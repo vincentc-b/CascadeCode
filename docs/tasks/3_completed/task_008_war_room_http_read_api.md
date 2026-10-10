@@ -2,7 +2,7 @@
 id: task_008
 title: Localhost HTTP server and read API
 tier: task
-status: active
+status: completed
 parent: feat_003
 children: []
 depends_on: []
