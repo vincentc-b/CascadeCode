@@ -2,7 +2,7 @@
 id: task_011
 title: Server-rendered War Room UI shell
 tier: task
-status: active
+status: completed
 parent: feat_003
 children: []
 depends_on:
@@ -24,8 +24,8 @@ updated: '2026-10-10'
 
 ## Depends on
 
-- [task_009](../../tasks/1_backlog/task_009_human_dispatch_routes.md) (human dispatch POST routes)
-- [task_010](../../tasks/1_backlog/task_010_transcript_toasts_sidecar.md) (chat, toasts, attach)
+- [task_009](../../tasks/3_completed/task_009_human_dispatch_routes.md) (human dispatch POST routes)
+- [task_010](../../tasks/3_completed/task_010_transcript_toasts_sidecar.md) (chat, toasts, attach)
 
 ## Acceptance criteria
 
