@@ -2,9 +2,13 @@
 id: feat_003
 title: Local War Room UI
 tier: feature
-status: active
+status: completed
 parent: epic_001
-children: []
+children:
+- task_008
+- task_009
+- task_010
+- task_011
 depends_on:
 - feat_001
 - feat_002
@@ -100,9 +104,14 @@ flowchart LR
 
 ## Task breakdown
 
-_(empty — Feature Team mints tasks after dispatch)_
+Tasks minted into `/docs/tasks/1_backlog/` (orchestrator moves them when dispatched). tasks 008–010 are now in `3_completed`; task_011 is in `2_active`. Depends on: feat_001, feat_002 completed.
 
-Depends on: feat_001, feat_002 completed.
+| ID | Title | Depends on |
+|---|---|---|
+| [task_008](../../tasks/3_completed/task_008_war_room_http_read_api.md) | Localhost HTTP server and read API | — |
+| [task_009](../../tasks/3_completed/task_009_human_dispatch_routes.md) | Human dispatch HTTP routes | task_008 |
+| [task_010](../../tasks/3_completed/task_010_transcript_toasts_sidecar.md) | Transcript sidecar, chat, toasts, attach stubs | task_008 |
+| [task_011](../../tasks/2_active/task_011_war_room_ui_shell.md) | Server-rendered War Room UI shell | task_009, task_010 |
 
 ## Risks & upward questions
 
@@ -111,4 +120,8 @@ Depends on: feat_001, feat_002 completed.
 
 ## Decision log
 
-_(empty — lock entries when this feature is active)_
+- `dec_013` · 2026-10-09 · Feature Architect · **Toolkit and task breakdown**
+  **Toolkit:** Python 3.12, stdlib HTTP server (or equivalent stdlib-only HTTP), server-rendered HTML/CSS in this repo. No TypeScript SPA, no Node, no cloud auth SDK, no new runtime dependency unless PyYAML is already enough. Bind `127.0.0.1` only; binding `0.0.0.0` is a defect.
+  **Tasks:** task_008 read API + loopback server; task_009 human dispatch POST routes (Boss dispatch enqueue-only); task_010 per-graph chat sidecar + war_room toasts + attach/detach stubs; task_011 server-rendered default home. task_008 and task_010 may start in parallel after task_008 lands for task_010; task_011 follows task_009 and task_010.
+  Rationale: separates HTTP/board reads from dispatch law wiring and from UI chrome; pytest can lock localhost and `by=human` before full War Room layout.
+  Honors: epic_001 feat_003 constraints; DESIGN.md §10 Human Interaction surfaces.
