@@ -2,7 +2,7 @@
 id: task_010
 title: Transcript sidecar, chat, toasts, attach stubs
 tier: task
-status: active
+status: completed
 parent: feat_003
 children: []
 depends_on:
@@ -23,7 +23,7 @@ updated: '2026-10-10'
 
 ## Depends on
 
-- [task_008](../../tasks/1_backlog/task_008_war_room_http_read_api.md) (localhost server)
+- [task_008](../../tasks/3_completed/task_008_war_room_http_read_api.md) (localhost server)
 
 ## Acceptance criteria
 
