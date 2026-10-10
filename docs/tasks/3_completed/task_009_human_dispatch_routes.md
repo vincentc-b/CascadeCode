@@ -2,7 +2,7 @@
 id: task_009
 title: Human dispatch HTTP routes
 tier: task
-status: active
+status: completed
 parent: feat_003
 children: []
 depends_on:
@@ -23,7 +23,7 @@ updated: '2026-10-10'
 
 ## Depends on
 
-- [task_008](../../tasks/1_backlog/task_008_war_room_http_read_api.md) (localhost server and read API)
+- [task_008](../../tasks/2_active/task_008_war_room_http_read_api.md) (localhost server and read API)
 
 ## Acceptance criteria
 
