@@ -134,6 +134,28 @@ def test_promote_epic_to_trunk_fails_when_epic_branch_absent(tmp_path: Path) -> 
     assert promote.branch == integration_branch("epic", "epic_001")
 
 
+def test_confirm_epic_complete_without_epic_branch_when_epic_not_on_worktree(
+    tmp_path: Path,
+) -> None:
+    """Epic lived on product trunk only (no ``epic/{id}`` integration branch)."""
+
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    commit_board(root)
+
+    assert confirm_epic_complete("epic_001", "human", root=root) is True
+    assert read_doc("epic_001", root=root).meta.status == "completed"
+
+
 def test_promote_epic_to_trunk_lands_epic_branch_on_main(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     _initial_commit(root)

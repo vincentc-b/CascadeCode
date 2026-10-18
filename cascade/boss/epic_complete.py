@@ -103,14 +103,19 @@ def confirm_epic_complete(epic_id: WorkId, by: Principal, *, root: Path | None =
     if not epic_ready_to_close(epic_id, root=repo):
         return False
     try:
-        read_doc(epic_id, root=repo)
+        epic_doc = read_doc(epic_id, root=repo)
     except NotFound:
         return False
     from cascade.boss.merge import promote_epic_to_trunk
 
     promote_result = promote_epic_to_trunk(epic_id, root=repo)
     if not promote_result.ok:
-        return False
+        if promote_result.reason == "branch_missing" and _skip_epic_promote(
+            epic_doc, repo=repo
+        ):
+            pass
+        else:
+            return False
     trunk = locate_trunk(repo)
     move_doc(epic_id, "completed", root=repo)
     _complete_epic_trunk_pointer(epic_id, trunk=trunk)
@@ -147,6 +152,20 @@ def on_feature_completed(feature_id: WorkId, *, root: Path | None = None) -> Non
     if parent is None or parent.tier != "epic":
         return
     surface_epic_close_prompt(epic_id, root=repo)
+
+
+def _skip_epic_promote(epic_doc, *, repo: Path) -> bool:
+    """True when there is no ``epic/{id}`` integration branch to merge (trunk-only epic)."""
+
+    if epic_doc.meta.integration_branch is not None:
+        return False
+    from cascade.workspace.integration_worktree import load_registry, locate_trunk
+
+    trunk = locate_trunk(repo)
+    for entry in load_registry(trunk):
+        if entry.kind == "epic" and entry.work_id == epic_doc.meta.id:
+            return False
+    return True
 
 
 def _child_feature_ids(epic_id: WorkId, board) -> set[WorkId]:

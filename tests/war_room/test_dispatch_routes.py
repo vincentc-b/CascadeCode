@@ -394,8 +394,8 @@ def test_confirm_epic_complete_success_and_refusal(dispatch_board, tmp_path):
     ready_base = f"http://127.0.0.1:{port}"
     try:
         reset_epic_close_prompt_surfaces()
-        code, body = _post_expect_error(f"{ready_base}/api/confirm_epic_complete", {"id": "epic_002"})
-        assert code == HTTPStatus.BAD_REQUEST
+        code, body = _post(f"{ready_base}/api/confirm_epic_complete", {"id": "epic_002"})
+        assert code == HTTPStatus.OK
         assert body["ok"] is False
         assert body["reason"] == "not_ready"
 
@@ -417,8 +417,8 @@ def test_confirm_epic_complete_success_and_refusal(dispatch_board, tmp_path):
         server.server_close()
         thread.join(timeout=5)
 
-    code, body = _post_expect_error(f"{base}/api/confirm_epic_complete", {"id": "epic_001"})
-    assert code == HTTPStatus.BAD_REQUEST
+    code, body = _post(f"{base}/api/confirm_epic_complete", {"id": "epic_001"})
+    assert code == HTTPStatus.OK
     assert body["ok"] is False
     assert body["reason"] == "not_ready"
 

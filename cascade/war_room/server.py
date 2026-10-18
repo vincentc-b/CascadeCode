@@ -25,7 +25,12 @@ from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
 from cascade.workspace.doc_root import read_doc_resolved
 from cascade.workspace.integration_worktree import merged_board
-from cascade.boss.epic_complete import confirm_epic_complete, on_feature_completed
+from cascade.boss.epic_complete import (
+    confirm_epic_complete,
+    epic_ready_to_close,
+    on_feature_completed,
+)
+from cascade.boss.merge import promote_epic_to_trunk
 from cascade.boss.graph import install_boss_consumer
 from cascade.boss.merge import merge_task_branch
 from cascade.boss.orphans import detect_orphans
@@ -367,7 +372,14 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if ok:
             self._json_response(HTTPStatus.OK, {"ok": True, "epic_id": epic_id})
             return
-        self._json_response(HTTPStatus.BAD_REQUEST, {"ok": False, "reason": "not_ready", "epic_id": epic_id})
+        reason = "not_ready"
+        if epic_ready_to_close(epic_id, root=self.server.root):
+            promote = promote_epic_to_trunk(epic_id, root=self.server.root)
+            reason = promote.reason or "promote_failed"
+        self._json_response(
+            HTTPStatus.OK,
+            {"ok": False, "reason": reason, "epic_id": epic_id},
+        )
 
     def _handle_boss_drain(self, body: dict[str, Any]) -> None:
         feature_id = body.get("feature_id")

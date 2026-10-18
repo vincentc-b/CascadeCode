@@ -2,31 +2,32 @@
 id: epic_001
 title: Functional MVP
 tier: epic
-status: active
+status: completed
 parent: null
 children:
-  - feat_001
-  - feat_002
-  - feat_003
-  - feat_004
-  - feat_005
-  - feat_006
-  - feat_007
-  - feat_008
-  - feat_009
-  - feat_010
-  - feat_011
-  - feat_012
-  - feat_013
-  - feat_014
-  - feat_015
+- feat_001
+- feat_002
+- feat_003
+- feat_004
+- feat_005
+- feat_006
+- feat_007
+- feat_008
+- feat_009
+- feat_010
+- feat_011
+- feat_012
+- feat_013
+- feat_014
+- feat_015
 depends_on: []
-owners: [epic_manager, epic_architect]
+owners:
+- epic_manager
+- epic_architect
 skills: []
 parent_rev: null
-created: 2026-10-09
-updated: 2026-10-16
-# activated by human 2026-10-09; first feature dispatched: feat_001
+created: '2026-10-09'
+updated: '2026-10-18'
 ---
 
 # Functional MVP

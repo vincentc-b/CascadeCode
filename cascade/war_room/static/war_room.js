@@ -395,19 +395,13 @@
   }
 
   async function confirmEpicComplete(epicId) {
-    try {
-      const { body } = await apiPost("/api/confirm_epic_complete", { id: epicId });
-      if (body.ok) {
-        dispatchBanner = "";
-        setStatus("Epic " + epicId + " closed.", false);
-        await refreshBoard();
-      } else {
-        setStatus("Epic close refused: " + (body.reason || "not_ready"), true);
-      }
-    } catch (err) {
-      const reason =
-        err.body && err.body.reason ? err.body.reason : err.message || "close failed";
-      setStatus("Epic close failed: " + reason, true);
+    const { body } = await apiPost("/api/confirm_epic_complete", { id: epicId });
+    if (body.ok) {
+      dispatchBanner = "";
+      setStatus("Epic " + epicId + " closed.", false);
+      await refreshBoard();
+    } else {
+      setStatus("Epic close refused: " + (body.reason || "not_ready"), true);
     }
   }
 
