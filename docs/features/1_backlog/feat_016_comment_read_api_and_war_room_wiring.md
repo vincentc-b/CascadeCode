@@ -37,10 +37,10 @@ Constraints this feature must honor:
 
 - Treat GET `/api/comments/{doc_id}` as the locked read API. Keep the current 404 (unknown id) and 400 (task-tier) behavior. Return the new optional fields below; older sidecar rows omit them and deserialize as null / empty.
 - Extend `cascade.comments.types.Comment` and POST `/api/comment` so a root comment may store `line_start`, `line_end`, `doc_sha`, and `blocks` (`list[work_id]`, default empty). `section` and `anchor` stay required/optional as today. `section` is stored as the shared slug (see `section_slug()`), not the raw heading text.
-- Add POST `/api/comment/reply` `{doc_id, comment_id, body}` as a human-authored in-thread reply. Reuse `reply_comment` in the store (already emits `CommentReplied`). Do not allow `blocking` or new anchors on replies.
+- When POST `/api/comment` includes `parent`, treat it as a human in-thread reply: call existing `reply_comment` (emits `CommentReplied`). Ignore `blocking`, `line_*`, `doc_sha`, and `blocks` on replies. Do not add a second reply URL.
 - Add `section_slug(heading: str) -> str` in `cascade/comments/` (one function, imported by the plan viewer and the dispatch gate). Heading rename that breaks a `cites:` entry is reported later by feat_019, not here.
-- War Room: on each visible epic/feature row, add a **Comments** (or reuse **View plan**) deep-link to `/plan/{id}#plan-comments`. Do **not** build a second compose form on the board. Toasts on new human comments when not attached stay as they are.
-- POST `/api/comment` and `/api/comment/reply` keep the existing `kickoff_graph_queue_event` call so one owning-graph turn is requested.
+- War Room: point the existing **View plan** control at `/plan/{id}#plan-comments` for epic and feature rows. No second compose form and no extra Comments button. Toasts on new human comments when not attached stay as they are.
+- POST `/api/comment` keeps the existing `kickoff_graph_queue_event` call so one owning-graph turn is requested for both roots and replies.
 
 **Out**
 
@@ -49,6 +49,7 @@ Constraints this feature must honor:
 - Dispatch / mint / merge gates and `cites:` frontmatter on `WorkMeta` (feat_019).
 - Agent playbook for review turns (feat_020).
 - GitHub OAuth, remote PR comments, or a new comment database.
+- A new `/api/comment/reply` route.
 - Changing `CommentPosted` payload shape beyond adding the new optional keys already stored on the record.
 
 ## Data structures
@@ -82,17 +83,13 @@ GET  /api/comments/{doc_id}
 
 POST /api/comment
      {doc_id, section, body, anchor?, blocking?=false,
-      line_start?, line_end?, doc_sha?, blocks?}
+      line_start?, line_end?, doc_sha?, blocks?, parent?}
      -> 202 {ok, comment_id, kickoff}
      author is always human on this route
-     blocking=true allowed (human-only path)
-     section is slugified before persist if the client sent a heading
-
-POST /api/comment/reply
-     {doc_id, comment_id, body}
-     -> 202 {ok, comment_id, kickoff}
-     author is always human; blocking ignored
-     404 if parent missing
+     parent omitted: root comment; blocking=true allowed
+     parent set: reply via store.reply_comment; blocking/line/sha/blocks ignored
+     section is slugified before persist if the client sent a heading (roots only)
+     404 if parent is set and missing
 ```
 
 All binds: `127.0.0.1`. Sidecar path is the owning worktree via `resolve_doc_worktree`.
@@ -101,9 +98,9 @@ All binds: `127.0.0.1`. Sidecar path is the owning worktree via `resolve_doc_wor
 
 ```mermaid
 flowchart LR
-  WR[War Room row] -->|deep-link| PV["/plan/id#plan-comments"]
+  WR[War Room View plan] -->|"/plan/id#plan-comments"| PV[Plan viewer]
   PV --> GET[GET /api/comments/id]
-  PV --> POST[POST /api/comment or /reply]
+  PV --> POST[POST /api/comment]
   POST --> STORE["docs/_comments/id.jsonl in worktree"]
   STORE --> Q[CommentPosted or CommentReplied]
   Q --> KO[kickoff_graph_queue_event]
@@ -113,9 +110,9 @@ flowchart LR
 
 Feature Team mints after dispatch. Suggested slice:
 
-1. **Comment schema + `section_slug()`** — optional fields on `Comment` / store / `from_dict` back-compat; unit-of-store tests for old lines without the new keys.
-2. **HTTP reply + POST field pass-through** — extend `_handle_comment`; add `/api/comment/reply`; keep kickoff + toast. API tests on the existing War Room server fixture.
-3. **War Room deep-link** — epic/feature row link to `/plan/{id}#plan-comments`. No new compose pane.
+1. **Comment schema + `section_slug()`** — optional fields on `Comment` / store / `from_dict` back-compat; store tests for old lines without the new keys.
+2. **POST field pass-through + parent-as-reply** — extend `_handle_comment`; keep kickoff + toast. API tests on the existing War Room server fixture.
+3. **War Room deep-link** — View plan on epic/feature rows goes to `/plan/{id}#plan-comments`.
 
 ## Risks & upward questions
 
@@ -125,4 +122,6 @@ Feature Team mints after dispatch. Suggested slice:
 
 ## Decision log
 
-_(entries via record_decision)_
+- **D1 — No second compose surface.** War Room reuses View plan + `#plan-comments`. A board-side compose form would duplicate the plan viewer and rot again.
+- **D2 — Replies use `parent` on POST `/api/comment`.** Extends the existing route; no `/api/comment/reply`.
+- **D3 — `section_slug()` lives in `cascade/comments/`.** Viewer (feat_017) and gate (feat_019) import the same function. Epic breakdown listed the slug on the gate feature; the comment store is the single owner so the two consumers cannot drift.
