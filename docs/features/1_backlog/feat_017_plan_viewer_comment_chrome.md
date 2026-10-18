@@ -47,6 +47,7 @@ Constraints this feature must honor:
   - `anchor` = quoted snippet (selection text, or the block's first ~120 chars),
   - `doc_sha` = `GET /api/doc/{id}` sha,
   - `blocking` from the existing checkbox (default off).
+- In-thread human reply on each open root: POST `/api/comment` with `parent` set (feat_016). Replies do not set blocking or new line anchors.
 - Thread list: group by root `parent=null`; show replies indented (already does). Mark a thread **outdated** when current sha ≠ `doc_sha` and the `anchor` cannot be found inside that `section`. Outdated threads stay visible at the section heading and remain blocking if `blocking`.
 - Re-anchor: when sha differs, search `anchor` within the section's current line range and move the gutter marker if found. Do not rewrite the sidecar from the client.
 - `#plan-comments` is the hash target for feat_016's View plan deep-link. Keep **Back to War Room** unchanged.
@@ -57,6 +58,7 @@ Constraints this feature must honor:
 - Resolve button, human-only resolve API, decision-log linkage (feat_018).
 - Dispatch / mint / merge gates (feat_019).
 - Agent review playbook (feat_020).
+- A `blocks:` picker in the UI (`blocks` stays API-only in v1).
 - In-browser plan editing.
 - Commenting on task plans.
 - Polling or websocket refresh.
@@ -96,6 +98,8 @@ flowchart TD
   RENDER --> UI[gutter + / selection]
   UI --> POST[POST /api/comment]
   POST --> RELOAD[reload threads]
+  THREAD[open thread] --> REPLY[POST parent=root]
+  REPLY --> RELOAD
   RENDER --> REANCHOR{sha == doc_sha?}
   REANCHOR -->|yes| MARK[place at line]
   REANCHOR -->|no, snippet found| MARK
@@ -107,7 +111,7 @@ flowchart TD
 Feature Team mints after dispatch. Suggested slice:
 
 1. **Source maps + `data-src-line`** — keep Mermaid/markdown behavior; add line metadata. Drop the 3s poll.
-2. **Compose from gutter / selection** — POST the feat_016 fields; keep the blocking checkbox.
+2. **Compose from gutter / selection + in-thread reply** — POST the feat_016 fields; keep the blocking checkbox on roots only.
 3. **Re-anchor + outdated** — client-only placement; no sidecar rewrite. Thread list shows outdated.
 
 System-level: extend existing plan-viewer tests (route + render) rather than new mock-heavy JS unit tests. One fixture covering re-anchor hit / miss is enough.
@@ -123,3 +127,4 @@ System-level: extend existing plan-viewer tests (route + render) rather than new
 - **D1 — Resolve button is feat_018.** This feature renders open vs resolved only, so human-only resolve can land without a stub button that agents could race.
 - **D2 — No comment poll.** Refresh on load and after POST. Matches kickoff-edges-only.
 - **D3 — Task plans hide the panel.** Matches store 400; operator comments on the parent feature or epic.
+- **D4 — `blocks:` is API-only.** A multi-select on every comment is gold-plating; section/`cites` covers the common case.
