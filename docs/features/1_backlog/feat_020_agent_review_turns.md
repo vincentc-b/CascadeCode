@@ -31,21 +31,23 @@ Constraints this feature must honor:
 - Owning graph only: epic-tier `doc_id` → `epic_{id}`; feature-tier → `feat_{id}`. Tasks have no comment room.
 - Agents reply and may `write_doc` / `record_decision` / `propose_epic_amendment`. They do not resolve (feat_018) and do not set blocking.
 - No timer polling for new comments.
+- Delivery is watchdog-only (dec_011). HTTP POST enqueues; this feature removes the eager `kickoff_graph_queue_event` from `_handle_comment` (or makes it ingest-only with no turn).
 
 ## Scope
 
 **In**
 
-- When a **human** `CommentPosted` or `CommentReplied` is ingested for an active owning graph, start **one** planning turn via existing `kickoff_turn(kind="comment")`, staging the comment body (id, section, blocking, snippet) as the turn input. This must work even when the graph has no prior chat messages. Today's `kickoff_graph_queue_event` → `kind=queue_event` path no-ops without `latest_input`; that is the bug this feature fixes.
+- When a **human** `CommentPosted` or `CommentReplied` is ingested for an active owning graph, start **one** planning turn via existing `kickoff_turn(kind="comment")`. `KickoffReason.message` is a **dict**, same shape as `ingest_human`: `{"role": "human", "content": "cmt_NNN on {doc_id} #{section} [blocking]\n{body}" }` (cap `content` at ~2k chars; tell the agent to read the sidecar for the rest). This must work even when the graph has no prior chat messages. Today's `kickoff_graph_queue_event` → `kind=queue_event` path no-ops without `latest_input`; that is the bug this feature fixes.
 - Agent-authored `CommentReplied` / `CommentPosted` must **not** request another comment-kind turn. Ingest the queue offset so it is not re-delivered, then stop. A reply loop is a defect.
-- War Room POST `/api/comment` already calls `kickoff_graph_queue_event`. Point that call (or a sibling) at the same human-comment kickoff helper so HTTP and watchdog share one function.
-- Playbook (short addition to existing epic/feature role skills, not a new skill file):
+- `CommentResolved` must **not** start a turn (feat_018 D2, dec_011). Ingest the offset only.
+- Replace the HTTP `_handle_comment` `kickoff_graph_queue_event` turn with enqueue-only (watchdog `deliver_queue_kickoffs` delivers). One helper shared by watchdog; HTTP must not fire a second turn for the same `comment_id`.
+- Playbook (short addition to existing epic/feature role skills, **not** a new skill file). `epic_manager` and `feature_lead` already load `skills/roles/product_manager/SKILL.md`; put the bullets there (and a one-liner in `frugal_engineering` only if needed):
   1. Read the thread (`read_doc` + comments).
   2. Answer, patch the owning spec, or `record_decision` (include `In reply to: cmt_NNN` when locking a choice).
   3. `reply_comment` with what changed or why not.
   4. If a **feature** turn needs an epic contract change: `propose_epic_amendment`, do not silently edit the epic.
   5. Never `resolve_comment`.
-- One system test: human comment on an activated epic with empty chat → exactly one kickoff. Agent reply in that thread → no second kickoff.
+- One system test: human comment on an activated epic with empty chat → exactly one kickoff. Agent reply in that thread → no second kickoff. Human resolve → no kickoff. HTTP POST + subsequent watchdog tick → still exactly one kickoff.
 
 **Out**
 
@@ -54,6 +56,7 @@ Constraints this feature must honor:
 - Auto-resolve after a patch.
 - Plan viewer chrome, HTTP schema, or dispatch gates (feat_016–019).
 - A new role or a dedicated "reviewer" graph.
+- A new skill path / new role-skill default list.
 
 ## Data structures
 
@@ -61,7 +64,7 @@ Constraints this feature must honor:
 KickoffReason.kind == "comment"   # already exists
   work_id: owning graph id
   by: human | watchdog
-  message: "cmt_NNN on {doc_id} #{section} [blocking]\n{body}"
+  message: {role: "human", content: str}   # dict, not a raw string
 ```
 
 No new persistence.
@@ -71,21 +74,26 @@ No new persistence.
 ```text
 kickoff_human_comment(doc_id, comment_id, *, root) -> bool
     no-op if author != human
+    no-op if event type is CommentResolved
     no-op if owning graph is not 2_active
-    otherwise kickoff_turn(kind="comment", message=...)
-    shared by HTTP POST and deliver_queue_kickoffs
+    otherwise kickoff_turn(kind="comment", message={role, content})
+    called from deliver_queue_kickoffs when new events include human comments
+    not called from POST /api/comment (enqueue only)
 
 CommentPosted / CommentReplied queue payloads stay as they are
     (doc_id, comment_id, author, section?)
 ```
 
+`deliver_queue_kickoffs` today calls `kickoff_graph_queue_event` (kind=`queue_event`) on any offset advance. This feature must inspect the new events: human comment → `kind=comment`; everything else keeps existing queue_event behavior **except** comment events (human or agent) and `CommentResolved`, which must not use the empty-chat-breaking `queue_event` path as a substitute for `kind=comment`.
+
 ## Logic flow
 
 ```mermaid
 flowchart TD
-  E[CommentPosted / Replied] --> H{author human?}
-  H -->|yes, graph active| K[kickoff_turn kind=comment]
-  H -->|no| INGEST[advance offset only]
+  E[New queue events] --> T{type + author}
+  T -->|human CommentPosted/Replied, graph active| K[kickoff_turn kind=comment]
+  T -->|agent comment or CommentResolved| INGEST[advance offset only]
+  T -->|other events| Q[existing queue_event path]
   K --> PLAY[read thread / patch or decide / reply]
   PLAY --> AMD{epic contract?}
   AMD -->|feature team| AMEND[propose_epic_amendment]
@@ -96,17 +104,20 @@ flowchart TD
 
 Feature Team mints after dispatch. Suggested slice:
 
-1. **Shared human-comment kickoff** — one helper; HTTP + watchdog; skip agent authors. The empty-chat vs agent-reply system test is the acceptance test.
-2. **Playbook blurb** — add the five bullets to the existing epic/feature role skills. No new skill path.
+1. **Shared human-comment kickoff** — one helper; watchdog delivers; HTTP enqueue-only; skip agent authors and CommentResolved. The empty-chat vs agent-reply vs resolve vs double-HTTP+watchdog system test is the acceptance test.
+2. **Playbook blurb** — five bullets on `skills/roles/product_manager/SKILL.md`. No new skill path.
 
 ## Risks & upward questions
 
-- Double kickoff: HTTP already calls `kickoff_graph_queue_event`, and the watchdog later sees the same event. The helper must be idempotent per `comment_id` (or the HTTP path must only enqueue and let the watchdog deliver). Prefer **watchdog-only delivery** plus HTTP enqueue, so there is one edge. If HTTP keeps an eager kickoff, it must use the same helper and the watchdog must not fire a second turn for that offset.
-- Staging the full comment body into the turn can be long. Cap the staged message (e.g. 2k chars) and tell the agent to `read` the sidecar for the rest.
-- A human reply on an already-busy graph should still get one turn, not be dropped on `resume_inflight`.
+- Double kickoff: HTTP already calls `kickoff_graph_queue_event`, and the watchdog later sees the same event. Lock: watchdog-only delivery. If a Feature Team leaves the HTTP eager call, they must skip watchdog for that offset — but prefer removing the HTTP turn.
+- Staging the full comment body into the turn can be long. Cap at 2k chars.
+- A human reply on an already-busy graph should still get one turn, not be dropped on `resume_inflight`. If an inflight turn is running, queue the comment as the next `kind=comment` after it finishes (existing inflight rules); do not drop the event.
+- Other non-comment queue events must keep working (amendments, decisions). Do not make `deliver_queue_kickoffs` comment-only.
 
 ## Decision log
 
 - **D1 — Human comments use `kind=comment`, not `queue_event`.** `queue_event` requires prior chat input and misses the first review on a quiet graph.
 - **D2 — Agent replies never kickoff.** Prevents a reply loop; the human comes back if they want another round.
-- **D3 — No new skill file.** Five bullets on existing role skills are enough; a new reviewer role would not serve the core problem.
+- **D3 — No new skill file.** Five bullets on `product_manager` (already loaded by epic_manager and feature_lead) are enough.
+- **D4 — Message is a dict `{role, content}`.** Matches `ingest_human` / `KickoffReason.message`; a raw string would fail `_stage_human_message`.
+- **D5 — Watchdog delivers; HTTP only enqueues (dec_011).** One edge, no double turn, resolve does not start a turn.
