@@ -1,0 +1,284 @@
+"""Poll the board and revert work that reached 2_active without a fresh dispatch."""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from cascade.board.context import resolve_root
+from cascade.board.errors import BoardError, GitError
+from cascade.board.gitutil import head_sha, introduced_at
+from cascade.board.parse import parse_doc
+from cascade.board.paths import filename_work_id
+from cascade.board.store import move_doc
+from cascade.board.types import WorkMeta
+from cascade.boss.graph import install_boss_consumer, tick_boss_consumer
+from cascade.boss.orphans import OrphanRecord, detect_orphans
+from cascade.watchdog.events import append_event, read_events
+from cascade.watchdog.lock import process_lock
+from cascade.watchdog.types import Event
+
+# Appearances already toasted. This suppresses duplicate toasts, not retries.
+_stuck: set[tuple[str, int, int]] = set()
+_orphan_toast_signatures: set[frozenset[tuple[str, str]]] = set()
+# Event is written just after the introducing commit; allow a little clock skew.
+_AUTH_SKEW = timedelta(seconds=2)
+
+
+def clear_watchdog_memory() -> None:
+    """Forget toast suppression. Tests call this so cases do not leak."""
+
+    from cascade.workspace.flight import clear_flight_memory
+
+    with process_lock:
+        _stuck.clear()
+        _orphan_toast_signatures.clear()
+        clear_flight_memory()
+
+
+def watchdog_tick(root: Path | None = None) -> None:
+    """Scan `2_active` once. Unauthorized docs are moved back to backlog and toasted."""
+
+    repo = resolve_root(root)
+    install_boss_consumer(repo)
+    with process_lock:
+        tick_boss_consumer()
+        _maybe_enqueue_orphan_toasts(repo)
+    from cascade.workspace.kickoff import deliver_queue_kickoffs
+
+    deliver_queue_kickoffs(repo)
+    with process_lock:
+        _tick_scan_active(repo)
+        from cascade.workspace.flight import refresh_flight_report
+
+        refresh_flight_report(repo)
+
+
+def run_watchdog(
+    *,
+    root: Path | None = None,
+    poll_interval: float = 0.5,
+    stop_when: Callable[[], bool] | None = None,
+) -> None:
+    """Loop `watchdog_tick` until `stop_when` is true. Default poll is 0.5s.
+
+    With no stop condition this function does not return.
+    """
+
+    repo = resolve_root(root)
+    from cascade.epic.boot import install_epic_boot_hook
+    from cascade.feature.boot import install_feature_boot_hook
+    from cascade.task.boot import install_task_boot_hook
+    from cascade.task.wiring import install_task_wiring
+
+    install_epic_boot_hook(repo)
+    install_feature_boot_hook(repo)
+    install_task_boot_hook(repo)
+    install_task_wiring(repo)
+    install_boss_consumer(repo)
+    from cascade.workspace.kickoff import install_kickoff
+
+    install_kickoff(repo)
+
+    while True:
+        if stop_when is not None and stop_when():
+            return
+        watchdog_tick(root)
+        if stop_when is not None and stop_when():
+            return
+        time.sleep(poll_interval)
+
+
+def _tick_scan_active(root: Path) -> None:
+    still: set[tuple[str, int, int]] = set()
+    for path in _active_markdown(root):
+        try:
+            _consider(root, path, still)
+        except Exception:
+            # A single bad file must not kill the tick or run_watchdog.
+            continue
+    _stuck.clear()
+    _stuck.update(still)
+
+
+def _consider(root: Path, path: Path, still: set[tuple[str, int, int]]) -> None:
+    try:
+        key = _appearance(path)
+    except OSError:
+        return
+    try:
+        doc = parse_doc(path)
+    except Exception:
+        renamed = _raw_rename_to_backlog(path)
+        if key not in _stuck:
+            work_id = filename_work_id(path) or path.stem
+            _toast(root, work_id, f"{work_id} in 2_active is not a valid work doc")
+        if not renamed:
+            still.add(key)
+        return
+    from cascade.workspace.integration_worktree import merged_board
+
+    board = merged_board(root)
+    canonical = board.by_id.get(doc.meta.id)
+    if canonical is None or canonical.path.resolve() != path.resolve():
+        return
+    try:
+        authorized = _authorized(root, doc.meta)
+    except Exception:
+        authorized = False
+    if authorized:
+        return
+    reverted = _try_revert(root, doc.meta.id)
+    if key not in _stuck:
+        _toast(
+            root,
+            doc.meta.id,
+            f"{doc.meta.id} appeared in 2_active without dispatch authorization",
+        )
+    if not reverted and path.exists() and path.parent.name == "2_active":
+        try:
+            still.add(_appearance(path))
+        except OSError:
+            still.add(key)
+
+
+def _active_markdown(root: Path) -> list[Path]:
+    from cascade.workspace.integration_worktree import scan_active_markdown_roots
+
+    found: list[Path] = []
+    for scan_root in scan_active_markdown_roots(root):
+        for dirname in ("epics", "features", "tasks"):
+            folder = scan_root / "docs" / dirname / "2_active"
+            if not folder.is_dir():
+                continue
+            found.extend(sorted(path for path in folder.glob("*.md") if path.is_file()))
+    return found
+
+
+def _appearance(path: Path) -> tuple[str, int, int]:
+    stat = path.stat()
+    return (str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+
+
+def _authorized(root: Path, meta: WorkMeta) -> bool:
+    """The work id's own queue authorizes, and only if it covers this path introduction."""
+
+    newest = _newest_authorizing_event(root, meta)
+    if newest is None:
+        return False
+    from cascade.workspace.integration_worktree import git_root_for_path
+
+    try:
+        doc_root = git_root_for_path(meta.path)
+        rel = meta.path.resolve().relative_to(doc_root.resolve())
+    except (ValueError, GitError):
+        return True
+    if head_sha(doc_root) is None:
+        return True
+    introduced = introduced_at(doc_root, rel)
+    latest = newest.ts.astimezone(timezone.utc)
+    now = datetime.now(timezone.utc)
+    if introduced is None:
+        return now - latest <= _AUTH_SKEW
+    intro = introduced.astimezone(timezone.utc)
+    if now - latest > _AUTH_SKEW and intro > latest + _AUTH_SKEW:
+        return False
+    if intro <= latest + _AUTH_SKEW:
+        return True
+    return intro - latest <= timedelta(minutes=1)
+
+
+def _newest_authorizing_event(root: Path, meta: WorkMeta) -> Event | None:
+    events, _offset = read_events(meta.id, 0, root=root)
+    matches = [event for event in events if _event_authorizes(meta, event)]
+    if not matches:
+        return None
+    return max(matches, key=lambda event: event.ts)
+
+
+def _event_authorizes(meta: WorkMeta, event: Event) -> bool:
+    payload = event.payload
+    if meta.tier == "epic":
+        return event.type == "EpicActivated" and payload.get("epic_id") == meta.id
+    if meta.tier == "feature":
+        if event.type != "FeatureReadyToPlan":
+            return False
+        return payload.get("id") == meta.id or payload.get("feature_id") == meta.id
+    if meta.tier == "task":
+        # TaskFailed is not a dispatch and does not authorize a file in 2_active.
+        if event.type != "TaskDispatched":
+            return False
+        return payload.get("id") == meta.id or payload.get("task_id") == meta.id
+    return False
+
+
+def _try_revert(root: Path, work_id: str) -> bool:
+    try:
+        move_doc(work_id, "backlog", root=root)
+    except BoardError:
+        return False
+    return True
+
+
+def _raw_rename_to_backlog(path: Path) -> bool:
+    """Move an unparseable file to 1_backlog without validating or committing."""
+
+    try:
+        dest_dir = path.parent.parent / "1_backlog"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / path.name
+        if dest.exists():
+            return False
+        path.rename(dest)
+        return not path.exists()
+    except OSError:
+        return False
+
+
+def _orphan_signature(records: list[OrphanRecord]) -> frozenset[tuple[str, str]]:
+    return frozenset((record.kind, record.work_id) for record in records)
+
+
+def _maybe_enqueue_orphan_toasts(root: Path) -> None:
+    try:
+        records = detect_orphans(root=root)
+    except Exception:
+        # Unparseable board files must not abort the tick (see _consider).
+        return
+    if not records:
+        return
+    signature = _orphan_signature(records)
+    if signature in _orphan_toast_signatures:
+        return
+    for record in records:
+        event = Event(
+            type="Toast",
+            ts=datetime.now(timezone.utc),
+            payload=dict(record.toast_payload),
+            dest="war_room",
+        )
+        try:
+            append_event("war_room", event, root=root)
+        except OSError:
+            return
+    _orphan_toast_signatures.add(signature)
+
+
+def _toast(root: Path, work_id: str, message: str) -> None:
+    event = Event(
+        type="Toast",
+        ts=datetime.now(timezone.utc),
+        payload={
+            "kind": "illegal_move",
+            "id": work_id,
+            "message": message,
+            "reason": "unauthorized",
+        },
+        dest="war_room",
+    )
+    try:
+        append_event("war_room", event, root=root)
+    except OSError:
+        return

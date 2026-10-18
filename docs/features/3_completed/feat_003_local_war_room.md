@@ -104,14 +104,14 @@ flowchart LR
 
 ## Task breakdown
 
-Tasks minted into `/docs/tasks/1_backlog/` (orchestrator moves them when dispatched). tasks 008–010 are now in `3_completed`; task_011 is in `2_active`. Depends on: feat_001, feat_002 completed.
+Tasks minted into `/docs/tasks/1_backlog/` (orchestrator moves them when dispatched). tasks 008–011 are in `3_completed`. Depends on: feat_001, feat_002 completed.
 
 | ID | Title | Depends on |
 |---|---|---|
 | [task_008](../../tasks/3_completed/task_008_war_room_http_read_api.md) | Localhost HTTP server and read API | — |
 | [task_009](../../tasks/3_completed/task_009_human_dispatch_routes.md) | Human dispatch HTTP routes | task_008 |
 | [task_010](../../tasks/3_completed/task_010_transcript_toasts_sidecar.md) | Transcript sidecar, chat, toasts, attach stubs | task_008 |
-| [task_011](../../tasks/2_active/task_011_war_room_ui_shell.md) | Server-rendered War Room UI shell | task_009, task_010 |
+| [task_011](../../tasks/3_completed/task_011_war_room_ui_shell.md) | Server-rendered War Room UI shell | task_009, task_010 |
 
 ## Risks & upward questions
 

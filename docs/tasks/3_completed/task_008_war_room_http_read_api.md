@@ -18,7 +18,7 @@ updated: '2026-10-10'
 
 ## Parent Feature
 
-[feat_003](../../features/2_active/feat_003_local_war_room.md) — Local War Room UI.
+[feat_003](../../features/3_completed/feat_003_local_war_room.md) — Local War Room UI.
 
 ## Depends on
 

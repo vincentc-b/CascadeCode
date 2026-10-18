@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      setTimeout(function () {
+        if (document.readyState === "complete") return;
+        if (document.getElementById("load-deadline-banner")) return;
+        var note = document.createElement("p");
+        note.id = "load-deadline-banner";
+        note.className = "load-deadline";
+        note.setAttribute("role", "status");
+        note.style.cssText =
+          "color:#ffb4a8;background:#0f1115;padding:0.75rem 1rem;margin:0;font-family:system-ui,sans-serif;";
+        note.textContent = "Timed out after 10s";
+        if (document.body) document.body.insertBefore(note, document.body.firstChild);
+      }, 10000);
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title id="plan-page-title">Plan — loading…</title>
+    <link rel="stylesheet" href="/static/plan_viewer.css" />
+  </head>
+  <body data-work-id="${work_id}">
+    <header class="plan-header">
+      <nav class="plan-nav">
+        <a href="/war-room" class="plan-back-link">Back to War Room</a>
+      </nav>
+      <div class="plan-meta-strip" aria-live="polite">
+        <dl class="plan-meta-list">
+          <div class="plan-meta-item">
+            <dt>Id</dt>
+            <dd id="plan-meta-id">…</dd>
+          </div>
+          <div class="plan-meta-item">
+            <dt>Title</dt>
+            <dd id="plan-meta-title">Loading…</dd>
+          </div>
+          <div class="plan-meta-item">
+            <dt>Tier</dt>
+            <dd id="plan-meta-tier">…</dd>
+          </div>
+          <div class="plan-meta-item">
+            <dt>Status</dt>
+            <dd id="plan-meta-status">…</dd>
+          </div>
+          <div class="plan-meta-item">
+            <dt>Path</dt>
+            <dd id="plan-meta-path">…</dd>
+          </div>
+          <div class="plan-meta-item">
+            <dt>SHA</dt>
+            <dd id="plan-meta-sha">…</dd>
+          </div>
+        </dl>
+        <p id="plan-meta-parent-rev-note" class="plan-meta-parent-rev" hidden></p>
+      </div>
+    </header>
+
+    <main class="plan-main">
+      <div id="plan-loading" class="plan-loading" aria-busy="true">Loading plan…</div>
+      <div id="plan-error" class="plan-error" hidden></div>
+      <article id="plan-body" class="plan-body" hidden></article>
+    </main>
+
+    <script src="/static/vendor/marked.min.js"></script>
+    <script src="/static/plan_viewer.js"></script>
+  </body>
+</html>

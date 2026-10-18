@@ -1,0 +1,322 @@
+"""Stacked merge targets: task→feat, feature→epic, epic→trunk (task_069)."""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from cascade.board.store import move_doc, read_doc
+from cascade.boss.epic_complete import confirm_epic_complete
+from cascade.boss import merge as merge_module
+from cascade.boss.merge import merge_feature_branch, merge_task_branch, promote_epic_to_trunk
+from cascade.boss.rollup import try_complete_feature, write_closeout
+from cascade.task.worktree import clear_task_runs, create_task_worktree
+from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
+from cascade.workspace.integration_worktree import (
+    integration_branch,
+    integration_worktree_path,
+    load_registry,
+    save_registry,
+)
+from tests.support import add_doc, commit_board, make_repo
+
+
+@pytest.fixture(autouse=True)
+def _isolation() -> None:
+    clear_task_runs()
+    yield
+    clear_task_runs()
+
+
+def _initial_commit(root: Path) -> None:
+    (root / "README.md").write_text("board\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True, capture_output=True)
+
+
+def _commit_in_worktree(worktree: Path, rel: str, content: str, message: str) -> None:
+    path = worktree / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    subprocess.run(["git", "add", rel], cwd=worktree, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", message], cwd=worktree, check=True, capture_output=True)
+
+
+def _stacked_board(root: Path) -> None:
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    assert activate_epic("epic_001", "human", root=root).ok
+    assert dispatch_feature("feat_001", "human", root=root).ok
+    assert dispatch_task("task_001", "human", root=root).ok
+
+
+def test_task_merge_lands_on_feature_branch_not_trunk(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    _stacked_board(root)
+
+    trunk_before = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    run = create_task_worktree("task_001", root=root, parent_rev=None, skills=[])
+    _commit_in_worktree(run.worktree, "code.txt", "task change\n", "task work")
+
+    result = merge_task_branch("task_001", root=root)
+    assert result.ok is True
+    assert result.target_branch == integration_branch("feature", "feat_001")
+
+    trunk_after = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert trunk_after == trunk_before
+
+    feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)
+    assert (feat_wt / "code.txt").read_text(encoding="utf-8") == "task change\n"
+
+
+def test_try_complete_feature_merges_feat_into_epic(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    _stacked_board(root)
+
+    feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+    epic_before = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=epic_wt,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    _commit_in_worktree(feat_wt, "feature_code.txt", "feature unit\n", "feature work")
+    from cascade.board.store import move_doc
+
+    move_doc("task_001", "completed", root=root)
+    write_closeout("feat_001", "All tasks done.", root=root)
+
+    assert try_complete_feature("feat_001", root=root) is True
+
+    epic_after = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=epic_wt,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert epic_after != epic_before
+    assert (epic_wt / "feature_code.txt").is_file()
+
+    merge_only = merge_feature_branch("feat_001", root=root)
+    assert merge_only.ok is True
+
+
+def test_promote_epic_to_trunk_fails_when_epic_branch_absent(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+
+    promote = promote_epic_to_trunk("epic_001", root=root)
+    assert promote.ok is False
+    assert promote.reason == "branch_missing"
+    assert promote.branch == integration_branch("epic", "epic_001")
+
+
+def test_promote_epic_to_trunk_lands_epic_branch_on_main(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+
+    epic_branch = integration_branch("epic", "epic_001")
+    from cascade.workspace.integration_worktree import ensure_integration_worktree
+
+    ensure_integration_worktree(
+        "epic",
+        "epic_001",
+        branch=epic_branch,
+        base_ref="HEAD",
+        trunk=root,
+    )
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+    _commit_in_worktree(epic_wt, "promote_me.txt", "epic payload\n", "epic commit")
+
+    trunk_before = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    promote = promote_epic_to_trunk("epic_001", root=root)
+    assert promote.ok is True
+    assert promote.target_branch == "main"
+    assert promote.branch == epic_branch
+
+    trunk_after = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert trunk_after != trunk_before
+    assert (root / "promote_me.txt").read_text(encoding="utf-8") == "epic payload\n"
+
+
+def test_confirm_epic_complete_promotes_before_moving_doc(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+
+    epic_branch = integration_branch("epic", "epic_001")
+    from cascade.workspace.integration_worktree import ensure_integration_worktree
+
+    ensure_integration_worktree(
+        "epic",
+        "epic_001",
+        branch=epic_branch,
+        base_ref="HEAD",
+        trunk=root,
+    )
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+    _commit_in_worktree(epic_wt, "promote_me.txt", "epic payload\n", "epic commit")
+
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+
+    assert confirm_epic_complete("epic_001", "human", root=root) is True
+    assert (root / "promote_me.txt").is_file()
+    epic = read_doc("epic_001", root=root)
+    assert epic.meta.status == "completed"
+
+
+def test_merge_repairs_checkout_when_branch_exists_without_registry(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    _stacked_board(root)
+
+    feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+    _commit_in_worktree(feat_wt, "feature_code.txt", "feature unit\n", "feature work")
+
+    save_registry(
+        root,
+        [e for e in load_registry(root) if e.work_id not in ("feat_001", "epic_001")],
+    )
+    shutil.rmtree(feat_wt)
+    shutil.rmtree(epic_wt)
+    assert not feat_wt.is_dir()
+    assert not epic_wt.is_dir()
+
+    feature_checkout = merge_module._feature_merge_checkout(root, "feat_001")
+    assert feature_checkout is not None
+    assert feature_checkout.is_dir()
+
+    feat_merge = merge_feature_branch("feat_001", root=root)
+    assert feat_merge.ok is True
+    assert feat_merge.reason != "merge_target_missing"
+    assert integration_worktree_path("epic", "epic_001", trunk=root).is_dir()
+
+
+def test_merge_feature_branch_missing_source_branch_fails(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    _stacked_board(root)
+    subprocess.run(
+        ["git", "update-ref", "-d", "refs/heads/feat/feat_001"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+
+    result = merge_feature_branch("feat_001", root=root)
+    assert result.ok is False
+    assert result.reason == "branch_missing"
+
+
+def test_try_complete_feature_does_not_complete_when_feat_branch_missing(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    _stacked_board(root)
+    feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)
+    _commit_in_worktree(feat_wt, "feature_code.txt", "feature unit\n", "feature work")
+    move_doc("task_001", "completed", root=root)
+    write_closeout("feat_001", "All tasks done.", root=root)
+
+    subprocess.run(
+        ["git", "update-ref", "-d", "refs/heads/feat/feat_001"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+
+    assert try_complete_feature("feat_001", root=root) is False
+    feature = read_doc("feat_001", root=root)
+    assert feature.meta.status == "active"
+    assert feature.meta.path.parent.name == "2_active"
+
+
+def test_confirm_epic_complete_updates_trunk_pointer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    from tests.support import commit_board
+
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+    add_doc(
+        epic_wt,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    move_doc("feat_001", "completed", root=root)
+    commit_board(epic_wt, message="feature completed on epic branch")
+    commit_board(root, message="trunk pointer and board")
+
+    from cascade.boss.merge import MergeResult
+
+    monkeypatch.setattr(
+        "cascade.boss.merge.promote_epic_to_trunk",
+        lambda *_a, **_k: MergeResult(ok=True, branch="epic/epic_001"),
+    )
+
+    assert confirm_epic_complete("epic_001", "human", root=root) is True
+    pointer_path = root / "docs" / "epics" / "3_completed"
+    pointers = list(pointer_path.glob("epic_001_*.md"))
+    assert len(pointers) == 1
+    text = pointers[0].read_text(encoding="utf-8")
+    assert "status: completed" in text
+    assert "integration_branch:" not in text
+    assert not list((root / "docs" / "epics" / "2_active").glob("epic_001_*.md"))

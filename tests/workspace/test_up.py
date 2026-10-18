@@ -1,0 +1,110 @@
+"""cascade up supervisor entry (task_064)."""
+
+from __future__ import annotations
+
+import json
+import socket
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+import pytest
+
+from cascade.workspace import WorkspaceError, init_workspace, up
+from cascade.workspace.lock import SupervisorLock
+from tests.support import make_git_repo
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _git(root: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True)
+
+
+def _seed_trunk_commit(root: Path) -> None:
+    (root / "README.md").write_text("workspace\n", encoding="utf-8")
+    _git(root, "add", "README.md")
+    _git(root, "commit", "-m", "init board")
+
+
+def _wait_for_http(url: str, *, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url) as resp:
+                if resp.status == 200:
+                    return
+        except (urllib.error.URLError, OSError) as exc:
+            last_error = exc
+            time.sleep(0.05)
+    raise AssertionError(f"server did not respond at {url}: {last_error}")
+
+
+def _get_board(url: str) -> dict:
+    with urllib.request.urlopen(url) as resp:
+        return json.loads(resp.read().decode())
+
+
+def test_up_starts_war_room_on_trunk(tmp_path: Path) -> None:
+    root = make_git_repo(tmp_path)
+    init_workspace(root)
+    _seed_trunk_commit(root)
+    port = _free_port()
+    stop = threading.Event()
+
+    thread = threading.Thread(
+        target=up,
+        kwargs={"root": root, "host": "127.0.0.1", "port": port, "stop_when": stop.is_set},
+        daemon=True,
+    )
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{port}"
+        _wait_for_http(f"{base}/api/board")
+        body = _get_board(f"{base}/api/board")
+        assert "epics" in body or "items" in body or isinstance(body, dict)
+    finally:
+        stop.set()
+        thread.join(timeout=10)
+
+
+def test_up_refuses_integration_branch_checkout(tmp_path: Path) -> None:
+    root = make_git_repo(tmp_path)
+    init_workspace(root)
+    _seed_trunk_commit(root)
+    _git(root, "checkout", "-b", "task/foo")
+
+    with pytest.raises(WorkspaceError, match="product trunk"):
+        up(root, port=_free_port(), stop_when=lambda: True)
+
+
+def test_second_up_refuses_while_lock_held(tmp_path: Path) -> None:
+    root = make_git_repo(tmp_path)
+    init_workspace(root)
+    _seed_trunk_commit(root)
+    port = _free_port()
+
+    held = SupervisorLock(root)
+    held.acquire()
+    try:
+        with pytest.raises(WorkspaceError, match="already running"):
+            up(root, port=port, stop_when=lambda: True)
+    finally:
+        held.release()
+
+
+def test_up_refuses_without_board_layout(tmp_path: Path) -> None:
+    root = make_git_repo(tmp_path)
+    _seed_trunk_commit(root)
+
+    with pytest.raises(WorkspaceError, match="cascade init"):
+        up(root, port=_free_port(), stop_when=lambda: True)

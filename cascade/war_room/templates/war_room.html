@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      setTimeout(function () {
+        if (document.readyState === "complete") return;
+        if (document.getElementById("load-deadline-banner")) return;
+        var note = document.createElement("p");
+        note.id = "load-deadline-banner";
+        note.className = "load-deadline";
+        note.setAttribute("role", "status");
+        note.style.cssText =
+          "color:#ffb4a8;background:#0f1115;padding:0.75rem 1rem;margin:0;font-family:system-ui,sans-serif;";
+        note.textContent = "Timed out after 10s";
+        if (document.body) document.body.insertBefore(note, document.body.firstChild);
+      }, 10000);
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cascade War Room</title>
+    <style>
+      body { margin: 0; background: #0f1115; color: #e8eaed; font-family: system-ui, sans-serif; }
+      .load-deadline { color: #ffb4a8; }
+    </style>
+    <link
+      rel="stylesheet"
+      href="/static/war_room.css"
+      media="print"
+      onload="this.media='all'; this.onload=null;"
+    />
+    <noscript><link rel="stylesheet" href="/static/war_room.css" /></noscript>
+  </head>
+  <body>
+    <div id="war-room-app" data-default-epic-graph-id="${epic_graph_id}">
+      <header class="war-room-header">
+        <h1>War Room</h1>
+        <div id="attachment-chrome" class="attachment-chrome">
+          <span id="attachment-label">Epic War Room</span>
+          <button type="button" id="btn-detach" class="btn-secondary" hidden>Detach</button>
+        </div>
+      </header>
+
+      <div class="war-room-layout">
+        <section id="war-room-board" class="board-panel" aria-label="Board">
+          <h2>Board</h2>
+          ${boss_panel_markup}
+          <div class="board-columns">
+            <div class="board-tier" data-tier="epics">
+              <h3>Epics</h3>
+              <div class="board-column" data-column="1_backlog"></div>
+              <div class="board-column" data-column="2_active"></div>
+              <div class="board-column board-column-completed" data-column="3_completed">
+                <div class="board-column-header board-column-header-completed">
+                  <span class="board-column-label">Completed</span>
+                  <button
+                    type="button"
+                    class="board-completed-collapse"
+                    data-board-completed-collapse
+                    data-board-tier="epics"
+                    aria-expanded="true"
+                    aria-label="Toggle completed epics column"
+                  >
+                    Collapse
+                  </button>
+                </div>
+                <p
+                  class="board-completed-count"
+                  data-board-completed-count
+                  data-board-tier="epics"
+                  hidden
+                ></p>
+                <div class="board-column-body" data-column-body="3_completed"></div>
+              </div>
+            </div>
+            <div class="board-tier" data-tier="features">
+              <h3>Features</h3>
+              <p
+                class="board-tier-empty board-features-lens-empty"
+                data-board-features-lens-empty
+                hidden
+              >
+                No epic is active or selected.
+              </p>
+              <div class="board-column" data-column="1_backlog"></div>
+              <div class="board-column" data-column="2_active"></div>
+              <div class="board-column board-column-completed" data-column="3_completed">
+                <div class="board-column-header board-column-header-completed">
+                  <span class="board-column-label">Completed</span>
+                  <button
+                    type="button"
+                    class="board-completed-collapse"
+                    data-board-completed-collapse
+                    data-board-tier="features"
+                    aria-expanded="false"
+                    aria-label="Toggle completed features column"
+                  >
+                    Expand
+                  </button>
+                </div>
+                <p
+                  class="board-completed-count"
+                  data-board-completed-count
+                  data-board-tier="features"
+                  hidden
+                ></p>
+                <div class="board-column-body" data-column-body="3_completed"></div>
+              </div>
+            </div>
+            <div class="board-tier" data-tier="tasks">
+              <h3>Tasks</h3>
+              <p
+                class="board-tier-empty board-tasks-lens-empty"
+                data-board-tasks-lens-empty
+              >
+                Select a feature to show its tasks.
+              </p>
+              <div class="board-column" data-column="1_backlog"></div>
+              <div class="board-column" data-column="2_active"></div>
+              <div class="board-column board-column-completed" data-column="3_completed">
+                <div class="board-column-header board-column-header-completed">
+                  <span class="board-column-label">Completed</span>
+                  <button
+                    type="button"
+                    class="board-completed-collapse"
+                    data-board-completed-collapse
+                    data-board-tier="tasks"
+                    aria-expanded="false"
+                    aria-label="Toggle completed tasks column"
+                  >
+                    Expand
+                  </button>
+                </div>
+                <p
+                  class="board-completed-count"
+                  data-board-completed-count
+                  data-board-tier="tasks"
+                  hidden
+                ></p>
+                <div class="board-column-body" data-column-body="3_completed"></div>
+              </div>
+            </div>
+          </div>
+          <p class="branch-pattern-hint" hidden aria-hidden="true">
+            Branch pattern: task/<span id="branch-label-example">${branch_label_example}</span>
+          </p>
+        </section>
+
+        <section id="room-panels" class="room-panels">
+          <div id="epic-war-room-chat" class="chat-panel" data-room="epic">
+            <h2>Epic War Room chat</h2>
+            <section
+              id="flight-report-panel"
+              class="flight-report-panel"
+              aria-label="In-flight path overlap"
+            >
+              <h3>In flight</h3>
+              <div id="flight-report-body" class="flight-report-body">
+                <p class="flight-empty">Loading…</p>
+              </div>
+            </section>
+            <p class="chat-meta">Graph: <code id="chat-graph-id">${epic_graph_id}</code></p>
+            <div id="chat-messages" class="chat-messages" role="log"></div>
+            <form id="chat-compose" class="chat-compose">
+              <textarea
+                id="chat-body"
+                name="body"
+                rows="3"
+                placeholder="Attach to this graph to compose…"
+                disabled
+              ></textarea>
+              <button type="submit" id="chat-send" disabled>Send</button>
+            </form>
+            <p id="chat-status" class="status-line"></p>
+          </div>
+
+          <div id="feature-room-placeholder" class="feature-room-panel" hidden>
+            <h2>Feature room</h2>
+            <p>Feature room — full drop-in in feat_005</p>
+          </div>
+        </section>
+
+        <aside class="side-panels">
+          <section id="toast-stream" class="toast-panel" aria-label="Toasts">
+            <h2>Toasts</h2>
+            <ul id="toast-list"></ul>
+          </section>
+
+          <details id="amendment-pane" class="amendment-panel stub-panel" open>
+            <summary>Amendments</summary>
+            <p id="amendment-pane-status" class="status-line"></p>
+            <ul id="amendment-list" class="amendment-list" aria-label="Pending amendments"></ul>
+            <div id="amendment-detail" class="amendment-detail" hidden>
+              <p id="amendment-meta" class="amendment-meta"></p>
+              <p id="amendment-revise-notice" class="amendment-revise-notice" hidden>
+                Counter-proposal sent — Feature room must <code>ack_amendment</code> before Epic
+                can accept or reject again.
+              </p>
+              <div class="amendment-diff-split" aria-label="Unified diff">
+                <div class="diff-pane diff-before">
+                  <h3>Before</h3>
+                  <pre id="diff-before"></pre>
+                </div>
+                <div class="diff-pane diff-after">
+                  <h3>After</h3>
+                  <pre id="diff-after"></pre>
+                </div>
+              </div>
+              <div id="amendment-actions" class="amendment-actions">
+                <button type="button" id="btn-amd-accept" class="btn-amd-accept">Accept</button>
+                <button type="button" id="btn-amd-reject" class="btn-amd-reject">Reject</button>
+                <button type="button" id="btn-amd-revise" class="btn-amd-revise">Revise</button>
+              </div>
+              <form id="amendment-reject-form" class="amendment-subform" hidden>
+                <label>
+                  Reason (optional)
+                  <textarea id="reject-note" rows="2"></textarea>
+                </label>
+                <button type="submit">Confirm reject</button>
+                <button type="button" class="btn-cancel-reject">Cancel</button>
+              </form>
+              <form id="amendment-revise-form" class="amendment-subform" hidden>
+                <label>
+                  Revised text
+                  <textarea id="revise-text" rows="4" required></textarea>
+                </label>
+                <label>
+                  Note (optional)
+                  <textarea id="revise-note" rows="2"></textarea>
+                </label>
+                <button type="submit">Send counter-proposal</button>
+                <button type="button" class="btn-cancel-revise">Cancel</button>
+              </form>
+            </div>
+          </details>
+
+          <details id="providers-pane" class="providers-panel stub-panel" open>
+            <summary>Providers</summary>
+            <p id="providers-pane-status" class="status-line"></p>
+            <div id="providers-list" class="providers-list" aria-label="Provider backends"></div>
+          </details>
+
+          <section id="comment-thread-stub" class="stub-panel">
+            <h2>Comments</h2>
+            <p>Comment storage is feat_005 — threads are not persisted yet.</p>
+            <label class="blocking-toggle">
+              <input type="checkbox" id="comment-blocking" />
+              Human-only blocking (UI stub — no persistence yet)
+            </label>
+          </section>
+        </aside>
+      </div>
+    </div>
+    <script src="/static/board_focus.js"></script>
+    <script src="/static/war_room.js"></script>
+  </body>
+</html>

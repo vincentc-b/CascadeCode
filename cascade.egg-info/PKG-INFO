@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: cascade
+Version: 0.0.1
+Summary: CascadeCode board store and watchdog
+Requires-Python: >=3.12
+Requires-Dist: PyYAML>=6
+Requires-Dist: cursor-sdk>=0.1
+Requires-Dist: langgraph>=0.2
+Requires-Dist: langgraph-checkpoint-sqlite>=2
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"

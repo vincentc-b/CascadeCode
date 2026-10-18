@@ -19,11 +19,11 @@ updated: '2026-10-10'
 
 ## Parent Feature
 
-[feat_003](../../features/2_active/feat_003_local_war_room.md) — Local War Room UI.
+[feat_003](../../features/3_completed/feat_003_local_war_room.md) — Local War Room UI.
 
 ## Depends on
 
-- [task_008](../../tasks/2_active/task_008_war_room_http_read_api.md) (localhost server and read API)
+- [task_008](../../tasks/3_completed/task_008_war_room_http_read_api.md) (localhost server and read API)
 
 ## Acceptance criteria
 

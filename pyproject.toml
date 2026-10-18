@@ -1,0 +1,29 @@
+[project]
+name = "cascade"
+version = "0.0.1"
+description = "CascadeCode board store and watchdog"
+requires-python = ">=3.12"
+dependencies = [
+    "PyYAML>=6",
+    "cursor-sdk>=0.1",
+    "langgraph>=0.2",
+    "langgraph-checkpoint-sqlite>=2",
+]
+
+[project.scripts]
+cascade = "cascade.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["cascade*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"

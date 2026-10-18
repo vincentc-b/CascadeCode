@@ -1,0 +1,10 @@
+# Workspace supervisor config. Watchdog is the only reader that
+# may start work; planning agents must not parse this to self-dispatch.
+
+task_parallelism = 4
+
+# Cursor model ids (cursor-sdk). Boss is omitted and uses the epic tier.
+[models]
+epic = "claude-opus-5-5"       # epic_manager, epic_architect
+feature = "claude-sonnet-5-5"  # feature_lead, feature_architect
+task = "composer-2.5"          # swe

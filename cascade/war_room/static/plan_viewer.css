@@ -1,0 +1,187 @@
+:root {
+  color-scheme: light dark;
+  --plan-text: #1a1a1a;
+  --plan-muted: #555;
+  --plan-border: #ccc;
+  --plan-code-bg: #f4f4f5;
+  --plan-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --plan-mono: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --plan-text: #e8e8e8;
+    --plan-muted: #aaa;
+    --plan-border: #444;
+    --plan-code-bg: #2a2a2e;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--plan-font);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--plan-text);
+  background: Canvas;
+}
+
+.plan-header {
+  border-bottom: 1px solid var(--plan-border);
+  padding: 0.75rem 1.25rem 1rem;
+}
+
+.plan-nav {
+  margin-bottom: 0.75rem;
+}
+
+.plan-back-link {
+  color: LinkText;
+}
+
+.plan-meta-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin: 0;
+  padding: 0;
+}
+
+.plan-meta-item {
+  margin: 0;
+}
+
+.plan-meta-item dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--plan-muted);
+  margin: 0 0 0.15rem;
+}
+
+.plan-meta-item dd {
+  margin: 0;
+  font-family: var(--plan-mono);
+  font-size: 0.875rem;
+  word-break: break-all;
+}
+
+.plan-meta-parent-rev {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  color: var(--plan-muted);
+}
+
+.plan-main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.plan-loading {
+  color: var(--plan-muted);
+}
+
+.plan-error {
+  color: #b00020;
+  padding: 1rem;
+  border: 1px solid #b00020;
+  border-radius: 4px;
+}
+
+.plan-body {
+  font-size: 1.0625rem;
+}
+
+.plan-body h1,
+.plan-body h2,
+.plan-body h3,
+.plan-body h4 {
+  line-height: 1.25;
+  margin: 1.5em 0 0.5em;
+}
+
+.plan-body h1:first-child,
+.plan-body h2:first-child {
+  margin-top: 0;
+}
+
+.plan-body p {
+  margin: 0.75em 0;
+}
+
+.plan-body code {
+  font-family: var(--plan-mono);
+  font-size: 0.9em;
+  background: var(--plan-code-bg);
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+}
+
+.plan-body pre {
+  font-family: var(--plan-mono);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  background: var(--plan-code-bg);
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.plan-body pre code {
+  background: none;
+  padding: 0;
+}
+
+.plan-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.9375rem;
+}
+
+.plan-body th,
+.plan-body td {
+  border: 1px solid var(--plan-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.plan-body th {
+  background: var(--plan-code-bg);
+}
+
+.plan-body ul,
+.plan-body ol {
+  margin: 0.75em 0;
+  padding-left: 1.5em;
+}
+
+.plan-body blockquote {
+  margin: 1em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--plan-border);
+  color: var(--plan-muted);
+}
+
+.plan-body a {
+  color: LinkText;
+}
+
+.plan-body .mermaid {
+  margin: 1.25em 0;
+  overflow-x: auto;
+}
+
+.plan-body .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
