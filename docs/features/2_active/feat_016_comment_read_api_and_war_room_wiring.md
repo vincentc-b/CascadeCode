@@ -7,6 +7,7 @@ parent: epic_002
 children:
 - task_077
 - task_078
+- task_079
 depends_on: []
 owners:
 - feature_lead
@@ -117,6 +118,7 @@ flowchart LR
 ```
 
 ## Task breakdown
+- task_079
 - task_078
 - task_077
 
