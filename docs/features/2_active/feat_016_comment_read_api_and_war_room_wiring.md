@@ -10,9 +10,9 @@ owners:
 - feature_lead
 - feature_architect
 skills: []
-parent_rev: null
+parent_rev: 739b74b3f2369b74eb1f0e539f334931145f79f2
 created: '2026-10-18'
-updated: '2026-10-18'
+updated: '2026-10-19'
 ---
 # Comment read API and War Room wiring
 
