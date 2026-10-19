@@ -4,7 +4,8 @@ title: Comment read API and War Room wiring
 tier: feature
 status: active
 parent: epic_002
-children: []
+children:
+- task_077
 depends_on: []
 owners:
 - feature_lead
@@ -115,6 +116,7 @@ flowchart LR
 ```
 
 ## Task breakdown
+- task_077
 
 Feature Team mints after dispatch. Suggested slice:
 
