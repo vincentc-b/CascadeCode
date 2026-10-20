@@ -37,6 +37,7 @@ class WorkMeta:
     provider: ProviderId | None = None
     integration_branch: str | None = None
     integration_worktree: str | None = None
+    cites: list[str] = field(default_factory=list)
 
 
 @dataclass
