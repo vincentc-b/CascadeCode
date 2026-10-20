@@ -2,7 +2,7 @@
 id: task_077
 title: Comment schema + section_slug()
 tier: task
-status: active
+status: blocked
 parent: feat_016
 children: []
 depends_on: []
@@ -11,7 +11,7 @@ owners:
 skills: []
 parent_rev: 3b458593a747105eb2f1818ef034b76e21512e41
 created: '2026-10-19'
-updated: '2026-10-19'
+updated: '2026-10-20'
 ---
 # Comment schema + section_slug()
 
