@@ -90,11 +90,27 @@ def create_task_worktree(
         )
         worktree = record.path
 
+    # A failed run keeps its Task branch and worktree so the Feature Team can
+    # inspect or retry it.  That branch may already contain a valid deliverable
+    # commit.  Keep the comparison base at the common Feature/Task ancestor;
+    # using the retry branch's current HEAD would make the existing commit
+    # disappear from ``has_deliverable_commit`` and cause an endless
+    # ``no_task_changes`` loop.
+    current_sha = _git(worktree, "rev-parse", "HEAD").stdout.strip()
+    merge_base = _git(
+        worktree,
+        "merge-base",
+        "HEAD",
+        cut_from,
+        check=False,
+    )
+    base_sha = merge_base.stdout.strip() if merge_base.returncode == 0 else current_sha
+
     run = TaskRun(
         task_id=task_id,
         branch=branch,
         worktree=worktree.resolve(),
-        base_sha=_git(worktree, "rev-parse", "HEAD").stdout.strip(),
+        base_sha=base_sha,
         parent_rev=parent_rev,
         skills=list(skills),
         state="booting",

@@ -231,6 +231,13 @@ body {
   cursor: pointer;
 }
 
+.board-row-actions button.approval-confirmed:disabled {
+  opacity: 1;
+  color: #d1fae5;
+  background: #166534;
+  border-color: #22c55e;
+}
+
 .task-branch {
   font-family: ui-monospace, monospace;
   font-size: 0.75rem;

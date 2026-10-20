@@ -102,6 +102,20 @@ def test_get_board_shape(war_room_server):
     assert "path" in tasks_active[0]
 
 
+def test_get_board_marks_approved_epic(war_room_server):
+    base, root, _server = war_room_server
+    approvals = root / ".cascade" / "approvals.json"
+    approvals.parent.mkdir(parents=True, exist_ok=True)
+    approvals.write_text('{"epic_001": {"approved_at": "now"}}\n', encoding="utf-8")
+
+    status, payload, _headers = _get(f"{base}/api/board")
+
+    assert status == HTTPStatus.OK
+    epic = payload["epics"]["1_backlog"][0]
+    assert epic["id"] == "epic_001"
+    assert epic["plan_approved"] is True
+
+
 def test_get_doc_and_missing(war_room_server):
     base, _root, _server = war_room_server
     status, doc, _ = _get(f"{base}/api/doc/task_001")

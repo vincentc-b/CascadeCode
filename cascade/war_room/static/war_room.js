@@ -421,9 +421,19 @@
         }));
       }
       if (column === "2_active") {
-        actions.appendChild(actionButton("Approve plan", function () {
-          return dispatch("/api/approve_epic_plan", { id: item.id });
-        }));
+        if (item.plan_approved) {
+          const approved = actionButton(
+            "Approved",
+            function () { return Promise.resolve(); },
+            "Epic plan approved; eligible features launch automatically."
+          );
+          approved.classList.add("approval-confirmed");
+          actions.appendChild(approved);
+        } else {
+          actions.appendChild(actionButton("Approve plan", function () {
+            return dispatch("/api/approve_epic_plan", { id: item.id });
+          }));
+        }
         actions.appendChild(actionButton("Close epic", function () {
           return confirmEpicComplete(item.id);
         }));

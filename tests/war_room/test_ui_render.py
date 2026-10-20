@@ -107,6 +107,9 @@ def test_war_room_js_renders_toast_body():
     assert "View plan" in source
     assert "/plan/" in source
     assert "Nothing in flight." in source
+    assert "item.plan_approved" in source
+    assert '"Approved"' in source
+    assert 'approved.classList.add("approval-confirmed")' in source
 
 
 def test_epic_chat_compose_markup_and_enter_to_send(ui_server):

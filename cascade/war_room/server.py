@@ -622,6 +622,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
     def _handle_board(self) -> None:
         board = merged_board(self.server.root)
         payload = board_view_from_index(board, root=self.server.root)
+        from cascade.approvals import epic_plan_approved
+
+        for column in payload["epics"].values():
+            for epic in column:
+                epic["plan_approved"] = epic_plan_approved(
+                    epic["id"], root=self.server.root
+                )
         self._json_response(HTTPStatus.OK, payload)
 
     def _handle_doc(self, work_id: str) -> None:

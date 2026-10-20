@@ -165,6 +165,38 @@ def test_teardown_hook_preserves_failed_worktree_for_retry(tmp_path: Path) -> No
     assert get_task_run("task_031") is run
 
 
+def test_retry_keeps_base_before_existing_deliverable_commit(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    feature_sha = _initial_commit(root)
+    run = create_task_worktree(
+        "task_031",
+        root=root,
+        parent_rev=None,
+        skills=[],
+        base_ref="main",
+    )
+    (run.worktree / "implementation.py").write_text("DONE = True\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "implementation.py"], cwd=run.worktree, check=True
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "implement task"], cwd=run.worktree, check=True
+    )
+
+    retried = create_task_worktree(
+        "task_031",
+        root=root,
+        parent_rev=None,
+        skills=[],
+        base_ref="main",
+    )
+
+    assert retried.base_sha == feature_sha
+    from cascade.task.swe_turn import has_deliverable_commit
+
+    assert has_deliverable_commit(retried)
+
+
 def test_no_git_push(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     import cascade.task.worktree as worktree_mod
 
