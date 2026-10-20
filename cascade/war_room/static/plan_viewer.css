@@ -97,6 +97,80 @@ body {
 
 .plan-body {
   font-size: 1.0625rem;
+  padding-left: 1.75rem;
+}
+
+.plan-body [data-src-line] {
+  position: relative;
+}
+
+.plan-gutter-add {
+  position: absolute;
+  left: -1.5rem;
+  top: 0.15em;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  font-size: 0.875rem;
+  line-height: 1;
+  border: 1px solid var(--plan-border);
+  border-radius: 3px;
+  background: Canvas;
+  color: var(--plan-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.plan-body [data-src-line]:hover .plan-gutter-add,
+.plan-gutter-add:focus-visible {
+  opacity: 1;
+}
+
+.plan-comment-selection-bar {
+  margin: 0 0 0.75rem;
+}
+
+.plan-comment-compose-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--plan-muted);
+}
+
+.plan-comment-compose-cancel {
+  font: inherit;
+  align-self: flex-start;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 4px;
+  background: Canvas;
+  color: inherit;
+  cursor: pointer;
+}
+
+.plan-comment-reply-form {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.plan-comment-reply-form textarea {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 4px;
+  background: Canvas;
+  color: inherit;
+}
+
+.plan-comment-reply-form button {
+  font: inherit;
+  align-self: flex-start;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 4px;
+  background: Canvas;
+  cursor: pointer;
 }
 
 .plan-body h1,
