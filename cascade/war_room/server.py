@@ -66,10 +66,12 @@ from cascade.war_room.sidecar_routes import _parse_graph_id_from_chat_path, regi
 from cascade.war_room.views import render_plan_page, render_war_room_page
 from cascade.comments import section_slug
 from cascade.comments.store import CommentNotFound
+from cascade.comments.store import NotARoot
 from cascade.comments.store import comment as post_comment
 from cascade.comments.store import CommentStoreError
 from cascade.comments.store import read_comments
 from cascade.comments.store import reply_comment
+from cascade.comments.store import resolve_comment
 from cascade.comments.store import work_tier
 from cascade.war_room.serialize import comment_to_dict
 from cascade.workspace.kickoff import deferred_kickoffs, kickoff_graph_queue_event
@@ -322,6 +324,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/confirm_epic_complete": lambda h, b: h._handle_confirm_epic_complete(b),
             "/api/boss_drain": lambda h, b: h._handle_boss_drain(b),
             "/api/comment": lambda h, b: h._handle_comment(b),
+            "/api/comment/resolve": lambda h, b: h._handle_comment_resolve(b),
             "/api/briefs": lambda h, b: h._handle_create_brief(b),
             "/api/sync/pull": lambda h, b: h._handle_sync_pull(b),
             "/api/approve_epic_plan": lambda h, b: h._handle_approve_epic_plan(b),
@@ -641,6 +644,35 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             HTTPStatus.OK,
             {"doc_id": doc_id, "comments": [comment_to_dict(row) for row in rows]},
         )
+
+    def _handle_comment_resolve(self, body: dict[str, Any]) -> None:
+        doc_id = body.get("doc_id")
+        if not isinstance(doc_id, str) or not doc_id.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing doc_id")
+            return
+        comment_id = body.get("comment_id")
+        if not isinstance(comment_id, str) or not comment_id.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing comment_id")
+            return
+        doc_id = doc_id.strip()
+        comment_id = comment_id.strip()
+        try:
+            resolve_comment(
+                doc_id,
+                comment_id,
+                author="human",
+                root=self.server.root,
+            )
+        except CommentNotFound:
+            self._json_error(HTTPStatus.NOT_FOUND, "comment not found")
+            return
+        except NotARoot:
+            self._json_error(HTTPStatus.BAD_REQUEST, "NotARoot")
+            return
+        except CommentStoreError as exc:
+            self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._json_response(HTTPStatus.ACCEPTED, {"ok": True, "comment_id": comment_id})
 
     def _handle_ask_boss_dispatch(self, body: dict[str, Any]) -> None:
         kind = body.get("kind")

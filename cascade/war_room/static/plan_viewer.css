@@ -163,6 +163,11 @@ body {
   cursor: pointer;
 }
 
+.plan-comment-resolve {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+}
+
 .plan-comment-reply-form {
   margin-top: 0.65rem;
   display: flex;

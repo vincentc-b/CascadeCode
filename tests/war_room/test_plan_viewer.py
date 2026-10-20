@@ -104,6 +104,8 @@ def test_get_plan_known_doc(war_room_server):
     assert "plan-comment-section" not in html
     assert "sectionSlug" in plan_js
     assert "plan-gutter-add" in plan_js
+    assert "plan-comment-resolve" in plan_js
+    assert "/api/comment/resolve" in plan_js
 
 
 def test_get_plan_task_tier_hides_comment_panel(tmp_path):
