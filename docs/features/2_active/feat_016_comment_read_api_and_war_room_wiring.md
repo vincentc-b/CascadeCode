@@ -15,7 +15,7 @@ owners:
 skills: []
 parent_rev: 739b74b3f2369b74eb1f0e539f334931145f79f2
 created: '2026-10-18'
-updated: '2026-10-19'
+updated: '2026-10-20'
 ---
 # Comment read API and War Room wiring
 
@@ -141,3 +141,8 @@ Feature Team mints after dispatch. Suggested slice:
 - **D2 — Replies use `parent` on POST `/api/comment`.** Extends the existing route; no `/api/comment/reply`. Section is optional on replies and inherited.
 - **D3 — `cascade.comments.section_slug()` is the only slugger for comments/cites.** Viewer (feat_017) and gate (feat_019) import it. Filename/amendment sluggers stay separate.
 - **D4 — Kickoff helper is feat_020.** This feature keeps the existing `kickoff_graph_queue_event` call so HTTP still requests a turn. Replacing it here would race feat_020.
+
+- `dec_001` · 2026-10-20 · Feature Lead · **D5 — Kickoff call lands at integration, not in this feature**
+  Chose feat/feat_016 does not add kickoff_graph_queue_event to POST /api/comment. The helper and its call in _handle_comment exist only in uncommitted work on the main checkout; they are absent from the committed base this branch was cut from. No second helper is created here..
+  Rationale: Spec D4 says keep today's call and add no second helper. Creating the helper on this branch would duplicate the uncommitted main work and collide with feat_020. When that work is committed, the merge must keep its kickoff call in both the root and reply paths of _handle_comment and keep the `kickoff` key in the 202 response. Merging should also drop the duplicate GET /api/comments handler (_handle_comments here vs _handle_comments_list there) in favor of one.
+  Honors: D4.
