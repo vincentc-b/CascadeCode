@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,9 +16,20 @@ const {
   planHrefFromRelative,
   markdownToHtml,
   blockLineNumbersForBody,
+  blockSourceRangesForBody,
+  sectionSlug,
+  sectionForSourceLine,
   mermaidNodeHasDiagram,
   safeUrl,
 } = require(join(staticDir, "plan_viewer.js"));
+
+const slugVectors = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fixtures/section_slug_vectors.json"), "utf8")
+);
+for (const [heading, expected] of slugVectors) {
+  assert.equal(sectionSlug(heading), expected);
+  assert.doesNotMatch(expected, /_/);
+}
 
 const sampleMd = `# Plan
 
@@ -83,5 +95,15 @@ assert.match(sampleHtml, /<p data-src-line="12">Plain/);
 assert.equal(mermaidNodeHasDiagram(null), false);
 assert.equal(mermaidNodeHasDiagram({ querySelector: () => null }), false);
 assert.equal(mermaidNodeHasDiagram({ querySelector: (sel) => (sel === "svg" ? {} : null) }), true);
+
+const sectionDoc = "# Title\n\nIntro\n\n## Scope\n\nLine under scope.\n";
+assert.equal(sectionForSourceLine(sectionDoc, 2), "title");
+assert.equal(sectionForSourceLine(sectionDoc, 4), "title");
+assert.equal(sectionForSourceLine(sectionDoc, 6), "scope");
+
+const ranges = blockSourceRangesForBody("# H\n\nPara.");
+assert.equal(ranges.length, 2);
+assert.equal(ranges[0].lineStart, 1);
+assert.equal(ranges[1].lineStart, 3);
 
 console.log("plan_render cases ok");

@@ -132,6 +132,129 @@
     return line != null ? ' data-src-line="' + line + '"' : "";
   }
 
+  var SECTION_SLUG_NON = /[^a-z0-9]+/g;
+
+  function sectionSlug(heading) {
+    var slug = String(heading != null ? heading : "")
+      .trim()
+      .toLowerCase()
+      .replace(SECTION_SLUG_NON, "-")
+      .replace(/^-+|-+$/g, "");
+    return slug;
+  }
+
+  function blockSourceRangesForBody(body) {
+    var text = body != null ? String(body) : "";
+    if (typeof marked === "undefined") {
+      return [];
+    }
+    var tokens = marked.lexer(text);
+    var offset = 0;
+    var ranges = [];
+    for (var i = 0; i < tokens.length; i += 1) {
+      var tok = tokens[i];
+      var raw = tok.raw || "";
+      if (tok.type === "space") {
+        offset += raw.length;
+        continue;
+      }
+      var startLine = offsetToSourceLine(text, offset);
+      var endOffset = offset + raw.length;
+      var endLine = offsetToSourceLine(text, Math.max(offset, endOffset - 1));
+      ranges.push({ lineStart: startLine, lineEnd: endLine });
+      offset = endOffset;
+    }
+    return ranges;
+  }
+
+  function headingIndexForBody(body) {
+    var lines = String(body != null ? body : "").split("\n");
+    var headings = [];
+    var firstH2Line = null;
+    for (var i = 0; i < lines.length; i += 1) {
+      var match = /^(#{1,6})\s+(.+?)\s*$/.exec(lines[i]);
+      if (!match) {
+        continue;
+      }
+      var level = match[1].length;
+      var title = match[2];
+      var lineNum = i + 1;
+      if (level >= 2 && firstH2Line === null) {
+        firstH2Line = lineNum;
+      }
+      headings.push({ line: lineNum, level: level, title: title, slug: sectionSlug(title) });
+    }
+    return { headings: headings, firstH2Line: firstH2Line };
+  }
+
+  function sectionForSourceLine(body, line) {
+    var idx = headingIndexForBody(body);
+    var headings = idx.headings;
+    var firstH2 = idx.firstH2Line;
+    var lineNum = line != null ? line : 1;
+    var h1 = null;
+    var nearestH2Plus = null;
+    for (var i = 0; i < headings.length; i += 1) {
+      var h = headings[i];
+      if (h.line > lineNum) {
+        break;
+      }
+      if (h.level === 1) {
+        h1 = h;
+      }
+      if (h.level >= 2) {
+        nearestH2Plus = h;
+      }
+    }
+    if (firstH2 !== null && lineNum < firstH2) {
+      if (h1 && h1.slug) {
+        return h1.slug;
+      }
+      return "general";
+    }
+    if (nearestH2Plus && nearestH2Plus.slug) {
+      return nearestH2Plus.slug;
+    }
+    if (h1 && h1.slug) {
+      return h1.slug;
+    }
+    return "general";
+  }
+
+  function lineEndForBlockStart(body, lineStart) {
+    var ranges = blockSourceRangesForBody(body);
+    for (var i = 0; i < ranges.length; i += 1) {
+      if (ranges[i].lineStart === lineStart) {
+        return ranges[i].lineEnd;
+      }
+    }
+    return lineStart;
+  }
+
+  function snippetFromLines(body, lineStart, lineEnd, maxLen) {
+    var lines = String(body != null ? body : "").split("\n");
+    var start = Math.max(1, lineStart || 1);
+    var end = Math.min(lines.length, lineEnd || start);
+    var chunk = lines.slice(start - 1, end).join("\n").trim();
+    var limit = maxLen != null ? maxLen : 120;
+    if (chunk.length > limit) {
+      chunk = chunk.slice(0, limit);
+    }
+    return chunk;
+  }
+
+  function srcLineFromDomNode(node, bodyEl) {
+    var el = node && node.nodeType === 1 ? node : node && node.parentElement;
+    while (el && el !== bodyEl) {
+      if (el.getAttribute && el.hasAttribute("data-src-line")) {
+        var parsed = parseInt(el.getAttribute("data-src-line"), 10);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
   function buildMarkedParseOptions(body) {
     if (typeof marked === "undefined") {
       return null;
@@ -463,20 +586,95 @@
     }
   }
 
-  function initPlanComments(workId, tier) {
+  function collectPreservedThreadExtras(container) {
+    var map = {};
+    if (!container || !container.querySelectorAll) {
+      return map;
+    }
+    var nodes = container.querySelectorAll(".plan-comment-thread[data-comment-id]");
+    for (var i = 0; i < nodes.length; i += 1) {
+      var el = nodes[i];
+      var id = el.getAttribute("data-comment-id");
+      if (!id) {
+        continue;
+      }
+      var extras = [];
+      var children = el.children;
+      for (var c = 0; c < children.length; c += 1) {
+        var child = children[c];
+        if (child.classList.contains("plan-comment-entry")) {
+          continue;
+        }
+        if (child.classList.contains("plan-comment-replies")) {
+          continue;
+        }
+        if (child.classList.contains("plan-comment-reply-form")) {
+          continue;
+        }
+        extras.push(child.cloneNode(true));
+      }
+      if (extras.length) {
+        map[id] = extras;
+      }
+    }
+    return map;
+  }
+
+  function installPlanGutters(bodyEl, onAdd) {
+    if (!bodyEl || !bodyEl.querySelectorAll) {
+      return;
+    }
+    var blocks = bodyEl.querySelectorAll("[data-src-line]");
+    for (var i = 0; i < blocks.length; i += 1) {
+      var block = blocks[i];
+      if (block.querySelector(".plan-gutter-add")) {
+        continue;
+      }
+      var line = parseInt(block.getAttribute("data-src-line"), 10);
+      if (!Number.isFinite(line)) {
+        continue;
+      }
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "plan-gutter-add";
+      btn.textContent = "+";
+      btn.setAttribute("aria-label", "Comment on this block");
+      btn.addEventListener("click", function (lineNum) {
+        return function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          onAdd(lineNum);
+        };
+      }(line));
+      block.insertBefore(btn, block.firstChild);
+    }
+  }
+
+  function initPlanComments(workId, tier, options) {
     if (tier === "task") {
       return;
     }
+    options = options || {};
+    var docBody = options.docBody != null ? String(options.docBody) : "";
+    var docSha = options.docSha != null ? String(options.docSha) : "";
+    var bodyEl = options.bodyEl || document.getElementById("plan-body");
+
     var panel = document.getElementById("plan-comments");
     var threadEl = document.getElementById("plan-comment-threads");
     var compose = document.getElementById("plan-comment-compose");
     var bodyInput = document.getElementById("plan-comment-body");
-    var sectionInput = document.getElementById("plan-comment-section");
     var blockingInput = document.getElementById("plan-comment-blocking");
     var statusEl = document.getElementById("plan-comment-status");
-    if (!panel || !threadEl || !compose || !bodyInput || !sectionInput) {
+    var composeHint = document.getElementById("plan-comment-compose-hint");
+    var composeCancel = document.getElementById("plan-comment-compose-cancel");
+    var selectionBar = document.getElementById("plan-comment-selection-bar");
+    var selectionBtn = document.getElementById("plan-comment-on-selection");
+    if (!panel || !threadEl || !compose || !bodyInput) {
       return;
     }
+
+    var pendingRoot = null;
+    var selectionDraft = null;
 
     function setCommentStatus(msg, isError) {
       if (!statusEl) return;
@@ -484,33 +682,97 @@
       statusEl.classList.toggle("error", !!isError);
     }
 
-    function renderCommentThreads(comments) {
-      threadEl.innerHTML = "";
-      var rows = comments || [];
-      var roots = rows.filter(function (row) {
-        return !row.parent;
+    function clearRootCompose() {
+      pendingRoot = null;
+      bodyInput.value = "";
+      if (blockingInput) {
+        blockingInput.checked = false;
+      }
+      compose.hidden = true;
+      if (composeHint) {
+        composeHint.textContent = "";
+      }
+    }
+
+    function showRootCompose(target) {
+      pendingRoot = target;
+      if (composeHint) {
+        composeHint.textContent =
+          "Section " +
+          target.section +
+          " · lines " +
+          target.line_start +
+          "–" +
+          target.line_end;
+      }
+      compose.hidden = false;
+      bodyInput.focus();
+      setCommentStatus("", false);
+    }
+
+    function beginRootFromLine(lineStart) {
+      var lineEnd = lineEndForBlockStart(docBody, lineStart);
+      var section = sectionForSourceLine(docBody, lineStart);
+      showRootCompose({
+        line_start: lineStart,
+        line_end: lineEnd,
+        section: section,
+        anchor: snippetFromLines(docBody, lineStart, lineEnd, 120),
       });
-      roots.forEach(function (root) {
-        var block = document.createElement("div");
-        block.className = "plan-comment-thread";
-        if (root.state === "resolved") {
-          block.classList.add("resolved");
-        }
-        block.setAttribute("role", "listitem");
-        block.appendChild(buildCommentNode(root));
-        var replies = rows.filter(function (row) {
-          return row.parent === root.id;
-        });
-        if (replies.length) {
-          var replyWrap = document.createElement("div");
-          replyWrap.className = "plan-comment-replies";
-          replies.forEach(function (reply) {
-            replyWrap.appendChild(buildCommentNode(reply));
-          });
-          block.appendChild(replyWrap);
-        }
-        threadEl.appendChild(block);
-      });
+    }
+
+    function beginRootFromSelection() {
+      if (!selectionDraft) {
+        return;
+      }
+      showRootCompose(selectionDraft);
+      if (selectionBar) {
+        selectionBar.hidden = true;
+      }
+      selectionDraft = null;
+    }
+
+    function updateSelectionDraft() {
+      if (!bodyEl || !selectionBar || !selectionBtn) {
+        return;
+      }
+      var sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+        selectionDraft = null;
+        selectionBar.hidden = true;
+        return;
+      }
+      if (!bodyEl.contains(sel.anchorNode) || !bodyEl.contains(sel.focusNode)) {
+        selectionDraft = null;
+        selectionBar.hidden = true;
+        return;
+      }
+      var startLine = srcLineFromDomNode(sel.anchorNode, bodyEl);
+      var endLine = srcLineFromDomNode(sel.focusNode, bodyEl);
+      if (startLine == null || endLine == null) {
+        selectionDraft = null;
+        selectionBar.hidden = true;
+        return;
+      }
+      var lineStart = Math.min(startLine, endLine);
+      var lineEnd = Math.max(
+        lineEndForBlockStart(docBody, startLine),
+        lineEndForBlockStart(docBody, endLine)
+      );
+      if (lineEnd < lineStart) {
+        lineEnd = lineStart;
+      }
+      var anchor = sel.toString().trim();
+      if (anchor.length > 120) {
+        anchor = anchor.slice(0, 120);
+      }
+      selectionDraft = {
+        line_start: lineStart,
+        line_end: lineEnd,
+        section: sectionForSourceLine(docBody, lineStart),
+        anchor: anchor,
+      };
+      selectionBar.hidden = false;
     }
 
     function buildCommentNode(row) {
@@ -532,6 +794,109 @@
       return wrap;
     }
 
+    function buildReplyForm(rootId) {
+      var form = document.createElement("form");
+      form.className = "plan-comment-reply-form";
+      var textarea = document.createElement("textarea");
+      textarea.rows = 2;
+      textarea.required = true;
+      textarea.setAttribute("aria-label", "Reply");
+      var submit = document.createElement("button");
+      submit.type = "submit";
+      submit.textContent = "Reply";
+      form.appendChild(textarea);
+      form.appendChild(submit);
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var text = textarea.value.trim();
+        if (!text) {
+          return;
+        }
+        submit.disabled = true;
+        setCommentStatus("Posting reply…", false);
+        fetch("/api/comment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            doc_id: workId,
+            body: text,
+            parent: rootId,
+          }),
+        })
+          .then(function (resp) {
+            return resp.text().then(function (raw) {
+              var payload;
+              try {
+                payload = JSON.parse(raw);
+              } catch (_e) {
+                payload = { error: raw };
+              }
+              if (resp.status !== 202 && !resp.ok) {
+                var errMsg =
+                  payload && payload.error ? payload.error : "Post failed (" + resp.status + ")";
+                throw new Error(errMsg);
+              }
+              return payload;
+            });
+          })
+          .then(function (payload) {
+            if (!payload || payload.ok !== true) {
+              throw new Error("Unexpected reply response");
+            }
+            textarea.value = "";
+            setCommentStatus("");
+            return loadComments();
+          })
+          .catch(function (err) {
+            setCommentStatus(err && err.message ? err.message : "Post failed", true);
+          })
+          .finally(function () {
+            submit.disabled = false;
+          });
+      });
+      return form;
+    }
+
+    function renderCommentThreads(comments) {
+      var preserved = collectPreservedThreadExtras(threadEl);
+      threadEl.innerHTML = "";
+      var rows = comments || [];
+      var roots = rows.filter(function (row) {
+        return !row.parent;
+      });
+      roots.forEach(function (root) {
+        var block = document.createElement("div");
+        block.className = "plan-comment-thread";
+        if (root.state === "resolved") {
+          block.classList.add("resolved");
+        }
+        block.setAttribute("role", "listitem");
+        block.setAttribute("data-comment-id", root.id);
+        block.appendChild(buildCommentNode(root));
+        var replies = rows.filter(function (row) {
+          return row.parent === root.id;
+        });
+        if (replies.length) {
+          var replyWrap = document.createElement("div");
+          replyWrap.className = "plan-comment-replies";
+          replies.forEach(function (reply) {
+            replyWrap.appendChild(buildCommentNode(reply));
+          });
+          block.appendChild(replyWrap);
+        }
+        if (root.state !== "resolved") {
+          block.appendChild(buildReplyForm(root.id));
+        }
+        var extras = preserved[root.id];
+        if (extras) {
+          extras.forEach(function (node) {
+            block.appendChild(node);
+          });
+        }
+        threadEl.appendChild(block);
+      });
+    }
+
     function loadComments() {
       return fetch("/api/comments/" + encodeURIComponent(workId), {
         signal: pageLoadSignal(),
@@ -547,53 +912,80 @@
         });
     }
 
+    function postJsonComment(payload) {
+      return fetch("/api/comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).then(function (resp) {
+        return resp.text().then(function (raw) {
+          var parsed;
+          try {
+            parsed = JSON.parse(raw);
+          } catch (_e) {
+            parsed = { error: raw };
+          }
+          if (resp.status !== 202 && !resp.ok) {
+            var errMsg =
+              parsed && parsed.error ? parsed.error : "Post failed (" + resp.status + ")";
+            throw new Error(errMsg);
+          }
+          return parsed;
+        });
+      });
+    }
+
     compose.addEventListener("submit", function (ev) {
       ev.preventDefault();
       var text = bodyInput.value.trim();
-      var section = sectionInput.value.trim();
-      if (!text || !section) {
-        setCommentStatus("Section and comment are required.", true);
+      if (!text) {
+        setCommentStatus("Comment is required.", true);
+        return;
+      }
+      if (!pendingRoot || !pendingRoot.section) {
+        setCommentStatus("Select text or use a gutter + to start a thread.", true);
         return;
       }
       setCommentStatus("Posting…", false);
-      fetch("/api/comment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          doc_id: workId,
-          section: section,
-          body: text,
-          blocking: !!(blockingInput && blockingInput.checked),
-        }),
+      postJsonComment({
+        doc_id: workId,
+        section: pendingRoot.section,
+        body: text,
+        line_start: pendingRoot.line_start,
+        line_end: pendingRoot.line_end,
+        anchor: pendingRoot.anchor,
+        doc_sha: docSha || null,
+        blocking: !!(blockingInput && blockingInput.checked),
       })
-        .then(function (resp) {
-          return resp.text().then(function (raw) {
-            var payload;
-            try {
-              payload = JSON.parse(raw);
-            } catch (_e) {
-              payload = { error: raw };
-            }
-            if (!resp.ok) {
-              var errMsg =
-                payload && payload.error ? payload.error : "Post failed (" + resp.status + ")";
-              throw new Error(errMsg);
-            }
-            return payload;
-          });
-        })
-        .then(function () {
-          bodyInput.value = "";
-          if (blockingInput) {
-            blockingInput.checked = false;
+        .then(function (payload) {
+          if (!payload || payload.ok !== true || !payload.comment_id) {
+            throw new Error("Unexpected post response");
           }
-          setCommentStatus("");
+          if (payload.kickoff != null) {
+            throw new Error("Unexpected kickoff in post response");
+          }
+          clearRootCompose();
           return loadComments();
         })
         .catch(function (err) {
           setCommentStatus(err && err.message ? err.message : "Post failed", true);
         });
     });
+
+    if (composeCancel) {
+      composeCancel.addEventListener("click", function () {
+        clearRootCompose();
+      });
+    }
+    if (selectionBtn) {
+      selectionBtn.addEventListener("click", function () {
+        beginRootFromSelection();
+      });
+    }
+    if (bodyEl) {
+      bodyEl.addEventListener("mouseup", updateSelectionDraft);
+      installPlanGutters(bodyEl, beginRootFromLine);
+    }
 
     panel.hidden = false;
     loadComments().catch(function (err) {
@@ -642,7 +1034,11 @@
           if (bodyEl) {
             bodyEl.hidden = false;
           }
-          initPlanComments(workId, meta.tier);
+          initPlanComments(workId, meta.tier, {
+            bodyEl: bodyEl,
+            docBody: doc.body,
+            docSha: doc.sha,
+          });
         });
       });
     withDeadline(loadWork).catch(function (err) {
@@ -663,6 +1059,9 @@
     escapeHtml: escapeHtml,
     safeUrl: safeUrl,
     blockLineNumbersForBody: blockLineNumbersForBody,
+    blockSourceRangesForBody: blockSourceRangesForBody,
+    sectionSlug: sectionSlug,
+    sectionForSourceLine: sectionForSourceLine,
     findMermaidFences: findMermaidFences,
     workIdFromDocHref: workIdFromDocHref,
     planHrefFromRelative: planHrefFromRelative,
