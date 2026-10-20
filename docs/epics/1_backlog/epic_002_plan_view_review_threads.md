@@ -180,6 +180,10 @@ _(none — all resolved, see Decision log dec_001–dec_013)_
   Rationale: dec_004 is one shared gate with no bypass; the human unblocks by resolving. feat_018 is what takes resolve_comment off agent tools and puts the Resolve button on the plan. Shipping the gate first would let the owning team unblock dispatch without a human click. Schema work can still proceed in parallel; only closeout waits.
   Honors: dec_004; dec_007; Intent human gate (dispatch and merges); feat_018 D1 agents cannot resolve.
 
+- `dec_014` · 2026-10-20 · Epic Architect · **Feature breakdown**
+  Chose feat_018 depends_on is feat_016 only, not feat_017. feat_017 and feat_018 may dispatch and merge in either order. Shared contract: each root thread in #plan-comments is an element with data-comment-id equal to the root comment id. feat_017 emits it (and must not wipe a Resolve control already mounted); feat_018 binds Resolve to open roots (and stamps the attribute if chrome has not shipped). Doc-level re-anchor on feat_017 searches the whole body, not an H1-only range..
+  Rationale: dec_007 already says dispatch 017 and 018 in the same wave, but feat_018.depends_on still listed feat_017, which would block resolve until chrome is complete. The store and tool guard do not need chrome; the existing #plan-comments panel is enough for a Resolve button. A second depends_on would also prevent leaving and resolving a thread in one operator session. The data-comment-id marker is the smallest seam that lets either merge order work without both features owning the list innerHTML.
+  Honors: dec_007; Intent (resolved only as human); feat_016 existing #plan-comments panel; feat_018 D1 agents cannot resolve..
 ## Amendment log
 
 _(none)_
