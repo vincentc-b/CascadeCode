@@ -64,8 +64,14 @@ from cascade.war_room.provider_routes import (
 )
 from cascade.war_room.sidecar_routes import _parse_graph_id_from_chat_path, register_sidecar_routes
 from cascade.war_room.views import render_plan_page, render_war_room_page
+from cascade.comments import section_slug
+from cascade.comments.store import CommentNotFound
 from cascade.comments.store import comment as post_comment
 from cascade.comments.store import CommentStoreError
+from cascade.comments.store import read_comments
+from cascade.comments.store import reply_comment
+from cascade.comments.store import work_tier
+from cascade.war_room.serialize import comment_to_dict
 from cascade.watchdog import activate_epic, append_event, dispatch_feature, dispatch_task
 from cascade.watchdog.types import Event
 
@@ -205,6 +211,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             from cascade.war_room.sidecar_routes import handle_get_chat
 
             handle_get_chat(self, chat_id)
+            return
+        if path.startswith("/api/comments/"):
+            doc_id = path.removeprefix("/api/comments/").strip("/")
+            if not doc_id or "/" in doc_id:
+                self._json_error(HTTPStatus.NOT_FOUND, "not found")
+                return
+            self._handle_comments(doc_id)
             return
         if path.startswith("/api/doc/"):
             work_id = path.removeprefix("/api/doc/").strip("/")
@@ -418,18 +431,63 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             flight_report_to_dict(report, root=self.server.root),
         )
 
+    def _handle_comments(self, doc_id: str) -> None:
+        try:
+            tier = work_tier(doc_id, root=self.server.root)
+        except CommentStoreError as exc:
+            self._json_error(HTTPStatus.NOT_FOUND, str(exc))
+            return
+        if tier == "task":
+            self._json_error(
+                HTTPStatus.BAD_REQUEST,
+                "comments not supported for tier task",
+            )
+            return
+        rows = read_comments(doc_id, root=self.server.root)
+        self._json_response(
+            HTTPStatus.OK,
+            {"doc_id": doc_id, "comments": [comment_to_dict(row) for row in rows]},
+        )
+
     def _handle_comment(self, body: dict[str, Any]) -> None:
         doc_id = body.get("doc_id")
         if not isinstance(doc_id, str) or not doc_id.strip():
             self._json_error(HTTPStatus.BAD_REQUEST, "missing doc_id")
             return
-        section = body.get("section")
-        if not isinstance(section, str) or not section.strip():
-            self._json_error(HTTPStatus.BAD_REQUEST, "missing section")
-            return
         text = body.get("body")
         if not isinstance(text, str) or not text.strip():
             self._json_error(HTTPStatus.BAD_REQUEST, "missing body")
+            return
+
+        parent = body.get("parent")
+        if parent is not None:
+            if not isinstance(parent, str) or not parent.strip():
+                self._json_error(HTTPStatus.BAD_REQUEST, "invalid parent")
+                return
+            try:
+                comment_id = reply_comment(
+                    doc_id.strip(),
+                    parent.strip(),
+                    text,
+                    author="human",
+                    root=self.server.root,
+                )
+            except CommentNotFound:
+                self._json_error(HTTPStatus.NOT_FOUND, "parent not found")
+                return
+            except CommentStoreError as exc:
+                self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._json_response(HTTPStatus.ACCEPTED, {"ok": True, "comment_id": comment_id})
+            return
+
+        section_raw = body.get("section")
+        if not isinstance(section_raw, str) or not section_raw.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing section")
+            return
+        section = section_slug(section_raw)
+        if not section:
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing section")
             return
         anchor = body.get("anchor")
         if anchor is not None and not isinstance(anchor, str):
@@ -439,6 +497,32 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if not isinstance(blocking, bool):
             self._json_error(HTTPStatus.BAD_REQUEST, "invalid blocking")
             return
+        line_start = body.get("line_start")
+        if line_start is not None and not isinstance(line_start, int):
+            self._json_error(HTTPStatus.BAD_REQUEST, "invalid line_start")
+            return
+        line_end = body.get("line_end")
+        if line_end is not None and not isinstance(line_end, int):
+            self._json_error(HTTPStatus.BAD_REQUEST, "invalid line_end")
+            return
+        if line_start is not None and line_end is not None and line_end < line_start:
+            self._json_error(HTTPStatus.BAD_REQUEST, "line_end before line_start")
+            return
+        doc_sha = body.get("doc_sha")
+        if doc_sha is not None and not isinstance(doc_sha, str):
+            self._json_error(HTTPStatus.BAD_REQUEST, "invalid doc_sha")
+            return
+        blocks_raw = body.get("blocks")
+        blocks: list[str] | None = None
+        if blocks_raw is not None:
+            if not isinstance(blocks_raw, list):
+                self._json_error(HTTPStatus.BAD_REQUEST, "invalid blocks")
+                return
+            for item in blocks_raw:
+                if not isinstance(item, str):
+                    self._json_error(HTTPStatus.BAD_REQUEST, "invalid blocks")
+                    return
+            blocks = [item for item in blocks_raw]
         try:
             comment_id = post_comment(
                 doc_id.strip(),
@@ -446,6 +530,10 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 text,
                 anchor=anchor,
                 blocking=blocking,
+                line_start=line_start,
+                line_end=line_end,
+                doc_sha=doc_sha,
+                blocks=blocks,
                 author="human",
                 root=self.server.root,
                 is_attached=self.server.attachment.is_attached,
@@ -610,6 +698,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return True
         if _parse_graph_id_from_chat_path(path) is not None:
             return True
+        if path.startswith("/api/comments/"):
+            doc_id = path.removeprefix("/api/comments/").strip("/")
+            return bool(doc_id and "/" not in doc_id)
         if path.startswith("/api/doc/"):
             work_id = path.removeprefix("/api/doc/").strip("/")
             return bool(work_id and "/" not in work_id)
