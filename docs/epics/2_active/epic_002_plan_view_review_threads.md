@@ -175,6 +175,10 @@ _(none — all resolved, see Decision log dec_001–dec_012)_
   Rationale: feat_016 was cut from a committed base that had no kickoff helper; adding one there would have duplicated in-flight main work and raced feat_020. Operator success #2 (owning team replies in-thread) is feat_020's job, not a silent HTTP side effect. Duplicate GET handlers would make the locked read API non-deterministic.
   Honors: feat_016 D5; dec_011; Kickoff edges only; Operator success #2.
 
+- `dec_013` · 2026-10-20 · Epic Architect · **Scoped dispatch gates — merge order**
+  Chose feat_019 may be implemented in parallel after feat_016 but must not merge or close out before feat_018. Until resolve is human-only, agents can still resolve_comment and that would bypass the gate. depends_on stays feat_016 (comment schema only)..
+  Rationale: dec_004 is one shared gate with no bypass; the human unblocks by resolving. feat_018 is what takes resolve_comment off agent tools and puts the Resolve button on the plan. Shipping the gate first would let the owning team unblock dispatch without a human click. Schema work can still proceed in parallel; only closeout waits.
+  Honors: dec_004; dec_007; Intent human gate (dispatch and merges); feat_018 D1 agents cannot resolve.
 ## Amendment log
 
 _(none)_
