@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from cascade.comments import section_slug
 from cascade.comments.store import (
     BlockingNotAllowed,
     comment,
@@ -14,6 +15,7 @@ from cascade.comments.store import (
     reply_comment,
     resolve_comment,
 )
+from cascade.comments.types import Comment
 from cascade.watchdog import read_events
 from tests.support import add_doc, make_repo
 
@@ -53,6 +55,10 @@ def test_comment_schema_and_monotonic_ids(board: Path) -> None:
     assert row.doc_id == "feat_001"
     assert row.section == "API contracts"
     assert row.anchor == "mint_task"
+    assert row.line_start is None
+    assert row.line_end is None
+    assert row.doc_sha is None
+    assert row.blocks == ()
     assert row.author == "human"
     assert row.body == "Need clearer errors"
     assert row.parent is None
@@ -63,6 +69,91 @@ def test_comment_schema_and_monotonic_ids(board: Path) -> None:
     sidecar = board / "docs" / "_comments" / "feat_001.jsonl"
     parsed = json.loads(sidecar.read_text(encoding="utf-8").splitlines()[0])
     assert parsed["created"].endswith("Z") or "+" in parsed["created"]
+    assert parsed["line_start"] is None
+    assert parsed["line_end"] is None
+    assert parsed["doc_sha"] is None
+    assert parsed["blocks"] == []
+
+
+def test_legacy_sidecar_without_new_keys(board: Path) -> None:
+    sidecar = board / "docs" / "_comments" / "feat_001.jsonl"
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    legacy = {
+        "id": "cmt_001",
+        "doc_id": "feat_001",
+        "section": "Scope",
+        "anchor": None,
+        "author": "human",
+        "body": "legacy row",
+        "parent": None,
+        "state": "open",
+        "blocking": False,
+        "created": "2026-01-15T12:00:00+00:00",
+    }
+    sidecar.write_text(json.dumps(legacy) + "\n", encoding="utf-8")
+
+    rows = read_comments("feat_001", root=board)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.line_start is None
+    assert row.line_end is None
+    assert row.doc_sha is None
+    assert row.blocks == ()
+
+    resolve_comment("feat_001", "cmt_001", root=board)
+    row = next(r for r in read_comments("feat_001", root=board) if r.id == "cmt_001")
+    assert row.state == "resolved"
+    assert row.line_start is None
+    assert row.line_end is None
+    assert row.doc_sha is None
+    assert row.blocks == ()
+
+
+def test_new_fields_round_trip(board: Path) -> None:
+    cmt_id = comment(
+        "feat_001",
+        "Scope",
+        "anchored",
+        line_start=3,
+        line_end=5,
+        doc_sha="abc",
+        blocks=["task_001"],
+        author="human",
+        root=board,
+    )
+    row = next(r for r in read_comments("feat_001", root=board) if r.id == cmt_id)
+    assert row.line_start == 3
+    assert row.line_end == 5
+    assert row.doc_sha == "abc"
+    assert row.blocks == ("task_001",)
+
+    sidecar = board / "docs" / "_comments" / "feat_001.jsonl"
+    parsed = json.loads(sidecar.read_text(encoding="utf-8").splitlines()[-1])
+    assert parsed["line_start"] == 3
+    assert parsed["line_end"] == 5
+    assert parsed["doc_sha"] == "abc"
+    assert parsed["blocks"] == ["task_001"]
+
+    reloaded = Comment.from_dict(parsed)
+    assert reloaded.line_start == 3
+    assert reloaded.line_end == 5
+    assert reloaded.doc_sha == "abc"
+    assert reloaded.blocks == ("task_001",)
+
+
+@pytest.mark.parametrize(
+    ("heading", "expected"),
+    [
+        ("Memory layout", "memory-layout"),
+        ("  Open  questions ", "open-questions"),
+        ("A_b/C", "a-b-c"),
+        ("--x--", "x"),
+    ],
+)
+def test_section_slug(heading: str, expected: str) -> None:
+    result = section_slug(heading)
+    assert result == expected
+    assert "_" not in result
 
 
 def test_blocking_human_only(board: Path) -> None:
