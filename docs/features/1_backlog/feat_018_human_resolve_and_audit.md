@@ -14,7 +14,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-18'
-updated: '2026-10-18'
+updated: '2026-10-20'
 ---
 # Human resolve and audit
 
@@ -22,7 +22,7 @@ updated: '2026-10-18'
 
 [epic_002](../../epics/2_active/epic_002_plan_view_review_threads.md) — Plan-view review threads.
 
-Depends on: [feat_016](feat_016_comment_read_api_and_war_room_wiring.md), [feat_017](feat_017_plan_viewer_comment_chrome.md).
+Depends on: [feat_016](../3_completed/feat_016_comment_read_api_and_war_room_wiring.md) (completed 2026-10-20), [feat_017](feat_017_plan_viewer_comment_chrome.md).
 
 Cites (promote to frontmatter `cites:` when feat_019 lands): `epic_002#intent`, `epic_002#cross-module-constraints`.
 
@@ -33,6 +33,7 @@ Constraints this feature must honor:
 - Resolve is **thread-level** (dec_009): only an open root may be resolved; the root and all descendants flip to `resolved`. Closeout blocks on any open human comment, so leaving replies open after resolving the root would still freeze complete.
 - Completion rollup is unchanged: any **open human** thread still blocks epic/feature closeout (feat_008), whether or not it is blocking.
 - No agent turn on resolve (dec_011). `CommentResolved` is ingested for the queue offset only.
+- feat_019 closeout waits on this feature (dec_013). The store + tool guard is what makes the gate un-bypassable; the Resolve button is still required here so humans have a UI path.
 - Localhost only. No new store.
 
 ## Scope
@@ -106,6 +107,7 @@ Feature Team mints after dispatch. Suggested slice:
 - Today's agent tools can resolve. Shipping feat_017 before this feature leaves a window where the UI has no button and agents still can. Dispatch feat_018 next to feat_017, or the same wave.
 - Not kicking off a turn on resolve avoids an agent immediately re-opening debate. If the operator wants a closeout note, they type a reply first.
 - Cascade rewrites the sidecar (same as today's single-row rewrite). Do not append duplicate resolved rows.
+- feat_019 must not merge until this feature's agent-tool denial is on the board (dec_013). The button can land in the same merge as the guard.
 
 ## Decision log
 
@@ -113,3 +115,4 @@ Feature Team mints after dispatch. Suggested slice:
 - **D2 — No turn on resolve.** Resolve is a gate release, not a new question. feat_020 must skip `CommentResolved`.
 - **D3 — Audit is `In reply to:` in the decision log.** DESIGN §10.4 already specifies it; a join table would be a second source of truth.
 - **D4 — Resolve cascades through the thread (dec_009).** Closeout would otherwise stay blocked on the operator's own replies.
+- **D5 — Gate merge waits on this feature (dec_013).** Until `resolve_comment` is denied to agents, shipping `blocking_threads_for` would leak the human gate.
