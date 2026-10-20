@@ -2,7 +2,7 @@
 id: feat_016
 title: Comment read API and War Room wiring
 tier: feature
-status: active
+status: completed
 parent: epic_002
 children:
 - task_077
