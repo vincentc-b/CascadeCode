@@ -99,19 +99,19 @@ feat_016 is complete. Remaining features stay in `docs/features/1_backlog/` unti
 
 1. **[feat_016](../../features/3_completed/feat_016_comment_read_api_and_war_room_wiring.md) — Comment read API and War Room wiring** *(completed 2026-10-20; task_077–079 merged)* — GET `/api/comments/{doc_id}` and POST `/api/comment` carry `line_start` / `line_end` / `doc_sha` / `blocks`; `parent` is a reply (section inherited); `cascade.comments.section_slug()` is hyphenated GitHub-style. View plan deep-links to `/plan/{id}#plan-comments`. No second compose form. HTTP `kickoff_graph_queue_event` was **not** added (feat_016 D5 / dec_012); feat_020 owns delivery. Merge must keep one GET `/api/comments` handler.
 
-2. **[feat_017](../../features/1_backlog/feat_017_plan_viewer_comment_chrome.md) — Plan viewer comment chrome** — Line-level threads on `/plan/{id}`: `data-src-line`, gutter "+" or text selection, re-anchor / outdated, blocking checkbox default off. In-thread human reply via `parent`. Resolve **status** only; the button is feat_018 (dec_007).
+2. **[feat_017](../../features/1_backlog/feat_017_plan_viewer_comment_chrome.md) — Plan viewer comment chrome** — Line-level threads on `/plan/{id}`: `data-src-line`, gutter "+" or text selection, re-anchor / outdated, blocking checkbox default off. In-thread human reply via `parent`. Resolve **status** only; the button is feat_018 (dec_007). POST 202 has no `kickoff` key — reload threads; do not wait for a turn (dec_012).
 
 3. **[feat_020](../../features/1_backlog/feat_020_agent_review_turns.md) — Agent review turns** — One `kickoff_turn(kind="comment")` per human CommentPosted / CommentReplied, including graphs with no prior chat. Watchdog delivers; HTTP enqueues only (do not add an HTTP eager turn — dec_012). Agent replies and `CommentResolved` do not loop. Playbook on existing `product_manager` skill.
 
-4. **[feat_019](../../features/1_backlog/feat_019_scoped_dispatch_gates.md) — Scoped dispatch gates** — One `blocking_threads_for(work_id)` (work + ancestors) on human dispatch, Boss dispatch, `mint_task`, and merge. No bypass. Optional feature `cites:` frontmatter. Does not gate `mint_feature` or `activate_epic`.
+4. **[feat_019](../../features/1_backlog/feat_019_scoped_dispatch_gates.md) — Scoped dispatch gates** — One `blocking_threads_for(work_id)` (work + ancestors) on human dispatch, Boss dispatch, `mint_task`, and merge. No bypass. Optional feature `cites:` frontmatter. Does not gate `mint_feature` or `activate_epic`. May implement in parallel after feat_016; **must not merge before feat_018** (dec_013).
 
 5. **[feat_018](../../features/1_backlog/feat_018_human_resolve_and_audit.md) — Human resolve and audit** — POST `/api/comment/resolve` on an open root only; cascades to descendants; agents cannot resolve; resolved rows stay in JSONL; Resolve control on the plan thread list; `In reply to: cmt_NNN` in the decision log.
 
-**Remaining dispatch (human or Boss):** feat_017 and feat_018 in the same wave (dec_007). feat_020 and feat_019 can start now (both depend only on completed feat_016). Suggested order: 017+018 first (operator can leave and resolve threads), then 020 (agent replies), 019 (gates) overlapping if capacity allows.
+**Remaining dispatch (human or Boss):** feat_017 and feat_018 in the same wave (dec_007). feat_020 can start now. feat_019 may be implemented in parallel after feat_016 but **must not merge before feat_018** (dec_013): until resolve is human-only, agents can still `resolve_comment` and bypass the gate. Suggested operator-facing order: 017+018 first (leave and resolve threads), then 020 (agent replies); 019 overlapping in implementation only.
 
 ## Open questions
 
-_(none — all resolved, see Decision log dec_001–dec_012)_
+_(none — all resolved, see Decision log dec_001–dec_013)_
 
 ## Decision log
 
@@ -176,9 +176,10 @@ _(none — all resolved, see Decision log dec_001–dec_012)_
   Honors: feat_016 D5; dec_011; Kickoff edges only; Operator success #2.
 
 - `dec_013` · 2026-10-20 · Epic Architect · **Scoped dispatch gates — merge order**
-  Chose feat_019 may be implemented in parallel after feat_016 but must not merge or close out before feat_018. Until resolve is human-only, agents can still resolve_comment and that would bypass the gate. depends_on stays feat_016 (comment schema only)..
+  Chose feat_019 may be implemented in parallel after feat_016 but must not merge or close out before feat_018. Until resolve is human-only, agents can still resolve_comment and that would bypass the gate. depends_on stays feat_016 (comment schema only).
   Rationale: dec_004 is one shared gate with no bypass; the human unblocks by resolving. feat_018 is what takes resolve_comment off agent tools and puts the Resolve button on the plan. Shipping the gate first would let the owning team unblock dispatch without a human click. Schema work can still proceed in parallel; only closeout waits.
   Honors: dec_004; dec_007; Intent human gate (dispatch and merges); feat_018 D1 agents cannot resolve.
+
 ## Amendment log
 
 _(none)_
