@@ -111,6 +111,7 @@ Feature Team mints after dispatch. Suggested slice:
 - Cascade rewrites the sidecar (same as today's single-row rewrite). Do not append duplicate resolved rows.
 - feat_019 must not merge until this feature's agent-tool denial is on the board (dec_013). The button can land in the same merge as the guard.
 - HTTP resolve forces `author=human`, same as POST `/api/comment`. Agents must use tools, which this feature denies. Do not add a second auth layer in v1.
+- Board YAML may still list `depends_on: [feat_016, feat_017]`. Treat that as stale graph metadata: this spec and epic dec_014 are the contract. Dispatch this feature with feat_017, do not wait for chrome closeout.
 
 ## Decision log
 
