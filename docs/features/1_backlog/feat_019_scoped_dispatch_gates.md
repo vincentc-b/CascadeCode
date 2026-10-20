@@ -13,7 +13,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-18'
-updated: '2026-10-18'
+updated: '2026-10-20'
 ---
 # Scoped dispatch gates
 
@@ -21,7 +21,7 @@ updated: '2026-10-18'
 
 [epic_002](../../epics/2_active/epic_002_plan_view_review_threads.md) — Plan-view review threads.
 
-Depends on: [feat_016](feat_016_comment_read_api_and_war_room_wiring.md) (`Comment.blocks`, `section`, `section_slug()`).
+Depends on: [feat_016](../3_completed/feat_016_comment_read_api_and_war_room_wiring.md) (`Comment.blocks`, `section`, `section_slug()`). Implementation may start after feat_016. **Do not merge or close out before feat_018** (dec_013).
 
 Cites (this feature adds the frontmatter field; until then record here): `epic_002#intent`, `epic_002#cross-module-constraints`, `epic_002#feature-breakdown`.
 
@@ -29,6 +29,7 @@ Constraints this feature must honor:
 
 - Dispatch law unchanged: epic activate = human only; feature/task dispatch = human or Boss; agents cannot dispatch themselves.
 - One gate, no bypass, no `force` flag (dec_004). Human unblocks by resolving (feat_018).
+- Merge order (dec_013): this feature must not merge before feat_018. Until resolve is human-only, agents can still `resolve_comment` and bypass the gate. Parallel implementation against feat_016's comment contract is fine.
 - Scope precedence locked (dec_003). Do not infer citations from spec prose.
 - Completion rollup unchanged: any open human thread still blocks closeout, blocking or not.
 - Slugs come from feat_016 `cascade.comments.section_slug`. Do not fork it and do not import amendment/filename sluggers.
@@ -68,6 +69,7 @@ Constraints this feature must honor:
 - Plan viewer chrome (feat_017) or resolve (feat_018).
 - Rewriting historical comment `section` strings to slugs.
 - A linter that features must have `cites`.
+- Merging before feat_018 (dec_013).
 
 ## Data structures
 
@@ -139,6 +141,7 @@ Feature Team mints after dispatch. Suggested slice:
 - A feature that forgets `cites` will not be gated by an epic-section thread. Accepted (dec_003). Do not add a linter in v1.
 - Historical comments store free-text sections (`Open questions`). Those will not match `##+` slugs, so they classify as doc-level and block all children of that doc. That is stricter than a slug match, safer than silently dropping them. Do not migrate old sidecars.
 - Merge-gating a task because its parent feature is in scope may surprise operators. Same human gate as Intent; resolve the thread to merge.
+- Merging the gate before feat_018 leaves `resolve_comment` on agent tools. That is a bypass of dec_004. Closeout of this feature waits for feat_018 (dec_013).
 
 ## Decision log
 
@@ -147,3 +150,4 @@ Feature Team mints after dispatch. Suggested slice:
 - **D3 — Unmatched cites warn, they do not block.** A renamed heading should not freeze the board; the operator still has `blocks:` and doc-level threads.
 - **D4 — Scan ancestors (dec_010).** The function is "threads that block this work", not "threads stored on this work".
 - **D5 — Historical free-text sections are doc-level.** Safer than inventing a migration; new comments slug on write (feat_016).
+- **D6 — Do not merge before feat_018 (dec_013).** `depends_on` stays feat_016 (schema). Human-only resolve must land first or the gate is leakable.
