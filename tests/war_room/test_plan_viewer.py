@@ -93,6 +93,32 @@ def test_get_plan_known_doc(war_room_server):
     assert "Timed out after 10s" in plan_js
     assert "PAGE_LOAD_MS = 10000" in plan_js
     assert 'id="plan-meta-parent-rev-note"' in html
+    assert 'id="plan-comments"' in html
+    assert "setInterval" not in plan_js
+    assert 'tier === "task"' in plan_js
+    assert "data-src-line" in plan_js
+
+
+def test_get_plan_task_tier_hides_comment_panel(tmp_path):
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Root epic", tier="epic")
+    add_doc(root, id="task_001", title="Sample task", tier="task", parent="epic_001")
+    port = _free_port()
+    server = serve(root=root, host="127.0.0.1", port=port)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{port}"
+    try:
+        status, html, _headers = _get_html(f"{base}/plan/task_001")
+        assert status == HTTPStatus.OK
+        assert 'data-work-id="task_001"' in html
+        assert 'id="plan-comments"' in html
+        _status, plan_js, _headers = _get_html(f"{base}/static/plan_viewer.js")
+        assert 'initPlanComments(workId, meta.tier)' in plan_js
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_get_plan_markdown_fixture_doc(tmp_path):
