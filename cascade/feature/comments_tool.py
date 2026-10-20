@@ -38,30 +38,12 @@ def reply_comment(
     )
 
 
-def resolve_comment(
-    comment_id: str,
-    *,
-    feature_id: str,
-    root: Path,
-    doc_id: str | None = None,
-) -> None:
-    _require_own_feature(feature_id, root)
-    target = _target_doc_id(feature_id, doc_id, root=root)
-    try:
-        rows = comment_store.read_comments(target, root=root)
-    except comment_store.CommentStoreError as exc:
-        raise FeatureToolDenied(str(exc)) from exc
-    if not any(row.id == comment_id for row in rows):
-        raise CommentNotFound(comment_id)
-    comment_store.resolve_comment(target, comment_id, root=root)
-
-
 def _target_doc_id(feature_id: str, doc_id: str | None, *, root: Path) -> str:
     if doc_id is None:
         return feature_id
     tier = comment_store.work_tier(doc_id, root=root)
     if tier == "epic":
-        raise FeatureToolDenied("feature tools cannot resolve epic-owned threads")
+        raise FeatureToolDenied("feature tools cannot access epic-owned threads")
     if doc_id != feature_id:
         raise FeatureToolDenied("feature tools cannot access another doc's threads")
     return doc_id
@@ -78,4 +60,3 @@ def _require_own_feature(feature_id: str, root: Path) -> None:
 
 
 register_feature_tool("reply_comment", reply_comment)
-register_feature_tool("resolve_comment", resolve_comment)

@@ -8,8 +8,11 @@ from pathlib import Path
 import pytest
 
 from cascade.comments import section_slug
+from cascade.boss.rollup import try_complete_feature, write_closeout
 from cascade.comments.store import (
     BlockingNotAllowed,
+    NotARoot,
+    ResolveNotAllowed,
     comment,
     read_comments,
     reply_comment,
@@ -100,7 +103,7 @@ def test_legacy_sidecar_without_new_keys(board: Path) -> None:
     assert row.doc_sha is None
     assert row.blocks == ()
 
-    resolve_comment("feat_001", "cmt_001", root=board)
+    resolve_comment("feat_001", "cmt_001", author="human", root=board)
     row = next(r for r in read_comments("feat_001", root=board) if r.id == "cmt_001")
     assert row.state == "resolved"
     assert row.line_start is None
@@ -233,13 +236,70 @@ def test_reply_and_resolve(board: Path) -> None:
     assert reply.parent == root_id
     assert reply.state == "open"
 
-    resolve_comment("feat_001", root_id, root=board)
+    resolve_comment("feat_001", root_id, author="human", root=board)
     rows = read_comments("feat_001", root=board)
     root_row = next(row for row in rows if row.id == root_id)
+    reply_row = next(row for row in rows if row.id == reply_id)
     assert root_row.state == "resolved"
+    assert reply_row.state == "resolved"
 
     feat_events, _ = read_events("feat_001", 0, root=board)
     types = [event.type for event in feat_events]
     assert "CommentPosted" in types
     assert "CommentReplied" in types
     assert "CommentResolved" in types
+
+
+def test_human_resolve_cascades_open_human_reply_for_closeout(board: Path) -> None:
+    from tests.support import add_doc
+
+    add_doc(
+        board,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="completed",
+        parent="feat_001",
+    )
+    write_closeout("feat_001", "Ready to ship.", root=board)
+    root_id = comment("feat_001", "Scope", "question", author="human", root=board)
+    reply_id = reply_comment(
+        "feat_001",
+        root_id,
+        "follow-up",
+        author="human",
+        root=board,
+    )
+    assert try_complete_feature("feat_001", root=board) is False
+
+    resolve_comment("feat_001", root_id, author="human", root=board)
+    reply_row = next(row for row in read_comments("feat_001", root=board) if row.id == reply_id)
+    assert reply_row.state == "resolved"
+    assert try_complete_feature("feat_001", root=board) is True
+
+
+def test_agent_author_cannot_resolve(board: Path) -> None:
+    root_id = comment("feat_001", "Scope", "note", author="human", root=board)
+    with pytest.raises(ResolveNotAllowed):
+        resolve_comment("feat_001", root_id, author="feature_lead", root=board)
+
+
+def test_resolve_on_reply_raises_not_a_root(board: Path) -> None:
+    root_id = comment("feat_001", "Scope", "note", author="human", root=board)
+    reply_id = reply_comment(
+        "feat_001",
+        root_id,
+        "reply",
+        author="human",
+        root=board,
+    )
+    with pytest.raises(NotARoot):
+        resolve_comment("feat_001", reply_id, author="human", root=board)
+
+
+def test_resolve_idempotent_when_root_already_resolved(board: Path) -> None:
+    root_id = comment("feat_001", "Scope", "note", author="human", root=board)
+    resolve_comment("feat_001", root_id, author="human", root=board)
+    resolve_comment("feat_001", root_id, author="human", root=board)
+    feat_events, _ = read_events("feat_001", 0, root=board)
+    assert sum(event.type == "CommentResolved" for event in feat_events) == 1

@@ -112,7 +112,12 @@ def ingest_human(
     return _state_values(graph, config)
 
 
-def ingest_queue(epic_id: str, *, root: Path) -> EpicGraphState:
+def ingest_queue(
+    epic_id: str,
+    *,
+    root: Path,
+    queue_root: Path | None = None,
+) -> EpicGraphState:
     """Pull new queue events into graph state without a manager/architect turn."""
 
     graph = ensure_epic_graph(epic_id, root=root)
@@ -120,7 +125,7 @@ def ingest_queue(epic_id: str, *, root: Path) -> EpicGraphState:
     snapshot = graph.get_state(config)
     values = snapshot.values or {}
     offset = int(values.get("last_queue_offset") or 0)
-    events, new_offset = read_events(epic_id, offset, root=root)
+    events, new_offset = read_events(epic_id, offset, root=queue_root or root)
     if not events:
         if not values:
             graph.update_state(

@@ -86,6 +86,8 @@ def render_doc(doc: WorkDoc) -> str:
         payload["integration_branch"] = meta.integration_branch
     if meta.integration_worktree is not None:
         payload["integration_worktree"] = meta.integration_worktree
+    if meta.cites:
+        payload["cites"] = list(meta.cites)
     frontmatter = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True, width=4096)
     body = doc.body
     if body and not body.endswith("\n"):
@@ -155,6 +157,7 @@ def _meta_from_mapping(loaded: dict[str, object], path: Path) -> WorkMeta:
         models=_optional_models(loaded),
         integration_branch=_optional_integration_str(loaded, "integration_branch"),
         integration_worktree=_optional_integration_str(loaded, "integration_worktree"),
+        cites=_optional_cites(loaded),
     )
 
 
@@ -180,6 +183,12 @@ def _str_list(value: object, field: str) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise SchemaError(f"{field} must be a list of strings")
     return list(value)
+
+
+def _optional_cites(loaded: dict[str, object]) -> list[str]:
+    if "cites" not in loaded:
+        return []
+    return _str_list(loaded["cites"], "cites")
 
 
 def _optional_integration_str(loaded: dict[str, object], field: str) -> str | None:

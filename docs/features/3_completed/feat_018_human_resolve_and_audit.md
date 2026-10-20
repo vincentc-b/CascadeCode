@@ -1,0 +1,131 @@
+---
+id: feat_018
+title: Human resolve and audit
+tier: feature
+status: completed
+parent: epic_002
+children:
+- task_086
+- task_087
+depends_on:
+- feat_016
+- feat_017
+owners:
+- feature_lead
+- feature_architect
+skills: []
+parent_rev: 065bd59cf2acf20ca40380377c85fd66bba6df1a
+created: '2026-10-18'
+updated: '2026-10-20'
+---
+# Human resolve and audit
+
+## Parent Epic
+
+[epic_002](../../epics/2_active/epic_002_plan_view_review_threads.md) — Plan-view review threads.
+
+Depends on: [feat_016](../3_completed/feat_016_comment_read_api_and_war_room_wiring.md) (completed 2026-10-20). **Not** feat_017 — store, HTTP, and the Resolve button can land on the existing `#plan-comments` list (dec_014). Parallel with [feat_017](feat_017_plan_viewer_comment_chrome.md).
+
+Cites (promote to frontmatter `cites:` when feat_019 lands): `epic_002#intent`, `epic_002#cross-module-constraints`.
+
+Constraints this feature must honor:
+
+- Blocking and resolve are human-only (epic constraint + dec_002). Agents may reply; they may not resolve or set blocking.
+- Resolved threads stay in `docs/_comments/{doc_id}.jsonl`. Do not delete. Resolve rewrites `state` only.
+- Resolve is **thread-level** (dec_009): only an open root may be resolved; the root and all descendants flip to `resolved`. Closeout blocks on any open human comment, so leaving replies open after resolving the root would still freeze complete.
+- Completion rollup is unchanged: any **open human** thread still blocks epic/feature closeout (feat_008), whether or not it is blocking.
+- No agent turn on resolve (dec_011). `CommentResolved` is ingested for the queue offset only.
+- feat_019 closeout waits on this feature (dec_013). The store + tool guard is what makes the gate un-bypassable; the Resolve button is still required here so humans have a UI path.
+- Parallel with feat_017 (dec_014): `depends_on` is feat_016 only. Bind Resolve to `#plan-comments [data-comment-id]` on open roots. If chrome has not shipped yet, set `data-comment-id` on each root yourself; if chrome has shipped, do not replace the list — mount the button on the existing node.
+- Localhost only. No new store.
+
+## Scope
+
+**In**
+
+- Add POST `/api/comment/resolve` `{doc_id, comment_id}` with author forced to `human`. 404 if missing. 400 if `comment_id` is a reply (not a root). Already-resolved root is **idempotent 202** (double click is not an error).
+- Change `cascade.comments.store.resolve_comment` to require `author="human"` and to cascade: given a root, rewrite that row and every row whose `parent` chain reaches it. Agent callers fail closed (`ResolveNotAllowed`). Reconstructing frozen `Comment` must copy feat_016 fields (`line_start`, `line_end`, `doc_sha`, `blocks`).
+- Unregister `resolve_comment` from epic and feature planning tool registries (or keep the name and always raise). Agents keep `reply_comment`.
+- Plan viewer: a **Resolve** control on each open root thread (human page, no auth beyond localhost). Selector: `#plan-comments [data-comment-id]` where that id is a root with `state=open`. Calls the new route, then reloads threads. Resolved threads stay listed, visually quieter (feat_017 `.resolved`). No Resolve button on replies.
+- Optional audit: when an agent turn locks a choice in response to a thread, `record_decision` body includes `In reply to: cmt_NNN` (DESIGN §10.4 already shows this). No new linkage table, no new sidecar field.
+
+**Out**
+
+- Letting agents resolve after they patch the doc (today's implicit path). Human must click Resolve. That is the human gate.
+- Dispatch / mint / merge gates (feat_019). Resolving is what unblocks those gates.
+- Agent review playbook (feat_020) beyond the one-line `In reply to:` convention above.
+- Soft-delete, hide-resolved toggle, or GitHub-style "outdated and resolved" auto-collapse.
+- A force-unresolve. Re-open is a new root comment.
+- Kicking off a planning turn on resolve.
+- Owning the thread list layout (feat_017). This feature only mounts Resolve on the shared marker.
+
+## Data structures
+
+No new types. `Comment.state` remains `open | resolved`.
+
+```text
+ResolveNotAllowed   # store error when author != human
+NotARoot            # store/HTTP error when comment_id has parent != null
+```
+
+## API contracts
+
+```text
+POST /api/comment/resolve
+     {doc_id, comment_id}
+     -> 202 {ok, comment_id}
+     author is always human
+     comment_id must be a root (parent is null)
+     cascades state=resolved to root + descendants
+     emits CommentResolved (already in store) once for the root
+     does not call kickoff_graph_queue_event or kickoff_turn
+
+resolve_comment(...)  # agent tool
+     MUST fail for epic_manager / epic_architect / feature_lead / feature_architect
+```
+
+Existing `CommentResolved` queue event may still be ingested; feat_020 must not start a planning turn from it (dec_011).
+
+## Logic flow
+
+```mermaid
+flowchart TD
+  H[Human Resolve click on root] --> API[POST /api/comment/resolve]
+  API --> STORE[root + descendants state=resolved]
+  STORE --> UI[thread shows resolved]
+  REPLY[Resolve on a reply] --> BAD[400 NotARoot]
+  AGENT[Agent resolve_comment] --> DENY[ResolveNotAllowed]
+```
+
+## Task breakdown
+- task_087
+- task_086
+
+Feature Team mints after dispatch. Suggested slice:
+
+1. **Store + tool guard** — `author=human` on resolve; cascade to descendants; agent tools denied; refuse non-roots. Store/API tests including a human reply that must not stay open after root resolve (closeout would still block).
+2. **HTTP resolve + plan button** — POST route; Resolve control on `#plan-comments [data-comment-id]` open roots only; idempotent 202. One plan-viewer + API test. Does not wait for feat_017; if that panel still uses the free-text list, stamp `data-comment-id` there.
+
+`In reply to:` is a playbook line, not a third implementation task.
+
+## Risks & upward questions
+
+- feat_017 and this feature may merge in either order (dec_014). The `data-comment-id` marker is the seam; do not both rewrite `#plan-comments` innerHTML.
+- Not kicking off a turn on resolve avoids an agent immediately re-opening debate. If the operator wants a closeout note, they type a reply first.
+- Cascade rewrites the sidecar (same as today's single-row rewrite). Do not append duplicate resolved rows.
+- feat_019 must not merge until this feature's agent-tool denial is on the board (dec_013). The button can land in the same merge as the guard.
+- HTTP resolve forces `author=human`, same as POST `/api/comment`. Agents must use tools, which this feature denies. Do not add a second auth layer in v1.
+- Board YAML may still list `depends_on: [feat_016, feat_017]`. Treat that as stale graph metadata: this spec and epic dec_014 are the contract. Dispatch this feature with feat_017, do not wait for chrome closeout.
+
+## Decision log
+
+- **D1 — Agents cannot resolve, even after a doc patch.** The human gate in Intent is a click, not a convention. Matches "Mark a thread resolved only as human."
+- **D2 — No turn on resolve.** Resolve is a gate release, not a new question. feat_020 must skip `CommentResolved`.
+- **D3 — Audit is `In reply to:` in the decision log.** DESIGN §10.4 already specifies it; a join table would be a second source of truth.
+- **D4 — Resolve cascades through the thread (dec_009).** Closeout would otherwise stay blocked on the operator's own replies.
+- **D5 — Gate merge waits on this feature (dec_013).** Until `resolve_comment` is denied to agents, shipping `blocking_threads_for` would leak the human gate.
+- **D6 — `depends_on` is feat_016 only (dec_014).** Same-wave dispatch with feat_017. The button binds to `data-comment-id`; store/HTTP do not need chrome.
+
+## Closeout
+
+Completed child work: `task_086` (Store + tool guard: human-only thread-level resolve), `task_087` (HTTP resolve route + Resolve button on plan viewer).

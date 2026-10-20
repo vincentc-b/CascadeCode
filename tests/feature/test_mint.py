@@ -105,7 +105,7 @@ def test_mint_emits_tasks_minted_event(feature_board: dict[str, object]) -> None
 
 def test_mint_refuses_open_blocking_human_comment(feature_board: dict[str, object]) -> None:
     root = feature_board["root"]
-    comment(
+    cmt_id = comment(
         "feat_001",
         "Scope",
         "Stop minting",
@@ -113,8 +113,11 @@ def test_mint_refuses_open_blocking_human_comment(feature_board: dict[str, objec
         author="human",
         root=root,
     )
-    with pytest.raises(FeatureToolDenied, match="blocking human comment"):
+    with pytest.raises(FeatureToolDenied) as exc_info:
         mint_task("Blocked", feature_id="feat_001", root=root)
+    message = str(exc_info.value)
+    assert cmt_id in message
+    assert "/plan/feat_001#plan-comments" in message
 
 
 def test_mint_allows_blocking_when_resolved(feature_board: dict[str, object]) -> None:
@@ -129,7 +132,7 @@ def test_mint_allows_blocking_when_resolved(feature_board: dict[str, object]) ->
         author="human",
         root=root,
     )
-    resolve_comment("feat_001", cmt_id, root=root)
+    resolve_comment("feat_001", cmt_id, author="human", root=root)
     task_id = mint_task("After resolve", feature_id="feat_001", root=root)
     assert task_id.startswith("task_")
 

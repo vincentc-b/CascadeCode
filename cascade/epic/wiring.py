@@ -32,7 +32,6 @@ def load_epic_tools() -> None:
         "read_doc",
         "write_doc",
         "reply_comment",
-        "resolve_comment",
         "resolve_amendment",
     )
     if all(name in epic_tools() for name in expected):

@@ -51,6 +51,10 @@ def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
     feature_id = task.meta.parent
     if not feature_id:
         return MergeResult(ok=False, reason="missing_parent", branch=branch)
+    from cascade.comments.gate import refusal_if_blocked
+
+    if blocked := refusal_if_blocked(task_id, root=trunk):
+        return MergeResult(ok=False, reason=blocked, branch=branch)
 
     if not has_git(trunk):
         return MergeResult(ok=False, reason="not_a_git_repo", branch=branch)
@@ -184,6 +188,10 @@ def merge_feature_branch(feature_id: str, *, root: Path | None = None) -> MergeR
 
     if feature.meta.tier != "feature":
         return MergeResult(ok=False, reason="wrong_tier", branch=source_branch)
+    from cascade.comments.gate import refusal_if_blocked
+
+    if blocked := refusal_if_blocked(feature_id, root=trunk):
+        return MergeResult(ok=False, reason=blocked, branch=source_branch)
 
     epic_id = feature.meta.parent
     if not epic_id:

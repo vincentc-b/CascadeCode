@@ -122,6 +122,36 @@ def test_invalid_model_frontmatter_raises() -> None:
         parse_text(with_extra("models:\n  epic_manager: '  '"), base)
 
 
+def test_feature_cites_optional_parse_round_trip_and_unknown_keys() -> None:
+    base = FIXTURES / "docs" / "features" / "1_backlog" / "feat_001_ok.md"
+    doc = parse_doc(base)
+    assert doc.meta.cites == []
+
+    def with_extra(yaml_lines: str) -> str:
+        rendered = render_doc(doc)
+        parts = rendered.split("---", 2)
+        fm = parts[1].rstrip("\n")
+        body = parts[2] if len(parts) > 2 else doc.body
+        return f"---\n{fm}\n{yaml_lines}\n---\n{body}"
+
+    text = with_extra(
+        "cites:\n"
+        "  - epic_002#intent\n"
+        "  - epic_002#cross-module-constraints\n"
+        "future_field: ignored"
+    )
+    parsed = parse_text(text, base)
+    assert parsed.meta.cites == [
+        "epic_002#intent",
+        "epic_002#cross-module-constraints",
+    ]
+    again = parse_text(render_doc(parsed), base)
+    assert again.meta.cites == parsed.meta.cites
+    rendered = render_doc(parsed)
+    assert "epic_002#intent" in rendered
+    assert "future_field" not in rendered
+
+
 def test_missing_frontmatter_raises() -> None:
     with pytest.raises(SchemaError):
         parse_doc(FIXTURES / "bad_no_frontmatter.md")
