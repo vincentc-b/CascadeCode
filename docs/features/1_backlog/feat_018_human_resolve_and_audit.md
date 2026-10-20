@@ -22,7 +22,7 @@ updated: '2026-10-20'
 
 [epic_002](../../epics/2_active/epic_002_plan_view_review_threads.md) — Plan-view review threads.
 
-Depends on: [feat_016](../3_completed/feat_016_comment_read_api_and_war_room_wiring.md) (completed 2026-10-20), [feat_017](feat_017_plan_viewer_comment_chrome.md).
+Depends on: [feat_016](../3_completed/feat_016_comment_read_api_and_war_room_wiring.md) (completed 2026-10-20). **Not** feat_017 — store, HTTP, and the Resolve button can land on the existing `#plan-comments` list (dec_014). Parallel with [feat_017](feat_017_plan_viewer_comment_chrome.md).
 
 Cites (promote to frontmatter `cites:` when feat_019 lands): `epic_002#intent`, `epic_002#cross-module-constraints`.
 
@@ -34,6 +34,7 @@ Constraints this feature must honor:
 - Completion rollup is unchanged: any **open human** thread still blocks epic/feature closeout (feat_008), whether or not it is blocking.
 - No agent turn on resolve (dec_011). `CommentResolved` is ingested for the queue offset only.
 - feat_019 closeout waits on this feature (dec_013). The store + tool guard is what makes the gate un-bypassable; the Resolve button is still required here so humans have a UI path.
+- Parallel with feat_017 (dec_014): `depends_on` is feat_016 only. Bind Resolve to `#plan-comments [data-comment-id]` on open roots. If chrome has not shipped yet, set `data-comment-id` on each root yourself; if chrome has shipped, do not replace the list — mount the button on the existing node.
 - Localhost only. No new store.
 
 ## Scope
@@ -43,7 +44,7 @@ Constraints this feature must honor:
 - Add POST `/api/comment/resolve` `{doc_id, comment_id}` with author forced to `human`. 404 if missing. 400 if `comment_id` is a reply (not a root). Already-resolved root is **idempotent 202** (double click is not an error).
 - Change `cascade.comments.store.resolve_comment` to require `author="human"` and to cascade: given a root, rewrite that row and every row whose `parent` chain reaches it. Agent callers fail closed (`ResolveNotAllowed`). Reconstructing frozen `Comment` must copy feat_016 fields (`line_start`, `line_end`, `doc_sha`, `blocks`).
 - Unregister `resolve_comment` from epic and feature planning tool registries (or keep the name and always raise). Agents keep `reply_comment`.
-- Plan viewer: a **Resolve** control on each open root thread (human page, no auth beyond localhost). Calls the new route, then reloads threads. Resolved threads stay listed, visually quieter (feat_017 `.resolved`). No Resolve button on replies.
+- Plan viewer: a **Resolve** control on each open root thread (human page, no auth beyond localhost). Selector: `#plan-comments [data-comment-id]` where that id is a root with `state=open`. Calls the new route, then reloads threads. Resolved threads stay listed, visually quieter (feat_017 `.resolved`). No Resolve button on replies.
 - Optional audit: when an agent turn locks a choice in response to a thread, `record_decision` body includes `In reply to: cmt_NNN` (DESIGN §10.4 already shows this). No new linkage table, no new sidecar field.
 
 **Out**
@@ -54,6 +55,7 @@ Constraints this feature must honor:
 - Soft-delete, hide-resolved toggle, or GitHub-style "outdated and resolved" auto-collapse.
 - A force-unresolve. Re-open is a new root comment.
 - Kicking off a planning turn on resolve.
+- Owning the thread list layout (feat_017). This feature only mounts Resolve on the shared marker.
 
 ## Data structures
 
@@ -98,16 +100,17 @@ flowchart TD
 Feature Team mints after dispatch. Suggested slice:
 
 1. **Store + tool guard** — `author=human` on resolve; cascade to descendants; agent tools denied; refuse non-roots. Store/API tests including a human reply that must not stay open after root resolve (closeout would still block).
-2. **HTTP resolve + plan button** — POST route; Resolve control on feat_017 open roots only; idempotent 202. One plan-viewer + API test.
+2. **HTTP resolve + plan button** — POST route; Resolve control on `#plan-comments [data-comment-id]` open roots only; idempotent 202. One plan-viewer + API test. Does not wait for feat_017; if that panel still uses the free-text list, stamp `data-comment-id` there.
 
 `In reply to:` is a playbook line, not a third implementation task.
 
 ## Risks & upward questions
 
-- Today's agent tools can resolve. Shipping feat_017 before this feature leaves a window where the UI has no button and agents still can. Dispatch feat_018 next to feat_017, or the same wave.
+- feat_017 and this feature may merge in either order (dec_014). The `data-comment-id` marker is the seam; do not both rewrite `#plan-comments` innerHTML.
 - Not kicking off a turn on resolve avoids an agent immediately re-opening debate. If the operator wants a closeout note, they type a reply first.
 - Cascade rewrites the sidecar (same as today's single-row rewrite). Do not append duplicate resolved rows.
 - feat_019 must not merge until this feature's agent-tool denial is on the board (dec_013). The button can land in the same merge as the guard.
+- HTTP resolve forces `author=human`, same as POST `/api/comment`. Agents must use tools, which this feature denies. Do not add a second auth layer in v1.
 
 ## Decision log
 
@@ -116,3 +119,4 @@ Feature Team mints after dispatch. Suggested slice:
 - **D3 — Audit is `In reply to:` in the decision log.** DESIGN §10.4 already specifies it; a join table would be a second source of truth.
 - **D4 — Resolve cascades through the thread (dec_009).** Closeout would otherwise stay blocked on the operator's own replies.
 - **D5 — Gate merge waits on this feature (dec_013).** Until `resolve_comment` is denied to agents, shipping `blocking_threads_for` would leak the human gate.
+- **D6 — `depends_on` is feat_016 only (dec_014).** Same-wave dispatch with feat_017. The button binds to `data-comment-id`; store/HTTP do not need chrome.
