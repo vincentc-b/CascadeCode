@@ -104,6 +104,22 @@ body {
   position: relative;
 }
 
+.plan-gutter-thread {
+  position: absolute;
+  left: -1.5rem;
+  top: 1.45em;
+  width: 1.25rem;
+  font-size: 0.65rem;
+  line-height: 1;
+  text-align: center;
+  color: LinkText;
+  pointer-events: none;
+}
+
+.plan-gutter-thread.outdated {
+  color: var(--plan-muted);
+}
+
 .plan-gutter-add {
   position: absolute;
   left: -1.5rem;
@@ -284,6 +300,10 @@ body {
 
 .plan-comment-thread.resolved {
   opacity: 0.72;
+}
+
+.plan-comment-thread.outdated {
+  border-style: dashed;
 }
 
 .plan-comment-meta {

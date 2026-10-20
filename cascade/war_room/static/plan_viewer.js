@@ -221,6 +221,103 @@
     return "general";
   }
 
+  function lineRangeForSectionSlug(body, slug) {
+    var want = String(slug != null ? slug : "");
+    if (!want) {
+      return null;
+    }
+    var lines = String(body != null ? body : "").split("\n");
+    var idx = headingIndexForBody(body);
+    var headings = idx.headings;
+    for (var i = 0; i < headings.length; i += 1) {
+      var h = headings[i];
+      if (h.level < 2 || h.slug !== want) {
+        continue;
+      }
+      var startLine = h.line;
+      var endLine = lines.length;
+      for (var j = i + 1; j < headings.length; j += 1) {
+        if (headings[j].level <= h.level) {
+          endLine = headings[j].line - 1;
+          break;
+        }
+      }
+      return { headingLine: h.line, startLine: startLine, endLine: endLine };
+    }
+    return null;
+  }
+
+  function isSectionThread(body, section) {
+    return lineRangeForSectionSlug(body, section) != null;
+  }
+
+  function findAnchorLineInRange(body, anchor, startLine, endLine) {
+    if (anchor == null || String(anchor).trim() === "") {
+      return null;
+    }
+    var lines = String(body != null ? body : "").split("\n");
+    var start = Math.max(1, startLine || 1);
+    var end = Math.min(lines.length, endLine != null ? endLine : lines.length);
+    if (start > end) {
+      return null;
+    }
+    var chunk = lines.slice(start - 1, end).join("\n");
+    var needle = String(anchor);
+    var pos = chunk.indexOf(needle);
+    if (pos === -1) {
+      return null;
+    }
+    var before = chunk.slice(0, pos);
+    return start + before.split("\n").length - 1;
+  }
+
+  function blockStartLineForSourceLine(body, line) {
+    var lineNum = line != null ? line : 1;
+    var ranges = blockSourceRangesForBody(body);
+    for (var i = 0; i < ranges.length; i += 1) {
+      if (lineNum >= ranges[i].lineStart && lineNum <= ranges[i].lineEnd) {
+        return ranges[i].lineStart;
+      }
+    }
+    var best = null;
+    for (var j = 0; j < ranges.length; j += 1) {
+      if (ranges[j].lineStart <= lineNum) {
+        best = ranges[j].lineStart;
+      }
+    }
+    return best != null ? best : lineNum;
+  }
+
+  function placementForRootThread(root, body, currentSha) {
+    var storedLine = root && root.line_start != null ? root.line_start : 1;
+    var threadSha = root && root.doc_sha != null ? String(root.doc_sha) : "";
+    var current = currentSha != null ? String(currentSha) : "";
+    if (threadSha !== "" && threadSha === current) {
+      return { gutterLine: storedLine, outdated: false };
+    }
+    var anchor = root && root.anchor;
+    var section = root && root.section != null ? root.section : "";
+    var lines = String(body != null ? body : "").split("\n");
+    var sectionRange = lineRangeForSectionSlug(body, section);
+    if (sectionRange) {
+      var inSection = findAnchorLineInRange(
+        body,
+        anchor,
+        sectionRange.startLine,
+        sectionRange.endLine
+      );
+      if (inSection != null) {
+        return { gutterLine: inSection, outdated: false };
+      }
+      return { gutterLine: sectionRange.headingLine, outdated: true };
+    }
+    var inDoc = findAnchorLineInRange(body, anchor, 1, lines.length);
+    if (inDoc != null) {
+      return { gutterLine: inDoc, outdated: false };
+    }
+    return { gutterLine: 1, outdated: true };
+  }
+
   function lineEndForBlockStart(body, lineStart) {
     var ranges = blockSourceRangesForBody(body);
     for (var i = 0; i < ranges.length; i += 1) {
@@ -620,6 +717,47 @@
     return map;
   }
 
+  function clearPlanThreadGutters(bodyEl) {
+    if (!bodyEl || !bodyEl.querySelectorAll) {
+      return;
+    }
+    var markers = bodyEl.querySelectorAll(".plan-gutter-thread");
+    for (var i = 0; i < markers.length; i += 1) {
+      markers[i].remove();
+    }
+  }
+
+  function applyPlanThreadGutters(bodyEl, body, roots, placementsById) {
+    if (!bodyEl || !bodyEl.querySelectorAll) {
+      return;
+    }
+    clearPlanThreadGutters(bodyEl);
+    (roots || []).forEach(function (root) {
+      var placement = placementsById && placementsById[root.id];
+      if (!placement) {
+        return;
+      }
+      var blockLine = blockStartLineForSourceLine(body, placement.gutterLine);
+      var block = bodyEl.querySelector('[data-src-line="' + blockLine + '"]');
+      if (!block) {
+        return;
+      }
+      var marker = document.createElement("span");
+      marker.className = "plan-gutter-thread";
+      marker.setAttribute("role", "img");
+      marker.setAttribute("data-comment-id", root.id);
+      marker.setAttribute(
+        "aria-label",
+        placement.outdated ? "Outdated review thread" : "Review thread"
+      );
+      if (placement.outdated) {
+        marker.classList.add("outdated");
+      }
+      marker.textContent = "●";
+      block.appendChild(marker);
+    });
+  }
+
   function installPlanGutters(bodyEl, onAdd) {
     if (!bodyEl || !bodyEl.querySelectorAll) {
       return;
@@ -775,7 +913,7 @@
       selectionBar.hidden = false;
     }
 
-    function buildCommentNode(row) {
+    function buildCommentNode(row, threadOutdated) {
       var wrap = document.createElement("div");
       wrap.className = "plan-comment-entry";
       var meta = document.createElement("div");
@@ -785,6 +923,7 @@
         " · " +
         (row.section || "") +
         (row.blocking ? " · blocking" : "") +
+        (threadOutdated ? " · outdated" : "") +
         (row.state === "resolved" ? " · resolved" : "");
       var body = document.createElement("p");
       body.className = "plan-comment-body-text";
@@ -857,6 +996,19 @@
       return form;
     }
 
+    function placementsForRoots(roots) {
+      var byId = {};
+      var outdated = {};
+      (roots || []).forEach(function (root) {
+        var placement = placementForRootThread(root, docBody, docSha);
+        byId[root.id] = placement;
+        if (placement.outdated) {
+          outdated[root.id] = true;
+        }
+      });
+      return { byId: byId, outdated: outdated };
+    }
+
     function renderCommentThreads(comments) {
       var preserved = collectPreservedThreadExtras(threadEl);
       threadEl.innerHTML = "";
@@ -864,15 +1016,22 @@
       var roots = rows.filter(function (row) {
         return !row.parent;
       });
+      var placementInfo = placementsForRoots(roots);
+      if (bodyEl) {
+        applyPlanThreadGutters(bodyEl, docBody, roots, placementInfo.byId);
+      }
       roots.forEach(function (root) {
         var block = document.createElement("div");
         block.className = "plan-comment-thread";
         if (root.state === "resolved") {
           block.classList.add("resolved");
         }
+        if (placementInfo.outdated[root.id]) {
+          block.classList.add("outdated");
+        }
         block.setAttribute("role", "listitem");
         block.setAttribute("data-comment-id", root.id);
-        block.appendChild(buildCommentNode(root));
+        block.appendChild(buildCommentNode(root, !!placementInfo.outdated[root.id]));
         var replies = rows.filter(function (row) {
           return row.parent === root.id;
         });
@@ -1062,6 +1221,11 @@
     blockSourceRangesForBody: blockSourceRangesForBody,
     sectionSlug: sectionSlug,
     sectionForSourceLine: sectionForSourceLine,
+    lineRangeForSectionSlug: lineRangeForSectionSlug,
+    isSectionThread: isSectionThread,
+    findAnchorLineInRange: findAnchorLineInRange,
+    placementForRootThread: placementForRootThread,
+    blockStartLineForSourceLine: blockStartLineForSourceLine,
     findMermaidFences: findMermaidFences,
     workIdFromDocHref: workIdFromDocHref,
     planHrefFromRelative: planHrefFromRelative,
