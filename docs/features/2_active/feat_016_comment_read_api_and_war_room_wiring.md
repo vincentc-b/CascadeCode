@@ -144,3 +144,7 @@ Verified on `feat/feat_016` (20 comment/API tests pass): schema and back-compat,
   Chose feat/feat_016 does not add kickoff_graph_queue_event to POST /api/comment. The helper and its call in _handle_comment exist only in uncommitted work on the main checkout; they are absent from the committed base this branch was cut from. No second helper is created here..
   Rationale: Spec D4 says keep today's call and add no second helper. Creating the helper on this branch would duplicate the uncommitted main work and collide with feat_020. When that work is committed, the merge must keep its kickoff call in both the root and reply paths of _handle_comment and keep the `kickoff` key in the 202 response. Merging should also drop the duplicate GET /api/comments handler (_handle_comments here vs _handle_comments_list there) in favor of one.
   Honors: D4.
+
+## Closeout
+
+Implemented structured comment metadata and section slugs, expanded the comment API with scoped reads and threaded replies, and added War Room plan deep links. All three child tasks are merged and their focused test suites passed.
