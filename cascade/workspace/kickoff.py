@@ -17,6 +17,12 @@ _model_turn_authorized: contextvars.ContextVar[bool] = contextvars.ContextVar(
 
 _default_root: Path | None = None
 
+_COMMENT_KICKOFF_CONTENT_CAP = 2000
+_COMMENT_KICKOFF_SIDECAR_NOTE = (
+    "\n(Full text in the comment sidecar; use read_doc and thread comments.)"
+)
+_COMMENT_QUEUE_TYPES = frozenset({"CommentPosted", "CommentReplied", "CommentResolved"})
+
 
 def model_turn_authorized() -> bool:
     """True while ``kickoff_turn`` is executing a roster model invocation."""
@@ -68,10 +74,48 @@ def resume_inflight_graphs(root: Path) -> None:
         )
 
 
+def kickoff_human_comment(doc_id: str, comment_id: str, *, root: Path) -> bool:
+    """Start one comment-kind turn for a human comment on an active owning graph."""
+
+    from cascade.comments.store import CommentStoreError, read_comments
+    from cascade.workspace.integration_worktree import merged_board
+
+    repo = Path(root).resolve()
+    try:
+        record = next(
+            (row for row in read_comments(doc_id, root=repo) if row.id == comment_id),
+            None,
+        )
+    except CommentStoreError:
+        return False
+    if record is None or record.author != "human":
+        return False
+
+    board = merged_board(repo)
+    meta = board.by_id.get(doc_id)
+    if meta is None or meta.path.parent.name != "2_active":
+        return False
+    if meta.tier not in ("epic", "feature"):
+        return False
+
+    message = {"role": "human", "content": _comment_kickoff_content(record)}
+    kickoff_turn(
+        KickoffReason(
+            kind="comment",
+            work_id=doc_id,
+            by="watchdog",
+            root=repo,
+            message=message,
+        )
+    )
+    return True
+
+
 def deliver_queue_kickoffs(root: Path) -> None:
     """Ingest new queue lines for live graphs and kick one turn when events arrived."""
 
     repo = Path(root).resolve()
+    from cascade.watchdog.events import read_events
     from cascade.workspace.integration_worktree import merged_board
 
     board = merged_board(repo)
@@ -81,25 +125,64 @@ def deliver_queue_kickoffs(root: Path) -> None:
             continue
         if meta.tier not in ("epic", "feature", "task"):
             continue
-        before = _queue_offset(work_id, meta.tier, root=repo, feature_id=meta.parent)
+        feature_id = meta.parent if meta.tier == "task" else None
+        before = _queue_offset(work_id, meta.tier, root=repo, feature_id=feature_id)
+        new_events, _ = read_events(work_id, before, root=repo)
         after_state = _ingest_queue_only(
             work_id,
             meta.tier,
             root=repo,
-            feature_id=meta.parent if meta.tier == "task" else None,
+            feature_id=feature_id,
         )
         after = int(after_state.get("last_queue_offset") or 0)
         if after <= before:
             continue
-        kickoff_turn(
-            KickoffReason(
-                kind="queue_event",
-                work_id=work_id,
-                by="watchdog",
-                root=repo,
-                feature_id=meta.parent if meta.tier == "task" else None,
+        human_comments, has_non_comment = _classify_queue_events(new_events)
+        for doc_id, comment_id in human_comments:
+            kickoff_human_comment(doc_id, comment_id, root=repo)
+        if has_non_comment:
+            kickoff_turn(
+                KickoffReason(
+                    kind="queue_event",
+                    work_id=work_id,
+                    by="watchdog",
+                    root=repo,
+                    feature_id=feature_id,
+                )
             )
-        )
+
+
+def _comment_kickoff_content(record) -> str:
+    blocking = " [blocking]" if record.blocking else ""
+    header = f"{record.id} on {record.doc_id} #{record.section}{blocking}\n"
+    body = record.body
+    full = header + body
+    if len(full) <= _COMMENT_KICKOFF_CONTENT_CAP:
+        return full
+    reserve = len(header) + len(_COMMENT_KICKOFF_SIDECAR_NOTE)
+    max_body = _COMMENT_KICKOFF_CONTENT_CAP - reserve
+    if max_body <= 0:
+        return (header + _COMMENT_KICKOFF_SIDECAR_NOTE)[:_COMMENT_KICKOFF_CONTENT_CAP]
+    trimmed = body[:max_body].rstrip()
+    if len(body) > max_body:
+        trimmed = f"{trimmed}…"
+    return header + trimmed + _COMMENT_KICKOFF_SIDECAR_NOTE
+
+
+def _classify_queue_events(events: list) -> tuple[list[tuple[str, str]], bool]:
+    human_comments: list[tuple[str, str]] = []
+    has_non_comment = False
+    for event in events:
+        if event.type in _COMMENT_QUEUE_TYPES:
+            if event.type in ("CommentPosted", "CommentReplied"):
+                if event.payload.get("author") == "human":
+                    doc_id = event.payload.get("doc_id")
+                    comment_id = event.payload.get("comment_id")
+                    if isinstance(doc_id, str) and isinstance(comment_id, str):
+                        human_comments.append((doc_id, comment_id))
+            continue
+        has_non_comment = True
+    return human_comments, has_non_comment
 
 
 def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
