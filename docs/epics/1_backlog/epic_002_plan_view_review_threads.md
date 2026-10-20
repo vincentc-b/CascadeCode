@@ -45,7 +45,7 @@ Operator success:
 ```
 Plan viewer (GET /plan/{id})
   ├─ renders markdown body (existing)
-  ├─ loads GET /api/comments/{doc_id}  [existing read API; feat_016 extends]
+  ├─ loads GET /api/comments/{doc_id}  [feat_016 shipped]
   ├─ inline / section anchors + thread UI  [feat_017]
   └─ POST /api/comment (root or parent reply); POST /api/comment/resolve
 
@@ -73,7 +73,7 @@ Dispatch law + new scope gates (feat_019)
 - **Filesystem is truth.** Comments remain sidecars, not inline in the `.md` body (feat_005 / DESIGN §10.3).
 - **Localhost only.** Plan viewer and APIs stay on `127.0.0.1`; no GitHub OAuth or remote PR comments.
 - **Dispatch law unchanged:** Epic activate = human only; feature/task dispatch = human or Boss. Agents still cannot dispatch themselves.
-- **Kickoff edges only:** Posting a comment enqueues `CommentPosted`; one agent turn is delivered by the watchdog — no timer polling for “new comments on main.” HTTP POST does not start a second turn (dec_011).
+- **Kickoff edges only:** Posting a comment enqueues `CommentPosted`; one agent turn is delivered by the watchdog — no timer polling for “new comments on main.” HTTP POST does not start a turn (dec_011, dec_012).
 - **Stacked worktrees:** Comment sidecars for an active epic/feature live in the same git root as that team’s plan (`resolve_doc_worktree` / existing comment repo rules).
 - **Read-only plan renderer** may gain comment *chrome*; plan body edits still go through agent tools or git, not WYSIWYG in the viewer (feat_012 read-only stance unless explicitly extended).
 - **Blocking is human-only** on create (existing store rule). Agents may reply but not resolve or set blocking.
@@ -90,27 +90,28 @@ Dispatch law + new scope gates (feat_019)
 - feat_012 plan viewer (`GET /plan/{id}`, `/api/doc/{id}`)
 - feat_004 / feat_005 epic & feature `reply_comment`, graph boot
 - feat_014 workspace / worktree doc resolution for reads
-- War Room `POST /api/comment` and `GET /api/comments/{doc_id}` (already persist; board compose is a deep-link, feat_016)
+- feat_016 comment fields, parent-as-reply, `section_slug()`, View plan `#plan-comments` (completed 2026-10-20). HTTP kickoff is feat_020 (dec_012).
+- War Room `POST /api/comment` and `GET /api/comments/{doc_id}` (persist; board compose is a deep-link, feat_016)
 
 ## Feature breakdown
 
-Minted into `docs/features/1_backlog/`:
+feat_016 is complete. Remaining features stay in `docs/features/1_backlog/` until dispatch:
 
-1. **[feat_016](../../features/1_backlog/feat_016_comment_read_api_and_war_room_wiring.md) — Comment read API and War Room wiring** — Extend existing GET `/api/comments/{doc_id}` and POST `/api/comment` with `line_start` / `line_end` / `doc_sha` / `blocks`, `parent` as reply (section optional on replies), and `cascade.comments.section_slug()`. View plan deep-links to `/plan/{id}#plan-comments`. No second compose form.
+1. **[feat_016](../../features/3_completed/feat_016_comment_read_api_and_war_room_wiring.md) — Comment read API and War Room wiring** *(completed 2026-10-20; task_077–079 merged)* — GET `/api/comments/{doc_id}` and POST `/api/comment` carry `line_start` / `line_end` / `doc_sha` / `blocks`; `parent` is a reply (section inherited); `cascade.comments.section_slug()` is hyphenated GitHub-style. View plan deep-links to `/plan/{id}#plan-comments`. No second compose form. HTTP `kickoff_graph_queue_event` was **not** added (feat_016 D5 / dec_012); feat_020 owns delivery. Merge must keep one GET `/api/comments` handler.
 
 2. **[feat_017](../../features/1_backlog/feat_017_plan_viewer_comment_chrome.md) — Plan viewer comment chrome** — Line-level threads on `/plan/{id}`: `data-src-line`, gutter "+" or text selection, re-anchor / outdated, blocking checkbox default off. In-thread human reply via `parent`. Resolve **status** only; the button is feat_018 (dec_007).
 
-3. **[feat_020](../../features/1_backlog/feat_020_agent_review_turns.md) — Agent review turns** — One `kickoff_turn(kind="comment")` per human CommentPosted / CommentReplied, including graphs with no prior chat. Watchdog delivers; HTTP enqueues. Agent replies and `CommentResolved` do not loop. Playbook on existing `product_manager` skill.
+3. **[feat_020](../../features/1_backlog/feat_020_agent_review_turns.md) — Agent review turns** — One `kickoff_turn(kind="comment")` per human CommentPosted / CommentReplied, including graphs with no prior chat. Watchdog delivers; HTTP enqueues only (do not add an HTTP eager turn — dec_012). Agent replies and `CommentResolved` do not loop. Playbook on existing `product_manager` skill.
 
 4. **[feat_019](../../features/1_backlog/feat_019_scoped_dispatch_gates.md) — Scoped dispatch gates** — One `blocking_threads_for(work_id)` (work + ancestors) on human dispatch, Boss dispatch, `mint_task`, and merge. No bypass. Optional feature `cites:` frontmatter. Does not gate `mint_feature` or `activate_epic`.
 
 5. **[feat_018](../../features/1_backlog/feat_018_human_resolve_and_audit.md) — Human resolve and audit** — POST `/api/comment/resolve` on an open root only; cascades to descendants; agents cannot resolve; resolved rows stay in JSONL; Resolve control on the plan thread list; `In reply to: cmt_NNN` in the decision log.
 
-**Dispatch order:** feat_016 first. Then feat_017 and feat_020. Dispatch feat_018 in the same wave as feat_017. feat_019 after feat_016 (can overlap 017/020).
+**Remaining dispatch (human or Boss):** feat_017 and feat_018 in the same wave (dec_007). feat_020 and feat_019 can start now (both depend only on completed feat_016). Suggested order: 017+018 first (operator can leave and resolve threads), then 020 (agent replies), 019 (gates) overlapping if capacity allows.
 
 ## Open questions
 
-_(none — all resolved 2026-10-18, see Decision log dec_001–dec_011)_
+_(none — all resolved, see Decision log dec_001–dec_012)_
 
 ## Decision log
 
@@ -170,9 +171,10 @@ _(none — all resolved 2026-10-18, see Decision log dec_001–dec_011)_
   Honors: Kickoff edges only; feat_018 no turn on resolve; feat_020 human-only comment turns.
 
 - `dec_012` · 2026-10-20 · Epic Manager · **feat_016 closeout — kickoff delivery**
-  Chose Accept feat_016 D5: POST /api/comment does not call kickoff_graph_queue_event and does not return a kickoff key. feat_020 implements watchdog-only comment turns and must not add an HTTP eager turn. If uncommitted main work that adds that call is merged first, feat_020 removes it. Merge of feat_016 must keep a single GET /api/comments handler (drop the duplicate _handle_comments vs _handle_comments_list)..
+  Chose Accept feat_016 D5: POST /api/comment does not call kickoff_graph_queue_event and does not return a kickoff key. feat_020 implements watchdog-only comment turns and must not add an HTTP eager turn. If uncommitted main work that adds that call is merged first, feat_020 removes it. Merge of feat_016 must keep a single GET /api/comments handler (drop the duplicate _handle_comments vs _handle_comments_list).
   Rationale: feat_016 was cut from a committed base that had no kickoff helper; adding one there would have duplicated in-flight main work and raced feat_020. Operator success #2 (owning team replies in-thread) is feat_020's job, not a silent HTTP side effect. Duplicate GET handlers would make the locked read API non-deterministic.
   Honors: feat_016 D5; dec_011; Kickoff edges only; Operator success #2.
+
 ## Amendment log
 
 _(none)_
