@@ -153,6 +153,10 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("unmet_deps")
     if _epic_has_feature_awaiting_merge(meta.parent, root=root):
         return _fail("feature_awaiting_merge")
+    from cascade.comments.gate import refusal_if_blocked
+
+    if blocked := refusal_if_blocked(work_id, root=root):
+        return _fail(blocked)
 
     if not has_git(root):
         move_doc(work_id, "active", root=root)
@@ -214,6 +218,10 @@ def _dispatch_task(
         return _fail("unmet_deps")
     if _active_task_count(board) >= task_parallelism(root):
         return _fail("cap")
+    from cascade.comments.gate import refusal_if_blocked
+
+    if blocked := refusal_if_blocked(work_id, root=root):
+        return _fail(blocked)
 
     if not has_git(root):
         move_doc(work_id, "active", root=root)

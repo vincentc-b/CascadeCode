@@ -9,7 +9,6 @@ from cascade.board.errors import NotFound
 from cascade.board.paths import slugify
 from cascade.board.store import allocate_id, list_board, read_doc, write_doc
 from cascade.board.types import WorkDoc, WorkId, WorkMeta
-from cascade.comments.store import read_comments
 from cascade.feature.checkout import feature_checkout_root
 from cascade.feature.guard import FeatureToolDenied, tool_guard
 from cascade.feature.registry import register_feature_tool
@@ -33,7 +32,10 @@ def mint_task(
     checkout = feature_checkout_root(feature_id, trunk=trunk)
     feature = _require_feature(feature_id, trunk)
     _refuse_blocked_feature(feature)
-    _refuse_blocking_human_comments(feature_id, trunk)
+    from cascade.comments.gate import refusal_if_blocked
+
+    if blocked := refusal_if_blocked(feature_id, root=trunk):
+        raise FeatureToolDenied(blocked)
 
     deps = list(depends_on or [])
     skill_paths = _validate_skills(list(skills or []), trunk)
@@ -119,14 +121,6 @@ def _refuse_blocked_feature(feature: WorkDoc) -> None:
         raise FeatureToolDenied(
             f"mint_task refused: feature {feature.meta.id} is blocked awaiting amendment resolution"
         )
-
-
-def _refuse_blocking_human_comments(feature_id: str, root: Path) -> None:
-    for row in read_comments(feature_id, root=root):
-        if row.author == "human" and row.state == "open" and row.blocking:
-            raise FeatureToolDenied(
-                f"mint_task refused: open blocking human comment {row.id} on {feature_id}"
-            )
 
 
 def _validate_skills(skills: list[str], root: Path) -> list[Path]:
