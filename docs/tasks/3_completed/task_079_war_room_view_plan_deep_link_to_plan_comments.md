@@ -2,7 +2,7 @@
 id: task_079
 title: 'War Room View plan deep-link to #plan-comments'
 tier: task
-status: active
+status: completed
 parent: feat_016
 children: []
 depends_on: []
