@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import socket
 import threading
 import urllib.error
@@ -10,6 +11,8 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
+
+from cascade.comments import section_slug
 
 from dataclasses import replace
 
@@ -93,6 +96,36 @@ def test_get_plan_known_doc(war_room_server):
     assert "Timed out after 10s" in plan_js
     assert "PAGE_LOAD_MS = 10000" in plan_js
     assert 'id="plan-meta-parent-rev-note"' in html
+    assert 'id="plan-comments"' in html
+    assert "setInterval" not in plan_js
+    assert 'tier === "task"' in plan_js
+    assert "data-src-line" in plan_js
+    assert "data-comment-id" in plan_js
+    assert "plan-comment-section" not in html
+    assert "sectionSlug" in plan_js
+    assert "plan-gutter-add" in plan_js
+
+
+def test_get_plan_task_tier_hides_comment_panel(tmp_path):
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Root epic", tier="epic")
+    add_doc(root, id="task_001", title="Sample task", tier="task", parent="epic_001")
+    port = _free_port()
+    server = serve(root=root, host="127.0.0.1", port=port)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{port}"
+    try:
+        status, html, _headers = _get_html(f"{base}/plan/task_001")
+        assert status == HTTPStatus.OK
+        assert 'data-work-id="task_001"' in html
+        assert 'id="plan-comments"' in html
+        _status, plan_js, _headers = _get_html(f"{base}/static/plan_viewer.js")
+        assert "initPlanComments(workId, meta.tier," in plan_js
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_get_plan_markdown_fixture_doc(tmp_path):
@@ -142,6 +175,14 @@ def test_get_plan_rejects_path_traversal(war_room_server):
     base = war_room_server
     code, _html = _get_html_expect_error(f"{base}/plan/epic_001/evil")
     assert code == HTTPStatus.NOT_FOUND
+
+
+def test_section_slug_fixture_matches_python() -> None:
+    fixture = Path(__file__).resolve().parent / "fixtures" / "section_slug_vectors.json"
+    pairs = json.loads(fixture.read_text(encoding="utf-8"))
+    for heading, expected in pairs:
+        assert section_slug(heading) == expected
+        assert "_" not in expected
 
 
 def test_static_plan_viewer_js(war_room_server):

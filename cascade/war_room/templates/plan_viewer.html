@@ -60,6 +60,30 @@
       <div id="plan-loading" class="plan-loading" aria-busy="true">Loading plan…</div>
       <div id="plan-error" class="plan-error" hidden></div>
       <article id="plan-body" class="plan-body" hidden></article>
+
+      <section id="plan-comments" class="plan-comments" aria-label="Review threads" hidden>
+        <h2 class="plan-comments-heading">Review threads</h2>
+        <div id="plan-comment-threads" class="plan-comment-threads" role="list"></div>
+        <p id="plan-comment-selection-bar" class="plan-comment-selection-bar" hidden>
+          <button type="button" id="plan-comment-on-selection">Comment on selection</button>
+        </p>
+        <form id="plan-comment-compose" class="plan-comment-compose" hidden>
+          <p id="plan-comment-compose-hint" class="plan-comment-compose-hint"></p>
+          <label class="plan-comment-field">
+            Comment
+            <textarea id="plan-comment-body" name="body" rows="4" required></textarea>
+          </label>
+          <label class="plan-comment-blocking blocking-toggle">
+            <input type="checkbox" id="plan-comment-blocking" name="blocking" />
+            Blocking
+          </label>
+          <button type="submit" id="plan-comment-send">Post comment</button>
+          <button type="button" id="plan-comment-compose-cancel" class="plan-comment-compose-cancel">
+            Cancel
+          </button>
+        </form>
+        <p id="plan-comment-status" class="plan-comment-status" role="status"></p>
+      </section>
     </main>
 
     <script src="/static/vendor/marked.min.js"></script>
