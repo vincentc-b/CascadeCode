@@ -159,7 +159,6 @@ def test_load_epic_tools_registers_all_tools() -> None:
         "read_doc",
         "write_doc",
         "reply_comment",
-        "resolve_comment",
         "resolve_amendment",
     } <= names
 

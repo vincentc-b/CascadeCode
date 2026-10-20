@@ -33,7 +33,6 @@ def load_feature_tools() -> None:
         "read_doc",
         "write_doc",
         "reply_comment",
-        "resolve_comment",
         "propose_epic_amendment",
         "ack_amendment",
         "reply_merge_request_comment",
@@ -48,7 +47,6 @@ def load_feature_tools() -> None:
     register_feature_tool("write_doc", docs_tool_mod.write_doc)
     register_feature_tool("list_children", docs_tool_mod.list_children)
     register_feature_tool("reply_comment", comments_tool_mod.reply_comment)
-    register_feature_tool("resolve_comment", comments_tool_mod.resolve_comment)
     register_feature_tool("propose_epic_amendment", amendments_mod.propose_epic_amendment)
     register_feature_tool("ack_amendment", amendments_mod.ack_amendment)
     register_feature_tool("reply_merge_request_comment", reply_feature_review)
