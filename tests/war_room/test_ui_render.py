@@ -7,6 +7,7 @@ import socket
 import threading
 import urllib.request
 from http import HTTPStatus
+from pathlib import Path
 
 import pytest
 
@@ -110,6 +111,34 @@ def test_war_room_js_renders_toast_body():
     assert "item.plan_approved" in source
     assert '"Approved"' in source
     assert 'approved.classList.add("approval-confirmed")' in source
+
+
+def test_task_execution_controls_are_visible_and_board_poll_is_independent():
+    js_path = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    )
+    source = js_path.read_text(encoding="utf-8")
+
+    assert 'status.setAttribute("aria-label", "Execution status: " + execution.label)' in source
+    assert 'label: "Running"' in source
+    assert 'label: "Blocked"' in source
+    assert 'execution.health || execution.phase' in source
+    assert 'label: "No signal"' in source
+    assert '"Retry is available only when execution is blocked."' in source
+    assert "setInterval(pollBoard, 3000)" in source
+    assert "async function pollBoard()" in source
+
+
+def test_task_execution_status_styles_include_healthy_and_blocked_states():
+    css_path = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.css"
+    )
+    source = css_path.read_text(encoding="utf-8")
+
+    assert ".task-execution-status-running" in source
+    assert ".task-execution-status-healthy" in source
+    assert ".task-execution-status-blocked" in source
+    assert ".task-execution-status-stuck" in source
 
 
 def test_epic_chat_compose_markup_and_enter_to_send(ui_server):

@@ -38,8 +38,8 @@ def _path_str(path: Path) -> str:
     return path.as_posix()
 
 
-def work_meta_to_dict(meta: WorkMeta) -> dict:
-    return {
+def work_meta_to_dict(meta: WorkMeta, *, root: Path | None = None) -> dict:
+    value = {
         "id": meta.id,
         "title": meta.title,
         "tier": meta.tier,
@@ -54,6 +54,11 @@ def work_meta_to_dict(meta: WorkMeta) -> dict:
         "updated": _date_iso(meta.updated),
         "path": _path_str(meta.path),
     }
+    if meta.tier == "task" and root is not None:
+        from cascade.task.execution import execution_view
+
+        value["execution"] = execution_view(meta.id, root=root)
+    return value
 
 
 def work_doc_to_dict(doc: WorkDoc) -> dict:
@@ -251,5 +256,5 @@ def board_view_from_index(board, *, root: Path) -> dict:
     for meta in sorted(board.by_id.values(), key=lambda m: m.id):
         key = _TIER_TO_VIEW_KEY[meta.tier]
         folder = column_folder_for_meta(meta, root=root)
-        view[key][folder].append(work_meta_to_dict(meta))
+        view[key][folder].append(work_meta_to_dict(meta, root=root))
     return view

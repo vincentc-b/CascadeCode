@@ -21,6 +21,7 @@ from cascade.agent import (
     run_role,
     validate_model_id,
 )
+from cascade.agent.adapter import _cursor_bridge_command
 
 
 def _turn(**overrides: object) -> RoleTurn:
@@ -73,6 +74,13 @@ def test_blank_model_id_raises_before_sdk(
 def test_cloud_runtime_rejected() -> None:
     with pytest.raises(TypeError, match="cloud agent runtime"):
         reject_cloud_runtime(cloud=CloudAgentOptions(repos=[]))
+
+
+def test_cursor_bridge_command_tracks_node_instead_of_shell_wrapper() -> None:
+    command = _cursor_bridge_command()
+    assert command is not None
+    assert command[0].endswith("/node")
+    assert command[1].endswith("/dist/bin/cursor-sdk-bridge.js")
 
 
 def test_startup_error_is_typed_not_role_result(

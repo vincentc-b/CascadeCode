@@ -129,6 +129,9 @@ def fail_task(task_id: str, reason: str, *, root: Path) -> None:
     """Emit failure events, block the task in place, and tear down the graph."""
 
     repo = Path(root).resolve()
+    from cascade.task.execution import mark_terminal
+
+    mark_terminal(task_id, "failed", root=repo, error=reason)
     try:
         task = read_doc(task_id, root=repo)
     except NotFound:

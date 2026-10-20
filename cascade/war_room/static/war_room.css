@@ -245,6 +245,35 @@ body {
   margin: 0.25rem 0;
 }
 
+.task-execution-status {
+  display: inline-block;
+  margin: 0 0 0.15rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.task-execution-status-running,
+.task-execution-status-healthy {
+  color: #d1fae5;
+  background: #166534;
+  border-color: #22c55e;
+}
+
+.task-execution-status-blocked,
+.task-execution-status-stuck {
+  color: #fee2e2;
+  background: #7f1d1d;
+  border-color: #ef4444;
+}
+
+.task-execution-status-queued,
+.task-execution-status-idle {
+  color: var(--muted);
+}
+
 button {
   background: #2d333b;
   color: var(--text);

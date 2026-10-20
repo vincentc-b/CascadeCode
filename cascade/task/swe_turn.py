@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import suppress
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,8 +49,10 @@ def augment_swe_prompt_with_work_context(task_id: str, prompt: str, *, root: Pat
     task = task_read_doc(task_id, task_id=task_id, root=root)
     sections = [
         "Execute the Task below now. Implement the change in the worktree, run "
-        "relevant tests, and leave a deliverable commit. Do not merely summarize "
-        "the plan or report completion.",
+        "relevant tests, and leave a deliverable commit. You MUST call Cascade's "
+        "swe_run_tests tool with the scoped test command before finishing; tests run "
+        "only through a native shell do not satisfy the supervised merge gate. Do not "
+        "merely summarize the plan or report completion.",
         f"--- Task plan: {task.meta.id} ({task.meta.title}) ---\n{task.body}",
     ]
     if task.meta.parent:
@@ -154,6 +158,14 @@ async def run_swe_turn(
     )
     invoke = run_role_fn or run_role
 
+    from cascade.task.execution import heartbeat
+
+    async def keep_lease_alive() -> None:
+        while True:
+            await asyncio.sleep(15)
+            heartbeat(task_id, root=repo)
+
+    lease_heartbeat = asyncio.create_task(keep_lease_alive())
     try:
         role_result = await invoke(turn)
     except CursorAgentError as exc:
@@ -163,6 +175,11 @@ async def run_swe_turn(
             may_retry=may_retry,
             failure_reason=str(exc.message),
         )
+    finally:
+        lease_heartbeat.cancel()
+        with suppress(asyncio.CancelledError):
+            await lease_heartbeat
+        heartbeat(task_id, root=repo)
 
     if role_result.status == "error":
         route_swe_turn_failure(task_id, role_result, root=repo)

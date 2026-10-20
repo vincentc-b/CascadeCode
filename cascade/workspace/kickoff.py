@@ -139,8 +139,16 @@ def _run_background_kickoff(reason: KickoffReason, repo: Path) -> None:
 
 
 def _report_background_failure(work_id: str, exc: Exception, repo: Path) -> None:
-    """The HTTP caller already returned, so the War Room chat is the only place to say so."""
+    """Surface failures after the initiating HTTP/watchdog caller has returned."""
 
+    if work_id.startswith("task_"):
+        try:
+            from cascade.task.failure import fail_task
+
+            fail_task(work_id, "background_error", root=repo)
+        except Exception:
+            _log.exception("could not fail crashed background task %s", work_id)
+        return
     if not work_id.startswith(("epic_", "feat_")):
         return
     try:
@@ -168,6 +176,11 @@ def resume_inflight_graphs(root: Path) -> None:
         if meta.path.parent.name != "2_active":
             continue
         if meta.tier not in ("epic", "feature", "task"):
+            continue
+        if meta.tier == "task":
+            # Task recovery owns worktree recreation and durable lease fencing
+            # in the watchdog.  Resuming here could race a detached provider
+            # bridge before the stale boundary.
             continue
         if not _graph_has_inflight_turn(work_id, meta.tier, root=repo, feature_id=meta.parent):
             continue

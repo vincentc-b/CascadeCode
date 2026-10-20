@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import traceback
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -49,9 +50,12 @@ def watchdog_tick(root: Path | None = None) -> None:
     with process_lock:
         tick_boss_consumer()
         _maybe_enqueue_orphan_toasts(repo)
-    from cascade.workspace.kickoff import deliver_queue_kickoffs
+    from cascade.workspace.kickoff import deferred_kickoffs, deliver_queue_kickoffs
 
-    deliver_queue_kickoffs(repo)
+    # Model turns can take minutes.  Enqueue them so this supervisory loop keeps
+    # scanning health, retrying merges, and dispatching independent work.
+    with deferred_kickoffs():
+        deliver_queue_kickoffs(repo)
     from cascade.automation import advance_work, poll_reviews
 
     advance_work(repo)
@@ -63,34 +67,16 @@ def watchdog_tick(root: Path | None = None) -> None:
         refresh_flight_report(repo)
 
 
-def run_watchdog(
-    *,
-    root: Path | None = None,
-    poll_interval: float = 0.5,
-    stop_when: Callable[[], bool] | None = None,
-) -> None:
-    """Loop `watchdog_tick` until `stop_when` is true. Default poll is 0.5s.
+def _resume_reclaimable_task_runs(repo: Path) -> None:
+    """Resume active Tasks whose durable execution lease has gone stale."""
 
-    With no stop condition this function does not return.
-    """
+    from cascade.task.wiring import restore_active_task_runs
+    from cascade.workspace.kickoff import deferred_kickoffs, kickoff_graph_queue_event
 
-    repo = resolve_root(root)
-    from cascade.epic.boot import install_epic_boot_hook
-    from cascade.feature.boot import install_feature_boot_hook
-    from cascade.task.boot import install_task_boot_hook
-    from cascade.task.wiring import install_task_wiring, restore_active_task_runs
-
-    install_epic_boot_hook(repo)
-    install_feature_boot_hook(repo)
-    install_task_boot_hook(repo)
-    install_task_wiring(repo)
-    install_boss_consumer(repo)
-    from cascade.workspace.kickoff import install_kickoff
-
-    install_kickoff(repo)
     restored_tasks = restore_active_task_runs(repo)
-    if restored_tasks:
-        from cascade.workspace.kickoff import kickoff_graph_queue_event
+    if not restored_tasks:
+        return
+    with deferred_kickoffs():
         for task_id, feature_id in restored_tasks:
             append_event(
                 task_id,
@@ -112,10 +98,48 @@ def run_watchdog(
             )
             kickoff_graph_queue_event(task_id, root=repo, by="watchdog")
 
+
+def run_watchdog(
+    *,
+    root: Path | None = None,
+    poll_interval: float = 0.5,
+    stop_when: Callable[[], bool] | None = None,
+) -> None:
+    """Loop `watchdog_tick` until `stop_when` is true. Default poll is 0.5s.
+
+    With no stop condition this function does not return.
+    """
+
+    repo = resolve_root(root)
+    from cascade.epic.boot import install_epic_boot_hook
+    from cascade.feature.boot import install_feature_boot_hook
+    from cascade.task.boot import install_task_boot_hook
+    from cascade.task.wiring import install_task_wiring
+
+    install_epic_boot_hook(repo)
+    install_feature_boot_hook(repo)
+    install_task_boot_hook(repo)
+    install_task_wiring(repo)
+    install_boss_consumer(repo)
+    from cascade.workspace.kickoff import install_kickoff
+
+    install_kickoff(repo)
+    _resume_reclaimable_task_runs(repo)
+
     while True:
         if stop_when is not None and stop_when():
             return
-        watchdog_tick(root)
+        # A fresh lease fences duplicate recovery.  Once its heartbeat ages out,
+        # this creates one process-local TaskRun; subsequent ticks see that run
+        # and cannot enqueue another resume.
+        _resume_reclaimable_task_runs(repo)
+        try:
+            watchdog_tick(root)
+        except Exception:
+            # The War Room and watchdog intentionally share one supervisor.
+            # A transient forge/git failure must not tear down the HTTP server;
+            # keep the loop alive and leave a full traceback in supervisor.log.
+            traceback.print_exc()
         if stop_when is not None and stop_when():
             return
         time.sleep(poll_interval)

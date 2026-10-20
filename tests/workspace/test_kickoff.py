@@ -263,6 +263,24 @@ def test_deferred_kickoff_returns_before_the_turn_runs(
     assert ran == ["feat_001", "feat_001"]
 
 
+def test_background_task_crash_is_failed_instead_of_only_logged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cascade.workspace.kickoff import _report_background_failure
+
+    root = make_repo(tmp_path)
+    failures: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        "cascade.task.failure.fail_task",
+        lambda task_id, reason, **_kwargs: failures.append((task_id, reason)),
+    )
+
+    _report_background_failure("task_001", RuntimeError("boom"), root)
+
+    assert failures == [("task_001", "background_error")]
+
+
 def test_dispatch_task_kickoff_swe_turn(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -371,6 +389,33 @@ def test_resume_idle_epic_does_not_kickoff(
 
     resume_legally_active_graphs(root)
     assert run_role_mock.await_count == 0
+
+
+def test_generic_inflight_recovery_leaves_active_tasks_to_lease_watchdog(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, models=True, role_skills=True)
+    _seed_epic_chain(root)
+    add_doc(
+        root,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    invoked: list[str] = []
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff._graph_has_inflight_turn",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.kickoff_turn",
+        lambda reason: invoked.append(reason.work_id),
+    )
+
+    resume_inflight_graphs(root)
+    assert "task_001" not in invoked
 
 
 def test_opening_turn_cannot_dispatch_feature(

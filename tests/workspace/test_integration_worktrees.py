@@ -128,6 +128,48 @@ def test_active_task_run_is_restored_after_process_restart(tmp_path: Path) -> No
     assert restore_active_task_runs(root) == []
 
 
+def test_active_task_with_fresh_live_lease_is_not_resumed_twice(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    _chain(root)
+    assert dispatch_task("task_001", "human", root=root).ok
+
+    from cascade.task.execution import mark_running
+    from cascade.task.wiring import restore_active_task_runs
+    from cascade.task.worktree import clear_task_runs, get_task_run
+
+    mark_running("task_001", root=root)
+    clear_task_runs()
+    assert restore_active_task_runs(root) == []
+    assert get_task_run("task_001") is None
+
+
+def test_active_task_with_stale_lease_is_reclaimed_once(tmp_path: Path) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    _chain(root)
+    assert dispatch_task("task_001", "human", root=root).ok
+
+    from cascade.task.execution import mark_running
+    from cascade.task.wiring import restore_active_task_runs
+    from cascade.task.worktree import clear_task_runs
+
+    mark_running(
+        "task_001",
+        root=root,
+        now=datetime.now(timezone.utc) - timedelta(minutes=3),
+    )
+    clear_task_runs()
+    assert restore_active_task_runs(root) == [("task_001", "feat_001")]
+    assert restore_active_task_runs(root) == []
+
+
 def test_repair_restores_worktree_without_new_dispatch(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")

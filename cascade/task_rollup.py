@@ -46,6 +46,7 @@ def retry_pending_task_merges(root: Path) -> list[str]:
 
     repo = resolve_root(root)
     completed: list[str] = []
+    terminal: list[str] = []
     with process_lock:
         pending = _read(repo)
     for task_id in pending:
@@ -53,6 +54,8 @@ def retry_pending_task_merges(root: Path) -> list[str]:
 
         result = merge_task_branch(task_id, root=repo)
         if not result.ok:
+            if result.reason in {"task_not_found", "wrong_column", "not_mergeable"}:
+                terminal.append(task_id)
             continue
         completed.append(task_id)
         from cascade.boss.rollup import on_task_merged
@@ -63,8 +66,9 @@ def retry_pending_task_merges(root: Path) -> list[str]:
             # The task merge itself is complete. Feature closeout is scanned on
             # every automation tick and can recover independently.
             pass
-    if completed:
+    if completed or terminal:
         with process_lock:
             latest = _read(repo)
-            _write(repo, [task_id for task_id in latest if task_id not in completed])
+            removed = set(completed) | set(terminal)
+            _write(repo, [task_id for task_id in latest if task_id not in removed])
     return completed

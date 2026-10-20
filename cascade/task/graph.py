@@ -270,7 +270,11 @@ def _swe_role_content(state: TaskGraphState) -> str:
     )
 
     from cascade.task.swe_turn import default_swe_commit_message, run_swe_turn
+    from cascade.task.execution import mark_running
+    from cascade.task.wiring import begin_validation_turn
 
+    mark_running(task_id, root=repo)
+    begin_validation_turn(task_id)
     try:
         outcome = run_coro_sync(
             run_swe_turn(
@@ -307,10 +311,24 @@ def _auto_merge_finished_task(task_id: str, root: Path) -> None:
         from cascade.task.failure import fail_task
         from cascade.task.swe_turn import has_deliverable_commit
         from cascade.task.worktree import get_task_run
+        from cascade.board.store import read_doc
 
         run = get_task_run(task_id)
-        if run is None or not has_deliverable_commit(run):
+        task = read_doc(task_id, root=root)
+        # A red test can block the Task while the provider continues and later
+        # reports "finished".  Only the green-test state is authoritative.
+        if task.meta.status != "active" or run is None:
+            return
+        if not has_deliverable_commit(run):
             fail_task(task_id, "no_task_changes", root=root)
+            return
+        if run.state != "awaiting_merge":
+            from cascade.task.wiring import last_test_passed
+
+            reason = "tests_red" if last_test_passed(task_id) is False else "tests_not_run"
+            if _schedule_validation_retry(task_id, reason, root=root):
+                return
+            fail_task(task_id, reason, root=root)
             return
         from cascade.task_rollup import queue_task_merge, retry_pending_task_merges
 
@@ -320,6 +338,40 @@ def _auto_merge_finished_task(task_id: str, root: Path) -> None:
         # The task commit remains durable. A later watchdog/review turn can retry
         # rollup without turning successful implementation into a failed task.
         return
+
+
+def _schedule_validation_retry(task_id: str, reason: str, *, root: Path) -> bool:
+    """Queue a corrective SWE turn; return False once the retry budget is exhausted."""
+
+    from datetime import datetime, timezone
+    from cascade.task.execution import MAX_VALIDATION_FAILURES, mark_validation_retry
+    from cascade.watchdog.events import append_event
+    from cascade.watchdog.types import Event
+
+    failures = mark_validation_retry(task_id, reason, root=root)
+    if failures >= MAX_VALIDATION_FAILURES:
+        return False
+    append_event(
+        task_id,
+        Event(
+            type="TaskValidationRetryRequested",
+            ts=datetime.now(timezone.utc),
+            payload={
+                "task_id": task_id,
+                "reason": reason,
+                "validation_failure": failures,
+                "validation_failure_limit": MAX_VALIDATION_FAILURES,
+                "instruction": (
+                    "Validation is not yet green. Inspect the existing implementation, fix any "
+                    "failure, and call the Cascade swe_run_tests tool with the Task's scoped test "
+                    "command. Tests run only through a native shell do not satisfy the merge gate."
+                ),
+            },
+            dest=task_id,
+        ),
+        root=root,
+    )
+    return True
 
 
 def _swe_outcome_message(outcome: SweTurnResult) -> str:

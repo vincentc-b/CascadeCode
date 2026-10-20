@@ -1,6 +1,8 @@
 """Illegal 2_active appearances are reverted. Authorized work stays."""
 
 import json
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -18,6 +20,63 @@ from cascade.watchdog import (
     watchdog_tick,
 )
 from tests.support import add_doc, commit_board, make_repo
+
+
+def test_watchdog_queue_kickoff_does_not_wait_for_model_turn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow_turn(_reason, _repo) -> None:
+        entered.set()
+        release.wait(timeout=5)
+
+    def deliver(repo: Path) -> None:
+        from cascade.workspace.kickoff import kickoff_turn
+        from cascade.workspace.types import KickoffReason
+
+        kickoff_turn(KickoffReason(kind="queue_event", work_id="task_001", by="watchdog", root=repo))
+
+    monkeypatch.setattr("cascade.workspace.kickoff._run_kickoff", slow_turn)
+    monkeypatch.setattr("cascade.workspace.kickoff.deliver_queue_kickoffs", deliver)
+    monkeypatch.setattr("cascade.automation.advance_work", lambda _root: {})
+    monkeypatch.setattr("cascade.automation.poll_reviews", lambda _root: None)
+    monkeypatch.setattr("cascade.automation.maybe_sync_briefs", lambda _root: None)
+
+    started = time.monotonic()
+    watchdog_tick(root)
+    elapsed = time.monotonic() - started
+    try:
+        assert entered.wait(timeout=1)
+        assert elapsed < 0.5
+    finally:
+        release.set()
+
+
+def test_periodic_stale_task_reclaim_enqueues_one_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    restores = iter([[('task_001', 'feat_001')], []])
+    kicked: list[str] = []
+    monkeypatch.setattr(
+        "cascade.task.wiring.restore_active_task_runs",
+        lambda _root: next(restores),
+    )
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.kickoff_graph_queue_event",
+        lambda work_id, **_kwargs: kicked.append(work_id) or True,
+    )
+    from cascade.watchdog.loop import _resume_reclaimable_task_runs
+
+    _resume_reclaimable_task_runs(root)
+    _resume_reclaimable_task_runs(root)
+
+    events, _ = read_events("task_001", 0, root=root)
+    assert [event.type for event in events] == ["TaskResumeRequested"]
+    assert kicked == ["task_001"]
 
 
 def test_authorized_dispatch_stays_without_git_history(tmp_path: Path) -> None:
@@ -129,6 +188,31 @@ def test_run_watchdog_stops_after_a_tick(tmp_path: Path) -> None:
     import inspect
 
     assert inspect.signature(run_watchdog).parameters["poll_interval"].default == 0.5
+
+
+def test_run_watchdog_survives_a_failed_tick(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = make_repo(tmp_path)
+    attempts = 0
+
+    def tick(_root: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("transient tick failure")
+
+    monkeypatch.setattr("cascade.watchdog.loop.watchdog_tick", tick)
+    monkeypatch.setattr("cascade.watchdog.loop.time.sleep", lambda _seconds: None)
+
+    run_watchdog(
+        root=root,
+        poll_interval=0,
+        stop_when=lambda: attempts >= 2,
+    )
+
+    assert attempts == 2
+    assert "transient tick failure" in capsys.readouterr().err
 
 
 def test_war_room_event_does_not_authorize(tmp_path: Path) -> None:

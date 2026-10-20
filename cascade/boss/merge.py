@@ -157,6 +157,9 @@ def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
     run = get_task_run(task_id)
     if run is not None:
         run.state = "merged"
+    from cascade.task.execution import mark_terminal
+
+    mark_terminal(task_id, "succeeded", root=trunk)
     from cascade.task.failure import schedule_task_teardown
 
     schedule_task_teardown(task_id)

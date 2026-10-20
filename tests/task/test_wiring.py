@@ -232,10 +232,9 @@ def test_invoke_tool_failing_pytest_fails_without_retry(tmp_path: Path) -> None:
     assert result["exit_code"] != 0
 
     events, _ = read_events("feat_001", 0, root=root)
-    failed = [e for e in events if e.type == "TaskFailed"]
-    assert len(failed) == 1
-    assert failed[0].payload["reason"] == "tests_red"
-    assert read_doc(task_id, root=root).meta.status == "blocked"
+    assert not [e for e in events if e.type == "TaskFailed"]
+    assert read_doc(task_id, root=root).meta.status == "active"
+    assert get_task_run(task_id).state == "testing"
 
 
 def test_invoke_tool_infra_retries_at_most_twice(tmp_path: Path) -> None:

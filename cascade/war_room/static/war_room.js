@@ -404,6 +404,14 @@
     row.appendChild(title);
 
     if (tier === "tasks") {
+      const execution = taskExecutionStatus(item);
+      const status = document.createElement("span");
+      status.className = "task-execution-status task-execution-status-" + execution.kind;
+      status.textContent = execution.label;
+      status.title = execution.title;
+      status.setAttribute("aria-label", "Execution status: " + execution.label);
+      row.appendChild(status);
+
       const branch = document.createElement("div");
       branch.className = "task-branch";
       branch.textContent = "task/" + item.id;
@@ -448,10 +456,12 @@
     }
     if (tier === "tasks") {
       const retryable = column === "2_active" && item.status === "blocked";
-      if (column === "2_active" && item.status === "blocked") {
-        actions.appendChild(actionButton("Retry", function () {
-          return askBoss("task", item.id);
-        }));
+      if (column === "2_active") {
+        actions.appendChild(actionButton(
+          "Retry",
+          function () { return askBoss("task", item.id); },
+          retryable ? null : "Retry is available only when execution is blocked."
+        ));
       }
     }
     if (tier === "epics") {
@@ -493,6 +503,44 @@
 
     row.appendChild(actions);
     return row;
+  }
+
+  function taskExecutionStatus(item) {
+    if (item.status === "blocked") {
+      return {
+        kind: "blocked",
+        label: "Blocked",
+        title: "Execution stopped and can be retried.",
+      };
+    }
+
+    const execution = item.execution || {};
+    const runtime = String(
+      execution.health || execution.phase || item.execution_status ||
+      item.runtime_status || item.execution_state || ""
+    ).toLowerCase();
+    if (
+      runtime === "stale" || runtime === "stuck" || runtime === "stalled" ||
+      runtime === "unhealthy"
+    ) {
+      return { kind: "stuck", label: "Stuck", title: "Execution needs attention." };
+    }
+    if (runtime === "queued") {
+      return { kind: "queued", label: "Queued", title: "Waiting for an execution slot." };
+    }
+    if (runtime === "healthy" || runtime === "succeeded") {
+      return { kind: "healthy", label: "Healthy", title: "Execution is healthy." };
+    }
+    if (runtime === "running") {
+      return { kind: "running", label: "Running", title: "Execution is in progress." };
+    }
+    if (runtime === "failed") {
+      return { kind: "stuck", label: "Failed", title: "Execution failed and needs attention." };
+    }
+    if (item.status === "active") {
+      return { kind: "idle", label: "No signal", title: "No live execution record is available." };
+    }
+    return { kind: "idle", label: item.status || "Unknown", title: "No active execution." };
   }
 
   function actionButton(label, handler, disabledReason) {
@@ -806,6 +854,22 @@
       await refreshBossView();
     } catch (err) {
       reportBoardLoadFailure(err);
+    }
+  }
+
+  let boardPollInFlight = false;
+
+  /** Keep lifecycle controls current even when no toast is emitted or a toast is replayed. */
+  async function pollBoard() {
+    if (boardPollInFlight) return;
+    boardPollInFlight = true;
+    try {
+      const view = await apiGet("/api/board?_=" + Date.now());
+      renderBoard(view);
+    } catch (err) {
+      reportBoardLoadFailure(err);
+    } finally {
+      boardPollInFlight = false;
     }
   }
 
@@ -1473,6 +1537,7 @@
   wireCompletedCollapseControls();
   updateFocusUi("epic");
   refreshBoard();
+  setInterval(pollBoard, 3000);
   refreshFlightReport().catch(reportBoardLoadFailure);
   refreshBossView();
   loadChat({ userInitiated: true }).catch(function (err) {

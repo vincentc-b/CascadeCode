@@ -193,6 +193,87 @@ def test_automation_blocks_finished_turn_without_deliverable_commit(tmp_path: Pa
     assert failures[-1].payload["reason"] == "no_task_changes"
 
 
+def test_finished_provider_does_not_merge_task_already_blocked_by_red_tests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, task_id = _board_with_worktree(tmp_path)
+    with (root / "cascade.toml").open("a", encoding="utf-8") as handle:
+        handle.write("\n[automation]\nenabled = true\n")
+    run = get_task_run(task_id)
+    assert run is not None
+    from cascade.task.failure import fail_task
+
+    fail_task(task_id, "tests_red", root=root)
+    run.state = "awaiting_merge"
+
+    queued: list[str] = []
+    monkeypatch.setattr("cascade.task_rollup.queue_task_merge", lambda task_id, **_kw: queued.append(task_id))
+    monkeypatch.setattr("cascade.task.swe_turn.has_deliverable_commit", lambda _run: True)
+
+    from cascade.task.graph import _auto_merge_finished_task
+
+    _auto_merge_finished_task(task_id, root)
+    assert queued == []
+
+
+def test_red_then_green_tests_allow_finished_provider_to_queue_merge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, task_id = _board_with_worktree(tmp_path)
+    with (root / "cascade.toml").open("a", encoding="utf-8") as handle:
+        handle.write("\n[automation]\nenabled = true\n")
+    from cascade.task.wiring import on_tests_finished
+
+    on_tests_finished(task_id, {"exit_code": 1}, root=root)
+    assert read_doc(task_id, root=root).meta.status == "active"
+    from cascade.task.graph import _auto_merge_finished_task
+    from cascade.task.swe_turn import has_deliverable_commit
+
+    monkeypatch.setattr("cascade.task.swe_turn.has_deliverable_commit", lambda _run: True)
+    _auto_merge_finished_task(task_id, root)
+    retry_events, _ = read_events(task_id, 0, root=root)
+    assert retry_events[-1].type == "TaskValidationRetryRequested"
+    assert retry_events[-1].payload["validation_failure"] == 1
+
+    on_tests_finished(task_id, {"exit_code": 0}, root=root)
+
+    queued: list[str] = []
+    monkeypatch.setattr("cascade.task_rollup.queue_task_merge", lambda value, **_kw: queued.append(value))
+    monkeypatch.setattr("cascade.task_rollup.retry_pending_task_merges", lambda _root: [])
+    _auto_merge_finished_task(task_id, root)
+    assert queued == [task_id]
+
+
+def test_final_red_tests_retry_twice_then_block_without_queueing_merge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, task_id = _board_with_worktree(tmp_path)
+    with (root / "cascade.toml").open("a", encoding="utf-8") as handle:
+        handle.write("\n[automation]\nenabled = true\n")
+    from cascade.task.wiring import on_tests_finished
+
+    queued: list[str] = []
+    monkeypatch.setattr("cascade.task_rollup.queue_task_merge", lambda value, **_kw: queued.append(value))
+    monkeypatch.setattr("cascade.task.swe_turn.has_deliverable_commit", lambda _run: True)
+    from cascade.task.graph import _auto_merge_finished_task
+
+    from cascade.task.wiring import begin_validation_turn
+
+    for failure in range(1, 4):
+        begin_validation_turn(task_id)
+        on_tests_finished(task_id, {"exit_code": 1}, root=root)
+        _auto_merge_finished_task(task_id, root)
+        if failure < 3:
+            assert read_doc(task_id, root=root).meta.status == "active"
+    assert queued == []
+    assert read_doc(task_id, root=root).meta.status == "blocked"
+    events, _ = read_events("feat_001", 0, root=root)
+    assert [event for event in events if event.type == "TaskFailed"][-1].payload["reason"] == "tests_red"
+    retry_events, _ = read_events(task_id, 0, root=root)
+    corrective = [event for event in retry_events if event.type == "TaskValidationRetryRequested"]
+    assert [event.payload["validation_failure"] for event in corrective] == [1, 2]
+
+
 def test_recoverable_tool_error_does_not_block_task(tmp_path: Path) -> None:
     root, task_id = _board_with_worktree(tmp_path)
     _before, offset = read_events("feat_001", 0, root=root)

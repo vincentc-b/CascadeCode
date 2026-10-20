@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from cursor_sdk import (
@@ -97,12 +98,33 @@ def _role_status_from_sdk(status: str) -> RoleResultStatus:
     return "error"
 
 
+def _cursor_bridge_command() -> list[str] | None:
+    """Run the vendored Node bridge directly so the SDK owns the real process.
+
+    The SDK's POSIX shell launcher does not ``exec`` Node.  Tracking that shell
+    leaves its child bridge orphaned after otherwise normal cleanup.
+    """
+
+    try:
+        from cursor_sdk._vendor import resolve_bridge_path
+
+        launcher = Path(resolve_bridge_path())
+        node = launcher.parent / "node"
+        script = launcher.parent.parent / "dist" / "bin" / "cursor-sdk-bridge.js"
+        if node.is_file() and script.is_file():
+            return [os.fspath(node), os.fspath(script)]
+    except (ImportError, OSError):
+        pass
+    return None
+
+
 async def _run_cursor_role(turn: RoleTurn, *, api_key: str) -> RoleResult:
     options = build_agent_options(turn, api_key=api_key)
     reject_cloud_runtime(cloud=options.cloud)
 
     try:
         async with await AsyncClient.launch_bridge(
+            command=_cursor_bridge_command(),
             workspace=os.fspath(turn.cwd),
             allow_api_key_env_fallback=False,
         ) as client:

@@ -108,5 +108,7 @@ def test_swe_prompt_includes_playbook_text_and_paths(tmp_path: Path) -> None:
     assert "FIXTURE_SW_DEV_SIMPLICITY" in prompt
     assert "implement feature" in prompt
     assert "Execute the Task below now" in prompt
+    assert "MUST call Cascade's swe_run_tests tool" in prompt
+    assert "native shell do not satisfy" in prompt
     assert "--- Task plan: task_063" in prompt
     assert "--- Pinned Feature plan: feat_001" in prompt

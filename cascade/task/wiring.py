@@ -26,6 +26,7 @@ from cascade.watchdog.hooks import register_boot_hook
 
 _wiring_root: Path | None = None
 _infra_attempts: dict[str, int] = {}
+_last_test_passed: dict[str, bool] = {}
 
 
 def load_task_tools() -> None:
@@ -111,9 +112,20 @@ def on_tests_finished(task_id: str, result: dict[str, object], *, root: Path) ->
         if run is None:
             return
         mark_awaiting_merge(task_id, run, root=repo)
+        _last_test_passed[task_id] = True
+        from cascade.task.execution import clear_validation_failures, record_running_error
+
+        record_running_error(task_id, None, root=repo)
+        clear_validation_failures(task_id, root=repo)
         _infra_attempts.pop(task_id, None)
         return
-    _route_failure(task_id, result, root=repo)
+    # A red test is feedback inside a still-live SWE turn.  The agent may fix
+    # the issue and run the gate again; terminalize only when the turn ends
+    # with this as the latest result.
+    _last_test_passed[task_id] = False
+    from cascade.task.execution import record_running_error
+
+    record_running_error(task_id, "tests_red", root=repo)
 
 
 def on_tool_error(task_id: str, exc: BaseException, *, root: Path) -> None:
@@ -164,6 +176,7 @@ def restore_active_task_runs(root: Path) -> list[tuple[str, str]]:
 
     repo = Path(root).resolve()
     from cascade.workspace.integration_worktree import integration_branch, merged_board
+    from cascade.task.execution import execution_lease_is_live
 
     restored: list[tuple[str, str]] = []
     for task_id, meta in sorted(merged_board(repo).by_id.items()):
@@ -174,6 +187,11 @@ def restore_active_task_runs(root: Path) -> list[tuple[str, str]]:
             or not meta.parent
             or get_task_run(task_id) is not None
         ):
+            continue
+        # Another live supervisor worker still owns this turn.  Do not create a
+        # second TaskRun or append a duplicate resume event.  Dead-owner and
+        # stale-heartbeat leases are reclaimed below.
+        if execution_lease_is_live(task_id, root=repo):
             continue
         run = create_task_worktree(
             task_id,
@@ -193,6 +211,17 @@ def clear_task_wiring_state() -> None:
     global _wiring_root
     _wiring_root = None
     _infra_attempts.clear()
+    _last_test_passed.clear()
+
+
+def last_test_passed(task_id: str) -> bool | None:
+    return _last_test_passed.get(task_id)
+
+
+def begin_validation_turn(task_id: str) -> None:
+    """Forget the prior turn's in-memory test result; durable failure count remains."""
+
+    _last_test_passed.pop(task_id, None)
 
 
 def get_infra_attempt(task_id: str) -> int:

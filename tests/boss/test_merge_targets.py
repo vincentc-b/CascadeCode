@@ -106,8 +106,8 @@ def test_try_complete_feature_merges_feat_into_epic(tmp_path: Path) -> None:
     from cascade.board.store import move_doc
 
     move_doc("task_001", "completed", root=root)
-    write_closeout("feat_001", "All tasks done.", root=root)
-
+    # The last completed child is sufficient for the deterministic closeout;
+    # no additional Feature Team model turn is required.
     assert try_complete_feature("feat_001", root=root) is True
 
     epic_after = subprocess.run(
@@ -122,6 +122,40 @@ def test_try_complete_feature_merges_feat_into_epic(tmp_path: Path) -> None:
 
     merge_only = merge_feature_branch("feat_001", root=root)
     assert merge_only.ok is True
+
+
+def test_synthesized_closeout_from_trunk_commits_on_feature_worktree(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    _stacked_board(root)
+    feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)
+    move_doc("task_001", "completed", root=root)
+    monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+    monkeypatch.setattr("cascade.review.ensure_feature_review", lambda *_args, **_kwargs: None)
+
+    assert try_complete_feature("feat_001", root=root) is False
+
+    feature = read_doc("feat_001", root=root)
+    assert feature.meta.path.is_relative_to(feat_wt)
+    assert "Completed child work: `task_001` (Task)." in feature.body
+    subject = subprocess.run(
+        ["git", "log", "-1", "--format=%s", "--", feature.meta.path],
+        cwd=feat_wt,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert subject == "docs: feat_001 Feature"
+    status = subprocess.run(
+        ["git", "status", "--short", "--", feature.meta.path],
+        cwd=feat_wt,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert status == ""
 
 
 def test_promote_epic_to_trunk_fails_when_epic_branch_absent(tmp_path: Path) -> None:
