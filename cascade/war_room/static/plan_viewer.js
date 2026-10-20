@@ -97,57 +97,165 @@
     );
   }
 
-  function configureMarked() {
+  function offsetToSourceLine(body, offset) {
+    var line = 1;
+    for (var i = 0; i < offset && i < body.length; i += 1) {
+      if (body.charCodeAt(i) === 10) {
+        line += 1;
+      }
+    }
+    return line;
+  }
+
+  function blockLineNumbersForBody(body) {
+    var text = body != null ? String(body) : "";
+    if (typeof marked === "undefined") {
+      return [];
+    }
+    var tokens = marked.lexer(text);
+    var offset = 0;
+    var lines = [];
+    for (var i = 0; i < tokens.length; i += 1) {
+      var tok = tokens[i];
+      var raw = tok.raw || "";
+      if (tok.type === "space") {
+        offset += raw.length;
+        continue;
+      }
+      lines.push(offsetToSourceLine(text, offset));
+      offset += raw.length;
+    }
+    return lines;
+  }
+
+  function dataSrcLineAttr(line) {
+    return line != null ? ' data-src-line="' + line + '"' : "";
+  }
+
+  function buildMarkedParseOptions(body) {
     if (typeof marked === "undefined") {
       return null;
     }
-    var renderer = {
-      html: function (text) {
-        return escapeHtml(text);
-      },
-      link: function (href, title, text) {
-        var safe = safeUrl(href);
-        if (!safe) {
-          return escapeHtml(text);
-        }
-        var out = '<a href="' + escapeHtml(safe) + '"';
-        if (title) {
-          out += ' title="' + escapeHtml(title) + '"';
-        }
-        return out + ">" + text + "</a>";
-      },
-      image: function (href, title, text) {
-        var safe = safeUrl(href);
-        if (!safe) {
-          return escapeHtml(text || "");
-        }
-        var out = '<img src="' + escapeHtml(safe) + '" alt="' + escapeHtml(text || "") + '"';
-        if (title) {
-          out += ' title="' + escapeHtml(title) + '"';
-        }
-        return out + ">";
-      },
-      code: function (text, lang) {
-        var language = (lang || "").trim().toLowerCase();
-        if (language === "mermaid") {
-          return '<div class="mermaid">' + escapeHtml(text) + "</div>\n";
-        }
-        var langAttr = language
-          ? ' class="language-' + escapeHtml(language) + '"'
-          : "";
-        return "<pre><code" + langAttr + ">" + escapeHtml(text) + "</code></pre>\n";
-      },
+    var text = body != null ? String(body) : "";
+    var defaultRenderer = new marked.Renderer();
+    var blockLines = blockLineNumbersForBody(text);
+    var blockIndex = 0;
+
+    function takeBlockLine() {
+      if (blockIndex >= blockLines.length) {
+        return null;
+      }
+      var line = blockLines[blockIndex];
+      blockIndex += 1;
+      return line;
+    }
+
+    var renderer = new marked.Renderer();
+    renderer.html = function (rawText) {
+      return escapeHtml(rawText);
     };
-    marked.use({ gfm: true, breaks: false, renderer: renderer });
-    return marked;
+    renderer.link = function (href, title, linkText) {
+      var safe = safeUrl(href);
+      if (!safe) {
+        return escapeHtml(linkText);
+      }
+      var out = '<a href="' + escapeHtml(safe) + '"';
+      if (title) {
+        out += ' title="' + escapeHtml(title) + '"';
+      }
+      return out + ">" + linkText + "</a>";
+    };
+    renderer.image = function (href, title, altText) {
+      var safe = safeUrl(href);
+      if (!safe) {
+        return escapeHtml(altText || "");
+      }
+      var out = '<img src="' + escapeHtml(safe) + '" alt="' + escapeHtml(altText || "") + '"';
+      if (title) {
+        out += ' title="' + escapeHtml(title) + '"';
+      }
+      return out + ">";
+    };
+    renderer.code = function (codeText, lang) {
+      var line = takeBlockLine();
+      var language = (lang || "").trim().toLowerCase();
+      if (language === "mermaid") {
+        return (
+          '<div class="mermaid"' +
+          dataSrcLineAttr(line) +
+          ">" +
+          escapeHtml(codeText) +
+          "</div>\n"
+        );
+      }
+      var langAttr = language ? ' class="language-' + escapeHtml(language) + '"' : "";
+      return (
+        "<pre" +
+        dataSrcLineAttr(line) +
+        "><code" +
+        langAttr +
+        ">" +
+        escapeHtml(codeText) +
+        "</code></pre>\n"
+      );
+    };
+    renderer.heading = function (headingText, level) {
+      var line = takeBlockLine();
+      return (
+        "<h" +
+        level +
+        dataSrcLineAttr(line) +
+        ">" +
+        headingText +
+        "</h" +
+        level +
+        ">\n"
+      );
+    };
+    renderer.paragraph = function (paragraphText) {
+      var line = takeBlockLine();
+      return "<p" + dataSrcLineAttr(line) + ">" + paragraphText + "</p>\n";
+    };
+    renderer.table = function (header, tableBody) {
+      var line = takeBlockLine();
+      return defaultRenderer.table
+        .call(this, header, tableBody)
+        .replace(/^<table>/, "<table" + dataSrcLineAttr(line) + ">");
+    };
+    renderer.blockquote = function (quote) {
+      var line = takeBlockLine();
+      return "<blockquote" + dataSrcLineAttr(line) + ">\n" + quote + "</blockquote>\n";
+    };
+    renderer.list = function (listBody, ordered, start) {
+      var line = takeBlockLine();
+      var tag = ordered ? "ol" : "ul";
+      var startAttr =
+        ordered && start !== "" && start != null && start !== 1 ? ' start="' + start + '"' : "";
+      return (
+        "<" +
+        tag +
+        dataSrcLineAttr(line) +
+        startAttr +
+        ">\n" +
+        listBody +
+        "</" +
+        tag +
+        ">\n"
+      );
+    };
+    renderer.hr = function () {
+      var line = takeBlockLine();
+      return "<hr" + dataSrcLineAttr(line) + ">\n";
+    };
+    return { gfm: true, breaks: false, renderer: renderer };
   }
 
   function markdownToHtml(body) {
-    var md = configureMarked();
-    if (!md) {
+    var options = buildMarkedParseOptions(body);
+    if (!options) {
       return null;
     }
-    return md.parse(body != null ? String(body) : "");
+    return marked.parse(body != null ? String(body) : "", options);
   }
 
   function mermaidNodeHasDiagram(node) {
@@ -159,6 +267,12 @@
       return;
     }
     var pre = document.createElement("pre");
+    if (node.getAttribute) {
+      var srcLine = node.getAttribute("data-src-line");
+      if (srcLine != null && srcLine !== "") {
+        pre.setAttribute("data-src-line", srcLine);
+      }
+    }
     var code = document.createElement("code");
     code.textContent = node.textContent || "";
     pre.appendChild(code);
@@ -349,6 +463,144 @@
     }
   }
 
+  function initPlanComments(workId, tier) {
+    if (tier === "task") {
+      return;
+    }
+    var panel = document.getElementById("plan-comments");
+    var threadEl = document.getElementById("plan-comment-threads");
+    var compose = document.getElementById("plan-comment-compose");
+    var bodyInput = document.getElementById("plan-comment-body");
+    var sectionInput = document.getElementById("plan-comment-section");
+    var blockingInput = document.getElementById("plan-comment-blocking");
+    var statusEl = document.getElementById("plan-comment-status");
+    if (!panel || !threadEl || !compose || !bodyInput || !sectionInput) {
+      return;
+    }
+
+    function setCommentStatus(msg, isError) {
+      if (!statusEl) return;
+      statusEl.textContent = msg || "";
+      statusEl.classList.toggle("error", !!isError);
+    }
+
+    function renderCommentThreads(comments) {
+      threadEl.innerHTML = "";
+      var rows = comments || [];
+      var roots = rows.filter(function (row) {
+        return !row.parent;
+      });
+      roots.forEach(function (root) {
+        var block = document.createElement("div");
+        block.className = "plan-comment-thread";
+        if (root.state === "resolved") {
+          block.classList.add("resolved");
+        }
+        block.setAttribute("role", "listitem");
+        block.appendChild(buildCommentNode(root));
+        var replies = rows.filter(function (row) {
+          return row.parent === root.id;
+        });
+        if (replies.length) {
+          var replyWrap = document.createElement("div");
+          replyWrap.className = "plan-comment-replies";
+          replies.forEach(function (reply) {
+            replyWrap.appendChild(buildCommentNode(reply));
+          });
+          block.appendChild(replyWrap);
+        }
+        threadEl.appendChild(block);
+      });
+    }
+
+    function buildCommentNode(row) {
+      var wrap = document.createElement("div");
+      wrap.className = "plan-comment-entry";
+      var meta = document.createElement("div");
+      meta.className = "plan-comment-meta";
+      meta.textContent =
+        (row.author || "unknown") +
+        " · " +
+        (row.section || "") +
+        (row.blocking ? " · blocking" : "") +
+        (row.state === "resolved" ? " · resolved" : "");
+      var body = document.createElement("p");
+      body.className = "plan-comment-body-text";
+      body.textContent = row.body || "";
+      wrap.appendChild(meta);
+      wrap.appendChild(body);
+      return wrap;
+    }
+
+    function loadComments() {
+      return fetch("/api/comments/" + encodeURIComponent(workId), {
+        signal: pageLoadSignal(),
+      })
+        .then(function (resp) {
+          if (!resp.ok) {
+            throw new Error("Failed to load comments (" + resp.status + ")");
+          }
+          return resp.json();
+        })
+        .then(function (data) {
+          renderCommentThreads(data.comments || []);
+        });
+    }
+
+    compose.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var text = bodyInput.value.trim();
+      var section = sectionInput.value.trim();
+      if (!text || !section) {
+        setCommentStatus("Section and comment are required.", true);
+        return;
+      }
+      setCommentStatus("Posting…", false);
+      fetch("/api/comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doc_id: workId,
+          section: section,
+          body: text,
+          blocking: !!(blockingInput && blockingInput.checked),
+        }),
+      })
+        .then(function (resp) {
+          return resp.text().then(function (raw) {
+            var payload;
+            try {
+              payload = JSON.parse(raw);
+            } catch (_e) {
+              payload = { error: raw };
+            }
+            if (!resp.ok) {
+              var errMsg =
+                payload && payload.error ? payload.error : "Post failed (" + resp.status + ")";
+              throw new Error(errMsg);
+            }
+            return payload;
+          });
+        })
+        .then(function () {
+          bodyInput.value = "";
+          if (blockingInput) {
+            blockingInput.checked = false;
+          }
+          setCommentStatus("");
+          return loadComments();
+        })
+        .catch(function (err) {
+          setCommentStatus(err && err.message ? err.message : "Post failed", true);
+        });
+    });
+
+    panel.hidden = false;
+    loadComments().catch(function (err) {
+      setCommentStatus(err && err.message ? err.message : "Could not load comments", true);
+    });
+  }
+
   function bootstrapPlanViewer() {
     var workId = document.body.getAttribute("data-work-id");
     if (!workId) {
@@ -390,6 +642,7 @@
           if (bodyEl) {
             bodyEl.hidden = false;
           }
+          initPlanComments(workId, meta.tier);
         });
       });
     withDeadline(loadWork).catch(function (err) {
@@ -409,6 +662,7 @@
   return {
     escapeHtml: escapeHtml,
     safeUrl: safeUrl,
+    blockLineNumbersForBody: blockLineNumbersForBody,
     findMermaidFences: findMermaidFences,
     workIdFromDocHref: workIdFromDocHref,
     planHrefFromRelative: planHrefFromRelative,

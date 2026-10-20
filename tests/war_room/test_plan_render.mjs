@@ -7,13 +7,14 @@ const require = createRequire(import.meta.url);
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const staticDir = join(repoRoot, "cascade/war_room/static");
 
-require(join(staticDir, "vendor/marked.min.js"));
+globalThis.marked = require(join(staticDir, "vendor/marked.min.js"));
 const {
   findMermaidFences,
   rewriteWorkDocLinks,
   workIdFromDocHref,
   planHrefFromRelative,
   markdownToHtml,
+  blockLineNumbersForBody,
   mermaidNodeHasDiagram,
   safeUrl,
 } = require(join(staticDir, "plan_viewer.js"));
@@ -70,6 +71,14 @@ assert.match(relLinkParsed, /href="\/plan\/feat_012"/);
 const mermaidHtml = markdownToHtml("```mermaid\nflowchart LR\n  A --> B\n```");
 assert.match(mermaidHtml, /class="mermaid"/);
 assert.match(mermaidHtml, /flowchart LR/);
+
+assert.deepEqual(blockLineNumbersForBody(sampleMd), [1, 3, 7, 12]);
+
+const sampleHtml = markdownToHtml(sampleMd);
+assert.match(sampleHtml, /<h1 data-src-line="1">Plan<\/h1>/);
+assert.match(sampleHtml, /<table data-src-line="3">/);
+assert.match(sampleHtml, /<div class="mermaid" data-src-line="7">/);
+assert.match(sampleHtml, /<p data-src-line="12">Plain/);
 
 assert.equal(mermaidNodeHasDiagram(null), false);
 assert.equal(mermaidNodeHasDiagram({ querySelector: () => null }), false);
