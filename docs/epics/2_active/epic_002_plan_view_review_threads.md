@@ -62,7 +62,7 @@ Watchdog deliver_queue_kickoffs → kickoff_turn(kind="comment") for human autho
   HTTP POST enqueues only; CommentResolved and agent replies do not start a turn
 
 Dispatch law + new scope gates (feat_019 planning)
-  ├─ blocking_threads_for scans the work + ancestors; refuse dispatch/mint_task/merge
+  ├─ cascade.comments.blocking_threads_for live-loads work+ancestors; refuse dispatch/mint_task/merge
   └─ completion rollup unchanged: any open human thread still blocks closeout
 ```
 
@@ -78,13 +78,13 @@ Dispatch law + new scope gates (feat_019 planning)
 - **Read-only plan renderer** may gain comment *chrome*; plan body edits still go through agent tools or git, not WYSIWYG in the viewer (feat_012 read-only stance unless explicitly extended).
 - **Comment chrome is render-only (dec_016).** `line_start` / `line_end` are 1-based markdown source lines from the renderer token source map. Re-anchor and outdated never rewrite the sidecar. `#plan-comments` is upserted by `data-comment-id`, never replaced via `innerHTML`. Task-tier GET `/api/comments` 400 stays. **feat_017 shipped this** (task_080–082).
 - **Blocking is human-only** on create (existing store rule). Agents may reply but not resolve or set blocking.
-- **Gate is store-only (dec_017).** `blocking_threads_for(work_id)` reads sidecars + current worktree `##+` headings. It does not consult plan-viewer outdated state, line numbers, or rewrite comments. Replace the existing `mint_task` any-blocking check; do not stack. Do not gate `mint_feature` or `activate_epic`. Closeout rollup stays separate.
-- **Scope (locked, see dec_003/dec_004/dec_008/dec_010):** affected work for an open blocking *root* thread, in order of precedence:
-  (a) explicit `blocks: [work_id, …]` on the root comment, if present (unknown ids ignored);
+- **Gate is store-only (dec_017, dec_018).** `cascade.comments.blocking_threads_for(work_id)` is a pure function next to the comment store. Each call live-loads open blocking roots from the work and ancestors via sidecar + `resolve_doc_worktree` (never trunk pointers, never a boot-time cache, never plan-viewer JS). It reads current worktree `##+` headings. It does not consult outdated state, line numbers, or rewrite comments. Replace the existing `mint_task` any-blocking check; do not stack. Do not gate `mint_feature` or `activate_epic`. Closeout rollup stays separate. Merge means the existing feature/task integration merge for that `work_id`, not git commit.
+- **Scope (locked, see dec_003/dec_004/dec_008/dec_010/dec_018):** affected work for an open blocking *root* thread, in order of precedence:
+  (a) explicit `blocks: [work_id, …]` on the root comment, if **non-empty**: exclusive membership of those ids plus tasks of any listed feature (unknown ids ignored). Do not also apply (b) or (c);
   (b) else, *section thread* on an **epic**: the epic plus only child features whose frontmatter `cites:` includes `{epic_id}#{section_slug}`;
   (c) else, *section thread* on a **feature**, or any *doc-level* thread: the commented doc and all its children.
-  A root is a section thread iff `section` matches a current `##` or deeper heading on that doc (`section_slug`); otherwise it is doc-level (H1, `general`, unmatched). Section is never empty.
-  Tasks inherit blocking from their parent feature. `blocking_threads_for(work_id)` loads roots from the work **and its ancestors** (parent feature, parent epic). Slugs come from one shared `cascade.comments.section_slug` (feat_016, dec_006).
+  A root is a section thread iff stored `section` **as-is** equals `section_slug(h)` for some current `##` or deeper heading on that doc; otherwise it is doc-level (H1, `general`, unmatched, historical free-text). Do not re-slugify stored section on read. Section is never empty.
+  Tasks inherit blocking from their parent feature. `blocking_threads_for(work_id)` loads roots from the work **and its ancestors** (parent feature, parent epic). Slugs come from one shared `cascade.comments.section_slug` (feat_016, dec_006). `WorkMeta.cites` is feature-tier only.
 
 ## Core dependencies
 
@@ -98,7 +98,7 @@ Dispatch law + new scope gates (feat_019 planning)
 
 ## Feature breakdown
 
-feat_016 and feat_017 are complete. **feat_019 planning started 2026-10-20** (dec_013, dec_017). Remaining features stay in `docs/features/1_backlog/` until dispatch:
+feat_016 and feat_017 are complete. **feat_019 planning started 2026-10-20** (dec_013, dec_017, dec_018). Remaining features stay in `docs/features/1_backlog/` until dispatch:
 
 1. **[feat_016](../../features/3_completed/feat_016_comment_read_api_and_war_room_wiring.md) — Comment read API and War Room wiring** *(completed 2026-10-20; task_077–079 merged)* — GET `/api/comments/{doc_id}` and POST `/api/comment` carry `line_start` / `line_end` / `doc_sha` / `blocks`; `parent` is a reply (section inherited); `cascade.comments.section_slug()` is hyphenated GitHub-style. View plan deep-links to `/plan/{id}#plan-comments`. No second compose form. HTTP `kickoff_graph_queue_event` was **not** added (feat_016 D5 / dec_012); feat_020 owns delivery. Merge must keep one GET `/api/comments` handler. feat_016’s API table still shows a `kickoff` key; **that row is stale** — shipped POST is `202 {ok, comment_id}`.
 
@@ -106,7 +106,7 @@ feat_016 and feat_017 are complete. **feat_019 planning started 2026-10-20** (de
 
 3. **[feat_020](../../features/1_backlog/feat_020_agent_review_turns.md) — Agent review turns** — One `kickoff_turn(kind="comment")` per human CommentPosted / CommentReplied, including graphs with no prior chat. Watchdog delivers; HTTP enqueues only (do not add an HTTP eager turn — dec_012). Agent replies and `CommentResolved` do not loop. Playbook on existing `product_manager` skill.
 
-4. **[feat_019](../../features/1_backlog/feat_019_scoped_dispatch_gates.md) — Scoped dispatch gates** *(planning 2026-10-20)* — One `blocking_threads_for(work_id)` (work + ancestors) on human dispatch, Boss dispatch, `mint_task`, and merge. No bypass. Optional feature `cites:` frontmatter. Does not gate `mint_feature` or `activate_epic`. May implement in parallel after feat_016; **must not merge before feat_018** (dec_013).
+4. **[feat_019](../../features/1_backlog/feat_019_scoped_dispatch_gates.md) — Scoped dispatch gates** *(planning 2026-10-20)* — One `cascade.comments.blocking_threads_for(work_id)` (work + ancestors, live worktree load) on human dispatch, Boss dispatch, `mint_task`, and feature/task integration merge. No bypass. Optional feature-tier `cites:` frontmatter. Does not gate `mint_feature` or `activate_epic`. May implement in parallel after feat_016; **must not merge before feat_018** (dec_013).
 
    **Planning lock (dec_017) — Feature Team honors this when minting tasks. Do not reopen epic decisions.**
    - Consume shipped feat_016 sidecar + `cascade.comments.section_slug`. Import; do not fork; do not import amendment/filename sluggers.
@@ -122,13 +122,25 @@ feat_016 and feat_017 are complete. **feat_019 planning started 2026-10-20** (de
    - **Out of this feature:** Resolve button (feat_018), chrome (feat_017 shipped), agent kickoff (feat_020), `blocks:` picker, cite inference, `force` flag, second slugger, gating `activate_epic` / `mint_feature`, changing closeout, sidecar rewrite.
    - Suggested task slice (Feature Team mints; do not grow past this): (1) `cites:` + `blocking_threads_for` membership tests; (2) four call sites + replace `mint_task` check + refusal payload. High-signal tests are dispatch / `mint_task` / merge API tests (epic-section + cites hit/miss, feature-section blocks tasks, doc-level blocks all children, `blocks:` override, ancestor scan, non-blocking/resolved do not refuse, Boss path equals human). Not a unit mock of `section_slug`.
 
+   **Architect lock (dec_018) — honor this when minting. Do not reopen epic decisions.**
+   - Home: `cascade.comments.blocking_threads_for`. Import it from War Room dispatch, Boss auto-dispatch, `mint_task`, and feature/task integration merge. Do not put a second copy in HTTP-only code or in JS.
+   - Live load every call through `resolve_doc_worktree` for each ancestor doc (epic sidecar in the epic worktree; feature sidecar and `cites:` in the feature worktree). No graph-boot cache: a human resolve must unblock the next dispatch in the same process.
+   - Pure function: return the in-scope blocking roots (empty = allow). No writes, no queue events, no sidecar rewrite, no kickoff.
+   - `WorkMeta.cites` is optional and **feature-tier only**. Gate reads frontmatter only. Backfill epic_002 children from body cites already listed; do not infer at runtime from the "Cites (promote..." prose.
+   - `blocks:` non-empty is exclusive (listed ids + tasks of listed features). Empty/absent falls through to (b)/(c).
+   - Compare stored `section` as-is to live `section_slug(##+)` headings. Do not re-slugify historical free-text (`Open questions` stays doc-level). No heading snapshot. No fuzzy rename match. Renamed heading → unmatched → doc-level (broader), accepted.
+   - `mint_task(feature_id)` calls `blocking_threads_for(feature_id)`. `dispatch_task` / merge of a task call `blocking_threads_for(task_id)` (ancestor scan + inherit).
+   - Merge = existing feature/task integration merge of that `work_id`. Not `git commit`, not closeout rollup.
+   - Refusal reuses the existing War Room/Boss refusal shape (not 500). Unmatched-cite warnings ride along and never refuse by themselves.
+   - Extra test cases on the same slice: sibling feature without matching `cites:` is allowed; resolve then dispatch in-process succeeds; historical free-text section classifies as doc-level.
+
 5. **[feat_018](../../features/1_backlog/feat_018_human_resolve_and_audit.md) — Human resolve and audit** — POST `/api/comment/resolve` on an open root only; cascades to descendants; agents cannot resolve; resolved rows stay in JSONL; Resolve control binds to `#plan-comments [data-comment-id]`; `In reply to: cmt_NNN` in the decision log. Spec `depends_on` is feat_016 only (dec_014); dispatch even if YAML still lists feat_017. Chrome has shipped, so the `data-comment-id` marker is already on the list.
 
 **Remaining dispatch (human or Boss):** feat_017 is complete — do not re-dispatch it. feat_019 is in planning — do not re-dispatch it. **Dispatch feat_018 now** (dec_007, dec_013, dec_014): YAML may still list `depends_on: feat_017`; ignore that, chrome is done, and feat_019 closeout waits on the resolve guard. feat_020 can start now.
 
 ## Open questions
 
-_(none — all resolved, see Decision log dec_001–dec_017)_
+_(none — all resolved, see Decision log dec_001–dec_018)_
 
 ## Decision log
 
@@ -218,9 +230,10 @@ _(none — all resolved, see Decision log dec_001–dec_017)_
   Honors: dec_003, dec_004, dec_006, dec_008, dec_010, dec_013, dec_016; feat_016 shipped sidecar and section_slug; Intent operator success #3 (unresolved blocking threads stop dispatch/merge); explicit cuts (no force flag, no cite inference, blocks API-only, no gating mint_feature/activate_epic); FeaturePlanningStarted feat_019.
 
 - `dec_018` · 2026-10-20 · Epic Architect · **feat_019 planning — call-site and worktree seam**
-  Chose Chose blocking_threads_for as a pure Python function next to the comment store (cascade.comments.blocking_threads_for), imported by every mutating call site — not a War Room HTTP helper, not JS, not a second copy in Boss. Each call live-loads ancestor sidecars and feature cites through resolve_doc_worktree (never trunk pointers, never a boot-time cache, never plan-viewer JS). WorkMeta.cites is optional and feature-tier only; the gate reads frontmatter only (no prose inference); backfill epic_002 children from the cites already listed in those spec bodies. blocks: non-empty is an exclusive membership set (listed ids plus tasks of listed features); do not union with (b)/(c). Compare stored section as-is to live section_slug(##+) headings — do not re-slugify historical free-text; unmatched is doc-level (dec_008), no heading snapshot, no fuzzy rename match. mint_task(feature_id) gates on blocking_threads_for(feature_id); dispatch_task/merge of a task gate on the task id (ancestor scan + inherit). Merge means the existing feature/task integration merge for that work_id, not git commit and not closeout rollup. Return the in-scope blocking roots; empty means allow. Call sites reuse the existing War Room/Boss refusal shape (not 500); payload lists thread id, doc_id, section, /plan/{doc_id}#plan-comments; unmatched-cite warnings ride along and never refuse by themselves. No writes, queue events, or sidecar rewrites. Must not merge before feat_018 (dec_013). Out of this feature unchanged..
+  Chose blocking_threads_for as a pure Python function next to the comment store (cascade.comments.blocking_threads_for), imported by every mutating call site — not a War Room HTTP helper, not JS, not a second copy in Boss. Each call live-loads ancestor sidecars and feature cites through resolve_doc_worktree (never trunk pointers, never a boot-time cache, never plan-viewer JS). WorkMeta.cites is optional and feature-tier only; the gate reads frontmatter only (no prose inference); backfill epic_002 children from the cites already listed in those spec bodies. blocks: non-empty is an exclusive membership set (listed ids plus tasks of listed features); do not union with (b)/(c). Compare stored section as-is to live section_slug(##+) headings — do not re-slugify historical free-text; unmatched is doc-level (dec_008), no heading snapshot, no fuzzy rename match. mint_task(feature_id) gates on blocking_threads_for(feature_id); dispatch_task/merge of a task gate on the task id (ancestor scan + inherit). Merge means the existing feature/task integration merge for that work_id, not git commit and not closeout rollup. Return the in-scope blocking roots; empty means allow. Call sites reuse the existing War Room/Boss refusal shape (not 500); payload lists thread id, doc_id, section, /plan/{doc_id}#plan-comments; unmatched-cite warnings ride along and never refuse by themselves. No writes, queue events, or sidecar rewrites. Must not merge before feat_018 (dec_013). Out of this feature unchanged.
   Rationale: FeaturePlanningStarted for feat_019. dec_017 locked the store-side consumer contract. Remaining holes: putting the gate in War Room HTTP only (Boss/merge would bypass), caching comments at graph boot (resolve would not unblock in-process), reading trunk pointer specs/sidecars (dec_005), inferring cites from the 'Cites (promote...' body line at runtime, unioning blocks: with section scope, re-slugifying historical 'Open questions' rows or snapshotting headings to preserve rule (b) after a rename, or gating closeout/git commit. Locking the call-site/worktree seam keeps operator success #3 the smallest slice and stops a leak of the human gate.
-  Honors: dec_003, dec_004, dec_005, dec_008, dec_010, dec_013, dec_017; feat_016 shipped sidecar, section_slug, resolve_doc_worktree; Intent operator success #3; Filesystem is truth; stacked worktrees / pointer epics; Dispatch law unchanged; FeaturePlanningStarted feat_019..
+  Honors: dec_003, dec_004, dec_005, dec_008, dec_010, dec_013, dec_017; feat_016 shipped sidecar, section_slug, resolve_doc_worktree; Intent operator success #3; Filesystem is truth; stacked worktrees / pointer epics; Dispatch law unchanged; FeaturePlanningStarted feat_019.
+
 ## Amendment log
 
 _(none)_
