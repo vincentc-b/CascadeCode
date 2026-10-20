@@ -65,9 +65,12 @@ from cascade.war_room.provider_routes import (
 from cascade.war_room.sidecar_routes import _parse_graph_id_from_chat_path, register_sidecar_routes
 from cascade.war_room.views import render_plan_page, render_war_room_page
 from cascade.comments.store import comment as post_comment
-from cascade.comments.store import CommentStoreError
+from cascade.comments.store import CommentStoreError, read_comments
+from cascade.war_room.serialize import comment_to_dict
+from cascade.workspace.kickoff import deferred_kickoffs, kickoff_graph_queue_event
 from cascade.watchdog import activate_epic, append_event, dispatch_feature, dispatch_task
 from cascade.watchdog.types import Event
+from cascade.board.errors import GitError
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SKILLS_INVALID = object()
@@ -105,6 +108,7 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
     """HTTPServer scoped to a repo root. One request cannot block the rest."""
 
     daemon_threads = True
+    allow_reuse_address = True
     request_queue_size = 64
 
     def __init__(
@@ -126,7 +130,6 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         load_feature_tools()
         self.attachment = AttachmentState()
         super().__init__(server_address, RequestHandlerClass)
-        self.allow_reuse_address = True
 
 
 GetRoute = Callable[["WarRoomRequestHandler"], None]
@@ -213,6 +216,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 return
             self._handle_doc(work_id)
             return
+        if path.startswith("/api/comments/"):
+            doc_id = path.removeprefix("/api/comments/").strip("/")
+            if not doc_id or "/" in doc_id:
+                self._json_error(HTTPStatus.NOT_FOUND, "not found")
+                return
+            self._handle_comments_list(doc_id)
+            return
         if path.startswith("/plan/"):
             work_id = path.removeprefix("/plan/").strip("/")
             if not work_id or "/" in work_id:
@@ -231,6 +241,11 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         self._json_error(HTTPStatus.NOT_FOUND, "not found")
 
     def do_POST(self) -> None:
+        # Model turns outlive REQUEST_DEADLINE_S; run them off the request thread.
+        with deferred_kickoffs():
+            self._do_post()
+
+    def _do_post(self) -> None:
         path = self.path.split("?", 1)[0]
         chat_id = _parse_graph_id_from_chat_path(path)
         if chat_id is not None:
@@ -270,6 +285,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
     def _exact_get_routes(cls) -> dict[str, GetRoute]:
         routes = {
             "/api/board": lambda h: h._handle_board(),
+            "/api/brief/template": lambda h: h._handle_brief_template(),
             "/api/boss_view": lambda h: h._handle_boss_view(),
             "/api/orphans": lambda h: h._handle_orphans(),
             "/api/flight": lambda h: h._handle_flight(),
@@ -294,6 +310,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/confirm_epic_complete": lambda h, b: h._handle_confirm_epic_complete(b),
             "/api/boss_drain": lambda h, b: h._handle_boss_drain(b),
             "/api/comment": lambda h, b: h._handle_comment(b),
+            "/api/briefs": lambda h, b: h._handle_create_brief(b),
+            "/api/sync/pull": lambda h, b: h._handle_sync_pull(b),
+            "/api/approve_epic_plan": lambda h, b: h._handle_approve_epic_plan(b),
         }
         routes.update(cls._extra_post_routes)
         return routes
@@ -310,6 +329,57 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
         result = activate_epic(work_id, "human", root=self.server.root)
         self._json_response(HTTPStatus.OK, dispatch_result_to_dict(result))
+
+    def _handle_brief_template(self) -> None:
+        from cascade.briefs import brief_template
+
+        try:
+            payload = brief_template(self.server.root)
+        except (ValueError, OSError) as exc:
+            self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._json_response(HTTPStatus.OK, payload)
+
+    def _handle_create_brief(self, body: dict[str, Any]) -> None:
+        from cascade.briefs import create_brief
+
+        try:
+            epic_id, mr = create_brief(self.server.root, body)
+        except (ValueError, GitError, OSError) as exc:
+            self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._json_response(
+            HTTPStatus.CREATED,
+            {
+                "ok": True,
+                "epic_id": epic_id,
+                "merge_request_url": mr.url,
+                "provider": mr.forge,
+            },
+        )
+
+    def _handle_sync_pull(self, body: dict[str, Any]) -> None:
+        from cascade.automation import sync_briefs
+
+        try:
+            payload = sync_briefs(self.server.root, force=True)
+        except (ValueError, GitError, OSError) as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._json_response(HTTPStatus.OK, payload)
+
+    def _handle_approve_epic_plan(self, body: dict[str, Any]) -> None:
+        epic_id = self._require_work_id(body)
+        if epic_id is None:
+            return
+        from cascade.approvals import approve_epic_plan
+
+        try:
+            payload = approve_epic_plan(epic_id, root=self.server.root)
+        except (ValueError, OSError) as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._json_response(HTTPStatus.OK, payload)
 
     def _handle_dispatch_feature(self, body: dict[str, Any]) -> None:
         work_id = self._require_work_id(body)
@@ -453,7 +523,37 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         except CommentStoreError as exc:
             self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
-        self._json_response(HTTPStatus.ACCEPTED, {"ok": True, "comment_id": comment_id})
+        kicked = False
+        try:
+            kicked = kickoff_graph_queue_event(
+                doc_id.strip(),
+                root=self.server.root,
+                by="human",
+            )
+        except Exception:
+            kicked = False
+        self._json_response(
+            HTTPStatus.ACCEPTED,
+            {"ok": True, "comment_id": comment_id, "kickoff": kicked},
+        )
+
+    def _handle_comments_list(self, doc_id: str) -> None:
+        try:
+            doc = read_doc_resolved(doc_id, root=self.server.root)
+        except NotFound:
+            self._json_error(HTTPStatus.NOT_FOUND, f"not found: {doc_id}")
+            return
+        if doc.meta.tier not in ("epic", "feature"):
+            self._json_error(
+                HTTPStatus.BAD_REQUEST,
+                "comments are supported for epic and feature plans only",
+            )
+            return
+        rows = read_comments(doc_id, root=self.server.root)
+        self._json_response(
+            HTTPStatus.OK,
+            {"doc_id": doc_id, "comments": [comment_to_dict(row) for row in rows]},
+        )
 
     def _handle_ask_boss_dispatch(self, body: dict[str, Any]) -> None:
         kind = body.get("kind")
@@ -598,6 +698,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -613,6 +714,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/doc/"):
             work_id = path.removeprefix("/api/doc/").strip("/")
             return bool(work_id and "/" not in work_id)
+        if path.startswith("/api/comments/"):
+            doc_id = path.removeprefix("/api/comments/").strip("/")
+            return bool(doc_id and "/" not in doc_id)
         if path in ("/", "/war-room"):
             return True
         if path.startswith("/plan/"):

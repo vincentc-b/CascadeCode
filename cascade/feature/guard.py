@@ -8,6 +8,7 @@ from cascade.board.errors import NotFound
 from cascade.board.parse import parse_doc
 from cascade.board.paths import filename_work_id
 from cascade.board.store import list_board, read_doc
+from cascade.feature.checkout import feature_checkout_root
 
 _TASK_COLUMNS = ("1_backlog", "2_active", "3_completed")
 _FEATURE_COLUMNS = ("1_backlog", "2_active", "3_completed")
@@ -18,38 +19,60 @@ class FeatureToolDenied(PermissionError):
 
 
 def tool_guard(path: Path | str, op: str, *, feature_id: str, root: Path) -> bool:
-    """Return whether the Feature graph may read or write `path` relative to `root`."""
+    """Return whether the Feature graph may read or write `path`.
+
+    ``root`` is the product trunk; paths resolve against the feature integration checkout.
+    """
 
     if op not in ("read", "write"):
         return False
 
-    repo = Path(root).resolve()
+    trunk = Path(root).resolve()
     try:
-        feature = read_doc(feature_id, root=repo)
+        checkout = feature_checkout_root(feature_id, trunk=trunk)
     except NotFound:
         return False
+    try:
+        feature = read_doc(feature_id, root=checkout)
+    except NotFound:
+        try:
+            feature = read_doc(feature_id, root=trunk)
+        except NotFound:
+            return False
     if feature.meta.tier != "feature":
         return False
 
-    resolved = _resolve_under_root(path, repo)
+    board_root = checkout
+    resolved = _resolve_under_root(path, checkout)
+    if resolved is None and checkout != trunk:
+        board_root = trunk
+        resolved = _resolve_under_root(path, trunk)
     if resolved is None:
         return False
 
-    if _walks_symlink(path, repo):
-        return False
-
-    rel = resolved.relative_to(repo)
-    parts = rel.parts
-    if not parts or parts[0] != "docs":
+    if _walks_symlink(path, board_root):
         return False
 
     feature_path = feature.meta.path.resolve()
     if resolved == feature_path:
+        return op in ("read", "write")
+
+    if op == "read" and _allow_parent_epic_read(resolved, feature=feature, trunk=trunk):
         return True
 
+    parts = resolved.relative_to(board_root).parts
+    if not parts or parts[0] != "docs":
+        return False
+
     if op == "write":
-        return _allow_write(resolved, parts, feature_id=feature_id, repo=repo)
-    return _allow_read(resolved, parts, feature=feature, feature_id=feature_id, repo=repo)
+        return _allow_write(resolved, parts, feature_id=feature_id, repo=board_root)
+    return _allow_read(
+        resolved,
+        parts,
+        feature=feature,
+        feature_id=feature_id,
+        repo=board_root,
+    )
 
 
 def _walks_symlink(path: Path | str, root: Path) -> bool:
@@ -148,9 +171,6 @@ def _allow_read(
     if len(parts) >= 2 and parts[1] == "_comments":
         return resolved == _own_comment_sidecar(feature_id, repo)
 
-    if len(parts) >= 2 and parts[1] == "epics":
-        return _allow_parent_epic_read(resolved, feature=feature, repo=repo)
-
     if len(parts) >= 3 and parts[1] == "features" and parts[2] in _FEATURE_COLUMNS:
         return False
 
@@ -166,12 +186,12 @@ def _allow_read(
     return False
 
 
-def _allow_parent_epic_read(resolved: Path, *, feature, repo: Path) -> bool:
+def _allow_parent_epic_read(resolved: Path, *, feature, trunk: Path) -> bool:
     parent_id = feature.meta.parent
     if parent_id is None:
         return False
     try:
-        parent = read_doc(parent_id, root=repo)
+        parent = read_doc(parent_id, root=trunk)
     except NotFound:
         return False
     if parent.meta.tier != "epic":

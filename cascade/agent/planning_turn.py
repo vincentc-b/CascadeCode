@@ -6,6 +6,8 @@ from pathlib import Path
 
 from cascade.agent.adapter import run_role, validate_model_id
 from cascade.agent.mcp_wrappers import (
+    ToolEffectCollector,
+    build_planning_custom_tools,
     build_planning_mcp_servers,
     merge_tool_effects_from_file,
 )
@@ -117,22 +119,36 @@ async def _run_sandbox_turn(
 ) -> RoleResult:
     scratch = sandbox.scratch_dir
     effects_path = scratch / ".cascade_effects.jsonl"
-    mcp = build_planning_mcp_servers(sandbox)
-    turn = RoleTurn(
-        role=role,
-        provider=provider,
-        model_id=model_id,
-        prompt=prompt,
-        cwd=scratch,
-        tools=mcp,
-    )
+    collector = ToolEffectCollector()
+    if provider == "cursor":
+        turn = RoleTurn(
+            role=role,
+            provider=provider,
+            model_id=model_id,
+            prompt=prompt,
+            cwd=scratch,
+            tools=[],
+            custom_tools=build_planning_custom_tools(sandbox, collector),
+        )
+    else:
+        turn = RoleTurn(
+            role=role,
+            provider=provider,
+            model_id=model_id,
+            prompt=prompt,
+            cwd=scratch,
+            tools=build_planning_mcp_servers(sandbox),
+        )
     try:
         result = await run_role(turn)
-        file_effects = merge_tool_effects_from_file(effects_path)
+        if provider == "cursor":
+            tool_effects = list(collector.effects)
+        else:
+            tool_effects = merge_tool_effects_from_file(effects_path)
         return RoleResult(
             text=result.text,
             status=result.status,
-            tool_effects=file_effects,
+            tool_effects=tool_effects,
         )
     finally:
         teardown_scratch(scratch)

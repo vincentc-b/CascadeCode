@@ -39,6 +39,23 @@ if TYPE_CHECKING:
     from cascade.war_room.server import WarRoomRequestHandler
 
 
+def _sync_epic_feature_chat_transcript(
+    handler: WarRoomRequestHandler, graph_id: str
+) -> None:
+    if not graph_id.startswith("epic_") and not graph_id.startswith("feat_"):
+        return
+    import logging
+
+    from cascade.war_room.planning_transcript import sync_planning_transcript_to_chat
+
+    try:
+        sync_planning_transcript_to_chat(graph_id, root=handler.server.root)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "chat transcript sync failed for %s: %s", graph_id, exc
+        )
+
+
 def _parse_graph_id_from_chat_path(path: str) -> str | None:
     prefix = "/api/chat/"
     if not path.startswith(prefix):
@@ -117,6 +134,7 @@ def handle_post_chat(handler: WarRoomRequestHandler, graph_id: str, body: dict[s
         remove_message(graph_id, message["id"], root=handler.server.root)
         handler._json_error(HTTPStatus.INTERNAL_SERVER_ERROR, "graph ingest failed")
         return
+    _sync_epic_feature_chat_transcript(handler, graph_id)
     handler._json_response(HTTPStatus.ACCEPTED, message_to_dict(message))
 
 
@@ -167,6 +185,7 @@ def handle_post_attach(handler: WarRoomRequestHandler, body: dict[str, Any]) -> 
         handler._json_error(HTTPStatus.NOT_FOUND, f"not found: {graph_id}")
         return
     handler.server.attachment.attach(graph_id)
+    _sync_epic_feature_chat_transcript(handler, graph_id)
     payload = _attach_briefing_payload(handler, graph_id)
     if payload is None:
         return

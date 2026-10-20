@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from cascade.agent import CursorAgentError, RoleResult
-from cascade.board.store import read_doc
+from cascade.board.store import read_doc, write_doc
 from cascade.task.registry import clear_task_tools
 from cascade.task.swe_mcp import MCP_SERVER_NAME, build_swe_mcp_servers
 from cascade.task.swe_turn import (
@@ -63,6 +63,9 @@ def _board_with_worktree(tmp_path: Path) -> tuple[Path, str, object]:
         status="active",
         parent="feat_001",
     )
+    task = read_doc(task_id, root=root)
+    task.meta.parent_rev = read_doc("feat_001", root=root).sha
+    write_doc(task, root=root)
     run = create_task_worktree(
         task_id,
         root=root,
@@ -84,6 +87,29 @@ def test_build_swe_role_turn_uses_worktree_cwd(tmp_path: Path) -> None:
     )
     assert turn.cwd == run.worktree.resolve()
     assert turn.role == "swe"
+    assert turn.tools == []
+    assert turn.custom_tools is not None
+    assert set(turn.custom_tools) == {
+        "swe_read",
+        "swe_write",
+        "read_doc",
+        "swe_run_tests",
+        "swe_commit",
+        "fail_task",
+    }
+
+
+def test_build_swe_role_turn_uses_stdio_mcp_for_cli_provider(tmp_path: Path) -> None:
+    root, task_id, run = _board_with_worktree(tmp_path)
+    turn = build_swe_role_turn(
+        task_id,
+        provider="codex",
+        model_id="gpt-5.3-codex",
+        prompt="implement",
+        root=root,
+    )
+    assert turn.cwd == run.worktree.resolve()
+    assert turn.custom_tools is None
     mcp = turn.tools[MCP_SERVER_NAME]
     assert mcp["command"] == sys.executable
     assert mcp["args"] == ["-m", "cascade.task.swe_mcp_stdio"]

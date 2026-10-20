@@ -181,8 +181,17 @@ def test_build_agent_options_uses_env_key(api_key_env: None) -> None:
 
 
 def test_build_agent_options_disables_builtin_tools(api_key_env: None) -> None:
+    from cursor_sdk import CustomTool
+
     opts = build_agent_options(_turn(), api_key="cursor_test_key")
     assert opts.tools == []
+
+    turn_custom = _turn(
+        role="epic_manager",
+        custom_tools={"read_doc": CustomTool(execute=lambda _a, _c: "ok")},
+    )
+    opts_custom = build_agent_options(turn_custom, api_key="cursor_test_key")
+    assert opts_custom.tools is None
 
 
 def test_non_empty_tools_list_raises_type_error(api_key_env: None) -> None:
@@ -194,6 +203,10 @@ def test_missing_credential_raises_before_launch_bridge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "cascade.agent.adapter.resolve_credential",
+        lambda _provider: None,
+    )
     launch = AsyncMock()
     monkeypatch.setattr(AsyncClient, "launch_bridge", launch)
 
@@ -207,6 +220,10 @@ def test_blank_env_credential_raises_before_launch_bridge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CURSOR_API_KEY", "   ")
+    monkeypatch.setattr(
+        "cascade.agent.adapter.resolve_credential",
+        lambda _provider: None,
+    )
     launch = AsyncMock()
     monkeypatch.setattr(AsyncClient, "launch_bridge", launch)
 
@@ -233,8 +250,26 @@ def test_claude_provider_routes_to_cli_adapter(
 
 
 def test_planning_role_enables_local_sandbox(api_key_env: None) -> None:
-    turn = _turn(role="epic_manager", tools={"cascade": {"command": "true"}})
-    opts = build_agent_options(turn, api_key="cursor_test_key")
-    assert opts.local is not None
-    assert opts.local.sandbox_options is not None
-    assert opts.local.sandbox_options.enabled is True
+    from cursor_sdk import CustomTool
+
+    turn_tools = _turn(
+        role="epic_manager",
+        tools={"cascade": {"command": "true"}},
+    )
+    opts_tools = build_agent_options(turn_tools, api_key="cursor_test_key")
+    assert opts_tools.local is not None
+    assert opts_tools.local.sandbox_options is None
+
+    turn_custom = _turn(
+        role="epic_manager",
+        custom_tools={"read_doc": CustomTool(execute=lambda _a, _c: "ok")},
+    )
+    opts_custom = build_agent_options(turn_custom, api_key="cursor_test_key")
+    assert opts_custom.local.sandbox_options is None
+    assert opts_custom.mcp_servers is None
+    assert opts_custom.local.custom_tools is not None
+
+    turn_no_mcp = _turn(role="epic_manager", tools=[])
+    opts_no_mcp = build_agent_options(turn_no_mcp, api_key="cursor_test_key")
+    assert opts_no_mcp.local.sandbox_options is not None
+    assert opts_no_mcp.local.sandbox_options.enabled is True

@@ -241,6 +241,12 @@ async def run_planning_role_turn(
         model_source=model_source,
         role_skills=role_skills,
     )
+    prompt = _append_planning_tool_directive(
+        role,
+        prompt,
+        scope_id=turn_kwargs.get("feature_id") or turn_kwargs.get("epic_id"),  # type: ignore[arg-type]
+        latest=latest_input(messages),
+    )
     try:
         result = await run_turn(
             role,
@@ -262,6 +268,57 @@ async def run_planning_role_turn(
     if result.status == "error":
         return run_error_message(role, result)
     return result.text
+
+
+_PLANNING_TOOL_DIRECTIVE = (
+    "Cascade MCP tools are the only way to change board markdown. "
+    "To update an epic or feature spec, call read_doc, then write_doc with the full revised body, "
+    "and record_decision for each decision-log entry. "
+    "War Room chat and turn text are not the spec — never claim the plan was updated unless write_doc succeeded."
+)
+
+_EPIC_PLANNING_ROLES = frozenset({"epic_manager", "epic_architect"})
+_FEATURE_PLANNING_ROLES = frozenset({"feature_lead", "feature_architect"})
+
+
+_FEATURE_DISPATCH_DIRECTIVE = (
+    "This feature was just dispatched; the team should start work now without waiting for a human. "
+    "Break the spec into tasks: call list_children first, then call mint_task once for each task "
+    "that is not minted yet, in dependency order, passing depends_on with the task ids returned "
+    "by earlier mint_task calls. Finish by listing the task ids you minted."
+)
+
+
+def _scope_line(role: RoleId, scope_id: str) -> str:
+    tier = "epic" if role in _EPIC_PLANNING_ROLES else "feature"
+    return (
+        f"You are {role} on the Cascade {tier} team for `{scope_id}`. "
+        f"Every board tool is already bound to `{scope_id}`; pass work_id \"{scope_id}\" "
+        f"to read_doc for its spec (a copy is also at ./plan.md)."
+    )
+
+
+def _append_planning_tool_directive(
+    role: RoleId,
+    prompt: str,
+    *,
+    scope_id: str | None = None,
+    latest: dict[str, str] | None = None,
+) -> str:
+    if role not in _EPIC_PLANNING_ROLES and role not in _FEATURE_PLANNING_ROLES:
+        return prompt
+    parts = [prompt]
+    if scope_id:
+        parts.append(_scope_line(role, scope_id))
+    parts.append(_PLANNING_TOOL_DIRECTIVE)
+    if (
+        role in _FEATURE_PLANNING_ROLES
+        and latest is not None
+        and latest["kind"] == "event"
+        and latest["text"].startswith("FeatureReadyToPlan")
+    ):
+        parts.append(_FEATURE_DISPATCH_DIRECTIVE)
+    return "\n\n".join(parts)
 
 
 def run_coro_sync(coro: Awaitable[T]) -> T:

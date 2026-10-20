@@ -28,6 +28,7 @@ from cascade.feature import (
 from cascade.feature.checkpoint import checkpoint_path, thread_config
 from cascade.war_room.server import serve
 from cascade.watchdog import activate_epic, dispatch_feature
+from cascade.workspace.kickoff import wait_for_background_kickoffs
 from tests.support import add_doc, make_repo
 
 
@@ -140,6 +141,7 @@ def test_feature_post_chat_sidecar_and_graph(chat_wire_board) -> None:
     epic_sidecar = root / "docs" / "_war_room" / "chat" / "epic_001.jsonl"
     assert not epic_sidecar.exists()
 
+    assert wait_for_background_kickoffs()
     graph = ensure_feature_graph("feat_001", root=root)
     state = graph.get_state(thread_config("feat_001")).values
     assert state is not None

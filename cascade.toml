@@ -3,6 +3,14 @@
 
 task_parallelism = 4
 
+# Once an epic is activated, dependency-ready feature and task plans run without
+# separate dispatch clicks. The watchdog also fast-forwards the checked-out
+# product trunk to discover merged brief MRs.
+[automation]
+enabled = true
+poll_seconds = 15
+remote = "origin"
+
 # Cursor model ids (cursor-sdk). Boss is omitted and uses the epic tier.
 [models]
 epic = "claude-opus-5-5"       # epic_manager, epic_architect

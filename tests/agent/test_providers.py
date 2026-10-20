@@ -30,6 +30,8 @@ def test_probe_provider_auth_fields_task_073(
 ) -> None:
     for key in ("CURSOR_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
         monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr("cascade.agent.credentials._read_user_store_raw", lambda: {})
+    monkeypatch.setattr("cascade.agent.credentials._cli_session_token", lambda _provider: None)
     status = probe_provider(provider_id)  # type: ignore[arg-type]
     assert status.authenticated is False
     assert status.auth_source == "missing"

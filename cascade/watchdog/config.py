@@ -35,6 +35,15 @@ class ProvidersConfig:
     tables: dict[ProviderId, ModelsTable]
 
 
+@dataclass(frozen=True)
+class AutomationConfig:
+    """Continuous workflow settings; new workspaces opt in through cascade.toml."""
+
+    enabled: bool = True
+    poll_seconds: float = 15.0
+    remote: str = "origin"
+
+
 def task_parallelism(root: Path) -> int:
     """Return the cap. Missing file or missing key defaults to 4.
 
@@ -55,6 +64,27 @@ def task_parallelism(root: Path) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise ConfigError(f"task_parallelism must be an integer >= 1, got {value!r}")
     return value
+
+
+def read_automation_config(root: Path) -> AutomationConfig:
+    data = _load_cascade_toml(root)
+    if "automation" not in data:
+        # Existing workspaces keep their manual lifecycle until the operator
+        # opts into the new flow. `cascade init` writes the enabled table.
+        return AutomationConfig(enabled=False)
+    raw = data.get("automation", {})
+    if not isinstance(raw, dict):
+        raise ConfigError("[automation] must be a table")
+    enabled = raw.get("enabled", True)
+    poll_seconds = raw.get("poll_seconds", 15.0)
+    remote = raw.get("remote", "origin")
+    if not isinstance(enabled, bool):
+        raise ConfigError("automation.enabled must be a boolean")
+    if isinstance(poll_seconds, bool) or not isinstance(poll_seconds, (int, float)) or poll_seconds < 1:
+        raise ConfigError("automation.poll_seconds must be a number >= 1")
+    if not isinstance(remote, str) or not remote.strip():
+        raise ConfigError("automation.remote must be a non-blank string")
+    return AutomationConfig(enabled=enabled, poll_seconds=float(poll_seconds), remote=remote.strip())
 
 
 def _require_non_blank_string(value: object, label: str) -> str:

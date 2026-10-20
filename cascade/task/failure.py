@@ -6,6 +6,7 @@ import errno
 from contextvars import ContextVar, Token
 from datetime import date, datetime, timezone
 from pathlib import Path
+from threading import RLock
 from typing import Literal
 
 from cascade.agent.errors import CursorAgentError
@@ -20,6 +21,9 @@ ErrorKind = Literal["infra", "spec"]
 
 _INFRA_EXCEPTION_TYPES = (TimeoutError, ConnectionError, BrokenPipeError, BlockingIOError)
 _deferred_teardown: ContextVar[set[str] | None] = ContextVar("_deferred_teardown", default=None)
+_teardown_lock = RLock()
+_active_teardown_scopes = 0
+_process_pending_teardown: set[str] = set()
 
 _TRANSIENT_ERRNOS = frozenset(
     {
@@ -72,19 +76,44 @@ def classify_error(exc_or_result: object) -> ErrorKind:
 
 def defer_task_teardown() -> Token:
     """Defer ``invoke_teardown`` until ``flush_deferred_task_teardown`` (graph invoke)."""
-
+    global _active_teardown_scopes
+    with _teardown_lock:
+        _active_teardown_scopes += 1
     return _deferred_teardown.set(set())
 
 
 def flush_deferred_task_teardown(token: Token) -> None:
     """Run teardown for tasks that failed while teardown was deferred."""
-
+    global _active_teardown_scopes
     pending = _deferred_teardown.get()
     _deferred_teardown.reset(token)
-    if not pending:
-        return
-    for task_id in sorted(pending):
+    with _teardown_lock:
+        if pending:
+            _process_pending_teardown.update(pending)
+        _active_teardown_scopes = max(0, _active_teardown_scopes - 1)
+        if _active_teardown_scopes:
+            return
+        ready = sorted(_process_pending_teardown)
+        _process_pending_teardown.clear()
+    for task_id in ready:
         invoke_teardown("task", task_id)
+
+
+def schedule_task_teardown(task_id: str) -> None:
+    """Tear down now, or after the current Task graph finishes checkpointing."""
+
+    pending = _deferred_teardown.get()
+    if pending is not None:
+        pending.add(task_id)
+        return
+    # LangGraph may execute the node in a worker thread, where ContextVar state
+    # is not guaranteed to match the caller.  The process-wide scope prevents
+    # that worker from closing its checkpointer before graph.invoke returns.
+    with _teardown_lock:
+        if _active_teardown_scopes:
+            _process_pending_teardown.add(task_id)
+            return
+    invoke_teardown("task", task_id)
 
 
 def maybe_retry(task_id: str, kind: ErrorKind, attempt: int, *, root: Path) -> bool:
@@ -142,7 +171,14 @@ def fail_task(task_id: str, reason: str, *, root: Path) -> None:
         previous_path = task.meta.path.resolve()
         task.meta.status = "blocked"
         task.meta.updated = date.today()
-        save_doc(task, previous_path=previous_path, root=repo)
+        # `read_doc(..., root=trunk)` may resolve this Task from its owning
+        # Feature worktree.  Commit the state transition in that checkout;
+        # trying to stage `.cascade/worktrees/...` from trunk is both wrong and
+        # rejected by the trunk's ignore rules.
+        from cascade.workspace.integration_worktree import git_root_for_path
+
+        owner_root = git_root_for_path(previous_path)
+        save_doc(task, previous_path=previous_path, root=owner_root)
 
     from cascade.task.worktree import get_task_run
 
@@ -150,11 +186,7 @@ def fail_task(task_id: str, reason: str, *, root: Path) -> None:
     if run is not None:
         run.state = "failed"
 
-    pending = _deferred_teardown.get()
-    if pending is not None:
-        pending.add(task_id)
-    else:
-        invoke_teardown("task", task_id)
+    schedule_task_teardown(task_id)
 
 
 register_task_tool("fail_task", fail_task)

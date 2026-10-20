@@ -211,6 +211,58 @@ def test_dispatch_feature_kickoff_one_planning_path(
     assert run_role_mock.await_count >= 1
 
 
+def test_dispatch_feature_turn_is_told_to_mint_tasks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = make_repo(tmp_path, models=True, role_skills=True)
+    run_role_mock = _patch_run_role(monkeypatch)
+    from cascade.epic.boot import install_epic_boot_hook
+    from cascade.feature.boot import install_feature_boot_hook
+    from cascade.workspace.kickoff import install_kickoff
+
+    install_epic_boot_hook(root)
+    install_feature_boot_hook(root)
+    install_kickoff(root)
+    _seed_epic_chain(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    run_role_mock.reset_mock()
+
+    assert dispatch_feature("feat_001", "human", root=root).ok
+    prompts = [call.args[0].prompt for call in run_role_mock.await_args_list]
+    assert prompts
+    for prompt in prompts:
+        assert "team for `feat_001`" in prompt
+        assert "call mint_task once for each task" in prompt
+
+
+def test_deferred_kickoff_returns_before_the_turn_runs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import threading
+
+    from cascade.workspace.kickoff import deferred_kickoffs, wait_for_background_kickoffs
+
+    root = make_repo(tmp_path)
+    release = threading.Event()
+    ran: list[str] = []
+
+    def _slow_turn(reason, repo):  # type: ignore[no-untyped-def]
+        release.wait(5)
+        ran.append(reason.work_id)
+
+    monkeypatch.setattr("cascade.workspace.kickoff._kickoff_turn", _slow_turn)
+    reason = KickoffReason(kind="dispatch", work_id="feat_001", by="human", root=root)
+    with deferred_kickoffs():
+        kickoff_turn(reason)
+        kickoff_turn(reason)
+    assert ran == []
+    release.set()
+    assert wait_for_background_kickoffs(timeout=5)
+    assert ran == ["feat_001", "feat_001"]
+
+
 def test_dispatch_task_kickoff_swe_turn(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

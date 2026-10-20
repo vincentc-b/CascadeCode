@@ -7,6 +7,7 @@ from pathlib import Path
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import WorkDoc
 
+from cascade.epic.checkout import epic_checkout_root
 from cascade.epic.guard import EpicToolDenied, tool_guard
 
 
@@ -55,4 +56,6 @@ def epic_write_doc(doc: WorkDoc, *, epic_id: str, root: Path) -> str | None:
                 )
     if not tool_guard(doc.meta.path, "write", epic_id=epic_id, root=root):
         raise EpicToolDenied(f"write denied for {doc.meta.path}")
-    return write_doc(doc, root=root)
+    trunk = Path(root).resolve()
+    checkout = epic_checkout_root(epic_id, trunk=trunk)
+    return write_doc(doc, root=checkout if doc.meta.path.resolve().is_relative_to(checkout) else trunk)

@@ -107,6 +107,10 @@ def test_ingest_queue_advances_offset_and_is_idempotent(tmp_path: Path) -> None:
     assert second["last_queue_offset"] == first["last_queue_offset"]
     assert len([m for m in second["messages"] if m.get("role") == "event"]) == 1
 
+    append_event("feat_001", event, root=root)
+    third = ingest_queue("feat_001", root=root)
+    assert len(third["messages"]) == 2
+
 
 def test_ingest_queue_does_not_run_lead_or_architect(tmp_path: Path) -> None:
     root = make_repo(tmp_path)

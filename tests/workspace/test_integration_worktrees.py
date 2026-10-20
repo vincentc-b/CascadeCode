@@ -107,6 +107,27 @@ def test_dispatch_stacked_branches_and_paths(tmp_path: Path) -> None:
     assert task_doc.meta.path.is_relative_to(feat_wt)
 
 
+def test_active_task_run_is_restored_after_process_restart(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    _chain(root)
+    assert dispatch_task("task_001", "human", root=root).ok
+
+    from cascade.task.wiring import restore_active_task_runs
+    from cascade.task.worktree import clear_task_runs, get_task_run
+
+    clear_task_runs()
+    assert get_task_run("task_001") is None
+
+    assert restore_active_task_runs(root) == [("task_001", "feat_001")]
+    restored = get_task_run("task_001")
+    assert restored is not None
+    assert restored.state == "coding"
+    assert restore_active_task_runs(root) == []
+
+
 def test_repair_restores_worktree_without_new_dispatch(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
@@ -168,3 +189,33 @@ def test_merged_board_scans_each_checkout_once(tmp_path: Path, monkeypatch: pyte
     assert board.by_id["feat_001"].path.is_relative_to(
         integration_worktree_path("feature", "feat_001", trunk=root)
     )
+
+
+def test_planning_tools_write_into_integration_checkouts(tmp_path: Path) -> None:
+    from cascade.board.store import pin_parent
+    from cascade.epic.mint import mint_feature
+    from cascade.feature.mint import mint_task
+    from cascade.feature.scoped_docs import feature_read_doc
+    from cascade.workspace.integration_worktree import doc_filesystem_root
+
+    root = make_repo(tmp_path)
+    (root / ".gitignore").write_text(".cascade/\n", encoding="utf-8")
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Done", tier="task", status="completed", parent="feat_001")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
+    _chain(root)
+    pin_parent("feat_001", "epic_001", root=doc_filesystem_root("feat_001", trunk=root))
+
+    assert mint_task("Next", feature_id="feat_001", root=root) == "task_002"
+    assert feature_read_doc("epic_001", feature_id="feat_001", root=root).meta.id == "epic_001"
+    assert mint_feature("Sibling", epic_id="epic_001", root=root) == "feat_002"
+    for checkout in (
+        integration_worktree_path("feature", "feat_001", trunk=root),
+        integration_worktree_path("epic", "epic_001", trunk=root),
+    ):
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=checkout, capture_output=True, text=True
+        )
+        assert status.stdout == ""

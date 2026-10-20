@@ -28,17 +28,20 @@ class PlanningSandbox:
 
 def collect_epic_readable_paths(epic_id: str, *, root: Path) -> list[Path]:
     repo = Path(root).resolve()
+    from cascade.workspace.integration_worktree import doc_filesystem_root
+
+    board_root = doc_filesystem_root(epic_id, trunk=repo)
     epic = read_doc(epic_id, root=repo)
     paths: list[Path] = [epic.meta.path.resolve()]
 
-    board = list_board(repo)
+    board = list_board(board_root)
     for meta in board.by_id.values():
         if meta.tier != "feature" or meta.parent != epic_id:
             continue
         if epic_tool_guard(meta.path, "read", epic_id=epic_id, root=repo):
             paths.append(meta.path.resolve())
 
-    amendments_dir = repo / "docs" / "epics" / "2_active" / "_amendments"
+    amendments_dir = board_root / "docs" / "epics" / "2_active" / "_amendments"
     if amendments_dir.is_dir():
         for candidate in sorted(amendments_dir.glob("*.md")):
             if epic_tool_guard(candidate, "read", epic_id=epic_id, root=repo):
@@ -48,27 +51,31 @@ def collect_epic_readable_paths(epic_id: str, *, root: Path) -> list[Path]:
 
 
 def collect_feature_readable_paths(feature_id: str, *, root: Path) -> list[Path]:
-    repo = Path(root).resolve()
-    feature = read_doc(feature_id, root=repo)
+    from cascade.feature.checkout import feature_checkout_root
+    from cascade.workspace.doc_root import read_doc_resolved
+
+    trunk = Path(root).resolve()
+    feature = read_doc_resolved(feature_id, root=trunk)
+    checkout = feature_checkout_root(feature_id, trunk=trunk)
     paths: list[Path] = [feature.meta.path.resolve()]
 
     parent_id = feature.meta.parent
     if parent_id is not None:
-        parent = read_doc(parent_id, root=repo)
-        if feature_tool_guard(parent.meta.path, "read", feature_id=feature_id, root=repo):
+        parent = read_doc_resolved(parent_id, root=trunk)
+        if feature_tool_guard(parent.meta.path, "read", feature_id=feature_id, root=trunk):
             paths.append(parent.meta.path.resolve())
 
-    sidecar = (repo / "docs" / "_comments" / f"{feature_id}.jsonl").resolve()
+    sidecar = (checkout / "docs" / "_comments" / f"{feature_id}.jsonl").resolve()
     if sidecar.is_file() and feature_tool_guard(
-        sidecar, "read", feature_id=feature_id, root=repo
+        sidecar, "read", feature_id=feature_id, root=trunk
     ):
         paths.append(sidecar)
 
-    board = list_board(repo)
+    board = list_board(checkout)
     for meta in board.by_id.values():
         if meta.tier != "task" or meta.parent != feature_id:
             continue
-        if feature_tool_guard(meta.path, "read", feature_id=feature_id, root=repo):
+        if feature_tool_guard(meta.path, "read", feature_id=feature_id, root=trunk):
             paths.append(meta.path.resolve())
 
     return _dedupe_paths(paths)
@@ -105,13 +112,18 @@ def materialize_scratch(
     repo = Path(repo_root).resolve()
     scratch = Path(tempfile.mkdtemp(prefix="cascade_planning_"))
     for src in readable_paths:
-        safe = _safe_materialize_source(repo, src)
-        if safe is None:
+        rel = _scratch_relpath(repo, src)
+        if rel is None:
             continue
-        rel = safe.relative_to(repo)
+        safe = src.resolve(strict=False)
         dest = scratch / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(safe, dest)
+
+    if tier in ("epic", "feature") and readable_paths:
+        primary = _safe_materialize_source(repo, readable_paths[0])
+        if primary is not None:
+            shutil.copy2(primary, scratch / "plan.md")
 
     if tier == "boss":
         from cascade.boss.view import compute_boss_view
@@ -151,13 +163,26 @@ def _safe_materialize_source(repo: Path, src: Path) -> Path | None:
         return None
     if resolved.is_symlink():
         return None
+    if not resolved.is_file():
+        return None
     try:
         resolved.relative_to(repo)
     except ValueError:
-        return None
-    if not resolved.is_file():
-        return None
+        if "docs" not in resolved.parts:
+            return None
     return resolved
+
+
+def _scratch_relpath(trunk: Path, src: Path) -> Path | None:
+    safe = _safe_materialize_source(trunk, src)
+    if safe is None:
+        return None
+    try:
+        return safe.relative_to(trunk.resolve())
+    except ValueError:
+        parts = safe.parts
+        idx = parts.index("docs")
+        return Path(*parts[idx:])
 
 
 def _dedupe_paths(paths: list[Path]) -> list[Path]:

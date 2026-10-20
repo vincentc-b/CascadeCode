@@ -151,13 +151,12 @@ def ingest_queue(task_id: str, *, root: Path, feature_id: str | None = None) -> 
         return values  # type: ignore[return-value]
 
     event_messages = [_event_message(event) for event in events]
-    prior_messages = list(values.get("messages") or [])
     if not values:
         update = _empty_state(task_id, feature_id, new_offset)
-        update["messages"] = prior_messages + event_messages
+        update["messages"] = event_messages
     else:
         update = {
-            "messages": prior_messages + event_messages,
+            "messages": event_messages,
             "last_queue_offset": new_offset,
         }
     graph.update_state(config, update)
@@ -168,7 +167,6 @@ def invoke_tool(task_id: str, name: str, args: dict, *, root: Path, feature_id: 
     """Run a registered task tool and record a tool message on success."""
 
     from cascade.task.failure import classify_error, maybe_retry
-    from cascade.task.guard import TaskToolDenied
     from cascade.task.wiring import get_infra_attempt, on_tests_finished, on_tool_error, set_infra_attempt
 
     tools = task_tools()
@@ -189,8 +187,13 @@ def invoke_tool(task_id: str, name: str, args: dict, *, root: Path, feature_id: 
             result = tools[name](**{**args, "task_id": task_id, "root": bound_root})
         except BaseException as exc:
             kind = classify_error(exc)
-            if isinstance(exc, TaskToolDenied) or kind == "spec":
-                on_tool_error(task_id, exc, root=bound_root)
+            if kind == "spec":
+                # Ordinary tool mistakes (for example probing a file that does
+                # not exist, a guarded access denial, or an empty duplicate
+                # commit) are part of an agent turn. Return the error to the
+                # agent so it can correct itself; the guards still deny the
+                # action and final deliverable/test gates decide whether the
+                # Task must be blocked.
                 raise
             if maybe_retry(task_id, kind, attempt, root=bound_root):
                 attempt += 1
@@ -283,7 +286,40 @@ def _swe_role_content(state: TaskGraphState) -> str:
     except RuntimeError as exc:
         return f"swe: {exc}"
 
+    if (
+        not outcome.failed_closed
+        and outcome.role_result is not None
+        and outcome.role_result.status == "finished"
+    ):
+        _auto_merge_finished_task(task_id, repo)
+
     return _swe_outcome_message(outcome)
+
+
+def _auto_merge_finished_task(task_id: str, root: Path) -> None:
+    """Land a successful task on its feature branch without another approval click."""
+
+    try:
+        from cascade.watchdog.config import read_automation_config
+
+        if not read_automation_config(root).enabled:
+            return
+        from cascade.task.failure import fail_task
+        from cascade.task.swe_turn import has_deliverable_commit
+        from cascade.task.worktree import get_task_run
+
+        run = get_task_run(task_id)
+        if run is None or not has_deliverable_commit(run):
+            fail_task(task_id, "no_task_changes", root=root)
+            return
+        from cascade.task_rollup import queue_task_merge, retry_pending_task_merges
+
+        queue_task_merge(task_id, root=root)
+        retry_pending_task_merges(root)
+    except Exception:
+        # The task commit remains durable. A later watchdog/review turn can retry
+        # rollup without turning successful implementation into a failed task.
+        return
 
 
 def _swe_outcome_message(outcome: SweTurnResult) -> str:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cascade.board import move_doc, read_doc, write_doc
+from cascade.board import move_doc, pin_parent, read_doc, write_doc
 from cascade.watchdog import (
     activate_epic,
     dispatch_feature,
@@ -158,6 +158,36 @@ def test_dispatch_task_emits_and_boots(tmp_path: Path) -> None:
     assert read_doc("task_001", root=root).meta.status == "active"
     saved, _offset = read_events("task_001", 0, root=root)
     assert [event.type for event in saved] == ["TaskDispatched"]
+
+
+def test_dispatch_task_refreshes_parent_pin_after_feature_plan_changes(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _open_feature(root)
+
+    from cascade.workspace.integration_worktree import get_integration_worktree
+
+    feature_run = get_integration_worktree(root, "feature", "feat_001")
+    assert feature_run is not None
+    feature_root = feature_run.path
+    add_doc(feature_root, id="task_001", title="Task", tier="task", parent="feat_001")
+    pin_parent("task_001", "feat_001", root=feature_root)
+    old_pin = read_doc("task_001", root=feature_root).meta.parent_rev
+
+    feature = read_doc("feat_001", root=feature_root)
+    feature.body += "\n\n## Clarification\n\nUse the revised contract.\n"
+    write_doc(feature, root=feature_root)
+    current_feature_sha = read_doc("feat_001", root=feature_root).sha
+    assert old_pin != current_feature_sha
+
+    booted: list[str] = []
+    register_boot_hook("task", booted.append)
+    result = dispatch_task("task_001", "boss", root=root)
+
+    assert result.ok
+    assert booted == ["task_001"]
+    assert read_doc("task_001", root=feature_root).meta.parent_rev == current_feature_sha
 
 
 def test_parallelism_cap_ignores_blocked_and_does_not_emit(tmp_path: Path) -> None:

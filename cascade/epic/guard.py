@@ -9,6 +9,7 @@ from cascade.board.errors import NotFound
 from cascade.board.parse import parse_doc
 from cascade.board.paths import filename_work_id
 from cascade.board.store import list_board, read_doc
+from cascade.epic.checkout import epic_checkout_root
 
 _FEATURE_COLUMNS = ("1_backlog", "2_active", "3_completed")
 _SIDECAR_TOP = frozenset({"_queue", "_comments", "_amendments"})
@@ -25,23 +26,37 @@ def tool_guard(path: Path | str, op: str, *, epic_id: str, root: Path) -> bool:
     if op not in ("read", "write"):
         return False
 
-    repo = Path(root).resolve()
+    trunk = Path(root).resolve()
     try:
-        epic = read_doc(epic_id, root=repo)
+        checkout = epic_checkout_root(epic_id, trunk=trunk)
     except NotFound:
         return False
+    try:
+        epic = read_doc(epic_id, root=checkout)
+    except NotFound:
+        try:
+            epic = read_doc(epic_id, root=trunk)
+        except NotFound:
+            return False
     if epic.meta.tier != "epic":
         return False
 
-    resolved = _resolve_under_root(path, repo)
+    board_root = checkout
+    resolved = _resolve_under_root(path, checkout)
+    if resolved is None and checkout != trunk:
+        board_root = trunk
+        resolved = _resolve_under_root(path, trunk)
     if resolved is None:
         return False
 
-    if _walks_symlink(path, repo):
+    if _walks_symlink(path, board_root):
         return False
 
-    rel = resolved.relative_to(repo)
-    parts = rel.parts
+    epic_path = epic.meta.path.resolve()
+    if resolved == epic_path:
+        return op in ("read", "write")
+
+    parts = resolved.relative_to(board_root).parts
     if not parts or parts[0] != "docs":
         return False
 
@@ -51,13 +66,9 @@ def tool_guard(path: Path | str, op: str, *, epic_id: str, root: Path) -> bool:
     if len(parts) >= 2 and parts[1] == "tasks":
         return False
 
-    epic_path = epic.meta.path.resolve()
-    if resolved == epic_path:
-        return True
-
     if op == "write":
-        return _allow_write(resolved, parts, epic_id=epic_id, repo=repo)
-    return _allow_read(resolved, parts, epic_id=epic_id, repo=repo)
+        return _allow_write(resolved, parts, epic_id=epic_id, repo=board_root)
+    return _allow_read(resolved, parts, epic_id=epic_id, repo=board_root)
 
 
 def _walks_symlink(path: Path | str, root: Path) -> bool:

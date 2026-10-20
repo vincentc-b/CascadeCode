@@ -147,6 +147,24 @@ def test_teardown_hook_removes_worktree_not_branch(tmp_path: Path) -> None:
     assert get_task_run("task_031") is None
 
 
+def test_teardown_hook_preserves_failed_worktree_for_retry(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    run = create_task_worktree(
+        "task_031", root=root, parent_rev=None, skills=[]
+    )
+    run.state = "failed"
+    install_task_worktree_teardown_hook(root)
+
+    from cascade.watchdog.hooks import _teardown
+
+    hooks = [fn for fn in _teardown["task"] if fn.__name__ == "_teardown_task_worktree"]
+    hooks[0]("task_031")
+
+    assert run.worktree.is_dir()
+    assert get_task_run("task_031") is run
+
+
 def test_no_git_push(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     import cascade.task.worktree as worktree_mod
 

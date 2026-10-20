@@ -17,6 +17,11 @@ _DEFAULT_CASCADE_TOML = """\
 
 task_parallelism = 4
 
+[automation]
+enabled = true
+poll_seconds = 15
+remote = "origin"
+
 [providers]
 default = "cursor"
 

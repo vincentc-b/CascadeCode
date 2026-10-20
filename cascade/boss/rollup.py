@@ -30,7 +30,12 @@ def write_closeout(feature_id: WorkId, paragraph: str, *, root: Path | None = No
     return write_doc(doc, root=repo)
 
 
-def try_complete_feature(feature_id: WorkId, *, root: Path | None = None) -> bool:
+def try_complete_feature(
+    feature_id: WorkId,
+    *,
+    root: Path | None = None,
+    review_merged: bool = False,
+) -> bool:
     """Complete the feature when all rollup gates pass; otherwise return False with no side effects."""
 
     repo = resolve_root(root)
@@ -51,6 +56,13 @@ def try_complete_feature(feature_id: WorkId, *, root: Path | None = None) -> boo
     doc = read_doc(feature_id, root=repo)
     if not _rollup_gates_pass(feature_id, doc.body, board, repo):
         return False
+
+    if not review_merged:
+        from cascade.review import ensure_feature_review, review_enabled
+
+        if review_enabled(repo):
+            ensure_feature_review(feature_id, root=repo)
+            return False
 
     epic_id = doc.meta.parent
     if not epic_id:

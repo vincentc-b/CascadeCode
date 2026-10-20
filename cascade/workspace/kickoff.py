@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 import contextvars
+import logging
+import queue
+import threading
+import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from cascade.board.context import resolve_root
@@ -10,12 +16,22 @@ from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
 from cascade.workspace.types import KickoffReason
 
+_log = logging.getLogger(__name__)
+
 _model_turn_authorized: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "_model_turn_authorized",
     default=False,
 )
+_defer_turns: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_defer_turns",
+    default=False,
+)
 
 _default_root: Path | None = None
+
+_graph_locks: dict[str, threading.RLock] = {}
+_graph_queues: dict[str, "queue.Queue[Callable[[], None]]"] = {}
+_registry_lock = threading.Lock()
 
 
 def model_turn_authorized() -> bool:
@@ -32,14 +48,112 @@ def install_kickoff(root: Path) -> None:
 
 
 def kickoff_turn(reason: KickoffReason) -> None:
-    """Run at most one roster model turn for an authorized edge; fail closed on models."""
+    """Run at most one roster model turn for an authorized edge; fail closed on models.
+
+    Inside ``deferred_kickoffs()`` the turn is queued on a per-graph worker thread and
+    this returns immediately; otherwise it runs inline. Turns for one graph never overlap.
+    """
 
     repo = resolve_root(reason.root or _default_root)
-    token = _model_turn_authorized.set(True)
+    if _defer_turns.get():
+        _submit_background(reason.work_id, lambda: _run_background_kickoff(reason, repo))
+        return
+    _run_kickoff(reason, repo)
+
+
+@contextmanager
+def deferred_kickoffs() -> Iterator[None]:
+    """Queue kickoff turns in the background (HTTP handlers must not block on a model)."""
+
+    token = _defer_turns.set(True)
     try:
-        _kickoff_turn(reason, repo)
+        yield
     finally:
-        _model_turn_authorized.reset(token)
+        _defer_turns.reset(token)
+
+
+def wait_for_background_kickoffs(timeout: float = 30.0) -> bool:
+    """Block until every queued background turn has finished (tests and shutdown)."""
+
+    deadline = time.monotonic() + timeout
+    with _registry_lock:
+        queues = list(_graph_queues.values())
+    for pending in queues:
+        while pending.unfinished_tasks:
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.02)
+    return True
+
+
+def _graph_lock(work_id: str) -> threading.RLock:
+    with _registry_lock:
+        lock = _graph_locks.get(work_id)
+        if lock is None:
+            lock = threading.RLock()
+            _graph_locks[work_id] = lock
+        return lock
+
+
+def _run_kickoff(reason: KickoffReason, repo: Path) -> None:
+    with _graph_lock(reason.work_id):
+        token = _model_turn_authorized.set(True)
+        try:
+            _kickoff_turn(reason, repo)
+        finally:
+            _model_turn_authorized.reset(token)
+
+
+def _submit_background(work_id: str, job: Callable[[], None]) -> None:
+    with _registry_lock:
+        pending = _graph_queues.get(work_id)
+        if pending is None:
+            pending = queue.Queue()
+            _graph_queues[work_id] = pending
+            threading.Thread(
+                target=_drain_background,
+                args=(work_id, pending),
+                name=f"kickoff-{work_id}",
+                daemon=True,
+            ).start()
+    pending.put(job)
+
+
+def _drain_background(work_id: str, pending: "queue.Queue[Callable[[], None]]") -> None:
+    while True:
+        job = pending.get()
+        try:
+            job()
+        except Exception:
+            _log.exception("background kickoff job crashed for %s", work_id)
+        finally:
+            pending.task_done()
+
+
+def _run_background_kickoff(reason: KickoffReason, repo: Path) -> None:
+    try:
+        _run_kickoff(reason, repo)
+    except Exception as exc:
+        _log.exception("background kickoff turn failed for %s", reason.work_id)
+        _report_background_failure(reason.work_id, exc, repo)
+
+
+def _report_background_failure(work_id: str, exc: Exception, repo: Path) -> None:
+    """The HTTP caller already returned, so the War Room chat is the only place to say so."""
+
+    if not work_id.startswith(("epic_", "feat_")):
+        return
+    try:
+        from cascade.war_room.chat_store import append_transcript_message
+
+        append_transcript_message(
+            work_id,
+            author="system",
+            body=f"Team turn failed: {exc}",
+            root=repo,
+        )
+    except Exception:
+        _log.exception("could not record kickoff failure for %s", work_id)
 
 
 def resume_inflight_graphs(root: Path) -> None:
@@ -81,25 +195,45 @@ def deliver_queue_kickoffs(root: Path) -> None:
             continue
         if meta.tier not in ("epic", "feature", "task"):
             continue
-        before = _queue_offset(work_id, meta.tier, root=repo, feature_id=meta.parent)
-        after_state = _ingest_queue_only(
-            work_id,
-            meta.tier,
+        kickoff_graph_queue_event(work_id, root=repo, by="watchdog")
+
+
+def kickoff_graph_queue_event(
+    work_id: str,
+    *,
+    root: Path | None = None,
+    by: str = "watchdog",
+) -> bool:
+    """Ingest new queue lines for one graph; run a model turn when the offset advanced."""
+
+    repo = resolve_root(root)
+    from cascade.workspace.integration_worktree import merged_board
+
+    board = merged_board(repo)
+    meta = board.by_id.get(work_id)
+    if meta is None or meta.tier not in ("epic", "feature", "task"):
+        return False
+    task_feature = meta.parent if meta.tier == "task" else None
+    before = _queue_offset(work_id, meta.tier, root=repo, feature_id=meta.parent)
+    after_state = _ingest_queue_only(
+        work_id,
+        meta.tier,
+        root=repo,
+        feature_id=task_feature,
+    )
+    after = int(after_state.get("last_queue_offset") or 0)
+    if after <= before:
+        return False
+    kickoff_turn(
+        KickoffReason(
+            kind="queue_event",
+            work_id=work_id,
+            by=by,  # type: ignore[arg-type]
             root=repo,
-            feature_id=meta.parent if meta.tier == "task" else None,
+            feature_id=task_feature,
         )
-        after = int(after_state.get("last_queue_offset") or 0)
-        if after <= before:
-            continue
-        kickoff_turn(
-            KickoffReason(
-                kind="queue_event",
-                work_id=work_id,
-                by="watchdog",
-                root=repo,
-                feature_id=meta.parent if meta.tier == "task" else None,
-            )
-        )
+    )
+    return True
 
 
 def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
@@ -546,7 +680,14 @@ def _invoke_role_turn(
 
         graph = ensure_epic_graph(work_id, root=root)
         config = thread_config(work_id)
+        snapshot = graph.get_state(config)
+        before = len((snapshot.values or {}).get("messages") or [])
         graph.invoke({}, config)
+        after = graph.get_state(config).values or {}
+        new_messages = (after.get("messages") or [])[before:]
+        from cascade.war_room.planning_transcript import append_planning_turn_to_chat
+
+        append_planning_turn_to_chat(work_id, new_messages, root=root)
         if model_id is not None:
             clear_turn_model_override(graph, config)
         return
@@ -557,7 +698,14 @@ def _invoke_role_turn(
 
         graph = ensure_feature_graph(work_id, root=root)
         config = thread_config(work_id)
+        snapshot = graph.get_state(config)
+        before = len((snapshot.values or {}).get("messages") or [])
         graph.invoke({}, config)
+        after = graph.get_state(config).values or {}
+        new_messages = (after.get("messages") or [])[before:]
+        from cascade.war_room.planning_transcript import append_planning_turn_to_chat
+
+        append_planning_turn_to_chat(work_id, new_messages, root=root)
         if model_id is not None:
             clear_turn_model_override(graph, config)
         return

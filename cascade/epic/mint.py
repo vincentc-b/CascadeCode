@@ -14,6 +14,7 @@ from cascade.epic.registry import register_epic_tool
 from cascade.epic.scoped_docs import epic_read_doc, epic_write_doc
 from cascade.watchdog import append_event
 from cascade.watchdog.types import Event
+from cascade.workspace.integration_worktree import merged_board
 
 
 def mint_feature(
@@ -30,7 +31,7 @@ def mint_feature(
     _require_epic(epic_id, repo)
 
     deps = list(depends_on or [])
-    board = list_board(repo)
+    board = merged_board(repo)
     for dep_id in deps:
         if dep_id not in board.by_id:
             raise EpicToolDenied(f"depends_on {dep_id} is not on the board")
@@ -42,6 +43,9 @@ def mint_feature(
     path = repo / "docs" / "features" / "1_backlog" / f"{feature_id}_{slugify(title)}.md"
     if not tool_guard(path, "write", epic_id=epic_id, root=repo):
         raise EpicToolDenied(f"write denied for {path}")
+
+    epic_doc = epic_read_doc(epic_id, epic_id=epic_id, root=repo)
+    provider, models, model = _feature_backend_from_epic(epic_doc)
 
     doc = WorkDoc(
         meta=WorkMeta(
@@ -58,6 +62,9 @@ def mint_feature(
             created=today,
             updated=today,
             path=path,
+            model=model,
+            models=models,
+            provider=provider,
         ),
         body=_feature_body(title=title, epic_id=epic_id, body_stub=body_stub),
         sha=None,
@@ -109,6 +116,32 @@ def _require_epic(epic_id: str, root: Path) -> WorkDoc:
     if not tool_guard(epic.meta.path, "read", epic_id=epic_id, root=root):
         raise EpicToolDenied(f"read denied for epic {epic_id}")
     return epic
+
+
+def _feature_backend_from_epic(epic: WorkDoc) -> tuple[str | None, dict[str, str] | None, str | None]:
+    """Copy parent epic provider/model defaults onto a new feature (explicit stamp, not resolve-time inherit)."""
+
+    provider = epic.meta.provider
+    models: dict[str, str] | None = None
+    model: str | None = None
+
+    if epic.meta.models:
+        mapped: dict[str, str] = {}
+        for epic_role, feature_role in (
+            ("epic_manager", "feature_lead"),
+            ("epic_architect", "feature_architect"),
+        ):
+            if epic_role in epic.meta.models:
+                mapped[feature_role] = epic.meta.models[epic_role]
+        for key, value in epic.meta.models.items():
+            if key in ("feature_lead", "feature_architect"):
+                mapped[key] = value
+        if mapped:
+            models = mapped
+    elif epic.meta.model:
+        model = epic.meta.model
+
+    return provider, models, model
 
 
 def _feature_body(*, title: str, epic_id: str, body_stub: str) -> str:

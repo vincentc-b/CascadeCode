@@ -62,13 +62,28 @@ def resolve_doc_worktree(work_id: WorkId, *, root: Path) -> Path:
 
 
 def read_doc_resolved(work_id: WorkId, *, root: Path):
-    """Read ``work_id`` from ``resolve_doc_worktree(work_id, root=root)``."""
+    """Read ``work_id`` preferring the integration worktree from ``resolve_doc_worktree``.
+
+    Child specs may still live on trunk (or another checkout) until dispatch relocates
+    them; fall back to ``doc_filesystem_root`` when the preferred tree has no copy.
+    """
+
+    from cascade.workspace.integration_worktree import doc_filesystem_root
 
     trunk = Path(root).resolve()
-    doc_root = resolve_doc_worktree(work_id, root=trunk)
-    if doc_root.resolve() == trunk:
+    preferred = resolve_doc_worktree(work_id, root=trunk)
+    if preferred.resolve() == trunk:
         return read_doc(work_id, root=trunk)
-    return read_doc_in_worktree(work_id, doc_root)
+    try:
+        return read_doc_in_worktree(work_id, preferred)
+    except NotFound:
+        pass
+    fs_root = doc_filesystem_root(work_id, trunk=trunk)
+    if fs_root.resolve() == preferred.resolve():
+        raise NotFound(work_id)
+    if fs_root.resolve() == trunk.resolve():
+        return read_doc(work_id, root=trunk)
+    return read_doc_in_worktree(work_id, fs_root)
 
 
 def is_backlog_feature_attach_refused(work_id: WorkId, *, root: Path) -> bool:

@@ -8,6 +8,7 @@ from cascade.board.errors import NotFound
 from cascade.board.store import list_board, read_doc, write_doc
 from cascade.board.types import WorkDoc, WorkMeta
 
+from cascade.feature.checkout import feature_checkout_root
 from cascade.feature.guard import FeatureToolDenied, tool_guard
 
 _COMMENT_PREFIX = "_comments/"
@@ -20,11 +21,12 @@ def comment_work_id(doc_id: str) -> str:
 
 
 def _read_comment_sidecar(*, feature_id: str, root: Path) -> WorkDoc:
-    repo = Path(root).resolve()
-    sidecar = (repo / "docs" / "_comments" / f"{feature_id}.jsonl").resolve()
-    if not tool_guard(sidecar, "read", feature_id=feature_id, root=repo):
+    trunk = Path(root).resolve()
+    checkout = feature_checkout_root(feature_id, trunk=trunk)
+    sidecar = (checkout / "docs" / "_comments" / f"{feature_id}.jsonl").resolve()
+    if not tool_guard(sidecar, "read", feature_id=feature_id, root=trunk):
         raise FeatureToolDenied(f"read denied for {sidecar}")
-    feature = read_doc(feature_id, root=repo)
+    feature = read_doc(feature_id, root=checkout)
     if sidecar.is_file():
         body = sidecar.read_text(encoding="utf-8")
     else:
@@ -51,10 +53,15 @@ def _read_comment_sidecar(*, feature_id: str, root: Path) -> WorkDoc:
 
 
 def _load_feature(feature_id: str, root: Path):
+    trunk = Path(root).resolve()
+    checkout = feature_checkout_root(feature_id, trunk=trunk)
     try:
-        feature = read_doc(feature_id, root=root)
+        feature = read_doc(feature_id, root=checkout)
     except NotFound:
-        raise FeatureToolDenied(f"unknown feature {feature_id}") from None
+        try:
+            feature = read_doc(feature_id, root=trunk)
+        except NotFound:
+            raise FeatureToolDenied(f"unknown feature {feature_id}") from None
     if feature.meta.tier != "feature":
         raise FeatureToolDenied(f"{feature_id} is not a feature")
     return feature
@@ -84,8 +91,9 @@ def feature_read_doc(work_id: str, *, feature_id: str, root: Path) -> WorkDoc:
         doc = read_doc(parent_id, rev=feature.meta.parent_rev, root=repo)
         if doc.meta.tier != "epic":
             raise FeatureToolDenied(f"{parent_id} is not an epic")
-        if not tool_guard(doc.meta.path, "read", feature_id=feature_id, root=repo):
-            raise FeatureToolDenied(f"read denied for {doc.meta.path}")
+        live_path = read_doc(parent_id, root=repo).meta.path
+        if not tool_guard(live_path, "read", feature_id=feature_id, root=repo):
+            raise FeatureToolDenied(f"read denied for {live_path}")
         return doc
 
     try:
@@ -127,15 +135,16 @@ def feature_write_doc(doc: WorkDoc, *, feature_id: str, root: Path) -> str | Non
         )
     if not tool_guard(doc.meta.path, "write", feature_id=feature_id, root=repo):
         raise FeatureToolDenied(f"write denied for {doc.meta.path}")
-    return write_doc(doc, root=repo)
+    checkout = feature_checkout_root(feature_id, trunk=repo)
+    return write_doc(doc, root=checkout if doc.meta.path.resolve().is_relative_to(checkout) else repo)
 
 
 def list_children(*, feature_id: str, root: Path) -> list[WorkMeta]:
     """Return task-tier children owned by this feature."""
 
-    repo = Path(root).resolve()
-    _load_feature(feature_id, repo)
-    board = list_board(repo)
+    trunk = Path(root).resolve()
+    _load_feature(feature_id, trunk)
+    board = list_board(feature_checkout_root(feature_id, trunk=trunk))
     result = [
         meta
         for meta in board.by_id.values()

@@ -25,6 +25,8 @@ updated: 2026-10-10
 
 # Boss agent and completion rollup
 
+> **Current workflow update (2026-10-20):** This completed feature records the original human-order and human-merge design. The current supervisor automatically dispatches eligible child work after Epic plan approval and automatically merges a green Task branch into its Feature branch. `TaskFailed` starts an owning Feature Team recovery turn; that team may revise and retry only its own blocked child. Feature rollup now pushes `epic/{parent}` and `feat/{id}` and opens a draft MR from Feature to Epic, whose merge closes the Feature. The decision log below is retained as historical context; [DESIGN.md](../../../DESIGN.md) is authoritative for current behavior.
+
 ## Parent Epic
 
 [epic_001](../../epics/2_active/epic_001_functional_mvp.md) — Functional MVP.

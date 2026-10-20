@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const staticDir = join(repoRoot, "cascade/war_room/static");
 
-require(join(staticDir, "vendor/marked.min.js"));
+globalThis.marked = require(join(staticDir, "vendor/marked.min.js")).marked;
 const {
   findMermaidFences,
   rewriteWorkDocLinks,
@@ -54,11 +54,11 @@ assert.match(rewritten, /href="\/plan\/feat_012"/);
 assert.doesNotMatch(rewritten, /feat_012_plan_viewer\.md/);
 
 const jsLinkHtml = markdownToHtml("[click](javascript:alert(1))");
-assert.doesNotMatch(jsLinkHtml, /href\s*=\s*["']?\s*javascript:/i);
-assert.match(jsLinkHtml, /click/);
+assert.doesNotMatch(jsLinkHtml ?? "", /href\s*=\s*["']?\s*javascript:/i);
+assert.match(jsLinkHtml ?? "", /click/);
 
 const dataLinkHtml = markdownToHtml("[x](data:text/html,<script>alert(1)</script>)");
-assert.doesNotMatch(dataLinkHtml, /href\s*=\s*["']?\s*data:/i);
+assert.doesNotMatch(dataLinkHtml ?? "", /href\s*=\s*["']?\s*data:/i);
 
 assert.equal(safeUrl("javascript:alert(1)"), null);
 assert.equal(safeUrl("../../features/1_backlog/feat_012_plan_viewer.md"), "../../features/1_backlog/feat_012_plan_viewer.md");

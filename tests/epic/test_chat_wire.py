@@ -25,6 +25,7 @@ from cascade.epic import (
 from cascade.epic.checkpoint import checkpoint_path, thread_config
 from cascade.war_room.server import serve
 from cascade.watchdog import activate_epic, dispatch_feature
+from cascade.workspace.kickoff import wait_for_background_kickoffs
 from tests.support import add_doc, make_repo
 
 
@@ -123,6 +124,7 @@ def test_epic_post_chat_sidecar_and_graph(chat_wire_board) -> None:
     assert sidecar.is_file()
     assert "Plan the MVP" in sidecar.read_text(encoding="utf-8")
 
+    assert wait_for_background_kickoffs()
     graph = ensure_epic_graph("epic_001", root=root)
     state = graph.get_state(thread_config("epic_001")).values
     assert state is not None

@@ -159,6 +159,34 @@ def install_task_wiring(root: Path) -> None:
     load_task_wiring(root)
 
 
+def restore_active_task_runs(root: Path) -> list[tuple[str, str]]:
+    """Rebuild process-local TaskRun records after a supervisor restart."""
+
+    repo = Path(root).resolve()
+    from cascade.workspace.integration_worktree import integration_branch, merged_board
+
+    restored: list[tuple[str, str]] = []
+    for task_id, meta in sorted(merged_board(repo).by_id.items()):
+        if (
+            meta.tier != "task"
+            or meta.status != "active"
+            or meta.path.parent.name != "2_active"
+            or not meta.parent
+            or get_task_run(task_id) is not None
+        ):
+            continue
+        run = create_task_worktree(
+            task_id,
+            root=repo,
+            parent_rev=meta.parent_rev,
+            skills=[str(path) for path in meta.skills],
+            base_ref=integration_branch("feature", meta.parent),
+        )
+        run.state = "coding"
+        restored.append((task_id, meta.parent))
+    return restored
+
+
 def clear_task_wiring_state() -> None:
     """Reset wiring module state (tests only)."""
 

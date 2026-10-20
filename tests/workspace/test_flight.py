@@ -136,7 +136,7 @@ def test_feature_epic_branch_overlap_after_cut(tmp_path: Path) -> None:
     assert epic_overlaps[0].work_ids == ("epic_001", "feat_001")
 
 
-def test_watchdog_tick_refresh_does_not_call_run_role(
+def test_watchdog_tick_refresh_advances_active_teams(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -155,7 +155,9 @@ def test_watchdog_tick_refresh_does_not_call_run_role(
     mock.reset_mock()
 
     watchdog_tick(root)
-    assert mock.await_count == 0
+    # The same tick refreshes the flight report and delivers queued activation
+    # events. Each active Epic/Feature team runs both of its roster roles.
+    assert mock.await_count == 6
 
 
 def test_overlap_toast_on_new_intersection(tmp_path: Path) -> None:

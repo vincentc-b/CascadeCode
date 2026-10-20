@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from cascade.agent import RoleResult
-from cascade.board.store import read_doc
+from cascade.board.store import pin_parent, read_doc
 from cascade.task.registry import clear_task_tools
 from cascade.task.skills_context import apply_skill_playbooks
 from cascade.task.swe_turn import run_swe_turn_sync
@@ -59,6 +59,7 @@ def test_swe_prompt_includes_playbook_text_and_paths(tmp_path: Path) -> None:
         status="active",
         parent="feat_001",
     )
+    pin_parent(task_id, "feat_001", root=root)
     create_task_worktree(
         task_id,
         root=root,
@@ -106,3 +107,6 @@ def test_swe_prompt_includes_playbook_text_and_paths(tmp_path: Path) -> None:
     assert "FIXTURE_FRUGAL_PHILOSOPHY" in prompt
     assert "FIXTURE_SW_DEV_SIMPLICITY" in prompt
     assert "implement feature" in prompt
+    assert "Execute the Task below now" in prompt
+    assert "--- Task plan: task_063" in prompt
+    assert "--- Pinned Feature plan: feat_001" in prompt

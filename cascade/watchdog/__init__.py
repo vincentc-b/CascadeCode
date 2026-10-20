@@ -1,9 +1,11 @@
 """Watchdog, append-only queues, and dispatch law."""
 
 from cascade.watchdog.config import (
+    AutomationConfig,
     ConfigError,
     ModelsTable,
     ProvidersConfig,
+    read_automation_config,
     read_models_table,
     read_providers_config,
     task_parallelism,
@@ -36,6 +38,7 @@ from cascade.watchdog.types import (
 
 __all__ = [
     "ConfigError",
+    "AutomationConfig",
     "ModelConfigError",
     "ModelSource",
     "ModelsTable",
@@ -52,6 +55,7 @@ __all__ = [
     "dispatch_feature",
     "dispatch_task",
     "read_events",
+    "read_automation_config",
     "read_models_table",
     "read_providers_config",
     "resolve_backend",

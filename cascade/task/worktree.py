@@ -32,6 +32,7 @@ class TaskRun:
     task_id: str
     branch: str
     worktree: Path
+    base_sha: str
     parent_rev: str | None
     skills: list[str]
     state: TaskRunState = "booting"
@@ -77,7 +78,9 @@ def create_task_worktree(
     existing = get_integration_worktree(root, "task", task_id)
     if existing is not None and existing.path.is_dir():
         worktree = existing.path
+        _fast_forward_retry_branch(worktree, branch, cut_from)
     else:
+        _fast_forward_detached_retry_branch(root, branch, cut_from)
         record = create_integration_worktree(
             "task",
             task_id,
@@ -91,12 +94,33 @@ def create_task_worktree(
         task_id=task_id,
         branch=branch,
         worktree=worktree.resolve(),
+        base_sha=_git(worktree, "rev-parse", "HEAD").stdout.strip(),
         parent_rev=parent_rev,
         skills=list(skills),
         state="booting",
     )
     _runs[task_id] = run
     return run
+
+
+def _fast_forward_retry_branch(worktree: Path, branch: str, base_ref: str) -> None:
+    """Advance a clean, unstarted retry branch to its current Feature tip."""
+
+    if _git(worktree, "status", "--porcelain").stdout.strip():
+        return
+    ancestor = _git(worktree, "merge-base", "--is-ancestor", branch, base_ref, check=False)
+    if ancestor.returncode == 0:
+        _git(worktree, "merge", "--ff-only", base_ref)
+
+
+def _fast_forward_detached_retry_branch(root: Path, branch: str, base_ref: str) -> None:
+    """Advance a retry branch whose worktree was removed after failed boot."""
+
+    if not _branch_exists(root, branch):
+        return
+    ancestor = _git(root, "merge-base", "--is-ancestor", branch, base_ref, check=False)
+    if ancestor.returncode == 0:
+        _git(root, "branch", "-f", branch, base_ref)
 
 
 def remove_task_worktree(task_run: TaskRun, *, root: Path) -> None:
@@ -129,6 +153,10 @@ def _teardown_task_worktree(work_id: str) -> None:
         return
     run = _runs.get(work_id)
     if run is None:
+        return
+    # Keep failed work available to the supervisor for diagnosis or retry.
+    # Successful merge teardown still removes the checkout.
+    if run.state == "failed":
         return
     remove_task_worktree(run, root=_root)
 

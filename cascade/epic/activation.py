@@ -62,8 +62,10 @@ def activate_epic_on_worktree(
     live = WorkDoc(meta=doc.meta, body=doc.body, sha=None)
     live.meta.status = "active"
     live.meta.path = (live_root / column_dir("epic", "active") / old_path.name).resolve()
-    write_doc(live, root=live_root)
+    # Drop the branch's backlog copy first: feature parent_rev pins the commit that
+    # last touched the live path, and that commit must hold exactly one epic copy.
     _drop_stale_copies(work_id, tier="epic", keep=live.meta.path, board_root=live_root)
+    write_doc(live, root=live_root)
     _scrub_child_specs(live_root)
 
     if old_path.exists():

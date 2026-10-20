@@ -21,6 +21,8 @@ def load_feature_tools() -> None:
     import cascade.feature.decisions as decisions_mod
     import cascade.feature.docs_tool as docs_tool_mod
     import cascade.feature.mint as mint_mod
+    import cascade.feature.recovery as recovery_mod
+    from cascade.review import reply_feature_review
 
     from cascade.feature.registry import feature_tools, register_feature_tool
 
@@ -34,6 +36,9 @@ def load_feature_tools() -> None:
         "resolve_comment",
         "propose_epic_amendment",
         "ack_amendment",
+        "reply_merge_request_comment",
+        "revise_task",
+        "retry_task",
     )
     if all(name in feature_tools() for name in expected):
         return
@@ -46,6 +51,9 @@ def load_feature_tools() -> None:
     register_feature_tool("resolve_comment", comments_tool_mod.resolve_comment)
     register_feature_tool("propose_epic_amendment", amendments_mod.propose_epic_amendment)
     register_feature_tool("ack_amendment", amendments_mod.ack_amendment)
+    register_feature_tool("reply_merge_request_comment", reply_feature_review)
+    register_feature_tool("revise_task", recovery_mod.revise_task)
+    register_feature_tool("retry_task", recovery_mod.retry_task)
 
 
 def accept_human_chat(
@@ -59,7 +67,9 @@ def accept_human_chat(
 
     repo = Path(root).resolve()
     try:
-        doc = read_doc(graph_id, root=repo)
+        from cascade.workspace.doc_root import read_doc_resolved
+
+        doc = read_doc_resolved(graph_id, root=repo)
     except NotFound:
         return
     if doc.meta.tier != "feature":

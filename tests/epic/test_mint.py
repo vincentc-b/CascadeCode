@@ -58,6 +58,38 @@ def epic_board(tmp_path: Path) -> dict[str, object]:
     return {"root": root, "epic": epic, "existing": existing, "task": task}
 
 
+def test_mint_copies_epic_provider_and_models(epic_board: dict[str, object]) -> None:
+    from dataclasses import replace
+
+    from cascade.board.store import write_doc
+    from cascade.board.types import WorkDoc
+
+    root = epic_board["root"]
+    epic = epic_board["epic"]
+    write_doc(
+        WorkDoc(
+            meta=replace(
+                epic.meta,
+                provider="cursor",
+                models={
+                    "epic_manager": "grok-4.6",
+                    "epic_architect": "grok-4.6",
+                },
+            ),
+            body=epic.body,
+            sha=epic.sha,
+        ),
+        root=root,
+    )
+    feature_id = mint_feature("Grok child", epic_id="epic_001", root=root)
+    child = read_doc(feature_id, root=root)
+    assert child.meta.provider == "cursor"
+    assert child.meta.models == {
+        "feature_lead": "grok-4.6",
+        "feature_architect": "grok-4.6",
+    }
+
+
 def test_mint_creates_backlog_feature_with_headings(epic_board: dict[str, object]) -> None:
     root = epic_board["root"]
     feature_id = mint_feature("New capability", body_stub="Ship it.", epic_id="epic_001", root=root)

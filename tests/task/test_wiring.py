@@ -154,7 +154,10 @@ def test_boot_wiring_integration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert ready[0].payload["id"] == task_id
 
     fail_task(task_id, "integration_cleanup", root=root)
-    assert not wt.exists()
+    assert wt.exists()
+    failed_run = get_task_run(task_id)
+    assert failed_run is not None
+    assert failed_run.state == "failed"
     assert _branch_exists(root, f"task/{task_id}")
 
 
@@ -169,13 +172,18 @@ def test_redispatch_after_fail_task_recreates_worktree(tmp_path: Path) -> None:
     branch = f"task/{task_id}"
 
     fail_task(task_id, "first_failure", root=root)
-    assert get_task_run(task_id) is None
+    failed_run = get_task_run(task_id)
+    assert failed_run is not None
+    assert failed_run.state == "failed"
+    failed_worktree = failed_run.worktree
+    assert failed_worktree.is_dir()
     assert _branch_exists(root, branch)
 
     invoke_boot("task", task_id)
     run = get_task_run(task_id)
     assert run is not None
     assert run.state == "coding"
+    assert run.worktree == failed_worktree
     assert worktree_path(task_id, root=root).is_dir()
     assert _branch_exists(root, branch)
 

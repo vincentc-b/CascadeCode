@@ -2,7 +2,7 @@
 
 A 3-tier, artifact-driven multi-agent engineering system.
 
-CascadeCode organizes work the way a mature engineering organization does: **Epic (Strategic) → Feature (Tactical) → Task (Execution)**. Planning agents never share a chat room. They negotiate through markdown artifacts and narrow LangGraph queues. Coding agents never see the strategy debate — they receive a sealed task spec, write a PR, and disappear.
+CascadeCode organizes work the way a mature engineering organization does: **Epic (Strategic) → Feature (Tactical) → Task (Execution)**. Planning agents never share a chat room. They negotiate through markdown artifacts and narrow LangGraph queues. Coding agents never see the strategy debate — they receive a sealed task spec, commit one bounded change to the Feature branch, and disappear.
 
 This keeps architecture from collapsing into implementation detail, and it keeps ephemeral SWE agents from building against a flawed interface.
 
@@ -28,16 +28,56 @@ A flat todo list cannot express this. A single chat window cannot isolate it. Ca
 - **Decisions outlive the chat.** Every persisting team keeps an append-only decision log on its `.md`. Dropping in later still answers "why," even if the transcript is gone.
 - **Context isolation.** Agents only load the documents and messages required for their tier. The human may attach to several graphs; those graphs still cannot see each other.
 - **Upward negotiation.** A Feature may not silently violate Epic constraints. It must propose an amendment and wait.
-- **Dispatch is a privilege.** Planning teams mint specs. Only the human or the Boss may start a Feature plan or a Task. An Epic Team cannot order implementation.
-- **Local only.** v1 is a local UI, local git, local checkpointers. No hosted product, no cloud graph, no GitLab/GitHub remote.
+- **Approval boundaries, automatic execution.** The human approves a brief by merging its MR, activates the resulting backlog epic, and reviews feature MRs. The watchdog automatically starts eligible Feature and Task teams between those boundaries.
+- **Forge-backed review.** The runtime stays local, while GitHub or GitLab holds brief approvals, draft feature reviews, and reviewer discussion. Cascade uses the operator's authenticated `gh` or `glab` session.
 
 Non-goals for v1:
 
 - Multi-user auth / hosted SaaS / any remote UI
-- Cloud checkpointers or remote agent runtimes
-- GitLab/GitHub integration (Task output is a local branch + local merge)
-- Automatic merge without a human
+- Hosted agent runtimes or cloud checkpointers
+- Automatic merging of feature MRs without normal repository review/merge policy
 - Cross-repo orchestration (one `cascade up` supervises a single git root; see §9.4)
+
+---
+
+## 2.1 Product workflow
+
+The War Room begins with **Create brief**, not a pre-existing board card. The form captures intent, success criteria, constraints, provider, and separate model choices for the Epic Manager and Epic Architect. Project provider/model defaults prefill the form and short guidance explains what each role needs.
+
+Submitting a brief creates `cascade/brief/epic_NNN`, commits the new backlog Epic document, pushes that brief branch, and opens a GitHub PR or GitLab MR with `cascade/brief/epic_NNN` as the source and `main` as the target (the resolved product trunk). The response contains the review URL. The brief does not appear in the local backlog until that change is merged.
+
+`cascade up` polls remote `main` every `automation.poll_seconds` (default 15 seconds) with a safe fetch plus fast-forward so newly merged briefs become visible. The War Room's **Pull main** button performs the same operation immediately. This operation only fetches and fast-forwards the checked-out product trunk; it never pushes `main`, `master`, a Feature branch, or any other branch. Pull refuses a non-trunk checkout or non-fast-forward update. Tracked local edits are allowed when the checkout is already current or when Git can preserve them across a non-conflicting fast-forward. Git rejects an incoming change that would overwrite a local edit. Pull never resets or stashes local work.
+
+```mermaid
+flowchart LR
+  FORM[Create brief] --> BRANCH[brief branch + commit]
+  BRANCH --> MR[Brief MR]
+  MR -->|human merges| POLL[War Room pulls trunk]
+  POLL --> BACKLOG[Epic backlog]
+  BACKLOG -->|human activates| EPIC[Epic Team plans]
+  EPIC -->|human approves plan| FEATURES[Features dispatched in dependency order]
+  FEATURES --> TASKS[Tasks planned and automatically dispatched]
+  TASKS --> COMMITS[Task commits merged to feature branch]
+  COMMITS --> DRAFT[Draft feature MR]
+  DRAFT -->|review comment| TEAM[Feature Team + fixer tasks]
+  TEAM --> DRAFT
+  DRAFT -->|merged| CLOSE[Feature closes; Epic continues]
+```
+
+After activation the Epic Team starts planning immediately. Its Feature documents remain queued until the human selects **Approve plan** on the active Epic. That approval is durable in `.cascade/approvals.json` and releases automatic, dependency-ordered Feature execution.
+
+Feature completion first pushes the target `epic/{epic_id}` branch and source `feat/{feature_id}` branch, then opens a draft MR from `feat/{feature_id}` to `epic/{epic_id}` when the configured forge CLI is available. It does not push `main`. The watchdog polls tracked MRs. New review comments become `MergeRequestComment` events for the persistent Feature Team, including the MR URL and comment identity. The team evaluates the comment against the whole Feature plan, mints fixer Tasks when code must change, and can answer through `reply_merge_request_comment`. A merged MR releases the feature closeout gate and informs the Epic Team. Without a recognized/authenticated forge CLI, Cascade retains the local merge path for offline workspaces.
+
+Configuration:
+
+```toml
+[automation]
+enabled = true
+poll_seconds = 15
+remote = "origin"
+```
+
+`cascade init` enables automation for new workspaces. Existing workspaces without an `[automation]` table retain their manual lifecycle until they opt in. Setting `automation.enabled = false` restores manual dispatch and task-merge controls for recovery or debugging.
 
 ---
 
@@ -53,7 +93,7 @@ Non-goals for v1:
 │   ├── /1_backlog
 │   ├── /2_active
 │   └── /3_completed
-└── /tasks       # execution: one PR-sized unit of work
+└── /tasks       # execution: one bounded commit-sized unit of work
     ├── /1_backlog
     ├── /2_active
     └── /3_completed
@@ -65,7 +105,7 @@ Directory membership **is** status. Agents must not invent a parallel status sto
 |---|---|
 | `1_backlog` | Accepted as work, not yet staffed |
 | `2_active` | A team is live against this document |
-| `3_completed` | Done; children complete (Epic/Feature) or PR merged (Task) |
+| `3_completed` | Done; children complete (Epic/Feature) or commit merged to its Feature branch (Task) |
 
 A fourth *logical* state, **ready to plan**, lives in frontmatter (`status: ready_to_plan`) while the file remains in `1_backlog`. Moving to `2_active` is what boots the team. Who may flip those bits is restricted (see §5.0).
 
@@ -173,21 +213,21 @@ The Task agent may read the parent Feature for types and APIs. It may **not** re
 
 Each tier is a LangGraph subgraph with its own checkpointer namespace. Subgraphs do not inherit transcripts.
 
-### 5.0 Authority — who may start work
+### 5.0 Authority and automation boundaries
 
-Planning teams write specs. They do not start the next machine. Two principals may issue a start order: the **human**, and the **Boss**.
+Planning teams write specs and never move their own children. The human starts an Epic and approves its Feature plan; after that, the deterministic watchdog/Boss issues legal Feature and Task start events automatically.
 
 | Action | Human | Boss | Epic Team | Feature Team |
 |---|---|---|---|---|
 | Epic → `ready_to_plan` / `2_active` | yes | no | no | no |
-| Feature → `ready_to_plan` / `2_active` | yes | yes | no | no |
-| Task → `2_active` (dispatch) | yes | yes | no | no |
+| Feature → `ready_to_plan` / `2_active` | optional override | automatic watchdog | no | no |
+| Task → `2_active` (dispatch) | optional retry | automatic watchdog | no | no |
 | Mint Feature into `1_backlog` | yes | no | yes | no |
 | Mint Task into `1_backlog` | yes | no | no | yes |
 
-An Epic Team asking "please implement this" is not a dispatch. The watchdog ignores it. Feature Teams mint Task files into backlog and stop. Every planning agent is instructed that dispatch without a Human or Boss order is forbidden; the filesystem sandbox also denies them `mv` into `2_active` for children.
+Planning teams still cannot move their own children into `2_active`. They mint complete plans into backlog. The watchdog is the single transition authority: after an epic is activated, it dispatches the next dependency-ready Feature, then dispatches that Feature's ready Tasks up to `task_parallelism`. Only one Feature plan per Epic runs at once so its output and questions can be incorporated into the Epic context before the next plan starts.
 
-The order may be given from the Epic War Room ("dispatch the ready tasks under this Feature") or from a Feature room ("dispatch `task_001`"). In both cases the issuer is the human or the Boss — never the Epic Manager, Epic Architect, Feature Lead, or Feature Architect.
+Human dispatch routes remain recovery controls for blocked work. They are not part of the normal flow.
 
 ### 5.0.1 The Boss
 
@@ -198,7 +238,7 @@ A single long-lived workspace agent. Not a planner. Not a coder.
 | **Lifecycle** | As long as the local app is running. |
 | **Reads** | Board status, dependency edges, parallelism slot count, human orders. |
 | **Does not read** | Planning transcripts, Task implementation chats, Epic amendment debate. |
-| **Role** | Dispatch Feature planning and Task execution when the human has delegated sequencing, or when the human issues a high-level order the Boss must break into legal dispatches. |
+| **Role** | Continuously dispatch dependency-ready Feature planning and Task execution after epic activation; apply the parallelism cap and stop at human review boundaries. |
 | **Output** | `FeatureReadyToPlan` / `TaskDispatched` events. Never `.md` body text. |
 
 The Boss honors `depends_on` and the parallelism cap. It cannot override a missing human Epic activation. It cannot merge code.
@@ -214,7 +254,7 @@ The Boss honors `depends_on` and the parallelism cap. It cannot override a missi
 | **Role** | Macro-architecture, cross-module constraints, core dependencies. |
 | **Output** | Feature `.md` files dropped into `/docs/features/1_backlog/`. Decision-log entries whenever a constraint is locked or an amendment is resolved. |
 
-The Epic Manager mints Feature files into `/docs/features/1_backlog/` and stops. It has no `set_feature_ready` and no task-dispatch tool. The Epic Architect owns constraint text. The human is a first-class participant in this graph, is the only principal who may activate the Epic, and may leave section-anchored comments on the Epic doc.
+The Epic Manager mints Feature files into `/docs/features/1_backlog/`. The watchdog starts them sequentially as dependencies allow. The Epic Architect owns constraint text. The human is a first-class participant in this graph, is the only principal who may activate the Epic, and may leave section-anchored comments on the Epic doc.
 
 ### 5.2 Tier 2 — Feature Team (Tactical Sub-Hub)
 
@@ -225,7 +265,7 @@ The Epic Manager mints Feature files into `/docs/features/1_backlog/` and stops.
 | **Reads** | Parent Epic at `parent_rev` (git SHA) plus that commit's decision log, own Feature doc, own decision log, own comment threads, own Task list. |
 | **Does not read** | Other Features' planning transcripts or comments, Task implementation chats, unrelated Epics, the Epic War Room transcript. |
 | **Role** | Scope the feature, lock data structures / APIs / logic flow, decompose into tasks, reply to human comments on this Feature. |
-| **Output** | Task `.md` files in `/docs/tasks/1_backlog/` (never `2_active`). Decision-log entries whenever an API, type, or flow is locked. |
+| **Output** | Task `.md` files in `/docs/tasks/1_backlog/` (the watchdog moves eligible tasks to `2_active`). Decision-log entries whenever an API, type, or flow is locked. |
 
 If the Feature Architect discovers that the Epic's constraints cannot support a required design (e.g. a spatial acceleration hierarchy that violates a mandated memory layout), they **do not write code and they do not silently edit the Epic**. They call `propose_epic_amendment` (see §7).
 
@@ -237,14 +277,14 @@ The human may attach to this graph at any time it is persisting (see §10). Atta
 
 | | |
 |---|---|
-| **Lifecycle** | Ephemeral. The watchdog starts a team only after a Human or Boss `TaskDispatched` moves the file to `/docs/tasks/2_active/`. The graph ends when the local task branch is merged (or abandoned). |
+| **Lifecycle** | Ephemeral. The watchdog starts a team as soon as its plan and dependencies are ready. The graph ends when its commit is automatically merged to the Feature branch (or the task blocks). |
 | **Roster** | One specialized SWE agent (routing is an open discussion — §15). |
 | **Reads** | The Task `.md` and the linked parent Feature `.md` at `parent_rev`. |
 | **Does not read** | Epic body, other Features, other Tasks, War Room chat. |
 | **Role** | Work in the task integration worktree (`.cascade/worktrees/task_{id}` on branch `task/{task_id}`). Implement, test, commit there. |
-| **Output** | Local commits on `task/{task_id}`. Human `merge_task_branch` merges into `feat/{parent_feature_id}`; the operator `--root` checkout stays on the product trunk. On success the Task `.md` moves to `3_completed`. |
+| **Output** | Local commits on `task/{task_id}`. A successful turn automatically runs `merge_task_branch` into `feat/{parent_feature_id}`; the operator `--root` checkout stays on the product trunk. On success the Task `.md` moves to `3_completed`. |
 
-Task agents have no amendment, comment, or dispatch tools. If the Feature contract is wrong, the Task fails closed and the Feature Team revises the spec. Re-dispatching the Task is a new Human/Boss order.
+Task agents have no amendment, comment, or dispatch tools. If a Task fails, the failure event automatically starts a Feature Team turn. That supervisor owns recovery: it inspects the child in the context of the whole Feature, uses `revise_task` when the plan is wrong, and uses `retry_task` to send its own blocked child back through the normal dispatch gates. A pre-execution stale parent pin is refreshed and retried deterministically by the watchdog. Ordinary successful Tasks need no manual merge or dispatch step.
 
 ---
 
@@ -287,17 +327,17 @@ Rules:
 2. **No shared message list** across tiers. Cross-tier events are typed messages on a queue (see §8).
 3. **Filesystem is the durable store** for plans. Plan edits are **git commits** on the local repo. Feature/Task graphs pin `parent_rev` to the SHA they last read. The LangGraph checkpointer is only for in-flight agent state and may be dropped; the committed `.md` remains.
 4. **Human messages enter the graph the operator is attached to.** Default attachment is the Epic graph. Attaching to a Feature graph delivers messages only to that Feature team. The human may be attached to several persisting graphs at once; agents in those graphs still cannot see each other's transcripts. Task graphs do not accept drop-in chat.
-5. **Spawn is not implied by minting.** A file in `1_backlog` does nothing until a Human or Boss (Epic: Human only) issues the start order.
+5. **Minting feeds the supervisor.** A child in `1_backlog` starts when its dependencies, parent lifecycle, review gates, and capacity allow. An Epic still requires explicit human activation.
 
 ### 6.1 Spawning trigger (happy path)
 
 1. Human marks the Epic `ready_to_plan`. Watchdog moves it to `/docs/epics/2_active/` and boots the Epic graph.
-2. Epic Manager writes `feat_001_usd_schema.md` into `/docs/features/1_backlog/` (with `depends_on` if any). Stops.
-3. Human or Boss sets Feature `ready_to_plan`. Watchdog moves it to `2_active` and boots `feat_001`.
+2. Epic Manager writes `feat_001_usd_schema.md` into `/docs/features/1_backlog/` (with `depends_on` if any).
+3. Human reviews the Epic plan and selects **Approve plan**. Watchdog selects the next dependency-ready Feature for this Epic, moves it to `2_active`, boots `feat_001`, and informs the Epic Team.
 4. Feature Team reads the parent Epic at `parent_rev`, drafts structures/APIs, writes Task files into `/docs/tasks/1_backlog/` with `depends_on`. Stops.
-5. Human or Boss dispatches a Task whose dependencies are complete and whose start would not exceed the parallelism cap.
+5. Watchdog dispatches each Task whose dependencies are complete without exceeding the parallelism cap.
 6. Watchdog boots that Task subgraph. SWE agent commits on `task/{task_id}`.
-7. Human merges the branch locally. Task → `3_completed`. When all children complete: Feature → `3_completed`. When all Features complete: Epic Team proposes close; human confirms.
+7. Cascade merges the successful Task branch locally. Task → `3_completed`. When all children complete, it opens a draft Feature MR. Review comments return to the Feature Team; merging that MR completes the Feature. When all Features complete, the Epic Team proposes close and the human confirms.
 
 ---
 
@@ -374,7 +414,7 @@ This is what keeps context windows isolated:
 
 - Epic Team thinks about **macro constraints**.
 - Feature Team thinks about **one API and its task breakdown**.
-- Task agents think about **the lines of code in one PR**.
+- Task agents think about **one bounded implementation change**.
 
 ---
 
@@ -385,11 +425,12 @@ A single process watches the board directories (fs events or a short poll).
 | Event | Action |
 |---|---|
 | Human marks Epic `ready_to_plan` | `mv` to `2_active`, start Epic graph. Boss cannot do this. |
-| Human or Boss marks Feature `ready_to_plan` | If `depends_on` are completed: `mv` to `2_active`, start Feature subgraph |
-| Human or Boss `TaskDispatched` | If `depends_on` completed **and** `# status=active Tasks in 2_active < parallelism`: `mv` to `2_active`, start Task subgraph |
-| `TaskFailed` | Set status `blocked` (stay in `2_active`). Teardown graph. Toast Feature + War Room. Do not auto-dispatch. `blocked` does not consume a slot. |
-| Human `merge_task_branch` (task → `feat/{parent}`) | `mv` Task to `3_completed` in the feature worktree, enqueue `TaskMerged` |
-| All child Tasks of a Feature completed | Notify Feature graph to write completion summary and `mv` Feature to `3_completed` |
+| Epic plan approved and an eligible Feature is in backlog | If `depends_on` are completed and no sibling Feature is active: `mv` to `2_active`, start Feature subgraph |
+| Eligible Task appears in backlog | If `depends_on` completed **and** `# status=active Tasks in 2_active < parallelism`: `mv` to `2_active`, start Task subgraph |
+| `TaskFailed` | Set status `blocked` (stay in `2_active`), preserve its worktree for diagnosis, and enqueue the failure to the Feature Team. The next watchdog tick starts a Feature Team recovery turn. A pre-execution `stale_parent_rev` is reconciled and re-dispatched deterministically; other failures remain blocked until the Feature Team revises/retries or replaces the child. `blocked` does not consume a slot. |
+| Successful Task turn (task → `feat/{parent}`) | Run `merge_task_branch`, `mv` Task to `3_completed`, enqueue `TaskMerged` |
+| All child Tasks of a Feature completed | Open/update draft Feature MR; poll review comments and merge state |
+| Feature MR merged | Complete Feature locally and enqueue `FeatureCompleted` to its Epic |
 | All child Features of an Epic completed | War Room prompt: close the Epic? |
 | Feature calls `propose_epic_amendment` | Sidecar diff + War Room alert + Epic queue event |
 | Illegal `mv` into a child `2_active` by a planning team | Reject, log, toast |
@@ -404,7 +445,7 @@ Workspace config (local file, e.g. `cascade.toml`):
 task_parallelism = 4
 ```
 
-Default is **4** concurrent Task subgraphs against the repo. Configurable. The watchdog counts Tasks in `/docs/tasks/2_active/` whose status is `active`. `blocked` (failed, awaiting a new order) does not count. A dispatch that would exceed the cap is queued, not started.
+Default is **4** concurrent Task subgraphs against the repo. Configurable. The watchdog counts Tasks in `/docs/tasks/2_active/` whose status is `active`. `blocked` (failed, awaiting a retry) does not count. Work beyond the cap stays in backlog and starts on a later tick.
 
 Dependencies live on the plan, not in the watchdog's head:
 
@@ -420,7 +461,7 @@ No integer `rev` field. Plan edits are ordinary local commits.
 - Creating or updating an Epic/Feature/Task `.md` is committed (`docs: update feat_001 …`).
 - Accepting an amendment commits the Epic; `AmendmentApproved.epic_rev` is that SHA.
 - Feature and Task files store `parent_rev` as the SHA they last read.
-- If the parent moved and `parent_rev` is stale, the child re-reads (Feature) or fails closed (Task — spec changed under it; needs a new dispatch after the Feature revises the Task).
+- If the parent moved and `parent_rev` is stale, the Feature re-reads it. Before Task execution, the supervisor refreshes the Task pin and fast-forwards an untouched Task branch; a conflict or already-modified child fails closed for Feature Team recovery.
 
 ### 9.3 Failure policy
 
@@ -428,8 +469,12 @@ No integer `rev` field. Plan edits are ordinary local commits.
 |---|---|
 | Infra/tool flake in a **live** Task subgraph | Retry up to **2** times, then `TaskFailed` |
 | Test failure or bad spec | Fail closed immediately → `TaskFailed` |
+| Finished turn with no deliverable commit | Fail closed as `no_task_changes`; never merge an empty lifecycle-only branch |
+| Scoped verification | `swe_run_tests` accepts guarded pytest argv so the Task follows its test plan instead of forcing the entire repository suite |
+| Recoverable SWE tool error | Deny the attempted action and return the error to the agent for correction within the turn; final delivery/test gates still fail closed |
 | `TaskFailed` | Graph torn down. Doc stays in `2_active` with `status: blocked`. Toast Feature room + War Room. Slot freed (`blocked` not counted). |
-| Start again | New `dispatch_task` from Human or Boss only. Feature/Epic cannot restart. Boss may propose; must not auto-fire. |
+| Stale parent before execution | Supervisor refreshes the Task's `parent_rev`, fast-forwards its untouched branch to the current Feature tip, and re-dispatches it. |
+| Other failures | `TaskFailed` automatically authorizes a Feature Team turn. The supervisor diagnoses the failed child holistically, then revises and retries it or replaces the plan. The deterministic watchdog does not blindly loop unchanged implementation work. |
 
 ### 9.4 Workspace supervisor
 
@@ -453,8 +498,8 @@ cascade init [--root PATH]     # default PATH = cwd
 cascade up   [--root PATH] [--host 127.0.0.1] [--port 8765]
 ```
 
-- **`init`** — requires a git repo. Creates missing `docs/{epics,features,tasks}/{1_backlog,2_active,3_completed}`, writes `cascade.toml` only when absent (`task_parallelism = 4`; `[providers]` with `default = "cursor"` and per-provider `epic` / `feature` / `task` keys **blank** so boot fails closed until filled), appends `.cascade/` to `.gitignore` when missing. Does not start agents, activate epics, or overwrite existing plans.
-- **`up`** — requires board layout and a git repo. The checkout at `--root` must be the **product trunk**; refuses `epic/*`, `feat/*`, or `task/*`. Binds War Room on loopback (`127.0.0.1` by default) and the watchdog to the same root, takes `.cascade/supervisor.lock` (a second `up` on that root refuses), runs `resume_legally_active_graphs` (repair missing worktrees, continue interrupted turns only). Does **not** dispatch, does **not** check out integration branches in `--root`. Entry point is `cascade up`, not a standalone War Room process alone.
+- **`init`** — requires a git repo. Creates missing `docs/{epics,features,tasks}/{1_backlog,2_active,3_completed}`, writes `cascade.toml` only when absent (`task_parallelism = 4`; automation enabled with a 15-second `origin` poll; `[providers]` with `default = "cursor"` and per-provider `epic` / `feature` / `task` keys **blank** so boot fails closed until filled), appends `.cascade/` to `.gitignore` when missing. Does not start agents, activate epics, or overwrite existing plans.
+- **`up`** — requires board layout and a git repo. The checkout at `--root` must be the **product trunk**; refuses `epic/*`, `feat/*`, or `task/*`. Binds War Room on loopback (`127.0.0.1` by default) and the watchdog to the same root, takes `.cascade/supervisor.lock` (a second `up` on that root refuses), and runs `resume_legally_active_graphs` (repair missing worktrees, continue interrupted turns only) before normal watchdog ticks dispatch newly eligible work. It does not check out integration branches in `--root`. Entry point is `cascade up`, not a standalone War Room process alone.
 
 **Product trunk** — `resolve_product_trunk`: `main` when that branch exists; otherwise the unique local branch that is not `epic/*`, `feat/*`, or `task/*` and is an ancestor of every other non-integration branch. If ambiguous, `up` and activation refuse.
 
@@ -490,10 +535,15 @@ After **`activate_epic`**, the trunk copy of the epic becomes a **pointer** (`in
 | `dispatch_feature` / `dispatch_task` | Cut branch/worktree + boot + opening / implementation turn |
 | Human chat or comment on live epic/feature | One turn of that team |
 | Queue event the graph must answer | One turn after ingest |
-| `up` resume | Re-attach checkpointer; **recreate missing worktree** from branch; **continue only if a turn was in flight**; idle graphs stay idle |
+| `up` resume | Re-attach checkpointer; **recreate missing worktrees and active TaskRun records**; active Tasks resume execution while idle Epic/Feature graphs stay idle |
+
+Cursor SWE turns receive guarded in-process custom tools because the Cursor bridge does not reliably expose stdio MCP. CLI providers use the equivalent out-of-process SWE MCP server; before dispatching a tool it reconstructs the scoped active `TaskRun` from the worktree registry. Both paths operate on the same Task branch as the watchdog. A failed Task keeps its worktree for supervisor diagnosis and retry; successful merge teardown removes it after the graph invocation has finished checkpointing, including when the merge runs in a LangGraph worker thread.
+
+`cascade up` and the compatibility command `python -m cascade.war_room` both start the combined War Room HTTP server and watchdog. There is no passive UI entry point that can leave an active board without its supervisor. The HTTP server binds before graph recovery begins, so the War Room remains reachable while a resumed agent turn is running.
+
 | `dispatch_task` on `blocked` task | New implementation turn (new order) |
 
-These do **not** start a model turn: `mint_feature` / `mint_task`; backlog files with no activate/dispatch; War Room open/refresh, Attach, View plan; watchdog poll with no new queue edge (including flight-report refresh); Boss noticing ready work without an order; task-targeted chat (tasks have no room).
+These do **not** directly start a model turn: the mint tool call itself; War Room open/refresh, Attach, View plan; watchdog poll with no new queue or newly eligible work; task-targeted chat (tasks have no room). A minted child may become eligible on the same or next watchdog tick.
 
 **War Room reads — `resolve_doc_worktree`**
 
@@ -509,12 +559,13 @@ Does not create worktrees. Attach on backlog feature is refused (`dispatch the f
 
 **Flight report** — `flight_report` / `GET /api/flight`: for each in-flight integration entry (`2_active` on merged board), `git diff --name-only` from `base_sha` to branch tip. Overlaps are **path intersections** (feature–feature; feature vs epic commits after feature cut). Overlap toasts are informational. No model call; no merge, rebase, or dispatch block.
 
-**Human merge targets** (git operations run in integration worktrees; operator `--root` stays on trunk):
+**Integration and review targets** (git operations run in integration worktrees; operator `--root` stays on trunk):
 
 | Action | Target |
 |---|---|
-| `merge_task_branch` | `task/{id}` → `feat/{parent}` |
-| `merge_feature_branch` (rollup / closeout) | `feat/{id}` → `epic/{parent}` |
+| Automatic `merge_task_branch` after a green Task turn | `task/{id}` → `feat/{parent}` |
+| Draft Feature MR after all Tasks complete | push `epic/{parent}` and `feat/{id}`; MR `feat/{id}` → `epic/{parent}` |
+| Offline `merge_feature_branch` fallback | `feat/{id}` → `epic/{parent}` |
 | `promote_epic_to_trunk` (human epic complete) | `epic/{id}` → product trunk |
 
 ---
@@ -523,7 +574,7 @@ Does not create worktrees. Attach on backlog feature is refused (`dispatch the f
 
 The human is not locked to the Epic graph. Persisting teams (Epic, Feature) are rooms you can enter. Plans are documents you can annotate. The "why" lives on the document so you can arrive late and still reconstruct the call.
 
-Task teams are not rooms. They are jobs. You inspect the MR, not the SWE agent's inner monologue.
+Task teams are not rooms. They are jobs. You inspect their commits through the Feature diff and draft MR, not the SWE agent's inner monologue.
 
 ### 10.1 Surfaces
 
@@ -533,9 +584,9 @@ Task teams are not rooms. They are jobs. You inspect the MR, not the SWE agent's
 | **Feature room** | Live chat of one Feature Team, after you attach. | Question an API, push a redesign, hear the Architect justify a type. |
 | **Design comments** | Threads anchored to a section of an Epic or Feature `.md`. | Leave review notes that persist after you detach, and that the owning team must answer. |
 | **Decision log** | Append-only section on every Epic/Feature `.md`. | Understand why a decision was locked without replaying the transcript. |
-| **Board** | The `/docs` columns. | Activate an Epic, dispatch Features/Tasks (or tell the Boss to), see `blocked`, watch rollup. |
+| **Board** | The `/docs` columns. | Activate an Epic, approve its plan, see automatic child progress and recovery, and watch rollup. |
 | **Amendment pane** | Split diff of an Epic section. | Accept / Reject / Revise a Feature proposal. |
-| **Stacked branches** | `task/{id}` on its worktree; merges land in `feat/{id}`, then `epic/{id}`, then trunk on promote. | Review diffs and merge via human tools; operator checkout stays on trunk. No remote. |
+| **Stacked branches** | `task/{id}` on its worktree; automatic Task merges land in `feat/{id}`; the draft Feature MR targets `epic/{id}`; Epic promotion targets trunk. | Review Feature diffs and MR discussion while the operator checkout stays on trunk. |
 
 The War Room still shows the board and toasts (amendments, new comments on the Epic, blocked Features, failed Tasks, merged MRs). Feature rooms show that Feature's doc, comments, decision log, and child Tasks.
 
@@ -623,7 +674,7 @@ Not visible unless you explicitly inspect:
 
 Inspect exists for debugging. It is not the interaction model.
 
-v1 is a **local UI only**. No hosted War Room, no remote checkpointer, no GitLab/GitHub remote. The repo on disk is the product.
+The War Room and checkpointers remain local. GitHub/GitLab stores review state and discussion; the repository and Markdown plans remain the product source of truth.
 
 ---
 
@@ -632,11 +683,11 @@ v1 is a **local UI only**. No hosted War Room, no remote checkpointer, no GitLab
 ### Human (workspace)
 
 - `activate_epic` — the only way an Epic leaves backlog
-- `dispatch_feature` / `dispatch_task` — start Feature planning or Task execution
+- `dispatch_feature` / `dispatch_task` — recovery overrides; normal child progression is automatic after Epic plan approval
 - `attach` / `detach` — join or leave an Epic or Feature graph
 - `comment` — section-anchored note; optional `blocking` (human-only; pauses `mint_task`)
 - `read_doc` — briefing pack for the attached team
-- `merge_task_branch` — merge `task/{task_id}` into `feat/{parent}` (human; trunk checkout unchanged)
+- `merge_task_branch` — recovery override for `task/{task_id}` → `feat/{parent}`; successful Task turns call it automatically
 - Epic close / promote — `promote_epic_to_trunk` merges `epic/{id}` into the product trunk
 
 ### Boss
@@ -663,16 +714,21 @@ v1 is a **local UI only**. No hosted War Room, no remote checkpointer, no GitLab
 - `propose_epic_amendment` — §7
 - `record_decision` — append to the Feature decision log
 - `reply_comment` / `resolve_comment` — this Feature's threads only
+- `reply_merge_request_comment` — answer the tracked feature MR after assessing the review holistically
+- `revise_task` / `retry_task` — repair and restart this Feature's own blocked child after diagnosing `TaskFailed`
 - `list_children` — Task status rollup
-- **no** `dispatch_*`
+- **no** general `dispatch_*`; retry is limited to an owned blocked child
 
 ### Task Team
 
-- repo tools: read/edit files, run tests, git commit on `task/{task_id}`
+- guarded `swe_read` / `swe_write` — scoped file access in the active `task/{task_id}` worktree
+- guarded `swe_run_tests` / `swe_commit` / `fail_task` — verify, commit, or block the active Task
 - `read_doc` — own Task + parent Feature at `parent_rev` (read-only; no comment sidecar, no Epic)
 - skill playbooks listed on the Task (in-repo `SKILL.md` paths), loaded at boot
 - no write access to `/docs/epics` or `/docs/features`
 - no amendment, comment, drop-in, or dispatch tools
+
+Cursor receives these as in-process `cursor-sdk` custom tools. CLI providers receive the same registry through the stdio MCP server, which reconstructs the active `TaskRun` in its own process before dispatch.
 
 A path sandbox enforces the above. Prompting alone is not sufficient.
 
@@ -683,7 +739,7 @@ A path sandbox enforces the above. Prompting alone is not sufficient.
 | Object | Completes when |
 |---|---|
 | Task | `task/{id}` is merged into `feat/{parent}` (tests green) and the file is in `3_completed` |
-| Feature | Every `children` Task is completed, **no open human comment threads**, and the Feature Architect writes a one-paragraph closeout |
+| Feature | Every `children` Task is completed, **no open human comment threads**, the Feature Architect writes a one-paragraph closeout, and the draft feature MR is merged (forge-backed mode) |
 | Epic | Every `children` Feature is completed, **no open human comment threads**, and the human confirms in the War Room |
 
 Orphans are illegal: a Feature without `parent`, a Task whose Feature is completed, a completed Epic with an active child. The watchdog flags these; it does not auto-repair strategy.
@@ -694,14 +750,14 @@ Orphans are illegal: a Feature without `parent`, a Task whose Feature is complet
 
 Epic: *Re-architect the core pipeline into modular libraries.*
 
-1. You activate `epic_001`. Epic Team writes the Epic (Bazel + C++/CUDA, memory-layout rule) and mints `feat_001_usd_lod_schema.md` into the Feature backlog. They do not start it.
-2. You (or the Boss) mark the Feature ready to plan. Feature subgraph boots. Architect reads the Epic at `parent_rev`, designs the OpenUSD LoD schema, and realizes the Epic's memory layout cannot host the acceleration hierarchy they need.
+1. You create a `cascade/brief/epic_001` branch and MR targeting `main`, merge it, select **Pull main** (or wait for polling), and activate its backlog card. Pull main fetches the merged brief and never pushes a branch. Epic Team writes the Epic (Bazel + C++/CUDA, memory-layout rule) and mints `feat_001_usd_lod_schema.md` into the Feature backlog.
+2. You review and approve the Epic plan. The watchdog starts the next dependency-ready Feature. Its Architect reads the Epic at `parent_rev`, designs the OpenUSD LoD schema, and realizes the Epic's memory layout cannot host the acceleration hierarchy they need.
 3. Feature Team calls `propose_epic_amendment(target_file="epic_001_core_pipeline.md", section="Memory Layout", ...)`.
 4. War Room alert: review diff. Human + Epic Architect accept. Epic file is committed. Queue: `AmendmentApproved` with the new SHA.
 5. Feature Team unblocks, updates `parent_rev`, locks APIs, records `dec_012`. You drop into the Feature room and comment on **API contracts**.
 6. Feature Architect replies, revises the signature, resolves `cmt_014`, and mints `task_001_splat_partition_node.md` (and any `depends_on`) into the Task backlog. Stops.
-7. You (or the Boss) dispatch `task_001` once deps are done and a parallelism slot is free. Watchdog starts a SWE agent. It implements and commits on `task/task_001`.
-8. You `merge_task_branch` into `feat/feat_001`. Task → `3_completed`. Remaining Tasks drain only as you or the Boss dispatch them. Feature rollup merges into `epic/epic_001`. Epic remains active until its other Features finish; human promote merges the epic branch to trunk.
+7. The watchdog dispatches `task_001` once dependencies are done and a parallelism slot is free. The SWE agent implements, tests, and commits on `task/task_001`; Cascade merges it into `feat/feat_001` and marks the Task completed.
+8. When all Tasks finish, Cascade pushes `epic/epic_001` and `feat/feat_001`, then opens a draft MR from the Feature branch to the Epic branch. Review comments return to the Feature Team, which mints and dispatches fixer Tasks as needed and replies on the MR. Merging the MR completes the Feature and lets the Epic proceed to its next Feature.
 
 At no point did the SWE agent see the memory-layout debate, and at no point did the Epic Architect see CUDA kernel drafts.
 
@@ -715,8 +771,8 @@ At no point did the SWE agent see the memory-layout debate, and at no point did 
 4. **Feature graph** — boot on `ready_to_plan`, `mint_task`, `propose_epic_amendment`, `record_decision`.
 5. **Drop-in + comments** — attach/detach, briefing pack, section-anchored comment sidecars, resolve-before-complete.
 6. **Amendment pane** — diff review, resolve tool, downward queue message.
-7. **Task graph + local branch** — ephemeral SWE agent, human merge → `3_completed`.
-8. **Rollup completion** — Feature/Epic closeout rules, including open-comment gates.
+7. **Task graph + local branch** — ephemeral SWE agent, automatic task-to-feature merge → `3_completed`.
+8. **Forge review + rollup completion** — brief MR creation, trunk polling, draft Feature MRs, review-comment delivery, and Feature/Epic closeout gates.
 
 ---
 
@@ -727,14 +783,14 @@ At no point did the SWE agent see the memory-layout debate, and at no point did 
 | Topic | Decision |
 |---|---|
 | Epic activation | **Human only.** The Boss cannot mark an Epic `ready_to_plan`. |
-| Feature planning start | **Human or Boss.** Epic Team mints into backlog and stops. |
-| Task dispatch | **Human or Boss.** Feature Team mints into backlog and stops. Epic Team cannot order implementation. |
+| Feature planning start | **Automatic after Epic plan approval.** Watchdog starts one dependency-ready Feature per Epic at a time. |
+| Task dispatch | **Automatic after planning.** Watchdog starts dependency-ready Tasks up to the parallelism cap. |
 | Parallelism | Configurable (`task_parallelism`, default **4**). Watchdog enforces. |
 | Dependencies | Declared on the `.md` (`depends_on` in frontmatter and body). Dispatch is illegal until they are `3_completed`. |
 | Doc versioning | **Git commits.** Children pin `parent_rev` to a SHA. No integer rev counter. |
-| Deployment | **Local UI only.** Local git, local checkpointers. No remote product, no GitLab/GitHub. |
+| Deployment | **Local runtime with forge review.** Local UI/checkpointers plus GitHub (`gh`) or GitLab (`glab`) for brief and feature MRs. |
 | Comment severity | Default **non-blocking**. Human may mark `blocking`, which pauses `mint_task` only. Agents cannot set it. Open human threads still gate completion. |
 | Task specialization | **No enum.** Optional in-repo `SKILL.md` paths on the Task. Empty = general SWE agent. Human/Boss may override the list at dispatch. Missing/out-of-repo paths fail dispatch. No classifier. |
-| Failure policy | Live-run infra flakes: retry **2** times, then `TaskFailed`. Spec/test miss: fail closed immediately. Failed Task stays in `2_active` as `blocked` and does **not** count toward the cap. Re-dispatch is Human or Boss `dispatch_task` only. Boss may propose a retry; it must not auto-fire. Feature/Epic cannot restart. |
+| Failure policy | Live-run infra flakes retry **2** times. A pre-execution stale parent pin is refreshed and retried automatically. Spec/test misses fail closed and automatically wake the Feature Team, which can revise and retry its own blocked child; the blocked Task does **not** count toward the cap. |
 
 All DESIGN.md §15 questions are locked.

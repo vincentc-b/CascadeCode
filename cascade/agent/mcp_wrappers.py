@@ -9,8 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+from cursor_sdk import CustomTool, CustomToolContext
+
 from cascade.agent.planning_sandbox import PlanningSandbox, PlanningTier
 from cascade.agent.types import ToolEffect
+from cascade.board.serde import work_doc_from_dict
 from cascade.watchdog.dispatch import dispatch_feature, dispatch_task
 from cascade.watchdog.types import DispatchResult
 
@@ -27,25 +30,65 @@ class ToolEffectCollector:
         self.effects.append(ToolEffect(tool=tool, summary=_summarize_result(result)))
 
 
+def _planning_tool_names(sandbox: PlanningSandbox) -> list[str]:
+    if sandbox.tier == "epic":
+        from cascade.epic.wiring import load_epic_tools
+
+        load_epic_tools()
+        return sorted(_epic_tool_names())
+    if sandbox.tier == "feature":
+        from cascade.feature.wiring import load_feature_tools
+
+        load_feature_tools()
+        return sorted(_feature_tool_names())
+    return sorted(_BOSS_TOOL_NAMES)
+
+
+def build_planning_custom_tools(
+    sandbox: PlanningSandbox,
+    collector: ToolEffectCollector,
+) -> dict[str, CustomTool]:
+    """Return SDK ``local.custom_tools`` for Cursor planning turns."""
+
+    tier = sandbox.tier
+    tool_names = _planning_tool_names(sandbox)
+    schemas = {**_EPIC_TOOL_SCHEMAS, **_FEATURE_TOOL_SCHEMAS, **_BOSS_TOOL_SCHEMAS}
+    tools: dict[str, CustomTool] = {}
+
+    for name in tool_names:
+        schema = schemas.get(name, {"type": "object", "properties": {}})
+
+        def _execute(
+            args: Mapping[str, Any],
+            _ctx: CustomToolContext,
+            *,
+            tool_name: str = name,
+        ) -> object:
+            return dispatch_planning_tool(
+                tier,
+                tool_name,
+                dict(args),
+                scope_id=sandbox.scope_id,
+                repo_root=sandbox.repo_root,
+                collector=collector,
+            )
+
+        tools[name] = CustomTool(
+            description=f"Cascade {tier} tool {name}",
+            input_schema=schema,
+            execute=_execute,
+        )
+    return tools
+
+
 def build_planning_mcp_servers(
     sandbox: PlanningSandbox,
     *,
     config_path: Path | None = None,
 ) -> dict[str, Mapping[str, Any]]:
-    """Return SDK ``mcp_servers`` mapping for one planning turn."""
+    """Return SDK ``mcp_servers`` mapping for one planning turn (CLI providers)."""
 
-    if sandbox.tier == "epic":
-        from cascade.epic.wiring import load_epic_tools
-
-        load_epic_tools()
-        tool_names = sorted(_epic_tool_names())
-    elif sandbox.tier == "feature":
-        from cascade.feature.wiring import load_feature_tools
-
-        load_feature_tools()
-        tool_names = sorted(_feature_tool_names())
-    else:
-        tool_names = sorted(_BOSS_TOOL_NAMES)
+    tool_names = _planning_tool_names(sandbox)
 
     cfg_path = config_path or (sandbox.scratch_dir / ".cascade_mcp.json")
     cfg_path.write_text(
@@ -73,6 +116,41 @@ def build_planning_mcp_servers(
     }
 
 
+def _normalize_planning_tool_args(
+    tier: PlanningToolTier,
+    name: str,
+    args: dict[str, Any],
+    *,
+    scope_id: str | None,
+    repo: Path,
+) -> dict[str, Any]:
+    """Coerce MCP/LLM JSON into types graph tools expect."""
+
+    normalized = dict(args)
+    if name == "write_doc":
+        doc_payload = normalized.get("doc")
+        if doc_payload is None and "body" in normalized and "meta" in normalized:
+            doc_payload = {
+                "meta": normalized.pop("meta"),
+                "body": normalized.pop("body"),
+                "sha": normalized.pop("sha", None),
+            }
+        if doc_payload is None:
+            raise ValueError("write_doc requires a doc object")
+        hint = scope_id if tier == "epic" else (scope_id if tier == "feature" else None)
+        normalized["doc"] = work_doc_from_dict(
+            doc_payload,
+            root=repo,
+            work_id_hint=hint if isinstance(hint, str) else None,
+        )
+    if name == "record_decision" and "text" in normalized and "choice" not in normalized:
+        text = str(normalized.pop("text"))
+        normalized.setdefault("choice", text)
+        normalized.setdefault("rationale", text)
+        normalized.setdefault("honors", "")
+    return normalized
+
+
 def dispatch_planning_tool(
     tier: PlanningToolTier,
     name: str,
@@ -87,6 +165,9 @@ def dispatch_planning_tool(
     repo = Path(repo_root).resolve()
     if tier in ("epic", "feature") and name in ("dispatch_feature", "dispatch_task"):
         raise ValueError(f"{name} is not available during {tier} planning turns")
+    tool_args = _normalize_planning_tool_args(
+        tier, name, dict(args), scope_id=scope_id, repo=repo
+    )
     if tier == "epic":
         if not scope_id:
             raise ValueError("epic tier requires scope_id")
@@ -95,7 +176,7 @@ def dispatch_planning_tool(
 
         load_epic_tools()
 
-        result = invoke_tool(scope_id, name, dict(args), root=repo)
+        result = invoke_tool(scope_id, name, tool_args, root=repo)
     elif tier == "feature":
         if not scope_id:
             raise ValueError("feature tier requires scope_id")
@@ -104,9 +185,9 @@ def dispatch_planning_tool(
 
         load_feature_tools()
 
-        result = invoke_tool(scope_id, name, dict(args), root=repo)
+        result = invoke_tool(scope_id, name, tool_args, root=repo)
     else:
-        result = _invoke_boss_tool(name, dict(args), root=repo)
+        result = _invoke_boss_tool(name, tool_args, root=repo)
 
     collector.record(name, result)
     _append_effect_file(repo, name, result)
@@ -195,16 +276,33 @@ _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "type": "object",
         "properties": {
             "section": {"type": "string"},
-            "text": {"type": "string"},
+            "choice": {"type": "string"},
+            "rationale": {"type": "string"},
+            "honors": {"type": "string"},
+            "author": {"type": "string"},
         },
-        "required": ["section", "text"],
+        "required": ["section", "choice", "rationale", "honors"],
     },
     "read_doc": {
         "type": "object",
         "properties": {"work_id": {"type": "string"}},
         "required": ["work_id"],
     },
-    "write_doc": {"type": "object", "properties": {"doc": {"type": "object"}}},
+    "write_doc": {
+        "type": "object",
+        "properties": {
+            "doc": {
+                "type": "object",
+                "properties": {
+                    "meta": {"type": "object"},
+                    "body": {"type": "string"},
+                    "sha": {"type": "string"},
+                },
+                "required": ["meta", "body"],
+            }
+        },
+        "required": ["doc"],
+    },
     "reply_comment": {
         "type": "object",
         "properties": {
@@ -240,16 +338,33 @@ _FEATURE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "type": "object",
         "properties": {
             "section": {"type": "string"},
-            "text": {"type": "string"},
+            "choice": {"type": "string"},
+            "rationale": {"type": "string"},
+            "honors": {"type": "string"},
+            "author": {"type": "string"},
         },
-        "required": ["section", "text"],
+        "required": ["section", "choice", "rationale", "honors"],
     },
     "read_doc": {
         "type": "object",
         "properties": {"work_id": {"type": "string"}},
         "required": ["work_id"],
     },
-    "write_doc": {"type": "object", "properties": {"doc": {"type": "object"}}},
+    "write_doc": {
+        "type": "object",
+        "properties": {
+            "doc": {
+                "type": "object",
+                "properties": {
+                    "meta": {"type": "object"},
+                    "body": {"type": "string"},
+                    "sha": {"type": "string"},
+                },
+                "required": ["meta", "body"],
+            }
+        },
+        "required": ["doc"],
+    },
     "reply_comment": {
         "type": "object",
         "properties": {

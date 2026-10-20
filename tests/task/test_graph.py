@@ -11,12 +11,14 @@ from cascade.agent.types import RoleResult
 from cascade.board.store import read_doc, write_doc
 from cascade.task.graph import (
     clear_task_graph_sessions,
+    invoke_tool,
     invoke_role_turn,
     seed_task_role_models,
     set_task_run_role_fn,
 )
 from cascade.watchdog.model_resolve import resolve_backend
 from cascade.task.wiring import clear_task_wiring_state, install_task_wiring
+from cascade.task.registry import register_task_tool
 from cascade.task.worktree import clear_task_runs, create_task_worktree, get_task_run
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 from cascade.watchdog.events import read_events
@@ -117,8 +119,8 @@ def test_missing_model_id_skips_run_role(tmp_path: Path) -> None:
         feature_id="feat_001",
     )
     assert called is False
-    swe = next(m for m in state["messages"] if m.get("role") == "task_swe")
-    assert "model_id is required" in swe["content"]
+    assert not [m for m in state["messages"] if m.get("role") == "task_swe"]
+    assert any(m.get("role") == "human" for m in state["messages"])
 
 
 def test_seeded_swe_model_and_source_reach_run_role(tmp_path: Path) -> None:
@@ -166,6 +168,45 @@ def test_adapter_text_becomes_swe_message(tmp_path: Path) -> None:
     )
     swe = next(m for m in state["messages"] if m.get("role") == "task_swe")
     assert swe["content"] == "adapter-reply"
+
+
+def test_automation_blocks_finished_turn_without_deliverable_commit(tmp_path: Path) -> None:
+    root, task_id = _board_with_worktree(tmp_path)
+    with (root / "cascade.toml").open("a", encoding="utf-8") as handle:
+        handle.write("\n[automation]\nenabled = true\n")
+
+    async def fake(_turn: object) -> RoleResult:
+        return RoleResult(text="done", status="finished")
+
+    set_task_run_role_fn(fake)
+    invoke_role_turn(
+        task_id,
+        {"role": "human", "content": "implement"},
+        root=root,
+        feature_id="feat_001",
+        model_id=TEST_MODEL_ID,
+    )
+
+    assert read_doc(task_id, root=root).meta.status == "blocked"
+    events, _ = read_events("feat_001", 0, root=root)
+    failures = [event for event in events if event.type == "TaskFailed"]
+    assert failures[-1].payload["reason"] == "no_task_changes"
+
+
+def test_recoverable_tool_error_does_not_block_task(tmp_path: Path) -> None:
+    root, task_id = _board_with_worktree(tmp_path)
+    _before, offset = read_events("feat_001", 0, root=root)
+
+    def missing_file(**_kwargs: object) -> None:
+        raise FileNotFoundError("agent probed the wrong path")
+
+    register_task_tool("probe", missing_file)
+    with pytest.raises(FileNotFoundError, match="wrong path"):
+        invoke_tool(task_id, "probe", {}, root=root, feature_id="feat_001")
+
+    assert read_doc(task_id, root=root).meta.status == "active"
+    events, _ = read_events("feat_001", offset, root=root)
+    assert not [event for event in events if event.type == "TaskFailed"]
 
 
 def test_forbidden_doc_path_surfaces_failure_not_adapter_text(tmp_path: Path) -> None:

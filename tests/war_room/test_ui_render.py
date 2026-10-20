@@ -109,10 +109,38 @@ def test_war_room_js_renders_toast_body():
     assert "Nothing in flight." in source
 
 
+def test_epic_chat_compose_markup_and_enter_to_send(ui_server):
+    """Epic chat exposes compose ids; Enter sends, Shift+Enter newline (war_room.js)."""
+    base, _root = ui_server
+    _status, html, _headers = _get_html(f"{base}/")
+    assert 'id="chat-compose"' in html
+    assert 'id="chat-body"' in html
+    assert 'id="chat-send"' in html
+
+    from pathlib import Path
+
+    js_path = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    )
+    source = js_path.read_text(encoding="utf-8")
+    assert "submitChatCompose" in source
+    assert 'ev.key !== "Enter" || ev.shiftKey' in source
+    assert "el.chatBody.value = \"\"" in source
+    assert "const draft = body" in source
+
+
 def test_war_room_html_loads_war_room_js(ui_server):
     base, _root = ui_server
     _status, html, _headers = _get_html(f"{base}/")
     assert "/static/war_room.js" in html
+
+
+def test_plan_page_includes_comment_compose(ui_server):
+    base, _root = ui_server
+    status, html, _headers = _get_html(f"{base}/plan/epic_001")
+    assert status == HTTPStatus.OK
+    assert 'id="plan-comment-body"' in html
+    assert 'id="plan-comment-compose"' in html
 
 
 def test_providers_pane_markup_in_html(ui_server):
@@ -121,3 +149,14 @@ def test_providers_pane_markup_in_html(ui_server):
     assert 'id="providers-pane"' in html
     assert 'id="providers-list"' in html
     assert "Providers" in html
+
+
+def test_brief_and_sync_controls_in_html(ui_server):
+    base, _root = ui_server
+    _status, html, _headers = _get_html(f"{base}/")
+    assert 'id="btn-create-brief"' in html
+    assert 'id="btn-pull-main"' in html
+    assert 'id="brief-form"' in html
+    assert 'name="manager_model"' in html
+    assert 'name="architect_model"' in html
+    assert "Create merge request" in html

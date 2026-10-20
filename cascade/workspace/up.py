@@ -95,11 +95,13 @@ def up(
     lock = SupervisorLock(ws.path)
     lock.acquire(blocking=False)
     try:
-        resume_legally_active_graphs(ws.path)
         server = serve(root=ws.path, host=host, port=port)
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
         server_thread.start()
         try:
+            # Bind the operator UI before potentially long agent resume turns.
+            # Recovery can then be observed instead of looking like a dead app.
+            resume_legally_active_graphs(ws.path)
             run_watchdog(root=ws.path, stop_when=stop_when)
         finally:
             server.shutdown()

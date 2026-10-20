@@ -55,7 +55,9 @@ def accept_human_chat(
 
     repo = Path(root).resolve()
     try:
-        doc = read_doc(graph_id, root=repo)
+        from cascade.workspace.doc_root import read_doc_resolved
+
+        doc = read_doc_resolved(graph_id, root=repo)
     except NotFound:
         return
     if doc.meta.tier != "epic":

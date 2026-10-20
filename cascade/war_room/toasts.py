@@ -21,6 +21,9 @@ _API_KINDS = frozenset(
         "orphan",
         "task_retry_proposed",
         "flight_overlap",
+        "brief_imported",
+        "epic_plan_approved",
+        "feature_review_opened",
     }
 )
 
@@ -62,6 +65,9 @@ def _event_to_toast(event: Event) -> dict | None:
     work_id = payload.get("id")
     if isinstance(work_id, str) and work_id.strip():
         link = f"/api/doc/{work_id.strip()}"
+    url = payload.get("url")
+    if isinstance(url, str) and url.startswith(("https://", "http://")):
+        link = url
     toast: dict = {"kind": kind, "body": body, "link": link}
     if kind == "amendment":
         if isinstance(work_id, str) and work_id.strip():

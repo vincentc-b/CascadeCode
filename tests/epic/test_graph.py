@@ -42,8 +42,8 @@ def test_missing_model_id_does_not_call_planning_turn(
         root=root,
     )
     assert called is False
-    manager = next(m for m in state["messages"] if m.get("role") == "epic_manager")
-    assert "model_id is required" in manager["content"]
+    assert not [m for m in state["messages"] if m.get("role") == "epic_manager"]
+    assert any(m.get("role") == "human" for m in state["messages"])
 
 
 @pytest.fixture

@@ -131,9 +131,8 @@ def ingest_queue(epic_id: str, *, root: Path) -> EpicGraphState:
         return values  # type: ignore[return-value]
 
     event_messages = [_event_message(event) for event in events]
-    prior_messages = list(values.get("messages") or [])
     update: EpicGraphState = {
-        "messages": prior_messages + event_messages,
+        "messages": event_messages,
         "last_queue_offset": new_offset,
     }
     if not values:

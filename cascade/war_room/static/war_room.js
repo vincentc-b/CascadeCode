@@ -26,6 +26,8 @@
     chatBody: document.getElementById("chat-body"),
     chatSend: document.getElementById("chat-send"),
     chatStatus: document.getElementById("chat-status"),
+    chatPollDebug: document.getElementById("chat-poll-debug"),
+    chatPollDebugBody: document.getElementById("chat-poll-debug-body"),
     toastList: document.getElementById("toast-list"),
     attachmentLabel: document.getElementById("attachment-label"),
     btnDetach: document.getElementById("btn-detach"),
@@ -53,7 +55,33 @@
     providersPane: document.getElementById("providers-pane"),
     providersPaneStatus: document.getElementById("providers-pane-status"),
     providersList: document.getElementById("providers-list"),
+    btnCreateBrief: document.getElementById("btn-create-brief"),
+    btnPullMain: document.getElementById("btn-pull-main"),
+    syncStatus: document.getElementById("sync-status"),
+    briefDialog: document.getElementById("brief-dialog"),
+    briefForm: document.getElementById("brief-form"),
+    briefStatus: document.getElementById("brief-status"),
+    briefResult: document.getElementById("brief-result"),
+    briefProvider: document.getElementById("brief-provider"),
+    briefManagerModel: document.getElementById("brief-manager-model"),
+    briefArchitectModel: document.getElementById("brief-architect-model"),
+    briefManagerSuggestion: document.getElementById("brief-manager-suggestion"),
+    briefArchitectSuggestion: document.getElementById("brief-architect-suggestion"),
+    btnCloseBrief: document.getElementById("btn-close-brief"),
+    btnCancelBrief: document.getElementById("btn-cancel-brief"),
+    btnSubmitBrief: document.getElementById("btn-submit-brief"),
   };
+
+  const AGENT_CHAT_AUTHORS = {
+    epic_manager: true,
+    epic_architect: true,
+    feature_lead: true,
+    feature_architect: true,
+    boss: true,
+  };
+
+  /** Statuses the dispatch law accepts for Activate / Dispatch (cascade/watchdog/dispatch.py _OPEN). */
+  const OPEN_STATUSES = { backlog: true, ready_to_plan: true };
 
   function setStatus(msg, isError) {
     el.chatStatus.textContent = msg || dispatchBanner;
@@ -73,10 +101,9 @@
     return controller.signal;
   }
 
-  function reportLoadFailure(err) {
+  function reportBoardLoadFailure(err) {
     const timedOut = err && (err.name === "TimeoutError" || err.name === "AbortError");
     const msg = timedOut ? "Timed out after 10s" : (err && err.message) || "Load failed";
-    setStatus(msg, true);
     if (el.board && !el.board.querySelector(".load-deadline")) {
       const note = document.createElement("p");
       note.className = "load-deadline";
@@ -85,8 +112,51 @@
     }
   }
 
+  function reportChatLoadFailure(err, options) {
+    const userInitiated = !options || options.userInitiated !== false;
+    const timedOut = err && (err.name === "TimeoutError" || err.name === "AbortError");
+    const msg = timedOut ? "Timed out after 10s" : (err && err.message) || "Load failed";
+    if (userInitiated) {
+      setStatus(msg, true);
+    }
+    noteChatPollDiagnostic(msg, err);
+  }
+
+  let lastChatPollDiagnostic = "";
+  let lastChatPollDiagnosticAt = 0;
+
+  function noteChatPollDiagnostic(msg, err) {
+    const detail = msg + (err && err.status ? " (HTTP " + err.status + ")" : "");
+    if (detail === lastChatPollDiagnostic && Date.now() - lastChatPollDiagnosticAt < 30000) {
+      return;
+    }
+    lastChatPollDiagnostic = detail;
+    lastChatPollDiagnosticAt = Date.now();
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn("[war-room chat poll]", detail, err || "");
+    }
+    if (!el.chatPollDebug || !el.chatPollDebugBody) return;
+    el.chatPollDebug.hidden = false;
+    el.chatPollDebugBody.textContent =
+      new Date().toISOString() +
+      " " +
+      detail +
+      (err && err.body ? "\n" + JSON.stringify(err.body, null, 2) : "");
+  }
+
+  function clearChatPollDiagnostic() {
+    lastChatPollDiagnostic = "";
+    if (el.chatPollDebug) el.chatPollDebug.hidden = true;
+    if (el.chatPollDebugBody) el.chatPollDebugBody.textContent = "";
+  }
+
+  function reportLoadFailure(err) {
+    reportBoardLoadFailure(err);
+    reportChatLoadFailure(err);
+  }
+
   async function apiGet(path) {
-    const resp = await fetch(path, { signal: deadlineSignal() });
+    const resp = await fetch(path, { signal: deadlineSignal(), cache: "no-store" });
     const text = await resp.text();
     let body;
     try {
@@ -110,7 +180,13 @@
       body: JSON.stringify(payload),
       signal: deadlineSignal(),
     });
-    const body = await resp.json();
+    const text = await resp.text();
+    let body;
+    try {
+      body = JSON.parse(text);
+    } catch (_e) {
+      body = { error: text || resp.statusText };
+    }
     if (!resp.ok) {
       const err = new Error(body.error || resp.statusText);
       err.status = resp.status;
@@ -118,6 +194,81 @@
       throw err;
     }
     return { status: resp.status, body };
+  }
+
+  async function openBriefDialog() {
+    el.briefStatus.textContent = "Loading model suggestions…";
+    el.briefResult.hidden = true;
+    el.briefDialog.showModal();
+    try {
+      const template = await apiGet("/api/brief/template");
+      el.briefProvider.replaceChildren();
+      (template.providers || []).forEach(function (provider) {
+        const option = document.createElement("option");
+        option.value = provider;
+        option.textContent = provider;
+        option.selected = provider === template.provider;
+        el.briefProvider.appendChild(option);
+      });
+      el.briefManagerModel.value = template.manager_model || "";
+      el.briefArchitectModel.value = template.architect_model || "";
+      el.briefProvider.onchange = function () {
+        const defaults = (template.provider_models || {})[el.briefProvider.value] || {};
+        el.briefManagerModel.value = defaults.manager_model || "";
+        el.briefArchitectModel.value = defaults.architect_model || "";
+      };
+      el.briefManagerSuggestion.textContent = (template.suggestions || {}).epic_manager || "";
+      el.briefArchitectSuggestion.textContent = (template.suggestions || {}).epic_architect || "";
+      el.btnSubmitBrief.disabled = template.tracking_ready === false;
+      el.briefStatus.textContent = template.tracking_ready === false
+        ? "Install and authenticate gh or glab for this origin before creating a brief."
+        : "";
+    } catch (err) {
+      el.briefStatus.textContent = err.message || "Could not load brief defaults";
+      el.briefStatus.classList.add("error");
+    }
+  }
+
+  async function submitBrief(ev) {
+    ev.preventDefault();
+    const form = new FormData(el.briefForm);
+    const payload = Object.fromEntries(form.entries());
+    el.btnSubmitBrief.disabled = true;
+    el.briefStatus.classList.remove("error");
+    el.briefStatus.textContent = "Creating branch and merge request…";
+    try {
+      const response = await apiPost("/api/briefs", payload);
+      el.briefStatus.textContent = "Brief created. Review and merge it to add it to the backlog.";
+      el.briefResult.replaceChildren();
+      const link = document.createElement("a");
+      link.href = response.body.merge_request_url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Open " + response.body.epic_id + " merge request";
+      el.briefResult.appendChild(link);
+      el.briefResult.hidden = false;
+    } catch (err) {
+      el.briefStatus.textContent = (err.body && err.body.error) || err.message || "Brief creation failed";
+      el.briefStatus.classList.add("error");
+    } finally {
+      el.btnSubmitBrief.disabled = false;
+    }
+  }
+
+  async function pullMain() {
+    el.btnPullMain.disabled = true;
+    el.syncStatus.textContent = "Pulling…";
+    try {
+      const response = await apiPost("/api/sync/pull", {});
+      const added = response.body.new_briefs || [];
+      el.syncStatus.textContent = added.length ? "Imported " + added.join(", ") : "Main is current";
+      await refreshBoard();
+    } catch (err) {
+      el.syncStatus.textContent = (err.body && err.body.error) || err.message || "Pull failed";
+      el.syncStatus.classList.add("error");
+    } finally {
+      el.btnPullMain.disabled = false;
+    }
   }
 
   function visibleBoardView(view) {
@@ -262,39 +413,33 @@
     const actions = document.createElement("div");
     actions.className = "board-row-actions";
 
+    const startable = OPEN_STATUSES[item.status] === true;
     if (tier === "epics") {
-      actions.appendChild(actionButton("Activate", function () {
-        return dispatch("/api/activate_epic", { id: item.id });
-      }));
+      if (startable) {
+        actions.appendChild(actionButton("Activate team", function () {
+          return dispatch("/api/activate_epic", { id: item.id });
+        }));
+      }
       if (column === "2_active") {
+        actions.appendChild(actionButton("Approve plan", function () {
+          return dispatch("/api/approve_epic_plan", { id: item.id });
+        }));
         actions.appendChild(actionButton("Close epic", function () {
           return confirmEpicComplete(item.id);
         }));
       }
     }
     if (tier === "features") {
-      actions.appendChild(actionButton("Dispatch", function () {
-        return dispatch("/api/dispatch_feature", { id: item.id });
-      }));
-      actions.appendChild(actionButton("Ask Boss", function () {
-        return askBoss("feature", item.id);
-      }));
-      actions.appendChild(actionButton("Attach", function () {
-        return attach(item.id, "feature");
-      }));
+      if (column === "2_active") {
+        actions.appendChild(actionButton("Open team", function () {
+          return attach(item.id, "feature");
+        }));
+      }
     }
     if (tier === "tasks") {
-      actions.appendChild(actionButton("Dispatch", function () {
-        return dispatch("/api/dispatch_task", { id: item.id });
-      }));
-      actions.appendChild(actionButton("Ask Boss", function () {
-        return askBoss("task", item.id);
-      }));
-      actions.appendChild(actionButton("Merge", function () {
-        return mergeTask(item.id);
-      }));
+      const retryable = column === "2_active" && item.status === "blocked";
       if (column === "2_active" && item.status === "blocked") {
-        actions.appendChild(actionButton("Propose retry", function () {
+        actions.appendChild(actionButton("Retry", function () {
           return askBoss("task", item.id);
         }));
       }
@@ -340,29 +485,54 @@
     return row;
   }
 
-  function actionButton(label, handler) {
+  function actionButton(label, handler, disabledReason) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.textContent = label;
+    if (disabledReason) {
+      btn.disabled = true;
+      btn.title = disabledReason;
+    }
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
-      handler().catch(function (err) {
-        setStatus(err.message || String(err), true);
-      });
+      if (btn.disabled) return;
+      btn.disabled = true;
+      handler()
+        .catch(function (err) {
+          setStatus(err.message || String(err), true);
+        })
+        .finally(function () {
+          if (btn.isConnected && !disabledReason) btn.disabled = false;
+        });
     });
     return btn;
   }
 
   async function dispatch(path, payload) {
-    const { body } = await apiPost(path, payload);
-    if (!body.ok) {
-      dispatchBanner = body.reason ? "Dispatch failed: " + body.reason : "Dispatch failed";
-      setStatus(dispatchBanner, true);
-    } else {
-      dispatchBanner = "";
-      setStatus("");
+    try {
+      const { body } = await apiPost(path, payload);
+      if (!body.ok) {
+        dispatchBanner = body.reason ? "Dispatch failed: " + body.reason : "Dispatch failed";
+        setStatus(dispatchBanner, true);
+      } else {
+        dispatchBanner = "";
+        setStatus("");
+      }
+      return body;
+    } finally {
       await refreshBoard();
     }
+  }
+
+  /** Dispatch starts the feature team's first turn (mint tasks); open its room to watch. */
+  async function dispatchFeature(id) {
+    const before = await fetchChatMessages(id).catch(function () {
+      return [];
+    });
+    const body = await dispatch("/api/dispatch_feature", { id: id });
+    if (!body.ok) return body;
+    await attach(id, "feature");
+    waitForChatReplies(id, countAgentChatMessages(before));
     return body;
   }
 
@@ -395,13 +565,17 @@
   }
 
   async function confirmEpicComplete(epicId) {
-    const { body } = await apiPost("/api/confirm_epic_complete", { id: epicId });
-    if (body.ok) {
-      dispatchBanner = "";
-      setStatus("Epic " + epicId + " closed.", false);
-      await refreshBoard();
-    } else {
-      setStatus("Epic close refused: " + (body.reason || "not_ready"), true);
+    try {
+      const { body } = await apiPost("/api/confirm_epic_complete", { id: epicId });
+      if (body.ok) {
+        dispatchBanner = "";
+        setStatus("Epic " + epicId + " closed.", false);
+        await refreshBoard();
+      } else {
+        setStatus("Epic close refused: " + (body.reason || "not_ready"), true);
+      }
+    } catch (err) {
+      setStatus(err.message || "Epic close failed", true);
     }
   }
 
@@ -425,8 +599,140 @@
     }
   }
 
+  function countAgentChatMessages(messages) {
+    return (messages || []).filter(function (msg) {
+      return AGENT_CHAT_AUTHORS[msg.author];
+    }).length;
+  }
+
+  let lastChatSnapshot = "";
+  let lastChatSnapshotGraphId = null;
+
+  function chatSnapshot(messages) {
+    if (!Array.isArray(messages)) return "";
+    return messages
+      .map(function (msg) {
+        return (
+          String(msg.id || "") +
+          "\t" +
+          String(msg.author || "") +
+          "\t" +
+          String(msg.body || "").length
+        );
+      })
+      .join("\n");
+  }
+
+  function renderChatMessages(messages) {
+    if (!el.chatMessages) return;
+    if (!Array.isArray(messages)) return;
+    const snap = chatSnapshot(messages);
+    if (snap === lastChatSnapshot && focusGraphId === lastChatSnapshotGraphId) return;
+    lastChatSnapshot = snap;
+    lastChatSnapshotGraphId = focusGraphId;
+    el.chatMessages.innerHTML = "";
+    messages.forEach(function (msg) {
+      const div = document.createElement("div");
+      div.className = "chat-message";
+      if (msg.author && msg.author !== "human") {
+        div.classList.add("chat-message-agent");
+      }
+      const author = document.createElement("div");
+      author.className = "author";
+      author.textContent = msg.author || "unknown";
+      const body = document.createElement("div");
+      body.className = "chat-body";
+      body.textContent = msg.body;
+      div.appendChild(author);
+      div.appendChild(body);
+      el.chatMessages.appendChild(div);
+    });
+    el.chatMessages.scrollTop = el.chatMessages.scrollHeight;
+  }
+
+  let inflightChatFetch = null;
+  let inflightChatFetchId = null;
+
+  async function fetchChatMessages(graphId) {
+    if (inflightChatFetch && inflightChatFetchId === graphId) {
+      return inflightChatFetch;
+    }
+    inflightChatFetchId = graphId;
+    inflightChatFetch = apiGet("/api/chat/" + encodeURIComponent(graphId)).finally(function () {
+      if (inflightChatFetchId === graphId) {
+        inflightChatFetch = null;
+        inflightChatFetchId = null;
+      }
+    });
+    return inflightChatFetch;
+  }
+
+  async function loadChat(options) {
+    const graphId = focusGraphId;
+    if (graphId !== lastChatSnapshotGraphId) {
+      lastChatSnapshot = "";
+    }
+    const userInitiated = !options || options.userInitiated !== false;
+    try {
+      const messages = await fetchChatMessages(graphId);
+      renderChatMessages(messages);
+      if (userInitiated) clearChatPollDiagnostic();
+      return messages;
+    } catch (err) {
+      reportChatLoadFailure(err, { userInitiated: userInitiated });
+      return [];
+    }
+  }
+
+  let chatPollInFlight = false;
+
+  /** Background refresh; never updates chat status on failure. */
+  async function pollChatSidecar() {
+    if (!focusGraphId || chatPollInFlight) return;
+    chatPollInFlight = true;
+    const graphId = focusGraphId;
+    try {
+      const messages = await fetchChatMessages(graphId);
+      if (graphId !== focusGraphId) return;
+      renderChatMessages(messages);
+      clearChatPollDiagnostic();
+    } catch (err) {
+      reportChatLoadFailure(err, { userInitiated: false });
+    } finally {
+      chatPollInFlight = false;
+    }
+  }
+
+  async function waitForChatReplies(graphId, baselineAgentCount) {
+    const deadline = Date.now() + 120000;
+    const team = graphId.indexOf("feat_") === 0 ? "Feature" : "Epic";
+    setStatus(team + " team is thinking…", false);
+    while (Date.now() < deadline) {
+      await new Promise(function (resolve) {
+        setTimeout(resolve, 1500);
+      });
+      if (graphId !== focusGraphId) return;
+      try {
+        const messages = await fetchChatMessages(graphId);
+        if (graphId !== focusGraphId) return;
+        renderChatMessages(messages);
+        if (countAgentChatMessages(messages) > baselineAgentCount) {
+          setStatus("");
+          return;
+        }
+      } catch (_e) {
+        /* keep polling */
+      }
+    }
+    setStatus("No team reply yet — check Providers and CURSOR_API_KEY.", true);
+  }
+
   async function attach(graphId, kind) {
     try {
+      if (attachedGraphId && attachedGraphId !== graphId) {
+        await apiPost("/api/detach", { graph_id: attachedGraphId });
+        attachedGraphId = null;
+      }
       await apiPost("/api/attach", { graph_id: graphId });
     } catch (err) {
       setStatus(err.message || String(err), true);
@@ -482,30 +788,14 @@
     el.btnDetach.hidden = !attachedGraphId;
   }
 
-  async function loadChat() {
-    const messages = await apiGet("/api/chat/" + encodeURIComponent(focusGraphId));
-    el.chatMessages.innerHTML = "";
-    (messages || []).forEach(function (msg) {
-      const div = document.createElement("div");
-      div.className = "chat-message";
-      const author = document.createElement("div");
-      author.className = "author";
-      author.textContent = msg.author || "unknown";
-      const body = document.createElement("div");
-      body.textContent = msg.body;
-      div.appendChild(author);
-      div.appendChild(body);
-      el.chatMessages.appendChild(div);
-    });
-  }
-
   async function refreshBoard() {
     try {
-      const view = await apiGet("/api/board");
+      const view = await apiGet("/api/board?_=" + Date.now());
       renderBoard(view);
       await refreshFlightReport();
+      await refreshBossView();
     } catch (err) {
-      reportLoadFailure(err);
+      reportBoardLoadFailure(err);
     }
   }
 
@@ -830,11 +1120,21 @@
     await refreshBoard();
   }
 
+  let toastPollInFlight = false;
+  let toastHistoryLoaded = false;
+
   async function pollToasts() {
+    if (toastPollInFlight) return;
+    toastPollInFlight = true;
     try {
       const data = await apiGet("/api/toasts?after=" + toastOffset);
-      toastOffset = typeof data.offset === "number" ? data.offset : toastOffset;
-      (data.toasts || []).forEach(function (toast) {
+      if (typeof data.offset === "number" && data.offset > toastOffset) {
+        toastOffset = data.offset;
+      }
+      const replayingHistory = !toastHistoryLoaded;
+      toastHistoryLoaded = true;
+      const newToasts = data.toasts || [];
+      newToasts.forEach(function (toast) {
         const li = document.createElement("li");
         const kind = toast.kind || "event";
         const bodyText = toast.body || "";
@@ -871,31 +1171,75 @@
               diff_path: toast.diff_path,
             });
           });
-          focusAmendmentPane({
-            epic_id: toast.epic_id || defaultEpicId,
-            diff_path: toast.diff_path,
-          });
+          if (!replayingHistory) {
+            focusAmendmentPane({
+              epic_id: toast.epic_id || defaultEpicId,
+              diff_path: toast.diff_path,
+            });
+          }
         }
         el.toastList.prepend(li);
       });
+      if (newToasts.length > 0 && !replayingHistory) {
+        await refreshBoard();
+      }
     } catch (_e) {
-      /* ignore transient poll errors */
+      /* ignore transient toast poll errors */
+    } finally {
+      toastPollInFlight = false;
     }
   }
 
-  el.chatCompose.addEventListener("submit", function (ev) {
-    ev.preventDefault();
+  function submitChatCompose() {
+    if (!el.chatBody) return;
     const body = el.chatBody.value.trim();
     if (!body || !attachedGraphId) return;
-    apiPost("/api/chat/" + encodeURIComponent(attachedGraphId), { body: body })
-      .then(function () {
-        el.chatBody.value = "";
-        return loadChat();
+    const graphId = attachedGraphId;
+    const draft = body;
+    el.chatBody.value = "";
+    if (el.chatCompose && typeof el.chatCompose.reset === "function") {
+      el.chatCompose.reset();
+    }
+    fetchChatMessages(graphId)
+      .catch(function () {
+        return [];
+      })
+      .then(function (before) {
+        const baseline = countAgentChatMessages(before);
+        return apiPost("/api/chat/" + encodeURIComponent(graphId), { body: draft }).then(
+          function () {
+            pollChatSidecar();
+            return waitForChatReplies(graphId, baseline);
+          },
+          function (err) {
+            if (!el.chatBody.value.trim()) el.chatBody.value = draft;
+            throw err;
+          }
+        );
       })
       .catch(function (err) {
         setStatus(err.message || "Send failed", true);
       });
-  });
+  }
+
+  if (el.chatCompose) {
+    el.chatCompose.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      submitChatCompose();
+    });
+  }
+  if (el.chatBody) {
+    el.chatBody.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Enter" || ev.shiftKey) return;
+      if (ev.isComposing) return;
+      ev.preventDefault();
+      if (el.chatCompose && typeof el.chatCompose.requestSubmit === "function") {
+        el.chatCompose.requestSubmit();
+      } else {
+        submitChatCompose();
+      }
+    });
+  }
 
   el.btnDetach.addEventListener("click", function () {
     detach().catch(function (err) {
@@ -1110,14 +1454,24 @@
     }
   }
 
+  if (el.btnCreateBrief) el.btnCreateBrief.addEventListener("click", openBriefDialog);
+  if (el.btnCloseBrief) el.btnCloseBrief.addEventListener("click", function () { el.briefDialog.close(); });
+  if (el.btnCancelBrief) el.btnCancelBrief.addEventListener("click", function () { el.briefDialog.close(); });
+  if (el.briefForm) el.briefForm.addEventListener("submit", submitBrief);
+  if (el.btnPullMain) el.btnPullMain.addEventListener("click", pullMain);
+
   wireCompletedCollapseControls();
   updateFocusUi("epic");
   refreshBoard();
-  refreshFlightReport().catch(reportLoadFailure);
+  refreshFlightReport().catch(reportBoardLoadFailure);
   refreshBossView();
-  loadChat().catch(reportLoadFailure);
+  loadChat({ userInitiated: true }).catch(function (err) {
+    reportChatLoadFailure(err, { userInitiated: true });
+  });
   refreshAmendments();
   refreshProviders();
   pollToasts();
   setInterval(pollToasts, 2000);
+  pollChatSidecar();
+  setInterval(pollChatSidecar, 3000);
 })();

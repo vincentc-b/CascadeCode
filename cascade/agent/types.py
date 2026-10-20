@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -36,6 +37,8 @@ class RoleTurn:
     prompt: str
     cwd: Path
     tools: list[Any] | dict[str, Any] = field(default_factory=list)
+    # Cursor local agents: SDK custom_tools (stdio MCP is unreliable in the bridge).
+    custom_tools: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)

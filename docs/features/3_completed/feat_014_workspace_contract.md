@@ -31,6 +31,8 @@ updated: 2026-10-14
 
 # Workspace contract and agent kickoff
 
+> **Current workflow update (2026-10-20):** Later automation work changed the original order-driven lifecycle recorded in this completed plan. `cascade up` and `python -m cascade.war_room` now both run the War Room and watchdog. After human Epic activation and plan approval, the watchdog dispatches eligible Features and Tasks automatically. Task success merges into `feat/{id}` automatically; Feature completion pushes `epic/{id}` and `feat/{id}` and opens a draft MR from the Feature branch to the Epic branch. `TaskFailed` wakes the owning Feature Team, which may revise and retry its own blocked child. The decision log below remains the history of this feature's original scope; [DESIGN.md](../../../DESIGN.md) is the current system contract.
+
 ## Parent Epic
 
 [epic_001](../../epics/2_active/epic_001_functional_mvp.md) — Functional MVP.
@@ -90,9 +92,9 @@ cascade init [--root PATH]     # default PATH = cwd
 cascade up   [--root PATH] [--host 127.0.0.1] [--port 8765]
 ```
 
-`init` requires a git repo. It creates missing `docs/{epics,features,tasks}/{1_backlog,2_active,3_completed}` directories, writes `cascade.toml` only when that file is absent (parallelism default 4; model keys present and blank so boot fails closed until the operator fills them), and ensures `.cascade/` is gitignored. It does not overwrite existing plans, activate an epic, or start a process.
+`init` requires a git repo. It creates missing `docs/{epics,features,tasks}/{1_backlog,2_active,3_completed}` directories, writes `cascade.toml` only when that file is absent (parallelism default 4; automation enabled with a 15-second `origin` poll; model keys present and blank so boot fails closed until the operator fills them), and ensures `.cascade/` is gitignored. It does not overwrite existing plans, activate an epic, or start a process.
 
-`up` requires a git repo that already has the board layout (`init` first). The checkout at `--root` must be the product trunk. `up` refuses any other branch. It binds the War Room and the watchdog to that root, takes the existing process lock, and refuses a second `up` on that root. Starting `up` is not a dispatch. It does not check out `epic/*`, `feat/*`, or `task/*` in `--root`.
+`up` requires a git repo that already has the board layout (`init` first). The checkout at `--root` must be the product trunk. `up` refuses any other branch. It binds the War Room and the watchdog to that root, takes the existing process lock, and refuses a second `up` on that root. Startup recovery does not invent a dispatch; subsequent watchdog ticks do dispatch newly eligible work. It does not check out `epic/*`, `feat/*`, or `task/*` in `--root`.
 
 ## Credentials
 
@@ -113,11 +115,11 @@ main                         product trunk (or the repo's other trunk branch)
 
 The **product trunk** is `main` when that branch exists. Otherwise it is the single local branch that is not `epic/*`, `feat/*`, or `task/*` and is an ancestor of every other such branch. If no unique trunk can be named, `up` and `activate_epic` refuse.
 
-The human brief is a commit on the trunk before `activate_epic`. Activation cuts `epic/{id}` from that commit and adds `.cascade/worktrees/epic_{id}`. The trunk copy of the epic becomes a pointer to `epic/{id}` and is not edited again. Plan edits, decision-log entries, and minted feature specs commit on the epic worktree.
+The human brief is created on `cascade/brief/epic_NNN`, pushed, and reviewed in an MR targeting `main`. After the human merges it, periodic polling or **Pull main** fetches and safely fast-forwards the product trunk; this pull path never pushes a branch. Activation cuts `epic/{id}` from that commit and adds `.cascade/worktrees/epic_{id}`. The trunk copy of the epic becomes a pointer to `epic/{id}` and is not edited again. Plan edits, decision-log entries, and minted feature specs commit on the epic worktree.
 
 `dispatch_feature` cuts `feat/{id}` from the epic branch's current spec commit and adds `.cascade/worktrees/feat_{id}`. The feature team plans there. The feature merges back into `epic/{id}` once, when its tasks are done. That merge is the self-contained feature. It does not target the trunk.
 
-`dispatch_task` cuts `task/{id}` from the feature branch and adds `.cascade/worktrees/task_{id}`. The SWE commits code only on that branch. A human merge lands the task into `feat/{id}`. Task branches stay parallel: the cap and `depends_on` apply to merges into the feature branch. A task is complete when it is merged there. A feature is complete when `feat/{id}` is merged into `epic/{id}`. The epic reaches the trunk when the human promotes `epic/{id}`.
+`dispatch_task` cuts `task/{id}` from the feature branch and adds `.cascade/worktrees/task_{id}`. The SWE commits code only on that branch. A successful Task turn automatically merges into `feat/{id}`. Task branches stay parallel: the cap and `depends_on` apply to merges into the feature branch. A task is complete when it is merged there. When all Tasks complete, Cascade pushes both `epic/{parent}` and `feat/{id}` and opens a draft MR from the Feature branch to the Epic branch. A feature is complete when that MR is merged (or the offline local fallback lands the same branch merge). The epic reaches the trunk when the human promotes `epic/{id}`.
 
 Specs stay on the branch of the team that owns them. The epic doc lives on `epic/{id}`. The feature spec and task specs live on `feat/{id}`. A task branch does not edit `docs/epics` or `docs/features`. An amendment is applied on the epic worktree. The feature stays blocked until that commit is on `epic/{id}`, then merges the epic branch and updates `parent_rev`. A feature pins `parent_rev` to a SHA on `epic/{id}`. A task pins `parent_rev` to a SHA on `feat/{id}`.
 
@@ -308,9 +310,9 @@ flowchart TD
 ## Risks & upward questions
 
 1. **Opening turn vs silence.** A fresh epic or feature dispatch runs one opening turn so the team does not sit mute until the human types. That turn must still refuse `dispatch_*`. If dogfooding shows the opening turn mints unwanted children, narrow it to "read the doc and wait" with an amendment; do not add a timer.
-2. **War Room today does not start the watchdog.** `python -m cascade.war_room` is HTTP only. `up` is the contract entry. Leaving the old module as a read-only server is fine; documenting two processes the operator must remember is not.
+2. **War Room and watchdog use one entry point.** `cascade up` is canonical, and `python -m cascade.war_room` is a compatibility entry point for the same combined supervisor. The HTTP server binds before graph recovery so the UI remains reachable during resumed turns.
 3. **Blank model template.** `init` writes model keys empty so the first boot fails closed with a clear toast. It must not invent `auto` or copy this repo's model ids into a foreign workspace.
-4. **Resume vs re-dispatch.** An idle active epic stays idle across `up`. A blocked task stays blocked until a new human or Boss `dispatch_task`. Resume continues an interrupted turn; it does not spend a new order.
+4. **Resume vs re-dispatch.** An idle active epic stays idle across `up`. Resume continues an interrupted Task turn without inventing a new order. A failed Task stays blocked until its owning Feature Team diagnoses it and uses the scoped revise/retry tools, except that the watchdog deterministically refreshes and retries a pre-execution stale parent pin.
 5. **Skills in the workspace.** Role and task `SKILL.md` paths resolve inside the worktree the role is running in, which was cut from the parent branch. They do not resolve against the tool checkout when that checkout is a different directory.
 6. **No project token file.** Operators will look for a per-repo key or a `.netrc` entry. The contract refuses both. `up` fails the first model turn with a missing-`CURSOR_API_KEY` error rather than searching the workspace.
 7. **Click feels like a checkout.** Attach and View plan on an in-progress feature open the feature worktree that dispatch already created. They leave `--root` on the trunk. A missing directory is repaired from the existing branch. Attach on a backlog feature does not create `feat/{id}`.

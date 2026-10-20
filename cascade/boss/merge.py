@@ -16,7 +16,6 @@ from cascade.board.gitutil import _run, has_git, head_sha
 from cascade.board.paths import column_for_status
 from cascade.board.store import move_doc, read_doc
 from cascade.watchdog.events import append_event
-from cascade.watchdog.hooks import invoke_teardown
 from cascade.watchdog.types import Event
 
 
@@ -158,7 +157,9 @@ def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
     run = get_task_run(task_id)
     if run is not None:
         run.state = "merged"
-    invoke_teardown("task", task_id)
+    from cascade.task.failure import schedule_task_teardown
+
+    schedule_task_teardown(task_id)
 
     return MergeResult(
         ok=True,

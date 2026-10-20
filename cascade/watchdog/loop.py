@@ -42,6 +42,9 @@ def watchdog_tick(root: Path | None = None) -> None:
     """Scan `2_active` once. Unauthorized docs are moved back to backlog and toasted."""
 
     repo = resolve_root(root)
+    from cascade.automation import maybe_sync_briefs
+
+    maybe_sync_briefs(repo)
     install_boss_consumer(repo)
     with process_lock:
         tick_boss_consumer()
@@ -49,6 +52,10 @@ def watchdog_tick(root: Path | None = None) -> None:
     from cascade.workspace.kickoff import deliver_queue_kickoffs
 
     deliver_queue_kickoffs(repo)
+    from cascade.automation import advance_work, poll_reviews
+
+    advance_work(repo)
+    poll_reviews(repo)
     with process_lock:
         _tick_scan_active(repo)
         from cascade.workspace.flight import refresh_flight_report
@@ -71,7 +78,7 @@ def run_watchdog(
     from cascade.epic.boot import install_epic_boot_hook
     from cascade.feature.boot import install_feature_boot_hook
     from cascade.task.boot import install_task_boot_hook
-    from cascade.task.wiring import install_task_wiring
+    from cascade.task.wiring import install_task_wiring, restore_active_task_runs
 
     install_epic_boot_hook(repo)
     install_feature_boot_hook(repo)
@@ -81,6 +88,29 @@ def run_watchdog(
     from cascade.workspace.kickoff import install_kickoff
 
     install_kickoff(repo)
+    restored_tasks = restore_active_task_runs(repo)
+    if restored_tasks:
+        from cascade.workspace.kickoff import kickoff_graph_queue_event
+        for task_id, feature_id in restored_tasks:
+            append_event(
+                task_id,
+                Event(
+                    type="TaskResumeRequested",
+                    ts=datetime.now(timezone.utc),
+                    payload={
+                        "task_id": task_id,
+                        "feature_id": feature_id,
+                        "instruction": (
+                            "Resume the Task by reading its plan and pinned Feature plan, "
+                            "then implement, test, and commit the deliverable. Do not report "
+                            "completion without a non-lifecycle commit."
+                        ),
+                    },
+                    dest=task_id,
+                ),
+                root=repo,
+            )
+            kickoff_graph_queue_event(task_id, root=repo, by="watchdog")
 
     while True:
         if stop_when is not None and stop_when():

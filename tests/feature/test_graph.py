@@ -42,8 +42,8 @@ def test_missing_model_id_does_not_call_planning_turn(
         root=root,
     )
     assert called is False
-    lead = next(m for m in state["messages"] if m.get("role") == "feature_lead")
-    assert "model_id is required" in lead["content"]
+    assert not [m for m in state["messages"] if m.get("role") == "feature_lead"]
+    assert any(m.get("role") == "human" for m in state["messages"])
 
 
 @pytest.fixture

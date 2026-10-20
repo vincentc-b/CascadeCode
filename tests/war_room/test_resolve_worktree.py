@@ -130,6 +130,29 @@ def worktree_board(tmp_path: Path):
         thread.join(timeout=5)
 
 
+def test_backlog_feature_on_trunk_plan_reads_under_active_epic(worktree_board) -> None:
+    """Backlog specs may live on trunk until dispatch; View plan must still resolve."""
+
+    base, root, _trunk_branch = worktree_board
+    add_doc(
+        root,
+        id="feat_002",
+        title="Trunk only",
+        tier="feature",
+        status="backlog",
+        parent="epic_001",
+    )
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+    assert resolve_doc_worktree("feat_002", root=root) == epic_wt.resolve()
+
+    status, doc = _get(f"{base}/api/doc/feat_002")
+    assert status == HTTPStatus.OK
+    assert doc["meta"]["title"] == "Trunk only"
+
+    plan_req = urllib.request.urlopen(f"{base}/plan/feat_002")
+    assert plan_req.status == HTTPStatus.OK
+
+
 def test_resolve_backlog_feature_plan_from_epic_worktree(worktree_board) -> None:
     base, root, trunk_branch = worktree_board
     epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)

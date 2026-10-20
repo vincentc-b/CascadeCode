@@ -59,6 +59,35 @@ def board(tmp_path):
     }
 
 
+def test_tool_guard_allows_epic_spec_under_cascade_worktree(board, monkeypatch):
+    root = board["root"]
+    epic = board["epic"]
+    wt_epic = (
+        root
+        / ".cascade"
+        / "worktrees"
+        / "epic_epic_001"
+        / "docs"
+        / "epics"
+        / "2_active"
+        / epic.meta.path.name
+    )
+    wt_epic.parent.mkdir(parents=True, exist_ok=True)
+    wt_epic.write_text(epic.meta.path.read_text(encoding="utf-8"), encoding="utf-8")
+    live = read_doc("epic_001", root=root)
+    live.meta.path = wt_epic.resolve()
+
+    def _read_doc(work_id: str, *, root: Path):
+        if work_id == "epic_001":
+            return live
+        return read_doc(work_id, root=root)
+
+    monkeypatch.setattr("cascade.epic.guard.read_doc", _read_doc)
+    monkeypatch.setattr("cascade.epic.scoped_docs.read_doc", _read_doc)
+    assert tool_guard(wt_epic, "read", epic_id="epic_001", root=root)
+    assert epic_read_doc("epic_001", epic_id="epic_001", root=root).meta.id == "epic_001"
+
+
 def test_write_epic_file_allowed_other_epic_denied(board):
     root = board["root"]
     epic = board["epic"]

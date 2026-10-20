@@ -48,6 +48,48 @@ body {
   margin: 0;
 }
 
+.war-room-title,
+.war-room-primary-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.flow-label,
+.brief-dialog small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.brief-dialog {
+  width: min(760px, calc(100vw - 2rem));
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.brief-dialog::backdrop { background: rgb(0 0 0 / 70%); }
+.brief-dialog form,
+.brief-dialog label { display: flex; flex-direction: column; gap: 0.35rem; }
+.brief-dialog form { gap: 0.8rem; }
+.brief-dialog h2, .brief-dialog p { margin: 0; }
+.dialog-heading, .dialog-actions { display: flex; justify-content: space-between; gap: 1rem; }
+.dialog-heading p { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+.brief-dialog input, .brief-dialog textarea, .brief-dialog select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0.55rem; font: inherit;
+}
+.brief-model-grid { display: grid; grid-template-columns: 0.7fr 1fr 1fr; gap: 0.75rem; }
+.dialog-actions { justify-content: flex-end; }
+.brief-result a { color: var(--accent); font-weight: 600; }
+
+@media (max-width: 760px) {
+  .war-room-header, .war-room-primary-actions { align-items: flex-start; flex-wrap: wrap; }
+  .brief-model-grid { grid-template-columns: 1fr; }
+}
+
 .attachment-chrome {
   display: flex;
   align-items: center;
@@ -258,6 +300,19 @@ button:disabled {
   color: #f28b82;
 }
 
+.chat-poll-debug {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.chat-poll-debug pre {
+  white-space: pre-wrap;
+  margin: 0.35rem 0 0;
+  max-height: 6rem;
+  overflow-y: auto;
+}
+
 .flight-report-panel {
   margin: 0.75rem 0 1rem;
   padding: 0.65rem 0.75rem;
@@ -314,6 +369,15 @@ button:disabled {
 
 .stub-panel {
   margin-top: 0.75rem;
+}
+
+.chat-message-agent {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.5rem;
+}
+
+.chat-message .chat-body {
+  white-space: pre-wrap;
 }
 
 .blocking-toggle {

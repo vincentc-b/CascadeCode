@@ -33,12 +33,55 @@
   <body>
     <div id="war-room-app" data-default-epic-graph-id="${epic_graph_id}">
       <header class="war-room-header">
-        <h1>War Room</h1>
+        <div class="war-room-title">
+          <h1>War Room</h1>
+          <span class="flow-label">Brief → plan → build → review</span>
+        </div>
+        <div class="war-room-primary-actions">
+          <button type="button" id="btn-create-brief">Create brief</button>
+          <button type="button" id="btn-pull-main" class="btn-secondary">Pull main</button>
+          <span id="sync-status" class="status-line" aria-live="polite"></span>
+        </div>
         <div id="attachment-chrome" class="attachment-chrome">
           <span id="attachment-label">Epic War Room</span>
           <button type="button" id="btn-detach" class="btn-secondary" hidden>Detach</button>
         </div>
       </header>
+
+      <dialog id="brief-dialog" class="brief-dialog">
+        <form id="brief-form" method="dialog">
+          <div class="dialog-heading">
+            <div>
+              <h2>Create a feature brief</h2>
+              <p>Submitting opens a merge request. Merge it to add the epic to the backlog.</p>
+            </div>
+            <button type="button" id="btn-close-brief" class="btn-secondary" aria-label="Close">×</button>
+          </div>
+          <label>Title <input name="title" required /></label>
+          <label>Intent <textarea name="intent" rows="4" required placeholder="What problem should the team solve, and for whom?"></textarea></label>
+          <label>Success criteria <textarea name="success_criteria" rows="3" required placeholder="Observable outcomes that mean this epic is done"></textarea></label>
+          <label>Constraints <textarea name="constraints" rows="3" placeholder="Compatibility, architecture, delivery, or operational constraints"></textarea></label>
+          <div class="brief-model-grid">
+            <label>Provider
+              <select name="provider" id="brief-provider" required></select>
+            </label>
+            <label>Epic Manager model
+              <input name="manager_model" id="brief-manager-model" required />
+              <small id="brief-manager-suggestion"></small>
+            </label>
+            <label>Epic Architect model
+              <input name="architect_model" id="brief-architect-model" required />
+              <small id="brief-architect-suggestion"></small>
+            </label>
+          </div>
+          <p id="brief-status" class="status-line" aria-live="polite"></p>
+          <div id="brief-result" class="brief-result" hidden></div>
+          <div class="dialog-actions">
+            <button type="button" id="btn-cancel-brief" class="btn-secondary">Cancel</button>
+            <button type="submit" id="btn-submit-brief">Create merge request</button>
+          </div>
+        </form>
+      </dialog>
 
       <div class="war-room-layout">
         <section id="war-room-board" class="board-panel" aria-label="Board">
@@ -171,6 +214,10 @@
               <button type="submit" id="chat-send" disabled>Send</button>
             </form>
             <p id="chat-status" class="status-line"></p>
+            <details id="chat-poll-debug" class="chat-poll-debug" hidden>
+              <summary>Background sync diagnostics</summary>
+              <pre id="chat-poll-debug-body"></pre>
+            </details>
           </div>
 
           <div id="feature-room-placeholder" class="feature-room-panel" hidden>
@@ -239,18 +286,10 @@
             <div id="providers-list" class="providers-list" aria-label="Provider backends"></div>
           </details>
 
-          <section id="comment-thread-stub" class="stub-panel">
-            <h2>Comments</h2>
-            <p>Comment storage is feat_005 — threads are not persisted yet.</p>
-            <label class="blocking-toggle">
-              <input type="checkbox" id="comment-blocking" />
-              Human-only blocking (UI stub — no persistence yet)
-            </label>
-          </section>
         </aside>
       </div>
     </div>
     <script src="/static/board_focus.js"></script>
-    <script src="/static/war_room.js"></script>
+    <script src="/static/war_room.js?v=20261018"></script>
   </body>
 </html>

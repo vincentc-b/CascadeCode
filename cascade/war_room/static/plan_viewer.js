@@ -349,6 +349,150 @@
     }
   }
 
+  function initPlanComments(workId) {
+    var panel = document.getElementById("plan-comments");
+    var threadEl = document.getElementById("plan-comment-threads");
+    var compose = document.getElementById("plan-comment-compose");
+    var bodyInput = document.getElementById("plan-comment-body");
+    var sectionInput = document.getElementById("plan-comment-section");
+    var blockingInput = document.getElementById("plan-comment-blocking");
+    var statusEl = document.getElementById("plan-comment-status");
+    if (!panel || !threadEl || !compose || !bodyInput || !sectionInput) {
+      return;
+    }
+
+    function setCommentStatus(msg, isError) {
+      if (!statusEl) return;
+      statusEl.textContent = msg || "";
+      statusEl.classList.toggle("error", !!isError);
+    }
+
+    function renderCommentThreads(comments) {
+      threadEl.innerHTML = "";
+      var rows = comments || [];
+      var byId = {};
+      rows.forEach(function (row) {
+        byId[row.id] = row;
+      });
+      var roots = rows.filter(function (row) {
+        return !row.parent;
+      });
+      roots.forEach(function (root) {
+        var block = document.createElement("div");
+        block.className = "plan-comment-thread";
+        if (root.state === "resolved") {
+          block.classList.add("resolved");
+        }
+        block.setAttribute("role", "listitem");
+        block.appendChild(buildCommentNode(root));
+        var replies = rows.filter(function (row) {
+          return row.parent === root.id;
+        });
+        if (replies.length) {
+          var replyWrap = document.createElement("div");
+          replyWrap.className = "plan-comment-replies";
+          replies.forEach(function (reply) {
+            replyWrap.appendChild(buildCommentNode(reply));
+          });
+          block.appendChild(replyWrap);
+        }
+        threadEl.appendChild(block);
+      });
+    }
+
+    function buildCommentNode(row) {
+      var wrap = document.createElement("div");
+      wrap.className = "plan-comment-entry";
+      var meta = document.createElement("div");
+      meta.className = "plan-comment-meta";
+      meta.textContent =
+        (row.author || "unknown") +
+        " · " +
+        (row.section || "") +
+        (row.blocking ? " · blocking" : "") +
+        (row.state === "resolved" ? " · resolved" : "");
+      var body = document.createElement("p");
+      body.className = "plan-comment-body-text";
+      body.textContent = row.body || "";
+      wrap.appendChild(meta);
+      wrap.appendChild(body);
+      return wrap;
+    }
+
+    function loadComments() {
+      return fetch("/api/comments/" + encodeURIComponent(workId), {
+        signal: pageLoadSignal(),
+      })
+        .then(function (resp) {
+          if (!resp.ok) {
+            throw new Error("Failed to load comments (" + resp.status + ")");
+          }
+          return resp.json();
+        })
+        .then(function (data) {
+          renderCommentThreads(data.comments || []);
+        });
+    }
+
+    compose.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var text = bodyInput.value.trim();
+      var section = sectionInput.value.trim();
+      if (!text || !section) {
+        setCommentStatus("Section and comment are required.", true);
+        return;
+      }
+      setCommentStatus("Posting…", false);
+      fetch("/api/comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doc_id: workId,
+          section: section,
+          body: text,
+          blocking: !!(blockingInput && blockingInput.checked),
+        }),
+      })
+        .then(function (resp) {
+          return resp.text().then(function (raw) {
+            var payload;
+            try {
+              payload = JSON.parse(raw);
+            } catch (_e) {
+              payload = { error: raw };
+            }
+            if (!resp.ok) {
+              var errMsg =
+                payload && payload.error ? payload.error : "Post failed (" + resp.status + ")";
+              throw new Error(errMsg);
+            }
+            return payload;
+          });
+        })
+        .then(function () {
+          bodyInput.value = "";
+          if (blockingInput) {
+            blockingInput.checked = false;
+          }
+          setCommentStatus("");
+          return loadComments();
+        })
+        .catch(function (err) {
+          setCommentStatus(err && err.message ? err.message : "Post failed", true);
+        });
+    });
+
+    panel.hidden = false;
+    loadComments().catch(function (err) {
+      setCommentStatus(err && err.message ? err.message : "Could not load comments", true);
+    });
+    setInterval(function () {
+      loadComments().catch(function () {
+        /* background refresh */
+      });
+    }, 3000);
+  }
+
   function bootstrapPlanViewer() {
     var workId = document.body.getAttribute("data-work-id");
     if (!workId) {
@@ -390,6 +534,7 @@
           if (bodyEl) {
             bodyEl.hidden = false;
           }
+          initPlanComments(workId);
         });
       });
     withDeadline(loadWork).catch(function (err) {

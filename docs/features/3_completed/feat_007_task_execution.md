@@ -25,6 +25,8 @@ updated: 2026-10-10
 
 # Task execution and local branches
 
+> **Current workflow update (2026-10-20):** Later automation work superseded the manual handoff described in this completed plan. Cursor Task turns now receive guarded in-process custom tools; CLI providers receive the equivalent stdio MCP tools with active `TaskRun` restoration. A successful Task turn merges automatically into `feat/{parent}`. A failed Task keeps its worktree for diagnosis and wakes the owning Feature Team, which can revise and retry its own blocked child. Pre-execution stale parent pins are refreshed and retried by the watchdog. The original decisions below remain implementation history; [DESIGN.md](../../../DESIGN.md) is the current contract.
+
 ## Parent Epic
 
 [epic_001](../../epics/2_active/epic_001_functional_mvp.md) — Functional MVP.

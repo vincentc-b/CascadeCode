@@ -94,8 +94,18 @@ def path_for_work_id(root: Path, rev: str, work_id: str) -> str | None:
     if not matches:
         return None
     if len(matches) > 1:
-        raise GitError(f"multiple paths for {work_id} at {rev}: {matches}")
+        # A column move that commits the new copy before deleting the old one leaves
+        # both in one commit; the furthest-along column is the live doc.
+        furthest = max(_column_rank(path) for path in matches)
+        live = [path for path in matches if _column_rank(path) == furthest]
+        if len(live) > 1:
+            raise GitError(f"multiple paths for {work_id} at {rev}: {matches}")
+        return live[0]
     return matches[0]
+
+
+def _column_rank(rel: str) -> int:
+    return ("1_backlog", "2_active", "3_completed").index(rel.split("/")[2])
 
 
 def introduced_at(root: Path, rel: Path) -> datetime | None:

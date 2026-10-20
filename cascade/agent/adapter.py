@@ -64,14 +64,22 @@ def _mcp_servers_from_turn_tools(tools: list[Any] | dict[str, Any]) -> Mapping[s
 
 def build_agent_options(turn: RoleTurn, *, api_key: str) -> AgentOptions:
     reject_cloud_runtime(cloud=None)
-    mcp_servers = _mcp_servers_from_turn_tools(turn.tools)
+    custom_tools = turn.custom_tools
+    mcp_servers = None if custom_tools else _mcp_servers_from_turn_tools(turn.tools)
 
     local_kwargs: dict[str, Any] = {
         "cwd": os.fspath(turn.cwd),
         "setting_sources": [],
     }
-    if turn.role in _PLANNING_ROLES:
+    if custom_tools:
+        local_kwargs["custom_tools"] = custom_tools
+    # Cursor's local filesystem sandbox blocks stdio MCP; planning turns need Cascade tools.
+    elif turn.role in _PLANNING_ROLES and not mcp_servers:
         local_kwargs["sandbox_options"] = SandboxOptions(enabled=True)
+
+    # tools=[] disables built-in Cursor tools only; omit when unset so custom_tools
+    # and default builtins stay available for planning turns that need both.
+    builtin_tools: list[str] | None = [] if not custom_tools else None
 
     return AgentOptions(
         api_key=api_key,
@@ -79,7 +87,7 @@ def build_agent_options(turn: RoleTurn, *, api_key: str) -> AgentOptions:
         local=LocalAgentOptions(**local_kwargs),
         cloud=None,
         mcp_servers=mcp_servers,
-        tools=[],
+        tools=builtin_tools,
     )
 
 

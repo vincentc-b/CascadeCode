@@ -237,6 +237,18 @@ def _dispatch_task(
     except SkillPathError:
         return _fail("bad_state")
 
+    # A Feature Team commonly mints several Tasks while it continues editing
+    # the Feature plan.  The revision captured at mint time is therefore only
+    # a draft pin.  Refresh it immediately before cutting the execution branch
+    # so a not-yet-started Task cannot fail merely because a sibling was added
+    # or the parent plan was clarified.
+    meta = _refresh_task_parent_pin(
+        work_id,
+        feat_id,
+        feature_root=feat_wt.path,
+        trunk=root,
+    )
+
     feat_branch = integration_branch("feature", feat_id)
     from cascade.task.worktree import create_task_worktree
 
@@ -265,9 +277,31 @@ def _dispatch_task(
             "feature_id": feat_id,
             "by": by,
             "skills": skill_paths,
+            "instruction": (
+                "Read the Task and pinned Feature plans, implement the scoped change, "
+                "run the relevant tests, and leave a deliverable commit on the Task branch. "
+                "A finished turn with only board lifecycle changes fails closed."
+            ),
         },
     )
     return DispatchResult(ok=True, reason=None, event=event)
+
+
+def _refresh_task_parent_pin(
+    task_id: str,
+    feature_id: str,
+    *,
+    feature_root: Path,
+    trunk: Path,
+) -> WorkMeta:
+    """Commit the live Feature revision onto a Task before its branch is cut."""
+
+    source_root = doc_filesystem_root(task_id, trunk=trunk)
+    task = read_doc(task_id, root=source_root)
+    feature = read_doc(feature_id, root=feature_root)
+    task.meta.parent_rev = feature.sha
+    write_doc(task, root=source_root)
+    return read_doc(task_id, root=source_root).meta
 
 
 def _task_can_start(meta: WorkMeta) -> bool:

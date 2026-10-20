@@ -10,11 +10,13 @@ from cascade.board.paths import slugify
 from cascade.board.store import allocate_id, list_board, read_doc, write_doc
 from cascade.board.types import WorkDoc, WorkId, WorkMeta
 from cascade.comments.store import read_comments
+from cascade.feature.checkout import feature_checkout_root
 from cascade.feature.guard import FeatureToolDenied, tool_guard
 from cascade.feature.registry import register_feature_tool
 from cascade.feature.scoped_docs import feature_read_doc, feature_write_doc
 from cascade.watchdog import append_event
 from cascade.watchdog.types import Event
+from cascade.workspace.integration_worktree import merged_board
 
 def mint_task(
     title: str,
@@ -27,15 +29,16 @@ def mint_task(
 ) -> WorkId:
     """Create a backlog task under this feature; does not dispatch or move columns."""
 
-    repo = Path(root).resolve()
-    feature = _require_feature(feature_id, repo)
+    trunk = Path(root).resolve()
+    checkout = feature_checkout_root(feature_id, trunk=trunk)
+    feature = _require_feature(feature_id, trunk)
     _refuse_blocked_feature(feature)
-    _refuse_blocking_human_comments(feature_id, repo)
+    _refuse_blocking_human_comments(feature_id, trunk)
 
     deps = list(depends_on or [])
-    skill_paths = _validate_skills(list(skills or []), repo)
+    skill_paths = _validate_skills(list(skills or []), trunk)
 
-    board = list_board(repo)
+    board = list_board(checkout)
     for dep_id in deps:
         if dep_id not in board.by_id:
             raise FeatureToolDenied(f"depends_on {dep_id} is not on the board")
@@ -45,10 +48,10 @@ def mint_task(
         if dep.parent != feature_id:
             raise FeatureToolDenied(f"depends_on {dep_id} is not owned by {feature_id}")
 
-    task_id = allocate_id("task", board)
+    task_id = allocate_id("task", merged_board(trunk))
     today = date.today()
-    path = repo / "docs" / "tasks" / "1_backlog" / f"{task_id}_{slugify(title)}.md"
-    if not tool_guard(path, "write", feature_id=feature_id, root=repo):
+    path = checkout / "docs" / "tasks" / "1_backlog" / f"{task_id}_{slugify(title)}.md"
+    if not tool_guard(path, "write", feature_id=feature_id, root=trunk):
         raise FeatureToolDenied(f"write denied for {path}")
 
     parent_rev = feature.sha
@@ -77,14 +80,14 @@ def mint_task(
         ),
         sha=None,
     )
-    write_doc(doc, root=repo)
+    write_doc(doc, root=checkout)
 
-    feature = feature_read_doc(feature_id, feature_id=feature_id, root=repo)
+    feature = feature_read_doc(feature_id, feature_id=feature_id, root=trunk)
     if task_id not in feature.meta.children:
         feature.meta.children.append(task_id)
     feature.meta.updated = today
     feature.body = _append_task_breakdown(feature.body, task_id)
-    feature_write_doc(feature, feature_id=feature_id, root=repo)
+    feature_write_doc(feature, feature_id=feature_id, root=trunk)
 
     append_event(
         feature_id,
@@ -94,7 +97,7 @@ def mint_task(
             payload={"feature_id": feature_id, "task_ids": [task_id]},
             dest=feature_id,
         ),
-        root=repo,
+        root=trunk,
     )
     return task_id
 

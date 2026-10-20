@@ -143,7 +143,44 @@ def test_materialize_only_allowed_epic_docs(epic_board: dict) -> None:
         teardown_scratch(scratch)
 
 
-def test_run_role_receives_mcp_mapping(monkeypatch: pytest.MonkeyPatch, epic_board: dict) -> None:
+def test_run_role_receives_cursor_custom_tools(
+    monkeypatch: pytest.MonkeyPatch, epic_board: dict
+) -> None:
+    root = epic_board["root"]
+    turns: list[object] = []
+
+    async def fake_run_role(turn: object) -> RoleResult:
+        from cascade.agent.types import RoleTurn
+
+        assert isinstance(turn, RoleTurn)
+        turns.append(turn)
+        return RoleResult(text="", status="finished")
+
+    monkeypatch.setattr("cascade.agent.planning_turn.run_role", fake_run_role)
+    asyncio.run(
+        run_epic_planning_turn(
+            "epic_manager",
+            "composer-2.5",
+            "hi",
+            provider="cursor",
+            epic_id="epic_001",
+            root=root,
+        )
+    )
+    assert len(turns) == 1
+    turn = turns[0]
+    from cascade.agent.types import RoleTurn
+
+    assert isinstance(turn, RoleTurn)
+    assert turn.tools == []
+    assert turn.custom_tools is not None
+    assert "write_doc" in turn.custom_tools
+    assert "read_doc" in turn.custom_tools
+
+
+def test_run_role_receives_mcp_mapping_for_claude(
+    monkeypatch: pytest.MonkeyPatch, epic_board: dict
+) -> None:
     root = epic_board["root"]
     tools_seen: list[object] = []
 
@@ -160,7 +197,7 @@ def test_run_role_receives_mcp_mapping(monkeypatch: pytest.MonkeyPatch, epic_boa
             "epic_manager",
             "composer-2.5",
             "hi",
-            provider="cursor",
+            provider="claude",
             epic_id="epic_001",
             root=root,
         )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Thread
 from unittest.mock import patch
 
 import pytest
@@ -28,11 +29,29 @@ def _failure_test_isolation() -> None:
     register_task_tool("fail_task", failure_mod.fail_task)
     task_boot._boot_root = None
     task_boot._last_fail_closed = None
+    failure_mod._active_teardown_scopes = 0
+    failure_mod._process_pending_teardown.clear()
     yield
     clear_hooks()
     clear_task_tools()
     task_boot._boot_root = None
     task_boot._last_fail_closed = None
+    failure_mod._active_teardown_scopes = 0
+    failure_mod._process_pending_teardown.clear()
+
+
+def test_teardown_from_worker_waits_for_graph_scope() -> None:
+    seen: list[str] = []
+    register_teardown_hook("task", seen.append)
+    token = failure_mod.defer_task_teardown()
+
+    worker = Thread(target=failure_mod.schedule_task_teardown, args=("task_001",))
+    worker.start()
+    worker.join()
+
+    assert seen == []
+    failure_mod.flush_deferred_task_teardown(token)
+    assert seen == ["task_001"]
 
 
 def test_infra_retry_budget(tmp_path: Path) -> None:
@@ -232,6 +251,25 @@ def test_fail_task_does_not_dispatch(tmp_path: Path) -> None:
     with patch("cascade.watchdog.dispatch.dispatch_task") as mocked:
         fail_task("task_001", "no_redispatch", root=root)
     mocked.assert_not_called()
+
+
+def test_fail_task_commits_blocked_state_in_owning_feature_worktree(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+
+    from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
+
+    assert activate_epic("epic_001", "human", root=root).ok
+    assert dispatch_feature("feat_001", "human", root=root).ok
+    assert dispatch_task("task_001", "human", root=root).ok
+
+    fail_task("task_001", "stale_parent_rev", root=root)
+
+    task = read_doc("task_001", root=root)
+    assert task.meta.status == "blocked"
+    assert ".cascade/worktrees/feat_feat_001" in task.meta.path.as_posix()
 
 
 def test_fail_task_registered_on_task_tools() -> None:
