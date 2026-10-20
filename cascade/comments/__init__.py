@@ -1,5 +1,6 @@
 """Shared comment sidecar store."""
 
+from cascade.comments.slug import section_slug
 from cascade.comments.store import (
     BlockingNotAllowed,
     CommentNotFound,
@@ -25,6 +26,7 @@ __all__ = [
     "read_comments",
     "reply_comment",
     "resolve_comment",
+    "section_slug",
     "sidecar_path",
     "work_tier",
 ]
