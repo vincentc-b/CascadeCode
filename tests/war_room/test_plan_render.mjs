@@ -19,6 +19,10 @@ const {
   blockSourceRangesForBody,
   sectionSlug,
   sectionForSourceLine,
+  lineRangeForSectionSlug,
+  isSectionThread,
+  findAnchorLineInRange,
+  placementForRootThread,
   mermaidNodeHasDiagram,
   safeUrl,
 } = require(join(staticDir, "plan_viewer.js"));
@@ -105,5 +109,99 @@ const ranges = blockSourceRangesForBody("# H\n\nPara.");
 assert.equal(ranges.length, 2);
 assert.equal(ranges[0].lineStart, 1);
 assert.equal(ranges[1].lineStart, 3);
+
+const reanchorDoc = `# My Doc
+
+Intro paragraph alpha.
+
+## Scope
+
+First line of scope.
+Second line here.
+
+## Other
+
+Tail content.
+`;
+
+const scopeRange = lineRangeForSectionSlug(reanchorDoc, "scope");
+assert.equal(scopeRange.startLine, 5);
+assert.equal(scopeRange.endLine, 9);
+assert.equal(isSectionThread(reanchorDoc, "scope"), true);
+assert.equal(isSectionThread(reanchorDoc, "my-doc"), false);
+
+assert.equal(findAnchorLineInRange(reanchorDoc, "Second line here", 5, 9), 8);
+assert.equal(findAnchorLineInRange(reanchorDoc, "missing snippet", 5, 9), null);
+assert.equal(findAnchorLineInRange(reanchorDoc, "Intro paragraph", 1, 5), 3);
+
+const shaMatch = placementForRootThread(
+  {
+    id: "cmt_1",
+    section: "scope",
+    anchor: "gone",
+    line_start: 8,
+    doc_sha: "abc123",
+  },
+  reanchorDoc,
+  "abc123"
+);
+assert.equal(shaMatch.outdated, false);
+assert.equal(shaMatch.gutterLine, 8);
+
+const sectionHit = placementForRootThread(
+  {
+    id: "cmt_2",
+    section: "scope",
+    anchor: "Second line here",
+    line_start: 8,
+    doc_sha: "old",
+  },
+  reanchorDoc,
+  "new"
+);
+assert.equal(sectionHit.outdated, false);
+assert.equal(sectionHit.gutterLine, 8);
+
+const sectionMiss = placementForRootThread(
+  {
+    id: "cmt_3",
+    section: "scope",
+    anchor: "deleted text",
+    line_start: 8,
+    doc_sha: "old",
+  },
+  reanchorDoc,
+  "new"
+);
+assert.equal(sectionMiss.outdated, true);
+assert.equal(sectionMiss.gutterLine, 5);
+
+const docHit = placementForRootThread(
+  {
+    id: "cmt_4",
+    section: "general",
+    anchor: "Intro paragraph alpha",
+    line_start: 2,
+    doc_sha: "old",
+  },
+  reanchorDoc,
+  "new"
+);
+assert.equal(docHit.outdated, false);
+assert.equal(docHit.gutterLine, 3);
+
+const docMiss = placementForRootThread(
+  {
+    id: "cmt_5",
+    section: "my-doc",
+    anchor: "nowhere",
+    line_start: 2,
+    doc_sha: "old",
+  },
+  reanchorDoc,
+  "new"
+);
+assert.equal(docMiss.outdated, true);
+assert.equal(docMiss.gutterLine, 1);
 
 console.log("plan_render cases ok");
