@@ -172,7 +172,6 @@ def test_load_feature_tools_registers_all_tools() -> None:
         "read_doc",
         "write_doc",
         "reply_comment",
-        "resolve_comment",
         "propose_epic_amendment",
     } <= names
 

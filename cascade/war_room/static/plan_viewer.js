@@ -708,6 +708,9 @@
         if (child.classList.contains("plan-comment-reply-form")) {
           continue;
         }
+        if (child.classList.contains("plan-comment-resolve")) {
+          continue;
+        }
         extras.push(child.cloneNode(true));
       }
       if (extras.length) {
@@ -933,6 +936,28 @@
       return wrap;
     }
 
+    function buildResolveControl(rootId) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "plan-comment-resolve";
+      btn.textContent = "Resolve";
+      btn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        btn.disabled = true;
+        postResolveComment(rootId)
+          .then(function () {
+            return loadComments();
+          })
+          .catch(function (err) {
+            setCommentStatus(err && err.message ? err.message : "Resolve failed", true);
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+      });
+      return btn;
+    }
+
     function buildReplyForm(rootId) {
       var form = document.createElement("form");
       form.className = "plan-comment-reply-form";
@@ -1044,6 +1069,7 @@
           block.appendChild(replyWrap);
         }
         if (root.state !== "resolved") {
+          block.appendChild(buildResolveControl(root.id));
           block.appendChild(buildReplyForm(root.id));
         }
         var extras = preserved[root.id];
@@ -1069,6 +1095,29 @@
         .then(function (data) {
           renderCommentThreads(data.comments || []);
         });
+    }
+
+    function postResolveComment(commentId) {
+      return fetch("/api/comment/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doc_id: workId, comment_id: commentId }),
+      }).then(function (resp) {
+        return resp.text().then(function (raw) {
+          var parsed;
+          try {
+            parsed = JSON.parse(raw);
+          } catch (_e) {
+            parsed = { error: raw };
+          }
+          if (resp.status !== 202 && !resp.ok) {
+            var errMsg =
+              parsed && parsed.error ? parsed.error : "Resolve failed (" + resp.status + ")";
+            throw new Error(errMsg);
+          }
+          return parsed;
+        });
+      });
     }
 
     function postJsonComment(payload) {

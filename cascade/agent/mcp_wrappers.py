@@ -213,11 +213,6 @@ _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "required": ["comment_id", "body"],
     },
-    "resolve_comment": {
-        "type": "object",
-        "properties": {"comment_id": {"type": "string"}},
-        "required": ["comment_id"],
-    },
     "resolve_amendment": {
         "type": "object",
         "properties": {"amendment_id": {"type": "string"}},
@@ -257,11 +252,6 @@ _FEATURE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "body": {"type": "string"},
         },
         "required": ["comment_id", "body"],
-    },
-    "resolve_comment": {
-        "type": "object",
-        "properties": {"comment_id": {"type": "string"}},
-        "required": ["comment_id"],
     },
     "propose_epic_amendment": {"type": "object", "properties": {}},
     "ack_amendment": {"type": "object", "properties": {}},
