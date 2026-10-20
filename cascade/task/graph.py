@@ -132,7 +132,13 @@ def invoke_role_turn(
     return _state_values(graph, config)
 
 
-def ingest_queue(task_id: str, *, root: Path, feature_id: str | None = None) -> TaskGraphState:
+def ingest_queue(
+    task_id: str,
+    *,
+    root: Path,
+    feature_id: str | None = None,
+    queue_root: Path | None = None,
+) -> TaskGraphState:
     """Pull new queue events into graph state without a SWE turn."""
 
     graph = ensure_task_graph(task_id, root=root, feature_id=feature_id)
@@ -140,7 +146,7 @@ def ingest_queue(task_id: str, *, root: Path, feature_id: str | None = None) -> 
     snapshot = graph.get_state(config)
     values = snapshot.values or {}
     offset = int(values.get("last_queue_offset") or 0)
-    events, new_offset = read_events(task_id, offset, root=root)
+    events, new_offset = read_events(task_id, offset, root=queue_root or root)
     if not events:
         if not values:
             graph.update_state(

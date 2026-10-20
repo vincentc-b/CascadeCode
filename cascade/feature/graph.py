@@ -112,7 +112,12 @@ def ingest_human(
     return _state_values(graph, config)
 
 
-def ingest_queue(feature_id: str, *, root: Path) -> FeatureGraphState:
+def ingest_queue(
+    feature_id: str,
+    *,
+    root: Path,
+    queue_root: Path | None = None,
+) -> FeatureGraphState:
     """Pull new queue events into graph state without a lead/architect turn."""
 
     graph = ensure_feature_graph(feature_id, root=root)
@@ -120,7 +125,7 @@ def ingest_queue(feature_id: str, *, root: Path) -> FeatureGraphState:
     snapshot = graph.get_state(config)
     values = snapshot.values or {}
     offset = int(values.get("last_queue_offset") or 0)
-    events, new_offset = read_events(feature_id, offset, root=root)
+    events, new_offset = read_events(feature_id, offset, root=queue_root or root)
     if not events:
         if not values:
             graph.update_state(

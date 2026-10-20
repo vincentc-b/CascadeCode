@@ -131,7 +131,7 @@ def reply_comment(
             },
             dest=owning,
         ),
-        root=repo,
+        root=trunk,
     )
     return record.id
 
