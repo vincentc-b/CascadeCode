@@ -2,7 +2,7 @@
 id: task_077
 title: Comment schema + section_slug()
 tier: task
-status: active
+status: blocked
 parent: feat_016
 children: []
 depends_on: []
