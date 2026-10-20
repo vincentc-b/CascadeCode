@@ -118,18 +118,16 @@ flowchart LR
 ```
 
 ## Task breakdown
-- task_079
-- task_078
-- task_077
 
-Feature Team mints after dispatch. Suggested slice:
+- `task_077` — Comment schema + `section_slug()`. Merged.
+- `task_078` — POST field pass-through + parent-as-reply. Merged.
+- `task_079` — War Room View plan deep-link to `#plan-comments`. Merged.
 
-1. **Comment schema + `section_slug()`** — optional fields on `Comment` / store / `from_dict` back-compat; every `Comment(...)` constructor updated; store tests for old lines without the new keys; unit vector for `section_slug` (shared with feat_017 JS).
-2. **POST field pass-through + parent-as-reply** — extend `_handle_comment`; section optional when `parent` set; keep kickoff + toast. API tests on the existing War Room server fixture.
-3. **War Room deep-link** — View plan on epic/feature rows goes to `/plan/{id}#plan-comments`.
+Verified on `feat/feat_016` (20 comment/API tests pass): schema and back-compat, hyphenated `section_slug`, root slugify + 400/404 cases, `parent` reply with inherited `section`/`anchor`, and the epic/feature-only deep-link. Not delivered here: the `kickoff_graph_queue_event` call and `kickoff` response key; see D5 and the first risk below.
 
 ## Risks & upward questions
 
+- **Integration (D5):** this branch was cut from a committed base that has no `kickoff_graph_queue_event` in `_handle_comment` and no `cascade/workspace/kickoff.py` helper; both exist only as uncommitted work on the main checkout. That work also has its own GET handler (`_handle_comments_list`), which duplicates `_handle_comments` added here. At merge, keep one GET handler, and keep the kickoff call in both the root and reply paths with the `kickoff` key in the 202 body. Add one test that asserts the call on both paths.
 - `cites:` frontmatter is not on `WorkMeta` yet. This spec records cites in the body until feat_019 adds the field. Accepted limitation from dec_003.
 - Slugifying `section` on write changes the stored string versus today's free-text headings (`"Open questions"` vs `open-questions`). Old rows stay as stored; the gate treats unmatched headings as doc-level (dec_008) and unmatched `cites:` as warnings (feat_019). Do not rewrite historical sidecars.
 - Resolve stays off this feature so feat_018 can make it human-only without a race against agent tools.
