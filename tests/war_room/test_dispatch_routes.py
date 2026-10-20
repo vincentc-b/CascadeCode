@@ -16,6 +16,7 @@ from unittest.mock import patch
 import pytest
 
 from cascade.board import read_doc
+from cascade.comments.store import comment
 from cascade.boss.epic_complete import reset_epic_close_prompt_surfaces
 from cascade.boss.rollup import write_closeout
 from cascade.task.worktree import clear_task_runs, create_task_worktree, get_task_run
@@ -138,6 +139,27 @@ def test_dispatch_refusal_unmet_deps_still_200(dispatch_board):
     assert read_doc("feat_002", root=root).meta.path.parent.name == "1_backlog"
 
 
+def test_dispatch_feature_refused_open_blocking_comment(dispatch_board):
+    base, root = dispatch_board
+    assert activate_epic("epic_001", "human", root=root).ok
+    cmt_id = comment(
+        "epic_001",
+        "Scope",
+        "Block dispatch",
+        blocking=True,
+        author="human",
+        blocks=["feat_001"],
+        root=root,
+    )
+    status, body = _post(f"{base}/api/dispatch_feature", {"id": "feat_001"})
+    assert status == HTTPStatus.OK
+    assert body["ok"] is False
+    assert cmt_id in body["reason"]
+    assert "/plan/epic_001#plan-comments" in body["reason"]
+    assert body["event"] is None
+    assert read_doc("feat_001", root=root).meta.path.parent.name == "1_backlog"
+
+
 def test_bad_request_invalid_json_and_missing_id(dispatch_board):
     base, _root = dispatch_board
     code, err = _post_expect_error(f"{base}/api/dispatch_task", raw=b"not-json")
@@ -201,6 +223,24 @@ def merge_server(tmp_path):
         thread.join(timeout=5)
         clear_hooks()
         clear_task_runs()
+
+
+def test_merge_task_branch_refused_open_blocking_comment(merge_server):
+    base, root = merge_server
+    cmt_id = comment(
+        "feat_001",
+        "Scope",
+        "Block merge",
+        blocking=True,
+        author="human",
+        root=root,
+    )
+    code, body = _post_expect_error(f"{base}/api/merge_task_branch", {"id": "task_001"})
+    assert code == HTTPStatus.BAD_REQUEST
+    assert body["ok"] is False
+    assert cmt_id in body["reason"]
+    assert "/plan/feat_001#plan-comments" in body["reason"]
+    assert read_doc("task_001", root=root).meta.status == "active"
 
 
 def test_merge_task_branch_success_200(merge_server):

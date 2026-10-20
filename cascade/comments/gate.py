@@ -65,6 +65,30 @@ def blocking_threads_for(work_id: str, *, root: Path) -> GateResult:
     return GateResult(blocked=bool(hits), threads=hits, warnings=warnings)
 
 
+def gate_refusal_reason(result: GateResult) -> str:
+    """Human-readable refusal listing each blocking thread and plan deep-links."""
+
+    lines = ["open blocking review thread(s):"]
+    for thread in result.threads:
+        link = f"/plan/{thread.doc_id}#plan-comments"
+        lines.append(
+            f"- {thread.id} doc_id={thread.doc_id} section={thread.section} {link}"
+        )
+    text = "\n".join(lines)
+    if result.warnings:
+        text = text + "\n" + "\n".join(result.warnings)
+    return text
+
+
+def refusal_if_blocked(work_id: str, *, root: Path) -> str | None:
+    """Return refusal text when ``work_id`` is blocked by open review threads."""
+
+    gate = blocking_threads_for(work_id, root=root)
+    if gate.blocked:
+        return gate_refusal_reason(gate)
+    return None
+
+
 def _load_blocking_roots(work_id: str, board, *, root: Path) -> list[Comment]:
     seen: set[str] = set()
     roots: list[Comment] = []
