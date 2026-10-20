@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from cascade.board.store import move_doc
 from cascade.war_room.server import serve
 from tests.support import add_doc, make_repo
 
@@ -77,6 +78,42 @@ def test_features_lens_empty_marker_in_html(ui_server):
     assert "No epic is active or selected." in html
 
 
+def test_completed_feature_awaiting_review_remains_in_active_lane(ui_server):
+    base, root = ui_server
+    move_doc("feat_001", "completed", root=root)
+    state = root / ".cascade" / "reviews.json"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(
+        json.dumps(
+            {
+                "feat_001": {
+                    "url": "https://github.example/pull/4",
+                    "number": "4",
+                    "forge": "github",
+                    "source_branch": "feat/feat_001",
+                    "target_branch": "epic/epic_001",
+                    "draft": False,
+                    "closed": False,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    _status, raw, _headers = _get_html(f"{base}/api/board")
+    board = json.loads(raw)
+
+    active = {item["id"]: item for item in board["features"]["2_active"]}
+    completed = {item["id"] for item in board["features"]["3_completed"]}
+    assert active["feat_001"]["review"] == {
+        "state": "awaiting_review",
+        "url": "https://github.example/pull/4",
+        "number": "4",
+        "draft": False,
+    }
+    assert "feat_001" not in completed
+
+
 def test_tasks_lens_empty_marker_in_html(ui_server):
     """Tasks tier exposes stable feature-lens empty copy (task_055)."""
     base, _root = ui_server
@@ -111,6 +148,8 @@ def test_war_room_js_renders_toast_body():
     assert "item.plan_approved" in source
     assert '"Approved"' in source
     assert 'approved.classList.add("approval-confirmed")' in source
+    assert '"Awaiting review"' in source
+    assert 'actionLink("Open review", item.review.url)' in source
 
 
 def test_task_execution_controls_are_visible_and_board_poll_is_independent():

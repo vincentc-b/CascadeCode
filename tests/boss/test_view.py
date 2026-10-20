@@ -1,5 +1,6 @@
 """BossView read model: deps, cap, and failed tasks."""
 
+import json
 from pathlib import Path
 
 from cascade.board import move_doc, read_doc, write_doc
@@ -64,6 +65,38 @@ def test_ready_to_plan_feature_in_backlog_is_dispatchable(tmp_path: Path) -> Non
     assert view.dispatchable_features == ["feat_001"]
     assert view.dispatchable_tasks == []
     assert view.slots_free == 4
+
+
+def test_pending_feature_review_blocks_sibling_dispatchability(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Under review",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    add_doc(root, id="feat_002", title="Next", tier="feature", parent="epic_001")
+    state = root / ".cascade" / "reviews.json"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(
+        json.dumps(
+            {
+                "feat_001": {
+                    "url": "https://github.example/pull/1",
+                    "source_branch": "feat/feat_001",
+                    "target_branch": "epic/epic_001",
+                    "forge": "github",
+                    "closed": False,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert compute_boss_view(root=root).dispatchable_features == []
 
 
 def test_cap_full_excludes_dispatchable_tasks_and_reports_slots_free(tmp_path: Path) -> None:

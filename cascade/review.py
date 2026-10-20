@@ -71,6 +71,42 @@ def feature_review_pending(feature_id: str, *, root: Path) -> bool:
     return doc.meta.status == "completed" and doc.meta.path.parent.name == "3_completed"
 
 
+def feature_review_view(feature_id: str, *, root: Path) -> dict[str, object] | None:
+    """Return operator-facing review state without polling the forge."""
+
+    trunk = locate_trunk(root)
+    record = _load(trunk).get(feature_id)
+    if record is not None:
+        return {
+            "state": "merged" if record.get("closed") else "awaiting_review",
+            "url": str(record.get("url") or ""),
+            "number": record.get("number"),
+            "draft": bool(record.get("draft", False)),
+        }
+    if feature_review_pending(feature_id, root=trunk):
+        return {
+            "state": "preparing_review",
+            "url": "",
+            "number": None,
+            "draft": False,
+        }
+    return None
+
+
+def epic_has_pending_feature_review(epic_id: str, *, root: Path) -> bool:
+    """True when any child feature is prepared for or awaiting forge review."""
+
+    trunk = locate_trunk(root)
+    from cascade.workspace.integration_worktree import merged_board
+
+    for meta in merged_board(trunk).by_id.values():
+        if meta.tier != "feature" or meta.parent != epic_id:
+            continue
+        if feature_review_pending(meta.id, root=trunk):
+            return True
+    return False
+
+
 def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None:
     """Push a completed feature line and open one MR to its epic line."""
 

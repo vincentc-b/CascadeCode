@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from cascade.board.store import move_doc, read_doc
@@ -68,6 +69,28 @@ def test_epic_ready_when_all_features_completed(tmp_path: Path) -> None:
 
 def test_epic_not_ready_when_child_feature_still_active(tmp_path: Path) -> None:
     root = _epic_board(tmp_path, feat_two_completed=False)
+    assert epic_ready_to_close("epic_001", root=root) is False
+
+
+def test_epic_not_ready_while_completed_feature_awaits_review(tmp_path: Path) -> None:
+    root = _epic_board(tmp_path)
+    state = root / ".cascade" / "reviews.json"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(
+        json.dumps(
+            {
+                "feat_001": {
+                    "url": "https://github.example/pull/1",
+                    "source_branch": "feat/feat_001",
+                    "target_branch": "epic/epic_001",
+                    "forge": "github",
+                    "closed": False,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
     assert epic_ready_to_close("epic_001", root=root) is False
 
 

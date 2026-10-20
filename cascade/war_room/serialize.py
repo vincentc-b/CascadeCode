@@ -58,6 +58,10 @@ def work_meta_to_dict(meta: WorkMeta, *, root: Path | None = None) -> dict:
         from cascade.task.execution import execution_view
 
         value["execution"] = execution_view(meta.id, root=root)
+    if meta.tier == "feature" and root is not None:
+        from cascade.review import feature_review_view
+
+        value["review"] = feature_review_view(meta.id, root=root)
     return value
 
 
@@ -256,5 +260,15 @@ def board_view_from_index(board, *, root: Path) -> dict:
     for meta in sorted(board.by_id.values(), key=lambda m: m.id):
         key = _TIER_TO_VIEW_KEY[meta.tier]
         folder = column_folder_for_meta(meta, root=root)
-        view[key][folder].append(work_meta_to_dict(meta, root=root))
+        item = work_meta_to_dict(meta, root=root)
+        review = item.get("review")
+        if (
+            meta.tier == "feature"
+            and isinstance(review, dict)
+            and review.get("state") in {"preparing_review", "awaiting_review"}
+        ):
+            # The source plan is already in completed so the MR contains its
+            # final location, but operationally the feature remains in flight.
+            folder = "2_active"
+        view[key][folder].append(item)
     return view

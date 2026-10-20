@@ -127,6 +127,33 @@ def test_dispatch_feature_by_human_and_boss_and_unmet_deps(tmp_path: Path) -> No
     assert queued == []
 
 
+def test_dispatch_feature_refuses_while_sibling_awaits_merge(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    _activate_epic(root)
+    add_doc(
+        root,
+        id="feat_001",
+        title="Under review",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    add_doc(root, id="feat_002", title="Next feature", tier="feature", parent="epic_001")
+    state = root / ".cascade" / "reviews.json"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(
+        '{"feat_001": {"closed": false, "url": "https://github.example/pull/1"}}\n',
+        encoding="utf-8",
+    )
+
+    result = dispatch_feature("feat_002", "human", root=root)
+
+    assert result.ok is False
+    assert result.reason == "feature_awaiting_merge"
+    assert read_doc("feat_002", root=root).meta.path.parent.name == "1_backlog"
+
+
 def test_dispatch_task_emits_and_boots(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic")

@@ -128,6 +128,13 @@ def advance_work(root: Path) -> dict[str, list[str]]:
         meta.parent for meta in board.by_id.values()
         if meta.tier == "feature" and meta.path.parent.name == "2_active"
     }
+    active_feature_parents.update(
+        meta.parent
+        for meta in board.by_id.values()
+        if meta.tier == "feature"
+        and meta.parent
+        and feature_review_pending(meta.id, root=repo)
+    )
     for feature_id in view.dispatchable_features:
         meta = board.by_id.get(feature_id)
         if meta is None or meta.parent in active_feature_parents:

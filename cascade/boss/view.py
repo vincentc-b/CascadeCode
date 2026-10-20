@@ -34,10 +34,27 @@ def compute_boss_view(*, root: Path | None = None) -> BossView:
     dispatchable_features: list[WorkId] = []
     dispatchable_tasks: list[WorkId] = []
     failed_tasks: list[WorkId] = []
+    from cascade.review import feature_review_pending
+
+    feature_parents_in_flight = {
+        meta.parent
+        for meta in board.by_id.values()
+        if meta.tier == "feature"
+        and meta.parent
+        and (
+            meta.path.parent.name == "2_active"
+            or feature_review_pending(meta.id, root=repo)
+        )
+    }
 
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
-        if meta.tier == "feature" and _backlog_open(meta) and _deps_met(board, meta):
+        if (
+            meta.tier == "feature"
+            and _backlog_open(meta)
+            and _deps_met(board, meta)
+            and meta.parent not in feature_parents_in_flight
+        ):
             dispatchable_features.append(work_id)
         elif meta.tier == "task":
             if meta.status == "blocked" and meta.path.parent.name == "2_active":

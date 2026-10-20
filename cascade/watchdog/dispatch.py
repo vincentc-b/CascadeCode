@@ -151,6 +151,8 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("bad_state")
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
+    if _epic_has_feature_awaiting_merge(meta.parent, root=root):
+        return _fail("feature_awaiting_merge")
 
     if not has_git(root):
         move_doc(work_id, "active", root=root)
@@ -361,6 +363,12 @@ def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
             if feature_review_pending(dep_id, root=root):
                 return False
     return True
+
+
+def _epic_has_feature_awaiting_merge(epic_id: str, *, root: Path) -> bool:
+    from cascade.review import epic_has_pending_feature_review
+
+    return epic_has_pending_feature_review(epic_id, root=root)
 
 
 def _active_task_count(board: BoardIndex) -> int:

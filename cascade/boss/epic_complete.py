@@ -50,6 +50,10 @@ def epic_ready_to_close(epic_id: WorkId, *, root: Path | None = None) -> bool:
         return False
     if not _all_child_features_completed(epic_id, board):
         return False
+    from cascade.review import epic_has_pending_feature_review
+
+    if epic_has_pending_feature_review(epic_id, root=repo):
+        return False
     if _has_open_human_comments(epic_id, repo):
         return False
     return True

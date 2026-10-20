@@ -403,6 +403,20 @@
     title.textContent = item.id + " — " + item.title;
     row.appendChild(title);
 
+    if (
+      tier === "features" &&
+      item.review &&
+      (item.review.state === "awaiting_review" || item.review.state === "preparing_review")
+    ) {
+      row.classList.add("board-row-awaiting-review");
+      const reviewStatus = document.createElement("span");
+      reviewStatus.className = "feature-review-status";
+      reviewStatus.textContent =
+        item.review.state === "awaiting_review" ? "Awaiting review" : "Preparing review";
+      reviewStatus.setAttribute("aria-label", "Feature review status: " + reviewStatus.textContent);
+      row.appendChild(reviewStatus);
+    }
+
     if (tier === "tasks") {
       const execution = taskExecutionStatus(item);
       const status = document.createElement("span");
@@ -452,6 +466,9 @@
         actions.appendChild(actionButton("Open team", function () {
           return attach(item.id, "feature");
         }));
+      }
+      if (item.review && item.review.url) {
+        actions.appendChild(actionLink("Open review", item.review.url));
       }
     }
     if (tier === "tasks") {
@@ -564,6 +581,19 @@
         });
     });
     return btn;
+  }
+
+  function actionLink(label, href) {
+    const link = document.createElement("a");
+    link.className = "board-action-link";
+    link.href = href;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = label;
+    link.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+    });
+    return link;
   }
 
   async function dispatch(path, payload) {
