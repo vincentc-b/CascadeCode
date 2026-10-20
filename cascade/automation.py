@@ -112,9 +112,15 @@ def advance_work(root: Path) -> dict[str, list[str]]:
     retry_pending_task_merges(repo)
     board = merged_board(repo)
     from cascade.boss.rollup import try_complete_feature
+    from cascade.review import feature_review_pending
 
     for meta in list(board.by_id.values()):
-        if meta.tier == "feature" and meta.path.parent.name == "2_active":
+        if meta.tier != "feature":
+            continue
+        if meta.path.parent.name == "2_active" or (
+            meta.path.parent.name == "3_completed"
+            and feature_review_pending(meta.id, root=repo)
+        ):
             try_complete_feature(meta.id, root=repo)
     board = merged_board(repo)
     view = compute_boss_view(root=repo)

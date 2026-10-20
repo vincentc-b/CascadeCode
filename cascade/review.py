@@ -11,6 +11,7 @@ from cascade.board.store import read_doc
 from cascade.tracking import (
     MergeRequest,
     create_merge_request,
+    fast_forward_branch,
     forge_ready,
     merge_request_snapshot,
     push_branch,
@@ -48,8 +49,30 @@ def review_enabled(root: Path) -> bool:
     return forge_ready(locate_trunk(root))
 
 
+def feature_review_pending(feature_id: str, *, root: Path) -> bool:
+    """True while a completed source branch still awaits its forge merge."""
+
+    trunk = locate_trunk(root)
+    record = _load(trunk).get(feature_id)
+    if record is not None:
+        return not bool(record.get("closed"))
+    # Closing the plan precedes publication. Treat that preparation window as
+    # pending too, so a sibling cannot dispatch if normalization or MR creation
+    # fails before reviews.json is written.
+    if not review_enabled(trunk):
+        return False
+    entry = get_integration_worktree(trunk, "feature", feature_id)
+    if entry is None or not entry.path.is_dir():
+        return False
+    try:
+        doc = read_doc(feature_id, root=entry.path)
+    except NotFound:
+        return False
+    return doc.meta.status == "completed" and doc.meta.path.parent.name == "3_completed"
+
+
 def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None:
-    """Push a completed feature line and open one draft MR to its epic line."""
+    """Push a completed feature line and open one MR to its epic line."""
 
     trunk = locate_trunk(root)
     if not review_enabled(trunk):
@@ -57,31 +80,38 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
     state = _load(trunk)
     existing = state.get(feature_id)
     if existing:
-        return _record_to_mr(existing)
-    doc = read_doc(feature_id, root=trunk)
-    if doc.meta.tier != "feature" or not doc.meta.parent:
-        raise NotFound(feature_id)
+        mr = _record_to_mr(existing)
+        _ensure_opened_toast(feature_id, mr, existing, state=state, root=trunk)
+        return mr
     entry = get_integration_worktree(trunk, "feature", feature_id)
     if entry is None:
         raise GitError(f"feature worktree missing: {feature_id}")
+    doc = read_doc(feature_id, root=entry.path)
+    if doc.meta.tier != "feature" or not doc.meta.parent:
+        raise NotFound(feature_id)
+    if doc.meta.status != "completed" or doc.meta.path.parent.name != "3_completed":
+        raise GitError(f"{feature_id} must be completed on its source branch before review")
     source = integration_branch("feature", feature_id)
     target = integration_branch("epic", doc.meta.parent)
     # The target must exist remotely for a stacked feature MR.
     epic_entry = get_integration_worktree(trunk, "epic", doc.meta.parent)
     if epic_entry is None:
         raise GitError(f"epic worktree missing: {doc.meta.parent}")
+    from cascade.feature.publication import prepare_feature_publication
+
+    prepare_feature_publication(feature_id, root=trunk)
     push_branch(epic_entry.path, target)
     push_branch(entry.path, source)
     mr = create_merge_request(
         entry.path,
         title=f"{feature_id}: {doc.meta.title}",
         body=(
-            f"Implements `{feature_id}` for `{doc.meta.parent}`. This draft is managed by "
+            f"Implements `{feature_id}` for `{doc.meta.parent}`. This review is managed by "
             "Cascade; review comments are delivered to the Feature Team."
         ),
         source_branch=source,
         target_branch=target,
-        draft=True,
+        draft=False,
     )
     state[feature_id] = {
         "url": mr.url,
@@ -89,10 +119,27 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         "forge": mr.forge,
         "source_branch": source,
         "target_branch": target,
-        "draft": True,
+        "draft": False,
         "seen_comments": [],
+        "toast_notified": False,
     }
     _save(trunk, state)
+    _ensure_opened_toast(feature_id, mr, state[feature_id], state=state, root=trunk)
+    return mr
+
+
+def _ensure_opened_toast(
+    feature_id: str,
+    mr: MergeRequest,
+    record: dict[str, object],
+    *,
+    state: dict[str, dict[str, object]],
+    root: Path,
+) -> None:
+    """Deliver the linked review notification at least once across restarts."""
+
+    if record.get("toast_notified") is True:
+        return
     append_event(
         "war_room",
         Event(
@@ -102,13 +149,15 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
                 "kind": "feature_review_opened",
                 "id": feature_id,
                 "url": mr.url,
-                "message": f"Draft review opened for {feature_id}",
+                "message": f"Review opened for {feature_id}",
             },
             dest="war_room",
         ),
-        root=trunk,
+        root=root,
     )
-    return mr
+    record["toast_notified"] = True
+    state[feature_id] = record
+    _save(root, state)
 
 
 def poll_feature_reviews(root: Path) -> None:
@@ -120,9 +169,6 @@ def poll_feature_reviews(root: Path) -> None:
             continue
         try:
             mr = _record_to_mr(record)
-            entry = get_integration_worktree(trunk, "feature", feature_id)
-            if entry is not None:
-                push_branch(entry.path, mr.source_branch)
             snapshot = merge_request_snapshot(trunk, mr)
         except (GitError, ValueError):
             continue
@@ -160,11 +206,40 @@ def poll_feature_reviews(root: Path) -> None:
         if snapshot.get("state") == "merged":
             from cascade.boss.rollup import try_complete_feature
 
-            if try_complete_feature(feature_id, root=trunk, review_merged=True):
-                record["closed"] = True
+            try:
+                _sync_merged_target(trunk, mr)
+                if try_complete_feature(feature_id, root=trunk, review_merged=True):
+                    record["closed"] = True
+            except GitError:
+                # Do not acknowledge completion until the local epic worktree
+                # contains the exact tree accepted by the forge.
+                continue
+        else:
+            entry = get_integration_worktree(trunk, "feature", feature_id)
+            if entry is not None:
+                try:
+                    from cascade.feature.publication import prepare_feature_publication
+
+                    prepare_feature_publication(feature_id, root=trunk)
+                    push_branch(entry.path, mr.source_branch)
+                except GitError:
+                    # Fail closed: never publish checkpoint/merge noise after the
+                    # initial review was opened.
+                    continue
         changed = True
     if changed:
         _save(trunk, state)
+
+
+def _sync_merged_target(trunk: Path, mr: MergeRequest) -> str:
+    prefix = "epic/"
+    if not mr.target_branch.startswith(prefix):
+        raise GitError(f"unexpected feature review target: {mr.target_branch}")
+    epic_id = mr.target_branch.removeprefix(prefix)
+    entry = get_integration_worktree(trunk, "epic", epic_id)
+    if entry is None or not entry.path.is_dir():
+        raise GitError(f"epic worktree missing: {epic_id}")
+    return fast_forward_branch(entry.path, mr.target_branch)
 
 
 def reply_feature_review(feature_id: str, body: str, *, root: Path) -> str:

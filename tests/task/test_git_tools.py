@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from cascade.board.errors import GitError
 from cascade.board.store import read_doc
 from cascade.task.git_tools import register_task_git_tools, swe_commit, swe_run_tests
 from cascade.task.guard import TaskToolDenied
@@ -121,6 +122,92 @@ def test_swe_commit_happy_path_on_task_branch(board) -> None:
     ).stdout.strip()
     assert branch == "task/task_034"
     assert patch.read_text(encoding="utf-8") == "value = 1\n"
+    message = subprocess.run(
+        ["git", "log", "-1", "--format=%B"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "Cascade-Task: task_034" in message
+
+
+def test_swe_commit_amends_existing_task_deliverable(board) -> None:
+    root = board["root"]
+    run = board["run"]
+    wt = run.worktree
+    patch = wt / "cascade" / "patch.py"
+    patch.parent.mkdir(parents=True, exist_ok=True)
+    patch.write_text("value = 1\n", encoding="utf-8")
+    first = swe_commit("task work", task_id="task_034", task_run=run, root=root)
+
+    patch.write_text("value = 2\n", encoding="utf-8")
+    amended = swe_commit("ignored retry message", task_id="task_034", task_run=run, root=root)
+
+    assert amended != first
+    count = subprocess.run(
+        ["git", "rev-list", "--count", f"{run.base_sha}..HEAD"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert count == "1"
+    assert patch.read_text(encoding="utf-8") == "value = 2\n"
+    message = subprocess.run(
+        ["git", "log", "-1", "--format=%B"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert message.count("Cascade-Task: task_034") == 1
+
+
+def test_swe_commit_replaces_model_supplied_task_trailer(board) -> None:
+    root = board["root"]
+    run = board["run"]
+    wt = run.worktree
+    patch = wt / "cascade" / "patch.py"
+    patch.parent.mkdir(parents=True, exist_ok=True)
+    patch.write_text("value = 1\n", encoding="utf-8")
+
+    swe_commit(
+        "task work\n\nCascade-Task: task_999",
+        task_id="task_034",
+        task_run=run,
+        root=root,
+    )
+
+    message = subprocess.run(
+        ["git", "log", "-1", "--format=%B"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "Cascade-Task: task_999" not in message
+    assert message.count("Cascade-Task: task_034") == 1
+
+
+def test_swe_commit_refuses_preexisting_multi_commit_task_history(board) -> None:
+    root = board["root"]
+    run = board["run"]
+    wt = run.worktree
+    for index in (1, 2):
+        path = wt / f"manual_{index}.py"
+        path.write_text(f"VALUE = {index}\n", encoding="utf-8")
+        subprocess.run(["git", "add", path.name], cwd=wt, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"manual {index}"],
+            cwd=wt,
+            check=True,
+            capture_output=True,
+        )
+    (wt / "retry.py").write_text("VALUE = 3\n", encoding="utf-8")
+
+    with pytest.raises(GitError, match="already has 2 deliverable commits"):
+        swe_commit("retry", task_id="task_034", task_run=run, root=root)
 
 
 def test_swe_commit_refused_wrong_branch(board) -> None:

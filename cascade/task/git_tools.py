@@ -23,7 +23,7 @@ def swe_run_tests(
 ) -> dict[str, object]:
     """Run pytest in the task worktree; return exit code and captured output."""
 
-    repo = Path(root).resolve()
+    _ = root
     _assert_task_run(task_id, task_run)
     wt = task_run.worktree.resolve()
     argv = list(cmd) if cmd is not None else list(_DEFAULT_TEST_CMD)
@@ -48,19 +48,54 @@ def swe_commit(
     task_run: TaskRun,
     root: Path,
 ) -> str:
-    """Create a normal git commit on the task branch; never push."""
+    """Create or amend the task's sole deliverable commit; never push."""
 
     repo = Path(root).resolve()
     _assert_task_run(task_id, task_run)
     wt = task_run.worktree.resolve()
     _assert_task_branch(task_id, wt)
     _assert_commit_paths_allowed(task_id, wt, board_root=repo)
+    count = _deliverable_commit_count(task_run)
+    if count > 1:
+        raise GitError(
+            f"task/{task_id} already has {count} deliverable commits; "
+            "refusing to add more"
+        )
     _git(wt, "add", "-A")
-    _git(wt, "commit", "-m", message)
+    trailer = f"Cascade-Task: {task_id}"
+    if count == 1:
+        existing = _git(wt, "log", "-1", "--format=%B").stdout.strip()
+        commit_message = _with_task_trailer(existing or message, trailer)
+        _git(wt, "commit", "--amend", "-m", commit_message)
+    else:
+        _git(wt, "commit", "-m", _with_task_trailer(message, trailer))
     sha = _git(wt, "rev-parse", "HEAD").stdout.strip()
     if not sha:
         raise GitError("commit succeeded but HEAD sha is empty")
     return sha
+
+
+def _deliverable_commit_count(task_run: TaskRun) -> int:
+    result = _git(
+        task_run.worktree.resolve(),
+        "rev-list",
+        "--count",
+        f"{task_run.base_sha}..HEAD",
+    )
+    try:
+        return int(result.stdout.strip())
+    except ValueError as exc:
+        raise GitError("could not count task deliverable commits") from exc
+
+
+def _with_task_trailer(message: str, trailer: str) -> str:
+    # The task id is orchestration-owned metadata.  Strip any model-supplied
+    # value before appending the canonical trailer so publication cannot end up
+    # with duplicate or spoofed task identities.
+    body = "\n".join(
+        line for line in message.strip().splitlines() if not line.startswith("Cascade-Task:")
+    ).rstrip()
+    return f"{body}\n\n{trailer}"
 
 
 def register_task_git_tools() -> None:

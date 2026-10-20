@@ -68,6 +68,29 @@ def push_branch(root: Path, branch: str, *, remote: str = "origin") -> None:
         raise GitError(detail or f"could not push {branch}")
 
 
+def fast_forward_branch(
+    root: Path,
+    branch: str,
+    *,
+    remote: str = "origin",
+) -> str:
+    """Fetch and fast-forward an integration worktree after its MR merges."""
+
+    current = _git(["branch", "--show-current"], root).stdout.strip()
+    if current != branch:
+        raise GitError(f"integration worktree must be on {branch!r}, not {current!r}")
+    fetch = _git(["fetch", remote, branch], root)
+    if fetch.returncode != 0:
+        raise GitError((fetch.stderr or fetch.stdout).strip() or f"could not fetch {branch}")
+    merge = _git(["merge", "--ff-only", f"{remote}/{branch}"], root)
+    if merge.returncode != 0:
+        raise GitError(
+            (merge.stderr or merge.stdout).strip()
+            or f"could not fast-forward {branch}"
+        )
+    return _git(["rev-parse", "HEAD"], root).stdout.strip()
+
+
 def create_merge_request(
     root: Path,
     *,

@@ -94,13 +94,16 @@ def test_resolved_human_comment_does_not_block(tmp_path: Path) -> None:
     assert try_complete_feature("feat_001", root=root) is True
 
 
-def test_missing_closeout_blocks_completion(tmp_path: Path) -> None:
+def test_missing_closeout_is_synthesized_after_all_children_complete(tmp_path: Path) -> None:
     root = _rollup_board(tmp_path)
 
-    assert try_complete_feature("feat_001", root=root) is False
+    assert try_complete_feature("feat_001", root=root) is True
 
     feature = read_doc("feat_001", root=root)
-    assert feature.meta.status == "active"
+    assert feature.meta.status == "completed"
+    assert "## Closeout" in feature.body
+    assert "`task_001` (Task one)" in feature.body
+    assert "`task_002` (Task two)" in feature.body
 
 
 def test_partial_task_completion_blocks(tmp_path: Path) -> None:
@@ -139,7 +142,7 @@ def test_child_task_via_parent_only_not_in_children_list(tmp_path: Path) -> None
     assert try_complete_feature("feat_001", root=root) is True
 
 
-def test_on_task_merged_no_op_when_closeout_missing(tmp_path: Path) -> None:
+def test_on_task_merged_synthesizes_closeout_without_model_action(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(
@@ -163,10 +166,11 @@ def test_on_task_merged_no_op_when_closeout_missing(tmp_path: Path) -> None:
     on_task_merged("task_001", root=root)
 
     feature = read_doc("feat_001", root=root)
-    assert feature.meta.status == "active"
-    assert feature.meta.path.parent.name == "2_active"
+    assert feature.meta.status == "completed"
+    assert feature.meta.path.parent.name == "3_completed"
+    assert "Completed child work: `task_001` (Last task)." in feature.body
     epic_events, _ = read_events("epic_001", 0, root=root)
-    assert not any(event.type == "FeatureCompleted" for event in epic_events)
+    assert any(event.type == "FeatureCompleted" for event in epic_events)
 
 
 def test_on_task_merged_completes_when_gates_hold(tmp_path: Path) -> None:

@@ -112,7 +112,7 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("not_found")
     if meta.tier != "epic" or meta.status not in _OPEN:
         return _fail("bad_state")
-    if not _deps_met(board, meta):
+    if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
     if not has_git(root):
         move_doc(work_id, "active", root=root)
@@ -149,7 +149,7 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("bad_state")
     if not meta.parent:
         return _fail("bad_state")
-    if not _deps_met(board, meta):
+    if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
 
     if not has_git(root):
@@ -163,7 +163,6 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
         return DispatchResult(ok=True, reason=None, event=event)
 
     epic_id = meta.parent
-    epic_branch = integration_branch("epic", epic_id)
     epic_wt = get_integration_worktree(root, "epic", epic_id)
     if epic_wt is None:
         return _fail("bad_state")
@@ -209,7 +208,7 @@ def _dispatch_task(
         return _fail("bad_state")
     if not meta.parent:
         return _fail("bad_state")
-    if not _deps_met(board, meta):
+    if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
     if _active_task_count(board) >= task_parallelism(root):
         return _fail("cap")
@@ -351,11 +350,16 @@ def _place_task_active(
             commit_paths(source_root, [previous], f"docs: relocate {work_id}")
 
 
-def _deps_met(board: BoardIndex, meta: WorkMeta) -> bool:
+def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
     for dep_id in meta.depends_on:
         dep = board.by_id.get(dep_id)
         if dep is None or dep.status != "completed" or dep.path.parent.name != "3_completed":
             return False
+        if dep.tier == "feature":
+            from cascade.review import feature_review_pending
+
+            if feature_review_pending(dep_id, root=root):
+                return False
     return True
 
 

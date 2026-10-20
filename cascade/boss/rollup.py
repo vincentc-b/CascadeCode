@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cascade.board.context import resolve_root
-from cascade.board.errors import NotFound
+from cascade.board.errors import GitError, NotFound
 from cascade.board.paths import column_for_status
 from cascade.board.store import list_board, move_doc, read_doc, write_doc
 from cascade.board.types import WorkId
@@ -27,7 +27,17 @@ def write_closeout(feature_id: WorkId, paragraph: str, *, root: Path | None = No
     if doc.meta.tier != "feature":
         raise NotFound(feature_id)
     doc.body = _upsert_closeout_section(doc.body, paragraph)
-    return write_doc(doc, root=repo)
+    # ``read_doc`` may resolve the feature to its integration worktree even
+    # when the caller is the product trunk. Commit from the checkout that owns
+    # the absolute document path; adding a .cascade/worktrees path from trunk
+    # is both the wrong branch and commonly rejected as ignored content.
+    from cascade.workspace.integration_worktree import git_root_for_path
+
+    try:
+        owner_root = git_root_for_path(doc.meta.path)
+    except GitError:
+        owner_root = repo
+    return write_doc(doc, root=owner_root)
 
 
 def try_complete_feature(
@@ -51,9 +61,34 @@ def try_complete_feature(
         feature_meta.status == "completed"
         and feature_meta.path.parent.name == "3_completed"
     ):
+        if review_merged and feature_meta.parent:
+            _emit_feature_completed(feature_id, feature_meta.parent, repo)
+        elif not review_merged:
+            from cascade.review import (
+                ensure_feature_review,
+                feature_review_pending,
+                review_enabled,
+            )
+
+            if review_enabled(repo) and feature_review_pending(feature_id, root=repo):
+                ensure_feature_review(feature_id, root=repo)
+                return False
         return True
 
     doc = read_doc(feature_id, root=repo)
+    # Closeout must not depend on another model turn after the last child lands.
+    # A Feature Architect may replace this paragraph with a richer summary, but
+    # the deterministic fallback records exactly which completed work unlocked
+    # review and makes crash/restart recovery converge on the same state.
+    if (
+        not _closeout_present(doc.body)
+        and _all_child_tasks_completed(feature_id, board)
+        and not _has_open_human_comments(feature_id, repo)
+    ):
+        paragraph = _synthesized_closeout(feature_id, board)
+        if paragraph is not None:
+            write_closeout(feature_id, paragraph, root=repo)
+            doc = read_doc(feature_id, root=repo)
     if not _rollup_gates_pass(feature_id, doc.body, board, repo):
         return False
 
@@ -61,8 +96,19 @@ def try_complete_feature(
         from cascade.review import ensure_feature_review, review_enabled
 
         if review_enabled(repo):
+            owner_root = _feature_owner_root(feature_id, doc, repo)
+            move_doc(feature_id, "completed", root=owner_root)
             ensure_feature_review(feature_id, root=repo)
             return False
+
+    if review_merged:
+        # The forge merge already landed the source tree, including the completed
+        # feature plan, on the epic branch. Polling records the terminal event but
+        # must not create another source commit after review.
+        if doc.meta.parent:
+            _emit_feature_completed(feature_id, doc.meta.parent, repo)
+            return True
+        return False
 
     epic_id = doc.meta.parent
     if not epic_id:
@@ -103,6 +149,11 @@ def try_complete_feature(
         if meta is not None and column_for_status(meta.status) != "completed":
             move_doc(feature_id, "completed", root=trunk)
 
+    _emit_feature_completed(feature_id, epic_id, repo)
+    return True
+
+
+def _emit_feature_completed(feature_id: str, epic_id: str, repo: Path) -> None:
     append_event(
         epic_id,
         Event(
@@ -113,7 +164,23 @@ def try_complete_feature(
         ),
         root=repo,
     )
-    return True
+
+
+def _feature_owner_root(feature_id: str, doc, repo: Path) -> Path:
+    from cascade.workspace.integration_worktree import (
+        get_integration_worktree,
+        git_root_for_path,
+        locate_trunk,
+    )
+
+    trunk = locate_trunk(repo)
+    entry = get_integration_worktree(trunk, "feature", feature_id)
+    if entry is not None and entry.path.is_dir():
+        return entry.path
+    try:
+        return git_root_for_path(doc.meta.path)
+    except GitError:
+        return repo
 
 
 def on_task_merged(task_id: WorkId, *, root: Path | None = None) -> None:
@@ -168,6 +235,21 @@ def _all_child_tasks_completed(feature_id: WorkId, board) -> bool:
         if meta.path.parent.name != "3_completed":
             return False
     return True
+
+
+def _synthesized_closeout(feature_id: WorkId, board) -> str | None:
+    """Return a stable, auditable fallback summary for a finished feature."""
+
+    task_ids = sorted(_child_task_ids(feature_id, board))
+    if not task_ids:
+        return None
+    completed = []
+    for task_id in task_ids:
+        meta = board.by_id.get(task_id)
+        if meta is None:
+            return None
+        completed.append(f"`{task_id}` ({meta.title})")
+    return "Completed child work: " + ", ".join(completed) + "."
 
 
 def _has_open_human_comments(feature_id: WorkId, repo: Path) -> bool:
