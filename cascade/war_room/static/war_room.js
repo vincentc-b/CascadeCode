@@ -488,7 +488,11 @@
     }
 
     actions.appendChild(actionButton("View plan", function () {
-      window.location.assign("/plan/" + item.id);
+      var planUrl = "/plan/" + item.id;
+      if (tier === "epics" || tier === "features") {
+        planUrl += "#plan-comments";
+      }
+      window.location.assign(planUrl);
       return Promise.resolve();
     }));
 
