@@ -13,7 +13,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-18'
-updated: '2026-10-18'
+updated: '2026-10-20'
 ---
 # Plan viewer comment chrome
 
@@ -21,7 +21,7 @@ updated: '2026-10-18'
 
 [epic_002](../../epics/2_active/epic_002_plan_view_review_threads.md) — Plan-view review threads.
 
-Depends on: [feat_016](feat_016_comment_read_api_and_war_room_wiring.md).
+Depends on: [feat_016](../3_completed/feat_016_comment_read_api_and_war_room_wiring.md) (completed 2026-10-20).
 
 Cites (promote to frontmatter `cites:` when feat_019 lands): `epic_002#intent`, `epic_002#macro-architecture`, `epic_002#cross-module-constraints`, `epic_002#feature-breakdown`.
 
@@ -30,6 +30,8 @@ Constraints this feature must honor:
 - Read-only plan renderer (feat_012). Comment chrome is overlay only. No WYSIWYG, no `write_doc` from the viewer.
 - Localhost only. Existing `/plan/{id}` shell.
 - Filesystem is truth: load/post through feat_016 APIs; never edit the `.md` body to store comments.
+- Locked read API is GET `/api/comments/{doc_id}` (feat_016 / dec_012). Do not add a second comments list route.
+- POST `/api/comment` 202 is `{ok, comment_id}` with **no** `kickoff` key (dec_012 / feat_016 D5). Reload threads after POST; do not wait for an agent turn (feat_020 delivers via watchdog).
 - Blocking checkbox unchecked by default (dec_002). Only the human compose path sets it.
 - Kickoff edges only: remove the current 3s `setInterval` comment poll in `plan_viewer.js`. Refresh after a successful POST and on page load. A later agent reply appears on the next human refresh or navigation.
 - Task plans: comments are not supported (feat_016 returns 400). Hide the review panel; do not show a compose form.
@@ -65,6 +67,7 @@ Constraints this feature must honor:
 - Polling or websocket refresh.
 - A second comment store or a War Room compose pane.
 - A free-text section field (replaced by gutter/selection).
+- Waiting on a `kickoff` key or adding `kickoff_graph_queue_event` (dec_012).
 
 ## Data structures
 
@@ -86,11 +89,12 @@ Consumes only:
 ```text
 GET  /plan/{id}            existing shell
 GET  /api/doc/{id}         existing; sha + body
-GET  /api/comments/{id}    feat_016
+GET  /api/comments/{id}    feat_016 (single handler, dec_012)
 POST /api/comment          feat_016 (root or parent reply)
+                           202 {ok, comment_id} — no kickoff key
 ```
 
-Client-side helper (same module as the server `cascade.comments.section_slug`, or a JS port with a shared test vector): heading → slug. If a JS port is used, a fixture of (heading, slug) pairs must match the Python function. Underscore slugs are wrong.
+Client-side helper (same module as the server `cascade.comments.section_slug`, or a JS port with a shared test vector): heading → slug. If a JS port is used, a fixture of (heading, slug) pairs must match the Python function. Underscore slugs are wrong. Double-slugify must be a no-op (`memory-layout` → `memory-layout`); feat_016 also slugifies on write.
 
 ## Logic flow
 
@@ -124,6 +128,7 @@ System-level: extend existing plan-viewer tests (route + render) rather than new
 - Line numbers after Mermaid replacement can skew if fences are swapped before mapping. Map lines against the **original** body.
 - Agent replies will not appear until the operator reloads. Accepted: epic forbids timer polling.
 - Shipping this before feat_018 leaves no Resolve button (status only). Dispatch them in the same wave (dec_007).
+- feat_016's original API box still shows a `kickoff` key; that was not shipped (D5 / dec_012). Do not restore it here.
 
 ## Decision log
 
@@ -132,3 +137,4 @@ System-level: extend existing plan-viewer tests (route + render) rather than new
 - **D3 — Task plans hide the panel.** Matches store 400; operator comments on the parent feature or epic.
 - **D4 — `blocks:` is API-only.** A multi-select on every comment is gold-plating; section/`cites` covers the common case.
 - **D5 — Free-text section box is gone.** Gutter or selection supplies `section`. Matches GitHub and dec_001.
+- **D6 — No kickoff wait (dec_012).** feat_016 shipped POST without a `kickoff` key. Chrome reloads comments; agent replies appear on the next load (feat_020).
