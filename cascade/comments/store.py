@@ -86,7 +86,7 @@ def comment(
         blocking=blocking,
         root=repo,
     )
-    _emit_comment_posted(record, owning, repo)
+    _emit_comment_posted(record, owning, trunk)
     if author == "human" and is_attached is not None and not is_attached(owning):
         _enqueue_comment_toast(doc_id, trunk)
     return record.id
@@ -131,7 +131,7 @@ def reply_comment(
             },
             dest=owning,
         ),
-        root=repo,
+        root=trunk,
     )
     return record.id
 
@@ -203,7 +203,7 @@ def resolve_comment(
             },
             dest=owning,
         ),
-        root=repo,
+        root=trunk,
     )
 
 
@@ -368,7 +368,7 @@ def _valid_doc_id(doc_id: str) -> bool:
     return Path(doc_id).name == doc_id
 
 
-def _emit_comment_posted(record: Comment, owning: str, repo: Path) -> None:
+def _emit_comment_posted(record: Comment, owning: str, trunk: Path) -> None:
     append_event(
         owning,
         Event(
@@ -382,7 +382,7 @@ def _emit_comment_posted(record: Comment, owning: str, repo: Path) -> None:
             },
             dest=owning,
         ),
-        root=repo,
+        root=trunk,
     )
 
 
