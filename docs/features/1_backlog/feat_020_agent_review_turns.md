@@ -13,7 +13,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-18'
-updated: '2026-10-18'
+updated: '2026-10-20'
 ---
 # Agent review turns
 
@@ -21,7 +21,7 @@ updated: '2026-10-18'
 
 [epic_002](../../epics/2_active/epic_002_plan_view_review_threads.md) — Plan-view review threads.
 
-Depends on: [feat_016](feat_016_comment_read_api_and_war_room_wiring.md).
+Depends on: [feat_016](../3_completed/feat_016_comment_read_api_and_war_room_wiring.md) (completed 2026-10-20).
 
 Cites (promote to frontmatter `cites:` when feat_019 lands): `epic_002#macro-architecture`, `epic_002#intent`.
 
@@ -31,7 +31,7 @@ Constraints this feature must honor:
 - Owning graph only: epic-tier `doc_id` → `epic_{id}`; feature-tier → `feat_{id}`. Tasks have no comment room.
 - Agents reply and may `write_doc` / `record_decision` / `propose_epic_amendment`. They do not resolve (feat_018) and do not set blocking.
 - No timer polling for new comments.
-- Delivery is watchdog-only (dec_011). HTTP POST enqueues; this feature removes the eager `kickoff_graph_queue_event` from `_handle_comment` (or makes it ingest-only with no turn).
+- Delivery is watchdog-only (dec_011, epic dec_012). HTTP POST enqueues only. feat_016 D5 did **not** add `kickoff_graph_queue_event` to `_handle_comment`. Do **not** add an HTTP eager turn. If other work merged that call, remove it so only the watchdog starts a turn.
 
 ## Scope
 
@@ -40,7 +40,7 @@ Constraints this feature must honor:
 - When a **human** `CommentPosted` or `CommentReplied` is ingested for an active owning graph, start **one** planning turn via existing `kickoff_turn(kind="comment")`. `KickoffReason.message` is a **dict**, same shape as `ingest_human`: `{"role": "human", "content": "cmt_NNN on {doc_id} #{section} [blocking]\n{body}" }` (cap `content` at ~2k chars; tell the agent to read the sidecar for the rest). This must work even when the graph has no prior chat messages. Today's `kickoff_graph_queue_event` → `kind=queue_event` path no-ops without `latest_input`; that is the bug this feature fixes.
 - Agent-authored `CommentReplied` / `CommentPosted` must **not** request another comment-kind turn. Ingest the queue offset so it is not re-delivered, then stop. A reply loop is a defect.
 - `CommentResolved` must **not** start a turn (feat_018 D2, dec_011). Ingest the offset only.
-- Replace the HTTP `_handle_comment` `kickoff_graph_queue_event` turn with enqueue-only (watchdog `deliver_queue_kickoffs` delivers). One helper shared by watchdog; HTTP must not fire a second turn for the same `comment_id`.
+- HTTP `_handle_comment` is enqueue-only (watchdog `deliver_queue_kickoffs` delivers). feat_016 did not add an eager turn; do not add one. If `_handle_comment` currently calls `kickoff_graph_queue_event`, remove that call. One helper shared by watchdog; HTTP must not fire a turn for the same `comment_id`.
 - Playbook (short addition to existing epic/feature role skills, **not** a new skill file). `epic_manager` and `feature_lead` already load `skills/roles/product_manager/SKILL.md`; put the bullets there (and a one-liner in `frugal_engineering` only if needed):
   1. Read the thread (`read_doc` + comments).
   2. Answer, patch the owning spec, or `record_decision` (include `In reply to: cmt_NNN` when locking a choice).
@@ -57,6 +57,7 @@ Constraints this feature must honor:
 - Plan viewer chrome, HTTP schema, or dispatch gates (feat_016–019).
 - A new role or a dedicated "reviewer" graph.
 - A new skill path / new role-skill default list.
+- Re-adding an HTTP `kickoff_graph_queue_event` turn (dec_012).
 
 ## Data structures
 
@@ -109,7 +110,7 @@ Feature Team mints after dispatch. Suggested slice:
 
 ## Risks & upward questions
 
-- Double kickoff: HTTP already calls `kickoff_graph_queue_event`, and the watchdog later sees the same event. Lock: watchdog-only delivery. If a Feature Team leaves the HTTP eager call, they must skip watchdog for that offset — but prefer removing the HTTP turn.
+- Double kickoff: feat_016 D5 left HTTP without an eager turn, but uncommitted main work may still add `kickoff_graph_queue_event`. Lock: watchdog-only delivery. Never leave both HTTP and watchdog starting a turn for the same comment.
 - Staging the full comment body into the turn can be long. Cap at 2k chars.
 - A human reply on an already-busy graph should still get one turn, not be dropped on `resume_inflight`. If an inflight turn is running, queue the comment as the next `kind=comment` after it finishes (existing inflight rules); do not drop the event.
 - Other non-comment queue events must keep working (amendments, decisions). Do not make `deliver_queue_kickoffs` comment-only.
@@ -121,3 +122,4 @@ Feature Team mints after dispatch. Suggested slice:
 - **D3 — No new skill file.** Five bullets on `product_manager` (already loaded by epic_manager and feature_lead) are enough.
 - **D4 — Message is a dict `{role, content}`.** Matches `ingest_human` / `KickoffReason.message`; a raw string would fail `_stage_human_message`.
 - **D5 — Watchdog delivers; HTTP only enqueues (dec_011).** One edge, no double turn, resolve does not start a turn.
+- **D6 — Do not add HTTP kickoff (epic dec_012 / feat_016 D5).** feat_016 shipped without `kickoff_graph_queue_event` on POST `/api/comment`. This feature implements watchdog delivery from that base; if merge reintroduces the HTTP call, delete it.
