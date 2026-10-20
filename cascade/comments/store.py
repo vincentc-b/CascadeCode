@@ -33,6 +33,14 @@ class CommentNotFound(CommentStoreError):
     """No comment with this id in the doc sidecar."""
 
 
+class ResolveNotAllowed(CommentStoreError):
+    """Only the human may resolve a thread."""
+
+
+class NotARoot(CommentStoreError):
+    """Resolve applies to open root comments only."""
+
+
 def comment(
     doc_id: str,
     section: str,
@@ -132,39 +140,57 @@ def resolve_comment(
     doc_id: str,
     comment_id: str,
     *,
+    author: str,
     root: Path,
     resolution: str = "resolved",
 ) -> None:
-    """Mark one comment resolved in the sidecar."""
+    """Mark a root thread resolved; cascade to all descendants."""
+
+    if author != "human":
+        raise ResolveNotAllowed("resolve is allowed only when author=human")
 
     trunk = locate_trunk(resolve_root(root))
     repo = _comment_repo(doc_id, root=root)
-    _require_comment(doc_id, comment_id, root=repo)
     owning = _owning_graph(doc_id, trunk)
+    changed = False
 
     def mutate(comments: list[Comment]) -> None:
-        for index, row in enumerate(comments):
+        nonlocal changed
+        root_row: Comment | None = None
+        for row in comments:
             if row.id == comment_id:
-                comments[index] = Comment(
-                    id=row.id,
-                    doc_id=row.doc_id,
-                    section=row.section,
-                    anchor=row.anchor,
-                    line_start=row.line_start,
-                    line_end=row.line_end,
-                    doc_sha=row.doc_sha,
-                    blocks=row.blocks,
-                    author=row.author,
-                    body=row.body,
-                    parent=row.parent,
-                    state="resolved",
-                    blocking=row.blocking,
-                    created=row.created,
-                )
-                return
-        raise CommentNotFound(comment_id)
+                root_row = row
+                break
+        if root_row is None:
+            raise CommentNotFound(comment_id)
+        if root_row.parent is not None:
+            raise NotARoot(comment_id)
+
+        targets = _thread_ids(comments, comment_id)
+        for index, row in enumerate(comments):
+            if row.id not in targets or row.state == "resolved":
+                continue
+            comments[index] = Comment(
+                id=row.id,
+                doc_id=row.doc_id,
+                section=row.section,
+                anchor=row.anchor,
+                line_start=row.line_start,
+                line_end=row.line_end,
+                doc_sha=row.doc_sha,
+                blocks=row.blocks,
+                author=row.author,
+                body=row.body,
+                parent=row.parent,
+                state="resolved",
+                blocking=row.blocking,
+                created=row.created,
+            )
+            changed = True
 
     _update_sidecar(doc_id, mutate, root=repo)
+    if not changed:
+        return
     append_event(
         owning,
         Event(
@@ -295,6 +321,21 @@ def _load_sidecar_unlocked(doc_id: str, root: Path) -> list[Comment]:
         except (ValueError, TypeError, json.JSONDecodeError):
             continue
     return comments
+
+
+def _thread_ids(comments: list[Comment], root_id: str) -> set[str]:
+    by_parent: dict[str | None, list[str]] = {}
+    for row in comments:
+        by_parent.setdefault(row.parent, []).append(row.id)
+    targets = {root_id}
+    queue = [root_id]
+    while queue:
+        parent_id = queue.pop()
+        for child_id in by_parent.get(parent_id, []):
+            if child_id not in targets:
+                targets.add(child_id)
+                queue.append(child_id)
+    return targets
 
 
 def _require_comment(doc_id: str, comment_id: str, *, root: Path) -> Comment:

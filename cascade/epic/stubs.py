@@ -43,23 +43,6 @@ def reply_comment(
     )
 
 
-def resolve_comment(
-    comment_id: str,
-    *,
-    epic_id: str,
-    root: Path,
-) -> None:
-    _require_active_epic(epic_id, root)
-    doc_id = epic_id
-    try:
-        rows = comment_store.read_comments(doc_id, root=root)
-    except comment_store.CommentStoreError as exc:
-        raise EpicToolDenied(str(exc)) from exc
-    if not any(row.id == comment_id for row in rows):
-        raise CommentNotFound(comment_id)
-    comment_store.resolve_comment(doc_id, comment_id, root=root)
-
-
 def _require_active_epic(epic_id: str, root: Path) -> None:
     repo = Path(root).resolve()
     try:
@@ -73,4 +56,3 @@ def _require_active_epic(epic_id: str, root: Path) -> None:
 
 
 register_epic_tool("reply_comment", reply_comment)
-register_epic_tool("resolve_comment", resolve_comment)

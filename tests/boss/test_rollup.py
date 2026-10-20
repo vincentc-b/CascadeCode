@@ -89,7 +89,7 @@ def test_resolved_human_comment_does_not_block(tmp_path: Path) -> None:
     root = _rollup_board(tmp_path)
     write_closeout("feat_001", "Shipped.", root=root)
     cmt_id = comment("feat_001", "Scope", "question", author="human", root=root)
-    resolve_comment("feat_001", cmt_id, root=root)
+    resolve_comment("feat_001", cmt_id, author="human", root=root)
 
     assert try_complete_feature("feat_001", root=root) is True
 

@@ -129,7 +129,7 @@ def test_mint_allows_blocking_when_resolved(feature_board: dict[str, object]) ->
         author="human",
         root=root,
     )
-    resolve_comment("feat_001", cmt_id, root=root)
+    resolve_comment("feat_001", cmt_id, author="human", root=root)
     task_id = mint_task("After resolve", feature_id="feat_001", root=root)
     assert task_id.startswith("task_")
 
