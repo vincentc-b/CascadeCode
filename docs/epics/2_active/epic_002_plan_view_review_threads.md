@@ -159,7 +159,7 @@ _(none — all resolved, see Decision log dec_001–dec_023)_
 
 ## Decision log
 
-PLACEHOLDER_DECISION_LOG
+SEE_FILE_FOR_DECISIONS
 
 ## Amendment log
 
