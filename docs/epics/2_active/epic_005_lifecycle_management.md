@@ -142,6 +142,11 @@ No parallel approval, lifecycle, or review store is introduced.
   Chose Treat the corrected child titles and dependency edges as authoritative and clear the pre-approval dispatch blocker..
   Rationale: Board metadata now matches the epic sequence: feat_004 depends on feat_001 and feat_002, while feat_005 depends on feat_003 and feat_004; the stale titles for feat_003 through feat_005 are also aligned.
   Honors: Dependency-safe dispatch, artifact-driven alignment, and the smallest coherent five-feature plan..
+
+- `dec_009` · 2026-10-21 · Epic Architect · **Architecture readiness after metadata reconciliation**
+  Chose Accept the reconciled five-feature architecture and dependency graph as ready for sequenced delivery..
+  Rationale: Authoritative child metadata now matches the epic contract: feat_002 follows feat_001; feat_003 and feat_004 follow the lifecycle foundation; feat_005 follows both the review API and lifecycle demonstration. The slices remain non-overlapping and use focused integration coverage plus one system flow.
+  Honors: Dependency-safe dispatch, artifact-driven alignment, durable lifecycle state, one authoritative review registry, and frugal high-signal verification..
 ## Amendment log
 
 _(none)_
