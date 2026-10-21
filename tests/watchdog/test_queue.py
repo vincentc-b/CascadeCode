@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cascade.watchdog import Event, append_event, read_events
-from tests.support import make_repo
+from cascade.watchdog.events import prune_completed_work_queues, remove_queue_if_unchanged
+from tests.support import add_doc, make_repo
 
 
 def _event(event_type: str, dest: str, **payload: object) -> Event:
@@ -107,3 +108,65 @@ def test_missing_file_and_stale_offset_reread(tmp_path: Path) -> None:
     assert len(events) == 1
     assert events[0].type == "CommentPosted"
     assert offset == len(data)
+
+
+def test_remove_queue_if_unchanged_preserves_concurrent_suffix(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    append_event("boss", _event("BossDrainRequested", "boss"), root=root)
+    path = root / "docs" / "_queue" / "boss.jsonl"
+    acknowledged_size = path.stat().st_size
+    append_event("boss", _event("BossDispatchRequested", "boss"), root=root)
+
+    assert not remove_queue_if_unchanged(
+        "boss", expected_size=acknowledged_size, root=root
+    )
+    assert path.is_file()
+    assert len(read_events("boss", acknowledged_size, root=root)[0]) == 1
+
+
+def test_prune_removes_only_terminal_work_queues(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Done", tier="epic", status="completed")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Active",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Blocked",
+        tier="task",
+        status="blocked",
+        parent="feat_001",
+    )
+    for dest in ("epic_001", "feat_001", "task_001", "war_room"):
+        append_event(dest, _event("Lifecycle", dest), root=root)
+
+    assert prune_completed_work_queues(root=root) == ["epic_001"]
+    assert not (root / "docs/_queue/epic_001.jsonl").exists()
+    for dest in ("feat_001", "task_001", "war_room"):
+        assert (root / "docs" / "_queue" / f"{dest}.jsonl").is_file()
+
+
+def test_prune_keeps_completed_feature_awaiting_review(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Parent", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Review",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    append_event("feat_001", _event("MergeRequestComment", "feat_001"), root=root)
+    monkeypatch.setattr("cascade.review.feature_review_pending", lambda *_args, **_kwargs: True)
+
+    assert prune_completed_work_queues(root=root) == []
+    assert (root / "docs/_queue/feat_001.jsonl").is_file()

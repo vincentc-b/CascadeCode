@@ -41,7 +41,7 @@ feature = ""
 task = ""
 """
 
-_GITIGNORE_LINE = ".cascade/"
+_GITIGNORE_LINES = (".cascade/", "docs/_queue/*.jsonl")
 
 
 def init_workspace(root: Path) -> WorkspaceRoot:
@@ -59,7 +59,7 @@ def init_workspace(root: Path) -> WorkspaceRoot:
     if not config_path.is_file():
         config_path.write_text(_DEFAULT_CASCADE_TOML, encoding="utf-8")
 
-    _ensure_gitignore_cascade(path / ".gitignore")
+    _ensure_runtime_gitignore(path / ".gitignore")
 
     return WorkspaceRoot(
         path=path,
@@ -70,13 +70,11 @@ def init_workspace(root: Path) -> WorkspaceRoot:
     )
 
 
-def _ensure_gitignore_cascade(gitignore: Path) -> None:
-    if gitignore.is_file():
-        text = gitignore.read_text(encoding="utf-8")
-        for line in text.splitlines():
-            if line.strip() == _GITIGNORE_LINE:
-                return
-        suffix = "" if text.endswith("\n") or not text else "\n"
-        gitignore.write_text(f"{text}{suffix}{_GITIGNORE_LINE}\n", encoding="utf-8")
-    else:
-        gitignore.write_text(f"{_GITIGNORE_LINE}\n", encoding="utf-8")
+def _ensure_runtime_gitignore(gitignore: Path) -> None:
+    text = gitignore.read_text(encoding="utf-8") if gitignore.is_file() else ""
+    present = {line.strip() for line in text.splitlines()}
+    missing = [line for line in _GITIGNORE_LINES if line not in present]
+    if not missing:
+        return
+    suffix = "" if text.endswith("\n") or not text else "\n"
+    gitignore.write_text(f"{text}{suffix}" + "\n".join(missing) + "\n", encoding="utf-8")

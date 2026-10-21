@@ -50,6 +50,7 @@ def test_init_creates_board_columns_gitignore_and_toml(tmp_path: Path) -> None:
 
     gitignore = (root / ".gitignore").read_text(encoding="utf-8")
     assert any(line.strip() == ".cascade/" for line in gitignore.splitlines())
+    assert any(line.strip() == "docs/_queue/*.jsonl" for line in gitignore.splitlines())
 
     with (root / "cascade.toml").open("rb") as handle:
         data = tomllib.load(handle)

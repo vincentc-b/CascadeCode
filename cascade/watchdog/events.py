@@ -54,6 +54,84 @@ def read_events(
     return _decode_buffer(data, after_offset)
 
 
+def remove_queue_if_unchanged(
+    dest: str,
+    *,
+    expected_size: int,
+    root: Path | None = None,
+) -> bool:
+    """Remove a fully acknowledged queue without racing a concurrent append.
+
+    Callers first read and process through ``expected_size``.  The shared lock
+    makes the size check and unlink atomic with respect to ``append_event``.
+    A queue that gained another event is deliberately left intact.
+    """
+
+    repo = resolve_root(root)
+    queue_dest = _safe_dest(dest)
+    path = _queue_path(repo, queue_dest)
+    with process_lock:
+        try:
+            if path.stat().st_size != expected_size:
+                return False
+        except FileNotFoundError:
+            return True
+        path.unlink()
+    return True
+
+
+def prune_completed_work_queues(*, root: Path | None = None) -> list[str]:
+    """Remove queues whose work graph has reached its durable terminal state.
+
+    Active and blocked work queues double as dispatch-authorization evidence,
+    so they must not be removed merely because their current events were read.
+    A completed Feature also remains live while its merge request is pending.
+    Special feeds (``boss`` and ``war_room``) have their own lifecycle.
+    """
+
+    repo = resolve_root(root)
+    queue_dir = repo / "docs" / "_queue"
+    if not queue_dir.is_dir():
+        return []
+
+    from cascade.board.errors import SchemaError
+    from cascade.board.paths import parse_work_id
+    from cascade.workspace.integration_worktree import merged_board
+
+    board = merged_board(repo)
+    removable: list[str] = []
+    for path in sorted(queue_dir.glob("*.jsonl")):
+        work_id = path.stem
+        try:
+            parse_work_id(work_id)
+        except SchemaError:
+            continue
+        meta = board.by_id.get(work_id)
+        if (
+            meta is None
+            or meta.status != "completed"
+            or meta.path.parent.name != "3_completed"
+        ):
+            continue
+        if meta.tier == "feature":
+            from cascade.review import feature_review_pending
+
+            if feature_review_pending(work_id, root=repo):
+                continue
+        removable.append(work_id)
+
+    removed: list[str] = []
+    with process_lock:
+        for work_id in removable:
+            path = _queue_path(repo, work_id)
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                continue
+            removed.append(work_id)
+    return removed
+
+
 def _queue_path(root: Path, dest: str) -> Path:
     return root / "docs" / "_queue" / f"{dest}.jsonl"
 

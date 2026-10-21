@@ -65,6 +65,9 @@ def watchdog_tick(root: Path | None = None) -> None:
         from cascade.workspace.flight import refresh_flight_report
 
         refresh_flight_report(repo)
+    from cascade.watchdog.events import prune_completed_work_queues
+
+    prune_completed_work_queues(root=repo)
 
 
 def _resume_reclaimable_task_runs(repo: Path) -> None:

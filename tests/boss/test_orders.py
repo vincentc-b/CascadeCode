@@ -8,9 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-from cascade.board import read_doc, write_doc
+from cascade.board import move_doc, read_doc, write_doc
 from cascade.boss.graph import (
-    boss_consumer_offset,
     install_boss_consumer,
     process_boss_queue,
     reset_boss_consumer_offset,
@@ -61,13 +60,14 @@ def test_dispatch_requested_dispatches_exactly_once(board: Path) -> None:
         "cascade.boss.orders.dispatch_feature"
     ) as mock_feature:
         new_offset = process_boss_queue(root=board, offset=0)
-        assert new_offset > 0
+        assert new_offset == 0
         mock_task.assert_called_once_with("task_001", "boss", root=board)
         mock_feature.assert_not_called()
 
     doc = read_doc("task_001", root=board)
     assert doc.meta.status == "active"
     assert doc.meta.path.parent.name == "2_active"
+    assert not (board / "docs/_queue/boss.jsonl").exists()
 
 
 def test_drain_dispatches_only_feature_backlog_in_order(board: Path) -> None:
@@ -131,8 +131,7 @@ def test_drain_skips_blocked_task_explicit_dispatch_allowed(board: Path) -> None
         board,
         _boss_event("BossDispatchRequested", kind="task", id="task_001", by="human"),
     )
-    offset = boss_consumer_offset()
-    process_boss_queue(root=board, offset=offset)
+    process_boss_queue(root=board, offset=0)
     doc = read_doc("task_001", root=board)
     assert doc.meta.status == "active"
 
@@ -171,7 +170,7 @@ def test_drain_stops_when_parallelism_cap_hit(tmp_path: Path) -> None:
     assert read_doc("task_002", root=root).meta.status == "backlog"
 
 
-def test_truncated_boss_queue_does_not_redispatch(board: Path) -> None:
+def test_consumed_boss_queue_does_not_redispatch_after_restart(board: Path) -> None:
     _enqueue(
         board,
         _boss_event("BossDispatchRequested", kind="task", id="task_001", by="human"),
@@ -181,10 +180,64 @@ def test_truncated_boss_queue_does_not_redispatch(board: Path) -> None:
         assert mock_task.call_count == 1
 
     queue_path = board / "docs" / "_queue" / "boss.jsonl"
-    prefix = queue_path.read_bytes()[: max(1, offset // 2)]
-    queue_path.write_bytes(prefix)
+    assert offset == 0
+    assert not queue_path.exists()
+    reset_boss_consumer_offset(0)
+    install_boss_consumer(board)
 
     with patch("cascade.boss.orders.dispatch_task", wraps=dispatch_task) as mock_task:
         again = process_boss_queue(root=board, offset=offset)
         assert mock_task.call_count == 0
-        assert again == len(prefix)
+        assert again == 0
+
+
+def test_legacy_dispatch_for_completed_task_is_acknowledged_without_boot(
+    board: Path,
+) -> None:
+    move_doc("task_001", "completed", root=board)
+    _enqueue(
+        board,
+        _boss_event("BossDispatchRequested", kind="task", id="task_001", by="human"),
+    )
+
+    with patch("cascade.watchdog.dispatch.invoke_boot") as boot, patch(
+        "cascade.workspace.kickoff.kickoff_turn"
+    ) as kickoff:
+        assert process_boss_queue(root=board, offset=0) == 0
+
+    boot.assert_not_called()
+    kickoff.assert_not_called()
+    assert read_doc("task_001", root=board).meta.status == "completed"
+    assert not (board / "docs/_queue/boss.jsonl").exists()
+
+
+def test_boss_queue_keeps_event_appended_during_processing(board: Path) -> None:
+    _enqueue(
+        board,
+        _boss_event("BossDispatchRequested", kind="task", id="task_001", by="human"),
+    )
+    real_process = __import__(
+        "cascade.boss.graph", fromlist=["process_boss_event"]
+    ).process_boss_event
+    appended = False
+
+    def process_and_append(event, *, root):
+        nonlocal appended
+        real_process(event, root=root)
+        if not appended:
+            appended = True
+            _enqueue(
+                board,
+                _boss_event("BossDispatchRequested", kind="task", id="task_002", by="human"),
+            )
+
+    with patch("cascade.boss.graph.process_boss_event", side_effect=process_and_append):
+        offset = process_boss_queue(root=board, offset=0)
+
+    assert offset > 0
+    assert (board / "docs/_queue/boss.jsonl").is_file()
+    reset_boss_consumer_offset(0)
+    install_boss_consumer(board)
+    process_boss_queue(root=board, offset=0)
+    assert read_doc("task_002", root=board).meta.status == "active"
+    assert not (board / "docs/_queue/boss.jsonl").exists()

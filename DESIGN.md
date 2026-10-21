@@ -408,7 +408,7 @@ FeatureCompleted       { feature_id }
 EpicCompleted          { epic_id }
 ```
 
-Queue messages are the only thing that crosses a subgraph boundary. They are stored as JSONL under `/docs/_queue/{dest_graph_id}.jsonl`. Agents load new events at their next turn; they do not subscribe to another team's tokens.
+Queue messages are the only thing that crosses a subgraph boundary. They are stored as ignored runtime JSONL under `/docs/_queue/{dest_graph_id}.jsonl`. Agents load new events at their next turn; they do not subscribe to another team's tokens. Work-graph queues remain in place while work is active or blocked because their dispatch event is authorization evidence; the watchdog removes them after the work reaches `3_completed` (after a Feature review closes, when review is enabled). The Boss queue persists its acknowledgement under `.cascade/` and removes a fully consumed file, preventing stale dispatch replay after restart. The `war_room` queue is retained because browser toast cursors are not durable acknowledgements.
 
 This is what keeps context windows isolated:
 
