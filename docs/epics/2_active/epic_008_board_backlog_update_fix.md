@@ -90,6 +90,10 @@ This is intentionally one feature: snapshot refresh, visibility, and activation 
 
 - 2026-10-21 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-10-21 · Epic Manager · **Remote backlog synchronization architecture**
+  Chose Use a fetched, read-only backlog snapshot with persisted remote SHA beneath local/integration board precedence, and activate snapshot-only briefs from that SHA; deliver visibility and activation together in feat_006..
+  Rationale: The existing fast-forward path fails when Cascade's local lifecycle commits and a newly merged remote brief diverge. A snapshot avoids mutating the operator checkout, while a single vertical feature prevents a visible-but-undispatchable intermediate state.
+  Honors: Seconds-scale visibility and dispatchability; filesystem lifecycle truth; human activation gate; safe active worktrees; no forge API; smallest shippable slice..
 ## Amendment log
 
 _(none)_
