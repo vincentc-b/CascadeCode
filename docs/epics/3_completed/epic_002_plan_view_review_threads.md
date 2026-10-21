@@ -2,7 +2,7 @@
 id: epic_002
 title: Plan-view review threads
 tier: epic
-status: backlog
+status: completed
 parent: null
 children:
 - feat_016
