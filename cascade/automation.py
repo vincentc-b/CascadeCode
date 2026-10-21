@@ -91,6 +91,9 @@ def poll_reviews(root: Path) -> None:
         from cascade.review import poll_feature_reviews
 
         poll_feature_reviews(root)
+        from cascade.completion_reconcile import reconcile_completion_with_prompts
+
+        reconcile_completion_with_prompts(root=root)
     except (GitError, OSError, WorkspaceError):
         return
 
@@ -109,18 +112,9 @@ def advance_work(root: Path) -> dict[str, list[str]]:
     from cascade.task_rollup import retry_pending_task_merges
 
     retry_pending_task_merges(repo)
-    board = merged_board(repo)
-    from cascade.boss.rollup import try_complete_feature
-    from cascade.review import feature_review_pending
+    from cascade.completion_reconcile import reconcile_completion_with_prompts
 
-    for meta in list(board.by_id.values()):
-        if meta.tier != "feature":
-            continue
-        if meta.path.parent.name == "2_active" or (
-            meta.path.parent.name == "3_completed"
-            and feature_review_pending(meta.id, root=repo)
-        ):
-            try_complete_feature(meta.id, root=repo)
+    reconcile_completion_with_prompts(root=repo)
     return reconcile_approval_dispatch(repo)
 
 
