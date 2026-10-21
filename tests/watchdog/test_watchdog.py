@@ -217,6 +217,81 @@ def test_run_watchdog_survives_a_failed_tick(
     assert "transient tick failure" in capsys.readouterr().err
 
 
+def test_run_watchdog_uses_light_event_ticks_between_maintenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    ticks: list[str] = []
+    checks = 0
+
+    monkeypatch.setattr("cascade.watchdog.loop.watchdog_tick", lambda _root: ticks.append("full"))
+    monkeypatch.setattr("cascade.watchdog.loop._event_tick", lambda _root: ticks.append("event"))
+    monkeypatch.setattr("cascade.watchdog.loop._resume_reclaimable_task_runs", lambda _root: None)
+    monkeypatch.setattr(
+        "cascade.completion_reconcile.reconcile_completion_with_prompts",
+        lambda **_kwargs: {},
+    )
+    monkeypatch.setattr("cascade.automation.advance_work", lambda _root: {})
+    monkeypatch.setattr("cascade.watchdog.loop.time.sleep", lambda _seconds: None)
+
+    def stop() -> bool:
+        nonlocal checks
+        checks += 1
+        return checks >= 6
+
+    run_watchdog(root=root, poll_interval=0, stop_when=stop)
+
+    assert ticks == ["full", "event", "event"]
+
+
+def test_event_tick_only_delivers_changed_work_queues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    delivered: list[Path] = []
+    monkeypatch.setattr("cascade.watchdog.loop.tick_boss_consumer", lambda: 0)
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.deliver_queue_kickoffs",
+        lambda repo: delivered.append(repo),
+    )
+    from cascade.watchdog.loop import _event_tick
+
+    _event_tick(root)
+    _event_tick(root)
+    queue = root / "docs" / "_queue" / "task_001.jsonl"
+    queue.parent.mkdir(parents=True, exist_ok=True)
+    queue.write_text("{}\n", encoding="utf-8")
+    _event_tick(root)
+
+    assert delivered == [root, root]
+
+
+def test_event_tick_retries_unchanged_queue_after_delivery_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    queue = root / "docs" / "_queue" / "task_001.jsonl"
+    queue.parent.mkdir(parents=True, exist_ok=True)
+    queue.write_text("{}\n", encoding="utf-8")
+    attempts = 0
+
+    def flaky_delivery(_repo: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("transient queue read failure")
+
+    monkeypatch.setattr("cascade.watchdog.loop.tick_boss_consumer", lambda: 0)
+    monkeypatch.setattr("cascade.workspace.kickoff.deliver_queue_kickoffs", flaky_delivery)
+    from cascade.watchdog.loop import _event_tick
+
+    with pytest.raises(OSError, match="transient"):
+        _event_tick(root)
+    _event_tick(root)
+
+    assert attempts == 2
+
+
 def test_war_room_event_does_not_authorize(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic")

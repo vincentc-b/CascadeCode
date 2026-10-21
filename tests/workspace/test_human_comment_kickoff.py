@@ -69,6 +69,17 @@ def _seed_active_epic(root: Path) -> None:
     from tests.support import add_doc
 
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    # Keep this comment-delivery fixture genuinely in flight.  An epic with no
+    # child features is immediately eligible for completion reconciliation when
+    # the War Room starts, so it cannot receive a subsequent planning kickoff.
+    add_doc(
+        root,
+        id="feat_001",
+        title="Pending feature",
+        tier="feature",
+        status="backlog",
+        parent="epic_001",
+    )
     _commit_all(root)
 
 

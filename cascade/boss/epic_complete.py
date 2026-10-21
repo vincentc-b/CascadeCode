@@ -14,6 +14,7 @@ in tests to clear that set.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,7 @@ from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.types import Event, Principal
 
 _TOAST_KIND = "epic_ready_to_close"
+_LOG = logging.getLogger(__name__)
 _surfaced_prompts: set[tuple[str, str]] = set()
 
 
@@ -151,6 +153,7 @@ def _finish_epic_completion_result(
         return EpicCompleteResult(ok=False, reason="wrong_tier")
     if epic_meta.status == "completed" and epic_meta.path.parent.name == "3_completed":
         _emit_epic_completed(epic_id, repo)
+        _retire_epic_worktree(epic_id, repo)
         return EpicCompleteResult(ok=True)
     if not _epic_ready_to_close(epic_id, repo=repo, board=board):
         return EpicCompleteResult(ok=False, reason="not_ready")
@@ -174,6 +177,7 @@ def _finish_epic_completion_result(
     move_doc(epic_id, "completed", root=repo)
     _complete_epic_trunk_pointer(epic_id, trunk=trunk)
     _emit_epic_completed(epic_id, repo)
+    _retire_epic_worktree(epic_id, repo)
     return EpicCompleteResult(ok=True)
 
 
@@ -190,6 +194,22 @@ def _emit_epic_completed(epic_id: WorkId, repo: Path) -> None:
         ),
         root=repo,
     )
+
+
+def _retire_epic_worktree(epic_id: WorkId, repo: Path) -> None:
+    """Best-effort cleanup after promotion and terminal metadata are durable."""
+
+    from cascade.workspace.integration_worktree import (
+        locate_trunk,
+        retire_integration_worktree,
+    )
+
+    try:
+        retire_integration_worktree(
+            "epic", epic_id, merged_into="HEAD", trunk=locate_trunk(repo)
+        )
+    except Exception:
+        _LOG.exception("could not retire completed epic worktree %s", epic_id)
 
 
 def on_feature_completed(feature_id: WorkId, *, root: Path | None = None) -> None:
@@ -238,7 +258,14 @@ def _child_feature_ids(epic_id: WorkId, board) -> set[WorkId]:
 
 
 def _all_child_features_completed(epic_id: WorkId, board) -> bool:
-    for feature_id in _child_feature_ids(epic_id, board):
+    feature_ids = _child_feature_ids(epic_id, board)
+    # An activated brief with no minted features is not delivered work.  In
+    # particular, do not let the universal "all children completed" check pass
+    # vacuously: startup recovery must only close epics that have actual child
+    # completion state to reconcile.
+    if not feature_ids:
+        return False
+    for feature_id in feature_ids:
         meta = board.by_id.get(feature_id)
         if meta is None or meta.tier != "feature":
             return False

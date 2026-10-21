@@ -145,6 +145,11 @@ def remove_task_worktree(task_run: TaskRun, *, root: Path) -> None:
     root = root.resolve()
     wt = task_run.worktree.resolve()
     _git(root, "worktree", "remove", "--force", str(wt))
+    from cascade.workspace.integration_worktree import (
+        unregister_missing_integration_worktree,
+    )
+
+    unregister_missing_integration_worktree("task", task_run.task_id, trunk=root)
     _runs.pop(task_run.task_id, None)
 
 

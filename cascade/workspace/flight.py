@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from itertools import combinations
 from pathlib import Path
+import time
 
 from cascade.board.context import resolve_root
 from cascade.board.types import BoardIndex
@@ -28,16 +29,22 @@ _last_overlap_signatures: set[OverlapSignature] = set()
 _toasted_overlap_signatures: set[OverlapSignature] = set()
 _cached_report: FlightReport | None = None
 _cached_root: Path | None = None
+_cached_at: float | None = None
+
+# Flight information is advisory UI data. Rebuilding it on every 500ms
+# watchdog tick reparses every registered worktree and can starve the War Room.
+DEFAULT_REFRESH_TTL_SECONDS = 10.0
 
 
 def clear_flight_memory() -> None:
     """Reset overlap toast state and cache (tests only)."""
 
-    global _cached_report, _cached_root
+    global _cached_report, _cached_root, _cached_at
     _last_overlap_signatures.clear()
     _toasted_overlap_signatures.clear()
     _cached_report = None
     _cached_root = None
+    _cached_at = None
 
 
 def get_cached_flight_report(*, root: Path | None = None) -> FlightReport:
@@ -79,9 +86,10 @@ def flight_report(root: Path | None = None) -> FlightReport:
         changed_paths=changed_paths,
         overlaps=overlaps,
     )
-    global _cached_report, _cached_root
+    global _cached_report, _cached_root, _cached_at
     _cached_report = report
     _cached_root = repo
+    _cached_at = time.monotonic()
     return report
 
 
@@ -92,6 +100,30 @@ def refresh_flight_report(root: Path | None = None) -> FlightReport:
     report = flight_report(repo)
     _maybe_enqueue_overlap_toasts(repo, report)
     return report
+
+
+def refresh_flight_report_if_stale(
+    root: Path | None = None,
+    *,
+    max_age_seconds: float = DEFAULT_REFRESH_TTL_SECONDS,
+) -> FlightReport:
+    """Refresh advisory flight data at most once per ``max_age_seconds``.
+
+    Explicit callers of :func:`refresh_flight_report` still force an immediate
+    rebuild. The watchdog uses this throttled path because its health loop runs
+    much more frequently than the UI needs a new overlap snapshot.
+    """
+
+    repo = resolve_root(root).resolve()
+    now = time.monotonic()
+    if (
+        _cached_report is not None
+        and _cached_root == repo
+        and _cached_at is not None
+        and now - _cached_at < max(0.0, max_age_seconds)
+    ):
+        return _cached_report
+    return refresh_flight_report(repo)
 
 
 def _tier_for_kind(kind: str) -> str:

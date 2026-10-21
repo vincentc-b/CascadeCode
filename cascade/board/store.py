@@ -99,12 +99,17 @@ def _write_doc(doc: WorkDoc, root: Path | None) -> str | None:
         path = repo / path
     doc.meta.path = path.resolve()
     doc.meta.updated = date.today()
-    from cascade.workspace.integration_worktree import locate_trunk, merged_board
+    from cascade.workspace.integration_worktree import (
+        invalidate_merged_board,
+        locate_trunk,
+        merged_board,
+    )
 
     board = merged_board(locate_trunk(repo))
     validate_doc(doc, board)
     doc.meta.path.parent.mkdir(parents=True, exist_ok=True)
     doc.meta.path.write_text(render_doc(doc), encoding="utf-8")
+    invalidate_merged_board(locate_trunk(repo))
     sha = commit_paths(repo, [doc.meta.path], f"docs: {doc.meta.id} {doc.meta.title}")
     doc.sha = sha
     return sha
@@ -135,7 +140,11 @@ def _move_doc(work_id: WorkId, dest_column: Column, root: Path | None) -> str | 
             repo = doc_filesystem_root(work_id, trunk=repo)
         except NotFound:
             pass
-    from cascade.workspace.integration_worktree import locate_trunk, merged_board
+    from cascade.workspace.integration_worktree import (
+        invalidate_merged_board,
+        locate_trunk,
+        merged_board,
+    )
 
     board = list_board(repo)
     if work_id not in board.by_id:
@@ -154,6 +163,7 @@ def _move_doc(work_id: WorkId, dest_column: Column, root: Path | None) -> str | 
     new_path.write_text(render_doc(doc), encoding="utf-8")
     if new_path != old_path and old_path.exists():
         old_path.unlink()
+    invalidate_merged_board(locate_trunk(repo))
     paths = [new_path] if new_path == old_path else [old_path, new_path]
     sha = commit_paths(repo, paths, f"docs: {doc.meta.id} {doc.meta.title}")
     doc.sha = sha
@@ -178,7 +188,11 @@ def _save_doc(doc: WorkDoc, previous_path: Path, root: Path | None) -> str | Non
     previous = previous_path.resolve()
     doc.meta.path = new_path
     doc.meta.updated = date.today()
-    from cascade.workspace.integration_worktree import locate_trunk, merged_board
+    from cascade.workspace.integration_worktree import (
+        invalidate_merged_board,
+        locate_trunk,
+        merged_board,
+    )
 
     board = merged_board(locate_trunk(repo))
     validate_doc(doc, board)
@@ -190,6 +204,7 @@ def _save_doc(doc: WorkDoc, previous_path: Path, root: Path | None) -> str | Non
         new_path.write_text(render_doc(doc), encoding="utf-8")
         if new_path != previous and previous.exists():
             previous.unlink()
+        invalidate_merged_board(locate_trunk(repo))
         paths = [new_path] if new_path == previous else [previous, new_path]
         sha = commit_paths(repo, paths, f"docs: {doc.meta.id} {doc.meta.title}")
     except Exception:
@@ -198,6 +213,7 @@ def _save_doc(doc: WorkDoc, previous_path: Path, root: Path | None) -> str | Non
         if previous_bytes is not None:
             previous.parent.mkdir(parents=True, exist_ok=True)
             previous.write_bytes(previous_bytes)
+        invalidate_merged_board(locate_trunk(repo))
         raise
     doc.sha = sha
     return sha

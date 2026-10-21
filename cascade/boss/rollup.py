@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ from cascade.watchdog.types import Event
 
 _CLOSEOUT_HEADING = re.compile(r"^## Closeout\s*$", re.MULTILINE)
 _NEXT_SECTION = re.compile(r"^## ", re.MULTILINE)
+_LOG = logging.getLogger(__name__)
 
 
 def write_closeout(feature_id: WorkId, paragraph: str, *, root: Path | None = None) -> str | None:
@@ -63,6 +65,9 @@ def try_complete_feature(
     ):
         if review_merged and feature_meta.parent:
             _emit_feature_completed(feature_id, feature_meta.parent, repo)
+            _retire_feature_worktree(
+                feature_id, feature_meta.parent, repo, merge_confirmed=True
+            )
         elif not review_merged:
             from cascade.review import (
                 ensure_feature_review,
@@ -73,6 +78,14 @@ def try_complete_feature(
             if review_enabled(repo) and feature_review_pending(feature_id, root=repo):
                 ensure_feature_review(feature_id, root=repo)
                 return False
+            _retire_feature_worktree(
+                feature_id,
+                feature_meta.parent,
+                repo,
+                merge_confirmed=feature_completed_recorded(
+                    feature_id, feature_meta.parent, root=repo
+                ),
+            )
         return True
 
     doc = read_doc(feature_id, root=repo)
@@ -107,6 +120,9 @@ def try_complete_feature(
         # must not create another source commit after review.
         if doc.meta.parent:
             _emit_feature_completed(feature_id, doc.meta.parent, repo)
+            _retire_feature_worktree(
+                feature_id, doc.meta.parent, repo, merge_confirmed=True
+            )
             return True
         return False
 
@@ -150,6 +166,7 @@ def try_complete_feature(
             move_doc(feature_id, "completed", root=trunk)
 
     _emit_feature_completed(feature_id, epic_id, repo)
+    _retire_feature_worktree(feature_id, epic_id, repo, merge_confirmed=True)
     return True
 
 
@@ -176,6 +193,45 @@ def _emit_feature_completed(feature_id: str, epic_id: str, repo: Path) -> None:
         ),
         root=repo,
     )
+
+
+def _retire_feature_worktree(
+    feature_id: WorkId,
+    epic_id: WorkId | None,
+    repo: Path,
+    *,
+    merge_confirmed: bool = False,
+) -> None:
+    """Best-effort cleanup after the feature is durably terminal.
+
+    Cleanup must not turn a successful merge into a failed lifecycle action.  The
+    workspace primitive refuses dirty, locked, non-canonical, or currently-used
+    checkouts and preserves the integration branch for history/recovery.
+    """
+
+    from cascade.workspace.integration_worktree import (
+        locate_trunk,
+        retire_integration_worktree,
+        terminal_doc_persisted_outside_worktree,
+    )
+
+    if epic_id is None:
+        return
+    trunk = locate_trunk(repo)
+    if not terminal_doc_persisted_outside_worktree(
+        "feature", feature_id, trunk=trunk
+    ):
+        return
+    try:
+        retire_integration_worktree(
+            "feature",
+            feature_id,
+            merged_into=f"epic/{epic_id}",
+            merge_confirmed=merge_confirmed,
+            trunk=trunk,
+        )
+    except Exception:
+        _LOG.exception("could not retire completed feature worktree %s", feature_id)
 
 
 def _feature_owner_root(feature_id: str, doc, repo: Path) -> Path:

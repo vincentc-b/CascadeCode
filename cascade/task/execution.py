@@ -258,7 +258,42 @@ def execution_view(
         record = _read(repo).get(task_id)
     if record is None:
         return None
+    return _execution_view_from_record(
+        record,
+        now=now or _now(),
+        stale_after=stale_after,
+    )
+
+
+def execution_views(
+    task_ids: list[str] | tuple[str, ...] | set[str],
+    *,
+    root: Path,
+    now: datetime | None = None,
+    stale_after: timedelta = DEFAULT_STALE_AFTER,
+) -> dict[str, dict[str, Any] | None]:
+    """Build multiple execution views from one sidecar read."""
+
+    repo = resolve_root(root)
+    with process_lock:
+        records = _read(repo)
     current = now or _now()
+    return {
+        task_id: (
+            _execution_view_from_record(records[task_id], now=current, stale_after=stale_after)
+            if task_id in records
+            else None
+        )
+        for task_id in task_ids
+    }
+
+
+def _execution_view_from_record(
+    record: dict[str, Any],
+    *,
+    now: datetime,
+    stale_after: timedelta,
+) -> dict[str, Any]:
     health: str
     age_seconds: float | None = None
     if record.get("phase") == "terminal":
@@ -268,7 +303,7 @@ def execution_view(
             heartbeat_at = datetime.fromisoformat(str(record["heartbeat_at"]))
             if heartbeat_at.tzinfo is None:
                 heartbeat_at = heartbeat_at.replace(tzinfo=timezone.utc)
-            age_seconds = max(0.0, (current - heartbeat_at).total_seconds())
+            age_seconds = max(0.0, (now - heartbeat_at).total_seconds())
         except (KeyError, TypeError, ValueError):
             age_seconds = None
         if age_seconds is None or age_seconds > stale_after.total_seconds():

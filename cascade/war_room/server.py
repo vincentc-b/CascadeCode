@@ -79,6 +79,7 @@ _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SKILLS_INVALID = object()
 REQUEST_DEADLINE_S = 10.0
 EPIC_CLOSE_DEADLINE_S = 60.0
+MAX_CONCURRENT_REQUESTS = 16
 
 
 def _merge_failure_status(reason: str | None) -> HTTPStatus:
@@ -136,7 +137,44 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         load_epic_tools()
         load_feature_tools()
         self.attachment = AttachmentState()
+        self._request_slots = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
         super().__init__(server_address, RequestHandlerClass)
+
+    def process_request(self, request: socket.socket, client_address: tuple[str, int]) -> None:
+        """Bound handler work so timed-out clients cannot create unlimited threads."""
+
+        if not self._request_slots.acquire(blocking=False):
+            body = b'{"error":"server busy"}'
+            response = (
+                b"HTTP/1.1 503 Service Unavailable\r\n"
+                b"Content-Type: application/json; charset=utf-8\r\n"
+                b"Cache-Control: no-store\r\n"
+                b"Retry-After: 1\r\n"
+                + f"Content-Length: {len(body)}\r\n".encode("ascii")
+                + b"Connection: close\r\n\r\n"
+                + body
+            )
+            try:
+                request.sendall(response)
+            except OSError:
+                pass
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(
+        self,
+        request: socket.socket,
+        client_address: tuple[str, int],
+    ) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
 
 
 GetRoute = Callable[["WarRoomRequestHandler"], None]
@@ -717,13 +755,6 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
     def _handle_board(self) -> None:
         board = merged_board(self.server.root)
         payload = board_view_from_index(board, root=self.server.root)
-        from cascade.approvals import epic_plan_approved
-
-        for column in payload["epics"].values():
-            for epic in column:
-                epic["plan_approved"] = epic_plan_approved(
-                    epic["id"], root=self.server.root
-                )
         self._json_response(HTTPStatus.OK, payload)
 
     def _handle_doc(self, work_id: str) -> None:

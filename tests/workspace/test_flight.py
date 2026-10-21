@@ -18,7 +18,12 @@ from cascade.watchdog import activate_epic, dispatch_feature, read_events
 from cascade.watchdog.loop import clear_watchdog_memory, watchdog_tick
 from cascade.war_room.serialize import flight_report_to_dict
 from cascade.war_room.server import serve
-from cascade.workspace.flight import clear_flight_memory, flight_report, refresh_flight_report
+from cascade.workspace.flight import (
+    clear_flight_memory,
+    flight_report,
+    refresh_flight_report,
+    refresh_flight_report_if_stale,
+)
 from cascade.workspace.integration_worktree import (
     get_integration_worktree,
     integration_worktree_path,
@@ -203,6 +208,21 @@ def test_overlap_toast_on_new_intersection(tmp_path: Path) -> None:
         if e.type == "Toast" and e.payload.get("kind") == "flight_overlap"
     ]
     assert len(overlap_again) == len(overlap_toasts)
+
+
+def test_watchdog_flight_refresh_reuses_fresh_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = make_repo(tmp_path)
+    _seed_epic_with_features(root)
+    first = refresh_flight_report(root)
+
+    def unexpected_rebuild(_root: Path | None = None):
+        raise AssertionError("fresh flight snapshot should be reused")
+
+    monkeypatch.setattr("cascade.workspace.flight.refresh_flight_report", unexpected_rebuild)
+    assert refresh_flight_report_if_stale(root, max_age_seconds=60) is first
 
 
 def test_get_api_flight_matches_dataclass(tmp_path: Path) -> None:

@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+import cascade.boss.epic_complete as epic_complete_module
+import cascade.boss.rollup as rollup_module
 from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
 from cascade.board.parse import render_doc
 from cascade.boss.epic_complete import confirm_epic_complete
@@ -32,6 +34,28 @@ def _isolation() -> None:
     clear_task_runs()
     yield
     clear_task_runs()
+
+
+def test_terminal_worktree_cleanup_is_best_effort(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    root = make_repo(tmp_path)
+
+    def cleanup_failed(*args, **kwargs) -> bool:
+        raise OSError("worktree disappeared during cleanup")
+
+    monkeypatch.setattr(
+        "cascade.workspace.integration_worktree.retire_integration_worktree",
+        cleanup_failed,
+    )
+
+    rollup_module._retire_feature_worktree("feat_001", "epic_001", root)
+    epic_complete_module._retire_epic_worktree("epic_001", root)
+
+    assert "could not retire completed feature worktree feat_001" in caplog.text
+    assert "could not retire completed epic worktree epic_001" in caplog.text
 
 
 def _initial_commit(root: Path) -> None:
@@ -123,6 +147,13 @@ def test_try_complete_feature_merges_feat_into_epic(tmp_path: Path) -> None:
     ).stdout.strip()
     assert epic_after != epic_before
     assert (epic_wt / "feature_code.txt").is_file()
+    assert not feat_wt.exists()
+    assert all(entry.work_id != "feat_001" for entry in load_registry(root))
+    assert subprocess.run(
+        ["git", "show-ref", "--verify", "refs/heads/feat/feat_001"],
+        cwd=root,
+        capture_output=True,
+    ).returncode == 0
 
     merge_only = merge_feature_branch("feat_001", root=root)
     assert merge_only.ok is True
@@ -301,6 +332,13 @@ def test_activated_epic_closes_through_real_git_promotion(tmp_path: Path) -> Non
     assert completed.meta.path.parent.name == "3_completed"
     assert "Full live epic content must reach trunk." in completed.body
     assert "Live epic spec is on branch" not in completed.body
+    assert not integration_worktree_path("epic", "epic_001", trunk=root).exists()
+    assert all(entry.work_id != "epic_001" for entry in load_registry(root))
+    assert subprocess.run(
+        ["git", "show-ref", "--verify", "refs/heads/epic/epic_001"],
+        cwd=root,
+        capture_output=True,
+    ).returncode == 0
     assert subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=no"],
         cwd=root,

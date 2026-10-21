@@ -72,6 +72,15 @@ def test_epic_not_ready_when_child_feature_still_active(tmp_path: Path) -> None:
     assert epic_ready_to_close("epic_001", root=root) is False
 
 
+def test_epic_without_minted_features_is_not_ready(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Empty epic", tier="epic", status="active")
+
+    assert epic_ready_to_close("epic_001", root=root) is False
+    assert confirm_epic_complete("epic_001", "human", root=root) is False
+    assert read_doc("epic_001", root=root).meta.status == "active"
+
+
 def test_epic_not_ready_while_completed_feature_awaits_review(tmp_path: Path) -> None:
     root = _epic_board(tmp_path)
     state = root / ".cascade" / "reviews.json"

@@ -39,7 +39,14 @@ def _path_str(path: Path) -> str:
     return path.as_posix()
 
 
-def work_meta_to_dict(meta: WorkMeta, *, root: Path | None = None) -> dict:
+def work_meta_to_dict(
+    meta: WorkMeta,
+    *,
+    root: Path | None = None,
+    execution: dict[str, Any] | None = None,
+    review: dict[str, object] | None = None,
+    sidecars_preloaded: bool = False,
+) -> dict:
     value = {
         "id": meta.id,
         "title": meta.title,
@@ -56,17 +63,25 @@ def work_meta_to_dict(meta: WorkMeta, *, root: Path | None = None) -> dict:
         "path": _path_str(meta.path),
     }
     if meta.tier == "task" and root is not None:
-        from cascade.task.execution import execution_view
+        if sidecars_preloaded:
+            value["execution"] = execution
+        else:
+            from cascade.task.execution import execution_view
 
-        value["execution"] = execution_view(meta.id, root=root)
+            value["execution"] = execution_view(meta.id, root=root)
     if meta.tier == "feature":
         value["approved"] = meta.approved_at is not None
         if meta.approved_at is not None:
             value["approved_at"] = meta.approved_at.isoformat()
+    if meta.tier == "epic":
+        value["plan_approved"] = meta.plan_approved_at is not None
     if meta.tier == "feature" and root is not None:
-        from cascade.review import feature_review_view
+        if sidecars_preloaded:
+            value["review"] = review
+        else:
+            from cascade.review import feature_review_view
 
-        value["review"] = feature_review_view(meta.id, root=root)
+            value["review"] = feature_review_view(meta.id, root=root)
     return value
 
 
@@ -271,16 +286,33 @@ def open_review_to_dict(review: OpenReview) -> dict[str, Any]:
 def board_view_from_index(board, *, root: Path) -> dict:
     """Build feat_003 BoardView from a BoardIndex scan."""
 
+    from cascade.review import feature_review_views
+    from cascade.task.execution import execution_views
+
+    metas = sorted(board.by_id.values(), key=lambda meta: meta.id)
+    executions = execution_views(
+        {meta.id for meta in metas if meta.tier == "task"}, root=root
+    )
+    reviews = feature_review_views(
+        {meta.id for meta in metas if meta.tier == "feature"}, root=root
+    )
+
     columns = ("1_backlog", "2_active", "3_completed")
     view: dict[str, dict[str, list]] = {
         "epics": {col: [] for col in columns},
         "features": {col: [] for col in columns},
         "tasks": {col: [] for col in columns},
     }
-    for meta in sorted(board.by_id.values(), key=lambda m: m.id):
+    for meta in metas:
         key = _TIER_TO_VIEW_KEY[meta.tier]
         folder = column_folder_for_meta(meta, root=root)
-        item = work_meta_to_dict(meta, root=root)
+        item = work_meta_to_dict(
+            meta,
+            root=root,
+            execution=executions.get(meta.id),
+            review=reviews.get(meta.id),
+            sidecars_preloaded=True,
+        )
         review = item.get("review")
         if (
             meta.tier == "feature"

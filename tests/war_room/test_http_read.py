@@ -195,3 +195,44 @@ def test_slow_request_is_interrupted_within_deadline(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def test_server_rejects_work_beyond_handler_limit(tmp_path):
+    entered = threading.Event()
+    release = threading.Event()
+
+    def _occupied(handler: WarRoomRequestHandler) -> None:
+        entered.set()
+        release.wait(timeout=5)
+        handler._json_response(HTTPStatus.OK, {"ok": True})
+
+    WarRoomRequestHandler.register_get_route("/api/occupied", _occupied)
+    root = make_repo(tmp_path)
+    port = _free_port()
+    server = serve(root=root, host="127.0.0.1", port=port)
+    server._request_slots = threading.BoundedSemaphore(1)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    first_error: list[Exception] = []
+
+    def first_request() -> None:
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/api/occupied").read()
+        except Exception as exc:  # pragma: no cover - diagnostic for assertion below
+            first_error.append(exc)
+
+    first = threading.Thread(target=first_request, daemon=True)
+    first.start()
+    try:
+        assert entered.wait(timeout=2)
+        code, body = _get_expect_error(f"http://127.0.0.1:{port}/api/board")
+        assert code == HTTPStatus.SERVICE_UNAVAILABLE
+        assert body == {"error": "server busy"}
+    finally:
+        release.set()
+        first.join(timeout=2)
+        WarRoomRequestHandler._extra_get_routes.pop("/api/occupied", None)
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+    assert not first_error

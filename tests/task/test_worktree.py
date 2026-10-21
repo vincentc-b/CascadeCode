@@ -16,6 +16,7 @@ from cascade.task.worktree import (
     worktree_path,
 )
 from cascade.watchdog.hooks import clear_hooks
+from cascade.workspace.integration_worktree import get_integration_worktree
 from tests.support import make_repo
 
 
@@ -121,6 +122,7 @@ def test_remove_task_worktree_keeps_branch(tmp_path: Path) -> None:
     assert not wt.exists()
     assert _branch_exists(root, "task/task_031")
     assert get_task_run("task_031") is None
+    assert get_integration_worktree(root, "task", "task_031") is None
 
 
 def test_teardown_hook_removes_worktree_not_branch(tmp_path: Path) -> None:
@@ -145,6 +147,7 @@ def test_teardown_hook_removes_worktree_not_branch(tmp_path: Path) -> None:
     assert not wt.exists()
     assert _branch_exists(root, "task/task_031")
     assert get_task_run("task_031") is None
+    assert get_integration_worktree(root, "task", "task_031") is None
 
 
 def test_teardown_hook_preserves_failed_worktree_for_retry(tmp_path: Path) -> None:

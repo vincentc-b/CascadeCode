@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cascade.board.context import resolve_root
-from cascade.board.errors import NotFound
-from cascade.board.store import read_doc
+from cascade.board.errors import NotFound, SchemaError
+from cascade.board.parse import parse_doc
+from cascade.board.types import WorkMeta
 from cascade.workspace.doc_root import read_doc_resolved, resolve_doc_worktree
-from cascade.workspace.integration_worktree import locate_trunk
+from cascade.workspace.integration_worktree import load_registry, locate_trunk
 from cascade.watchdog.lock import process_lock
 
 _CHAT_DIR = Path("docs") / "_war_room" / "chat"
@@ -32,8 +33,7 @@ def _sidecar_path(root: Path, graph_id: str) -> Path:
 def read_messages(graph_id: str, *, root: Path) -> list[dict]:
     """Return all messages for ``graph_id`` (empty if sidecar missing)."""
 
-    repo = _chat_repo(graph_id, root=root)
-    path = _sidecar_path(repo, graph_id)
+    path = _chat_read_path(graph_id, root=root)
     with process_lock:
         if not path.is_file():
             return []
@@ -138,6 +138,97 @@ def _chat_repo(graph_id: str, *, root: Path) -> Path:
         return resolve_doc_worktree(graph_id, root=trunk)
     except NotFound:
         return trunk
+
+
+def _chat_read_path(graph_id: str, *, root: Path) -> Path:
+    """Resolve an existing chat sidecar without constructing the merged board.
+
+    Chat GET is a frequent poll.  ``resolve_doc_worktree`` is appropriate for
+    mutations, where the current plan owner must be established authoritatively,
+    but it used to make every poll parse every plan in every registered checkout.
+    The registry and one ID-specific plan lookup contain enough routing
+    information for a read.
+    """
+
+    trunk = locate_trunk(resolve_root(root))
+    trunk_meta = _direct_doc_meta(graph_id, root=trunk)
+
+    # A closed epic's trunk copy is authoritative even while conservative
+    # worktree cleanup leaves the old registration in place.
+    if (
+        trunk_meta is not None
+        and trunk_meta.tier == "epic"
+        and trunk_meta.status == "completed"
+        and trunk_meta.path.parent.name == "3_completed"
+    ):
+        return _sidecar_path(trunk, graph_id)
+
+    entries = load_registry(trunk)
+    expected_kind = "epic" if graph_id.startswith("epic_") else "feature"
+    for entry in entries:
+        if entry.kind == expected_kind and entry.work_id == graph_id:
+            # Match resolve_doc_worktree: a registered epic/feature owns its
+            # room even before the first message creates a sidecar.
+            return _sidecar_path(entry.path, graph_id)
+
+    if graph_id.startswith("feat_"):
+        # Before feature dispatch, its room belongs to the parent epic. Prefer
+        # the epic checkout that actually contains the feature plan.
+        for entry in entries:
+            if entry.kind != "epic" or not entry.path.is_dir():
+                continue
+            if _direct_doc_meta(graph_id, root=entry.path) is not None:
+                return _sidecar_path(entry.path, graph_id)
+
+        # A newly drafted feature can still be trunk-only while its parent epic
+        # is active. Its parent field routes the room without a board-wide scan.
+        if trunk_meta is not None and trunk_meta.parent:
+            for entry in entries:
+                if entry.kind == "epic" and entry.work_id == trunk_meta.parent:
+                    return _sidecar_path(entry.path, graph_id)
+
+    if graph_id.startswith("task_"):
+        # Task chat is rejected by the API, but preserve historical read routing.
+        # Normally the task plan itself is already in its feature checkout.
+        for entry in entries:
+            if entry.kind != "feature" or not entry.path.is_dir():
+                continue
+            if _direct_doc_meta(graph_id, root=entry.path) is not None:
+                return _sidecar_path(entry.path, graph_id)
+        # A trunk-only task follows its parent feature's registered checkout.
+        if trunk_meta is not None and trunk_meta.parent:
+            for entry in entries:
+                if entry.kind == "feature" and entry.work_id == trunk_meta.parent:
+                    return _sidecar_path(entry.path, graph_id)
+
+    return _sidecar_path(trunk, graph_id)
+
+
+def _direct_doc_meta(work_id: str, *, root: Path) -> WorkMeta | None:
+    """Read only the plan whose filename encodes ``work_id`` in one checkout."""
+
+    if work_id.startswith("epic_"):
+        tier_dir = "epics"
+    elif work_id.startswith("feat_"):
+        tier_dir = "features"
+    elif work_id.startswith("task_"):
+        tier_dir = "tasks"
+    else:
+        return None
+    for column in ("2_active", "3_completed", "1_backlog"):
+        directory = root / "docs" / tier_dir / column
+        candidates = [directory / f"{work_id}.md"]
+        candidates.extend(sorted(directory.glob(f"{work_id}_*.md")))
+        for path in candidates:
+            if not path.is_file() or path.is_symlink():
+                continue
+            try:
+                meta = parse_doc(path).meta
+            except (OSError, UnicodeDecodeError, SchemaError):
+                continue
+            if meta.id == work_id:
+                return meta
+    return None
 
 
 def _is_task_tier(graph_id: str, *, root: Path) -> bool:

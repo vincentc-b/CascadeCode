@@ -23,6 +23,7 @@ from cascade.watchdog.types import Event
 from cascade.workspace.integration_worktree import (
     get_integration_worktree,
     integration_branch,
+    load_registry,
     locate_trunk,
     merged_board,
 )
@@ -148,6 +149,59 @@ def feature_review_view(feature_id: str, *, root: Path) -> dict[str, object] | N
             "draft": False,
         }
     return None
+
+
+def feature_review_views(
+    feature_ids: list[str] | tuple[str, ...] | set[str],
+    *,
+    root: Path,
+) -> dict[str, dict[str, object] | None]:
+    """Build multiple operator review views with one registry/sidecar load."""
+
+    trunk = locate_trunk(root)
+    state = _load(trunk)
+    ids = list(feature_ids)
+    missing = [feature_id for feature_id in ids if feature_id not in state]
+    enabled = bool(missing) and review_enabled(trunk)
+    entries = {
+        entry.work_id: entry
+        for entry in load_registry(trunk)
+        if enabled and entry.kind == "feature" and entry.work_id in missing
+    }
+    views: dict[str, dict[str, object] | None] = {}
+    for feature_id in ids:
+        record = state.get(feature_id)
+        if record is not None:
+            views[feature_id] = {
+                "state": "merged" if record.get("closed") else "awaiting_review",
+                "url": str(record.get("url") or ""),
+                "number": record.get("number"),
+                "draft": bool(record.get("draft", False)),
+            }
+            continue
+        entry = entries.get(feature_id)
+        pending = False
+        if entry is not None and entry.path.is_dir():
+            try:
+                doc = read_doc(feature_id, root=entry.path)
+            except NotFound:
+                pass
+            else:
+                pending = (
+                    doc.meta.status == "completed"
+                    and doc.meta.path.parent.name == "3_completed"
+                )
+        views[feature_id] = (
+            {
+                "state": "preparing_review",
+                "url": "",
+                "number": None,
+                "draft": False,
+            }
+            if pending
+            else None
+        )
+    return views
 
 
 def epic_has_pending_feature_review(epic_id: str, *, root: Path) -> bool:

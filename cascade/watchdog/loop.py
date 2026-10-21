@@ -24,8 +24,16 @@ from cascade.watchdog.types import Event
 # Appearances already toasted. This suppresses duplicate toasts, not retries.
 _stuck: set[tuple[str, int, int]] = set()
 _orphan_toast_signatures: set[frozenset[tuple[str, str]]] = set()
+# Work queues are the latency-sensitive watchdog input. Remember their cheap
+# filesystem signature so idle polls do not rebuild the merged board merely to
+# discover that no graph has anything new to ingest.
+_work_queue_signatures: dict[Path, tuple[tuple[str, int, int, int, int], ...]] = {}
 # Event is written just after the introducing commit; allow a little clock skew.
 _AUTH_SKEW = timedelta(seconds=2)
+# Filesystem/lifecycle reconciliation is not latency-sensitive; explicit queue
+# traffic still uses the 500ms loop below. This also aligns with the advisory
+# flight cache TTL, avoiding an extra all-worktree rebuild between refreshes.
+_MAINTENANCE_INTERVAL_SECONDS = 10.0
 
 
 def clear_watchdog_memory() -> None:
@@ -36,6 +44,7 @@ def clear_watchdog_memory() -> None:
     with process_lock:
         _stuck.clear()
         _orphan_toast_signatures.clear()
+        _work_queue_signatures.clear()
         clear_flight_memory()
 
 
@@ -46,28 +55,72 @@ def watchdog_tick(root: Path | None = None) -> None:
     from cascade.automation import maybe_sync_briefs
 
     maybe_sync_briefs(repo)
-    install_boss_consumer(repo)
+    # Authorization is the first lifecycle gate after importing remote board
+    # state.  Later consumers can dispatch descendants or apply other durable
+    # lifecycle transitions based on active status, so they must never observe
+    # an illegal filesystem move as authorized work.
     with process_lock:
-        tick_boss_consumer()
+        _tick_scan_active(repo)
+    _consume_explicit_events(repo, force_work_queues=True)
+    with process_lock:
         _maybe_enqueue_orphan_toasts(repo)
-    from cascade.workspace.kickoff import deferred_kickoffs, deliver_queue_kickoffs
-
-    # Model turns can take minutes.  Enqueue them so this supervisory loop keeps
-    # scanning health, retrying merges, and dispatching independent work.
-    with deferred_kickoffs():
-        deliver_queue_kickoffs(repo)
     from cascade.automation import advance_work, poll_reviews
 
     advance_work(repo)
     poll_reviews(repo)
     with process_lock:
-        _tick_scan_active(repo)
-        from cascade.workspace.flight import refresh_flight_report
+        from cascade.workspace.flight import refresh_flight_report_if_stale
 
-        refresh_flight_report(repo)
+        refresh_flight_report_if_stale(repo)
     from cascade.watchdog.events import prune_completed_work_queues
 
     prune_completed_work_queues(root=repo)
+
+
+def _event_tick(root: Path) -> None:
+    """Consume explicit orders without running broad board maintenance."""
+
+    _consume_explicit_events(root, force_work_queues=False)
+
+
+def _consume_explicit_events(root: Path, *, force_work_queues: bool) -> None:
+    """Consume boss and graph queues, skipping unchanged graph queues when idle."""
+
+    install_boss_consumer(root)
+    with process_lock:
+        tick_boss_consumer()
+
+    signature = _work_queue_signature(root)
+    previous = _work_queue_signatures.get(root.resolve())
+    if not force_work_queues and signature == previous:
+        return
+
+    from cascade.workspace.kickoff import deferred_kickoffs, deliver_queue_kickoffs
+
+    # Model turns can take minutes. Enqueue them so this supervisory loop keeps
+    # scanning health, retrying merges, and dispatching independent work.
+    with deferred_kickoffs():
+        deliver_queue_kickoffs(root)
+    # A failed delivery must remain retryable on the next fast poll.
+    _work_queue_signatures[root.resolve()] = signature
+
+
+def _work_queue_signature(root: Path) -> tuple[tuple[str, int, int, int, int], ...]:
+    """Return a cheap change token for graph queues (not UI or boss feeds)."""
+
+    queue_dir = root / "docs" / "_queue"
+    if not queue_dir.is_dir():
+        return ()
+    rows: list[tuple[str, int, int, int, int]] = []
+    for path in queue_dir.glob("*.jsonl"):
+        if path.stem in {"boss", "war_room"}:
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        rows.append((path.name, stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_size))
+    return tuple(sorted(rows))
 
 
 def _resume_reclaimable_task_runs(repo: Path) -> None:
@@ -135,15 +188,25 @@ def run_watchdog(
 
     advance_work(repo)
 
+    last_maintenance_at: float | None = None
+
     while True:
         if stop_when is not None and stop_when():
             return
         # A fresh lease fences duplicate recovery.  Once its heartbeat ages out,
         # this creates one process-local TaskRun; subsequent ticks see that run
         # and cannot enqueue another resume.
-        _resume_reclaimable_task_runs(repo)
+        maintenance_due = (
+            last_maintenance_at is None
+            or time.monotonic() - last_maintenance_at >= _MAINTENANCE_INTERVAL_SECONDS
+        )
         try:
-            watchdog_tick(root)
+            if maintenance_due:
+                _resume_reclaimable_task_runs(repo)
+                watchdog_tick(root)
+                last_maintenance_at = time.monotonic()
+            else:
+                _event_tick(repo)
         except Exception:
             # The War Room and watchdog intentionally share one supervisor.
             # A transient forge/git failure must not tear down the HTTP server;

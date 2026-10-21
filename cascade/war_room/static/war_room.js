@@ -651,7 +651,6 @@
           false
         );
         await refreshBoard();
-        await refreshBossView();
       } else {
         setStatus("Merge failed: " + (body.reason || "unknown"), true);
       }
@@ -845,8 +844,7 @@
     attachedGraphId = graphId;
     focusGraphId = graphId;
     if (kind === "feature" && boardFocus && BoardFocusApi) {
-      const view = await apiGet("/api/board");
-      lastBoardView = view;
+      const view = await loadBoardView();
       const featureItem = BoardFocusApi.findFeatureItem(view, graphId);
       if (featureItem) {
         boardFocus = BoardFocusApi.applyFeatureSelection(boardFocus, featureItem);
@@ -892,31 +890,77 @@
     el.btnDetach.hidden = !attachedGraphId;
   }
 
-  async function refreshBoard() {
+  let boardRefreshInFlight = null;
+  let relatedRefreshInFlight = null;
+
+  /** Share the expensive board request across startup, polling, and user actions. */
+  function loadBoardView() {
+    if (boardRefreshInFlight) return boardRefreshInFlight;
+    boardRefreshInFlight = apiGet("/api/board?_=" + Date.now())
+      .then(function (view) {
+        renderBoard(view);
+        return view;
+      })
+      .finally(function () {
+        boardRefreshInFlight = null;
+      });
+    return boardRefreshInFlight;
+  }
+
+  function refreshRelatedPanels() {
+    if (relatedRefreshInFlight) return relatedRefreshInFlight;
+    relatedRefreshInFlight = Promise.all([refreshFlightReport(), refreshBossView()])
+      .finally(function () {
+        relatedRefreshInFlight = null;
+      });
+    return relatedRefreshInFlight;
+  }
+
+  async function refreshBoard(options) {
+    const refreshRelated = !options || options.refreshRelated !== false;
     try {
-      const view = await apiGet("/api/board?_=" + Date.now());
-      renderBoard(view);
-      await refreshFlightReport();
-      await refreshBossView();
+      await loadBoardView();
+      if (refreshRelated) {
+        await refreshRelatedPanels();
+      }
+      return true;
     } catch (err) {
       reportBoardLoadFailure(err);
+      return false;
     }
   }
 
-  let boardPollInFlight = false;
-
   /** Keep lifecycle controls current even when no toast is emitted or a toast is replayed. */
-  async function pollBoard() {
-    if (boardPollInFlight) return;
-    boardPollInFlight = true;
-    try {
-      const view = await apiGet("/api/board?_=" + Date.now());
-      renderBoard(view);
-    } catch (err) {
-      reportBoardLoadFailure(err);
-    } finally {
-      boardPollInFlight = false;
+  function pollBoard() {
+    return refreshBoard({ refreshRelated: false });
+  }
+
+  const BOARD_POLL_BASE_MS = 3000;
+  const BOARD_POLL_MAX_MS = 30000;
+  let boardPollDelayMs = BOARD_POLL_BASE_MS;
+  let boardPollTimer = null;
+
+  function scheduleBoardPoll(delayMs) {
+    if (boardPollTimer !== null) clearTimeout(boardPollTimer);
+    boardPollTimer = setTimeout(async function () {
+      boardPollTimer = null;
+      if (document.hidden) return;
+      const loaded = await pollBoard();
+      boardPollDelayMs = loaded
+        ? BOARD_POLL_BASE_MS
+        : Math.min(BOARD_POLL_MAX_MS, boardPollDelayMs * 2);
+      scheduleBoardPoll(boardPollDelayMs);
+    }, delayMs);
+  }
+
+  function handleVisibilityChange() {
+    if (document.hidden) {
+      if (boardPollTimer !== null) clearTimeout(boardPollTimer);
+      boardPollTimer = null;
+      return;
     }
+    boardPollDelayMs = BOARD_POLL_BASE_MS;
+    scheduleBoardPoll(0);
   }
 
   function epicIdForFlightLens() {
@@ -1612,20 +1656,32 @@
     });
   }
 
-  wireCompletedCollapseControls();
-  updateFocusUi("epic");
-  refreshBoard();
-  setInterval(pollBoard, 3000);
-  refreshFlightReport().catch(reportBoardLoadFailure);
-  refreshBossView();
-  loadChat({ userInitiated: true }).catch(function (err) {
-    reportChatLoadFailure(err, { userInitiated: true });
-  });
-  refreshAmendments();
-  refreshProviders();
-  refreshOpenReviews({ userInitiated: false });
-  pollToasts();
-  setInterval(pollToasts, 2000);
-  pollChatSidecar();
-  setInterval(pollChatSidecar, 3000);
+  async function bootstrapWarRoom() {
+    wireCompletedCollapseControls();
+    updateFocusUi("epic");
+
+    // Load the board first. It supplies the lens used by flight and avoids a
+    // burst of duplicate board/flight/boss requests during startup.
+    await refreshBoard();
+    await Promise.allSettled([
+      loadChat({ userInitiated: true }).catch(function (err) {
+        reportChatLoadFailure(err, { userInitiated: true });
+      }),
+      refreshAmendments(),
+      refreshProviders(),
+      refreshOpenReviews({ userInitiated: false }),
+      pollToasts(),
+    ]);
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    if (!document.hidden) scheduleBoardPoll(boardPollDelayMs);
+    setInterval(function () {
+      if (!document.hidden) pollToasts();
+    }, 2000);
+    setInterval(function () {
+      if (!document.hidden) pollChatSidecar();
+    }, 3000);
+  }
+
+  bootstrapWarRoom().catch(reportLoadFailure);
 })();

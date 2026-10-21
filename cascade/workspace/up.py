@@ -17,10 +17,14 @@ from cascade.workspace.types import WorkspaceRoot
 def resume_legally_active_graphs(root: Path) -> None:
     """Recreate missing integration worktrees for registered branches (no dispatch)."""
 
-    from cascade.workspace.integration_worktree import repair_all_registered
+    from cascade.workspace.integration_worktree import (
+        repair_all_registered,
+        retire_terminal_registered_worktrees,
+    )
     from cascade.workspace.kickoff import resume_inflight_graphs
 
     repo = Path(root).resolve()
+    retire_terminal_registered_worktrees(repo)
     repair_all_registered(repo)
     resume_inflight_graphs(repo)
 

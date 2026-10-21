@@ -156,7 +156,7 @@ def test_war_room_js_renders_toast_body():
     assert '"Epic close timed out after 60s"' in source
 
 
-def test_task_execution_controls_are_visible_and_board_poll_is_independent():
+def test_task_execution_controls_and_board_polling_are_load_safe():
     js_path = (
         Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
     )
@@ -168,8 +168,31 @@ def test_task_execution_controls_are_visible_and_board_poll_is_independent():
     assert 'execution.health || execution.phase' in source
     assert 'label: "No signal"' in source
     assert '"Retry is available only when execution is blocked."' in source
-    assert "setInterval(pollBoard, 3000)" in source
-    assert "async function pollBoard()" in source
+    assert 'boardRefreshInFlight = apiGet("/api/board?_=" + Date.now())' in source
+    assert source.count('apiGet("/api/board') == 1
+    assert "return refreshBoard({ refreshRelated: false })" in source
+    assert "setInterval(pollBoard" not in source
+    assert "scheduleBoardPoll(boardPollDelayMs)" in source
+    assert "Math.min(BOARD_POLL_MAX_MS, boardPollDelayMs * 2)" in source
+    assert 'document.addEventListener("visibilitychange", handleVisibilityChange)' in source
+    bootstrap = source[source.index("async function bootstrapWarRoom()") :]
+    assert bootstrap.index("await Promise.allSettled([") < bootstrap.index(
+        "scheduleBoardPoll(boardPollDelayMs)"
+    )
+
+
+def test_startup_does_not_duplicate_board_related_requests():
+    js_path = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    )
+    source = js_path.read_text(encoding="utf-8")
+
+    bootstrap = source[source.index("async function bootstrapWarRoom()") :]
+    assert bootstrap.count("await refreshBoard();") == 1
+    assert "refreshFlightReport().catch" not in bootstrap
+    assert "refreshBossView();" not in bootstrap
+    assert "pollChatSidecar()," not in bootstrap
+    assert "relatedRefreshInFlight" in source
 
 
 def test_task_execution_status_styles_include_healthy_and_blocked_states():

@@ -4,6 +4,7 @@ import json
 
 from cascade.task.execution import (
     execution_view,
+    execution_views,
     execution_lease_is_live,
     heartbeat,
     mark_queued,
@@ -47,6 +48,29 @@ def test_execution_health_is_persisted_and_exposed_on_task_board(tmp_path: Path)
     assert failed["phase"] == "terminal"
     assert failed["health"] == "failed"
     assert failed["last_error"] == "tests_red"
+
+
+def test_execution_views_reads_sidecar_once(tmp_path: Path, monkeypatch) -> None:
+    root = make_repo(tmp_path, git=False)
+    mark_queued("task_001", root=root)
+    mark_queued("task_002", root=root)
+
+    import cascade.task.execution as execution
+
+    calls = 0
+    real_read = execution._read
+
+    def counting_read(repo: Path):
+        nonlocal calls
+        calls += 1
+        return real_read(repo)
+
+    monkeypatch.setattr(execution, "_read", counting_read)
+    views = execution_views({"task_001", "task_002"}, root=root)
+
+    assert calls == 1
+    assert views["task_001"]["health"] == "queued"
+    assert views["task_002"]["health"] == "queued"
 
 
 def test_new_queue_attempt_increments_and_clears_terminal_error(tmp_path: Path) -> None:
