@@ -58,6 +58,7 @@ from cascade.war_room.provider_routes import (
     register_provider_routes,
     try_handle_provider_post,
 )
+from cascade.war_room.review_routes import register_review_routes
 from cascade.war_room.sidecar_routes import _parse_graph_id_from_chat_path, register_sidecar_routes
 from cascade.war_room.views import render_plan_page, render_war_room_page
 from cascade.comments import section_slug
@@ -867,6 +868,7 @@ def main() -> None:
 register_sidecar_routes(WarRoomRequestHandler)
 register_amendment_routes(WarRoomRequestHandler)
 register_provider_routes(WarRoomRequestHandler)
+register_review_routes(WarRoomRequestHandler)
 
 if __name__ == "__main__":
     main()
