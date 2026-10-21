@@ -108,6 +108,11 @@ None blocking. Detailed storage/API shapes belong in feature planning and should
   Chose Derive feature completion from completed tasks plus a merged MR, and derive epic completion from all persisted child-feature states..
   Rationale: Derived state avoids premature or manually divergent completion and can be reconciled idempotently after restart.
   Honors: Automatic feature and epic transitions based on content completion..
+
+- `dec_003` · 2026-10-21 · Epic Team · **Follow-up semantics**
+  Chose Treat a follow-up as completion-blocking only after it is accepted and minted as an actual child feature..
+  Rationale: Free-form suggestions are ambiguous; persisted children provide an auditable boundary without inventing a second backlog state.
+  Honors: Keeping an epic active for accepted follow-up work while allowing completion when suggestions are not adopted..
 ## Amendment log
 
 _(none)_
