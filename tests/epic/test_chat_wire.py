@@ -26,7 +26,7 @@ from cascade.epic.checkpoint import checkpoint_path, thread_config
 from cascade.war_room.server import serve
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.workspace.kickoff import wait_for_background_kickoffs
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, approve_board_feature
 
 
 def _free_port() -> int:
@@ -53,6 +53,7 @@ def chat_wire_board(tmp_path: Path):
     root = make_repo(tmp_path, git=False, role_skills=True)
     add_doc(root, id="epic_001", title="Root epic", tier="epic", status="ready_to_plan")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     port = _free_port()
     server = serve(root=root, host="127.0.0.1", port=port)

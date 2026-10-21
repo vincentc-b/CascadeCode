@@ -10,7 +10,7 @@ from cascade.comments.store import comment
 from cascade.task.worktree import clear_task_runs
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.workspace.integration_worktree import integration_worktree_path
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, approve_board_feature
 
 
 def _initial_commit(root: Path) -> None:
@@ -34,6 +34,7 @@ def test_merge_feature_branch_refused_open_blocking_comment(tmp_path: Path) -> N
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
 
     feature_wt = integration_worktree_path("feature", "feat_001", trunk=root)

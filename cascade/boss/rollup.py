@@ -12,7 +12,7 @@ from cascade.board.paths import column_for_status
 from cascade.board.store import list_board, move_doc, read_doc, write_doc
 from cascade.board.types import WorkId
 from cascade.comments.store import read_comments
-from cascade.watchdog.events import append_event
+from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.types import Event
 
 _CLOSEOUT_HEADING = re.compile(r"^## Closeout\s*$", re.MULTILINE)
@@ -153,7 +153,19 @@ def try_complete_feature(
     return True
 
 
+def feature_completed_recorded(feature_id: WorkId, epic_id: WorkId, *, root: Path) -> bool:
+    """True when ``FeatureCompleted`` for ``feature_id`` is already on the epic feed."""
+
+    events, _ = read_events(epic_id, 0, root=root)
+    return any(
+        event.type == "FeatureCompleted" and event.payload.get("feature_id") == feature_id
+        for event in events
+    )
+
+
 def _emit_feature_completed(feature_id: str, epic_id: str, repo: Path) -> None:
+    if feature_completed_recorded(feature_id, epic_id, root=repo):
+        return
     append_event(
         epic_id,
         Event(
@@ -184,7 +196,7 @@ def _feature_owner_root(feature_id: str, doc, repo: Path) -> Path:
 
 
 def on_task_merged(task_id: WorkId, *, root: Path | None = None) -> None:
-    """After a task merge, attempt to complete its parent feature when gates already hold."""
+    """After a task merge, reconcile feature and epic completion from persisted state."""
 
     repo = resolve_root(root)
     try:
@@ -193,10 +205,9 @@ def on_task_merged(task_id: WorkId, *, root: Path | None = None) -> None:
         return
     if task.meta.tier != "task":
         return
-    parent_id = task.meta.parent
-    if not parent_id:
-        return
-    try_complete_feature(parent_id, root=repo)
+    from cascade.completion_reconcile import reconcile_completion_with_prompts
+
+    reconcile_completion_with_prompts(root=repo)
 
 
 def _rollup_gates_pass(

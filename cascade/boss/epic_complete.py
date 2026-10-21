@@ -24,7 +24,7 @@ from cascade.board.paths import column_for_status
 from cascade.board.store import move_doc, read_doc
 from cascade.board.types import WorkId
 from cascade.comments.store import read_comments
-from cascade.watchdog.events import append_event
+from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.types import Event, Principal
 
 _TOAST_KIND = "epic_ready_to_close"
@@ -99,6 +99,22 @@ def surface_epic_close_prompt(epic_id: WorkId, *, root: Path | None = None) -> N
     )
 
 
+def epic_completed_recorded(epic_id: WorkId, *, root: Path) -> bool:
+    """True when ``EpicCompleted`` for ``epic_id`` is already on ``war_room``."""
+
+    events, _ = read_events("war_room", 0, root=root)
+    return any(
+        event.type == "EpicCompleted" and event.payload.get("epic_id") == epic_id
+        for event in events
+    )
+
+
+def try_complete_epic(epic_id: WorkId, *, root: Path | None = None) -> bool:
+    """Complete the epic when every persisted child feature is terminal; idempotent."""
+
+    return _finish_epic_completion(epic_id, root=root)
+
+
 def confirm_epic_complete(epic_id: WorkId, by: Principal, *, root: Path | None = None) -> bool:
     """Human-only: move the epic to completed and emit ``EpicCompleted`` on ``war_room``."""
 
@@ -112,6 +128,18 @@ def confirm_epic_complete_result(
 
     if by != "human":
         return EpicCompleteResult(ok=False, reason="unauthorized")
+    return _finish_epic_completion_result(epic_id, root=root)
+
+
+def _finish_epic_completion(epic_id: WorkId, *, root: Path | None = None) -> bool:
+    """Boolean compatibility wrapper for automatic lifecycle reconciliation."""
+
+    return _finish_epic_completion_result(epic_id, root=root).ok
+
+
+def _finish_epic_completion_result(
+    epic_id: WorkId, *, root: Path | None = None
+) -> EpicCompleteResult:
     repo = resolve_root(root)
     from cascade.workspace.integration_worktree import locate_trunk, merged_board
 
@@ -122,6 +150,7 @@ def confirm_epic_complete_result(
     if epic_meta.tier != "epic":
         return EpicCompleteResult(ok=False, reason="wrong_tier")
     if epic_meta.status == "completed" and epic_meta.path.parent.name == "3_completed":
+        _emit_epic_completed(epic_id, repo)
         return EpicCompleteResult(ok=True)
     if not _epic_ready_to_close(epic_id, repo=repo, board=board):
         return EpicCompleteResult(ok=False, reason="not_ready")
@@ -144,6 +173,13 @@ def confirm_epic_complete_result(
     trunk = locate_trunk(repo)
     move_doc(epic_id, "completed", root=repo)
     _complete_epic_trunk_pointer(epic_id, trunk=trunk)
+    _emit_epic_completed(epic_id, repo)
+    return EpicCompleteResult(ok=True)
+
+
+def _emit_epic_completed(epic_id: WorkId, repo: Path) -> None:
+    if epic_completed_recorded(epic_id, root=repo):
+        return
     append_event(
         "war_room",
         Event(
@@ -154,7 +190,6 @@ def confirm_epic_complete_result(
         ),
         root=repo,
     )
-    return EpicCompleteResult(ok=True)
 
 
 def on_feature_completed(feature_id: WorkId, *, root: Path | None = None) -> None:

@@ -128,6 +128,12 @@ def run_watchdog(
 
     install_kickoff(repo)
     _resume_reclaimable_task_runs(repo)
+    from cascade.completion_reconcile import reconcile_completion_with_prompts
+
+    reconcile_completion_with_prompts(root=repo)
+    from cascade.automation import advance_work
+
+    advance_work(repo)
 
     while True:
         if stop_when is not None and stop_when():

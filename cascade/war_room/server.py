@@ -22,13 +22,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from cascade.board.errors import NotFound
-from cascade.board.store import read_doc
 from cascade.workspace.doc_root import read_doc_resolved
 from cascade.workspace.integration_worktree import merged_board
-from cascade.boss.epic_complete import (
-    confirm_epic_complete_result,
-    on_feature_completed,
-)
+from cascade.boss.epic_complete import confirm_epic_complete_result
 from cascade.boss.graph import install_boss_consumer
 from cascade.boss.merge import merge_task_branch
 from cascade.boss.orphans import detect_orphans
@@ -60,6 +56,7 @@ from cascade.war_room.provider_routes import (
     register_provider_routes,
     try_handle_provider_post,
 )
+from cascade.war_room.review_routes import register_review_routes
 from cascade.war_room.sidecar_routes import _parse_graph_id_from_chat_path, register_sidecar_routes
 from cascade.war_room.views import render_plan_page, render_war_room_page
 from cascade.comments import section_slug
@@ -133,6 +130,9 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         install_task_boot_hook(self.root)
         install_task_wiring(self.root)
         install_boss_consumer(self.root)
+        from cascade.completion_reconcile import reconcile_completion_with_prompts
+
+        reconcile_completion_with_prompts(root=self.root)
         load_epic_tools()
         load_feature_tools()
         self.attachment = AttachmentState()
@@ -333,6 +333,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/briefs": lambda h, b: h._handle_create_brief(b),
             "/api/sync/pull": lambda h, b: h._handle_sync_pull(b),
             "/api/approve_epic_plan": lambda h, b: h._handle_approve_epic_plan(b),
+            "/api/approve_feature": lambda h, b: h._handle_approve_feature(b),
         }
         routes.update(cls._extra_post_routes)
         return routes
@@ -401,6 +402,19 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
         self._json_response(HTTPStatus.OK, payload)
 
+    def _handle_approve_feature(self, body: dict[str, Any]) -> None:
+        feature_id = self._require_work_id(body)
+        if feature_id is None:
+            return
+        from cascade.approvals import approve_feature
+
+        try:
+            payload = approve_feature(feature_id, root=self.server.root)
+        except (ValueError, OSError) as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._json_response(HTTPStatus.OK, payload)
+
     def _handle_dispatch_feature(self, body: dict[str, Any]) -> None:
         work_id = self._require_work_id(body)
         if work_id is None:
@@ -431,19 +445,6 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             )
             return
         on_task_merged(task_id, root=self.server.root)
-        try:
-            task = read_doc(task_id, root=self.server.root)
-            parent_id = task.meta.parent
-            if parent_id:
-                feature = read_doc(parent_id, root=self.server.root)
-                if (
-                    feature.meta.tier == "feature"
-                    and feature.meta.status == "completed"
-                    and feature.meta.path.parent.name == "3_completed"
-                ):
-                    on_feature_completed(parent_id, root=self.server.root)
-        except NotFound:
-            pass
         self._json_response(
             HTTPStatus.OK,
             {
@@ -874,6 +875,7 @@ def main() -> None:
 register_sidecar_routes(WarRoomRequestHandler)
 register_amendment_routes(WarRoomRequestHandler)
 register_provider_routes(WarRoomRequestHandler)
+register_review_routes(WarRoomRequestHandler)
 
 if __name__ == "__main__":
     main()

@@ -14,7 +14,7 @@ from cascade.watchdog import (
     register_teardown_hook,
     watchdog_tick,
 )
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, approve_board_feature, make_repo
 
 
 def _activate_epic(root: Path, epic_id: str = "epic_001") -> None:
@@ -27,6 +27,7 @@ def _activate_epic(root: Path, epic_id: str = "epic_001") -> None:
 
 def _open_feature(root: Path, feat_id: str = "feat_001", *, epic_id: str = "epic_001") -> None:
     _activate_epic(root, epic_id)
+    approve_board_feature(root, feat_id)
     assert dispatch_feature(feat_id, "human", root=root).ok
 
 
@@ -103,6 +104,8 @@ def test_dispatch_feature_by_human_and_boss_and_unmet_deps(tmp_path: Path) -> No
         depends_on=["feat_004"],
     )
 
+    approve_board_feature(root, "feat_001")
+    approve_board_feature(root, "feat_002")
     human = dispatch_feature("feat_001", "human", root=root)
     boss = dispatch_feature("feat_002", "boss", root=root)
     assert human.ok and human.event is not None
@@ -127,6 +130,24 @@ def test_dispatch_feature_by_human_and_boss_and_unmet_deps(tmp_path: Path) -> No
     assert queued == []
 
 
+def test_dispatch_feature_refuses_unapproved(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    _activate_epic(root)
+    add_doc(root, id="feat_001", title="Needs approval", tier="feature", parent="epic_001")
+
+    refused = dispatch_feature("feat_001", "human", root=root)
+    assert refused.ok is False
+    assert refused.reason == "not_approved"
+    assert refused.event is None
+    assert read_doc("feat_001", root=root).meta.path.parent.name == "1_backlog"
+
+    approve_board_feature(root, "feat_001")
+    started = dispatch_feature("feat_001", "human", root=root)
+    assert started.ok is True
+    assert started.event is not None
+
+
 def test_dispatch_feature_refuses_while_sibling_awaits_merge(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic")
@@ -147,6 +168,7 @@ def test_dispatch_feature_refuses_while_sibling_awaits_merge(tmp_path: Path) -> 
         encoding="utf-8",
     )
 
+    approve_board_feature(root, "feat_002")
     result = dispatch_feature("feat_002", "human", root=root)
 
     assert result.ok is False

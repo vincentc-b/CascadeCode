@@ -130,7 +130,8 @@ def test_completed_column_collapse_controls_in_html(ui_server):
     assert html.count("board-completed-collapse") >= 3
     for tier in ("epics", "features", "tasks"):
         assert f'data-board-tier="{tier}"' in html
-    assert html.index("/static/board_focus.js") < html.index("/static/war_room.js")
+    assert html.index("/static/board_focus.js") < html.index("/static/open_reviews_pane.js")
+    assert html.index("/static/open_reviews_pane.js") < html.index("/static/war_room.js")
 
 
 def test_war_room_js_renders_toast_body():
@@ -236,3 +237,27 @@ def test_brief_and_sync_controls_in_html(ui_server):
     assert 'name="manager_model"' in html
     assert 'name="architect_model"' in html
     assert "Create merge request" in html
+
+
+def test_open_reviews_pane_markup_in_html(ui_server):
+    """Open merge requests panel exposes stable ids (feat_005 / task_012)."""
+    base, _root = ui_server
+    _status, html, _headers = _get_html(f"{base}/")
+    assert 'id="open-reviews-pane"' in html
+    assert 'id="open-reviews-list"' in html
+    assert 'id="btn-refresh-open-reviews"' in html
+    assert 'id="open-reviews-status"' in html
+    assert "Open merge requests" in html
+
+
+def test_open_reviews_js_queries_authoritative_api_only():
+    static = Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static"
+    pane_source = (static / "open_reviews_pane.js").read_text(encoding="utf-8")
+    war_room_source = (static / "war_room.js").read_text(encoding="utf-8")
+    assert 'apiGet("/api/open-reviews")' in pane_source
+    assert "function refreshOpenReviews" in pane_source
+    assert "function renderOpenReviews" in pane_source
+    assert 'actionLink("Open review", review.url)' in pane_source
+    assert "localStorage" not in pane_source
+    assert "OpenReviewsPane" in war_room_source
+    assert "createOpenReviewsPane" in war_room_source

@@ -24,6 +24,7 @@ from cascade.feature.briefing import BriefingPack
 from cascade.watchdog.types import DispatchResult, Event
 from cascade.workspace.integration_worktree import IntegrationWorktree
 from cascade.agent.providers import ProviderId, ProviderStatus
+from cascade.review import OpenReview
 from cascade.workspace.types import FlightOverlap, FlightReport
 
 _COLUMN_FOLDERS = frozenset({"1_backlog", "2_active", "3_completed"})
@@ -58,6 +59,10 @@ def work_meta_to_dict(meta: WorkMeta, *, root: Path | None = None) -> dict:
         from cascade.task.execution import execution_view
 
         value["execution"] = execution_view(meta.id, root=root)
+    if meta.tier == "feature":
+        value["approved"] = meta.approved_at is not None
+        if meta.approved_at is not None:
+            value["approved_at"] = meta.approved_at.isoformat()
     if meta.tier == "feature" and root is not None:
         from cascade.review import feature_review_view
 
@@ -245,6 +250,21 @@ def providers_view_to_dict(
     return {
         "default": default,
         "providers": [provider_status_to_dict(item) for item in statuses],
+    }
+
+
+def open_review_to_dict(review: OpenReview) -> dict[str, Any]:
+    ctx = review.context
+    return {
+        "id": review.id,
+        "url": review.url,
+        "state": review.state,
+        "context": {
+            "feature_id": ctx.feature_id,
+            "epic_id": ctx.epic_id,
+            "feature_title": ctx.feature_title,
+            "epic_title": ctx.epic_title,
+        },
     }
 
 

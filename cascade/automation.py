@@ -91,6 +91,9 @@ def poll_reviews(root: Path) -> None:
         from cascade.review import poll_feature_reviews
 
         poll_feature_reviews(root)
+        from cascade.completion_reconcile import reconcile_completion_with_prompts
+
+        reconcile_completion_with_prompts(root=root)
     except (GitError, OSError, WorkspaceError):
         return
 
@@ -104,28 +107,38 @@ def advance_work(root: Path) -> dict[str, list[str]]:
 
     repo = Path(root).resolve()
     cfg = read_automation_config(repo)
-    result: dict[str, list[str]] = {"features": [], "tasks": []}
     if not cfg.enabled:
-        return result
+        return {"features": [], "tasks": []}
     from cascade.task_rollup import retry_pending_task_merges
 
     retry_pending_task_merges(repo)
-    board = merged_board(repo)
-    from cascade.boss.rollup import try_complete_feature
+    from cascade.completion_reconcile import reconcile_completion_with_prompts
+
+    reconcile_completion_with_prompts(root=repo)
+    return reconcile_approval_dispatch(repo)
+
+
+def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
+    """Re-evaluate durable approval and dependency gates through canonical dispatch.
+
+    Restart-safe: already-dispatched work is skipped by dispatch law; idempotent
+    approval timestamps are not rewritten.
+    """
+
+    repo = Path(root).resolve()
+    cfg = read_automation_config(repo)
+    result: dict[str, list[str]] = {"features": [], "tasks": []}
+    if not cfg.enabled:
+        return result
+
+    from cascade.approvals import feature_approved
     from cascade.review import feature_review_pending
 
-    for meta in list(board.by_id.values()):
-        if meta.tier != "feature":
-            continue
-        if meta.path.parent.name == "2_active" or (
-            meta.path.parent.name == "3_completed"
-            and feature_review_pending(meta.id, root=repo)
-        ):
-            try_complete_feature(meta.id, root=repo)
     board = merged_board(repo)
     view = compute_boss_view(root=repo)
     active_feature_parents = {
-        meta.parent for meta in board.by_id.values()
+        meta.parent
+        for meta in board.by_id.values()
         if meta.tier == "feature" and meta.path.parent.name == "2_active"
     }
     active_feature_parents.update(
@@ -142,9 +155,7 @@ def advance_work(root: Path) -> dict[str, list[str]]:
         parent = board.by_id.get(meta.parent or "")
         if parent is None or parent.path.parent.name != "2_active":
             continue
-        from cascade.approvals import epic_plan_approved
-
-        if not epic_plan_approved(parent.id, root=repo):
+        if not feature_approved(feature_id, root=repo):
             continue
         dispatched = dispatch_feature(feature_id, "boss", root=repo)
         if dispatched.ok:

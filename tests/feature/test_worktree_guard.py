@@ -17,7 +17,7 @@ from cascade.workspace.integration_worktree import (
     integration_branch,
     integration_worktree_path,
 )
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, approve_board_feature
 
 
 def _commit_all(root: Path) -> None:
@@ -43,6 +43,7 @@ def test_feature_read_and_mint_on_dispatched_worktree(tmp_path: Path) -> None:
     )
     _commit_all(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
 
     feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)

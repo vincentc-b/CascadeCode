@@ -55,6 +55,10 @@
     providersPane: document.getElementById("providers-pane"),
     providersPaneStatus: document.getElementById("providers-pane-status"),
     providersList: document.getElementById("providers-list"),
+    openReviewsPane: document.getElementById("open-reviews-pane"),
+    openReviewsStatus: document.getElementById("open-reviews-status"),
+    openReviewsList: document.getElementById("open-reviews-list"),
+    btnRefreshOpenReviews: document.getElementById("btn-refresh-open-reviews"),
     btnCreateBrief: document.getElementById("btn-create-brief"),
     btnPullMain: document.getElementById("btn-pull-main"),
     syncStatus: document.getElementById("sync-status"),
@@ -1421,6 +1425,31 @@
     }
   }
 
+  const OpenReviewsPaneApi = globalThis.OpenReviewsPane;
+  const openReviewsPane =
+    OpenReviewsPaneApi && OpenReviewsPaneApi.createOpenReviewsPane
+      ? OpenReviewsPaneApi.createOpenReviewsPane({
+          elements: {
+            openReviewsStatus: el.openReviewsStatus,
+            openReviewsList: el.openReviewsList,
+            btnRefreshOpenReviews: el.btnRefreshOpenReviews,
+          },
+          apiGet: apiGet,
+        })
+      : null;
+
+  function setOpenReviewsStatus(msg, isError) {
+    if (openReviewsPane) {
+      openReviewsPane.setOpenReviewsStatus(msg, isError);
+    }
+  }
+
+  function refreshOpenReviews(options) {
+    if (openReviewsPane) {
+      return openReviewsPane.refreshOpenReviews(options);
+    }
+  }
+
   function setProvidersStatus(msg, isError) {
     if (!el.providersPaneStatus) return;
     el.providersPaneStatus.textContent = msg || "";
@@ -1575,6 +1604,13 @@
   if (el.btnCancelBrief) el.btnCancelBrief.addEventListener("click", function () { el.briefDialog.close(); });
   if (el.briefForm) el.briefForm.addEventListener("submit", submitBrief);
   if (el.btnPullMain) el.btnPullMain.addEventListener("click", pullMain);
+  if (el.btnRefreshOpenReviews) {
+    el.btnRefreshOpenReviews.addEventListener("click", function () {
+      refreshOpenReviews({ userInitiated: true }).catch(function (err) {
+        setOpenReviewsStatus(err.message || "Refresh failed", true);
+      });
+    });
+  }
 
   wireCompletedCollapseControls();
   updateFocusUi("epic");
@@ -1587,6 +1623,7 @@
   });
   refreshAmendments();
   refreshProviders();
+  refreshOpenReviews({ userInitiated: false });
   pollToasts();
   setInterval(pollToasts, 2000);
   pollChatSidecar();
