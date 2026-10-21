@@ -22,7 +22,7 @@ from cascade.approvals import approve_feature, feature_approved
 from cascade.automation import reconcile_approval_dispatch, reset_automation_memory
 from cascade.board.store import read_doc
 from cascade.boss.epic_complete import reset_epic_close_prompt_surfaces
-from cascade.task.worktree import clear_task_runs
+from cascade.task.worktree import clear_task_runs, get_task_run
 from cascade.war_room.server import serve
 from cascade.watchdog import activate_epic, read_events
 from cascade.watchdog.hooks import clear_hooks
@@ -139,6 +139,79 @@ def follow_feature_blocked_in_backlog(scenario: LifecycleScenario) -> bool:
 def ready_to_plan_event_count(feature_id: str, *, root: Path) -> int:
     events, _ = read_events(feature_id, 0, root=root)
     return sum(1 for event in events if event.type == "FeatureReadyToPlan")
+
+
+def task_dispatched_count(task_id: str, *, root: Path) -> int:
+    events, _ = read_events(task_id, 0, root=root)
+    return sum(1 for event in events if event.type == "TaskDispatched")
+
+
+def feature_completed_count(epic_id: str, feature_id: str, *, root: Path) -> int:
+    events, _ = read_events(epic_id, 0, root=root)
+    return sum(
+        1
+        for event in events
+        if event.type == "FeatureCompleted" and event.payload.get("feature_id") == feature_id
+    )
+
+
+def epic_ready_to_close_toast_count(epic_id: str, *, root: Path) -> int:
+    events, _ = read_events("war_room", 0, root=root)
+    return sum(
+        1
+        for event in events
+        if event.type == "Toast"
+        and event.payload.get("kind") == "epic_ready_to_close"
+        and event.payload.get("epic_id") == epic_id
+    )
+
+
+def commit_task_run(
+    task_id: str,
+    *,
+    rel: str = "scenario.txt",
+    content: str = "scenario work\n",
+    message: str | None = None,
+) -> None:
+    """Commit deliverable work on the active task branch (merge-gate scenarios)."""
+
+    run = get_task_run(task_id)
+    if run is None:
+        raise RuntimeError(f"no active task run for {task_id}")
+    path = run.worktree / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    subprocess.run(["git", "add", rel], cwd=run.worktree, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", message or f"{task_id} scenario work"],
+        cwd=run.worktree,
+        check=True,
+        capture_output=True,
+    )
+
+
+def install_scenario_review_recording(
+    monkeypatch: pytest.MonkeyPatch,
+    scenario: LifecycleScenario,
+) -> None:
+    """Record open feature reviews in ``reviews.json`` without forge I/O."""
+
+    from cascade.tracking import MergeRequest
+
+    monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+
+    def ensure(feature_id: str, *, root: Path) -> MergeRequest:
+        write_scenario_open_review(scenario, feature_id, closed=False)
+        return MergeRequest(
+            url=f"https://github.example/o/r/pull/{feature_id}",
+            number="1",
+            forge="github",
+            source_branch=f"feat/{feature_id}",
+            target_branch=f"epic/{scenario.ids.epic}",
+            draft=False,
+        )
+
+    monkeypatch.setattr("cascade.review.ensure_feature_review", ensure)
 
 
 def complete_scenario_gate_feature(scenario: LifecycleScenario) -> list[str]:
