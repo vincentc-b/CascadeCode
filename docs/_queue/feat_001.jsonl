@@ -2,3 +2,8 @@
 {"type":"HumanAttached","ts":"2026-10-16T04:05:54.694949+00:00","payload":{"graph_id":"feat_001","tier":"feature"},"dest":"feat_001"}
 {"type":"HumanAttached","ts":"2026-10-16T04:09:50.235455+00:00","payload":{"graph_id":"feat_001","tier":"feature"},"dest":"feat_001"}
 {"type":"HumanAttached","ts":"2026-10-16T04:10:07.395991+00:00","payload":{"graph_id":"feat_001","tier":"feature"},"dest":"feat_001"}
+{"type":"FeatureReadyToPlan","ts":"2026-10-21T05:05:40.899889+00:00","payload":{"id":"feat_001","feature_id":"feat_001","by":"boss"},"dest":"feat_001"}
+{"type":"TasksMinted","ts":"2026-10-21T05:06:54.301102+00:00","payload":{"feature_id":"feat_001","task_ids":["task_001"]},"dest":"feat_001"}
+{"type":"TasksMinted","ts":"2026-10-21T05:07:20.385208+00:00","payload":{"feature_id":"feat_001","task_ids":["task_002"]},"dest":"feat_001"}
+{"type":"TasksMinted","ts":"2026-10-21T05:07:47.013028+00:00","payload":{"feature_id":"feat_001","task_ids":["task_003"]},"dest":"feat_001"}
+{"type":"TaskActivated","ts":"2026-10-21T05:11:41.892828+00:00","payload":{"task_id":"task_001","feature_id":"feat_001"},"dest":"feat_001"}

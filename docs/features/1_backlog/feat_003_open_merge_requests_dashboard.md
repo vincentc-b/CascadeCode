@@ -1,6 +1,6 @@
 ---
 id: feat_003
-title: Open merge requests dashboard
+title: Open review registry API
 tier: feature
 status: backlog
 parent: epic_005

@@ -1,12 +1,13 @@
 ---
 id: feat_004
-title: Completion rollup and recovery
+title: Lifecycle sandbox demonstration
 tier: feature
 status: backlog
 parent: epic_005
 children: []
 depends_on:
 - feat_001
+- feat_002
 owners:
 - feature_lead
 - feature_architect

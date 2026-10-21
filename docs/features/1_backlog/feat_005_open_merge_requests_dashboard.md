@@ -1,12 +1,12 @@
 ---
 id: feat_005
-title: Open merge requests dashboard
+title: Open merge requests War Room view
 tier: feature
 status: backlog
 parent: epic_005
 children: []
 depends_on:
-- feat_001
+- feat_003
 - feat_004
 owners:
 - feature_lead
