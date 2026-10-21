@@ -147,6 +147,11 @@ _(none)_
   Chose Use one board-level graph-write operation under the existing process lock: prevalidate the full mapping, snapshot all affected bytes, mutate paths, commit the complete path set once through commit_paths, and restore the snapshot on any failure..
   Rationale: Existing write_doc and save_doc recovery is document-scoped, while the registry's atomic replacement is registry-specific. Extending the existing lock and isolated-index Git commit boundary is the narrowest mechanism that can make the whole board graph recoverable without adding a datastore or transaction framework.
   Honors: Collision safety, atomic migration, idempotence, and the frugal-engineering preference for the smallest reliable extension..
+
+- `dec_005` · 2026-10-21 · Epic Architect · **Runtime and external ID artifacts**
+  Chose Migrate only graphs proven backlog-only and free of runtime or published identity artifacts; reject graphs with worktree registrations, integration branches, checkpoints, queues, or remote review artifacts instead of renaming those systems. Rewrite board-owned backlog sidecars within the atomic migration..
+  Rationale: Cascade persists IDs in local execution state and Git/forge identities, but those artifacts arise after dispatch and publication. A strict preflight preserves the approved backlog-only scope and avoids unsafe cross-system renames; retained active and completed IDs remain readable.
+  Honors: The explicit compatibility boundary, no partial migration, and the requirement to define an external persistence contract before shipping..
 ## Amendment log
 
 _(none)_
