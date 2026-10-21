@@ -130,7 +130,8 @@ def test_completed_column_collapse_controls_in_html(ui_server):
     assert html.count("board-completed-collapse") >= 3
     for tier in ("epics", "features", "tasks"):
         assert f'data-board-tier="{tier}"' in html
-    assert html.index("/static/board_focus.js") < html.index("/static/war_room.js")
+    assert html.index("/static/board_focus.js") < html.index("/static/open_reviews_pane.js")
+    assert html.index("/static/open_reviews_pane.js") < html.index("/static/war_room.js")
 
 
 def test_war_room_js_renders_toast_body():
@@ -247,12 +248,13 @@ def test_open_reviews_pane_markup_in_html(ui_server):
 
 
 def test_open_reviews_js_queries_authoritative_api_only():
-    js_path = (
-        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
-    )
-    source = js_path.read_text(encoding="utf-8")
-    assert 'apiGet("/api/open-reviews")' in source
-    assert "function refreshOpenReviews" in source
-    assert "function renderOpenReviews" in source
-    assert 'actionLink("Open review", review.url)' in source
-    assert "localStorage" not in source.split("refreshOpenReviews")[1].split("setProvidersStatus")[0]
+    static = Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static"
+    pane_source = (static / "open_reviews_pane.js").read_text(encoding="utf-8")
+    war_room_source = (static / "war_room.js").read_text(encoding="utf-8")
+    assert 'apiGet("/api/open-reviews")' in pane_source
+    assert "function refreshOpenReviews" in pane_source
+    assert "function renderOpenReviews" in pane_source
+    assert 'actionLink("Open review", review.url)' in pane_source
+    assert "localStorage" not in pane_source
+    assert "OpenReviewsPane" in war_room_source
+    assert "createOpenReviewsPane" in war_room_source
