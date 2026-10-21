@@ -15,8 +15,8 @@ created: '2026-10-21'
 updated: '2026-10-21'
 provider: codex
 models:
-  epic_manager: GTP-5.6-Sol medium
-  epic_architect: GTP-5.6-Sol medium
+  epic_manager: gpt-5.6-sol
+  epic_architect: gpt-5.6-sol
 ---
 # Epic, feature, and task numbering
 
