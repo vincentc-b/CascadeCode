@@ -133,6 +133,11 @@ No parallel approval, lifecycle, or review store is introduced.
   Chose Retain the five minted children but remove overlap: feat_003 owns the read-only review API, feat_004 owns the lifecycle sandbox scenario, and feat_005 owns the War Room UI; feat_005 waits for both API and sandbox..
   Rationale: Concurrent planning minted two additional children after the original three-feature breakdown. Giving each a narrow, independently verifiable boundary avoids duplicate implementation and preserves an ordered smallest-coherent delivery without inventing unrelated scope.
   Honors: The requested sandbox demonstration, Open MRs dashboard, dependency-safe sequencing, and frugal high-signal testing..
+
+- `dec_007` · 2026-10-21 · Epic Architect · **Feature metadata as dispatch contract**
+  Chose Treat child feature metadata as authoritative for dispatch and block approval of feat_004 and feat_005 until their titles and dependency edges match the epic sequence..
+  Rationale: Feature-body prose cannot enforce orchestration order. The current metadata omits feat_002 from feat_004 and feat_003 from feat_005, which could bypass required lifecycle/API prerequisites.
+  Honors: Dependency-safe dispatch, artifact-driven alignment, and the smallest coherent delivery sequence..
 ## Amendment log
 
 _(none)_
