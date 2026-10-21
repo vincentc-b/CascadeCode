@@ -20,7 +20,7 @@ models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
 ---
-# Open merge requests dashboard
+# Open merge requests War Room view
 
 ## Parent Epic
 
@@ -28,52 +28,41 @@ epic_005
 
 ## Scope
 
-# Open merge requests dashboard
+### Intent
 
-## Intent
+Give reviewers one direct War Room view of currently open merge requests using the authoritative read-only review API.
 
-Give reviewers one War Room view of currently open merge requests without requiring them to navigate through plans or team pages.
+- Add an Open MRs view with feature and epic context.
+- Link each item directly to its review.
+- Reflect merged/closed changes through the API without client-side persistence.
+- Provide usable empty, loading, and failure states.
+- Extend the sandbox browser flow only enough to demonstrate review discovery and disappearance after merge.
 
-## Scope
+### Acceptance criteria
 
-- Expose open review records through a read-only API backed by the existing durable review registry.
-- Add an Open MRs War Room view with direct links to each review.
-- Reflect lifecycle changes without introducing a second review-state store.
-- Provide a small sandbox/demo flow using Playwright (or the repository's existing browser harness) that demonstrates approval, dependency gating, completion rollup, and review discovery.
+- Open reviews appear with identifying feature/epic context and working direct links.
+- Merged or closed reviews disappear after authoritative state refresh.
+- Empty, loading, and failure states are usable.
+- The browser scenario proves appearance, navigation target, and disappearance after merge.
+- The UI introduces no second review-state store.
 
-## Acceptance criteria
+### Out of scope
 
-- The view lists current open MRs with enough feature/epic context to identify them.
-- Each item links directly to its review.
-- Merged or closed reviews disappear based on the durable registry state.
-- Empty and loading/error states are usable.
-- One browser-level scenario demonstrates the core lifecycle and Open MRs flow.
-- API and UI do not duplicate review truth into another store.
-
-## Out of scope
-
-- Review editing or merge actions from the dashboard.
-- A new review registry.
-- Broad War Room redesign or exhaustive browser coverage.
-
-## Task breakdown
-
-_(empty — Feature Team mints tasks after dispatch)_
+- Review editing or merge actions from War Room.
+- General dashboard redesign.
+- Exhaustive browser coverage.
 
 ## Data structures
 
-TBD.
+Use the API read model as transient UI state only.
 
 ## API contracts
 
-TBD.
+Consume the read-only open-review contract from feat_003.
 
 ## Logic flow
 
-```mermaid
-flowchart TD
-  A[Start] --> B[End]
-```
+Load Open MRs → query API → render rows/states → follow direct link or refresh authoritative state.
 
 ## Task breakdown
 
