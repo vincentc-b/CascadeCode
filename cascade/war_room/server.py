@@ -25,11 +25,7 @@ from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
 from cascade.workspace.doc_root import read_doc_resolved
 from cascade.workspace.integration_worktree import merged_board
-from cascade.boss.epic_complete import (
-    confirm_epic_complete,
-    epic_ready_to_close,
-    on_feature_completed,
-)
+from cascade.boss.epic_complete import confirm_epic_complete, epic_ready_to_close
 from cascade.boss.merge import promote_epic_to_trunk
 from cascade.boss.graph import install_boss_consumer
 from cascade.boss.merge import merge_task_branch
@@ -134,6 +130,9 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         install_task_boot_hook(self.root)
         install_task_wiring(self.root)
         install_boss_consumer(self.root)
+        from cascade.completion_reconcile import reconcile_completion_with_prompts
+
+        reconcile_completion_with_prompts(root=self.root)
         load_epic_tools()
         load_feature_tools()
         self.attachment = AttachmentState()
@@ -434,19 +433,6 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             )
             return
         on_task_merged(task_id, root=self.server.root)
-        try:
-            task = read_doc(task_id, root=self.server.root)
-            parent_id = task.meta.parent
-            if parent_id:
-                feature = read_doc(parent_id, root=self.server.root)
-                if (
-                    feature.meta.tier == "feature"
-                    and feature.meta.status == "completed"
-                    and feature.meta.path.parent.name == "3_completed"
-                ):
-                    on_feature_completed(parent_id, root=self.server.root)
-        except NotFound:
-            pass
         self._json_response(
             HTTPStatus.OK,
             {
