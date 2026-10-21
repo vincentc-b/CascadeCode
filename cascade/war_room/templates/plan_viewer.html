@@ -18,7 +18,7 @@
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title id="plan-page-title">Plan — loading…</title>
-    <link rel="stylesheet" href="/static/plan_viewer.css" />
+    <link rel="stylesheet" href="/static/plan_viewer.css?v=20261020-inline-comments" />
   </head>
   <body data-work-id="${work_id}">
     <header class="plan-header">
@@ -63,30 +63,42 @@
 
       <section id="plan-comments" class="plan-comments" aria-label="Review threads" hidden>
         <h2 class="plan-comments-heading">Review threads</h2>
-        <div id="plan-comment-threads" class="plan-comment-threads" role="list"></div>
+        <p class="plan-review-instructions">
+          Use the + beside a plan block, or select plan text, to start a line-anchored thread.
+          Agent replies appear here automatically.
+        </p>
+        <div
+          id="plan-comment-threads"
+          class="plan-comment-threads"
+          role="list"
+          aria-live="polite"
+          aria-relevant="additions text"
+        ></div>
         <p id="plan-comment-selection-bar" class="plan-comment-selection-bar" hidden>
           <button type="button" id="plan-comment-on-selection">Comment on selection</button>
         </p>
-        <form id="plan-comment-compose" class="plan-comment-compose" hidden>
-          <p id="plan-comment-compose-hint" class="plan-comment-compose-hint"></p>
-          <label class="plan-comment-field">
-            Comment
-            <textarea id="plan-comment-body" name="body" rows="4" required></textarea>
-          </label>
-          <label class="plan-comment-blocking blocking-toggle">
-            <input type="checkbox" id="plan-comment-blocking" name="blocking" />
-            Blocking
-          </label>
-          <button type="submit" id="plan-comment-send">Post comment</button>
-          <button type="button" id="plan-comment-compose-cancel" class="plan-comment-compose-cancel">
-            Cancel
-          </button>
-        </form>
+        <div class="plan-global-comment">
+          <h3 class="plan-global-comment-heading">Comment on the whole plan</h3>
+          <form id="plan-comment-compose" class="plan-comment-compose">
+            <p id="plan-comment-compose-hint" class="plan-comment-compose-hint">
+              This comment applies to the plan as a whole.
+            </p>
+            <label class="plan-comment-field">
+              Global comment
+              <textarea id="plan-comment-body" name="body" rows="4" required></textarea>
+            </label>
+            <label class="plan-comment-blocking blocking-toggle">
+              <input type="checkbox" id="plan-comment-blocking" name="blocking" />
+              Blocking
+            </label>
+            <button type="submit" id="plan-comment-send">Post comment</button>
+          </form>
+        </div>
         <p id="plan-comment-status" class="plan-comment-status" role="status"></p>
       </section>
     </main>
 
     <script src="/static/vendor/marked.min.js"></script>
-    <script src="/static/plan_viewer.js"></script>
+    <script src="/static/plan_viewer.js?v=20261020-inline-comments"></script>
   </body>
 </html>

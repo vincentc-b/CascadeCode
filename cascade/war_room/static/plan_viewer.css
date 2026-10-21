@@ -113,7 +113,7 @@ body {
   line-height: 1;
   text-align: center;
   color: LinkText;
-  pointer-events: none;
+  text-decoration: none;
 }
 
 .plan-gutter-thread.outdated {
@@ -134,16 +134,35 @@ body {
   background: Canvas;
   color: var(--plan-muted);
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.45;
+  transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
 .plan-body [data-src-line]:hover .plan-gutter-add,
 .plan-gutter-add:focus-visible {
   opacity: 1;
+  color: LinkText;
+  border-color: LinkText;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .plan-gutter-add {
+    opacity: 1;
+  }
+}
+
+.plan-review-instructions {
+  margin: 0 0 1rem;
+  color: var(--plan-muted);
+  font-size: 0.875rem;
 }
 
 .plan-comment-selection-bar {
-  margin: 0 0 0.75rem;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.45rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 4px;
+  background: Canvas;
 }
 
 .plan-comment-compose-hint {
@@ -163,9 +182,30 @@ body {
   cursor: pointer;
 }
 
-.plan-comment-resolve {
-  margin-top: 0.35rem;
-  font-size: 0.875rem;
+.plan-inline-comment-compose {
+  margin: 0.5rem 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--plan-border);
+  border-left: 3px solid LinkText;
+  border-radius: 5px;
+  background: Canvas;
+}
+
+.plan-inline-comment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.plan-inline-comment-status {
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--plan-muted);
+}
+
+.plan-inline-comment-status.error {
+  color: #b00020;
 }
 
 .plan-comment-reply-form {
@@ -292,6 +332,17 @@ body {
   margin: 0 0 1rem;
 }
 
+.plan-global-comment {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--plan-border);
+}
+
+.plan-global-comment-heading {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
 .plan-comment-threads {
   margin-bottom: 1.25rem;
 }
@@ -311,6 +362,11 @@ body {
   border-style: dashed;
 }
 
+.plan-comment-thread:target {
+  outline: 2px solid LinkText;
+  outline-offset: 2px;
+}
+
 .plan-comment-meta {
   font-size: 0.75rem;
   color: var(--plan-muted);
@@ -328,10 +384,32 @@ body {
   border-left: 2px solid var(--plan-border);
 }
 
+.plan-comment-resolve {
+  margin-top: 0.65rem;
+  font: inherit;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 4px;
+  background: Canvas;
+  cursor: pointer;
+}
+
 .plan-comment-compose {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+}
+
+@media (max-width: 36rem) {
+  .plan-inline-comment-compose,
+  .plan-global-comment {
+    width: 100%;
+  }
+
+  .plan-inline-comment-actions button,
+  .plan-comment-compose > button {
+    width: 100%;
+  }
 }
 
 .plan-comment-field {

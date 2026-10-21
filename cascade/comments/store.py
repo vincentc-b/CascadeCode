@@ -86,7 +86,7 @@ def comment(
         blocking=blocking,
         root=repo,
     )
-    _emit_comment_posted(record, owning, trunk=trunk)
+    _emit_comment_posted(record, owning, trunk)
     if author == "human" and is_attached is not None and not is_attached(owning):
         _enqueue_comment_toast(doc_id, trunk)
     return record.id
@@ -368,9 +368,7 @@ def _valid_doc_id(doc_id: str) -> bool:
     return Path(doc_id).name == doc_id
 
 
-def _emit_comment_posted(record: Comment, owning: str, *, trunk: Path) -> None:
-    """Queue on the product trunk so the supervisor watchdog ingests one graph."""
-
+def _emit_comment_posted(record: Comment, owning: str, trunk: Path) -> None:
     append_event(
         owning,
         Event(
@@ -379,6 +377,11 @@ def _emit_comment_posted(record: Comment, owning: str, *, trunk: Path) -> None:
             payload={
                 "doc_id": record.doc_id,
                 "section": record.section,
+                "anchor": record.anchor,
+                "line_start": record.line_start,
+                "line_end": record.line_end,
+                "doc_sha": record.doc_sha,
+                "blocks": list(record.blocks),
                 "comment_id": record.id,
                 "author": record.author,
             },

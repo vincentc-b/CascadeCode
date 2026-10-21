@@ -212,6 +212,8 @@ def test_plan_page_includes_comment_compose(ui_server):
     assert status == HTTPStatus.OK
     assert 'id="plan-comment-body"' in html
     assert 'id="plan-comment-compose"' in html
+    assert "Comment on the whole plan" in html
+    assert 'id="plan-comment-compose" class="plan-comment-compose" hidden' not in html
 
 
 def test_providers_pane_markup_in_html(ui_server):

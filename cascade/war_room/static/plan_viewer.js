@@ -340,6 +340,19 @@
     return chunk;
   }
 
+  function rootCommentPayload(workId, text, target, docSha, blocking) {
+    return {
+      doc_id: workId,
+      section: target && target.section ? target.section : "general",
+      body: text,
+      line_start: target && target.line_start != null ? target.line_start : null,
+      line_end: target && target.line_end != null ? target.line_end : null,
+      anchor: target && target.anchor ? target.anchor : null,
+      doc_sha: docSha || null,
+      blocking: !!blocking,
+    };
+  }
+
   function srcLineFromDomNode(node, bodyEl) {
     var el = node && node.nodeType === 1 ? node : node && node.parentElement;
     while (el && el !== bodyEl) {
@@ -683,6 +696,25 @@
     }
   }
 
+  function groupCommentThreads(comments) {
+    var rows = comments || [];
+    var repliesByParent = {};
+    rows.forEach(function (row) {
+      if (!row.parent) return;
+      if (!repliesByParent[row.parent]) {
+        repliesByParent[row.parent] = [];
+      }
+      repliesByParent[row.parent].push(row);
+    });
+    return rows
+      .filter(function (row) {
+        return !row.parent;
+      })
+      .map(function (root) {
+        return { root: root, replies: repliesByParent[root.id] || [] };
+      });
+  }
+
   function collectPreservedThreadExtras(container) {
     var map = {};
     if (!container || !container.querySelectorAll) {
@@ -745,13 +777,13 @@
       if (!block) {
         return;
       }
-      var marker = document.createElement("span");
+      var marker = document.createElement("a");
       marker.className = "plan-gutter-thread";
-      marker.setAttribute("role", "img");
       marker.setAttribute("data-comment-id", root.id);
+      marker.href = "#plan-thread-" + encodeURIComponent(root.id);
       marker.setAttribute(
         "aria-label",
-        placement.outdated ? "Outdated review thread" : "Review thread"
+        placement.outdated ? "Open outdated review thread" : "Open review thread"
       );
       if (placement.outdated) {
         marker.classList.add("outdated");
@@ -779,7 +811,7 @@
       btn.type = "button";
       btn.className = "plan-gutter-add";
       btn.textContent = "+";
-      btn.setAttribute("aria-label", "Comment on this block");
+      btn.setAttribute("aria-label", "Comment on source line " + line);
       btn.addEventListener("click", function (lineNum) {
         return function (ev) {
           ev.preventDefault();
@@ -807,15 +839,15 @@
     var blockingInput = document.getElementById("plan-comment-blocking");
     var statusEl = document.getElementById("plan-comment-status");
     var composeHint = document.getElementById("plan-comment-compose-hint");
-    var composeCancel = document.getElementById("plan-comment-compose-cancel");
     var selectionBar = document.getElementById("plan-comment-selection-bar");
     var selectionBtn = document.getElementById("plan-comment-on-selection");
     if (!panel || !threadEl || !compose || !bodyInput) {
       return;
     }
 
-    var pendingRoot = null;
     var selectionDraft = null;
+    var activeInlineCompose = null;
+    var lastCommentsSignature = null;
 
     function setCommentStatus(msg, isError) {
       if (!statusEl) return;
@@ -823,42 +855,127 @@
       statusEl.classList.toggle("error", !!isError);
     }
 
-    function clearRootCompose() {
-      pendingRoot = null;
-      bodyInput.value = "";
-      if (blockingInput) {
-        blockingInput.checked = false;
-      }
-      compose.hidden = true;
-      if (composeHint) {
-        composeHint.textContent = "";
+    function insertAfter(reference, node) {
+      if (!reference || !reference.parentNode) return;
+      reference.parentNode.insertBefore(node, reference.nextSibling);
+    }
+
+    function blockForSourceLine(line) {
+      if (!bodyEl) return null;
+      var blockLine = blockStartLineForSourceLine(docBody, line);
+      return bodyEl.querySelector('[data-src-line="' + blockLine + '"]');
+    }
+
+    function removeInlineCompose(preserveViewport) {
+      if (!activeInlineCompose) return;
+      var x = window.scrollX || window.pageXOffset || 0;
+      var y = window.scrollY || window.pageYOffset || 0;
+      activeInlineCompose.remove();
+      activeInlineCompose = null;
+      if (preserveViewport && typeof window.scrollTo === "function") {
+        window.scrollTo(x, y);
       }
     }
 
-    function showRootCompose(target) {
-      pendingRoot = target;
-      if (composeHint) {
-        composeHint.textContent =
-          "Section " +
-          target.section +
-          " · lines " +
-          target.line_start +
-          "–" +
-          target.line_end;
+    function showInlineCompose(target) {
+      var anchorBlock = target.anchorBlock || blockForSourceLine(target.line_start);
+      if (!anchorBlock) return;
+      removeInlineCompose(true);
+
+      var form = document.createElement("form");
+      form.className = "plan-comment-compose plan-inline-comment-compose";
+      form.setAttribute("aria-label", "Comment on selected plan lines");
+
+      var hint = document.createElement("p");
+      hint.className = "plan-comment-compose-hint";
+      hint.textContent =
+        "Section " + target.section + " · lines " + target.line_start + "–" + target.line_end;
+
+      var field = document.createElement("label");
+      field.className = "plan-comment-field";
+      field.appendChild(document.createTextNode("Comment"));
+      var input = document.createElement("textarea");
+      input.name = "body";
+      input.rows = 4;
+      input.required = true;
+      input.setAttribute("aria-label", "Comment on lines " + target.line_start + "–" + target.line_end);
+      field.appendChild(input);
+
+      var blockingLabel = document.createElement("label");
+      blockingLabel.className = "plan-comment-blocking blocking-toggle";
+      var inlineBlocking = document.createElement("input");
+      inlineBlocking.type = "checkbox";
+      inlineBlocking.name = "blocking";
+      blockingLabel.appendChild(inlineBlocking);
+      blockingLabel.appendChild(document.createTextNode(" Blocking"));
+
+      var actions = document.createElement("div");
+      actions.className = "plan-inline-comment-actions";
+      var submit = document.createElement("button");
+      submit.type = "submit";
+      submit.textContent = "Post comment";
+      var cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "plan-comment-compose-cancel";
+      cancel.textContent = "Cancel";
+      actions.appendChild(submit);
+      actions.appendChild(cancel);
+
+      var localStatus = document.createElement("p");
+      localStatus.className = "plan-inline-comment-status";
+      localStatus.setAttribute("role", "status");
+      form.appendChild(hint);
+      form.appendChild(field);
+      form.appendChild(blockingLabel);
+      form.appendChild(actions);
+      form.appendChild(localStatus);
+      insertAfter(anchorBlock, form);
+      activeInlineCompose = form;
+
+      cancel.addEventListener("click", function () {
+        removeInlineCompose(true);
+      });
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var text = input.value.trim();
+        if (!text) {
+          localStatus.textContent = "Comment is required.";
+          localStatus.classList.add("error");
+          return;
+        }
+        submit.disabled = true;
+        localStatus.textContent = "Posting…";
+        localStatus.classList.remove("error");
+        postJsonComment(rootCommentPayload(workId, text, target, docSha, inlineBlocking.checked))
+          .then(function (payload) {
+            if (!payload || payload.ok !== true || !payload.comment_id) {
+              throw new Error("Unexpected post response");
+            }
+            removeInlineCompose(false);
+            return loadComments();
+          })
+          .catch(function (err) {
+            localStatus.textContent = err && err.message ? err.message : "Post failed";
+            localStatus.classList.add("error");
+            submit.disabled = false;
+          });
+      });
+      try {
+        input.focus({ preventScroll: true });
+      } catch (_err) {
+        input.focus();
       }
-      compose.hidden = false;
-      bodyInput.focus();
       setCommentStatus("", false);
     }
 
     function beginRootFromLine(lineStart) {
       var lineEnd = lineEndForBlockStart(docBody, lineStart);
-      var section = sectionForSourceLine(docBody, lineStart);
-      showRootCompose({
+      showInlineCompose({
         line_start: lineStart,
         line_end: lineEnd,
-        section: section,
+        section: sectionForSourceLine(docBody, lineStart),
         anchor: snippetFromLines(docBody, lineStart, lineEnd, 120),
+        anchorBlock: blockForSourceLine(lineStart),
       });
     }
 
@@ -866,7 +983,7 @@
       if (!selectionDraft) {
         return;
       }
-      showRootCompose(selectionDraft);
+      showInlineCompose(selectionDraft);
       if (selectionBar) {
         selectionBar.hidden = true;
       }
@@ -912,7 +1029,11 @@
         line_end: lineEnd,
         section: sectionForSourceLine(docBody, lineStart),
         anchor: anchor,
+        anchorBlock: blockForSourceLine(lineStart),
       };
+      if (selectionDraft.anchorBlock) {
+        insertAfter(selectionDraft.anchorBlock, selectionBar);
+      }
       selectionBar.hidden = false;
     }
 
@@ -934,28 +1055,6 @@
       wrap.appendChild(meta);
       wrap.appendChild(body);
       return wrap;
-    }
-
-    function buildResolveControl(rootId) {
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "plan-comment-resolve";
-      btn.textContent = "Resolve";
-      btn.addEventListener("click", function (ev) {
-        ev.preventDefault();
-        btn.disabled = true;
-        postResolveComment(rootId)
-          .then(function () {
-            return loadComments();
-          })
-          .catch(function (err) {
-            setCommentStatus(err && err.message ? err.message : "Resolve failed", true);
-          })
-          .finally(function () {
-            btn.disabled = false;
-          });
-      });
-      return btn;
     }
 
     function buildReplyForm(rootId) {
@@ -1021,10 +1120,36 @@
       return form;
     }
 
+    function buildResolveControl(rootId) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "plan-comment-resolve";
+      btn.textContent = "Resolve";
+      btn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        btn.disabled = true;
+        postResolveComment(rootId)
+          .then(function () {
+            return loadComments();
+          })
+          .catch(function (err) {
+            setCommentStatus(err && err.message ? err.message : "Resolve failed", true);
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+      });
+      return btn;
+    }
+
     function placementsForRoots(roots) {
       var byId = {};
       var outdated = {};
       (roots || []).forEach(function (root) {
+        if (root.line_start == null) {
+          byId[root.id] = null;
+          return;
+        }
         var placement = placementForRootThread(root, docBody, docSha);
         byId[root.id] = placement;
         if (placement.outdated) {
@@ -1036,16 +1161,30 @@
 
     function renderCommentThreads(comments) {
       var preserved = collectPreservedThreadExtras(threadEl);
+      var replyDrafts = {};
+      var existingThreads = threadEl.querySelectorAll(
+        ".plan-comment-thread[data-comment-id]"
+      );
+      for (var draftIndex = 0; draftIndex < existingThreads.length; draftIndex += 1) {
+        var existingId = existingThreads[draftIndex].getAttribute("data-comment-id");
+        var existingInput = existingThreads[draftIndex].querySelector(
+          ".plan-comment-reply-form textarea"
+        );
+        if (existingId && existingInput && existingInput.value) {
+          replyDrafts[existingId] = existingInput.value;
+        }
+      }
       threadEl.innerHTML = "";
-      var rows = comments || [];
-      var roots = rows.filter(function (row) {
-        return !row.parent;
+      var threads = groupCommentThreads(comments);
+      var roots = threads.map(function (thread) {
+        return thread.root;
       });
       var placementInfo = placementsForRoots(roots);
       if (bodyEl) {
         applyPlanThreadGutters(bodyEl, docBody, roots, placementInfo.byId);
       }
-      roots.forEach(function (root) {
+      threads.forEach(function (thread) {
+        var root = thread.root;
         var block = document.createElement("div");
         block.className = "plan-comment-thread";
         if (root.state === "resolved") {
@@ -1056,10 +1195,9 @@
         }
         block.setAttribute("role", "listitem");
         block.setAttribute("data-comment-id", root.id);
+        block.id = "plan-thread-" + root.id;
         block.appendChild(buildCommentNode(root, !!placementInfo.outdated[root.id]));
-        var replies = rows.filter(function (row) {
-          return row.parent === root.id;
-        });
+        var replies = thread.replies;
         if (replies.length) {
           var replyWrap = document.createElement("div");
           replyWrap.className = "plan-comment-replies";
@@ -1070,7 +1208,12 @@
         }
         if (root.state !== "resolved") {
           block.appendChild(buildResolveControl(root.id));
-          block.appendChild(buildReplyForm(root.id));
+          var replyForm = buildReplyForm(root.id);
+          var replyDraft = replyDrafts[root.id];
+          if (replyDraft) {
+            replyForm.querySelector("textarea").value = replyDraft;
+          }
+          block.appendChild(replyForm);
         }
         var extras = preserved[root.id];
         if (extras) {
@@ -1079,6 +1222,27 @@
           });
         }
         threadEl.appendChild(block);
+      });
+    }
+
+    function postResolveComment(commentId) {
+      return fetch("/api/comment/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doc_id: workId, comment_id: commentId }),
+      }).then(function (resp) {
+        return resp.text().then(function (raw) {
+          var payload;
+          try {
+            payload = JSON.parse(raw);
+          } catch (_e) {
+            payload = { error: raw };
+          }
+          if (resp.status !== 202 && !resp.ok) {
+            throw new Error(payload && payload.error ? payload.error : "Resolve failed");
+          }
+          return payload;
+        });
       });
     }
 
@@ -1093,31 +1257,13 @@
           return resp.json();
         })
         .then(function (data) {
-          renderCommentThreads(data.comments || []);
-        });
-    }
-
-    function postResolveComment(commentId) {
-      return fetch("/api/comment/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ doc_id: workId, comment_id: commentId }),
-      }).then(function (resp) {
-        return resp.text().then(function (raw) {
-          var parsed;
-          try {
-            parsed = JSON.parse(raw);
-          } catch (_e) {
-            parsed = { error: raw };
+          var comments = data.comments || [];
+          var signature = JSON.stringify(comments);
+          if (signature !== lastCommentsSignature) {
+            lastCommentsSignature = signature;
+            renderCommentThreads(comments);
           }
-          if (resp.status !== 202 && !resp.ok) {
-            var errMsg =
-              parsed && parsed.error ? parsed.error : "Resolve failed (" + resp.status + ")";
-            throw new Error(errMsg);
-          }
-          return parsed;
         });
-      });
     }
 
     function postJsonComment(payload) {
@@ -1150,29 +1296,19 @@
         setCommentStatus("Comment is required.", true);
         return;
       }
-      if (!pendingRoot || !pendingRoot.section) {
-        setCommentStatus("Select text or use a gutter + to start a thread.", true);
-        return;
-      }
       setCommentStatus("Posting…", false);
-      postJsonComment({
-        doc_id: workId,
-        section: pendingRoot.section,
-        body: text,
-        line_start: pendingRoot.line_start,
-        line_end: pendingRoot.line_end,
-        anchor: pendingRoot.anchor,
-        doc_sha: docSha || null,
-        blocking: !!(blockingInput && blockingInput.checked),
-      })
+      postJsonComment(
+        rootCommentPayload(workId, text, null, docSha, blockingInput && blockingInput.checked)
+      )
         .then(function (payload) {
           if (!payload || payload.ok !== true || !payload.comment_id) {
             throw new Error("Unexpected post response");
           }
-          if (payload.kickoff != null) {
-            throw new Error("Unexpected kickoff in post response");
+          bodyInput.value = "";
+          if (blockingInput) {
+            blockingInput.checked = false;
           }
-          clearRootCompose();
+          setCommentStatus("", false);
           return loadComments();
         })
         .catch(function (err) {
@@ -1180,18 +1316,20 @@
         });
     });
 
-    if (composeCancel) {
-      composeCancel.addEventListener("click", function () {
-        clearRootCompose();
-      });
-    }
     if (selectionBtn) {
+      selectionBtn.addEventListener("mousedown", function (ev) {
+        // Keep the document selection intact until its saved draft is opened.
+        ev.preventDefault();
+      });
       selectionBtn.addEventListener("click", function () {
         beginRootFromSelection();
       });
     }
     if (bodyEl) {
-      bodyEl.addEventListener("mouseup", updateSelectionDraft);
+      bodyEl.addEventListener("mouseup", function (ev) {
+        if (selectionBar && selectionBar.contains(ev.target)) return;
+        updateSelectionDraft();
+      });
       installPlanGutters(bodyEl, beginRootFromLine);
     }
 
@@ -1275,6 +1413,8 @@
     findAnchorLineInRange: findAnchorLineInRange,
     placementForRootThread: placementForRootThread,
     blockStartLineForSourceLine: blockStartLineForSourceLine,
+    rootCommentPayload: rootCommentPayload,
+    groupCommentThreads: groupCommentThreads,
     findMermaidFences: findMermaidFences,
     workIdFromDocHref: workIdFromDocHref,
     planHrefFromRelative: planHrefFromRelative,
