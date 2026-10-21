@@ -109,6 +109,11 @@ No new external service or datastore is required.
   Chose Use epic_NNN, feat_NNN_MMM, and task_NNN_MMM_KKK with three-digit underscore-separated segments; allocate child segments monotonically within their direct parent..
   Rationale: The format makes parentage visible, preserves lexical ordering, matches existing canonical prefixes, and limits the change to identity semantics.
   Honors: The human request for hierarchical epic, feature, and task numbering..
+
+- `dec_002` · 2026-10-21 · Epic Manager · **Migration scope**
+  Chose Immediately migrate backlog epic graphs and board-owned structured references, while retaining active and completed identifiers as compatible inputs..
+  Rationale: This meets the explicit backlog requirement without taking on a high-risk historical rewrite whose product value is low.
+  Honors: The success criterion that backlog epics receive hierarchical numbering right away and the frugal-engineering constraint to avoid unnecessary scope..
 ## Amendment log
 
 _(none)_
