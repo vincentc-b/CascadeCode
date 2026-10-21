@@ -19,7 +19,7 @@ models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
 ---
-# Completion rollup and recovery
+# Lifecycle sandbox demonstration
 
 ## Parent Epic
 
@@ -27,54 +27,40 @@ epic_005
 
 ## Scope
 
-# Completion rollup and recovery
+### Intent
 
-## Intent
+Provide one economical, repeatable sandbox scenario that proves approval, dependency, merge, recovery, and completion behavior together.
 
-Make feature and epic completion automatic, durable, and restart-safe once implementation and review obligations are actually finished.
+- Add a minimal sandbox project or fixture using the repository's existing browser/system harness, preferring Playwright when already supported.
+- Demonstrate per-feature approval, blocked dependency dispatch, task/MR completion ordering, restart reconciliation, and epic rollup.
+- Keep the scenario deterministic and suitable for local or CI execution.
 
-## Scope
+### Acceptance criteria
 
-- Complete a feature only when every child task is completed and its merge request has merged.
-- Derive epic completion from all persisted child features being completed.
-- Keep an epic active when an accepted follow-up has been persisted as a child feature.
-- Reconcile incomplete lifecycle transitions idempotently after restart.
-- Preserve review visibility while an MR is still open.
+- The scenario shows an unapproved or dependency-blocked feature does not dispatch.
+- Approval plus completed prerequisites permits dispatch exactly once.
+- Completed tasks with an open MR do not complete the feature.
+- Merge completes the feature and the final child completes the epic.
+- A restart/reconciliation step preserves the same result without duplicate effects.
+- Setup and execution are documented in the fixture.
 
-## Acceptance criteria
+### Out of scope
 
-- Finishing the final task does not complete a feature while its MR remains open.
-- Merging the MR completes the feature when all tasks are complete.
-- Completing the last child feature completes the epic.
-- A persisted, non-completed follow-up child prevents epic completion.
-- A suggested but unaccepted/unpersisted follow-up does not block completion.
-- Repeated reconciliation and restart produce no duplicate transitions.
-- Focused integration tests cover feature rollup, epic rollup, follow-up behavior, and recovery.
-
-## Out of scope
-
-- Approval and dependency dispatch.
-- Dashboard presentation.
-- Treating free-text suggestions as lifecycle state.
-
-## Task breakdown
-
-_(empty — Feature Team mints tasks after dispatch)_
+- Exhaustive lifecycle permutations.
+- Production dashboard UI.
+- A new test framework when the repository already has a suitable harness.
 
 ## Data structures
 
-TBD.
+Use disposable sandbox fixtures only; no production store.
 
 ## API contracts
 
-TBD.
+Drive existing public lifecycle entry points and observable status/review endpoints.
 
 ## Logic flow
 
-```mermaid
-flowchart TD
-  A[Start] --> B[End]
-```
+Seed sandbox → approve → verify dependency block → complete prerequisite → dispatch → finish tasks → merge → reconcile → verify rollup.
 
 ## Task breakdown
 
