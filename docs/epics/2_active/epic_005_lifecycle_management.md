@@ -127,6 +127,10 @@ None blocking. Feature planning should reuse existing lifecycle, review, and tes
   Rationale: This covers high-value boundaries and recovery with lower maintenance cost.
   Honors: Pragmatic validation and a Playwright-style demonstration.
 
+- `dec_006` · 2026-10-21 · Epic Team · **Feature sequencing after concurrent mint**
+  Chose Retain the five minted children but remove overlap: feat_003 owns the read-only review API, feat_004 owns the lifecycle sandbox scenario, and feat_005 owns the War Room UI; feat_005 waits for both API and sandbox..
+  Rationale: Concurrent planning minted two additional children after the original three-feature breakdown. Giving each a narrow, independently verifiable boundary avoids duplicate implementation and preserves an ordered smallest-coherent delivery without inventing unrelated scope.
+  Honors: The requested sandbox demonstration, Open MRs dashboard, dependency-safe sequencing, and frugal high-signal testing..
 ## Amendment log
 
 _(none)_
