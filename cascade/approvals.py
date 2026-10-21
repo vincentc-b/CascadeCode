@@ -31,6 +31,8 @@ def approve_feature(feature_id: str, *, root: Path) -> dict[str, object]:
     if meta is None or meta.tier != "feature":
         raise ValueError("feature approval requires a feature on the board")
     newly = _set_feature_approved(feature_id, root=repo)
+    if newly:
+        _maybe_advance_after_approval(repo)
     return {"ok": True, "feature_id": feature_id, "newly_approved": newly}
 
 
@@ -70,6 +72,7 @@ def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
                 ),
                 root=repo,
             )
+        _maybe_advance_after_approval(repo)
     return {"ok": True, "epic_id": epic_id, "features": children}
 
 
@@ -80,6 +83,16 @@ def _set_feature_approved(feature_id: str, *, root: Path) -> bool:
     doc.meta.approved_at = datetime.now(timezone.utc)
     write_doc(doc, root=root)
     return True
+
+
+def _maybe_advance_after_approval(root: Path) -> None:
+    from cascade.watchdog.config import read_automation_config
+
+    if not read_automation_config(root).enabled:
+        return
+    from cascade.automation import advance_work
+
+    advance_work(root)
 
 
 def _set_epic_plan_approved(epic_id: str, *, root: Path) -> bool:

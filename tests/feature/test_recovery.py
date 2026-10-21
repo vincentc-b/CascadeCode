@@ -6,7 +6,7 @@ from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
 from cascade.feature.recovery import revise_task, retry_task
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, approve_board_feature
 
 
 def _board(tmp_path: Path) -> Path:
@@ -15,6 +15,7 @@ def _board(tmp_path: Path) -> Path:
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
     task = read_doc("task_001", root=root)

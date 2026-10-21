@@ -142,9 +142,9 @@ def advance_work(root: Path) -> dict[str, list[str]]:
         parent = board.by_id.get(meta.parent or "")
         if parent is None or parent.path.parent.name != "2_active":
             continue
-        from cascade.approvals import epic_plan_approved
+        from cascade.approvals import feature_approved
 
-        if not epic_plan_approved(parent.id, root=repo):
+        if not feature_approved(feature_id, root=repo):
             continue
         dispatched = dispatch_feature(feature_id, "boss", root=repo)
         if dispatched.ok:

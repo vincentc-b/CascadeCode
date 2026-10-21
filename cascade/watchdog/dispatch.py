@@ -151,6 +151,10 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("bad_state")
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
+    from cascade.approvals import feature_approved
+
+    if not feature_approved(work_id, root=root):
+        return _fail("not_approved")
     if _epic_has_feature_awaiting_merge(meta.parent, root=root):
         return _fail("feature_awaiting_merge")
     from cascade.comments.gate import refusal_if_blocked

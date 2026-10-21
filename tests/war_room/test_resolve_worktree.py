@@ -20,7 +20,7 @@ from cascade.war_room.server import serve
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.workspace.doc_root import resolve_doc_worktree
 from cascade.workspace.integration_worktree import integration_worktree_path
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, approve_board_feature
 
 
 def _free_port() -> int:
@@ -171,6 +171,7 @@ def test_resolve_backlog_feature_plan_from_epic_worktree(worktree_board) -> None
 
 def test_dispatched_feature_reads_live_feature_worktree(worktree_board) -> None:
     base, root, trunk_branch = worktree_board
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)
     assert resolve_doc_worktree("feat_001", root=root) == feat_wt.resolve()
@@ -188,6 +189,7 @@ def test_dispatched_feature_reads_live_feature_worktree(worktree_board) -> None:
 
 def test_task_plan_reads_from_feature_worktree(worktree_board) -> None:
     base, root, _trunk_branch = worktree_board
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)
     assert resolve_doc_worktree("task_001", root=root) == feat_wt.resolve()
@@ -229,6 +231,7 @@ def test_backlog_feature_stray_branch_still_refuses_attach(worktree_board) -> No
 
 def test_attach_repairs_missing_feature_worktree(worktree_board) -> None:
     base, root, _trunk_branch = worktree_board
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)
     shutil.rmtree(feat_wt)
