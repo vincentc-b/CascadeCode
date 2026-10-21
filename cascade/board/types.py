@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -38,6 +38,8 @@ class WorkMeta:
     integration_branch: str | None = None
     integration_worktree: str | None = None
     cites: list[str] = field(default_factory=list)
+    approved_at: datetime | None = None
+    plan_approved_at: datetime | None = None
 
 
 @dataclass

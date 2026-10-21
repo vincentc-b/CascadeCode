@@ -322,6 +322,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/briefs": lambda h, b: h._handle_create_brief(b),
             "/api/sync/pull": lambda h, b: h._handle_sync_pull(b),
             "/api/approve_epic_plan": lambda h, b: h._handle_approve_epic_plan(b),
+            "/api/approve_feature": lambda h, b: h._handle_approve_feature(b),
         }
         routes.update(cls._extra_post_routes)
         return routes
@@ -385,6 +386,19 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
         try:
             payload = approve_epic_plan(epic_id, root=self.server.root)
+        except (ValueError, OSError) as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._json_response(HTTPStatus.OK, payload)
+
+    def _handle_approve_feature(self, body: dict[str, Any]) -> None:
+        feature_id = self._require_work_id(body)
+        if feature_id is None:
+            return
+        from cascade.approvals import approve_feature
+
+        try:
+            payload = approve_feature(feature_id, root=self.server.root)
         except (ValueError, OSError) as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return

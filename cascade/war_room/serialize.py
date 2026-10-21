@@ -58,6 +58,10 @@ def work_meta_to_dict(meta: WorkMeta, *, root: Path | None = None) -> dict:
         from cascade.task.execution import execution_view
 
         value["execution"] = execution_view(meta.id, root=root)
+    if meta.tier == "feature":
+        value["approved"] = meta.approved_at is not None
+        if meta.approved_at is not None:
+            value["approved_at"] = meta.approved_at.isoformat()
     if meta.tier == "feature" and root is not None:
         from cascade.review import feature_review_view
 

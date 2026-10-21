@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -88,6 +88,10 @@ def render_doc(doc: WorkDoc) -> str:
         payload["integration_worktree"] = meta.integration_worktree
     if meta.cites:
         payload["cites"] = list(meta.cites)
+    if meta.approved_at is not None:
+        payload["approved_at"] = meta.approved_at.isoformat()
+    if meta.plan_approved_at is not None:
+        payload["plan_approved_at"] = meta.plan_approved_at.isoformat()
     frontmatter = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True, width=4096)
     body = doc.body
     if body and not body.endswith("\n"):
@@ -158,6 +162,8 @@ def _meta_from_mapping(loaded: dict[str, object], path: Path) -> WorkMeta:
         integration_branch=_optional_integration_str(loaded, "integration_branch"),
         integration_worktree=_optional_integration_str(loaded, "integration_worktree"),
         cites=_optional_cites(loaded),
+        approved_at=_optional_datetime(loaded, "approved_at"),
+        plan_approved_at=_optional_datetime(loaded, "plan_approved_at"),
     )
 
 
@@ -183,6 +189,24 @@ def _str_list(value: object, field: str) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise SchemaError(f"{field} must be a list of strings")
     return list(value)
+
+
+def _optional_datetime(loaded: dict[str, object], field: str) -> datetime | None:
+    if field not in loaded:
+        return None
+    value = loaded[field]
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise SchemaError(f"{field} must be an ISO-8601 datetime string")
+    text = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise SchemaError(f"invalid {field}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def _optional_cites(loaded: dict[str, object]) -> list[str]:

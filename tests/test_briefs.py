@@ -152,6 +152,10 @@ def test_epic_plan_approval_requires_feature_plan_and_persists(tmp_path: Path) -
 
     assert result["features"] == ["feat_001"]
     assert epic_plan_approved("epic_001", root=root) is True
+    from cascade.board.store import read_doc
+
+    assert read_doc("feat_001", root=root).meta.approved_at is not None
+    assert read_doc("epic_001", root=root).meta.plan_approved_at is not None
 
 
 def test_existing_workspace_must_opt_into_automation(tmp_path: Path) -> None:
