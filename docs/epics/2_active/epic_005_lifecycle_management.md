@@ -99,6 +99,10 @@ None blocking. Detailed storage/API shapes belong in feature planning and should
 
 - 2026-10-21 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-10-21 · Epic Team · **Lifecycle approval and dispatch**
+  Chose Keep approval as durable state separate from board lifecycle status, and enforce approval plus dependency readiness in the central dispatch path..
+  Rationale: Approval and status answer different questions; a single dispatch guard prevents alternate entry points from bypassing prerequisites.
+  Honors: Per-feature approval, epic-wide approval of current children, dependency-safe implementation dispatch, and restart recovery..
 ## Amendment log
 
 _(none)_
