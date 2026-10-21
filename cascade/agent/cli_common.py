@@ -88,34 +88,6 @@ def write_claude_mcp_config(turn: RoleTurn, servers: Mapping[str, Mapping[str, A
     return path
 
 
-def write_codex_mcp_config(turn: RoleTurn, servers: Mapping[str, Mapping[str, Any]]) -> Path:
-    """Write ``config.toml`` under ``turn.cwd/.cascade_codex_home`` for ``CODEX_HOME``."""
-
-    codex_home = turn.cwd / ".cascade_codex_home"
-    codex_home.mkdir(parents=True, exist_ok=True)
-    lines = [
-        'approval_policy = "never"',
-        "",
-    ]
-    for name, spec in servers.items():
-        lines.append(f"[mcp_servers.{name}]")
-        lines.append(f"command = {json.dumps(spec['command'])}")
-        args = spec.get("args") or []
-        args_literal = ", ".join(json.dumps(str(a)) for a in args)
-        lines.append(f"args = [{args_literal}]")
-        env = spec.get("env") or {}
-        if env:
-            pairs = ", ".join(f"{k} = {json.dumps(str(v))}" for k, v in env.items())
-            lines.append(f"env = {{ {pairs} }}")
-        cwd = spec.get("cwd")
-        if cwd:
-            lines.append(f"cwd = {json.dumps(str(cwd))}")
-        lines.append("")
-    config_path = codex_home / "config.toml"
-    config_path.write_text("\n".join(lines), encoding="utf-8")
-    return codex_home
-
-
 def codex_mcp_config_overrides(
     servers: Mapping[str, Mapping[str, Any]],
 ) -> list[str]:
