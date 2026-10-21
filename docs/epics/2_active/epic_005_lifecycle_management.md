@@ -68,7 +68,7 @@ No parallel approval, lifecycle, or review store is introduced.
 - Only a follow-up persisted as a child feature participates in completion rollup.
 - Review UI and API read from the existing review registry and do not duplicate review state.
 - Preserve the current single-feature-awaiting-merge gate.
-- Child metadata is authoritative for dispatch. Before approval, `feat_004` metadata must depend on `feat_001` and `feat_002`; `feat_005` metadata must depend on `feat_003` and `feat_004`.
+- Child metadata is authoritative for dispatch; the current titles and dependency edges are aligned with the sequence below.
 - Prefer focused integration coverage plus one system/browser scenario; do not create a new test framework if an existing harness suffices.
 
 ## Core dependencies
@@ -97,8 +97,7 @@ No parallel approval, lifecycle, or review store is introduced.
 
 ## Open questions
 
-- **Blocking before approval/dispatch:** correct stale child metadata so `feat_004` depends on `feat_001` and `feat_002`, and `feat_005` depends on `feat_003` and `feat_004`. Their bodies and this epic already describe the intended slices, but dispatch must follow metadata.
-- Feature planning should reuse existing lifecycle, review, and test abstractions.
+- No unresolved epic-level planning questions. Feature planning should reuse existing lifecycle, review, and test abstractions.
 
 ## Decision log
 
