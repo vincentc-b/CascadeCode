@@ -137,6 +137,11 @@ No parallel approval, lifecycle, or review store is introduced.
   Chose Treat child feature metadata as authoritative for dispatch and block approval of feat_004 and feat_005 until their titles and dependency edges match the epic sequence..
   Rationale: Feature-body prose cannot enforce orchestration order. The current metadata omits feat_002 from feat_004 and feat_003 from feat_005, which could bypass required lifecycle/API prerequisites.
   Honors: Dependency-safe dispatch, artifact-driven alignment, and the smallest coherent delivery sequence..
+
+- `dec_008` · 2026-10-21 · Epic Manager · **Metadata reconciliation**
+  Chose Treat the corrected child titles and dependency edges as authoritative and clear the pre-approval dispatch blocker..
+  Rationale: Board metadata now matches the epic sequence: feat_004 depends on feat_001 and feat_002, while feat_005 depends on feat_003 and feat_004; the stale titles for feat_003 through feat_005 are also aligned.
+  Honors: Dependency-safe dispatch, artifact-driven alignment, and the smallest coherent five-feature plan..
 ## Amendment log
 
 _(none)_
