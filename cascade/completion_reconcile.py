@@ -45,3 +45,28 @@ def reconcile_completion(root: Path | None = None) -> dict[str, list[str]]:
             epics.append(meta.id)
 
     return {"features": features, "epics": epics}
+
+
+def reconcile_completion_with_prompts(root: Path | None = None) -> dict[str, list[str]]:
+    """Run completion reconciliation and surface epic close prompts for new completions."""
+
+    repo = resolve_root(root)
+    result = reconcile_completion(root=repo)
+    from cascade.boss.epic_complete import on_feature_completed
+    from cascade.workspace.integration_worktree import locate_trunk, merged_board
+
+    board = merged_board(locate_trunk(repo))
+    auto_completed_epics = set(result["epics"])
+
+    for feature_id in result["features"]:
+        feature = board.by_id.get(feature_id)
+        if feature is None:
+            continue
+        epic_id = feature.parent or ""
+        if not epic_id or epic_id in auto_completed_epics:
+            continue
+        epic = board.by_id.get(epic_id)
+        if epic is None or epic.path.parent.name != "2_active":
+            continue
+        on_feature_completed(feature_id, root=repo)
+    return result

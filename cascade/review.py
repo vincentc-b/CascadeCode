@@ -215,7 +215,7 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
         try:
             mr = _record_to_mr(record)
             snapshot = merge_request_snapshot(trunk, mr)
-        except (GitError, ValueError):
+        except (GitError, ValueError, KeyError):
             continue
         if snapshot.get("state") != "merged":
             continue

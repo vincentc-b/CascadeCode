@@ -196,7 +196,7 @@ def _feature_owner_root(feature_id: str, doc, repo: Path) -> Path:
 
 
 def on_task_merged(task_id: WorkId, *, root: Path | None = None) -> None:
-    """After a task merge, attempt to complete its parent feature when gates already hold."""
+    """After a task merge, reconcile feature and epic completion from persisted state."""
 
     repo = resolve_root(root)
     try:
@@ -205,10 +205,9 @@ def on_task_merged(task_id: WorkId, *, root: Path | None = None) -> None:
         return
     if task.meta.tier != "task":
         return
-    parent_id = task.meta.parent
-    if not parent_id:
-        return
-    try_complete_feature(parent_id, root=repo)
+    from cascade.completion_reconcile import reconcile_completion_with_prompts
+
+    reconcile_completion_with_prompts(root=repo)
 
 
 def _rollup_gates_pass(
