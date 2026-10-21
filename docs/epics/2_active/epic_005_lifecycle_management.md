@@ -113,6 +113,11 @@ None blocking. Detailed storage/API shapes belong in feature planning and should
   Chose Treat a follow-up as completion-blocking only after it is accepted and minted as an actual child feature..
   Rationale: Free-form suggestions are ambiguous; persisted children provide an auditable boundary without inventing a second backlog state.
   Honors: Keeping an epic active for accepted follow-up work while allowing completion when suggestions are not adopted..
+
+- `dec_004` · 2026-10-21 · Epic Team · **Review dashboard**
+  Chose Build the Open MRs API and War Room view from the existing durable review registry, without a second review store..
+  Rationale: One authoritative registry minimizes synchronization failure and keeps the dashboard a low-risk read model.
+  Honors: Easy access to open merge requests from the dashboard..
 ## Amendment log
 
 _(none)_
