@@ -142,6 +142,11 @@ _(none)_
   Chose Deliver canonical allocation and compatibility in feat_009 before the dependent backlog graph migration in feat_010..
   Rationale: Migration needs one settled parser, formatter, and allocation contract; separating it from steady-state creation makes rollout and verification recoverable.
   Honors: The smallest shippable sequence that keeps the system honest..
+
+- `dec_004` · 2026-10-21 · Epic Architect · **Recoverable graph-wide migration**
+  Chose Use one board-level graph-write operation under the existing process lock: prevalidate the full mapping, snapshot all affected bytes, mutate paths, commit the complete path set once through commit_paths, and restore the snapshot on any failure..
+  Rationale: Existing write_doc and save_doc recovery is document-scoped, while the registry's atomic replacement is registry-specific. Extending the existing lock and isolated-index Git commit boundary is the narrowest mechanism that can make the whole board graph recoverable without adding a datastore or transaction framework.
+  Honors: Collision safety, atomic migration, idempotence, and the frugal-engineering preference for the smallest reliable extension..
 ## Amendment log
 
 _(none)_
