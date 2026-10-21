@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +41,8 @@ def work_meta_from_dict(raw: Mapping[str, Any]) -> WorkMeta:
         provider=raw.get("provider"),  # type: ignore[arg-type]
         integration_branch=raw.get("integration_branch"),
         integration_worktree=raw.get("integration_worktree"),
+        approved_at=_parse_optional_datetime(raw.get("approved_at")),
+        plan_approved_at=_parse_optional_datetime(raw.get("plan_approved_at")),
     )
 
 
@@ -81,6 +83,17 @@ def work_doc_from_dict(
         raise ValueError("doc.meta is required when work id cannot be resolved")
     meta = work_meta_from_dict(meta_raw)
     return WorkDoc(meta=meta, body=str(body), sha=raw.get("sha"))
+
+
+def _parse_optional_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value.strip():
+        text = value.strip().replace("Z", "+00:00")
+        return datetime.fromisoformat(text)
+    raise ValueError("approved_at must be an ISO datetime string or null")
 
 
 def _parse_date(value: Any, *, field: str) -> date:

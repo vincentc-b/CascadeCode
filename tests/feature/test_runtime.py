@@ -18,7 +18,7 @@ from cascade.feature import (
     register_feature_tool,
 )
 from cascade.feature.graph import clear_feature_graph_sessions
-from tests.support import TEST_MODEL_ID
+from tests.support import TEST_MODEL_ID, approve_board_feature
 from cascade.feature.checkpoint import checkpoint_path, get_checkpointer
 from cascade.board.store import pin_parent, read_doc
 from cascade.watchdog import activate_epic, append_event, dispatch_feature
@@ -143,6 +143,7 @@ def test_install_boot_hook_consumes_feature_ready_to_plan(tmp_path: Path) -> Non
     install_feature_boot_hook(root)
 
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     dispatch_feature("feat_001", "human", root=root)
 
     graph = ensure_feature_graph("feat_001", root=root)
@@ -269,6 +270,7 @@ def test_run_watchdog_installs_feature_boot_hook(tmp_path: Path) -> None:
 
     run_watchdog(root=root, poll_interval=0.01, stop_when=lambda: True)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     dispatch_feature("feat_001", "human", root=root)
     graph = ensure_feature_graph("feat_001", root=root)
     state = graph.get_state({"configurable": {"thread_id": "feat_001"}}).values

@@ -13,7 +13,7 @@ from cascade.task.git_tools import swe_commit
 from cascade.task.worktree import clear_task_runs, get_task_run
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 from cascade.workspace.integration_worktree import get_integration_worktree
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, approve_board_feature
 
 
 @pytest.fixture(autouse=True)
@@ -40,6 +40,7 @@ def test_prepare_feature_publication_folds_history_to_one_commit_per_task(
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     add_doc(root, id="task_001", title="Deliver value", tier="task", parent="feat_001")
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
     run = get_task_run("task_001")

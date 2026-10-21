@@ -26,7 +26,7 @@ from cascade.watchdog.hooks import clear_hooks
 from cascade.board.parse import render_doc
 from cascade.board.paths import column_dir, column_for_status, slugify
 from cascade.board.types import WorkDoc, WorkMeta
-from tests.support import FEATURE_BODY, add_doc, make_repo
+from tests.support import FEATURE_BODY, add_doc, make_repo, approve_board_feature
 
 
 def _free_port() -> int:
@@ -107,6 +107,7 @@ def test_activate_epic_human_success(dispatch_board):
 def test_dispatch_feature_success(dispatch_board):
     base, root = dispatch_board
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     status, body = _post(f"{base}/api/dispatch_feature", {"id": "feat_001"})
     assert status == HTTPStatus.OK
     assert body["ok"] is True
@@ -117,6 +118,7 @@ def test_dispatch_feature_success(dispatch_board):
 def test_dispatch_task_success_and_skills_unchanged_when_null(dispatch_board):
     base, root = dispatch_board
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     before = read_doc("task_001", root=root)
     status, body = _post(f"{base}/api/dispatch_task", {"id": "task_001", "skills": None})
@@ -131,6 +133,7 @@ def test_dispatch_task_success_and_skills_unchanged_when_null(dispatch_board):
 
 def test_dispatch_refusal_unmet_deps_still_200(dispatch_board):
     base, root = dispatch_board
+    approve_board_feature(root, "feat_002")
     status, body = _post(f"{base}/api/dispatch_feature", {"id": "feat_002"})
     assert status == HTTPStatus.OK
     assert body["ok"] is False
@@ -142,6 +145,7 @@ def test_dispatch_refusal_unmet_deps_still_200(dispatch_board):
 def test_dispatch_feature_refused_open_blocking_comment(dispatch_board):
     base, root = dispatch_board
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     cmt_id = comment(
         "epic_001",
         "Scope",
@@ -293,6 +297,7 @@ def merge_rollup_server(tmp_path):
     add_doc(root, id="task_001", title="Task one", tier="task", parent="feat_001")
     write_closeout("feat_001", "All tasks merged; feature complete.", root=root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
     run = create_task_worktree(
@@ -479,6 +484,7 @@ def test_boss_drain_appends_without_dispatch(dispatch_board):
 
 def test_get_boss_view_and_orphans(dispatch_board):
     base, root = dispatch_board
+    approve_board_feature(root, "feat_001")
     status, body = _get(f"{base}/api/boss_view")
     assert status == HTTPStatus.OK
     assert "slots_free" in body
@@ -493,6 +499,7 @@ def test_get_boss_view_and_orphans(dispatch_board):
     assert orphans_body["orphans"] == []
 
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
     blocked = read_doc("task_001", root=root)

@@ -58,6 +58,7 @@ def validate_doc(doc: WorkDoc, board: BoardIndex) -> None:
     _check_identity(meta)
     _check_model_frontmatter(meta)
     _check_provider_frontmatter(meta)
+    _check_approval_frontmatter(meta)
     if meta.tier in ("feature", "task") and not meta.parent:
         raise SchemaError(f"{meta.id} requires a parent")
     _check_folder(meta)
@@ -83,6 +84,13 @@ def _check_identity(meta: WorkMeta) -> None:
         raise SchemaError(f"filename {meta.path.name} does not match id {meta.id}")
     if meta.parent_rev is not None and _SHA_RE.fullmatch(meta.parent_rev) is None:
         raise SchemaError("parent_rev must be a 40-character hex SHA or null")
+
+
+def _check_approval_frontmatter(meta: WorkMeta) -> None:
+    if meta.approved_at is not None and meta.tier != "feature":
+        raise SchemaError(f"{meta.id} approved_at is only valid for features")
+    if meta.plan_approved_at is not None and meta.tier != "epic":
+        raise SchemaError(f"{meta.id} plan_approved_at is only valid for epics")
 
 
 def _check_provider_frontmatter(meta: WorkMeta) -> None:

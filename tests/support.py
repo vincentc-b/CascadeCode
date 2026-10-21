@@ -235,6 +235,14 @@ def make_repo(
     return root
 
 
+def approve_board_feature(root: Path, feature_id: str) -> None:
+    """Mark a feature approved through the same path production uses."""
+
+    from cascade.approvals import approve_feature
+
+    approve_feature(feature_id, root=root)
+
+
 def add_doc(
     root: Path,
     *,

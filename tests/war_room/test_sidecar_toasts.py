@@ -17,7 +17,7 @@ from cascade.war_room.server import serve
 from cascade.war_room.toasts import events_to_toasts
 from cascade.watchdog import activate_epic, append_event, dispatch_feature, read_events
 from cascade.watchdog.types import Event
-from tests.support import TEST_MODEL_ID, add_doc, install_fake_planning_turns, make_repo
+from tests.support import TEST_MODEL_ID, add_doc, install_fake_planning_turns, make_repo, approve_board_feature
 
 
 def _free_port() -> int:
@@ -93,6 +93,7 @@ def sidecar_board(tmp_path):
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     add_doc(root, id="task_001", title="Task one", tier="task", parent="feat_001")
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     port = _free_port()
     server = serve(root=root, host="127.0.0.1", port=port)
