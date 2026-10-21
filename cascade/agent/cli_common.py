@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shlex
 from collections.abc import Mapping
 from pathlib import Path
@@ -115,6 +116,47 @@ def write_codex_mcp_config(turn: RoleTurn, servers: Mapping[str, Mapping[str, An
     return codex_home
 
 
+def codex_mcp_config_overrides(
+    servers: Mapping[str, Mapping[str, Any]],
+) -> list[str]:
+    """Return Codex ``-c`` values for MCP servers without replacing CODEX_HOME.
+
+    Keeping the operator's CODEX_HOME is required for CLI-session authentication.
+    Values are encoded as TOML fragments; JSON strings and arrays are valid TOML
+    values for the scalar data accepted by Cascade's MCP server mapping.
+    """
+
+    overrides: list[str] = []
+    for name, spec in servers.items():
+        server_name = str(name)
+        if re.fullmatch(r"[A-Za-z0-9_-]+", server_name) is None:
+            raise ValueError(f"invalid Codex MCP server name: {server_name!r}")
+        # Codex's dotted override parser treats quote characters in a path
+        # segment literally (creating a server named '"cascade"'), unlike a
+        # TOML document parser. MCP server names are therefore restricted to
+        # bare-key characters here.
+        prefix = f"mcp_servers.{server_name}"
+        overrides.append(f"{prefix}.enabled=true")
+        overrides.append(f"{prefix}.required=true")
+        # Cascade tools enforce their own tier/work-id guards. CLI turns are
+        # non-interactive, so prompting here would make every tool unusable.
+        overrides.append(f'{prefix}.default_tools_approval_mode="approve"')
+        overrides.append(f"{prefix}.command={json.dumps(str(spec['command']))}")
+        args = [str(arg) for arg in spec.get("args") or []]
+        overrides.append(f"{prefix}.args={json.dumps(args)}")
+        env = spec.get("env") or {}
+        if env:
+            pairs = ", ".join(
+                f"{json.dumps(str(key))} = {json.dumps(str(value))}"
+                for key, value in env.items()
+            )
+            overrides.append(f"{prefix}.env={{ {pairs} }}")
+        cwd = spec.get("cwd")
+        if cwd:
+            overrides.append(f"{prefix}.cwd={json.dumps(str(cwd))}")
+    return overrides
+
+
 async def read_cli_help(binary: str, *prefix: str) -> str:
     key = (binary, prefix)
     if key in _help_cache:
@@ -153,10 +195,13 @@ def codex_help_supports_turn(*, exec_help: str, mcp_help: str) -> tuple[bool, bo
         or " -c " in exec_help
         or exec_help.lstrip().startswith("-c,")
     )
-    exec_ok = bool(exec_help.strip())
+    # Use the exec-scoped config override for the approval policy.  Codex CLI
+    # versions disagree about whether ``--ask-for-approval`` is an exec option
+    # or a root option, while ``codex exec -c key=value`` is the interface we
+    # already require for MCP configuration.
+    exec_ok = bool(exec_help.strip()) and has_config
     mcp_ok = "mcp" in mcp_help.lower() and has_config
-    approval_ok = "--ask-for-approval" in exec_help or "--approve-for-me" in exec_help
-    return exec_ok and approval_ok, mcp_ok
+    return exec_ok, mcp_ok
 
 
 def assert_claude_non_interactive(argv: list[str]) -> None:

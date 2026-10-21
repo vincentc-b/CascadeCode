@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +12,7 @@ from cascade.agent.mcp_wrappers import (
     dispatch_planning_tool,
     mcp_tool_catalog,
 )
+from cascade.agent.mcp_transport import read_message, write_message
 from cascade.agent.planning_sandbox import PlanningTier
 
 
@@ -28,12 +28,13 @@ def main() -> None:
     collector = ToolEffectCollector()
 
     while True:
-        message = _read_message()
-        if message is None:
+        incoming = read_message()
+        if incoming is None:
             break
+        message, framing = incoming
         response = _handle_message(message, tier, scope_id, repo_root, tool_names, collector)
         if response is not None:
-            _write_message(response)
+            write_message(response, framing=framing)
 
 
 def _handle_message(
@@ -105,32 +106,6 @@ def _error(msg_id: object, code: int, message: str) -> dict[str, Any]:
         "id": msg_id,
         "error": {"code": code, "message": message},
     }
-
-
-def _read_message() -> dict[str, Any] | None:
-    headers: dict[str, str] = {}
-    while True:
-        line = sys.stdin.buffer.readline()
-        if not line:
-            return None
-        decoded = line.decode("utf-8", errors="replace").strip()
-        if not decoded:
-            break
-        key, _, value = decoded.partition(":")
-        headers[key.strip().lower()] = value.strip()
-    length = int(headers.get("content-length", "0"))
-    if length <= 0:
-        return None
-    body = sys.stdin.buffer.read(length)
-    return json.loads(body.decode("utf-8"))
-
-
-def _write_message(payload: dict[str, Any]) -> None:
-    encoded = json.dumps(payload).encode("utf-8")
-    header = f"Content-Length: {len(encoded)}\r\n\r\n".encode("ascii")
-    sys.stdout.buffer.write(header)
-    sys.stdout.buffer.write(encoded)
-    sys.stdout.buffer.flush()
 
 
 if __name__ == "__main__":

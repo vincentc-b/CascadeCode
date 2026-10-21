@@ -33,8 +33,9 @@ Usage: codex exec [options] [PROMPT]
   -c, --config key=value      Inline configuration override
   --model, -m                 Override model
   --color always|never|auto
-  --ask-for-approval on-request|never
   --approve-for-me            Automatic approval review
+  --skip-git-repo-check       Allow running outside a Git repository
+  --ignore-user-config        Ignore user config but retain authentication
   PROMPT use - for stdin
 """
 
@@ -191,7 +192,7 @@ def test_codex_unsupported_mcp_fails_closed(
         asyncio.run(run_codex_role(turn, token="sk-test"))
 
 
-def test_codex_exec_with_mcp_writes_codex_home(
+def test_codex_exec_with_mcp_uses_inline_config_and_preserves_codex_home(
     mock_help: None,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -211,9 +212,13 @@ def test_codex_exec_with_mcp_writes_codex_home(
     assert argv[:3] == ["codex", "exec", "--color"]
     assert argv[-1] == "-"
     env = captured["kwargs"]["env"]
-    codex_home = Path(str(env["CODEX_HOME"]))
-    assert (codex_home / "config.toml").is_file()
-    assert "cascade" in (codex_home / "config.toml").read_text(encoding="utf-8")
+    assert "CODEX_HOME" not in env
+    assert "--ignore-user-config" in argv
+    overrides = [argv[index + 1] for index, arg in enumerate(argv) if arg == "--config"]
+    assert any(value.startswith("mcp_servers.cascade.command=") for value in overrides)
+    assert 'mcp_servers.cascade.default_tools_approval_mode="approve"' in overrides
+    assert "mcp_servers.cascade.required=true" in overrides
+    assert any("CASCADE_MCP_CONFIG" in value for value in overrides)
     assert env["OPENAI_API_KEY"] == "openai-key"
     assert captured["kwargs"]["cwd"] == os.fspath(tmp_path)
 
@@ -239,6 +244,18 @@ def test_reject_interactive_claude_argv() -> None:
 def test_build_codex_argv_requires_exec_subcommand() -> None:
     argv = build_codex_argv(_turn(provider="codex"), exec_help=_CODEX_EXEC_HELP)
     assert argv[1] == "exec"
+
+
+def test_build_codex_argv_sets_approval_policy_via_exec_config() -> None:
+    argv = build_codex_argv(_turn(provider="codex"), exec_help=_CODEX_EXEC_HELP)
+    assert "--ask-for-approval" not in argv
+    assert argv[argv.index("--config") + 1] == 'approval_policy="never"'
+
+
+def test_build_codex_argv_allows_planning_scratch_directory() -> None:
+    argv = build_codex_argv(_turn(provider="codex"), exec_help=_CODEX_EXEC_HELP)
+    assert "--skip-git-repo-check" in argv
+    assert argv[-1] == "-"
 
 
 def test_nonzero_exit_is_role_result_error(monkeypatch: pytest.MonkeyPatch) -> None:
