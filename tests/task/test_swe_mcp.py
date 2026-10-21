@@ -3,7 +3,7 @@ from pathlib import Path
 from cascade.task.swe_mcp import build_swe_custom_tools, dispatch_swe_tool
 from cascade.task.worktree import clear_task_runs, get_task_run
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, approve_board_feature
 
 
 def test_out_of_process_tool_restores_active_task_run(tmp_path: Path) -> None:
@@ -12,6 +12,7 @@ def test_out_of_process_tool_restores_active_task_run(tmp_path: Path) -> None:
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
 
@@ -35,6 +36,7 @@ def test_cursor_custom_tool_writes_through_guarded_dispatch(tmp_path: Path) -> N
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
 

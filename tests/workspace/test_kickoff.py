@@ -30,7 +30,7 @@ from cascade.watchdog.types import Event
 from cascade.workspace.kickoff import kickoff_turn, resume_inflight_graphs
 from cascade.workspace.types import KickoffReason
 from cascade.workspace.up import resume_legally_active_graphs
-from tests.support import TEST_MODEL_ID, add_doc, make_repo
+from tests.support import TEST_MODEL_ID, add_doc, make_repo, approve_board_feature
 
 
 @pytest.fixture(autouse=True)
@@ -145,6 +145,7 @@ def test_forbidden_paths_do_not_call_model(
         assert epic_wt is not None
         mint_feature("Child", epic_id="epic_001", root=epic_wt.path)
     elif action == "mint_task":
+        approve_board_feature(root, "feat_001")
         assert dispatch_feature("feat_001", "human", root=root).ok
         run_role_mock.reset_mock()
         from cascade.workspace.integration_worktree import get_integration_worktree
@@ -207,6 +208,7 @@ def test_dispatch_feature_kickoff_one_planning_path(
     assert activate_epic("epic_001", "human", root=root).ok
     run_role_mock.reset_mock()
 
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert run_role_mock.await_count >= 1
 
@@ -228,6 +230,7 @@ def test_dispatch_feature_turn_is_told_to_mint_tasks(
     assert activate_epic("epic_001", "human", root=root).ok
     run_role_mock.reset_mock()
 
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     prompts = [call.args[0].prompt for call in run_role_mock.await_args_list]
     assert prompts
@@ -309,6 +312,7 @@ def test_dispatch_task_kickoff_swe_turn(
     )
     _commit_all(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     run_role_mock.reset_mock()
 

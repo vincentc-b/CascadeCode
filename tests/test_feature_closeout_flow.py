@@ -196,7 +196,6 @@ def test_merged_review_releases_next_dependent_feature_on_next_pass(
     root = make_repo(tmp_path, git=False)
     (root / "cascade.toml").write_text("[automation]\nenabled = true\n", encoding="utf-8")
     _completed_feature_board(root, sibling=True)
-    approve_epic_plan("epic_001", root=root)
     monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
     monkeypatch.setattr("cascade.review.ensure_feature_review", lambda *_args, **_kwargs: None)
     review_pending = True
@@ -206,6 +205,7 @@ def test_merged_review_releases_next_dependent_feature_on_next_pass(
     )
     monkeypatch.setattr("cascade.watchdog.dispatch.invoke_boot", lambda *_args: None)
     monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args: None)
+    approve_epic_plan("epic_001", root=root)
 
     first = advance_work(root)
     assert first["features"] == []

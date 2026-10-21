@@ -26,7 +26,7 @@ from cascade.workspace.integration_worktree import (
     scan_active_markdown_roots,
 )
 from cascade.workspace.up import resume_legally_active_graphs
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, approve_board_feature
 
 
 def _branch_exists(root: Path, branch: str) -> bool:
@@ -40,6 +40,7 @@ def _branch_exists(root: Path, branch: str) -> bool:
 
 def _chain(root: Path) -> None:
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
 
 

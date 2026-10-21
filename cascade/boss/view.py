@@ -52,7 +52,8 @@ def compute_boss_view(*, root: Path | None = None) -> BossView:
         if (
             meta.tier == "feature"
             and _backlog_open(meta)
-            and _deps_met(board, meta)
+            and meta.approved_at is not None
+            and _deps_met(board, meta, root=repo)
             and meta.parent not in feature_parents_in_flight
         ):
             dispatchable_features.append(work_id)
@@ -62,7 +63,7 @@ def compute_boss_view(*, root: Path | None = None) -> BossView:
             elif (
                 _backlog_open(meta)
                 and meta.parent
-                and _deps_met(board, meta)
+                and _deps_met(board, meta, root=repo)
                 and not at_cap
             ):
                 dispatchable_tasks.append(work_id)
@@ -79,11 +80,16 @@ def _backlog_open(meta: WorkMeta) -> bool:
     return meta.status in _OPEN and meta.path.parent.name == "1_backlog"
 
 
-def _deps_met(board: BoardIndex, meta: WorkMeta) -> bool:
+def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
     for dep_id in meta.depends_on:
         dep = board.by_id.get(dep_id)
         if dep is None or dep.status != "completed" or dep.path.parent.name != "3_completed":
             return False
+        if dep.tier == "feature":
+            from cascade.review import feature_review_pending
+
+            if feature_review_pending(dep_id, root=root):
+                return False
     return True
 
 

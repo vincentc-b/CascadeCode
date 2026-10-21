@@ -17,7 +17,7 @@ from cascade.boss.graph import (
 )
 from cascade.watchdog import activate_epic, append_event, dispatch_feature, dispatch_task
 from cascade.watchdog.types import Event
-from tests.support import add_doc, commit_board, make_repo
+from tests.support import add_doc, commit_board, make_repo, approve_board_feature
 
 
 def _boss_event(event_type: str, **payload: object) -> Event:
@@ -46,7 +46,9 @@ def board(tmp_path: Path) -> Path:
     install_boss_consumer(root)
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
+    approve_board_feature(root, "feat_002")
     assert dispatch_feature("feat_002", "human", root=root).ok
     return root
 
@@ -154,6 +156,7 @@ def test_drain_stops_when_parallelism_cap_hit(tmp_path: Path) -> None:
     add_doc(root, id="task_002", title="Task A2", tier="task", parent="feat_001")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     reset_boss_consumer_offset(0)
     install_boss_consumer(root)

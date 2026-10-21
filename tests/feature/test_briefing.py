@@ -21,7 +21,7 @@ from cascade.war_room.serialize import briefing_pack_to_dict
 from cascade.war_room.server import serve
 from cascade.watchdog import read_events
 from cascade.watchdog import activate_epic, dispatch_feature
-from tests.support import FEATURE_BODY, add_doc, commit_board, make_repo
+from tests.support import FEATURE_BODY, add_doc, commit_board, make_repo, approve_board_feature
 
 
 def _free_port() -> int:
@@ -65,6 +65,7 @@ def briefing_board(tmp_path: Path):
     install_feature_boot_hook(root)
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     port = _free_port()
     server = serve(root=root, host="127.0.0.1", port=port)

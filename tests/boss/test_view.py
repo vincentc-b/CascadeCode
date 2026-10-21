@@ -6,7 +6,7 @@ from pathlib import Path
 from cascade.board import move_doc, read_doc, write_doc
 from cascade.boss import BossView, compute_boss_view
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
-from tests.support import add_doc, commit_board, make_repo
+from tests.support import add_doc, commit_board, make_repo, approve_board_feature
 
 
 def test_empty_board(tmp_path: Path) -> None:
@@ -37,6 +37,8 @@ def test_backlog_feature_and_task_with_met_and_unmet_deps(tmp_path: Path) -> Non
         depends_on=["task_003"],
     )
 
+    approve_board_feature(root, "feat_001")
+    approve_board_feature(root, "feat_003")
     view = compute_boss_view(root=root)
     assert view.dispatchable_features == ["feat_001", "feat_003"]
     assert view.dispatchable_tasks == ["task_001", "task_003"]
@@ -45,6 +47,7 @@ def test_backlog_feature_and_task_with_met_and_unmet_deps(tmp_path: Path) -> Non
 
     move_doc("feat_003", "completed", root=root)
     move_doc("task_003", "completed", root=root)
+    approve_board_feature(root, "feat_002")
     after = compute_boss_view(root=root)
     assert after.dispatchable_features == ["feat_001", "feat_002"]
     assert after.dispatchable_tasks == ["task_001", "task_002"]
@@ -61,6 +64,7 @@ def test_ready_to_plan_feature_in_backlog_is_dispatchable(tmp_path: Path) -> Non
         parent="epic_001",
         status="ready_to_plan",
     )
+    approve_board_feature(root, "feat_001")
     view = compute_boss_view(root=root)
     assert view.dispatchable_features == ["feat_001"]
     assert view.dispatchable_tasks == []
@@ -108,6 +112,7 @@ def test_cap_full_excludes_dispatchable_tasks_and_reports_slots_free(tmp_path: P
     add_doc(root, id="task_003", title="Task C", tier="task", parent="feat_001")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
 
     assert dispatch_task("task_001", "human", root=root).ok
@@ -135,6 +140,7 @@ def test_blocked_task_in_active_is_failed_not_dispatchable(tmp_path: Path) -> No
     add_doc(root, id="task_001", title="Failed task", tier="task", parent="feat_001")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
     doc = read_doc("task_001", root=root)

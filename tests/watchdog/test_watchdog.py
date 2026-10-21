@@ -19,7 +19,7 @@ from cascade.watchdog import (
     run_watchdog,
     watchdog_tick,
 )
-from tests.support import add_doc, commit_board, make_repo
+from tests.support import add_doc, commit_board, make_repo, approve_board_feature
 
 
 def test_watchdog_queue_kickoff_does_not_wait_for_model_turn(
@@ -87,6 +87,7 @@ def test_authorized_dispatch_stays_without_git_history(tmp_path: Path) -> None:
     add_doc(root, id="task_002", title="Rogue task", tier="task", parent="feat_001")
 
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
     move_doc("task_002", "active", root=root)
@@ -115,6 +116,7 @@ def test_rogue_move_is_reverted_and_legal_dispatch_stays(tmp_path: Path) -> None
     commit_board(root)
 
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "boss", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
     move_doc("epic_002", "active", root=root)
@@ -253,6 +255,7 @@ def test_stale_authorization_and_blocked_edit(tmp_path: Path) -> None:
     add_doc(root, id="task_002", title="Stays blocked", tier="task", parent="feat_001")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
     assert dispatch_task("task_002", "boss", root=root).ok
