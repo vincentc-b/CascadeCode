@@ -105,6 +105,10 @@ No new external service or datastore is required.
 
 - 2026-10-21 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-10-21 · Epic Manager · **Identifier format and allocation**
+  Chose Use epic_NNN, feat_NNN_MMM, and task_NNN_MMM_KKK with three-digit underscore-separated segments; allocate child segments monotonically within their direct parent..
+  Rationale: The format makes parentage visible, preserves lexical ordering, matches existing canonical prefixes, and limits the change to identity semantics.
+  Honors: The human request for hierarchical epic, feature, and task numbering..
 ## Amendment log
 
 _(none)_
