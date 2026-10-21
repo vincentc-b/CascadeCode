@@ -100,17 +100,24 @@ def _write_doc(doc: WorkDoc, root: Path | None) -> str | None:
     doc.meta.path = path.resolve()
     doc.meta.updated = date.today()
     from cascade.workspace.integration_worktree import (
+        git_root_for_path,
         invalidate_merged_board,
         locate_trunk,
         merged_board,
     )
 
-    board = merged_board(locate_trunk(repo))
+    trunk = locate_trunk(repo)
+    board = merged_board(trunk)
     validate_doc(doc, board)
     doc.meta.path.parent.mkdir(parents=True, exist_ok=True)
     doc.meta.path.write_text(render_doc(doc), encoding="utf-8")
-    invalidate_merged_board(locate_trunk(repo))
-    sha = commit_paths(repo, [doc.meta.path], f"docs: {doc.meta.id} {doc.meta.title}")
+    invalidate_merged_board(trunk)
+    commit_root = git_root_for_path(doc.meta.path) if has_git(repo) else repo
+    sha = commit_paths(
+        commit_root,
+        [doc.meta.path],
+        f"docs: {doc.meta.id} {doc.meta.title}",
+    )
     doc.sha = sha
     return sha
 

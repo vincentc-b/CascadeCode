@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
+
+import pytest
 
 from cascade.approvals import (
     approve_epic_plan,
@@ -18,6 +21,7 @@ from cascade.approvals import (
 from cascade.board.store import read_doc
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.watchdog.events import read_events
+from cascade.workspace.integration_worktree import integration_worktree_path
 from tests.support import add_doc, commit_board, make_repo
 
 
@@ -77,6 +81,66 @@ def test_child_added_after_epic_approval_stays_unapproved(tmp_path: Path) -> Non
 
     assert feature_approved("feat_001", root=root) is True
     assert feature_approved("feat_002", root=root) is False
+
+
+def test_epic_approval_commits_docs_in_their_owning_checkouts(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    (root / ".gitignore").write_text(".cascade/\n", encoding="utf-8")
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    epic_root = integration_worktree_path("epic", "epic_001", trunk=root)
+    trunk_before = _head(root)
+    epic_before = _head(epic_root)
+
+    approve_epic_plan("epic_001", root=root)
+
+    assert _head(root) != trunk_before
+    assert _head(epic_root) != epic_before
+    assert feature_approved("feat_001", root=root) is True
+    assert epic_plan_approved("epic_001", root=root) is True
+    assert _status(root, "docs/epics", "docs/features") == ""
+    assert _status(epic_root, "docs/epics", "docs/features") == ""
+
+
+def test_epic_approval_marks_plan_only_after_all_children_succeed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+
+    def fail_child(feature_id: str, *, root: Path) -> bool:
+        raise RuntimeError(f"could not approve {feature_id}")
+
+    monkeypatch.setattr("cascade.approvals._set_feature_approved", fail_child)
+
+    with pytest.raises(RuntimeError, match="could not approve feat_001"):
+        approve_epic_plan("epic_001", root=root)
+
+    assert epic_plan_approved("epic_001", root=root) is False
+
+
+def _head(root: Path) -> str:
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _status(root: Path, *paths: str) -> str:
+    return subprocess.run(
+        ["git", "status", "--porcelain", "--", *paths],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
 
 
 def test_approve_feature_enables_dispatch_when_automation_off(tmp_path: Path) -> None:

@@ -49,9 +49,12 @@ def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
     if not children:
         raise ValueError("epic plan has no feature plans to approve yet")
 
-    epic_newly = _set_epic_plan_approved(epic_id, root=repo)
     for feature_id in children:
         _set_feature_approved(feature_id, root=repo)
+    # The epic timestamp is the durable indication that the entire current plan
+    # was approved.  Write it only after every child so a child write failure
+    # cannot leave the plan marked approved while work remains blocked.
+    epic_newly = _set_epic_plan_approved(epic_id, root=repo)
 
     if epic_newly:
         for dest in (epic_id, "war_room"):
