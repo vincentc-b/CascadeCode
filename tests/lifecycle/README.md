@@ -77,7 +77,8 @@ Fixtures always call `teardown_lifecycle_scenario()` after each test; no manual 
 
 - **No live agent or Cursor boot** — dispatch is stubbed so CI stays deterministic and fast.
 - **No real GitHub/GitLab forge** — merge requests are simulated in `.cascade/reviews.json`.
-- **No Playwright UI walkthrough** — board state is checked via HTTP API and store/events; browser harness can reuse the same fixtures later.
+- **Open merge requests browser flow** — `test_open_reviews_browser_flow.py` drives the shared `open_reviews_pane.js` helpers against the lifecycle War Room (empty → open review with link/context → close → empty), plus a local failure-state case. No Playwright driver.
+- **No full-browser walkthrough** — board state is still checked via HTTP API and store/events outside the open-reviews pane flow.
 - **Single scripted path** — one gate/follow dependency chain, not an exhaustive lifecycle matrix.
 
 ## Related code
