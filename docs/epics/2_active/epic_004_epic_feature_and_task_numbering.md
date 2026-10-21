@@ -114,6 +114,11 @@ No new external service or datastore is required.
   Chose Immediately migrate backlog epic graphs and board-owned structured references, while retaining active and completed identifiers as compatible inputs..
   Rationale: This meets the explicit backlog requirement without taking on a high-risk historical rewrite whose product value is low.
   Honors: The success criterion that backlog epics receive hierarchical numbering right away and the frugal-engineering constraint to avoid unnecessary scope..
+
+- `dec_003` · 2026-10-21 · Epic Manager · **Feature sequencing**
+  Chose Deliver canonical allocation and compatibility in feat_009 before the dependent backlog graph migration in feat_010..
+  Rationale: Migration needs one settled parser, formatter, and allocation contract; separating it from steady-state creation makes rollout and verification recoverable.
+  Honors: The smallest shippable sequence that keeps the system honest..
 ## Amendment log
 
 _(none)_
