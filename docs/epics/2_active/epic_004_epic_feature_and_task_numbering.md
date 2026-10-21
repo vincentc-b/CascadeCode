@@ -67,11 +67,34 @@ Readers accept both retained legacy identifiers and the new hierarchical identif
 
 ## Core dependencies
 
-- Existing board persistence/transaction or recoverable-write mechanism.
+- The existing board process lock and Git-backed isolated-index commit boundary, extended narrowly for a prevalidated multi-path graph write with byte-level rollback.
 - The authoritative indexes and serializers for work metadata and graph relationships.
 - All creation interfaces that currently mint epic, feature, or task IDs.
 
 No new external service or datastore is required.
+
+## Architecture validation
+
+### Recoverable graph-wide writes
+
+The existing primitives are individually insufficient as-is: `write_doc` commits one document and does not restore it after commit failure; `save_doc` restores one path; and the worktree registry's temp-file/`os.replace` transaction applies only to that registry. The narrowest reusable boundary is the existing board `process_lock` plus `commit_paths` isolated-index commit.
+
+The migration implementation must add one board-level graph-write operation that, while holding `process_lock`:
+
+1. computes and validates the full mapping and every rendered destination before mutation;
+2. rejects duplicate sources, occupied destinations, invalid parentage, and unresolved structured references;
+3. snapshots bytes and existence for every affected board-owned path;
+4. writes new files and removes old paths;
+5. commits the entire affected path set once through `commit_paths`; and
+6. restores the complete snapshot and invalidates board caches if any write or commit fails.
+
+A deterministic manifest records the mapping and affected paths. Re-running after success is a no-op; re-running after a failed attempt starts from the restored pre-migration graph.
+
+### ID persistence outside board documents
+
+Cascade persists work IDs outside plan frontmatter and structured document references in local LangGraph checkpoint filenames/thread IDs, event queues, War Room chat and comment sidecars, the integration-worktree registry and paths, Git branch names, commit trailers, and remote GitHub/GitLab branches or merge requests after dispatch/publication.
+
+Those artifacts belong to active execution, while this epic migrates backlog graphs only. Migration therefore does not rename or rewrite runtime or forge artifacts. Before mutation, it must prove the entire selected graph is backlog-only and reject it if any integration-worktree registration, matching local or remote integration branch, checkpoint, queue/runtime sidecar, or published review artifact exists. Board-owned backlog comment/chat sidecars, if present, are included in the structured rewrite and atomic path set. The dry-run report lists every checked artifact class and any blocker. Retained active/completed IDs remain compatible, so no external notification contract is needed for this scope.
 
 ## Feature breakdown
 
@@ -83,14 +106,15 @@ No new external service or datastore is required.
 
 2. **feat_010 — Backlog epic ID migration** (depends on `feat_009`)
    - Discover backlog epic graphs and generate deterministic old-to-new mappings.
-   - Validate collisions and reference coverage before changing state.
-   - Rewrite board-owned documents, metadata, paths, indexes, and cross-work references recoverably.
-   - Provide dry-run/audit output and representative end-to-end migration coverage.
+   - Validate collisions, reference coverage, backlog-only status, and absence of runtime/remote identity artifacts before changing state.
+   - Rewrite board-owned documents, metadata, paths, indexes, cross-work references, and applicable board sidecars in one locked Git commit with full byte-snapshot rollback.
+   - Provide dry-run/audit output and representative end-to-end migration coverage, including injected commit failure and runtime-artifact refusal.
    - Leave active and completed work untouched.
 
 ## Explicit non-goals
 
 - Renumbering active or completed epics and their existing descendants.
+- Renaming integration branches, worktrees, checkpoints, queues, or remote forge artifacts.
 - Changing lifecycle states, board ordering, titles, or human-readable slugs.
 - Rewriting arbitrary user prose that merely contains an old identifier.
 - Introducing configurable segment widths, alternate separators, or a general-purpose ID framework.
@@ -98,8 +122,7 @@ No new external service or datastore is required.
 
 ## Open questions
 
-- Which existing persistence primitive will provide recoverable graph-wide migration semantics? The Epic Architect should select the narrowest mechanism already present in the codebase.
-- Do any external integrations persist work IDs outside Cascade's board-owned references? If so, they need an explicit compatibility/notification contract before migration ships.
+_(none)_
 
 ## Decision log
 
