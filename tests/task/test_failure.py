@@ -20,7 +20,7 @@ from cascade.war_room.toasts import events_to_toasts
 from cascade.watchdog.events import read_events
 from cascade.watchdog.hooks import clear_hooks, invoke_boot, register_teardown_hook
 from cascade.watchdog.types import Event
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, approve_board_feature
 
 @pytest.fixture(autouse=True)
 def _failure_test_isolation() -> None:
@@ -262,6 +262,7 @@ def test_fail_task_commits_blocked_state_in_owning_feature_worktree(tmp_path: Pa
     from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
 

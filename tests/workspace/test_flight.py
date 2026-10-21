@@ -23,7 +23,7 @@ from cascade.workspace.integration_worktree import (
     get_integration_worktree,
     integration_worktree_path,
 )
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, approve_board_feature
 
 
 @pytest.fixture(autouse=True)
@@ -93,7 +93,9 @@ def _seed_epic_with_features(root: Path) -> None:
 
 def _activate_and_dispatch_features(root: Path) -> None:
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
+    approve_board_feature(root, "feat_002")
     assert dispatch_feature("feat_002", "human", root=root).ok
 
 
@@ -121,6 +123,7 @@ def test_feature_epic_branch_overlap_after_cut(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     _seed_epic_with_features(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
 
     shared = "docs/epic_delta.txt"

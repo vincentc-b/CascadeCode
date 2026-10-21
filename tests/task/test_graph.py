@@ -22,7 +22,7 @@ from cascade.task.registry import register_task_tool
 from cascade.task.worktree import clear_task_runs, create_task_worktree, get_task_run
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 from cascade.watchdog.events import read_events
-from tests.support import TEST_MODEL_ID
+from tests.support import TEST_MODEL_ID, approve_board_feature
 from tests.support import add_doc, commit_board, make_repo
 
 
@@ -85,6 +85,7 @@ def _board_with_worktree(tmp_path: Path) -> tuple[Path, str]:
     install_task_wiring(root)
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task(task_id, "human", root=root).ok
     if get_task_run(task_id) is None:

@@ -16,8 +16,9 @@ from cascade.approvals import (
     feature_approved,
 )
 from cascade.board.store import read_doc
+from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.watchdog.events import read_events
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, commit_board, make_repo
 
 
 def test_missing_approval_is_unapproved(tmp_path: Path) -> None:
@@ -76,6 +77,20 @@ def test_child_added_after_epic_approval_stays_unapproved(tmp_path: Path) -> Non
 
     assert feature_approved("feat_001", root=root) is True
     assert feature_approved("feat_002", root=root) is False
+
+
+def test_approve_feature_enables_dispatch_when_automation_off(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    refused = dispatch_feature("feat_001", "human", root=root)
+    assert refused.reason == "not_approved"
+
+    approve_feature("feat_001", root=root)
+    started = dispatch_feature("feat_001", "human", root=root)
+    assert started.ok is True
 
 
 def test_approve_feature_api(tmp_path: Path) -> None:
