@@ -2,7 +2,7 @@
 id: task_078
 title: POST /api/comment field pass-through + parent-as-reply
 tier: task
-status: active
+status: backlog
 parent: feat_016
 children: []
 depends_on:
@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: 6a9092f322a947e128f1ddfd9a643f8e37049273
 created: '2026-10-19'
-updated: '2026-10-20'
+updated: '2026-10-21'
 ---
 # POST /api/comment field pass-through + parent-as-reply
 
