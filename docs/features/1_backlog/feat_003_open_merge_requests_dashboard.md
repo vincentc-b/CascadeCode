@@ -20,7 +20,7 @@ models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
 ---
-# Open merge requests dashboard
+# Open review registry API
 
 ## Parent Epic
 
@@ -28,48 +28,39 @@ epic_005
 
 ## Scope
 
-# Open merge requests dashboard
+### Intent
 
-## Intent
+Expose authoritative open merge-request data for War Room consumers without introducing another review-state store.
 
-Give reviewers a direct War Room view of open merge requests without requiring navigation through plans or teams.
+- Add a read-only query/API over the existing durable review registry.
+- Return currently open reviews with stable identifiers, direct review URLs, and feature/epic context.
+- Exclude merged and closed reviews according to authoritative registry state.
+- Define usable failure behavior for the UI consumer.
 
-## Scope
+### Acceptance criteria
 
-- Expose open review records through a read-only API derived from the existing durable review registry.
-- Add an Open MRs War Room view.
-- Show enough context to identify the epic/feature and current review state.
-- Link each row directly to its merge request.
-- Refresh from authoritative lifecycle data without introducing a second review store.
+- The API returns open review records and excludes merged or closed records.
+- Each record contains the identifiers, display context, state, and direct URL needed by the War Room.
+- Repeated reads are side-effect free and lifecycle changes appear from the existing registry.
+- Focused integration tests cover filtering, context mapping, and failure behavior.
 
-## Acceptance criteria
+### Out of scope
 
-- The API returns currently open review records and excludes merged or closed reviews.
-- The dashboard lists open merge requests with feature/epic context and working direct links.
-- Lifecycle changes are reflected from the existing durable review registry.
-- Empty, loading, and failure states are usable.
-- One browser-level flow demonstrates an open MR appearing, linking correctly, and disappearing after merge; lower-level tests remain focused on query/filter behavior.
-
-## Out of scope
-
-- Editing or merging reviews from the dashboard.
-- A new review persistence model.
-- General dashboard redesign.
+- War Room presentation.
+- Review mutation or merge actions.
+- New review persistence.
 
 ## Data structures
 
-TBD.
+Use existing durable review records; define only a read-model DTO.
 
 ## API contracts
 
-TBD.
+Read-only list of open reviews with review, feature, and epic identifiers plus direct URL and state.
 
 ## Logic flow
 
-```mermaid
-flowchart TD
-  A[Start] --> B[End]
-```
+Registry query → open-state filter → context mapping → read-only response.
 
 ## Task breakdown
 
