@@ -196,6 +196,71 @@ def _ensure_opened_toast(
     _save(root, state)
 
 
+def reconcile_feature_review_completions(root: Path) -> list[str]:
+    """Finalize merged feature reviews from durable registry state; idempotent."""
+
+    trunk = locate_trunk(root)
+    state = _load(trunk)
+    finalized: list[str] = []
+    changed = False
+    from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
+
+    for feature_id, record in list(state.items()):
+        if record.get("closed"):
+            epic_id = _review_target_epic(record)
+            if epic_id and not feature_completed_recorded(feature_id, epic_id, root=trunk):
+                if try_complete_feature(feature_id, root=trunk, review_merged=True):
+                    finalized.append(feature_id)
+            continue
+        try:
+            mr = _record_to_mr(record)
+            snapshot = merge_request_snapshot(trunk, mr)
+        except (GitError, ValueError):
+            continue
+        if snapshot.get("state") != "merged":
+            continue
+        epic_id = _review_target_epic(record)
+        before = (
+            feature_completed_recorded(feature_id, epic_id, root=trunk)
+            if epic_id
+            else True
+        )
+        if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
+            record["closed"] = True
+            changed = True
+            if epic_id and not before and feature_completed_recorded(
+                feature_id, epic_id, root=trunk
+            ):
+                finalized.append(feature_id)
+    if changed:
+        _save(trunk, state)
+    return finalized
+
+
+def _review_target_epic(record: dict[str, object]) -> str | None:
+    target = str(record.get("target_branch") or "")
+    prefix = "epic/"
+    if target.startswith(prefix):
+        return target.removeprefix(prefix)
+    return None
+
+
+def _finalize_merged_review_record(
+    feature_id: str,
+    record: dict[str, object],
+    mr: MergeRequest,
+    *,
+    trunk: Path,
+) -> bool:
+    from cascade.boss.rollup import try_complete_feature
+
+    try:
+        _sync_merged_target(trunk, mr)
+        return try_complete_feature(feature_id, root=trunk, review_merged=True)
+    except GitError:
+        return False
+
+
 def poll_feature_reviews(root: Path) -> None:
     trunk = locate_trunk(root)
     state = _load(trunk)
@@ -240,13 +305,9 @@ def poll_feature_reviews(root: Path) -> None:
             )
         record["seen_comments"] = sorted(seen)
         if snapshot.get("state") == "merged":
-            from cascade.boss.rollup import try_complete_feature
-
-            try:
-                _sync_merged_target(trunk, mr)
-                if try_complete_feature(feature_id, root=trunk, review_merged=True):
-                    record["closed"] = True
-            except GitError:
+            if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
+                record["closed"] = True
+            else:
                 # Do not acknowledge completion until the local epic worktree
                 # contains the exact tree accepted by the forge.
                 continue

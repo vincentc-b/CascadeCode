@@ -12,7 +12,7 @@ from cascade.board.paths import column_for_status
 from cascade.board.store import list_board, move_doc, read_doc, write_doc
 from cascade.board.types import WorkId
 from cascade.comments.store import read_comments
-from cascade.watchdog.events import append_event
+from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.types import Event
 
 _CLOSEOUT_HEADING = re.compile(r"^## Closeout\s*$", re.MULTILINE)
@@ -153,7 +153,19 @@ def try_complete_feature(
     return True
 
 
+def feature_completed_recorded(feature_id: WorkId, epic_id: WorkId, *, root: Path) -> bool:
+    """True when ``FeatureCompleted`` for ``feature_id`` is already on the epic feed."""
+
+    events, _ = read_events(epic_id, 0, root=root)
+    return any(
+        event.type == "FeatureCompleted" and event.payload.get("feature_id") == feature_id
+        for event in events
+    )
+
+
 def _emit_feature_completed(feature_id: str, epic_id: str, repo: Path) -> None:
+    if feature_completed_recorded(feature_id, epic_id, root=repo):
+        return
     append_event(
         epic_id,
         Event(
