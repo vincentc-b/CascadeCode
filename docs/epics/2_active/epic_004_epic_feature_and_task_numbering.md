@@ -152,6 +152,11 @@ _(none)_
   Chose Migrate only graphs proven backlog-only and free of runtime or published identity artifacts; reject graphs with worktree registrations, integration branches, checkpoints, queues, or remote review artifacts instead of renaming those systems. Rewrite board-owned backlog sidecars within the atomic migration..
   Rationale: Cascade persists IDs in local execution state and Git/forge identities, but those artifacts arise after dispatch and publication. A strict preflight preserves the approved backlog-only scope and avoids unsafe cross-system renames; retained active and completed IDs remain readable.
   Honors: The explicit compatibility boundary, no partial migration, and the requirement to define an external persistence contract before shipping..
+
+- `dec_006` · 2026-10-21 · Epic Manager · **Architecture validation**
+  Chose Assume no external integration currently persists Cascade work IDs; omit remote-system preflight, migration, and notification from this epic while retaining checks for local runtime identity artifacts..
+  Rationale: This records the human-confirmed current-state boundary and avoids speculative integration work. Local checkpoints, queues, worktrees, and branches still exist and can make a backlog rename unsafe.
+  Honors: In reply to: cmt_001; the human direction to assume no external integrations persist work IDs, plus the approved backlog-only and atomic-migration constraints..
 ## Amendment log
 
 - 2026-10-21 · In reply to: cmt_001 · Adopted the current-state assumption that no external integration persists Cascade work IDs. Removed remote-system preflight and migration requirements while retaining local runtime-artifact refusal and the recoverable graph-write boundary.
