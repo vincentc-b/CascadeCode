@@ -33,7 +33,7 @@ def ui_server(tmp_path):
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Root epic", tier="epic", status="ready_to_plan")
     add_doc(root, id="epic_002", title="Second epic", tier="epic", status="active")
-    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_002")
     add_doc(root, id="task_001", title="Work item", tier="task", parent="feat_001", status="active")
     port = _free_port()
     server = serve(root=root, host="127.0.0.1", port=port)
@@ -91,7 +91,7 @@ def test_completed_feature_awaiting_review_remains_in_active_lane(ui_server):
                     "number": "4",
                     "forge": "github",
                     "source_branch": "feat/feat_001",
-                    "target_branch": "epic/epic_001",
+                    "target_branch": "epic/epic_002",
                     "draft": False,
                     "closed": False,
                 }

@@ -102,8 +102,12 @@ def test_lifecycle_approval_to_rollup_system_scenario(
 
     follow_rollup = _close_feature_review_and_rollup(scenario, ids.feature_follow)
     assert follow_rollup["features"] == [ids.feature_follow]
+    assert follow_rollup["epics"] == [ids.epic]
     assert feature_completed_count(ids.epic, ids.feature_follow, root=root) == 1
-    assert epic_ready_to_close_toast_count(ids.epic, root=root) == 1
+    epic = read_doc(ids.epic, root=root)
+    assert epic.meta.status == "completed"
+    assert epic.meta.path.parent.name == "3_completed"
+    assert epic_ready_to_close_toast_count(ids.epic, root=root) == 0
 
     # Simulated restart: reconciliation stays idempotent.
     reset_automation_memory()
@@ -112,4 +116,4 @@ def test_lifecycle_approval_to_rollup_system_scenario(
     assert feature_completed_count(ids.epic, ids.feature_gate, root=root) == 1
     assert feature_completed_count(ids.epic, ids.feature_follow, root=root) == 1
     assert ready_to_plan_event_count(ids.feature_follow, root=root) == 1
-    assert epic_ready_to_close_toast_count(ids.epic, root=root) == 1
+    assert epic_ready_to_close_toast_count(ids.epic, root=root) == 0
