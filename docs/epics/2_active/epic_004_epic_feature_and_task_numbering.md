@@ -92,9 +92,9 @@ A deterministic manifest records the mapping and affected paths. Re-running afte
 
 ### ID persistence outside board documents
 
-Cascade persists work IDs outside plan frontmatter and structured document references in local LangGraph checkpoint filenames/thread IDs, event queues, War Room chat and comment sidecars, the integration-worktree registry and paths, Git branch names, commit trailers, and remote GitHub/GitLab branches or merge requests after dispatch/publication.
+Cascade persists work IDs outside plan frontmatter and structured document references in local LangGraph checkpoint filenames/thread IDs, event queues, War Room chat and comment sidecars, the integration-worktree registry and paths, local Git branch names, and commit trailers. For this epic, assume no external integration currently persists Cascade work IDs.
 
-Those artifacts belong to active execution, while this epic migrates backlog graphs only. Migration therefore does not rename or rewrite runtime or forge artifacts. Before mutation, it must prove the entire selected graph is backlog-only and reject it if any integration-worktree registration, matching local or remote integration branch, checkpoint, queue/runtime sidecar, or published review artifact exists. Board-owned backlog comment/chat sidecars, if present, are included in the structured rewrite and atomic path set. The dry-run report lists every checked artifact class and any blocker. Retained active/completed IDs remain compatible, so no external notification contract is needed for this scope.
+Those local artifacts belong to active execution, while this epic migrates backlog graphs only. Migration therefore does not rename or rewrite runtime artifacts. Before mutation, it must prove the entire selected graph is backlog-only and reject it if any integration-worktree registration, matching local integration branch, checkpoint, or queue/runtime sidecar exists. Board-owned backlog comment/chat sidecars, if present, are included in the structured rewrite and atomic path set. The dry-run report lists every checked local artifact class and any blocker. External-system discovery, migration, and notification are out of scope under the explicit assumption that no external integration currently persists Cascade work IDs; that assumption must be revisited before such an integration is introduced.
 
 ## Feature breakdown
 
@@ -106,7 +106,7 @@ Those artifacts belong to active execution, while this epic migrates backlog gra
 
 2. **feat_010 — Backlog epic ID migration** (depends on `feat_009`)
    - Discover backlog epic graphs and generate deterministic old-to-new mappings.
-   - Validate collisions, reference coverage, backlog-only status, and absence of runtime/remote identity artifacts before changing state.
+   - Validate collisions, reference coverage, backlog-only status, and absence of local runtime identity artifacts before changing state.
    - Rewrite board-owned documents, metadata, paths, indexes, cross-work references, and applicable board sidecars in one locked Git commit with full byte-snapshot rollback.
    - Provide dry-run/audit output and representative end-to-end migration coverage, including injected commit failure and runtime-artifact refusal.
    - Leave active and completed work untouched.
@@ -114,7 +114,7 @@ Those artifacts belong to active execution, while this epic migrates backlog gra
 ## Explicit non-goals
 
 - Renumbering active or completed epics and their existing descendants.
-- Renaming integration branches, worktrees, checkpoints, queues, or remote forge artifacts.
+- Renaming local integration branches, worktrees, checkpoints, or queues.
 - Changing lifecycle states, board ordering, titles, or human-readable slugs.
 - Rewriting arbitrary user prose that merely contains an old identifier.
 - Introducing configurable segment widths, alternate separators, or a general-purpose ID framework.
@@ -154,4 +154,4 @@ _(none)_
   Honors: The explicit compatibility boundary, no partial migration, and the requirement to define an external persistence contract before shipping..
 ## Amendment log
 
-_(none)_
+- 2026-10-21 · In reply to: cmt_001 · Adopted the current-state assumption that no external integration persists Cascade work IDs. Removed remote-system preflight and migration requirements while retaining local runtime-artifact refusal and the recoverable graph-write boundary.
