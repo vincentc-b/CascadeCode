@@ -8,7 +8,6 @@ import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -91,29 +90,27 @@ def test_post_comment_persists_and_emits_queue(comment_board) -> None:
     base, root = comment_board
     assert activate_epic("epic_001", "human", root=root).ok
 
-    with patch("cascade.war_room.server.kickoff_graph_queue_event", return_value=True) as kick:
-        status, body = _post(
-            f"{base}/api/comment",
-            {
-                "doc_id": "epic_001",
-                "section": "Open questions",
-                "anchor": "selected plan line",
-                "line_start": 8,
-                "line_end": 9,
-                "doc_sha": "abc123",
-                "body": "Please resolve anchor model.",
-                "blocking": True,
-            },
-        )
+    status, body = _post(
+        f"{base}/api/comment",
+        {
+            "doc_id": "epic_001",
+            "section": "Open questions",
+            "anchor": "selected plan line",
+            "line_start": 8,
+            "line_end": 9,
+            "doc_sha": "abc123",
+            "body": "Please resolve anchor model.",
+            "blocking": True,
+        },
+    )
     assert status == 202
     assert body["ok"] is True
     assert body["comment_id"].startswith("cmt_")
-    assert body["kickoff"] is True
-    kick.assert_called_once()
+    assert "kickoff" not in body
 
     rows = read_comments("epic_001", root=root)
     assert len(rows) == 1
-    assert rows[0].section == "Open questions"
+    assert rows[0].section == "open-questions"
     assert rows[0].anchor == "selected plan line"
     assert rows[0].line_start == 8
     assert rows[0].line_end == 9
@@ -174,17 +171,13 @@ def test_post_reply_inherits_context_but_not_line_position(comment_board) -> Non
         root=root,
     )
 
-    with patch(
-        "cascade.war_room.server.kickoff_graph_queue_event", return_value=True
-    ) as kick:
-        status, response = _post(
-            f"{base}/api/comment",
-            {"doc_id": "epic_001", "parent": parent_id, "body": "Follow-up"},
-        )
+    status, response = _post(
+        f"{base}/api/comment",
+        {"doc_id": "epic_001", "parent": parent_id, "body": "Follow-up"},
+    )
 
     assert status == 202
-    assert response["kickoff"] is True
-    kick.assert_called_once_with("epic_001", root=root, by="human")
+    assert "kickoff" not in response
     reply = next(
         row
         for row in read_comments("epic_001", root=root)

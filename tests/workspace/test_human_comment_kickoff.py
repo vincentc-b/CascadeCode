@@ -23,7 +23,11 @@ from cascade.watchdog.hooks import clear_hooks
 from cascade.watchdog.loop import clear_watchdog_memory, watchdog_tick
 from cascade.watchdog.types import Event
 from cascade.war_room.server import serve
-from cascade.workspace.kickoff import deliver_queue_kickoffs, install_kickoff
+from cascade.workspace.kickoff import (
+    deliver_queue_kickoffs,
+    install_kickoff,
+    wait_for_background_kickoffs,
+)
 from tests.support import make_repo
 
 
@@ -123,7 +127,7 @@ def test_human_comment_watchdog_delivery_no_agent_or_resolve_kickoff(
     deliver_queue_kickoffs(root)
     assert run_role_mock.await_count == turns_after_human
 
-    resolve_comment("epic_001", root_id, root=root)
+    resolve_comment("epic_001", root_id, author="human", root=root)
     deliver_queue_kickoffs(root)
     assert run_role_mock.await_count == turns_after_human
 
@@ -164,12 +168,14 @@ def test_http_post_then_watchdog_tick_single_kickoff(
             assert resp.status == HTTPStatus.ACCEPTED
 
         watchdog_tick(root)
+        assert wait_for_background_kickoffs()
         turns_after_post = run_role_mock.await_count
         assert turns_after_post >= 1
 
         events, _ = read_events("epic_001", 0, root=root)
         assert sum(event.type == "CommentPosted" for event in events) == 1
         watchdog_tick(root)
+        assert wait_for_background_kickoffs()
         assert run_role_mock.await_count == turns_after_post
     finally:
         server.shutdown()

@@ -53,11 +53,7 @@ def install_kickoff(root: Path) -> None:
 
 
 def kickoff_turn(reason: KickoffReason) -> None:
-    """Run at most one roster model turn for an authorized edge; fail closed on models.
-
-    Inside ``deferred_kickoffs()`` the turn is queued on a per-graph worker thread and
-    this returns immediately; otherwise it runs inline. Turns for one graph never overlap.
-    """
+    """Run or enqueue one serialized roster model turn for an authorized edge."""
 
     repo = resolve_root(reason.root or _default_root)
     if _defer_turns.get():
@@ -68,7 +64,7 @@ def kickoff_turn(reason: KickoffReason) -> None:
 
 @contextmanager
 def deferred_kickoffs() -> Iterator[None]:
-    """Queue kickoff turns in the background (HTTP handlers must not block on a model)."""
+    """Queue kickoff turns in the background while an HTTP request is active."""
 
     token = _defer_turns.set(True)
     try:
@@ -78,7 +74,7 @@ def deferred_kickoffs() -> Iterator[None]:
 
 
 def wait_for_background_kickoffs(timeout: float = 30.0) -> bool:
-    """Block until every queued background turn has finished (tests and shutdown)."""
+    """Wait until every queued background turn has finished."""
 
     deadline = time.monotonic() + timeout
     with _registry_lock:
@@ -144,8 +140,6 @@ def _run_background_kickoff(reason: KickoffReason, repo: Path) -> None:
 
 
 def _report_background_failure(work_id: str, exc: Exception, repo: Path) -> None:
-    """Surface failures after the initiating HTTP/watchdog caller has returned."""
-
     if work_id.startswith("task_"):
         try:
             from cascade.task.failure import fail_task
@@ -183,9 +177,6 @@ def resume_inflight_graphs(root: Path) -> None:
         if meta.tier not in ("epic", "feature", "task"):
             continue
         if meta.tier == "task":
-            # Task recovery owns worktree recreation and durable lease fencing
-            # in the watchdog.  Resuming here could race a detached provider
-            # bridge before the stale boundary.
             continue
         if not _graph_has_inflight_turn(work_id, meta.tier, root=repo, feature_id=meta.parent):
             continue

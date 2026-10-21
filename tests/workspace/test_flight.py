@@ -155,6 +155,9 @@ def test_watchdog_tick_refresh_advances_active_teams(
     mock.reset_mock()
 
     watchdog_tick(root)
+    from cascade.workspace.kickoff import wait_for_background_kickoffs
+
+    assert wait_for_background_kickoffs()
     # The same tick refreshes the flight report and delivers queued activation
     # events. Each active Epic/Feature team runs both of its roster roles.
     assert mock.await_count == 6
