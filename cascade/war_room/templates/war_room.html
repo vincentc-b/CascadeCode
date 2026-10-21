@@ -222,7 +222,7 @@
 
           <div id="feature-room-placeholder" class="feature-room-panel" hidden>
             <h2>Feature room</h2>
-            <p>Feature room — full drop-in in feat_005</p>
+            <p>Open merge requests are listed in the sidebar panel.</p>
           </div>
         </section>
 
@@ -231,6 +231,17 @@
             <h2>Toasts</h2>
             <ul id="toast-list"></ul>
           </section>
+
+          <details id="open-reviews-pane" class="open-reviews-panel" open>
+            <summary>Open merge requests</summary>
+            <div class="open-reviews-toolbar">
+              <button type="button" id="btn-refresh-open-reviews" class="btn-secondary">
+                Refresh
+              </button>
+            </div>
+            <p id="open-reviews-status" class="status-line" aria-live="polite">Loading…</p>
+            <ul id="open-reviews-list" class="open-reviews-list" aria-label="Open merge requests"></ul>
+          </details>
 
           <details id="amendment-pane" class="amendment-panel stub-panel" open>
             <summary>Amendments</summary>

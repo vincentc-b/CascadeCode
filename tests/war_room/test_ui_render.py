@@ -233,3 +233,26 @@ def test_brief_and_sync_controls_in_html(ui_server):
     assert 'name="manager_model"' in html
     assert 'name="architect_model"' in html
     assert "Create merge request" in html
+
+
+def test_open_reviews_pane_markup_in_html(ui_server):
+    """Open merge requests panel exposes stable ids (feat_005 / task_012)."""
+    base, _root = ui_server
+    _status, html, _headers = _get_html(f"{base}/")
+    assert 'id="open-reviews-pane"' in html
+    assert 'id="open-reviews-list"' in html
+    assert 'id="btn-refresh-open-reviews"' in html
+    assert 'id="open-reviews-status"' in html
+    assert "Open merge requests" in html
+
+
+def test_open_reviews_js_queries_authoritative_api_only():
+    js_path = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    )
+    source = js_path.read_text(encoding="utf-8")
+    assert 'apiGet("/api/open-reviews")' in source
+    assert "function refreshOpenReviews" in source
+    assert "function renderOpenReviews" in source
+    assert 'actionLink("Open review", review.url)' in source
+    assert "localStorage" not in source.split("refreshOpenReviews")[1].split("setProvidersStatus")[0]
