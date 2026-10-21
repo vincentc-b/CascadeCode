@@ -103,6 +103,11 @@ None blocking. Detailed storage/API shapes belong in feature planning and should
   Chose Keep approval as durable state separate from board lifecycle status, and enforce approval plus dependency readiness in the central dispatch path..
   Rationale: Approval and status answer different questions; a single dispatch guard prevents alternate entry points from bypassing prerequisites.
   Honors: Per-feature approval, epic-wide approval of current children, dependency-safe implementation dispatch, and restart recovery..
+
+- `dec_002` · 2026-10-21 · Epic Team · **Completion rollup**
+  Chose Derive feature completion from completed tasks plus a merged MR, and derive epic completion from all persisted child-feature states..
+  Rationale: Derived state avoids premature or manually divergent completion and can be reconciled idempotently after restart.
+  Honors: Automatic feature and epic transitions based on content completion..
 ## Amendment log
 
 _(none)_
