@@ -2,7 +2,7 @@
 id: epic_002
 title: Plan-view review threads
 tier: epic
-status: active
+status: backlog
 parent: null
 children: []
 depends_on: []
@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-18'
-updated: '2026-10-18'
+updated: '2026-10-21'
 ---
 
 # Plan-view review threads
