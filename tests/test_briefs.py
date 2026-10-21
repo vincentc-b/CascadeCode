@@ -6,9 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from cascade.briefs import build_brief_doc, validate_brief
+from cascade.briefs import build_brief_doc, create_brief, validate_brief
 from cascade.approvals import approve_epic_plan, epic_plan_approved
 from cascade.tracking import (
+    MergeRequest,
     _unsafe_tracked_changes,
     create_merge_request,
     detect_forge,
@@ -54,6 +55,63 @@ def test_validate_brief_requires_both_team_models() -> None:
     raw["architect_model"] = ""
     with pytest.raises(ValueError, match="architect model"):
         validate_brief(raw)
+
+
+def test_create_brief_uses_remote_trunk_and_commits_only_markdown(
+    tmp_path: Path, monkeypatch
+) -> None:
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    root = make_repo(tmp_path)
+    (root / "README.md").write_text("remote trunk\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    subprocess.run(["git", "push", "-u", "origin", "main"], cwd=root, check=True, capture_output=True)
+    remote_sha = subprocess.run(
+        ["git", "rev-parse", "origin/main"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    (root / "local-only.txt").write_text("must not enter the brief PR\n", encoding="utf-8")
+    subprocess.run(["git", "add", "local-only.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "local ahead"], cwd=root, check=True, capture_output=True)
+
+    observed: dict[str, object] = {}
+
+    def inspect_push(worktree: Path, branch: str) -> None:
+        observed["branch"] = branch
+        observed["parent"] = subprocess.run(
+            ["git", "rev-parse", "HEAD^"], cwd=worktree, check=True, capture_output=True, text=True
+        ).stdout.strip()
+        observed["files"] = subprocess.run(
+            ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+            cwd=worktree,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+
+    monkeypatch.setattr("cascade.briefs.forge_ready", lambda _repo: True)
+    monkeypatch.setattr("cascade.briefs.push_branch", inspect_push)
+    monkeypatch.setattr(
+        "cascade.briefs.create_merge_request",
+        lambda _root, **kwargs: MergeRequest(
+            url="https://example.test/pull/1",
+            number="1",
+            forge="github",
+            source_branch=str(kwargs["source_branch"]),
+            target_branch=str(kwargs["target_branch"]),
+            draft=False,
+        ),
+    )
+
+    epic_id, _mr = create_brief(root, _request())
+
+    assert observed == {
+        "branch": f"cascade/brief/{epic_id}",
+        "parent": remote_sha,
+        "files": [f"docs/epics/1_backlog/{epic_id}_search_experience.md"],
+    }
 
 
 def test_github_merge_request_command_returns_link(tmp_path: Path, monkeypatch) -> None:

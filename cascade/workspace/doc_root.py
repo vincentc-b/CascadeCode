@@ -10,6 +10,7 @@ from cascade.board.types import WorkId
 from cascade.workspace.integration_worktree import (
     IntegrationKind,
     get_integration_worktree,
+    git_root_for_path,
     is_trunk_pointer,
     merged_board,
     repair_missing_worktree,
@@ -32,14 +33,18 @@ def resolve_doc_worktree(work_id: WorkId, *, root: Path) -> Path:
     tier = meta.tier
 
     if tier == "epic":
+        if (
+            meta.status == "completed"
+            and meta.path.parent.name == "3_completed"
+            and git_root_for_path(meta.path).resolve() == trunk
+        ):
+            return trunk
         if meta.path.parent.name == "1_backlog" and not is_trunk_pointer(meta):
             return trunk
         epic_root = _registered_worktree_path(trunk, "epic", work_id)
         if epic_root is not None:
             return epic_root
         if "/worktrees/epic_" in meta.path.as_posix():
-            from cascade.workspace.integration_worktree import git_root_for_path
-
             return git_root_for_path(meta.path)
         return trunk
 

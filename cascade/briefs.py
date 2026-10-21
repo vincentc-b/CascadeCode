@@ -151,6 +151,29 @@ _(none)_
     return WorkDoc(meta=meta, body=body)
 
 
+def _fetch_remote_trunk(repo: Path, trunk: str, *, remote: str = "origin") -> str:
+    """Fetch and return the remote-tracking ref used as a clean brief base."""
+
+    fetch = subprocess.run(
+        ["git", "fetch", remote, trunk],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    if fetch.returncode != 0:
+        raise GitError((fetch.stderr or fetch.stdout).strip() or f"could not fetch {remote}/{trunk}")
+    base = f"{remote}/{trunk}"
+    verify = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{base}^{{commit}}"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    if verify.returncode != 0:
+        raise GitError((verify.stderr or verify.stdout).strip() or f"remote trunk {base} is unavailable")
+    return base
+
+
 def create_brief(root: Path, raw: dict[str, object]) -> tuple[str, MergeRequest]:
     """Create an isolated brief branch, push it, and open its approval MR."""
 
@@ -163,10 +186,11 @@ def create_brief(root: Path, raw: dict[str, object]) -> tuple[str, MergeRequest]
     epic_id = _next_epic_id(repo)
     branch = f"cascade/brief/{epic_id}"
     trunk = resolve_product_trunk(repo)
+    base = _fetch_remote_trunk(repo, trunk)
     with tempfile.TemporaryDirectory(prefix=f"cascade-{epic_id}-") as temp:
         worktree = Path(temp) / "worktree"
         add = subprocess.run(
-            ["git", "worktree", "add", "-b", branch, str(worktree), trunk],
+            ["git", "worktree", "add", "-b", branch, str(worktree), base],
             cwd=repo,
             capture_output=True,
             text=True,
@@ -183,7 +207,11 @@ def create_brief(root: Path, raw: dict[str, object]) -> tuple[str, MergeRequest]
             )
             if commit.returncode == 0:
                 commit = subprocess.run(
-                    ["git", "-c", "commit.gpgsign=false", "commit", "-m", f"brief: {epic_id} {request.title}"],
+                    [
+                        "git", "-c", "commit.gpgsign=false", "commit", "--only",
+                        "-m", f"brief: {epic_id} {request.title}",
+                        "--", str(path.relative_to(worktree)),
+                    ],
                     cwd=worktree, capture_output=True, text=True,
                 )
             if commit.returncode != 0:

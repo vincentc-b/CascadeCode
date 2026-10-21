@@ -8,17 +8,20 @@ from pathlib import Path
 
 import pytest
 
-from cascade.board.store import move_doc, read_doc
+from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
+from cascade.board.parse import render_doc
 from cascade.boss.epic_complete import confirm_epic_complete
 from cascade.boss import merge as merge_module
 from cascade.boss.merge import merge_feature_branch, merge_task_branch, promote_epic_to_trunk
 from cascade.boss.rollup import try_complete_feature, write_closeout
 from cascade.task.worktree import clear_task_runs, create_task_worktree
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
+from cascade.workspace.doc_root import read_doc_resolved, resolve_doc_worktree
 from cascade.workspace.integration_worktree import (
     integration_branch,
     integration_worktree_path,
     load_registry,
+    merged_board,
     save_registry,
 )
 from tests.support import add_doc, commit_board, make_repo
@@ -376,3 +379,20 @@ def test_confirm_epic_complete_updates_trunk_pointer(
     assert "status: completed" in text
     assert "integration_branch:" not in text
     assert not list((root / "docs" / "epics" / "2_active").glob("epic_001_*.md"))
+
+    # Retained integration worktrees can have a pre-close active copy (for
+    # example, a feature/task checkout forked before the epic was closed).
+    # It must not resurrect the epic in the supervisor board or plan API.
+    stale = read_doc_in_worktree("epic_001", epic_wt)
+    completed_path = stale.meta.path
+    stale.meta.status = "active"
+    stale.meta.path = epic_wt / "docs/epics/2_active" / completed_path.name
+    stale.meta.path.parent.mkdir(parents=True, exist_ok=True)
+    stale.meta.path.write_text(render_doc(stale), encoding="utf-8")
+    completed_path.unlink()
+    assert stale.meta.status == "active"
+    visible = merged_board(root).by_id["epic_001"]
+    assert visible.status == "completed"
+    assert visible.path.parent.name == "3_completed"
+    assert resolve_doc_worktree("epic_001", root=root) == root.resolve()
+    assert read_doc_resolved("epic_001", root=root).meta.status == "completed"

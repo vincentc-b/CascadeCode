@@ -260,9 +260,26 @@ def _boards_for_trunk(trunk: Path) -> list[BoardIndex]:
 def merged_board(trunk: Path) -> BoardIndex:
     """Supervisor view: trunk plus each registered integration worktree board."""
 
+    trunk = trunk.resolve()
+    boards = _boards_for_trunk(trunk)
+    trunk_board = boards[0]
+    completed_trunk_epics = {
+        work_id: meta
+        for work_id, meta in trunk_board.by_id.items()
+        if meta.tier == "epic"
+        and meta.status == "completed"
+        and meta.path.parent.name == "3_completed"
+        and not is_trunk_pointer(meta)
+    }
     by_id: dict[str, WorkMeta] = {}
-    for board in _boards_for_trunk(trunk):
+    for board in boards:
         for work_id, meta in board.by_id.items():
+            if work_id in completed_trunk_epics:
+                # Closing an epic makes the product-trunk document authoritative.
+                # Registered worktrees are retained for history/recovery and can
+                # still contain an active snapshot of the same epic.
+                by_id[work_id] = completed_trunk_epics[work_id]
+                continue
             current = by_id.get(work_id)
             if current is None or _meta_preference(meta) > _meta_preference(current):
                 by_id[work_id] = meta
