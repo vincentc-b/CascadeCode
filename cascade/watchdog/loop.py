@@ -128,6 +128,9 @@ def run_watchdog(
 
     install_kickoff(repo)
     _resume_reclaimable_task_runs(repo)
+    from cascade.automation import advance_work
+
+    advance_work(repo)
 
     while True:
         if stop_when is not None and stop_when():

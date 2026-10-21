@@ -31,8 +31,7 @@ def approve_feature(feature_id: str, *, root: Path) -> dict[str, object]:
     if meta is None or meta.tier != "feature":
         raise ValueError("feature approval requires a feature on the board")
     newly = _set_feature_approved(feature_id, root=repo)
-    if newly:
-        _maybe_advance_after_approval(repo)
+    _maybe_advance_after_approval(repo)
     return {"ok": True, "feature_id": feature_id, "newly_approved": newly}
 
 
@@ -72,7 +71,7 @@ def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
                 ),
                 root=repo,
             )
-        _maybe_advance_after_approval(repo)
+    _maybe_advance_after_approval(repo)
     return {"ok": True, "epic_id": epic_id, "features": children}
 
 
