@@ -150,6 +150,9 @@ def test_war_room_js_renders_toast_body():
     assert 'approved.classList.add("approval-confirmed")' in source
     assert '"Awaiting review"' in source
     assert 'actionLink("Open review", item.review.url)' in source
+    assert "EPIC_CLOSE_DEADLINE_MS = 60000" in source
+    assert 'setStatus("Closing epic " + epicId + "…", false)' in source
+    assert '"Epic close timed out after 60s"' in source
 
 
 def test_task_execution_controls_are_visible_and_board_poll_is_independent():

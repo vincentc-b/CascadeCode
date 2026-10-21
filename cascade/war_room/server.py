@@ -26,11 +26,9 @@ from cascade.board.store import read_doc
 from cascade.workspace.doc_root import read_doc_resolved
 from cascade.workspace.integration_worktree import merged_board
 from cascade.boss.epic_complete import (
-    confirm_epic_complete,
-    epic_ready_to_close,
+    confirm_epic_complete_result,
     on_feature_completed,
 )
-from cascade.boss.merge import promote_epic_to_trunk
 from cascade.boss.graph import install_boss_consumer
 from cascade.boss.merge import merge_task_branch
 from cascade.boss.orphans import detect_orphans
@@ -83,6 +81,7 @@ from cascade.board.errors import GitError
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SKILLS_INVALID = object()
 REQUEST_DEADLINE_S = 10.0
+EPIC_CLOSE_DEADLINE_S = 60.0
 
 
 def _merge_failure_status(reason: str | None) -> HTTPStatus:
@@ -184,9 +183,21 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         def interrupt() -> None:
             if finished.wait(REQUEST_DEADLINE_S):
                 return
+            path = getattr(self, "path", "").split("?", 1)[0]
+            if (
+                getattr(self, "command", "") == "POST"
+                and path == "/api/confirm_epic_complete"
+                and finished.wait(max(0.0, EPIC_CLOSE_DEADLINE_S - REQUEST_DEADLINE_S))
+            ):
+                return
+            deadline = (
+                EPIC_CLOSE_DEADLINE_S
+                if path == "/api/confirm_epic_complete"
+                else REQUEST_DEADLINE_S
+            )
             self.log_error(
                 "deadline exceeded after %.1fs; closing connection",
-                time.monotonic() - started,
+                deadline,
             )
             try:
                 self.connection.shutdown(socket.SHUT_RDWR)
@@ -447,17 +458,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         epic_id = self._require_work_id(body)
         if epic_id is None:
             return
-        ok = confirm_epic_complete(epic_id, "human", root=self.server.root)
-        if ok:
+        result = confirm_epic_complete_result(epic_id, "human", root=self.server.root)
+        if result.ok:
             self._json_response(HTTPStatus.OK, {"ok": True, "epic_id": epic_id})
             return
-        reason = "not_ready"
-        if epic_ready_to_close(epic_id, root=self.server.root):
-            promote = promote_epic_to_trunk(epic_id, root=self.server.root)
-            reason = promote.reason or "promote_failed"
         self._json_response(
             HTTPStatus.OK,
-            {"ok": False, "reason": reason, "epic_id": epic_id},
+            {"ok": False, "reason": result.reason or "close_failed", "epic_id": epic_id},
         )
 
     def _handle_boss_drain(self, body: dict[str, Any]) -> None:

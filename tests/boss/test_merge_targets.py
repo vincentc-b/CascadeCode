@@ -267,6 +267,95 @@ def test_confirm_epic_complete_promotes_before_moving_doc(tmp_path: Path) -> Non
     assert epic.meta.status == "completed"
 
 
+def test_activated_epic_closes_through_real_git_promotion(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    epic = add_doc(
+        root,
+        id="epic_001",
+        title="Epic",
+        tier="epic",
+        status="ready_to_plan",
+    )
+    epic.body += "\nFull live epic content must reach trunk.\n"
+    epic.meta.path.write_text(render_doc(epic), encoding="utf-8")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    commit_board(root)
+
+    assert activate_epic("epic_001", "human", root=root).ok
+    pointer = read_doc_in_worktree("epic_001", root)
+    assert "Live epic spec is on branch" in pointer.body
+
+    assert confirm_epic_complete("epic_001", "human", root=root) is True
+
+    completed = read_doc("epic_001", root=root)
+    assert completed.meta.status == "completed"
+    assert completed.meta.path.parent.name == "3_completed"
+    assert "Full live epic content must reach trunk." in completed.body
+    assert "Live epic spec is on branch" not in completed.body
+    assert subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout == ""
+
+
+def test_epic_promotion_refuses_preexisting_staged_changes(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    epic_branch = integration_branch("epic", "epic_001")
+    from cascade.workspace.integration_worktree import ensure_integration_worktree
+
+    ensure_integration_worktree(
+        "epic", "epic_001", branch=epic_branch, base_ref="HEAD", trunk=root
+    )
+    staged = root / "staged.txt"
+    staged.write_text("do not merge\n", encoding="utf-8")
+    subprocess.run(["git", "add", "staged.txt"], cwd=root, check=True, capture_output=True)
+
+    promote = promote_epic_to_trunk("epic_001", root=root)
+
+    assert promote.ok is False
+    assert promote.reason == "dirty_index"
+    assert subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip() == "staged.txt"
+
+
+def test_epic_promotion_does_not_resolve_unrelated_conflicts(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+    _commit_in_worktree(epic_wt, "collision.txt", "epic branch\n", "epic collision")
+    _commit_in_worktree(root, "collision.txt", "product trunk\n", "trunk collision")
+
+    promote = promote_epic_to_trunk("epic_001", root=root)
+
+    assert promote.ok is False
+    assert promote.reason == "merge_conflict"
+    assert (root / "collision.txt").read_text(encoding="utf-8") == "product trunk\n"
+    assert not (root / ".git" / "MERGE_HEAD").exists()
+    pointer = read_doc_in_worktree("epic_001", root)
+    assert "Live epic spec is on branch" in pointer.body
+
+
 def test_merge_repairs_checkout_when_branch_exists_without_registry(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     _initial_commit(root)

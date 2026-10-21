@@ -7,6 +7,7 @@ import socket
 from datetime import date
 import subprocess
 import threading
+import time
 import urllib.error
 import urllib.request
 from http import HTTPStatus
@@ -18,6 +19,7 @@ import pytest
 from cascade.board import read_doc
 from cascade.comments.store import comment
 from cascade.boss.epic_complete import reset_epic_close_prompt_surfaces
+from cascade.boss.epic_complete import EpicCompleteResult
 from cascade.boss.rollup import write_closeout
 from cascade.task.worktree import clear_task_runs, create_task_worktree, get_task_run
 from cascade.war_room.server import serve
@@ -461,6 +463,32 @@ def test_confirm_epic_complete_success_and_refusal(dispatch_board, tmp_path):
     assert code == HTTPStatus.OK
     assert body["ok"] is False
     assert body["reason"] == "not_ready"
+
+
+def test_confirm_epic_complete_surfaces_single_attempt_failure(
+    dispatch_board, monkeypatch
+):
+    base, root = dispatch_board
+
+    def slow_failure(*_args, **_kwargs):
+        time.sleep(0.1)
+        return EpicCompleteResult(ok=False, reason="merge_conflict")
+
+    monkeypatch.setattr("cascade.war_room.server.REQUEST_DEADLINE_S", 0.05)
+    monkeypatch.setattr("cascade.war_room.server.EPIC_CLOSE_DEADLINE_S", 0.5)
+    with patch(
+        "cascade.war_room.server.confirm_epic_complete_result",
+        side_effect=slow_failure,
+    ) as complete:
+        code, body = _post(f"{base}/api/confirm_epic_complete", {"id": "epic_001"})
+
+    assert code == HTTPStatus.OK
+    assert body == {
+        "ok": False,
+        "reason": "merge_conflict",
+        "epic_id": "epic_001",
+    }
+    complete.assert_called_once_with("epic_001", "human", root=root)
 
 
 def test_boss_drain_appends_without_dispatch(dispatch_board):

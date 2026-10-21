@@ -14,6 +14,7 @@ in tests to clear that set.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -30,6 +31,12 @@ _TOAST_KIND = "epic_ready_to_close"
 _surfaced_prompts: set[tuple[str, str]] = set()
 
 
+@dataclass(frozen=True)
+class EpicCompleteResult:
+    ok: bool
+    reason: str | None = None
+
+
 def reset_epic_close_prompt_surfaces() -> None:
     """Clear in-process ``surface_epic_close_prompt`` deduplication (tests only)."""
 
@@ -43,6 +50,10 @@ def epic_ready_to_close(epic_id: WorkId, *, root: Path | None = None) -> bool:
     from cascade.workspace.integration_worktree import locate_trunk, merged_board
 
     board = merged_board(locate_trunk(repo))
+    return _epic_ready_to_close(epic_id, repo=repo, board=board)
+
+
+def _epic_ready_to_close(epic_id: WorkId, *, repo: Path, board) -> bool:
     if epic_id not in board.by_id:
         return False
     epic_meta = board.by_id[epic_id]
@@ -91,25 +102,33 @@ def surface_epic_close_prompt(epic_id: WorkId, *, root: Path | None = None) -> N
 def confirm_epic_complete(epic_id: WorkId, by: Principal, *, root: Path | None = None) -> bool:
     """Human-only: move the epic to completed and emit ``EpicCompleted`` on ``war_room``."""
 
+    return confirm_epic_complete_result(epic_id, by, root=root).ok
+
+
+def confirm_epic_complete_result(
+    epic_id: WorkId, by: Principal, *, root: Path | None = None
+) -> EpicCompleteResult:
+    """Complete an epic and retain the refusal reason for API callers."""
+
     if by != "human":
-        return False
+        return EpicCompleteResult(ok=False, reason="unauthorized")
     repo = resolve_root(root)
     from cascade.workspace.integration_worktree import locate_trunk, merged_board
 
     board = merged_board(locate_trunk(repo))
     if epic_id not in board.by_id:
-        return False
+        return EpicCompleteResult(ok=False, reason="not_ready")
     epic_meta = board.by_id[epic_id]
     if epic_meta.tier != "epic":
-        return False
+        return EpicCompleteResult(ok=False, reason="wrong_tier")
     if epic_meta.status == "completed" and epic_meta.path.parent.name == "3_completed":
-        return True
-    if not epic_ready_to_close(epic_id, root=repo):
-        return False
+        return EpicCompleteResult(ok=True)
+    if not _epic_ready_to_close(epic_id, repo=repo, board=board):
+        return EpicCompleteResult(ok=False, reason="not_ready")
     try:
         epic_doc = read_doc(epic_id, root=repo)
     except NotFound:
-        return False
+        return EpicCompleteResult(ok=False, reason="not_found")
     from cascade.boss.merge import promote_epic_to_trunk
 
     promote_result = promote_epic_to_trunk(epic_id, root=repo)
@@ -119,7 +138,9 @@ def confirm_epic_complete(epic_id: WorkId, by: Principal, *, root: Path | None =
         ):
             pass
         else:
-            return False
+            return EpicCompleteResult(
+                ok=False, reason=promote_result.reason or "promote_failed"
+            )
     trunk = locate_trunk(repo)
     move_doc(epic_id, "completed", root=repo)
     _complete_epic_trunk_pointer(epic_id, trunk=trunk)
@@ -133,7 +154,7 @@ def confirm_epic_complete(epic_id: WorkId, by: Principal, *, root: Path | None =
         ),
         root=repo,
     )
-    return True
+    return EpicCompleteResult(ok=True)
 
 
 def on_feature_completed(feature_id: WorkId, *, root: Path | None = None) -> None:

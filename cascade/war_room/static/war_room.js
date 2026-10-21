@@ -89,15 +89,17 @@
   }
 
   const LOAD_DEADLINE_MS = 10000;
+  const EPIC_CLOSE_DEADLINE_MS = 60000;
 
-  function deadlineSignal() {
+  function deadlineSignal(timeoutMs) {
+    timeoutMs = timeoutMs || LOAD_DEADLINE_MS;
     if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
-      return AbortSignal.timeout(LOAD_DEADLINE_MS);
+      return AbortSignal.timeout(timeoutMs);
     }
     const controller = new AbortController();
     setTimeout(function () {
       controller.abort();
-    }, LOAD_DEADLINE_MS);
+    }, timeoutMs);
     return controller.signal;
   }
 
@@ -173,12 +175,12 @@
     return body;
   }
 
-  async function apiPost(path, payload) {
+  async function apiPost(path, payload, timeoutMs) {
     const resp = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: deadlineSignal(),
+      signal: deadlineSignal(timeoutMs),
     });
     const text = await resp.text();
     let body;
@@ -657,8 +659,13 @@
   }
 
   async function confirmEpicComplete(epicId) {
+    setStatus("Closing epic " + epicId + "…", false);
     try {
-      const { body } = await apiPost("/api/confirm_epic_complete", { id: epicId });
+      const { body } = await apiPost(
+        "/api/confirm_epic_complete",
+        { id: epicId },
+        EPIC_CLOSE_DEADLINE_MS
+      );
       if (body.ok) {
         dispatchBanner = "";
         setStatus("Epic " + epicId + " closed.", false);
@@ -667,7 +674,8 @@
         setStatus("Epic close refused: " + (body.reason || "not_ready"), true);
       }
     } catch (err) {
-      setStatus(err.message || "Epic close failed", true);
+      const timedOut = err && (err.name === "TimeoutError" || err.name === "AbortError");
+      setStatus(timedOut ? "Epic close timed out after 60s" : err.message || "Epic close failed", true);
     }
   }
 

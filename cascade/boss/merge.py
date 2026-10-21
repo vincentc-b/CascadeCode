@@ -14,7 +14,7 @@ from cascade.board.context import resolve_root
 from cascade.board.errors import NotFound
 from cascade.board.gitutil import _run, has_git, head_sha
 from cascade.board.paths import column_for_status
-from cascade.board.store import move_doc, read_doc
+from cascade.board.store import list_board, move_doc, read_doc
 from cascade.watchdog.events import append_event
 from cascade.watchdog.types import Event
 
@@ -293,8 +293,15 @@ def promote_epic_to_trunk(epic_id: str, *, root: Path | None = None) -> MergeRes
             branch=source_branch,
             target_branch=target_branch,
         )
+    if not _index_clean(trunk):
+        return MergeResult(
+            ok=False,
+            reason="dirty_index",
+            branch=source_branch,
+            target_branch=target_branch,
+        )
 
-    merge_sha = _merge_branch(trunk, source_branch)
+    merge_sha = _merge_epic_branch(trunk, source_branch, epic_id)
     if merge_sha is None:
         return MergeResult(
             ok=False,
@@ -406,9 +413,110 @@ def _merge_branch(repo: Path, branch: str) -> str | None:
     return sha
 
 
+def _merge_epic_branch(repo: Path, branch: str, epic_id: str) -> str | None:
+    """Merge an epic, resolving only its activation-created pointer conflict.
+
+    Activation independently adds the live epic document on ``epic/{id}`` and a
+    pointer document at the same path on product trunk.  Git consequently sees
+    an add/add conflict during promotion.  The incoming live document is the
+    authoritative version, but only when it is the sole conflict and the two
+    index stages have the exact pointer/live shapes expected here.
+    """
+
+    try:
+        from cascade.board.parse import parse_doc
+
+        pointer_meta = list_board(repo).by_id[epic_id]
+        pointer = parse_doc(pointer_meta.path)
+        pointer_path = pointer_meta.path.resolve().relative_to(repo.resolve()).as_posix()
+    except (KeyError, ValueError):
+        pointer = None
+        pointer_path = None
+
+    if _run(["merge", branch, "--no-edit"], repo, check=False).returncode == 0:
+        return head_sha(repo)
+
+    if not _is_expected_epic_pointer_conflict(
+        repo,
+        branch=branch,
+        epic_id=epic_id,
+        pointer=pointer,
+        pointer_path=pointer_path,
+    ):
+        _run(["merge", "--abort"], repo, check=False)
+        return None
+
+    assert pointer_path is not None
+    if _run(["checkout", "--theirs", "--", pointer_path], repo, check=False).returncode != 0:
+        _run(["merge", "--abort"], repo, check=False)
+        return None
+    if _run(["add", "--", pointer_path], repo, check=False).returncode != 0:
+        _run(["merge", "--abort"], repo, check=False)
+        return None
+    if _run(
+        ["-c", "commit.gpgsign=false", "commit", "--no-edit"], repo, check=False
+    ).returncode != 0:
+        _run(["merge", "--abort"], repo, check=False)
+        return None
+    return head_sha(repo)
+
+
+def _is_expected_epic_pointer_conflict(
+    repo: Path,
+    *,
+    branch: str,
+    epic_id: str,
+    pointer,
+    pointer_path: str | None,
+) -> bool:
+    if pointer is None or pointer_path is None:
+        return False
+    if pointer.meta.tier != "epic" or pointer.meta.integration_branch != branch:
+        return False
+    expected_prefix = "docs/epics/2_active/"
+    if not pointer_path.startswith(expected_prefix):
+        return False
+
+    conflicts = _run(
+        ["diff", "--name-only", "--diff-filter=U", "-z"], repo, check=False
+    )
+    if conflicts.returncode != 0:
+        return False
+    paths = [path for path in conflicts.stdout.split("\0") if path]
+    if paths != [pointer_path]:
+        return False
+
+    from cascade.board.parse import parse_text
+    from cascade.workspace.integration_worktree import is_trunk_pointer
+
+    ours = _run(["show", f":2:{pointer_path}"], repo, check=False)
+    theirs = _run(["show", f":3:{pointer_path}"], repo, check=False)
+    if ours.returncode != 0 or theirs.returncode != 0:
+        return False
+    try:
+        ours_doc = parse_text(ours.stdout, repo / pointer_path)
+        theirs_doc = parse_text(theirs.stdout, repo / pointer_path)
+    except Exception:
+        return False
+    return (
+        ours_doc.meta.id == epic_id
+        and is_trunk_pointer(ours_doc.meta)
+        and ours_doc.meta.integration_branch == branch
+        and theirs_doc.meta.id == epic_id
+        and theirs_doc.meta.tier == "epic"
+        and not is_trunk_pointer(theirs_doc.meta)
+    )
+
+
 def _branch_exists(repo: Path, branch: str) -> bool:
     result = _run(["show-ref", "--verify", f"refs/heads/{branch}"], repo, check=False)
     return result.returncode == 0
+
+
+def _index_clean(repo: Path) -> bool:
+    """True when promotion cannot sweep pre-existing staged changes into its merge."""
+
+    return _run(["diff", "--cached", "--quiet", "HEAD"], repo, check=False).returncode == 0
 
 
 def _sync_task_completed_on_trunk(trunk: Path, task_id: str, merge_root: Path) -> None:
