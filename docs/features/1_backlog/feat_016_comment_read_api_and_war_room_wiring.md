@@ -2,7 +2,7 @@
 id: feat_016
 title: Comment read API and War Room wiring
 tier: feature
-status: active
+status: backlog
 parent: epic_002
 children:
 - task_077
@@ -15,7 +15,7 @@ owners:
 skills: []
 parent_rev: 739b74b3f2369b74eb1f0e539f334931145f79f2
 created: '2026-10-18'
-updated: '2026-10-19'
+updated: '2026-10-21'
 ---
 # Comment read API and War Room wiring
 
