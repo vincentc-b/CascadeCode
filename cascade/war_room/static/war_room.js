@@ -55,6 +55,10 @@
     providersPane: document.getElementById("providers-pane"),
     providersPaneStatus: document.getElementById("providers-pane-status"),
     providersList: document.getElementById("providers-list"),
+    openReviewsPane: document.getElementById("open-reviews-pane"),
+    openReviewsStatus: document.getElementById("open-reviews-status"),
+    openReviewsList: document.getElementById("open-reviews-list"),
+    btnRefreshOpenReviews: document.getElementById("btn-refresh-open-reviews"),
     btnCreateBrief: document.getElementById("btn-create-brief"),
     btnPullMain: document.getElementById("btn-pull-main"),
     syncStatus: document.getElementById("sync-status"),
@@ -1413,6 +1417,104 @@
     }
   }
 
+  function setOpenReviewsStatus(msg, isError) {
+    if (!el.openReviewsStatus) return;
+    el.openReviewsStatus.textContent = msg || "";
+    el.openReviewsStatus.classList.toggle("error", !!isError);
+  }
+
+  function reviewStateLabel(state) {
+    if (state === "awaiting_review") return "Awaiting review";
+    if (state === "preparing_review") return "Preparing review";
+    return state || "Unknown";
+  }
+
+  function renderOpenReviewCard(review) {
+    const li = document.createElement("li");
+    li.className = "open-review-card";
+    li.dataset.reviewId = review.id || "";
+
+    const title = document.createElement("h3");
+    title.className = "open-review-feature-title";
+    const ctx = review.context || {};
+    title.textContent = ctx.feature_title || review.id || "Feature";
+    li.appendChild(title);
+
+    const meta = document.createElement("p");
+    meta.className = "open-review-context";
+    const epicLabel = ctx.epic_title || ctx.epic_id || "—";
+    const featureId = ctx.feature_id || review.id || "";
+    meta.textContent =
+      (featureId ? featureId + " · " : "") + "Epic: " + epicLabel;
+    li.appendChild(meta);
+
+    const state = document.createElement("p");
+    state.className = "open-review-state";
+    state.textContent = reviewStateLabel(review.state);
+    li.appendChild(state);
+
+    if (review.url) {
+      li.appendChild(actionLink("Open review", review.url));
+    } else {
+      const missing = document.createElement("p");
+      missing.className = "open-review-missing-url";
+      missing.textContent = "Review URL unavailable.";
+      li.appendChild(missing);
+    }
+
+    return li;
+  }
+
+  function renderOpenReviews(data) {
+    if (!el.openReviewsList) return;
+    el.openReviewsList.innerHTML = "";
+    const reviews = (data && data.reviews) || [];
+    if (!reviews.length) {
+      const empty = document.createElement("li");
+      empty.className = "open-reviews-empty";
+      empty.textContent = "No open merge requests.";
+      el.openReviewsList.appendChild(empty);
+      return;
+    }
+    reviews.forEach(function (review) {
+      el.openReviewsList.appendChild(renderOpenReviewCard(review));
+    });
+  }
+
+  let openReviewsLoadInFlight = false;
+
+  async function refreshOpenReviews(options) {
+    if (!el.openReviewsList) return;
+    const userInitiated = !options || options.userInitiated !== false;
+    if (openReviewsLoadInFlight) return;
+    openReviewsLoadInFlight = true;
+    if (userInitiated && el.btnRefreshOpenReviews) {
+      el.btnRefreshOpenReviews.disabled = true;
+    }
+    if (userInitiated) {
+      setOpenReviewsStatus("Loading…", false);
+    }
+    try {
+      const data = await apiGet("/api/open-reviews");
+      renderOpenReviews(data);
+      const count = ((data && data.reviews) || []).length;
+      setOpenReviewsStatus(
+        count === 1 ? "1 open merge request." : count + " open merge requests.",
+        false
+      );
+    } catch (err) {
+      if (el.openReviewsList) {
+        el.openReviewsList.innerHTML = "";
+      }
+      setOpenReviewsStatus(err.message || "Failed to load open reviews", true);
+    } finally {
+      openReviewsLoadInFlight = false;
+      if (el.btnRefreshOpenReviews) {
+        el.btnRefreshOpenReviews.disabled = false;
+      }
+    }
+  }
+
   function setProvidersStatus(msg, isError) {
     if (!el.providersPaneStatus) return;
     el.providersPaneStatus.textContent = msg || "";
@@ -1567,6 +1669,13 @@
   if (el.btnCancelBrief) el.btnCancelBrief.addEventListener("click", function () { el.briefDialog.close(); });
   if (el.briefForm) el.briefForm.addEventListener("submit", submitBrief);
   if (el.btnPullMain) el.btnPullMain.addEventListener("click", pullMain);
+  if (el.btnRefreshOpenReviews) {
+    el.btnRefreshOpenReviews.addEventListener("click", function () {
+      refreshOpenReviews({ userInitiated: true }).catch(function (err) {
+        setOpenReviewsStatus(err.message || "Refresh failed", true);
+      });
+    });
+  }
 
   wireCompletedCollapseControls();
   updateFocusUi("epic");
@@ -1579,6 +1688,7 @@
   });
   refreshAmendments();
   refreshProviders();
+  refreshOpenReviews({ userInitiated: false });
   pollToasts();
   setInterval(pollToasts, 2000);
   pollChatSidecar();
