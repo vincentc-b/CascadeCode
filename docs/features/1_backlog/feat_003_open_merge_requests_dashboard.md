@@ -26,41 +26,37 @@ models:
 
 epic_005
 
-## Scope
-
-### Intent
+## Intent
 
 Expose authoritative open merge-request data for War Room consumers without introducing another review-state store.
 
-- Add a read-only query/API over the existing durable review registry.
-- Return currently open reviews with stable identifiers, direct review URLs, and feature/epic context.
-- Exclude merged and closed reviews according to authoritative registry state.
-- Define usable failure behavior for the UI consumer.
+## Scope
 
-### Acceptance criteria
+- Add a read-only API over the durable review registry.
+- Return open reviews with stable identifiers, direct URLs, and feature/epic context.
+- Exclude merged and closed reviews.
 
-- The API returns open review records and excludes merged or closed records.
-- Each record contains the identifiers, display context, state, and direct URL needed by the War Room.
-- Repeated reads are side-effect free and lifecycle changes appear from the existing registry.
-- Focused integration tests cover filtering, context mapping, and failure behavior.
+## Acceptance criteria
 
-### Out of scope
+- Open records are returned and merged/closed records excluded.
+- Records contain context, state, and direct URL.
+- Reads are side-effect free and covered by focused integration tests.
 
-- War Room presentation.
-- Review mutation or merge actions.
-- New review persistence.
+## Out of scope
+
+War Room presentation, review mutation, and new persistence.
 
 ## Data structures
 
-Use existing durable review records; define only a read-model DTO.
+Existing review records plus a read-model DTO.
 
 ## API contracts
 
-Read-only list of open reviews with review, feature, and epic identifiers plus direct URL and state.
+Read-only open-reviews list.
 
 ## Logic flow
 
-Registry query → open-state filter → context mapping → read-only response.
+Registry query → open filter → context mapping → response.
 
 ## Task breakdown
 
