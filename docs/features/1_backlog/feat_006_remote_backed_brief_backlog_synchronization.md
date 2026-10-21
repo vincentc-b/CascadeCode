@@ -17,6 +17,7 @@ provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-10-21T23:24:53.251598+00:00'
 ---
 # Remote-backed brief backlog synchronization
 
