@@ -2,7 +2,7 @@
 id: epic_005
 title: Lifecycle management
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_001
