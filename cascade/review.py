@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,7 +20,63 @@ from cascade.tracking import (
 )
 from cascade.watchdog.events import append_event
 from cascade.watchdog.types import Event
-from cascade.workspace.integration_worktree import get_integration_worktree, integration_branch, locate_trunk
+from cascade.workspace.integration_worktree import (
+    get_integration_worktree,
+    integration_branch,
+    locate_trunk,
+    merged_board,
+)
+
+
+@dataclass(frozen=True)
+class OpenReviewContext:
+    feature_id: str
+    epic_id: str | None
+    feature_title: str | None
+    epic_title: str | None
+
+
+@dataclass(frozen=True)
+class OpenReview:
+    """Read-model row for one open entry in the durable review registry."""
+
+    id: str
+    url: str
+    state: str
+    context: OpenReviewContext
+
+
+def list_open_reviews(*, root: Path) -> list[OpenReview]:
+    """Return open registry rows without mutating durable review state."""
+
+    trunk = locate_trunk(root)
+    state = _load(trunk)
+    board = merged_board(trunk)
+    rows: list[OpenReview] = []
+    for feature_id in sorted(state):
+        record = state[feature_id]
+        if not isinstance(record, dict) or record.get("closed"):
+            continue
+        url = str(record.get("url") or "").strip()
+        if not url:
+            continue
+        epic_id = _review_target_epic(record)
+        feature_meta = board.by_id.get(feature_id)
+        epic_meta = board.by_id.get(epic_id) if epic_id else None
+        rows.append(
+            OpenReview(
+                id=feature_id,
+                url=url,
+                state="awaiting_review",
+                context=OpenReviewContext(
+                    feature_id=feature_id,
+                    epic_id=epic_id,
+                    feature_title=feature_meta.title if feature_meta else None,
+                    epic_title=epic_meta.title if epic_meta else None,
+                ),
+            )
+        )
+    return rows
 
 
 def _state_path(root: Path) -> Path:
