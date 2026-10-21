@@ -25,42 +25,37 @@ models:
 
 epic_005
 
+## Intent
+
+Provide one economical, repeatable scenario proving approval, dependency, merge, recovery, and completion behavior.
+
 ## Scope
 
-### Intent
+- Use the existing browser/system harness, preferring Playwright when supported.
+- Demonstrate approval, dependency gating, task/MR ordering, restart recovery, and rollup.
 
-Provide one economical, repeatable sandbox scenario that proves approval, dependency, merge, recovery, and completion behavior together.
+## Acceptance criteria
 
-- Add a minimal sandbox project or fixture using the repository's existing browser/system harness, preferring Playwright when already supported.
-- Demonstrate per-feature approval, blocked dependency dispatch, task/MR completion ordering, restart reconciliation, and epic rollup.
-- Keep the scenario deterministic and suitable for local or CI execution.
+- Blocked work does not dispatch; ready work dispatches once.
+- Open MR prevents completion; merge enables feature and epic rollup.
+- Restart reconciliation is idempotent.
+- Setup and execution are documented.
 
-### Acceptance criteria
+## Out of scope
 
-- The scenario shows an unapproved or dependency-blocked feature does not dispatch.
-- Approval plus completed prerequisites permits dispatch exactly once.
-- Completed tasks with an open MR do not complete the feature.
-- Merge completes the feature and the final child completes the epic.
-- A restart/reconciliation step preserves the same result without duplicate effects.
-- Setup and execution are documented in the fixture.
-
-### Out of scope
-
-- Exhaustive lifecycle permutations.
-- Production dashboard UI.
-- A new test framework when the repository already has a suitable harness.
+Exhaustive permutations, dashboard UI, and a new test framework.
 
 ## Data structures
 
-Use disposable sandbox fixtures only; no production store.
+Disposable fixtures only.
 
 ## API contracts
 
-Drive existing public lifecycle entry points and observable status/review endpoints.
+Drive existing public lifecycle entry points.
 
 ## Logic flow
 
-Seed sandbox → approve → verify dependency block → complete prerequisite → dispatch → finish tasks → merge → reconcile → verify rollup.
+Seed → approve → gate → complete dependency → dispatch → tasks → merge → reconcile → verify.
 
 ## Task breakdown
 
