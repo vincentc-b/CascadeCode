@@ -118,6 +118,11 @@ None blocking. Detailed storage/API shapes belong in feature planning and should
   Chose Build the Open MRs API and War Room view from the existing durable review registry, without a second review store..
   Rationale: One authoritative registry minimizes synchronization failure and keeps the dashboard a low-risk read model.
   Honors: Easy access to open merge requests from the dashboard..
+
+- `dec_005` · 2026-10-21 · Epic Team · **Verification strategy**
+  Chose Use focused lifecycle integration tests and one browser-level Open MRs flow instead of broad redundant unit coverage or a separate sandbox application..
+  Rationale: These tests cover the high-value boundaries and recovery behavior with lower maintenance cost; the browser flow supplies the requested demonstrable behavior.
+  Honors: Pragmatic validation and a Playwright-style demonstration of the user-visible lifecycle..
 ## Amendment log
 
 _(none)_
