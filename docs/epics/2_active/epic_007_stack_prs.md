@@ -81,6 +81,10 @@ Persist or derive the selected upstream feature and base branch through the exis
 
 - 2026-10-21 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-10-22 · Epic Manager · **Safety**
+  Chose Permit stacking only from a completed-but-unmerged predecessor and fail closed when its branch or pull request cannot be resolved..
+  Rationale: This captures the lead-time benefit without allowing downstream work to build on unstable or ambiguous state.
+  Honors: Existing approval and dependency gates, idempotent dispatch, and system reliability..
 ## Amendment log
 
 _(none)_
