@@ -83,6 +83,11 @@ The same thread node builder and refresh path must serve both destinations so po
   Chose Keep whole-plan and unplaceable threads in the existing bottom review tray..
   Rationale: A visible fallback prevents comments from disappearing when an anchor is global, invalid, or cannot be relocated.
   Honors: Reliable access to every review thread..
+
+- `dec_003` · 2026-10-22 · Epic Architect · **Delivery shape**
+  Chose Deliver the epic as one end-to-end feature..
+  Rationale: The change is localized to a single viewer flow and has no independently valuable intermediate slice.
+  Honors: Frugal engineering and the smallest shippable scope..
 ## Amendment log
 
 _(none)_
