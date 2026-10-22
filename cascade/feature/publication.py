@@ -32,6 +32,7 @@ class PublicationHistory:
     tip_sha: str
     task_ids: tuple[str, ...]
     commits: tuple[str, ...]
+    remote_lease_sha: str | None = None
 
 
 def prepare_feature_publication(feature_id: str, *, root: Path) -> PublicationHistory:
@@ -54,27 +55,68 @@ def prepare_feature_publication(feature_id: str, *, root: Path) -> PublicationHi
     old_tip = _git(entry.path, "rev-parse", source).stdout.strip()
     remote_ref = f"refs/remotes/origin/{source}"
     remote_tip = _optional_ref(entry.path, remote_ref)
+    remote_lease_sha: str | None = None
     if remote_tip is not None:
-        published = validate_feature_publication(
-            feature_id,
-            source_root=entry.path,
-            source_ref=remote_tip,
-            base_ref=entry.base_sha,
-            expected_task_ids=None,
-        )
-        base_sha = remote_tip
-        published_ids = set(published.task_ids)
-        new_task_ids = [task_id for task_id in task_ids if task_id not in published_ids]
-        if published_ids - set(task_ids):
-            raise GitError("published feature history contains a task no longer owned by the feature")
-        if not new_task_ids:
-            return validate_feature_publication(
+        if not _is_ancestor(entry.path, entry.base_sha, remote_tip):
+            raise GitError(f"{remote_ref} does not descend from the feature publication base")
+        try:
+            published = validate_feature_publication(
                 feature_id,
                 source_root=entry.path,
-                source_ref=source,
+                source_ref=remote_tip,
                 base_ref=entry.base_sha,
-                expected_task_ids=task_ids,
+                expected_task_ids=None,
             )
+        except GitError:
+            # A feature branch can be pushed before review publication.  Such a
+            # branch contains the ordinary lifecycle/checkpoint history and is
+            # safe to replace only while it is an ancestor of the local source.
+            # Once any publication trailer appears, treat invalid history as a
+            # partial publication and fail closed rather than guessing.
+            if _range_task_trailers(entry.path, entry.base_sha, remote_tip):
+                raise
+            recovery_ref = _recovery_ref(feature_id)
+            recorded_tip = _optional_ref(entry.path, recovery_ref)
+            if _is_ancestor(entry.path, remote_tip, old_tip):
+                _git(entry.path, "update-ref", recovery_ref, remote_tip)
+                base_sha = entry.base_sha
+                new_task_ids = list(task_ids)
+                remote_lease_sha = remote_tip
+            elif recorded_tip == remote_tip:
+                # A previous attempt normalized locally but failed before its
+                # leased push.  Reuse only the exact recorded remote tip.
+                history = validate_feature_publication(
+                    feature_id,
+                    source_root=entry.path,
+                    source_ref=source,
+                    base_ref=entry.base_sha,
+                    expected_task_ids=task_ids,
+                )
+                return PublicationHistory(
+                    base_sha=history.base_sha,
+                    tip_sha=history.tip_sha,
+                    task_ids=history.task_ids,
+                    commits=history.commits,
+                    remote_lease_sha=remote_tip,
+                )
+            else:
+                raise GitError(f"{remote_ref} has diverged from {source}; refusing publication rewrite")
+        else:
+            if not _is_ancestor(entry.path, remote_tip, old_tip):
+                raise GitError(f"{remote_ref} has diverged from {source}; refusing publication rewrite")
+            base_sha = remote_tip
+            published_ids = set(published.task_ids)
+            new_task_ids = [task_id for task_id in task_ids if task_id not in published_ids]
+            if published_ids - set(task_ids):
+                raise GitError("published feature history contains a task no longer owned by the feature")
+            if not new_task_ids:
+                return validate_feature_publication(
+                    feature_id,
+                    source_root=entry.path,
+                    source_ref=source,
+                    base_ref=entry.base_sha,
+                    expected_task_ids=task_ids,
+                )
     else:
         base_sha = entry.base_sha
         new_task_ids = list(task_ids)
@@ -88,12 +130,21 @@ def prepare_feature_publication(feature_id: str, *, root: Path) -> PublicationHi
         task_commits=task_commits,
     )
     _git(entry.path, "update-ref", f"refs/heads/{source}", new_tip, old_tip)
-    return validate_feature_publication(
+    history = validate_feature_publication(
         feature_id,
         source_root=entry.path,
         source_ref=source,
         base_ref=entry.base_sha,
         expected_task_ids=task_ids,
+    )
+    if remote_lease_sha is None:
+        return history
+    return PublicationHistory(
+        base_sha=history.base_sha,
+        tip_sha=history.tip_sha,
+        task_ids=history.task_ids,
+        commits=history.commits,
+        remote_lease_sha=remote_lease_sha,
     )
 
 
@@ -243,6 +294,24 @@ def _require_clean(root: Path) -> None:
 def _optional_ref(root: Path, ref: str) -> str | None:
     result = _git(root, "show-ref", "--verify", "--hash", ref, check=False)
     return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else None
+
+
+def _recovery_ref(feature_id: str) -> str:
+    return f"refs/cascade/publication-recovery/{feature_id}"
+
+
+def _is_ancestor(root: Path, ancestor: str, descendant: str) -> bool:
+    return _git(root, "merge-base", "--is-ancestor", ancestor, descendant, check=False).returncode == 0
+
+
+def _range_task_trailers(root: Path, base_ref: str, tip_ref: str) -> list[str]:
+    merge_base = _git(root, "merge-base", base_ref, tip_ref, check=False)
+    if merge_base.returncode != 0 or not merge_base.stdout.strip():
+        return []
+    trailers: list[str] = []
+    for sha in _git(root, "rev-list", f"{merge_base.stdout.strip()}..{tip_ref}").stdout.splitlines():
+        trailers.extend(_task_trailers(_git(root, "show", "-s", "--format=%B", sha).stdout))
+    return trailers
 
 
 def _git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
