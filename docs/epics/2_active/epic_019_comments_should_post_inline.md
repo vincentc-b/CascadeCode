@@ -61,9 +61,8 @@ The same thread node builder and refresh path must serve both destinations so po
 - Existing comment sidecar line-anchor fields and document SHA.
 
 ## Feature breakdown
-- feat_019_001
 
-1. **Render anchored review threads inline** — Update the plan viewer to route placeable root threads beside their anchored content, retain the bottom tray for global/unplaceable threads, preserve all thread interactions across refresh, and add focused UI regression coverage.
+- `feat_019_001` — **Render anchored review threads inline**: route placeable root threads beside their anchored content, retain the bottom tray for global/unplaceable threads, preserve all thread interactions across refresh, and add focused UI regression coverage.
 
 ## Open questions
 
