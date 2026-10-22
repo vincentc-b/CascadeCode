@@ -127,6 +127,11 @@ Testing stance: prefer a small number of system-level tests with a fake planning
   Chose The watchdog's advance_work and boss-order dispatch paths run inside deferred_kickoffs(). The post-turn queue re-check is a loop inside the running job, not a nested kickoff_turn..
   Rationale: kickoff_graph_queue_event's only production caller is already deferred, so it doesn't block. But dispatch_* -> _boot_after -> kickoff_turn currently runs model turns synchronously on the watchdog thread, and in the boss path it does so while holding process_lock, which contradicts the premise that the watchdog only submits jobs. The fix is one wrapper per call site. _defer_turns is a contextvar that the drain thread does not inherit, so a nested kickoff_turn inside a job would run synchronously and recurse.
   Honors: Constraint: the watchdog stays non-blocking. Keep the fix focused (wrapping call sites only, no new watchdog work)..
+
+- `dec_005` · 2026-10-22 · Epic Architect · **Macro-architecture**
+  Chose When snapshot.next is non-empty, the job resumes before it ingests. The monotonic cursor helper treats cursor > current file size as the only allowed explicit, logged reset. read_events keeps its signature, and no file identity is stored..
+  Rationale: Calling update_state on an interrupted checkpoint can change next and silently drop the resume. _decode_buffer already restarts from 0 when the offset is past EOF, so making that case explicit is enough. Detecting a file replaced by a larger one would need a checkpoint schema change, which is out of scope; that limitation is accepted as pre-existing.
+  Honors: Success criteria: an interrupted turn resumes at most once, monotonic cursor. Constraints: backward-compatible checkpoints and queue format..
 ## Amendment log
 
 _(none)_
