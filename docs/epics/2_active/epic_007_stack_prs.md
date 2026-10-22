@@ -90,6 +90,11 @@ Persist or derive the selected upstream feature and base branch through the exis
   Chose Use the existing declared feature dependency graph as the sole definition of pull request stack order..
   Rationale: A second ordering model would create drift and additional lifecycle state without adding user value.
   Honors: The approved brief's sequential feature semantics and the requirement that downstream work follow its priors..
+
+- `dec_003` · 2026-10-22 · Epic Manager · **Scope**
+  Chose Deliver stack-aware dispatch, pull request base selection, and post-merge reconciliation as one vertical-slice feature..
+  Rationale: None of these parts is independently useful; a single feature is the smallest shippable slice and avoids coordination overhead.
+  Honors: The core outcome of dispatching approved downstream features before predecessor merge while keeping their pull requests correctly based..
 ## Amendment log
 
 _(none)_
