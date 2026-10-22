@@ -23,60 +23,65 @@ models:
 
 ## Intent
 
-Shorten epic lead time by allowing the next approved feature to start after its ordered predecessor is complete, even when that predecessor's pull request has not merged. The resulting pull requests form a dependency stack and remain reviewable and mergeable in feature order.
+Shorten epic lead time by allowing the next approved feature in a linear dependency stack to start after its single ordered predecessor is complete, even when that predecessor's pull request has not merged. The resulting pull requests form a linear stack and remain reviewable and mergeable in feature order.
 
 ### Success criteria
 
-- An approved feature is dispatched when every declared predecessor is either merged or complete and safe to stack.
-- A stacked feature pull request targets the nearest unmerged predecessor's branch.
-- An incomplete, failed, blocked, or unapproved predecessor still prevents downstream dispatch.
-- After the predecessor merges, the downstream pull request targets the epic's normal integration/base branch without duplicate dispatch or pull requests.
+- An approved feature is dispatched when its single declared predecessor is either merged or complete and safe to stack.
+- A stacked feature pull request targets its completed-but-unmerged predecessor's branch.
+- A feature cannot enter the completed state until a durable feature-to-pull-request link has been populated.
+- An incomplete, failed, blocked, unapproved, or unresolved predecessor still prevents downstream dispatch.
+- After the predecessor merges, GitHub's native retargeting moves the downstream pull request to the epic's normal integration/base branch; reconciliation verifies the result without duplicate dispatch or pull requests.
 - Existing behavior remains unchanged for first features and features whose predecessors are already merged.
+- Dependency fan-in is outside this epic's stacking scope and fails closed with a visible unsupported-topology reason.
 
 ## Macro-architecture
 
-Use the existing feature dependency graph as the stack definition; do not introduce a second ordering model.
+Use the existing feature dependency graph as the stack definition; do not introduce a second ordering model. This epic supports only linear stacks.
 
-The scheduler/dispatcher evaluates each approved feature against its declared predecessors. A merged predecessor satisfies the dependency normally. A complete but unmerged predecessor also satisfies dispatch eligibility, while supplying its head branch as the downstream pull request base. Any other predecessor state remains blocking.
+The scheduler/dispatcher evaluates each approved feature against its single declared predecessor. A merged predecessor satisfies the dependency normally. A complete but unmerged predecessor also satisfies dispatch eligibility, while supplying its head branch as the downstream pull request base. Any other predecessor state remains blocking. Features with dependency fan-in are not eligible for stacked dispatch in this slice.
 
-Persist or derive the selected upstream feature and base branch through the existing durable dispatch/feature state so retries are deterministic. At pull-request creation, the GitHub adapter uses the selected base. When an upstream pull request merges, normal reconciliation verifies that the downstream base has moved to the epic's integration/base branch; accept GitHub's native retargeting when correct and repair or clearly report stale state otherwise.
+Persist the feature-to-pull-request link in project state before allowing a feature to become complete. Persist or derive the selected upstream feature and base branch through the existing durable dispatch/feature state so retries are deterministic. At pull-request creation, the GitHub adapter uses the selected base. When an upstream pull request merges, reconciliation verifies GitHub's native retargeting moved the downstream pull request to the epic's integration/base branch and clearly reports stale state. If native retargeting is not available or reliable, explicit retargeting is deferred to a follow-up feature.
 
 ## Cross-module constraints
 
 - The feature dependency graph is authoritative for both dispatch order and pull request stacking.
+- This epic supports only linear stacks: a stacked feature has at most one direct predecessor. Dependency fan-in fails closed with a visible unsupported-topology reason.
 - Stacking is permitted only after a predecessor reaches the existing completed state; it must not relax approval, failure, cancellation, or blocking gates.
-- Choose the uniquely nearest unmerged predecessor in dependency ancestry; never skip an incomplete predecessor. If multiple incomparable completed-but-unmerged predecessors remain, fail closed because one pull request cannot represent multiple bases.
+- Completion requires a durable feature-to-pull-request link; missing or unresolvable pull-request identity fails closed.
 - Scheduler and reconciliation operations must remain idempotent under retries and restarts.
 - Keep provider-specific pull request operations behind the existing GitHub/integration boundary.
+- Assume GitHub native base retargeting after predecessor merge; this slice verifies and diagnoses the result but does not implement explicit retargeting.
 - Preserve current behavior for non-stacked work and avoid introducing a custom merge queue.
 
 ## Core dependencies
 
 - Existing feature dependency and approval state.
 - Existing scheduler/dispatcher eligibility checks.
+- Durable project-state mapping from features to pull requests.
 - Existing worktree/branch identity for completed features.
 - Existing pull request creation and reconciliation integration with GitHub.
 - Epic integration/base branch resolution.
 
 ## Feature breakdown
 
-1. **feat_007_001 — Dispatch and retarget stacked feature PRs**
-   - Deliver the complete vertical slice: eligibility for complete-but-unmerged predecessors, deterministic base selection, pull request creation, post-merge reconciliation, diagnostics, and focused integration coverage.
+1. **feat_007_001 — Dispatch and verify native retargeting for linear stacked feature PRs**
+   - Deliver the complete vertical slice: completion-gated feature-to-pull-request linkage, eligibility for a single complete-but-unmerged predecessor, deterministic base selection, pull request creation, post-merge verification of native retargeting, diagnostics, and focused integration coverage.
    - No prerequisite feature. This single feature is the smallest independently useful release; splitting scheduler and pull-request behavior would create a nonfunctional intermediate state.
+   - Explicit provider-side retargeting is excluded; mint a follow-up feature only if implementation evidence shows native retargeting is unavailable or unreliable.
 
 ## Delivery sequence
 
-1. Map the existing dependency-state and pull-request lifecycle boundaries.
-2. Implement stack-aware eligibility and deterministic base selection.
-3. Pass the selected base through pull-request creation without changing non-stacked behavior.
-4. Reconcile downstream bases after upstream merges.
-5. Verify the two-feature path, a three-feature chain, blocking states, and retry idempotency.
+1. Map the existing dependency-state, feature-to-pull-request linkage, and pull-request lifecycle boundaries.
+2. Enforce durable pull-request linkage before feature completion.
+3. Implement linear-stack eligibility and deterministic base selection.
+4. Pass the selected base through pull-request creation without changing non-stacked behavior.
+5. Verify native downstream base retargeting after upstream merges and surface stale state.
+6. Verify the two-feature path, a three-feature linear chain, unsupported fan-in, blocking states, missing pull-request linkage, and retry idempotency.
 
 ## Open questions
 
-- Does the current GitHub integration observe native base retargeting after an upstream merge, or must reconciliation explicitly update the downstream pull request? Resolve during implementation against the adapter's observed contract; no separate discovery feature is warranted.
-- If a completed predecessor's branch or pull request cannot be resolved, fail closed with a visible blocked reason rather than falling back to the epic base.
-- A dependency fan-in with multiple incomparable completed-but-unmerged predecessors is not stackable. Block with a visible ambiguity reason until reconciliation leaves one uniquely nearest unmerged predecessor.
+_(none)_
 
 ## Decision log
 
