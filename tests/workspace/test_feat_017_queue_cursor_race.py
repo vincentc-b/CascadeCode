@@ -46,15 +46,6 @@ def _isolate_graphs(monkeypatch: pytest.MonkeyPatch) -> None:
     clear_watchdog_memory()
 
 
-def _wait_until(predicate, *, timeout: float = 5.0, interval: float = 0.02) -> None:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if predicate():
-            return
-        time.sleep(interval)
-    raise TimeoutError("condition not met before timeout")
-
-
 def _run_mid_turn_append_race(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _RaceScenario:
     runner = CountingBlockedTurnRunner()
     runner.install(monkeypatch)
@@ -117,12 +108,6 @@ def _run_mid_turn_append_race(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     deliver_thread = threading.Thread(target=_deliver, name="watchdog-deliver")
     deliver_thread.start()
 
-    def _ingest_visible() -> bool:
-        values = feature_graph_values(feature_id, root=root)
-        return int(values.get("last_queue_offset") or 0) >= queue_size_after_append
-
-    _wait_until(_ingest_visible)
-
     runner.release()
     turn_thread.join(timeout=15)
     deliver_thread.join(timeout=15)
@@ -141,7 +126,7 @@ def _run_mid_turn_append_race(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     )
 
 
-def test_append_during_blocked_inflight_turn_reproduces_cursor_loss_and_duplicate_turn(
+def test_append_during_blocked_inflight_turn_cursor_at_eof_and_single_delivery(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -150,32 +135,68 @@ def test_append_during_blocked_inflight_turn_reproduces_cursor_loss_and_duplicat
     final_offset = int(final.get("last_queue_offset") or 0)
     event_messages = [m for m in final.get("messages") or [] if m.get("role") == "event"]
 
-    assert final_offset == scenario.seed_offset
+    assert final_offset == queue_eof(scenario.feature_id, root=scenario.root)
     seed_rows = [m for m in event_messages if "dec_race_seed" in m.get("content", "")]
     append_rows = [m for m in event_messages if "dec_race_append" in m.get("content", "")]
     assert len(seed_rows) == 1
-    assert not append_rows
-    race_turns = scenario.runner.turn_count - scenario.turns_before_race
-    assert race_turns >= 2
+    assert len(append_rows) == 1
 
     turns_before_redeliver = scenario.runner.turn_count
     deliver_queue_kickoffs(scenario.root)
     assert wait_for_background_kickoffs(timeout=15)
-    assert scenario.runner.turn_count - turns_before_redeliver >= 1
+    assert scenario.runner.turn_count == turns_before_redeliver
 
 
-@pytest.mark.xfail(reason="feat_017_001: cursor must stay at EOF after mid-turn append")
 def test_mid_turn_append_cursor_ends_at_eof(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     scenario = _run_mid_turn_append_race(tmp_path, monkeypatch)
     values = feature_graph_values(scenario.feature_id, root=scenario.root)
     assert int(values.get("last_queue_offset") or 0) == queue_eof(scenario.feature_id, root=scenario.root)
 
 
-@pytest.mark.xfail(reason="feat_017_001: appended queue event must be ingested exactly once")
 def test_mid_turn_append_event_ingested_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     scenario = _run_mid_turn_append_race(tmp_path, monkeypatch)
     values = feature_graph_values(scenario.feature_id, root=scenario.root)
     events = [m for m in values.get("messages") or [] if m.get("role") == "event"]
     append_rows = [m for m in events if "dec_race_append" in m.get("content", "")]
     assert len(append_rows) == 1
-    assert len(events) == 2
+    decision_events = [
+        m for m in events if "DecisionRecorded" in m.get("content", "")
+    ]
+    assert len(decision_events) == 2
+
+
+def test_unchanged_queue_maintenance_ticks_start_zero_turns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = CountingBlockedTurnRunner()
+    runner.install(monkeypatch)
+
+    root = make_repo(tmp_path, models=True, role_skills=True)
+    feature_id = seed_active_feature_board(root)
+    boot_feature_graph(root, feature_id)
+
+    append_lifecycle_event(
+        feature_id,
+        "DecisionRecorded",
+        root=root,
+        section="Decision log",
+        entry="dec_idle",
+    )
+    ingest_queue(feature_id, root=root)
+    kickoff_turn(
+        KickoffReason(
+            kind="queue_event",
+            work_id=feature_id,
+            by="watchdog",
+            root=root,
+        )
+    )
+    assert wait_for_background_kickoffs(timeout=15)
+    turns_after_catchup = runner.turn_count
+
+    for _ in range(5):
+        deliver_queue_kickoffs(root)
+        assert wait_for_background_kickoffs(timeout=15)
+
+    assert runner.turn_count == turns_after_catchup

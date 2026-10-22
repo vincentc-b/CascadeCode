@@ -25,6 +25,8 @@ from cascade.watchdog import activate_epic, append_event, dispatch_feature
 from cascade.watchdog.hooks import clear_hooks, invoke_boot
 from cascade.watchdog.events import read_events
 from cascade.watchdog.types import Event
+from cascade.workspace.kickoff import install_kickoff, kickoff_turn, wait_for_background_kickoffs
+from cascade.workspace.types import KickoffReason
 from tests.support import add_doc, make_repo
 
 
@@ -156,6 +158,7 @@ def test_install_boot_hook_consumes_feature_ready_to_plan(tmp_path: Path) -> Non
     assert activate_epic("epic_001", "human", root=root).ok
     approve_board_feature(root, "feat_001")
     dispatch_feature("feat_001", "human", root=root)
+    assert wait_for_background_kickoffs(timeout=15)
 
     graph = ensure_feature_graph("feat_001", root=root)
     state = graph.get_state({"configurable": {"thread_id": "feat_001"}}).values
@@ -207,7 +210,17 @@ def test_invoke_boot_with_hook(tmp_path: Path) -> None:
         root=root,
     )
     install_feature_boot_hook(root)
+    install_kickoff(root)
     invoke_boot("feature", "feat_001")
+    kickoff_turn(
+        KickoffReason(
+            kind="dispatch",
+            work_id="feat_001",
+            by="human",
+            root=root,
+        )
+    )
+    assert wait_for_background_kickoffs(timeout=15)
 
     graph = ensure_feature_graph("feat_001", root=root)
     state = graph.get_state({"configurable": {"thread_id": "feat_001"}}).values
@@ -283,6 +296,7 @@ def test_run_watchdog_installs_feature_boot_hook(tmp_path: Path) -> None:
     assert activate_epic("epic_001", "human", root=root).ok
     approve_board_feature(root, "feat_001")
     dispatch_feature("feat_001", "human", root=root)
+    assert wait_for_background_kickoffs(timeout=15)
     graph = ensure_feature_graph("feat_001", root=root)
     state = graph.get_state({"configurable": {"thread_id": "feat_001"}}).values
     assert state is not None

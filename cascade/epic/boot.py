@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cascade.board.store import read_doc
-from cascade.epic.graph import ingest_queue, seed_epic_role_models
+from cascade.epic.graph import seed_epic_role_models
 from cascade.watchdog.boot_model import toast_model_config_failure
 from cascade.watchdog.config import ConfigError
 from cascade.watchdog.hooks import register_boot_hook
@@ -51,7 +51,6 @@ def boot_epic(work_id: str) -> None:
         architect=architect,
         root=_boot_root,
     )
-    ingest_queue(work_id, root=_boot_root)
 
 
 def install_epic_boot_hook(root: Path) -> None:

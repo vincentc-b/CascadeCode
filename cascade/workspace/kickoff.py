@@ -14,7 +14,7 @@ from pathlib import Path
 from cascade.board.context import resolve_root
 from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
-from cascade.watchdog.queue_cursor import resolve_last_queue_offset
+from cascade.watchdog.queue_cursor import queue_byte_size, resolve_last_queue_offset
 from cascade.workspace.types import KickoffReason
 
 _log = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ _COMMENT_KICKOFF_SIDECAR_NOTE = (
 _COMMENT_QUEUE_TYPES = frozenset({"CommentPosted", "CommentReplied", "CommentResolved"})
 _graph_locks: dict[str, threading.RLock] = {}
 _graph_queues: dict[str, "queue.Queue[Callable[[], None]]"] = {}
+_pending_queue_delivery: set[str] = set()
 _registry_lock = threading.Lock()
 
 
@@ -72,6 +73,20 @@ def deferred_kickoffs() -> Iterator[None]:
         yield
     finally:
         _defer_turns.reset(token)
+
+
+def clear_kickoff_delivery_state() -> None:
+    """Reset per-graph delivery dedupe (tests only)."""
+
+    with _registry_lock:
+        _pending_queue_delivery.clear()
+
+
+def reset_kickoff_test_state() -> None:
+    """Clear deferred-kickoff context leakage between tests."""
+
+    _defer_turns.set(False)
+    clear_kickoff_delivery_state()
 
 
 def wait_for_background_kickoffs(timeout: float = 30.0) -> bool:
@@ -230,10 +245,9 @@ def kickoff_human_comment(doc_id: str, comment_id: str, *, root: Path) -> bool:
 
 
 def deliver_queue_kickoffs(root: Path) -> None:
-    """Ingest new queue lines for live graphs and kick one turn when events arrived."""
+    """Submit coalesced delivery jobs when a graph queue is ahead of its cursor."""
 
     repo = Path(root).resolve()
-    from cascade.watchdog.events import read_events
     from cascade.workspace.integration_worktree import merged_board
 
     board = merged_board(repo)
@@ -244,17 +258,112 @@ def deliver_queue_kickoffs(root: Path) -> None:
         if meta.tier not in ("epic", "feature", "task"):
             continue
         feature_id = meta.parent if meta.tier == "task" else None
-        before = _queue_offset(work_id, meta.tier, root=repo, feature_id=feature_id)
+        if not _queue_is_ahead(work_id, meta.tier, root=repo, feature_id=feature_id):
+            continue
+        _schedule_queue_delivery(work_id, meta.tier, repo, feature_id)
+
+
+def kickoff_graph_queue_event(
+    work_id: str,
+    *,
+    root: Path | None = None,
+    by: str = "watchdog",
+) -> bool:
+    """Schedule one delivery job when the graph queue is ahead of its cursor."""
+
+    repo = resolve_root(root)
+    from cascade.workspace.integration_worktree import merged_board
+
+    meta = merged_board(repo).by_id.get(work_id)
+    if meta is None or meta.tier not in ("epic", "feature", "task"):
+        return False
+    feature_id = meta.parent if meta.tier == "task" else None
+    if not _queue_is_ahead(work_id, meta.tier, root=repo, feature_id=feature_id):
+        return False
+    _schedule_queue_delivery(work_id, meta.tier, repo, feature_id)
+    return True
+
+
+def _queue_is_ahead(
+    work_id: str,
+    tier: str,
+    *,
+    root: Path,
+    feature_id: str | None,
+) -> bool:
+    cursor = _queue_offset(work_id, tier, root=root, feature_id=feature_id)
+    return queue_byte_size(work_id, root=root) > cursor
+
+
+def _schedule_queue_delivery(
+    work_id: str,
+    tier: str,
+    repo: Path,
+    feature_id: str | None,
+) -> None:
+    if _defer_turns.get():
+        _submit_queue_delivery(work_id, tier, repo, feature_id)
+        return
+    _run_queue_delivery(work_id, tier, repo, feature_id)
+
+
+def _submit_queue_delivery(
+    work_id: str,
+    tier: str,
+    repo: Path,
+    feature_id: str | None,
+) -> None:
+    with _registry_lock:
+        if work_id in _pending_queue_delivery:
+            return
+        _pending_queue_delivery.add(work_id)
+
+    def job() -> None:
+        try:
+            _run_queue_delivery(work_id, tier, repo, feature_id)
+        finally:
+            with _registry_lock:
+                _pending_queue_delivery.discard(work_id)
+
+    _submit_background(work_id, job)
+
+
+def _run_queue_delivery(
+    work_id: str,
+    tier: str,
+    repo: Path,
+    feature_id: str | None,
+) -> None:
+    with _graph_lock(work_id):
+        token = _model_turn_authorized.set(True)
+        try:
+            _run_queue_delivery_locked(work_id, tier, repo, feature_id)
+        finally:
+            _model_turn_authorized.reset(token)
+
+
+def _run_queue_delivery_locked(
+    work_id: str,
+    tier: str,
+    repo: Path,
+    feature_id: str | None,
+) -> None:
+    from cascade.watchdog.events import read_events
+
+    for _pass in range(2):
+        before = _queue_offset(work_id, tier, root=repo, feature_id=feature_id)
+        if queue_byte_size(work_id, root=repo) <= before:
+            return
         new_events, _ = read_events(work_id, before, root=repo)
         after_state = _ingest_queue_only(
             work_id,
-            meta.tier,
+            tier,
             root=repo,
             feature_id=feature_id,
         )
         after = int(after_state.get("last_queue_offset") or 0)
         if after <= before:
-            continue
+            return
         human_comments, has_non_comment = _classify_queue_events(new_events)
         for doc_id, comment_id in human_comments:
             kickoff_human_comment(doc_id, comment_id, root=repo)
@@ -268,43 +377,6 @@ def deliver_queue_kickoffs(root: Path) -> None:
                     feature_id=feature_id,
                 )
             )
-
-
-def kickoff_graph_queue_event(
-    work_id: str,
-    *,
-    root: Path | None = None,
-    by: str = "watchdog",
-) -> bool:
-    """Ingest one graph queue and run a turn if its byte offset advanced."""
-
-    repo = resolve_root(root)
-    from cascade.workspace.integration_worktree import merged_board
-
-    meta = merged_board(repo).by_id.get(work_id)
-    if meta is None or meta.tier not in ("epic", "feature", "task"):
-        return False
-    feature_id = meta.parent if meta.tier == "task" else None
-    before = _queue_offset(work_id, meta.tier, root=repo, feature_id=feature_id)
-    state = _ingest_queue_only(
-        work_id,
-        meta.tier,
-        root=repo,
-        feature_id=feature_id,
-    )
-    after = int(state.get("last_queue_offset") or 0)
-    if after <= before:
-        return False
-    kickoff_turn(
-        KickoffReason(
-            kind="queue_event",
-            work_id=work_id,
-            by=by,  # type: ignore[arg-type]
-            root=repo,
-            feature_id=feature_id,
-        )
-    )
-    return True
 
 
 def _comment_kickoff_content(record) -> str:
@@ -360,6 +432,20 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
         tier = _tier_from_work_id(reason.work_id)
     if tier not in ("epic", "feature", "task"):
         return
+
+    feature_id = reason.feature_id or (doc.meta.parent if doc is not None else None)
+    if reason.kind != "resume_inflight" and not _graph_has_inflight_turn(
+        reason.work_id,
+        tier,
+        root=repo,
+        feature_id=feature_id,
+    ):
+        _ingest_queue_only(
+            reason.work_id,
+            tier,
+            root=repo,
+            feature_id=feature_id,
+        )
 
     if reason.kind in ("human_message", "comment") and reason.message is not None:
         meta = doc.meta if doc is not None else None
@@ -698,20 +784,26 @@ def _graph_has_inflight_turn(
 
         graph = ensure_epic_graph(work_id, root=root)
         config = thread_config(work_id)
+        role_names = frozenset({"epic_manager", "epic_architect"})
     elif tier == "feature":
         from cascade.feature.checkpoint import thread_config
         from cascade.feature.graph import ensure_feature_graph
 
         graph = ensure_feature_graph(work_id, root=root)
         config = thread_config(work_id)
+        role_names = frozenset({"feature_lead", "feature_architect"})
     else:
         from cascade.task.checkpoint import thread_config
         from cascade.task.graph import ensure_task_graph
 
         graph = ensure_task_graph(work_id, root=root, feature_id=feature_id)
         config = thread_config(work_id)
+        role_names = frozenset({"swe"})
     snapshot = graph.get_state(config)
-    return bool(snapshot.next)
+    if not snapshot.next:
+        return False
+    messages = (snapshot.values or {}).get("messages") or []
+    return any(m.get("role") in role_names for m in messages)
 
 
 def _stage_human_message(

@@ -18,7 +18,7 @@ from cascade.watchdog.events import read_events
 from cascade.watchdog.hooks import clear_hooks
 from cascade.watchdog.loop import clear_watchdog_memory
 from cascade.watchdog.types import Event
-from cascade.workspace.kickoff import install_kickoff
+from cascade.workspace.kickoff import install_kickoff, reset_kickoff_test_state
 from tests.support import add_doc, make_repo
 
 
@@ -147,6 +147,7 @@ def install_queue_delivery_test_isolation(monkeypatch: pytest.MonkeyPatch) -> Co
     clear_feature_graph_sessions()
     clear_hooks()
     clear_watchdog_memory()
+    reset_kickoff_test_state()
     runner = CountingBlockedTurnRunner()
     runner.install(monkeypatch)
     return runner

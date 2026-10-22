@@ -25,6 +25,8 @@ from cascade.watchdog import activate_epic, append_event
 from cascade.watchdog.events import read_events
 from cascade.watchdog.hooks import clear_hooks, invoke_boot
 from cascade.watchdog.types import Event
+from cascade.workspace.kickoff import install_kickoff, kickoff_turn, wait_for_background_kickoffs
+from cascade.workspace.types import KickoffReason
 from tests.support import add_doc, make_repo
 
 
@@ -114,6 +116,7 @@ def test_install_boot_hook_consumes_epic_activated(tmp_path: Path) -> None:
     install_epic_boot_hook(root)
 
     activate_epic("epic_001", "human", root=root)
+    assert wait_for_background_kickoffs(timeout=15)
 
     graph = ensure_epic_graph("epic_001", root=root)
     state = graph.get_state({"configurable": {"thread_id": "epic_001"}}).values
@@ -137,7 +140,17 @@ def test_invoke_boot_with_hook(tmp_path: Path) -> None:
         root=root,
     )
     install_epic_boot_hook(root)
+    install_kickoff(root)
     invoke_boot("epic", "epic_001")
+    kickoff_turn(
+        KickoffReason(
+            kind="activate",
+            work_id="epic_001",
+            by="human",
+            root=root,
+        )
+    )
+    assert wait_for_background_kickoffs(timeout=15)
 
     graph = ensure_epic_graph("epic_001", root=root)
     state = graph.get_state({"configurable": {"thread_id": "epic_001"}}).values
@@ -228,6 +241,7 @@ def test_run_watchdog_installs_epic_boot_hook(tmp_path: Path) -> None:
 
     run_watchdog(root=root, poll_interval=0.01, stop_when=lambda: True)
     activate_epic("epic_001", "human", root=root)
+    assert wait_for_background_kickoffs(timeout=15)
     graph = ensure_epic_graph("epic_001", root=root)
     state = graph.get_state({"configurable": {"thread_id": "epic_001"}}).values
     assert state is not None
