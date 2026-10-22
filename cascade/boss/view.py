@@ -34,18 +34,10 @@ def compute_boss_view(*, root: Path | None = None) -> BossView:
     dispatchable_features: list[WorkId] = []
     dispatchable_tasks: list[WorkId] = []
     failed_tasks: list[WorkId] = []
-    from cascade.review import feature_review_pending
-
-    feature_parents_in_flight = {
-        meta.parent
-        for meta in board.by_id.values()
-        if meta.tier == "feature"
-        and meta.parent
-        and (
-            meta.path.parent.name == "2_active"
-            or feature_review_pending(meta.id, root=repo)
-        )
-    }
+    from cascade.stacked_dispatch import (
+        feature_dispatch_blocked_by_sibling,
+        feature_merge_gated,
+    )
 
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
@@ -54,7 +46,8 @@ def compute_boss_view(*, root: Path | None = None) -> BossView:
             and _backlog_open(meta)
             and meta.approved_at is not None
             and _deps_met(board, meta, root=repo)
-            and meta.parent not in feature_parents_in_flight
+            and not feature_merge_gated(meta, board, root=repo)
+            and not feature_dispatch_blocked_by_sibling(meta, board, root=repo)
         ):
             dispatchable_features.append(work_id)
         elif meta.tier == "task":
@@ -81,6 +74,11 @@ def _backlog_open(meta: WorkMeta) -> bool:
 
 
 def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
+    if meta.tier == "feature" and meta.parent:
+        from cascade.stacked_dispatch import feature_dependency_ready
+        from cascade.war_room.room_settings import effective_stacked_pr_enabled
+
+        return feature_dependency_ready(meta, board, root=root)
     for dep_id in meta.depends_on:
         dep = board.by_id.get(dep_id)
         if dep is None or dep.status != "completed" or dep.path.parent.name != "3_completed":

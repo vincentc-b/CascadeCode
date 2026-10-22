@@ -49,7 +49,6 @@ def board(tmp_path: Path) -> Path:
     approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     approve_board_feature(root, "feat_002")
-    assert dispatch_feature("feat_002", "human", root=root).ok
     return root
 
 

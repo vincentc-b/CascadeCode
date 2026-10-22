@@ -82,6 +82,17 @@ def stacked_pr_enabled(graph_id: str, *, root: Path) -> bool:
     return read_room_settings(graph_id, root=root).stacked_pr_enabled
 
 
+def effective_stacked_pr_enabled(feature_id: str, epic_id: str, *, root: Path) -> bool:
+    """Resolve stacked dispatch for a feature: explicit feature room overrides epic default."""
+
+    trunk = locate_trunk(root)
+    rooms = _load(trunk)
+    feat_record = rooms.get(feature_id)
+    if feat_record is not None and "stacked_pr_enabled" in feat_record:
+        return _read_stacked_pr_enabled(feat_record)
+    return _read_stacked_pr_enabled(rooms.get(epic_id))
+
+
 def write_stacked_pr_enabled(
     graph_id: str, enabled: bool, *, root: Path
 ) -> RoomSettings:
