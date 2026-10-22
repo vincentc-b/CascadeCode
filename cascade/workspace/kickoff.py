@@ -354,20 +354,22 @@ def _run_queue_delivery_locked(
         before = _queue_offset(work_id, tier, root=repo, feature_id=feature_id)
         if queue_byte_size(work_id, root=repo) <= before:
             return
-        new_events, _ = read_events(work_id, before, root=repo)
-        after_state = _ingest_queue_only(
+        new_events, new_offset = read_events(work_id, before, root=repo)
+        if not new_events:
+            return
+        staged = _staged_messages_from_queue_events(new_events, repo)
+        after = _commit_classified_queue_batch(
             work_id,
             tier,
+            staged,
+            current_offset=before,
+            new_offset=new_offset,
             root=repo,
             feature_id=feature_id,
         )
-        after = int(after_state.get("last_queue_offset") or 0)
         if after <= before:
             return
-        human_comments, has_non_comment = _classify_queue_events(new_events)
-        for doc_id, comment_id in human_comments:
-            kickoff_human_comment(doc_id, comment_id, root=repo)
-        if has_non_comment:
+        if staged:
             kickoff_turn(
                 KickoffReason(
                     kind="queue_event",
@@ -396,20 +398,107 @@ def _comment_kickoff_content(record) -> str:
     return header + trimmed + _COMMENT_KICKOFF_SIDECAR_NOTE
 
 
-def _classify_queue_events(events: list) -> tuple[list[tuple[str, str]], bool]:
-    human_comments: list[tuple[str, str]] = []
-    has_non_comment = False
+def _staged_messages_from_queue_events(events: list, repo: Path) -> list[dict]:
+    """Map one queue batch to graph input messages, preserving queue order."""
+
+    from cascade.feature.graph import _event_message
+
+    staged: list[dict] = []
     for event in events:
         if event.type in _COMMENT_QUEUE_TYPES:
             if event.type in ("CommentPosted", "CommentReplied"):
                 if event.payload.get("author") == "human":
-                    doc_id = event.payload.get("doc_id")
-                    comment_id = event.payload.get("comment_id")
-                    if isinstance(doc_id, str) and isinstance(comment_id, str):
-                        human_comments.append((doc_id, comment_id))
+                    message = _human_message_from_comment_event(event, repo)
+                    if message is not None:
+                        staged.append(message)
             continue
-        has_non_comment = True
-    return human_comments, has_non_comment
+        staged.append(_event_message(event))
+    return staged
+
+
+def _human_message_from_comment_event(event, repo: Path) -> dict | None:
+    doc_id = event.payload.get("doc_id")
+    comment_id = event.payload.get("comment_id")
+    if not isinstance(doc_id, str) or not isinstance(comment_id, str):
+        return None
+    from cascade.comments.store import CommentStoreError, read_comments
+
+    try:
+        record = next(
+            (row for row in read_comments(doc_id, root=repo) if row.id == comment_id),
+            None,
+        )
+    except CommentStoreError:
+        return None
+    if record is None or record.author != "human":
+        return None
+    return {"role": "human", "content": _comment_kickoff_content(record)}
+
+
+def _commit_classified_queue_batch(
+    work_id: str,
+    tier: str,
+    messages: list[dict],
+    *,
+    current_offset: int,
+    new_offset: int,
+    root: Path,
+    feature_id: str | None,
+) -> int:
+    """Advance the cursor for a batch and stage classified messages when needed."""
+
+    resolved = resolve_last_queue_offset(
+        work_id,
+        current=current_offset,
+        proposed=new_offset,
+        root=root,
+    )
+    update: dict = {"last_queue_offset": resolved}
+    if messages:
+        update["messages"] = messages
+
+    if tier == "epic":
+        from cascade.epic.checkpoint import thread_config
+        from cascade.epic.graph import ensure_epic_graph
+
+        graph = ensure_epic_graph(work_id, root=root)
+        config = thread_config(work_id)
+        snapshot = graph.get_state(config)
+        if not snapshot.values:
+            update.setdefault("epic_id", work_id)
+            if not messages:
+                update.setdefault("messages", [])
+        graph.update_state(config, update)
+        return int(resolved)
+
+    if tier == "feature":
+        from cascade.feature.checkpoint import thread_config
+        from cascade.feature.graph import ensure_feature_graph
+
+        graph = ensure_feature_graph(work_id, root=root)
+        config = thread_config(work_id)
+        snapshot = graph.get_state(config)
+        if not snapshot.values:
+            update.setdefault("feature_id", work_id)
+            if not messages:
+                update.setdefault("messages", [])
+        graph.update_state(config, update)
+        return int(resolved)
+
+    from cascade.task.checkpoint import thread_config
+    from cascade.task.graph import ensure_task_graph
+
+    graph = ensure_task_graph(work_id, root=root, feature_id=feature_id)
+    config = thread_config(work_id)
+    snapshot = graph.get_state(config)
+    if not snapshot.values:
+        update.setdefault("task_id", work_id)
+        update.setdefault("feature_id", feature_id or "")
+        update.setdefault("skill_playbooks", [])
+        if not messages:
+            update.setdefault("messages", [])
+    graph.update_state(config, update)
+    return int(resolved)
 
 
 def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
