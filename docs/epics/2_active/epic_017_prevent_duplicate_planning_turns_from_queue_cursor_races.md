@@ -19,6 +19,7 @@ provider: cursor
 models:
   epic_manager: claude-opus-5-5
   epic_architect: claude-opus-5-5
+plan_approved_at: '2026-10-22T22:14:48.630705+00:00'
 ---
 # Prevent duplicate planning turns from queue cursor races
 
