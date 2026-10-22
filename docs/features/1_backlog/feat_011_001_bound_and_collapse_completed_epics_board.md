@@ -39,6 +39,7 @@ Keep the War Room useful as completed work accumulates: show only the most recen
 - Apply the limit after the existing completed-epic ordering so the newest completed items are retained.
 - Render the completed section collapsed on initial load.
 - Keep a visible link to the repository's completed-epics location, including when no completed rows are shown.
+- If repository metadata is unavailable, keep the history-link affordance visible but disabled using the application's established unavailable-link behavior.
 
 ## Acceptance criteria
 
@@ -47,7 +48,8 @@ Keep the War Room useful as completed work accumulates: show only the most recen
 3. Missing, non-positive, or malformed values safely fall back to 10.
 4. Expanding and collapsing the section does not change which rows are selected.
 5. A repository link for browsing all completed epic documents is visible beside the bounded section and resolves using the project's existing repository metadata/path conventions.
-6. Focused render/integration coverage proves default collapse, default/configured bounds, ordering, fallback behavior, and link presence.
+6. When repository metadata is unavailable, the history-link affordance remains visible but disabled using the application's established unavailable-link behavior, and the board still renders.
+7. Focused render/integration coverage proves default collapse, default/configured bounds, ordering, fallback behavior, and link presence, including the unavailable-metadata state.
 
 ## Out of scope
 
