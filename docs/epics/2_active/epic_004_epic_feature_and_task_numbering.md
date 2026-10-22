@@ -163,6 +163,11 @@ _(none)_
   Chose Retain a durable high-water mark (or equivalent allocation history) for each epic, feature, and task namespace, and atomically advance it with creation under the existing board process lock..
   Rationale: Scanning only currently persisted siblings would reuse the highest identifier after hard deletion, contradicting the approved monotonic non-reuse requirement. A small persisted watermark closes that gap without introducing a new service or general transaction system.
   Honors: The epic success criterion that moved, archived, or deleted work IDs are never reused, and the frugal-engineering preference for the smallest reliable persistence extension..
+
+- `dec_008` · 2026-10-22 · Epic Architect · **Migration allocation history**
+  Chose During backlog graph migration, initialize or advance each affected epic, feature, and task namespace high-water mark to at least the greatest segment assigned by the migration, and include those updates in the same locked, snapshotted, single-commit graph write..
+  Rationale: Migrated documents make the current maximum discoverable only while they remain present. If the highest migrated item is later hard-deleted and migration did not seed durable allocation history, a subsequent creation could reuse its identifier. Updating the existing feat_009 watermark state preserves monotonic non-reuse without adding a new persistence mechanism.
+  Honors: The epic's non-reuse success criterion, the recoverable all-or-nothing migration boundary, and the frugal-engineering preference to extend existing allocation state..
 ## Amendment log
 
 - 2026-10-22 · Architectural clarification for feat_010 · Required backlog migration to initialize or advance affected durable allocation high-water marks within the same recoverable graph write, preventing reuse of migrated IDs after later deletion.
