@@ -437,6 +437,12 @@ def _run_queue_delivery_locked(
         new_events, new_offset = read_events(work_id, before, root=repo)
         if not new_events:
             return
+        from cascade.workspace.queue_observability import (
+            note_batch_delivered,
+            warn_duplicate_kickoff_if_needed,
+        )
+
+        warn_duplicate_kickoff_if_needed(work_id, new_offset, root=repo)
         staged = _staged_messages_from_queue_events(new_events, repo)
         after = _commit_classified_queue_batch(
             work_id,
@@ -449,6 +455,7 @@ def _run_queue_delivery_locked(
         )
         if after <= before:
             return
+        note_batch_delivered(work_id, after)
         _log_queue_delivery(
             work_id,
             cursor_before=before,
