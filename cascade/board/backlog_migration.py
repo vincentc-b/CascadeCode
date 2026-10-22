@@ -1,16 +1,22 @@
-"""Preflight planning for backlog epic hierarchical ID migration (feat_010 / task_021)."""
+"""Backlog epic hierarchical ID migration: plan (task_021) and apply (task_022)."""
 
 from __future__ import annotations
 
 import json
 import re
+from collections import defaultdict
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
-from cascade.board.errors import BoardError, SchemaError
+from cascade.board.errors import BoardError, GitError, SchemaError
+from cascade.board.gitutil import commit_paths, has_git
+from cascade.board.lock import process_lock
+from cascade.board.parse import parse_doc, render_doc
 from cascade.board.paths import column_for_status, infer_repo_root, slugify
 from cascade.board.store import list_board, read_doc
-from cascade.board.types import BoardIndex, WorkId, WorkMeta, WorkTier
+from cascade.board.types import BoardIndex, WorkDoc, WorkId, WorkMeta, WorkTier
+from cascade.board.validate import validate_doc
 from cascade.board.work_ids import (
     feature_id_key,
     format_hierarchical_epic_id,
@@ -43,6 +49,10 @@ class BacklogMigrationValidationError(BoardError):
     def __init__(self, errors: list[str]) -> None:
         self.errors = tuple(sorted(set(errors)))
         super().__init__("; ".join(self.errors))
+
+
+class BacklogMigrationApplyError(BoardError):
+    """Migration apply failed after preflight; board bytes were restored when possible."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +158,258 @@ def build_backlog_migration_plan(*, root: Path) -> BacklogMigrationPlan:
         sidecar_renames=sidecar_renames,
         runtime_checks=_runtime_check_labels(),
     )
+
+
+def apply_backlog_migration(*, root: Path) -> str | None:
+    """Apply a validated migration plan in one locked commit, rolling back on failure."""
+
+    with process_lock:
+        return _apply_backlog_migration(Path(root).resolve())
+
+
+def _apply_backlog_migration(repo: Path) -> str | None:
+    plan = build_backlog_migration_plan(root=repo)
+    if not plan.reference_updates and not plan.path_updates and not plan.sidecar_renames:
+        return None
+
+    mapping = dict(plan.id_mapping)
+    path_by_old = {update.old_path.resolve(): update.new_path.resolve() for update in plan.path_updates}
+    sidecar_by_old = {
+        update.old_path.resolve(): update.new_path.resolve() for update in plan.sidecar_renames
+    }
+
+    refs_by_path: dict[Path, list[ReferenceUpdate]] = defaultdict(list)
+    for row in plan.reference_updates:
+        refs_by_path[row.path.resolve()].append(row)
+
+    md_paths = sorted(path for path in refs_by_path if path.suffix == ".md")
+    sidecar_paths = sorted(path for path in refs_by_path if path.suffix == ".jsonl")
+
+    staged_docs: dict[WorkId, WorkDoc] = {}
+    staged_sidecars: dict[Path, str] = {}
+    delete_after_write: list[Path] = []
+
+    for path in md_paths:
+        doc = parse_doc(path)
+        rows = refs_by_path[path]
+        _apply_meta_reference_rows(doc, rows)
+        body_rows = [row for row in rows if row.location.startswith("body:")]
+        if body_rows:
+            doc.body = _apply_body_reference_rows(doc.body, body_rows)
+        new_path = path_by_old.get(path.resolve(), path.resolve())
+        doc.meta.path = new_path
+        doc.meta.updated = date.today()
+        staged_docs[doc.meta.id] = doc
+        if new_path != path.resolve():
+            delete_after_write.append(path.resolve())
+
+    for path in sidecar_paths:
+        rows = refs_by_path[path]
+        staged_sidecars[path.resolve()] = _apply_sidecar_reference_rows(path, rows)
+        new_path = sidecar_by_old.get(path.resolve())
+        if new_path is not None and new_path != path.resolve():
+            staged_sidecars[new_path] = staged_sidecars.pop(path.resolve())
+            delete_after_write.append(path.resolve())
+
+    for update in plan.sidecar_renames:
+        old_path = update.old_path.resolve()
+        new_path = update.new_path.resolve()
+        if new_path in staged_sidecars or not old_path.is_file():
+            continue
+        staged_sidecars[new_path] = old_path.read_text(encoding="utf-8")
+        if new_path != old_path:
+            delete_after_write.append(old_path)
+
+    board = list_board(repo)
+    projected = _project_board_after_migration(board, staged_docs, mapping)
+    for doc in staged_docs.values():
+        try:
+            validate_doc(doc, projected)
+        except (SchemaError, BoardError) as exc:
+            raise BacklogMigrationApplyError(str(exc)) from exc
+
+    snapshot_paths = _migration_snapshot_paths(
+        repo,
+        md_paths,
+        sidecar_paths,
+        plan.path_updates,
+        plan.sidecar_renames,
+        staged_docs,
+        staged_sidecars,
+    )
+    written_paths: set[Path] = set()
+
+    try:
+        for doc in staged_docs.values():
+            target = doc.meta.path.resolve()
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(render_doc(doc), encoding="utf-8")
+            written_paths.add(target)
+        for path, text in staged_sidecars.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            written_paths.add(path.resolve())
+        for old_path in delete_after_write:
+            old_path.unlink(missing_ok=True)
+        from cascade.workspace.integration_worktree import invalidate_merged_board, locate_trunk
+
+        invalidate_merged_board(locate_trunk(repo))
+        commit_set = set(written_paths) | set(delete_after_write)
+        sha = commit_paths(
+            repo,
+            sorted(commit_set),
+            "docs: backlog epic hierarchical id migration",
+        )
+    except Exception as exc:
+        _restore_migration_snapshot(snapshot_paths)
+        from cascade.workspace.integration_worktree import invalidate_merged_board, locate_trunk
+
+        invalidate_merged_board(locate_trunk(repo))
+        if isinstance(exc, (GitError, BacklogMigrationApplyError)):
+            raise
+        raise BacklogMigrationApplyError(str(exc)) from exc
+
+    if not has_git(repo):
+        return None
+    return sha
+
+
+def _migration_snapshot_paths(
+    repo: Path,
+    md_paths: list[Path],
+    sidecar_paths: list[Path],
+    path_updates: tuple[PathUpdate, ...],
+    sidecar_renames: tuple[PathUpdate, ...],
+    staged_docs: dict[WorkId, WorkDoc],
+    staged_sidecars: dict[Path, str],
+) -> dict[Path, tuple[bool, bytes | None]]:
+    candidates: set[Path] = set()
+    for path in md_paths + sidecar_paths:
+        candidates.add(path.resolve())
+    for update in path_updates + sidecar_renames:
+        candidates.add(update.old_path.resolve())
+        candidates.add(update.new_path.resolve())
+    for doc in staged_docs.values():
+        candidates.add(doc.meta.path.resolve())
+    for path in staged_sidecars:
+        candidates.add(path.resolve())
+    return _snapshot_paths(candidates)
+
+
+def _snapshot_paths(paths: set[Path]) -> dict[Path, tuple[bool, bytes | None]]:
+    snapshot: dict[Path, tuple[bool, bytes | None]] = {}
+    for path in sorted(paths):
+        resolved = path.resolve()
+        if resolved.is_file():
+            snapshot[resolved] = (True, resolved.read_bytes())
+        else:
+            snapshot[resolved] = (False, None)
+    return snapshot
+
+
+def _restore_migration_snapshot(snapshot: dict[Path, tuple[bool, bytes | None]]) -> None:
+    for path in sorted(snapshot, reverse=True):
+        existed, data = snapshot[path]
+        if existed:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if data is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(data)
+        else:
+            path.unlink(missing_ok=True)
+
+
+def _project_board_after_migration(
+    board: BoardIndex,
+    staged_docs: dict[WorkId, WorkDoc],
+    mapping: dict[WorkId, WorkId],
+) -> BoardIndex:
+    nodes = dict(board.by_id)
+    for old_id, new_id in sorted(mapping.items()):
+        if old_id == new_id or old_id not in nodes:
+            continue
+        nodes.pop(old_id, None)
+    for doc in staged_docs.values():
+        nodes[doc.meta.id] = doc.meta
+    return BoardIndex(by_id=nodes)
+
+
+def _apply_meta_reference_rows(doc: WorkDoc, rows: list[ReferenceUpdate]) -> None:
+    for row in rows:
+        if row.location == "meta.id":
+            doc.meta.id = row.new_value
+        elif row.location == "meta.parent":
+            doc.meta.parent = row.new_value
+        elif row.location.startswith("meta.children["):
+            index = int(row.location[len("meta.children[") : -1])
+            doc.meta.children[index] = row.new_value
+        elif row.location.startswith("meta.depends_on["):
+            index = int(row.location[len("meta.depends_on[") : -1])
+            doc.meta.depends_on[index] = row.new_value
+        elif row.location.startswith("meta.cites["):
+            index = int(row.location[len("meta.cites[") : -1])
+            doc.meta.cites[index] = row.new_value
+
+
+def _apply_body_reference_rows(body: str, rows: list[ReferenceUpdate]) -> str:
+    if not rows:
+        return body
+    lines = body.splitlines(keepends=True)
+    if not lines:
+        lines = [""]
+    for row in sorted(rows, key=lambda item: (item.location, item.old_value)):
+        line_no = int(row.location.split(":")[1]) - 1
+        if line_no < 0 or line_no >= len(lines):
+            raise BacklogMigrationApplyError(f"body line out of range: {row.location}")
+        line = lines[line_no]
+        if row.old_value not in line:
+            raise BacklogMigrationApplyError(
+                f"missing expected token {row.old_value!r} at {row.location}"
+            )
+        lines[line_no] = line.replace(row.old_value, row.new_value, 1)
+    return "".join(lines)
+
+
+def _apply_sidecar_reference_rows(path: Path, rows: list[ReferenceUpdate]) -> str:
+    text = path.read_text(encoding="utf-8")
+    if not rows:
+        return text
+    lines = text.splitlines(keepends=True)
+    if not lines and text:
+        lines = [text]
+    by_line: dict[int, list[ReferenceUpdate]] = defaultdict(list)
+    for row in rows:
+        parts = row.location.split(":")
+        if len(parts) < 3 or parts[0] != "sidecar":
+            continue
+        by_line[int(parts[1])].append(row)
+
+    for line_no, line_rows in sorted(by_line.items()):
+        index = line_no - 1
+        if index < 0 or index >= len(lines):
+            raise BacklogMigrationApplyError(f"sidecar line out of range: {line_rows[0].location}")
+        raw = lines[index].strip()
+        if not raw:
+            continue
+        payload = json.loads(raw)
+        for row in line_rows:
+            field = row.location.split(":", 2)[2]
+            if field == "doc_id":
+                payload["doc_id"] = row.new_value
+            elif field == "parent":
+                payload["parent"] = row.new_value
+            elif field.startswith("blocks[") and field.endswith("]"):
+                block_index = int(field[len("blocks[") : -1])
+                blocks = payload.get("blocks")
+                if not isinstance(blocks, list):
+                    raise BacklogMigrationApplyError(f"sidecar blocks missing at {row.location}")
+                blocks[block_index] = row.new_value
+            else:
+                raise BacklogMigrationApplyError(f"unsupported sidecar field {field!r}")
+        newline = "\n" if lines[index].endswith("\n") else ""
+        lines[index] = json.dumps(payload, separators=(",", ":")) + newline
+    return "".join(lines)
 
 
 def _discover_scoped_ids(board: BoardIndex, errors: list[str]) -> frozenset[WorkId]:

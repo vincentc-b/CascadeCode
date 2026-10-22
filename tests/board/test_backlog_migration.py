@@ -8,9 +8,10 @@ import pytest
 
 from cascade.board.backlog_migration import (
     BacklogMigrationValidationError,
+    apply_backlog_migration,
     build_backlog_migration_plan,
 )
-from cascade.board.store import pin_parent, read_doc, write_doc
+from cascade.board.store import list_board, pin_parent, read_doc, write_doc
 from tests.support import TASK_BODY, add_doc, make_repo
 
 
@@ -208,6 +209,64 @@ def test_enumerates_body_reference_updates(tmp_path: Path) -> None:
 
     assert any(row.location == "meta.depends_on[0]" for row in plan.reference_updates)
     assert any(row.location.startswith("body:") for row in plan.reference_updates)
+
+
+def test_apply_migrates_legacy_backlog_tree(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_004", title="Active epic", tier="epic", status="active")
+    add_doc(root, id="epic_002", title="Backlog epic", tier="epic", status="backlog")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Legacy feature",
+        tier="feature",
+        status="backlog",
+        parent="epic_002",
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Legacy task",
+        tier="task",
+        status="backlog",
+        parent="feat_001",
+    )
+    pin_parent("feat_001", "epic_002", root=root)
+    pin_parent("task_001", "feat_001", root=root)
+
+    apply_backlog_migration(root=root)
+
+    board = list_board(root)
+    assert "feat_001" not in board.by_id
+    assert "task_001" not in board.by_id
+    assert board.by_id["feat_002_001"].parent == "epic_002"
+    task = read_doc("task_002_001_001", root=root)
+    assert task.meta.parent == "feat_002_001"
+    assert "epic_004" in board.by_id
+
+
+def test_apply_is_noop_without_eligible_renames(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_002", title="Backlog epic", tier="epic", status="backlog")
+    add_doc(
+        root,
+        id="feat_002_001",
+        title="Already hierarchical",
+        tier="feature",
+        status="backlog",
+        parent="epic_002",
+    )
+    pin_parent("feat_002_001", "epic_002", root=root)
+    before = {
+        path: path.read_bytes()
+        for path in root.rglob("*.md")
+        if path.is_file()
+    }
+
+    assert apply_backlog_migration(root=root) is None
+
+    after = {path: path.read_bytes() for path in before}
+    assert before == after
 
 
 def test_rejects_event_queue_runtime_artifact(tmp_path: Path) -> None:
