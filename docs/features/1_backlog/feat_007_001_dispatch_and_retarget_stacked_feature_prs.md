@@ -24,10 +24,6 @@ models:
 
 epic_007
 
-## Scope
-
-# Dispatch and retarget stacked feature PRs
-
 ## Intent
 
 Allow an approved feature to begin before its completed predecessor merges, while preserving the declared feature order and making the predecessor's branch the pull request base.
@@ -36,10 +32,10 @@ Allow an approved feature to begin before its completed predecessor merges, whil
 
 - Treat a declared predecessor that is complete but unmerged as eligible for stacking.
 - Dispatch only when every declared predecessor is either merged or complete and stackable.
-- Choose the nearest unmerged predecessor's branch as the new feature pull request base; use the epic's normal integration/base branch when all predecessors are merged.
+- Choose the uniquely nearest unmerged predecessor's branch as the new feature pull request base; use the epic's normal integration/base branch when all predecessors are merged.
 - Preserve the dependency relationship in durable feature/dispatch state so retries and restarts select the same base.
 - Reconcile a stacked pull request after its predecessor merges so its base becomes the normal integration/base branch, relying on GitHub's native retargeting when it occurs and correcting stale state when necessary.
-- Surface a clear blocked reason when the predecessor branch or pull request cannot safely be resolved.
+- Surface a clear blocked reason when the predecessor branch or pull request cannot safely be resolved, including when multiple incomparable completed-but-unmerged predecessors remain.
 
 ## Out of scope
 
@@ -56,8 +52,9 @@ Allow an approved feature to begin before its completed predecessor merges, whil
 3. B is not dispatched while A is implementing, failed, blocked, or otherwise incomplete.
 4. Once A merges, B targets the epic's normal integration/base branch; native GitHub retargeting is accepted, and reconciliation repairs or reports a stale base.
 5. For A → B → C, each newly dispatched feature targets the nearest unmerged predecessor, without skipping an incomplete predecessor.
-6. Dispatch is idempotent: repeated scheduling or reconciliation does not duplicate work or create a second pull request.
-7. Existing non-stacked and first-feature dispatch behavior remains unchanged.
+6. If multiple incomparable completed-but-unmerged predecessors remain, dispatch fails closed with a visible ambiguity reason rather than selecting a base arbitrarily.
+7. Dispatch is idempotent: repeated scheduling or reconciliation does not duplicate work or create a second pull request.
+8. Existing non-stacked and first-feature dispatch behavior remains unchanged.
 
 ## Verification
 
@@ -67,6 +64,7 @@ Prefer focused integration tests around the scheduler/dispatcher and pull-reques
 - incomplete predecessor still blocks;
 - merged predecessor falls back to the normal base;
 - a three-feature chain selects the nearest unmerged predecessor;
+- incomparable completed-but-unmerged fan-in blocks with a visible ambiguity reason;
 - repeated dispatch/reconciliation is idempotent.
 
 Add lower-level tests only where the integration boundary cannot exercise a consequential branch.
