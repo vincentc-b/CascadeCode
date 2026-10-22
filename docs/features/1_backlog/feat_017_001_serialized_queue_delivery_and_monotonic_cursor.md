@@ -2,7 +2,7 @@
 id: feat_017_001
 title: Serialized queue delivery and monotonic cursor
 tier: feature
-status: active
+status: backlog
 parent: epic_017
 children:
 - task_017_001_001
