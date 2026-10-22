@@ -63,7 +63,7 @@ Readers accept both retained legacy identifiers and the new hierarchical identif
 - References must be rewritten by structured identity, never by unrestricted text replacement.
 - User-authored prose mentioning an old ID is not rewritten unless it is a board-owned structured reference.
 - Existing active/completed IDs remain valid inputs; no broad historical renumbering is in scope.
-- The migration must be idempotent, detect target collisions before mutation, and produce an audit mapping.
+- The migration must be idempotent, detect target collisions before mutation, initialize or advance every affected namespace's durable high-water mark to at least the greatest assigned segment, and produce an audit mapping.
 - Tests should concentrate on creation workflows and a representative graph migration; exhaustive unit coverage of trivial format helpers is unnecessary.
 
 ## Core dependencies
@@ -108,7 +108,7 @@ Those local artifacts belong to active execution, while this epic migrates backl
 2. **feat_010 — Backlog epic ID migration** (depends on `feat_009`)
    - Discover backlog epic graphs and generate deterministic old-to-new mappings.
    - Validate collisions, reference coverage, backlog-only status, and absence of local runtime identity artifacts before changing state.
-   - Rewrite board-owned documents, metadata, paths, indexes, cross-work references, and applicable board sidecars in one locked Git commit with full byte-snapshot rollback.
+   - Rewrite board-owned documents, metadata, paths, indexes, cross-work references, applicable board sidecars, and affected durable allocation high-water marks in one locked Git commit with full byte-snapshot rollback.
    - Provide dry-run/audit output and representative end-to-end migration coverage, including injected commit failure and runtime-artifact refusal.
    - Leave active and completed work untouched.
 
@@ -164,6 +164,8 @@ _(none)_
   Rationale: Scanning only currently persisted siblings would reuse the highest identifier after hard deletion, contradicting the approved monotonic non-reuse requirement. A small persisted watermark closes that gap without introducing a new service or general transaction system.
   Honors: The epic success criterion that moved, archived, or deleted work IDs are never reused, and the frugal-engineering preference for the smallest reliable persistence extension..
 ## Amendment log
+
+- 2026-10-22 · Architectural clarification for feat_010 · Required backlog migration to initialize or advance affected durable allocation high-water marks within the same recoverable graph write, preventing reuse of migrated IDs after later deletion.
 
 - 2026-10-22 · Architectural clarification for feat_009 · Required durable per-namespace allocation history and atomic high-water-mark advancement so hard deletion cannot cause ID reuse; added one high-signal deletion/non-reuse integration criterion.
 
