@@ -174,14 +174,21 @@ def test_write_rejects_cycle_without_creating_the_edge(tmp_path: Path) -> None:
     assert read_doc("feat_001", root=root).meta.depends_on == []
 
 
-def test_allocate_id_fills_gaps_and_does_not_reuse(tmp_path: Path) -> None:
+def test_allocate_id_uses_hierarchical_scoping(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="One", tier="epic")
     add_doc(root, id="epic_003", title="Three", tier="epic")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Legacy feature",
+        tier="feature",
+        parent="epic_001",
+    )
     board = list_board(root)
-    assert allocate_id("epic", board) == "epic_002"
     assert allocate_id("epic", board) == "epic_004"
-    assert allocate_id("task", board) == "task_001"
+    assert allocate_id("feature", board, parent_id="epic_001") == "feat_001_002"
+    assert allocate_id("task", board, parent_id="feat_001") == "task_001_000_001"
 
 
 def test_read_doc_at_revision(tmp_path: Path) -> None:

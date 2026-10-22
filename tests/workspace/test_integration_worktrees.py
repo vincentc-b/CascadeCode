@@ -488,9 +488,9 @@ def test_planning_tools_write_into_integration_checkouts(tmp_path: Path) -> None
     _chain(root)
     pin_parent("feat_001", "epic_001", root=doc_filesystem_root("feat_001", trunk=root))
 
-    assert mint_task("Next", feature_id="feat_001", root=root) == "task_002"
+    assert mint_task("Next", feature_id="feat_001", root=root) == "task_001_000_002"
     assert feature_read_doc("epic_001", feature_id="feat_001", root=root).meta.id == "epic_001"
-    assert mint_feature("Sibling", epic_id="epic_001", root=root) == "feat_002"
+    assert mint_feature("Sibling", epic_id="epic_001", root=root) == "feat_001_002"
     for checkout in (
         integration_worktree_path("feature", "feat_001", trunk=root),
         integration_worktree_path("epic", "epic_001", trunk=root),

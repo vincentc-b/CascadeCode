@@ -26,6 +26,14 @@ def reserve_work_id(work_id: WorkId) -> None:
     _reserved_ids.set(frozenset(reserved))
 
 
+def release_work_id(work_id: WorkId) -> None:
+    """Drop an in-process reservation after a failed persist attempt."""
+
+    reserved = set(_reserved_ids.get())
+    reserved.discard(work_id)
+    _reserved_ids.set(frozenset(reserved))
+
+
 def reserved_work_ids() -> frozenset[str]:
     """In-process ids already handed out by an allocator."""
 
