@@ -87,7 +87,7 @@ This is intentionally one feature: none of the individual changes is a useful in
 ## Open questions
 
 - The exact YAML key and UI component names should follow established conventions discovered during implementation; they do not alter the product contract above.
-- If repository metadata is unavailable, preserve the board and omit or disable the history link using the application's established unavailable-link behavior rather than failing the page.
+- If repository metadata is unavailable, preserve the board and keep the history-link affordance visible but disabled using the application's established unavailable-link behavior rather than failing the page.
 
 ## Decision log
 
