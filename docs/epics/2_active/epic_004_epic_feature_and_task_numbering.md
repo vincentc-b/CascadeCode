@@ -48,7 +48,7 @@ Segments are zero-padded to three digits for readable lexical ordering. This epi
 
 Use one canonical work-ID module for formatting, parsing, validation, and next-child allocation. Creation entry points must ask this module for an ID rather than reconstructing numbering rules.
 
-Allocation reads the relevant namespace: all epics for a new epic, direct features for a new feature, and direct tasks for a new task. It selects the next monotonically increasing segment and commits only if the identifier is still free; concurrent collisions retry through the existing persistence boundary.
+Allocation reads the relevant namespace: all epics for a new epic, direct features for a new feature, and direct tasks for a new task. Within the existing board persistence boundary, each namespace also retains an authoritative high-water mark (or equivalent durable allocation history) so a hard-deleted identifier is never reused. Under the board process lock, allocation chooses one above both the persisted maximum and the high-water mark, then persists the new work item and advanced mark atomically; collision detection remains a defensive retry.
 
 Treat backlog migration as a graph rewrite. Build and validate the complete old-to-new mapping first, then rewrite documents, paths, metadata, relationships, dependencies, citations, and board indexes as one recoverable operation. Emit a deterministic dry-run/report so operators can inspect mappings and diagnose conflicts.
 
@@ -58,7 +58,7 @@ Readers accept both retained legacy identifiers and the new hierarchical identif
 
 - Canonical prefixes remain `epic`, `feat`, and `task`; separators are underscores and each numeric segment is three digits.
 - IDs are immutable after creation except for the explicit backlog migration in this epic.
-- Numeric allocation is based on persisted identity, not list position or title.
+- Numeric allocation is based on persisted identity plus durable allocation history, not list position or title; deleting the highest-numbered item must not lower the namespace high-water mark.
 - Parentage encoded in a new ID must match the stored parent link; validation rejects disagreement.
 - References must be rewritten by structured identity, never by unrestricted text replacement.
 - User-authored prose mentioning an old ID is not rewritten unless it is a board-owned structured reference.
@@ -100,10 +100,10 @@ Those local artifacts belong to active execution, while this epic migrates backl
 ## Feature breakdown
 
 1. **feat_009 — Hierarchical ID allocation for new work**
-   - Define the canonical parser/formatter/validator and scoped allocation rules.
+   - Define the canonical parser/formatter/validator, scoped allocation rules, and durable per-namespace high-water marks within the existing board persistence boundary.
    - Integrate all epic, feature, and task creation paths.
    - Preserve read compatibility for retained identifiers.
-   - Add creation-level integration coverage, including separate parent namespaces and collision handling.
+   - Add creation-level integration coverage, including separate parent namespaces, collision handling, and non-reuse after deletion of the highest allocated item.
 
 2. **feat_010 — Backlog epic ID migration** (depends on `feat_009`)
    - Discover backlog epic graphs and generate deterministic old-to-new mappings.
@@ -159,5 +159,7 @@ _(none)_
   Rationale: This records the human-confirmed current-state boundary and avoids speculative integration work. Local checkpoints, queues, worktrees, and branches still exist and can make a backlog rename unsafe.
   Honors: In reply to: cmt_001; the human direction to assume no external integrations persist work IDs, plus the approved backlog-only and atomic-migration constraints..
 ## Amendment log
+
+- 2026-10-22 · Architectural clarification for feat_009 · Required durable per-namespace allocation history and atomic high-water-mark advancement so hard deletion cannot cause ID reuse; added one high-signal deletion/non-reuse integration criterion.
 
 - 2026-10-21 · In reply to: cmt_001 · Adopted the current-state assumption that no external integration persists Cascade work IDs. Removed remote-system preflight and migration requirements while retaining local runtime-artifact refusal and the recoverable graph-write boundary.
