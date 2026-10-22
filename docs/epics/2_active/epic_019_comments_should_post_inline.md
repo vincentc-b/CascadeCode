@@ -78,6 +78,11 @@ The same thread node builder and refresh path must serve both destinations so po
   Chose Limit the epic to plan-viewer placement and presentation; keep comment persistence, APIs, gates, and agent workflows unchanged..
   Rationale: The existing model already stores line anchors and supports all comment lifecycle operations, so backend work would add risk without serving the requested behavior.
   Honors: The request that posted comments appear where they were added..
+
+- `dec_002` · 2026-10-22 · Epic Architect · **Fallback behavior**
+  Chose Keep whole-plan and unplaceable threads in the existing bottom review tray..
+  Rationale: A visible fallback prevents comments from disappearing when an anchor is global, invalid, or cannot be relocated.
+  Honors: Reliable access to every review thread..
 ## Amendment log
 
 _(none)_
