@@ -27,7 +27,7 @@ def reset_automation_memory() -> None:
 
 
 def sync_briefs(root: Path, *, force: bool = False) -> dict[str, object]:
-    """Fast-forward trunk and report newly visible backlog briefs."""
+    """Refresh remote backlog briefs and report newly visible epic ids."""
 
     repo = Path(root).resolve()
     cfg = read_automation_config(repo)
@@ -35,14 +35,31 @@ def sync_briefs(root: Path, *, force: bool = False) -> dict[str, object]:
     key = str(repo)
     if not force and now - _last_remote_poll.get(key, 0.0) < cfg.poll_seconds:
         return {"ok": True, "skipped": True, "new_briefs": []}
-    _last_remote_poll[key] = now
     before = {
         meta.id for meta in merged_board(repo).by_id.values()
         if meta.tier == "epic" and column_for_status(meta.status) == "backlog"
     }
-    from cascade.tracking import fast_forward_trunk
+    trunk_branch = resolve_product_trunk(repo)
+    if cfg.enabled:
+        from cascade.workspace.backlog_snapshot import refresh_remote_backlog_snapshot
 
-    sha = fast_forward_trunk(repo, resolve_product_trunk(repo), remote=cfg.remote)
+        refresh = refresh_remote_backlog_snapshot(
+            repo,
+            remote=cfg.remote,
+            trunk_branch=trunk_branch,
+        )
+        sha = refresh.sha
+        payload_extras: dict[str, object] = {
+            "unchanged": refresh.unchanged,
+            "omitted_ids": list(refresh.omitted_ids),
+            "diagnostics": list(refresh.diagnostics),
+        }
+    else:
+        from cascade.tracking import fast_forward_trunk
+
+        sha = fast_forward_trunk(repo, trunk_branch, remote=cfg.remote)
+        payload_extras = {}
+    _last_remote_poll[key] = now
     after = {
         meta.id for meta in merged_board(repo).by_id.values()
         if meta.tier == "epic" and column_for_status(meta.status) == "backlog"
@@ -63,7 +80,13 @@ def sync_briefs(root: Path, *, force: bool = False) -> dict[str, object]:
             ),
             root=repo,
         )
-    return {"ok": True, "skipped": False, "sha": sha, "new_briefs": added}
+    return {
+        "ok": True,
+        "skipped": False,
+        "sha": sha,
+        "new_briefs": added,
+        **payload_extras,
+    }
 
 
 def maybe_sync_briefs(root: Path) -> None:
