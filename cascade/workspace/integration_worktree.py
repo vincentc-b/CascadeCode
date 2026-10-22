@@ -602,6 +602,15 @@ def _merged_board_uncached(trunk: Path) -> BoardIndex:
             current = by_id.get(work_id)
             if current is None or _meta_preference(meta) > _meta_preference(current):
                 by_id[work_id] = meta
+    from cascade.workspace.backlog_snapshot import read_provenance, snapshot_board
+
+    if read_provenance(trunk) is not None:
+        for work_id, meta in snapshot_board(trunk).by_id.items():
+            if meta.tier != "epic" or meta.path.parent.name != "1_backlog":
+                continue
+            if work_id in by_id:
+                continue
+            by_id[work_id] = meta
     return BoardIndex(by_id=by_id)
 
 
