@@ -114,6 +114,7 @@ def test_human_comment_watchdog_delivery_no_agent_or_resolve_kickoff(
     install_kickoff(root)
     _seed_active_epic(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    assert wait_for_background_kickoffs(timeout=15)
     run_role_mock.reset_mock()
 
     root_id = comment(
@@ -125,6 +126,7 @@ def test_human_comment_watchdog_delivery_no_agent_or_resolve_kickoff(
         blocking=True,
     )
     deliver_queue_kickoffs(root)
+    assert wait_for_background_kickoffs(timeout=15)
     turns_after_human = run_role_mock.await_count
     assert turns_after_human >= 1
 
@@ -136,10 +138,12 @@ def test_human_comment_watchdog_delivery_no_agent_or_resolve_kickoff(
         root=root,
     )
     deliver_queue_kickoffs(root)
+    assert wait_for_background_kickoffs(timeout=15)
     assert run_role_mock.await_count == turns_after_human
 
     resolve_comment("epic_001", root_id, author="human", root=root)
     deliver_queue_kickoffs(root)
+    assert wait_for_background_kickoffs(timeout=15)
     assert run_role_mock.await_count == turns_after_human
 
 
@@ -155,6 +159,7 @@ def test_http_post_then_watchdog_tick_single_kickoff(
     install_kickoff(root)
     _seed_active_epic(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    assert wait_for_background_kickoffs(timeout=15)
     run_role_mock.reset_mock()
 
     port = _free_port()
@@ -206,6 +211,7 @@ def test_non_comment_queue_event_still_kickoffs(
     install_kickoff(root)
     _seed_active_epic(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    assert wait_for_background_kickoffs(timeout=15)
     run_role_mock.reset_mock()
 
     append_event(
@@ -219,4 +225,5 @@ def test_non_comment_queue_event_still_kickoffs(
         root=root,
     )
     deliver_queue_kickoffs(root)
+    assert wait_for_background_kickoffs(timeout=15)
     assert run_role_mock.await_count >= 1

@@ -12,6 +12,7 @@ from cascade.feature.checkpoint import get_checkpointer, thread_config
 from cascade.feature.registry import feature_tools
 from cascade.feature.state import FeatureGraphState
 from cascade.watchdog.events import read_events
+from cascade.watchdog.queue_cursor import resolve_last_queue_offset
 from cascade.watchdog.model_resolve import ResolvedBackend
 
 _graph_cache: dict[tuple[str, str], object] = {}
@@ -58,7 +59,9 @@ def seed_feature_role_models(
     if not snapshot.values:
         update["feature_id"] = feature_id
         update["messages"] = []
-        update["last_queue_offset"] = 0
+        update["last_queue_offset"] = resolve_last_queue_offset(
+            feature_id, current=0, proposed=0, root=root
+        )
     graph.update_state(config, update)
 
 
@@ -130,7 +133,13 @@ def ingest_queue(
         if not values:
             graph.update_state(
                 config,
-                {"feature_id": feature_id, "messages": [], "last_queue_offset": offset},
+                {
+                    "feature_id": feature_id,
+                    "messages": [],
+                    "last_queue_offset": resolve_last_queue_offset(
+                        feature_id, current=0, proposed=offset, root=queue_root or root
+                    ),
+                },
             )
             return _state_values(graph, config)
         return values  # type: ignore[return-value]
@@ -138,7 +147,9 @@ def ingest_queue(
     event_messages = [_event_message(event) for event in events]
     update: FeatureGraphState = {
         "messages": event_messages,
-        "last_queue_offset": new_offset,
+        "last_queue_offset": resolve_last_queue_offset(
+            feature_id, current=offset, proposed=new_offset, root=queue_root or root
+        ),
     }
     if not values:
         update["feature_id"] = feature_id
@@ -160,7 +171,13 @@ def invoke_tool(feature_id: str, name: str, args: dict, *, root: Path) -> object
     if not snapshot.values:
         graph.update_state(
             config,
-            {"feature_id": feature_id, "messages": [], "last_queue_offset": 0},
+            {
+                "feature_id": feature_id,
+                "messages": [],
+                "last_queue_offset": resolve_last_queue_offset(
+                    feature_id, current=0, proposed=0, root=root
+                ),
+            },
         )
     tool_message = {
         "role": "tool",

@@ -22,6 +22,7 @@ from cascade.task.registry import task_tools
 from cascade.task.state import TaskGraphState
 from cascade.task.swe_turn import RunRoleFn, SweTurnResult
 from cascade.watchdog.events import read_events
+from cascade.watchdog.queue_cursor import resolve_last_queue_offset
 from cascade.watchdog.model_resolve import ResolvedBackend
 
 _graph_cache: dict[tuple[str, str], object] = {}
@@ -66,7 +67,7 @@ def seed_task_role_models(
     }
     snapshot = graph.get_state(config)
     if not snapshot.values:
-        update.update(_empty_state(task_id, feature_id, 0))
+        update.update(_empty_state(task_id, feature_id, 0, root=root))
     graph.update_state(config, update)
 
 
@@ -151,19 +152,21 @@ def ingest_queue(
         if not values:
             graph.update_state(
                 config,
-                _empty_state(task_id, feature_id, offset),
+                _empty_state(task_id, feature_id, offset, root=queue_root or root),
             )
             return _state_values(graph, config)
         return values  # type: ignore[return-value]
 
     event_messages = [_event_message(event) for event in events]
     if not values:
-        update = _empty_state(task_id, feature_id, new_offset)
+        update = _empty_state(task_id, feature_id, new_offset, root=queue_root or root)
         update["messages"] = event_messages
     else:
         update = {
             "messages": event_messages,
-            "last_queue_offset": new_offset,
+            "last_queue_offset": resolve_last_queue_offset(
+                task_id, current=offset, proposed=new_offset, root=queue_root or root
+            ),
         }
     graph.update_state(config, update)
     return _state_values(graph, config)
@@ -229,7 +232,7 @@ def _record_tool_message(
     config = thread_config(task_id)
     snapshot = graph.get_state(config)
     if not snapshot.values:
-        graph.update_state(config, _empty_state(task_id, feature_id, 0))
+        graph.update_state(config, _empty_state(task_id, feature_id, 0, root=root))
     tool_message = {
         "role": "tool",
         "name": name,
@@ -421,12 +424,24 @@ def _tool_content(result: object) -> str:
         return str(result)
 
 
-def _empty_state(task_id: str, feature_id: str | None, offset: int) -> TaskGraphState:
+def _empty_state(
+    task_id: str,
+    feature_id: str | None,
+    offset: int,
+    *,
+    root: Path,
+    current_offset: int = 0,
+) -> TaskGraphState:
     return {
         "task_id": task_id,
         "feature_id": feature_id or "",
         "messages": [],
-        "last_queue_offset": offset,
+        "last_queue_offset": resolve_last_queue_offset(
+            task_id,
+            current=current_offset,
+            proposed=offset,
+            root=root,
+        ),
         "skill_playbooks": [],
     }
 
@@ -435,7 +450,7 @@ def _state_values(graph, config: dict) -> TaskGraphState:
     values = graph.get_state(config).values
     if not values:
         task_id = config["configurable"]["thread_id"]
-        return _empty_state(task_id, None, 0)
+        return _empty_state(task_id, None, 0, root=_repo_for_state(task_id))
     playbooks = values.get("skill_playbooks")
     if playbooks is None:
         values = {**values, "skill_playbooks": []}

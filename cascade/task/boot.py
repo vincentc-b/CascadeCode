@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cascade.board.store import read_doc
-from cascade.task.graph import ingest_queue, seed_task_role_models
+from cascade.task.graph import seed_task_role_models
 from cascade.watchdog.events import append_event
 from cascade.watchdog.hooks import register_boot_hook
 from cascade.watchdog.config import ConfigError
@@ -98,7 +98,6 @@ def boot_task(work_id: str) -> None:
         ),
         root=_boot_root,
     )
-    ingest_queue(work_id, root=_boot_root, feature_id=feature_id)
 
 
 def install_task_boot_hook(root: Path) -> None:

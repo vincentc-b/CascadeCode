@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cascade.board.store import pin_parent, read_doc
-from cascade.feature.graph import ingest_queue, seed_feature_role_models
+from cascade.feature.graph import seed_feature_role_models
 from cascade.watchdog.boot_model import toast_model_config_failure
 from cascade.watchdog.config import ConfigError
 from cascade.watchdog.hooks import register_boot_hook
@@ -54,7 +54,6 @@ def boot_feature(work_id: str) -> None:
         architect=architect,
         root=_boot_root,
     )
-    ingest_queue(work_id, root=_boot_root)
 
 
 def install_feature_boot_hook(root: Path) -> None:
