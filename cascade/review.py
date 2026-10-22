@@ -501,3 +501,37 @@ def _record_to_mr(record: dict[str, object]) -> MergeRequest:
         target_branch=str(record["target_branch"]),
         draft=bool(record.get("draft", True)),
     )
+
+
+def live_merge_request_target_branch(record: dict[str, object], *, root: Path) -> str | None:
+    """Read the forge-reported PR/MR base branch without mutating durable state."""
+
+    url = str(record.get("url") or "").strip()
+    if not url:
+        return None
+    trunk = locate_trunk(root)
+    try:
+        mr = _record_to_mr(record)
+        snapshot = merge_request_snapshot(trunk, mr)
+    except (GitError, ValueError, KeyError):
+        return None
+    live = str(snapshot.get("target_branch") or "").strip()
+    return live or None
+
+
+def persist_review_target_branch(
+    feature_id: str, target_branch: str, *, root: Path
+) -> None:
+    """Mirror a verified forge base into the durable review registry."""
+
+    trunk = locate_trunk(root)
+    state = _load(trunk)
+    record = state.get(feature_id)
+    if not isinstance(record, dict):
+        return
+    if str(record.get("target_branch") or "") == target_branch:
+        return
+    updated = dict(record)
+    updated["target_branch"] = target_branch
+    state[feature_id] = updated
+    _save(trunk, state)

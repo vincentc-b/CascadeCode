@@ -8,7 +8,11 @@ from pathlib import Path
 
 from cascade.board.types import BoardIndex, WorkMeta
 from cascade.war_room.room_settings import effective_stacked_pr_enabled
-from cascade.workspace.integration_worktree import integration_branch, locate_trunk
+from cascade.workspace.integration_worktree import (
+    integration_branch,
+    locate_trunk,
+    merged_board,
+)
 from cascade.watchdog.lock import process_lock
 
 
@@ -278,3 +282,142 @@ def _predecessor_head_branch(predecessor_id: str, *, root: Path) -> str | None:
         return None
     branch = str(record.get("source_branch") or "").strip()
     return branch or None
+
+
+def _dispatch_record(trunk: Path, feature_id: str) -> dict[str, object] | None:
+    record = _load(trunk).get(feature_id)
+    return dict(record) if isinstance(record, dict) else None
+
+
+def _set_dispatch_record(trunk: Path, feature_id: str, record: dict[str, object]) -> None:
+    with process_lock:
+        features = _load(trunk)
+        features[feature_id] = record
+        _save(trunk, features)
+
+
+def _predecessor_review_merged(predecessor_id: str, *, root: Path) -> bool:
+    from cascade.review import review_record_for_feature
+
+    record = review_record_for_feature(predecessor_id, root=root)
+    if record is None:
+        return False
+    return bool(record.get("closed"))
+
+
+def feature_stacked_dispatch_view(feature_id: str, *, root: Path) -> dict[str, object] | None:
+    """Operator-facing stacked dispatch and native-retarget reconciliation state."""
+
+    trunk = locate_trunk(root)
+    record = _dispatch_record(trunk, feature_id)
+    if record is None:
+        return None
+    base = str(record.get("base_branch") or "").strip()
+    if not base:
+        return None
+    predecessor = record.get("predecessor_id")
+    pred_id = str(predecessor).strip() if isinstance(predecessor, str) and predecessor else None
+    retarget = record.get("retarget")
+    view: dict[str, object] = {
+        "base_branch": base,
+        "predecessor_id": pred_id,
+    }
+    if isinstance(retarget, dict):
+        state = str(retarget.get("state") or "").strip()
+        if state:
+            view["retarget_state"] = state
+        expected = str(retarget.get("expected_base") or "").strip()
+        actual = str(retarget.get("actual_base") or "").strip()
+        if expected:
+            view["retarget_expected_base"] = expected
+        if actual:
+            view["retarget_actual_base"] = actual
+    return view
+
+
+def reconcile_stacked_native_retargeting(root: Path) -> dict[str, list[str]]:
+    """Verify forge-native base retargeting after a stacked predecessor merges.
+
+    Does not edit pull requests on the provider. Updates durable dispatch state
+    and local review registry only when the live PR base matches the epic line.
+    """
+
+    trunk = locate_trunk(root)
+    board = merged_board(trunk)
+    reconciled: list[str] = []
+    stale: list[str] = []
+    blocked: list[str] = []
+    from cascade.review import (
+        live_merge_request_target_branch,
+        persist_review_target_branch,
+        review_record_for_feature,
+    )
+
+    for feature_id, record in list(_load(trunk).items()):
+        predecessor_id = record.get("predecessor_id")
+        if not isinstance(predecessor_id, str) or not predecessor_id.strip():
+            continue
+        predecessor_id = predecessor_id.strip()
+        if not _predecessor_review_merged(predecessor_id, root=trunk):
+            continue
+
+        meta = board.by_id.get(feature_id)
+        epic_id = meta.parent if meta is not None else None
+        if not epic_id:
+            blocked.append(feature_id)
+            record = dict(record)
+            record["retarget"] = {
+                "state": "missing_pr_identity",
+                "expected_base": "",
+                "actual_base": "",
+            }
+            _set_dispatch_record(trunk, feature_id, record)
+            continue
+
+        expected_base = integration_branch("epic", epic_id)
+        review_record = review_record_for_feature(feature_id, root=trunk)
+        if review_record is None or not str(review_record.get("url") or "").strip():
+            blocked.append(feature_id)
+            record = dict(record)
+            record["retarget"] = {
+                "state": "missing_pr_identity",
+                "expected_base": expected_base,
+                "actual_base": "",
+            }
+            _set_dispatch_record(trunk, feature_id, record)
+            continue
+
+        actual_base = live_merge_request_target_branch(review_record, root=trunk)
+        if not actual_base:
+            blocked.append(feature_id)
+            record = dict(record)
+            record["retarget"] = {
+                "state": "missing_pr_identity",
+                "expected_base": expected_base,
+                "actual_base": "",
+            }
+            _set_dispatch_record(trunk, feature_id, record)
+            continue
+
+        if actual_base != expected_base:
+            stale.append(feature_id)
+            record = dict(record)
+            record["retarget"] = {
+                "state": "stale_base",
+                "expected_base": expected_base,
+                "actual_base": actual_base,
+            }
+            _set_dispatch_record(trunk, feature_id, record)
+            continue
+
+        record = dict(record)
+        record["predecessor_id"] = None
+        record["base_branch"] = expected_base
+        record["retarget"] = {"state": "reconciled", "expected_base": expected_base, "actual_base": actual_base}
+        _set_dispatch_record(trunk, feature_id, record)
+
+        persist_review_target_branch(feature_id, expected_base, root=trunk)
+
+        reconciled.append(feature_id)
+
+    return {"reconciled": reconciled, "stale": stale, "blocked": blocked}

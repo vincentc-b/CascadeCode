@@ -83,6 +83,11 @@ def work_meta_to_dict(
             from cascade.review import feature_review_view
 
             value["review"] = feature_review_view(meta.id, root=root)
+        from cascade.stacked_dispatch import feature_stacked_dispatch_view
+
+        stacked = feature_stacked_dispatch_view(meta.id, root=root)
+        if stacked is not None:
+            value["stacked_dispatch"] = stacked
     return value
 
 
