@@ -2,7 +2,7 @@
 id: epic_007
 title: Stack PRs
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_007_001
