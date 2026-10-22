@@ -85,8 +85,8 @@ def test_task_merge_leaves_open_review_without_feature_completed_event(
     on_task_merged("task_001", root=root)
 
     feature = read_doc("feat_001", root=root)
-    assert feature.meta.status == "completed"
-    assert feature.meta.path.parent.name == "3_completed"
+    assert feature.meta.status == "active"
+    assert feature.meta.path.parent.name == "2_active"
     assert _feature_completed_events("epic_001", root=root) == []
 
 
@@ -97,9 +97,9 @@ def test_tasks_first_then_merged_review_via_poll_reviews(
     _enable_automation(root)
     reset_automation_memory()
     _single_task_feature(root)
-    move_doc("feat_001", "completed", root=root)
     _write_open_review(root, closed=False)
     monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+    move_doc("feat_001", "completed", root=root)
     monkeypatch.setattr(
         "cascade.review.merge_request_snapshot",
         lambda *_args, **_kwargs: {"state": "merged", "comments": []},

@@ -155,25 +155,11 @@ def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
         return result
 
     from cascade.approvals import feature_approved
-    from cascade.review import feature_review_pending
-
     board = merged_board(repo)
     view = compute_boss_view(root=repo)
-    active_feature_parents = {
-        meta.parent
-        for meta in board.by_id.values()
-        if meta.tier == "feature" and meta.path.parent.name == "2_active"
-    }
-    active_feature_parents.update(
-        meta.parent
-        for meta in board.by_id.values()
-        if meta.tier == "feature"
-        and meta.parent
-        and feature_review_pending(meta.id, root=repo)
-    )
     for feature_id in view.dispatchable_features:
         meta = board.by_id.get(feature_id)
-        if meta is None or meta.parent in active_feature_parents:
+        if meta is None:
             continue
         parent = board.by_id.get(meta.parent or "")
         if parent is None or parent.path.parent.name != "2_active":
@@ -183,7 +169,6 @@ def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
         dispatched = dispatch_feature(feature_id, "boss", root=repo)
         if dispatched.ok:
             result["features"].append(feature_id)
-            active_feature_parents.add(meta.parent)
             if meta.parent:
                 append_event(
                     meta.parent,

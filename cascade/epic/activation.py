@@ -143,6 +143,9 @@ def _drop_stale_copies(
             removed.append(path)
     if removed and has_git(board_root):
         commit_paths(board_root, removed, f"docs: drop stale copies of {work_id}")
+        from cascade.workspace.integration_worktree import invalidate_merged_board, locate_trunk
+
+        invalidate_merged_board(locate_trunk(board_root))
 
 
 def _scrub_child_specs(epic_root: Path) -> None:

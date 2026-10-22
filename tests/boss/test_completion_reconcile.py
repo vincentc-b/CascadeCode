@@ -48,8 +48,8 @@ def test_open_merge_request_blocks_terminal_feature_completion(
     reconcile_completion(root)
 
     feature = read_doc("feat_001", root=root)
-    assert feature.meta.status == "completed"
-    assert feature.meta.path.parent.name == "3_completed"
+    assert feature.meta.status == "active"
+    assert feature.meta.path.parent.name == "2_active"
     epic_events, _ = read_events("epic_001", 0, root=root)
     assert not any(event.type == "FeatureCompleted" for event in epic_events)
 
@@ -59,7 +59,6 @@ def test_merged_review_completes_feature_via_reconcile(
 ) -> None:
     root = make_repo(tmp_path, git=False)
     _feature_with_tasks(root)
-    move_doc("feat_001", "completed", root=root)
     state_path = root / ".cascade" / "reviews.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(
@@ -79,6 +78,7 @@ def test_merged_review_completes_feature_via_reconcile(
         encoding="utf-8",
     )
     monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+    move_doc("feat_001", "completed", root=root)
 
     first = reconcile_completion(root)
     assert first["features"] == ["feat_001"]

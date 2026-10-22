@@ -84,6 +84,12 @@ def _state_path(root: Path) -> Path:
     return Path(root) / ".cascade" / "reviews.json"
 
 
+def review_record_for_feature(feature_id: str, *, root: Path) -> dict[str, object] | None:
+    trunk = locate_trunk(root)
+    record = _load(trunk).get(feature_id)
+    return dict(record) if isinstance(record, dict) else None
+
+
 def _load(root: Path) -> dict[str, dict[str, object]]:
     path = _state_path(root)
     if not path.exists():
@@ -236,10 +242,20 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
     doc = read_doc(feature_id, root=entry.path)
     if doc.meta.tier != "feature" or not doc.meta.parent:
         raise NotFound(feature_id)
-    if doc.meta.status != "completed" or doc.meta.path.parent.name != "3_completed":
-        raise GitError(f"{feature_id} must be completed on its source branch before review")
+    ready_for_review = doc.meta.status == "completed" and doc.meta.path.parent.name == "3_completed"
+    if not ready_for_review:
+        if doc.meta.status != "active" or doc.meta.path.parent.name != "2_active":
+            raise GitError(f"{feature_id} must be completed on its source branch before review")
+        from cascade.boss.rollup import _rollup_gates_pass
+
+        if not _rollup_gates_pass(
+            feature_id, doc.body, merged_board(trunk), trunk
+        ):
+            raise GitError(f"{feature_id} is not ready for review publication")
     source = integration_branch("feature", feature_id)
-    target = integration_branch("epic", doc.meta.parent)
+    from cascade.stacked_dispatch import review_target_branch
+
+    target = review_target_branch(feature_id, doc.meta.parent, root=trunk)
     # The target must exist remotely for a stacked feature MR.
     epic_entry = get_integration_worktree(trunk, "epic", doc.meta.parent)
     if epic_entry is None:
@@ -485,3 +501,37 @@ def _record_to_mr(record: dict[str, object]) -> MergeRequest:
         target_branch=str(record["target_branch"]),
         draft=bool(record.get("draft", True)),
     )
+
+
+def live_merge_request_target_branch(record: dict[str, object], *, root: Path) -> str | None:
+    """Read the forge-reported PR/MR base branch without mutating durable state."""
+
+    url = str(record.get("url") or "").strip()
+    if not url:
+        return None
+    trunk = locate_trunk(root)
+    try:
+        mr = _record_to_mr(record)
+        snapshot = merge_request_snapshot(trunk, mr)
+    except (GitError, ValueError, KeyError):
+        return None
+    live = str(snapshot.get("target_branch") or "").strip()
+    return live or None
+
+
+def persist_review_target_branch(
+    feature_id: str, target_branch: str, *, root: Path
+) -> None:
+    """Mirror a verified forge base into the durable review registry."""
+
+    trunk = locate_trunk(root)
+    state = _load(trunk)
+    record = state.get(feature_id)
+    if not isinstance(record, dict):
+        return
+    if str(record.get("target_branch") or "") == target_branch:
+        return
+    updated = dict(record)
+    updated["target_branch"] = target_branch
+    state[feature_id] = updated
+    _save(trunk, state)

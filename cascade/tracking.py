@@ -161,7 +161,7 @@ def merge_request_snapshot(
     if mr.forge == "github":
         args = [
             "gh", "pr", "view", mr.url, "--json",
-            "state,isDraft,comments,reviews,url",
+            "state,isDraft,comments,reviews,url,baseRefName",
         ]
     else:
         args = ["glab", "mr", "view", mr.url, "--output", "json"]
@@ -193,12 +193,19 @@ def merge_request_snapshot(
                 except json.JSONDecodeError:
                     pass
         state = str(raw.get("state") or "").lower()
+        target_branch = str(raw.get("baseRefName") or "").strip()
     else:
         comments = list(raw.get("notes") or raw.get("discussions") or [])
         state = str(raw.get("state") or "").lower()
         if raw.get("merged_at"):
             state = "merged"
-    return {"state": state, "comments": comments, "url": mr.url}
+        target_branch = str(
+            raw.get("target_branch") or raw.get("targetBranch") or ""
+        ).strip()
+    out: dict[str, object] = {"state": state, "comments": comments, "url": mr.url}
+    if target_branch:
+        out["target_branch"] = target_branch
+    return out
 
 
 def reply_to_merge_request(
