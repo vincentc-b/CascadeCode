@@ -18,6 +18,7 @@ provider: codex
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
+plan_approved_at: '2026-10-22T23:55:12.339366+00:00'
 ---
 # Comments should post inline
 
