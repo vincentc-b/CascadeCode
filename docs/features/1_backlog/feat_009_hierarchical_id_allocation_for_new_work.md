@@ -17,6 +17,7 @@ provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-10-22T04:03:15.199633+00:00'
 ---
 # Hierarchical ID allocation for new work
 
