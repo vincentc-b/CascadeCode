@@ -78,24 +78,22 @@ Planning graphs can repeatedly process the same queue events when queue ingestio
 - Existing tests to extend instead of duplicating: `tests/workspace/test_kickoff.py`, `tests/workspace/test_human_comment_kickoff.py`, `tests/watchdog/test_queue.py`, `tests/workspace/test_up.py`.
 
 ## Feature breakdown
-- feat_017_002
 - feat_017_001
+- feat_017_002
 
-1. **Serialized queue delivery and monotonic cursor** (`feat` minted at activation). Move ingestion under the per-graph lock and serial job path, coalesce delivery jobs, one turn per batch with the comment/agent/resolution classification above, a monotonic cursor helper for all three tiers. Regression tests: a queue append during an in-flight turn is ingested exactly once and the cursor ends at EOF; N maintenance ticks on an unchanged queue start zero turns; one human comment yields exactly one turn and one reply; agent reply / `CommentResolved` yields zero turns; event ordering in messages matches queue order. This feature alone stops the loop.
-2. **Restart convergence and stall detection** (depends on 1). Route boot resume and watchdog delivery through the same serialized path so an interrupted turn resumes at most once, a behind-cursor graph from before the fix catches up in one bounded delivery and settles idle, and add the delivery log plus stalled-cursor / duplicate-kickoff warning. Tests: simulated restart with an interrupted checkpoint and pending queue lines (bounded invocations, idle at the end), plus a forced stall that emits exactly one warning.
+1. **feat_017_001 · Serialized queue delivery and monotonic cursor.** Move ingestion under the per-graph lock and serial job path, coalesce delivery jobs, one turn per batch with the comment/agent/resolution classification above, a monotonic cursor helper for all three tiers. Regression tests: a queue append during an in-flight turn is ingested exactly once and the cursor ends at EOF; N maintenance ticks on an unchanged queue start zero turns; one human comment yields exactly one turn and one reply; agent reply / `CommentResolved` yields zero turns; event ordering in messages matches queue order. This feature alone stops the loop.
+2. **feat_017_002 · Restart convergence and stall detection** (depends on feat_017_001). Route boot resume and watchdog delivery through the same serialized path so an interrupted turn resumes at most once, a behind-cursor graph from before the fix catches up in one bounded delivery and settles idle, and add the delivery log plus stalled-cursor / duplicate-kickoff warning. Tests: simulated restart with an interrupted checkpoint and pending queue lines (bounded invocations, idle at the end), plus a forced stall that emits exactly one warning.
 
 Testing stance: prefer a small number of system-level tests with a fake planning-turn runner that counts invocations over per-function unit tests.
 
 ## Open questions
 
-- Risk to retire first (feature 1, first task): write a failing reproduction that runs `ingest_queue` while a fake `graph.invoke` is blocked mid-node, and confirm the checkpoint after the turn has lost the advanced cursor and event messages. If LangGraph does not actually supersede the write, re-check the root cause before building.
+- Risk to retire first (feat_017_001, first task): write a failing reproduction that runs `ingest_queue` while a fake `graph.invoke` is blocked mid-node, and confirm the checkpoint after the turn has lost the advanced cursor and event messages. If LangGraph does not actually supersede the write, re-check the root cause before building.
 - Does holding the per-graph lock during ingestion risk stalling the watchdog? Design answer: the watchdog only submits jobs (`deferred_kickoffs`), so it never waits on the lock; the architect should confirm no synchronous caller (for example `kickoff_graph_queue_event` outside `deferred_kickoffs`) would block.
 
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
-- 2026-10-22 · epic_manager · Ingestion moves into the serialized per-graph job; the watchdog never writes graph checkpoints directly.
-- 2026-10-22 · epic_manager · Two features: the core serialized delivery fix, then restart convergence plus stall detection. Observability is limited to logs and one War Room note.
 
 - `dec_001` · 2026-10-22 · Epic Manager · **Macro-architecture**
   Chose Queue ingestion (read events, append messages, advance last_queue_offset) runs only inside the serialized per-graph kickoff job under _graph_lock; the watchdog only detects a queue ahead of the cursor and submits a coalesced delivery job..
@@ -106,6 +104,7 @@ Testing stance: prefer a small number of system-level tests with a fake planning
   Chose Two features: (1) serialized queue delivery and monotonic cursor with one turn per batch across all tiers; (2) restart convergence and stall/duplicate-kickoff detection, which depends on 1. Observability is limited to structured logs and one deduplicated War Room note per incident. Tests are a small set of system-level tests using a counting fake turn runner..
   Rationale: Feature 1 alone stops the loop and is the smallest shippable slice. Restart and observability build on the same serialized path, so they are sequenced after it. Dashboards and broader watchdog work are cut as scope creep.
   Honors: Cross-module constraint: keep the fix focused; frugal testing.
+
 ## Amendment log
 
 _(none)_
