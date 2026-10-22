@@ -23,11 +23,13 @@ models:
 
 ## Intent
 
-Shorten epic lead time by allowing the next approved feature in a linear dependency stack to start after its single ordered predecessor is complete, even when that predecessor's pull request has not merged. The resulting pull requests form a linear stack and remain reviewable and mergeable in feature order.
+Shorten epic lead time by allowing the next approved feature in a linear dependency stack to start after its single ordered predecessor is complete, even when that predecessor's pull request has not merged. This behavior is opt-in per Cascade room through a persisted slider switch that is off by default. The resulting pull requests form a linear stack and remain reviewable and mergeable in feature order.
 
 ### Success criteria
 
-- An approved feature is dispatched when its single declared predecessor is either merged or complete and safe to stack.
+- Each Cascade room exposes a persisted stacked-PR slider that is off by default; enabling it opts that room into stacked dispatch.
+- When the room setting is disabled, dispatch behavior remains unchanged and downstream features wait for predecessor merge.
+- When the room setting is enabled, an approved feature is dispatched when its single declared predecessor is either merged or complete and safe to stack.
 - A stacked feature pull request targets its completed-but-unmerged predecessor's branch.
 - A feature cannot enter the completed state until a durable feature-to-pull-request link has been populated.
 - An incomplete, failed, blocked, unapproved, or unresolved predecessor still prevents downstream dispatch.
@@ -37,14 +39,16 @@ Shorten epic lead time by allowing the next approved feature in a linear depende
 
 ## Macro-architecture
 
-Use the existing feature dependency graph as the stack definition; do not introduce a second ordering model. This epic supports only linear stacks.
+Use the existing feature dependency graph as the stack definition; do not introduce a second ordering model. This epic supports only linear stacks. Gate the behavior with a persisted room-level setting exposed as a slider in the Cascade room; the setting defaults to disabled.
 
-The scheduler/dispatcher evaluates each approved feature against its single declared predecessor. A merged predecessor satisfies the dependency normally. A complete but unmerged predecessor also satisfies dispatch eligibility, while supplying its head branch as the downstream pull request base. Any other predecessor state remains blocking. Features with dependency fan-in are not eligible for stacked dispatch in this slice.
+The scheduler/dispatcher first reads the room's stacked-PR setting. When disabled, it preserves existing dependency behavior. When enabled, it evaluates each approved feature against its single declared predecessor. A merged predecessor satisfies the dependency normally. A complete but unmerged predecessor also satisfies dispatch eligibility, while supplying its head branch as the downstream pull request base. Any other predecessor state remains blocking. Features with dependency fan-in are not eligible for stacked dispatch in this slice.
 
 Persist the feature-to-pull-request link in project state before allowing a feature to become complete. Persist or derive the selected upstream feature and base branch through the existing durable dispatch/feature state so retries are deterministic. At pull-request creation, the GitHub adapter uses the selected base. When an upstream pull request merges, reconciliation verifies GitHub's native retargeting moved the downstream pull request to the epic's integration/base branch and clearly reports stale state. If native retargeting is not available or reliable, explicit retargeting is deferred to a follow-up feature.
 
 ## Cross-module constraints
 
+- Stacked dispatch is enabled only by an explicit, persisted room-level opt-in; the default is disabled.
+- The Cascade room slider and scheduler must use the same durable setting, and disabling it restores existing dispatch behavior for future eligibility decisions without rewriting already-created pull requests.
 - The feature dependency graph is authoritative for both dispatch order and pull request stacking.
 - This epic supports only linear stacks: a stacked feature has at most one direct predecessor. Dependency fan-in fails closed with a visible unsupported-topology reason.
 - Stacking is permitted only after a predecessor reaches the existing completed state; it must not relax approval, failure, cancellation, or blocking gates.
@@ -56,6 +60,7 @@ Persist the feature-to-pull-request link in project state before allowing a feat
 
 ## Core dependencies
 
+- Existing Cascade room settings persistence and room UI controls.
 - Existing feature dependency and approval state.
 - Existing scheduler/dispatcher eligibility checks.
 - Durable project-state mapping from features to pull requests.
@@ -66,18 +71,19 @@ Persist the feature-to-pull-request link in project state before allowing a feat
 ## Feature breakdown
 
 1. **feat_007_001 — Dispatch and verify native retargeting for linear stacked feature PRs**
-   - Deliver the complete vertical slice: completion-gated feature-to-pull-request linkage, eligibility for a single complete-but-unmerged predecessor, deterministic base selection, pull request creation, post-merge verification of native retargeting, diagnostics, and focused integration coverage.
+   - Deliver the complete vertical slice: persisted room-level opt-in control, completion-gated feature-to-pull-request linkage, eligibility for a single complete-but-unmerged predecessor, deterministic base selection, pull request creation, post-merge verification of native retargeting, diagnostics, and focused integration coverage.
    - No prerequisite feature. This single feature is the smallest independently useful release; splitting scheduler and pull-request behavior would create a nonfunctional intermediate state.
    - Explicit provider-side retargeting is excluded; mint a follow-up feature only if implementation evidence shows native retargeting is unavailable or unreliable.
 
 ## Delivery sequence
 
-1. Map the existing dependency-state, feature-to-pull-request linkage, and pull-request lifecycle boundaries.
-2. Enforce durable pull-request linkage before feature completion.
-3. Implement linear-stack eligibility and deterministic base selection.
-4. Pass the selected base through pull-request creation without changing non-stacked behavior.
-5. Verify native downstream base retargeting after upstream merges and surface stale state.
-6. Verify the two-feature path, a three-feature linear chain, unsupported fan-in, blocking states, missing pull-request linkage, and retry idempotency.
+1. Map the existing room-setting, dependency-state, feature-to-pull-request linkage, and pull-request lifecycle boundaries.
+2. Add the persisted, default-off Cascade room slider and gate stacked dispatch on it.
+3. Enforce durable pull-request linkage before feature completion.
+4. Implement linear-stack eligibility and deterministic base selection.
+5. Pass the selected base through pull-request creation without changing disabled or non-stacked behavior.
+6. Verify native downstream base retargeting after upstream merges and surface stale state.
+7. Verify disabled and enabled settings, persistence, the two-feature path, a three-feature linear chain, unsupported fan-in, blocking states, missing pull-request linkage, and retry idempotency.
 
 ## Open questions
 
