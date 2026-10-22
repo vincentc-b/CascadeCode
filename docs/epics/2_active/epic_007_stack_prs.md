@@ -18,6 +18,7 @@ provider: codex
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
+plan_approved_at: '2026-10-22T17:59:16.312434+00:00'
 ---
 # Stack PRs
 
