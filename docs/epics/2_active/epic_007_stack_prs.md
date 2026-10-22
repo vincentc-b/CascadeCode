@@ -96,6 +96,11 @@ Persist or derive the selected upstream feature and base branch through the exis
   Chose Deliver stack-aware dispatch, pull request base selection, and post-merge reconciliation as one vertical-slice feature..
   Rationale: None of these parts is independently useful; a single feature is the smallest shippable slice and avoids coordination overhead.
   Honors: The core outcome of dispatching approved downstream features before predecessor merge while keeping their pull requests correctly based..
+
+- `dec_004` · 2026-10-22 · Epic Architect · **Architecture**
+  Chose Require a uniquely nearest completed-but-unmerged predecessor for stacking; fail closed on incomparable unmerged dependency fan-in..
+  Rationale: A pull request has exactly one base branch. Selecting arbitrarily among incomparable predecessors would make the declared dependency graph and the actual code ancestry disagree.
+  Honors: The existing dependency graph as the sole ordering model, deterministic retries, visible diagnostics, and fail-closed safety..
 ## Amendment log
 
 _(none)_
