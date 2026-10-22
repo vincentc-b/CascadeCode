@@ -618,7 +618,15 @@ def doc_filesystem_root(work_id: str, *, trunk: Path) -> Path:
     """Return the checkout root that owns ``work_id``'s markdown file."""
 
     meta = _best_meta_for_id(work_id, trunk=trunk)
-    return git_root_for_path(meta.path)
+    path = meta.path.resolve()
+    from cascade.workspace.backlog_snapshot import snapshot_root
+
+    snap = snapshot_root(trunk).resolve()
+    try:
+        path.relative_to(snap)
+    except ValueError:
+        return git_root_for_path(meta.path)
+    return snap
 
 
 def _best_meta_for_id(work_id: str, *, trunk: Path) -> WorkMeta:

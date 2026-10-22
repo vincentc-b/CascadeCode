@@ -7,7 +7,9 @@ import pytest
 
 from cascade.automation import reset_automation_memory, sync_briefs
 from cascade.board.errors import GitError
+from cascade.board.store import read_doc
 from cascade.watchdog.dispatch import activate_epic
+from cascade.workspace.doc_root import read_doc_resolved
 from cascade.workspace.backlog_snapshot import (
     read_provenance,
     refresh_remote_backlog_snapshot,
@@ -255,3 +257,49 @@ def test_activate_snapshot_only_epic_without_trunk_ff(tmp_path: Path, monkeypatc
     epic_wt = get_integration_worktree(root, "epic", "epic_050")
     assert epic_wt is not None
     assert epic_wt.base_sha == provenance.sha
+
+
+def test_snapshot_only_epic_is_readable_from_trunk(tmp_path: Path) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_060", "Readable")
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+
+    doc = read_doc("epic_060", root=root)
+    assert doc.meta.title == "Readable"
+    assert read_doc_resolved("epic_060", root=root).meta.id == "epic_060"
+
+
+def test_merged_board_cache_observes_published_snapshot(tmp_path: Path) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    warm = merged_board(root)
+    assert "epic_070" not in warm.by_id
+
+    _push_remote_brief(upstream, "epic_070", "Cached")
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+    fresh = merged_board(root)
+    assert fresh is not warm
+    assert "epic_070" in fresh.by_id
+
+
+def test_sync_briefs_reports_omitted_conflicts(tmp_path: Path) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_080", "Remote")
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    add_doc(root, id="epic_080", title="Local wins", tier="epic", status="active")
+    _enable_automation(root)
+    reset_automation_memory()
+
+    payload = sync_briefs(root, force=True)
+
+    assert payload["new_briefs"] == []
+    assert payload["omitted_ids"] == ["epic_080"]
+    assert any("epic_080" in item for item in payload["diagnostics"])
+    assert merged_board(root).by_id["epic_080"].title == "Local wins"
