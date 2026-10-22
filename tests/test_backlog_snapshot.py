@@ -14,9 +14,14 @@ from cascade.workspace.backlog_snapshot import (
     read_provenance,
     refresh_remote_backlog_snapshot,
     resolve_epic_brief_base_sha,
+    resolve_validated_epic_activation_sha,
     snapshot_root,
 )
-from cascade.workspace.integration_worktree import merged_board
+from cascade.workspace.integration_worktree import (
+    get_integration_worktree,
+    integration_branch,
+    merged_board,
+)
 from tests.support import add_doc, commit_board, make_repo
 
 
@@ -285,6 +290,119 @@ def test_merged_board_cache_observes_published_snapshot(tmp_path: Path) -> None:
     fresh = merged_board(root)
     assert fresh is not warm
     assert "epic_070" in fresh.by_id
+
+
+def test_activate_snapshot_epic_after_restart_without_refresh(tmp_path: Path, monkeypatch) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_051", "Restart me")
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    (root / "README.md").write_text("local\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "init local"], cwd=root, check=True, capture_output=True)
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+    provenance = read_provenance(root)
+    assert provenance is not None
+
+    monkeypatch.setattr("cascade.watchdog.hooks.invoke_boot", lambda *args, **kwargs: None)
+    monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args, **_kwargs: None)
+
+    result = activate_epic("epic_051", "human", root=root)
+    assert result.ok
+    epic_wt = get_integration_worktree(root, "epic", "epic_051")
+    assert epic_wt is not None
+    assert epic_wt.base_sha == provenance.sha
+
+
+def test_activate_snapshot_epic_uses_provenance_not_local_head(tmp_path: Path, monkeypatch) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_052", "Provenance wins")
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    (root / "README.md").write_text("local\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "local"], cwd=root, check=True, capture_output=True)
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+    provenance = read_provenance(root)
+    assert provenance is not None
+    local_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    assert local_head != provenance.sha
+    assert resolve_validated_epic_activation_sha("epic_052", trunk=root) == provenance.sha
+
+    monkeypatch.setattr("cascade.watchdog.hooks.invoke_boot", lambda *args, **kwargs: None)
+    monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args, **_kwargs: None)
+
+    result = activate_epic("epic_052", "human", root=root)
+    assert result.ok
+    epic_wt = get_integration_worktree(root, "epic", "epic_052")
+    assert epic_wt is not None
+    assert epic_wt.base_sha == provenance.sha
+
+
+def test_activate_refuses_stale_snapshot_provenance(tmp_path: Path, monkeypatch) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_053", "Stale")
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    (root / "README.md").write_text("local\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "init local"], cwd=root, check=True, capture_output=True)
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+
+    good_sha = read_provenance(root).sha  # type: ignore[union-attr]
+    provenance_path = snapshot_root(root) / "provenance.json"
+    raw = provenance_path.read_text(encoding="utf-8")
+    provenance_path.write_text(raw.replace(good_sha, "0" * 40), encoding="utf-8")
+
+    monkeypatch.setattr("cascade.watchdog.hooks.invoke_boot", lambda *args, **kwargs: None)
+    monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args, **_kwargs: None)
+
+    refused = activate_epic("epic_053", "human", root=root)
+    assert refused.ok is False
+    assert refused.reason == "brief_not_on_trunk"
+    assert get_integration_worktree(root, "epic", "epic_053") is None
+
+
+def test_activate_failure_leaves_existing_epic_worktree(tmp_path: Path, monkeypatch) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_054", "Will fail")
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    add_doc(root, id="epic_001", title="Local epic", tier="epic", status="ready_to_plan")
+    commit_board(root, "local epic")
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+
+    monkeypatch.setattr("cascade.watchdog.hooks.invoke_boot", lambda *args, **kwargs: None)
+    monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args, **_kwargs: None)
+
+    assert activate_epic("epic_001", "human", root=root).ok
+    existing = get_integration_worktree(root, "epic", "epic_001")
+    assert existing is not None
+
+    good_sha = read_provenance(root).sha  # type: ignore[union-attr]
+    provenance_path = snapshot_root(root) / "provenance.json"
+    raw = provenance_path.read_text(encoding="utf-8")
+    provenance_path.write_text(raw.replace(good_sha, "0" * 40), encoding="utf-8")
+
+    refused = activate_epic("epic_054", "human", root=root)
+    assert refused.ok is False
+    assert get_integration_worktree(root, "epic", "epic_001") == existing
+    assert _branch_exists(root, integration_branch("epic", "epic_001"))
+
+
+def _branch_exists(root: Path, branch: str) -> bool:
+    result = subprocess.run(
+        ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
+        cwd=root,
+        capture_output=True,
+    )
+    return result.returncode == 0
 
 
 def test_sync_briefs_reports_omitted_conflicts(tmp_path: Path) -> None:

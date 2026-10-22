@@ -99,6 +99,37 @@ def resolve_epic_brief_base_sha(work_id: str, *, trunk: Path) -> str | None:
     return None
 
 
+def is_snapshot_only_epic(work_id: str, *, trunk: Path) -> bool:
+    """True when ``work_id`` is visible only from the managed backlog snapshot."""
+
+    trunk = trunk.resolve()
+    if work_id in list_board(trunk).by_id:
+        return False
+    return work_id in snapshot_board(trunk).by_id
+
+
+def resolve_validated_epic_activation_sha(work_id: str, *, trunk: Path) -> str | None:
+    """Resolve and validate the git revision to cut an epic integration branch from."""
+
+    trunk = trunk.resolve()
+    if is_snapshot_only_epic(work_id, trunk=trunk):
+        provenance = read_provenance(trunk)
+        if provenance is None:
+            return None
+        sha = provenance.sha
+        if not _object_exists(trunk, sha):
+            return None
+        if path_for_work_id(trunk, sha, work_id) is None:
+            return None
+        return sha
+    return resolve_epic_brief_base_sha(work_id, trunk=trunk)
+
+
+def _object_exists(trunk: Path, sha: str) -> bool:
+    result = git_run(["cat-file", "-e", f"{sha}^{{commit}}"], trunk, check=False)
+    return result.returncode == 0
+
+
 def refresh_remote_backlog_snapshot(
     trunk: Path,
     *,
