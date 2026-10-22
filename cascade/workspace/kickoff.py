@@ -14,6 +14,7 @@ from pathlib import Path
 from cascade.board.context import resolve_root
 from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
+from cascade.watchdog.queue_cursor import resolve_last_queue_offset
 from cascade.workspace.types import KickoffReason
 
 _log = logging.getLogger(__name__)
@@ -734,7 +735,9 @@ def _stage_human_message(
         snapshot = graph.get_state(config)
         if not snapshot.values:
             payload["epic_id"] = work_id
-            payload["last_queue_offset"] = 0
+            payload["last_queue_offset"] = resolve_last_queue_offset(
+                work_id, current=0, proposed=0, root=root
+            )
         graph.update_state(config, payload)
         return
     if tier == "feature":
@@ -746,7 +749,9 @@ def _stage_human_message(
         snapshot = graph.get_state(config)
         if not snapshot.values:
             payload["feature_id"] = work_id
-            payload["last_queue_offset"] = 0
+            payload["last_queue_offset"] = resolve_last_queue_offset(
+                work_id, current=0, proposed=0, root=root
+            )
         graph.update_state(config, payload)
         return
     from cascade.task.checkpoint import thread_config
@@ -760,7 +765,9 @@ def _stage_human_message(
             {
                 "task_id": work_id,
                 "feature_id": feature_id or "",
-                "last_queue_offset": 0,
+                "last_queue_offset": resolve_last_queue_offset(
+                    work_id, current=0, proposed=0, root=root
+                ),
                 "skill_playbooks": [],
             }
         )

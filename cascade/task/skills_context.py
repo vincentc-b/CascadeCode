@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cascade.watchdog.queue_cursor import resolve_last_queue_offset
 from cascade.watchdog.skills import effective_skill_paths
 
 
@@ -38,7 +39,9 @@ def apply_skill_playbooks(task_id: str, playbooks: list[dict], *, root: Path) ->
                 "task_id": task_id,
                 "feature_id": "",
                 "messages": [],
-                "last_queue_offset": 0,
+                "last_queue_offset": resolve_last_queue_offset(
+                    task_id, current=0, proposed=0, root=repo
+                ),
                 "skill_playbooks": playbooks,
             },
         )
