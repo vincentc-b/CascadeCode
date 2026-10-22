@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import socket
 import subprocess
-import sys
 import threading
 import time
 import urllib.error
@@ -108,3 +108,30 @@ def test_up_refuses_without_board_layout(tmp_path: Path) -> None:
 
     with pytest.raises(WorkspaceError, match="cascade init"):
         up(root, port=_free_port(), stop_when=lambda: True)
+
+
+def test_up_stops_when_loaded_python_source_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_git_repo(tmp_path)
+    init_workspace(root)
+    _seed_trunk_commit(root)
+    source = tmp_path / "installed" / "cascade"
+    source.mkdir(parents=True)
+    module = source / "runtime.py"
+    module.write_text("VERSION = 1\n", encoding="utf-8")
+    port = _free_port()
+    up_module = importlib.import_module("cascade.workspace.up")
+    fingerprint = up_module._source_fingerprint
+    monkeypatch.setattr(up_module, "_source_fingerprint", lambda: fingerprint(source))
+    monkeypatch.setattr(up_module, "_SOURCE_CHECK_INTERVAL_SECONDS", 0.01)
+
+    def update_after_start() -> None:
+        _wait_for_http(f"http://127.0.0.1:{port}/api/board")
+        module.write_text("VERSION = 2\n", encoding="utf-8")
+
+    updater = threading.Thread(target=update_after_start, daemon=True)
+    updater.start()
+    with pytest.raises(WorkspaceError, match=r"Python source changed.*restart `cascade up`"):
+        up(root, port=port)
+    updater.join(timeout=5)

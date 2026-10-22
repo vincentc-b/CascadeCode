@@ -435,7 +435,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
         try:
             payload = approve_epic_plan(epic_id, root=self.server.root)
-        except (ValueError, OSError) as exc:
+        except (ValueError, BoardError, OSError) as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(HTTPStatus.OK, payload)
@@ -448,7 +448,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
         try:
             payload = approve_feature(feature_id, root=self.server.root)
-        except (ValueError, OSError) as exc:
+        except (ValueError, BoardError, OSError) as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(HTTPStatus.OK, payload)

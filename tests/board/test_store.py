@@ -9,6 +9,7 @@ import pytest
 
 from cascade.board import (
     CycleError,
+    GitError,
     NotFound,
     SchemaError,
     allocate_id,
@@ -79,6 +80,52 @@ def test_write_commits_only_that_file(tmp_path: Path) -> None:
     assert "notes.txt" in status
     assert "scratch.txt" in status
     assert "epic_001" not in status
+
+
+def test_write_restores_existing_file_when_commit_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    doc = add_doc(root, id="epic_001", title="Original", tier="epic")
+    original = doc.meta.path.read_bytes()
+    edited = read_doc("epic_001", root=root)
+    edited.meta.title = "Must roll back"
+
+    def fail_commit(*_args, **_kwargs):
+        raise GitError("commit rejected")
+
+    monkeypatch.setattr("cascade.board.store.commit_paths", fail_commit)
+    with pytest.raises(GitError, match="commit rejected"):
+        write_doc(edited, root=root)
+
+    assert doc.meta.path.read_bytes() == original
+    assert read_doc("epic_001", root=root).meta.title == "Original"
+    assert "epic_001" not in _porcelain(root)
+
+
+def test_write_removes_new_file_and_invalidates_cache_when_commit_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    doc = add_doc(root, id="epic_001", title="Template", tier="epic")
+    doc.meta.id = "epic_002"
+    doc.meta.title = "Transient"
+    doc.meta.path = root / "docs/epics/1_backlog/epic_002_transient.md"
+    invalidations: list[Path] = []
+
+    def fail_commit(*_args, **_kwargs):
+        raise GitError("commit rejected")
+
+    monkeypatch.setattr("cascade.board.store.commit_paths", fail_commit)
+    monkeypatch.setattr(
+        "cascade.workspace.integration_worktree.invalidate_merged_board",
+        lambda trunk: invalidations.append(trunk),
+    )
+    with pytest.raises(GitError, match="commit rejected"):
+        write_doc(doc, root=root)
+
+    assert not doc.meta.path.exists()
+    assert invalidations == [root.resolve(), root.resolve()]
 
 
 def test_move_doc_sets_column_default_status(tmp_path: Path) -> None:

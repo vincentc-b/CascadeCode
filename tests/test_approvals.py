@@ -18,6 +18,7 @@ from cascade.approvals import (
     epic_plan_approved,
     feature_approved,
 )
+from cascade.board.errors import BoardError, GitError
 from cascade.board.store import read_doc
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.watchdog.events import read_events
@@ -192,6 +193,53 @@ def test_approve_feature_api(tmp_path: Path) -> None:
         assert feature["id"] == "feat_001"
         assert feature["approved"] is True
         assert "approved_at" in feature
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_approval_apis_return_conflict_for_board_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import socket
+    import threading
+
+    root = make_repo(tmp_path, git=False)
+    from cascade.war_room.server import serve
+
+    def fail_epic(*args: object, **kwargs: object) -> None:
+        raise GitError("epic approval commit failed")
+
+    def fail_feature(*args: object, **kwargs: object) -> None:
+        raise BoardError("feature approval failed")
+
+    monkeypatch.setattr("cascade.approvals.approve_epic_plan", fail_epic)
+    monkeypatch.setattr("cascade.approvals.approve_feature", fail_feature)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    server = serve(root=root, host="127.0.0.1", port=port)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        cases = (
+            ("approve_epic_plan", "epic_001", "epic approval commit failed"),
+            ("approve_feature", "feat_001", "feature approval failed"),
+        )
+        for endpoint, work_id, message in cases:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/{endpoint}",
+                method="POST",
+                data=json.dumps({"id": work_id}).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            with pytest.raises(urllib.error.HTTPError) as exc_info:
+                urllib.request.urlopen(req)
+            assert exc_info.value.code == HTTPStatus.CONFLICT
+            assert json.loads(exc_info.value.read().decode()) == {"error": message}
     finally:
         server.shutdown()
         server.server_close()
