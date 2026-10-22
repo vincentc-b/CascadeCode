@@ -506,9 +506,18 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if result.ok:
             self._json_response(HTTPStatus.OK, {"ok": True, "epic_id": epic_id})
             return
+        payload: dict[str, Any] = {
+            "ok": False,
+            "reason": result.reason or "close_failed",
+            "epic_id": epic_id,
+        }
+        if result.blocker_ids:
+            payload["blocker_ids"] = list(result.blocker_ids)
+        if result.reason == "open_human_comments":
+            payload["plan_url"] = f"/plan/{epic_id}#plan-comments"
         self._json_response(
             HTTPStatus.OK,
-            {"ok": False, "reason": result.reason or "close_failed", "epic_id": epic_id},
+            payload,
         )
 
     def _handle_boss_drain(self, body: dict[str, Any]) -> None:

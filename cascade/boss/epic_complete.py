@@ -37,6 +37,7 @@ _surfaced_prompts: set[tuple[str, str]] = set()
 class EpicCompleteResult:
     ok: bool
     reason: str | None = None
+    blocker_ids: tuple[WorkId, ...] = ()
 
 
 def reset_epic_close_prompt_surfaces() -> None:
@@ -56,20 +57,46 @@ def epic_ready_to_close(epic_id: WorkId, *, root: Path | None = None) -> bool:
 
 
 def _epic_ready_to_close(epic_id: WorkId, *, repo: Path, board) -> bool:
+    return _epic_close_blocker(epic_id, repo=repo, board=board) is None
+
+
+def _epic_close_blocker(
+    epic_id: WorkId, *, repo: Path, board
+) -> EpicCompleteResult | None:
+    """Return the first actionable closeout blocker, if any.
+
+    Keep the public boolean readiness check for existing callers, but retain the
+    specific gate for the human close endpoint.  A generic ``not_ready`` left
+    operators unable to distinguish unfinished work from a comment thread that
+    merely needed resolving.
+    """
+
     if epic_id not in board.by_id:
-        return False
+        return EpicCompleteResult(ok=False, reason="not_ready")
     epic_meta = board.by_id[epic_id]
     if epic_meta.tier != "epic":
-        return False
-    if not _all_child_features_completed(epic_id, board):
-        return False
+        return EpicCompleteResult(ok=False, reason="wrong_tier")
+    incomplete = _incomplete_child_feature_ids(epic_id, board)
+    if incomplete is None:
+        return EpicCompleteResult(ok=False, reason="no_child_features")
+    if incomplete:
+        return EpicCompleteResult(
+            ok=False,
+            reason="child_features_incomplete",
+            blocker_ids=tuple(sorted(incomplete)),
+        )
     from cascade.review import epic_has_pending_feature_review
 
     if epic_has_pending_feature_review(epic_id, root=repo):
-        return False
-    if _has_open_human_comments(epic_id, repo):
-        return False
-    return True
+        return EpicCompleteResult(ok=False, reason="pending_feature_review")
+    open_comments = _open_human_comment_ids(epic_id, repo)
+    if open_comments:
+        return EpicCompleteResult(
+            ok=False,
+            reason="open_human_comments",
+            blocker_ids=tuple(open_comments),
+        )
+    return None
 
 
 def surface_epic_close_prompt(epic_id: WorkId, *, root: Path | None = None) -> None:
@@ -155,8 +182,9 @@ def _finish_epic_completion_result(
         _emit_epic_completed(epic_id, repo)
         _retire_epic_worktree(epic_id, repo)
         return EpicCompleteResult(ok=True)
-    if not _epic_ready_to_close(epic_id, repo=repo, board=board):
-        return EpicCompleteResult(ok=False, reason="not_ready")
+    blocker = _epic_close_blocker(epic_id, repo=repo, board=board)
+    if blocker is not None:
+        return blocker
     try:
         epic_doc = read_doc(epic_id, root=repo)
     except NotFound:
@@ -258,24 +286,33 @@ def _child_feature_ids(epic_id: WorkId, board) -> set[WorkId]:
 
 
 def _all_child_features_completed(epic_id: WorkId, board) -> bool:
+    incomplete = _incomplete_child_feature_ids(epic_id, board)
+    return incomplete == set()
+
+
+def _incomplete_child_feature_ids(epic_id: WorkId, board) -> set[WorkId] | None:
+    """Return incomplete/missing children, or ``None`` when no features exist."""
+
     feature_ids = _child_feature_ids(epic_id, board)
     # An activated brief with no minted features is not delivered work.  In
     # particular, do not let the universal "all children completed" check pass
     # vacuously: startup recovery must only close epics that have actual child
     # completion state to reconcile.
     if not feature_ids:
-        return False
+        return None
+    incomplete: set[WorkId] = set()
     for feature_id in feature_ids:
         meta = board.by_id.get(feature_id)
         if meta is None or meta.tier != "feature":
-            return False
-        if meta.status != "completed":
-            return False
-        if column_for_status(meta.status) != "completed":
-            return False
-        if meta.path.parent.name != "3_completed":
-            return False
-    return True
+            incomplete.add(feature_id)
+            continue
+        if (
+            meta.status != "completed"
+            or column_for_status(meta.status) != "completed"
+            or meta.path.parent.name != "3_completed"
+        ):
+            incomplete.add(feature_id)
+    return incomplete
 
 
 def _complete_epic_trunk_pointer(epic_id: WorkId, *, trunk: Path) -> None:
@@ -312,8 +349,9 @@ def _complete_epic_trunk_pointer(epic_id: WorkId, *, trunk: Path) -> None:
         commit_paths(trunk, paths, f"docs: {epic_id} trunk pointer completed")
 
 
-def _has_open_human_comments(epic_id: WorkId, repo: Path) -> bool:
+def _open_human_comment_ids(epic_id: WorkId, repo: Path) -> list[WorkId]:
+    ids: list[WorkId] = []
     for row in read_comments(epic_id, root=repo):
         if row.state == "open" and row.author == "human":
-            return True
-    return False
+            ids.append(row.id)
+    return ids

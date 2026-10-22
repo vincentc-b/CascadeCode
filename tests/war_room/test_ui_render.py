@@ -156,6 +156,15 @@ def test_war_room_js_renders_toast_body():
     assert '"Epic close timed out after 60s"' in source
 
 
+def test_war_room_js_explains_epic_close_comment_blockers():
+    source = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    ).read_text(encoding="utf-8")
+
+    assert 'body.reason === "open_human_comments"' in source
+    assert 'body.plan_url || ("/plan/" + epicId + "#plan-comments")' in source
+
+
 def test_task_execution_controls_and_board_polling_are_load_safe():
     js_path = (
         Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"

@@ -674,7 +674,22 @@
         setStatus("Epic " + epicId + " closed.", false);
         await refreshBoard();
       } else {
-        setStatus("Epic close refused: " + (body.reason || "not_ready"), true);
+        const blockers = (body.blocker_ids || []).join(", ");
+        if (body.reason === "open_human_comments") {
+          setStatus(
+            "Epic close refused: resolve open human comments " + blockers +
+              " in " + (body.plan_url || ("/plan/" + epicId + "#plan-comments")),
+            true
+          );
+        } else if (body.reason === "child_features_incomplete") {
+          setStatus("Epic close refused: child features incomplete: " + blockers, true);
+        } else if (body.reason === "no_child_features") {
+          setStatus("Epic close refused: this epic has no child features.", true);
+        } else if (body.reason === "pending_feature_review") {
+          setStatus("Epic close refused: a child feature review is still pending.", true);
+        } else {
+          setStatus("Epic close refused: " + (body.reason || "not_ready"), true);
+        }
       }
     } catch (err) {
       const timedOut = err && (err.name === "TimeoutError" || err.name === "AbortError");
