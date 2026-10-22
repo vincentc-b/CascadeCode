@@ -167,6 +167,28 @@ body {
   margin-bottom: 0.25rem;
 }
 
+.board-column-header-completed-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.board-completed-history .board-action-link {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.board-completed-history .board-action-link-unavailable {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .board-column-header-completed .board-column-label {
   font-size: 0.7rem;
   color: var(--muted);

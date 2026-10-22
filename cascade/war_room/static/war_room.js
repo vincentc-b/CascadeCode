@@ -367,6 +367,34 @@
     return tierEl.querySelector('[data-column="3_completed"]');
   }
 
+  function unavailableActionLink(label, title) {
+    const link = document.createElement("span");
+    link.className = "board-action-link board-action-link-unavailable";
+    link.setAttribute("role", "link");
+    link.setAttribute("aria-disabled", "true");
+    link.title = title;
+    link.textContent = label;
+    return link;
+  }
+
+  function renderCompletedEpicsHistory(tierEl, view) {
+    if (!tierEl) return;
+    const slot = tierEl.querySelector('[data-board-completed-history][data-board-tier="epics"]');
+    if (!slot) return;
+    slot.innerHTML = "";
+    if (!view || !view.board) return;
+    const history = view.board.completed_epics_history;
+    if (!history) return;
+    const label = history.path || "Completed epics history";
+    if (history.available && history.url) {
+      slot.appendChild(actionLink(label, history.url));
+    } else {
+      slot.appendChild(
+        unavailableActionLink(label, "Repository history link unavailable.")
+      );
+    }
+  }
+
   function renderCompletedColumn(tierEl, tier, visibleView) {
     const columnWrap = completedColumnElements(tierEl);
     if (!columnWrap || !boardFocus || !BoardFocusApi) return;
@@ -425,6 +453,9 @@
         });
       });
       renderCompletedColumn(tierEl, tier, visibleView);
+      if (tier === "epics") {
+        renderCompletedEpicsHistory(tierEl, view);
+      }
     });
   }
 

@@ -16,16 +16,17 @@ const {
 const defaults = defaultBoardFocus();
 assert.equal(defaults.selected_epic_id, null);
 assert.equal(defaults.selected_feature_id, null);
-assert.equal(defaults.completed_collapsed.epics, false);
+assert.equal(defaults.completed_collapsed.epics, true);
 assert.equal(defaults.completed_collapsed.features, true);
 assert.equal(defaults.completed_collapsed.tasks, true);
 
 let focus = defaults;
-focus = toggleCompletedCollapsed(focus, "epics");
 assert.equal(focus.completed_collapsed.epics, true);
-assert.equal(focus.completed_collapsed.features, true);
 focus = toggleCompletedCollapsed(focus, "epics");
 assert.equal(focus.completed_collapsed.epics, false);
+assert.equal(focus.completed_collapsed.features, true);
+focus = toggleCompletedCollapsed(focus, "epics");
+assert.equal(focus.completed_collapsed.epics, true);
 
 focus = toggleCompletedCollapsed(focus, "features");
 assert.equal(focus.completed_collapsed.features, false);
