@@ -106,6 +106,11 @@ _(none)_
   Chose Require a uniquely nearest completed-but-unmerged predecessor for stacking; fail closed on incomparable unmerged dependency fan-in..
   Rationale: A pull request has exactly one base branch. Selecting arbitrarily among incomparable predecessors would make the declared dependency graph and the actual code ancestry disagree.
   Honors: The existing dependency graph as the sole ordering model, deterministic retries, visible diagnostics, and fail-closed safety..
+
+- `dec_005` · 2026-10-22 · Epic Manager · **Provider behavior**
+  Chose Assume GitHub native base retargeting after predecessor merge; verify and diagnose it in this epic, and defer explicit retargeting to a follow-up feature if implementation evidence disproves the assumption. In reply to: cmt_001.
+  Rationale: This keeps the first release to the smallest useful slice while preserving a clear fallback if the provider contract is insufficient.
+  Honors: The human's stated assumption, focused scope, visible failure behavior, and avoidance of speculative provider work..
 ## Amendment log
 
 _(none)_
