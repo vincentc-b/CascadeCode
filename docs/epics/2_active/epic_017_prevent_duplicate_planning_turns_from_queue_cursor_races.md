@@ -134,6 +134,11 @@ Testing stance: prefer a small number of system-level tests with a fake planning
   Chose When snapshot.next is non-empty, the job resumes before it ingests. The monotonic cursor helper treats cursor > current file size as the only allowed explicit, logged reset. read_events keeps its signature, and no file identity is stored..
   Rationale: Calling update_state on an interrupted checkpoint can change next and silently drop the resume. _decode_buffer already restarts from 0 when the offset is past EOF, so making that case explicit is enough. Detecting a file replaced by a larger one would need a checkpoint schema change, which is out of scope; that limitation is accepted as pre-existing.
   Honors: Success criteria: an interrupted turn resumes at most once, monotonic cursor. Constraints: backward-compatible checkpoints and queue format..
+
+- `dec_006` · 2026-10-22 · Epic Manager · **Feature breakdown**
+  Chose The resume-before-ingest rule (dec_005) ships in feat_017_001 as part of the locked job step, not in feat_017_002. feat_017_002 keeps routing boot resume through that path, the restart convergence test, and observability. The epic's feature breakdown supersedes the pre-review feature stubs. The feat_017_001 regression assertions may share a few scenario tests..
+  Rationale: feat_017_001 makes ingest the first step of every serialized job. Without the guard, any job that lands on an interrupted checkpoint would ingest first and could silently drop the resume, so feat_017_001 would ship a known regression until feat_017_002 landed. The guard is a single snapshot.next check, so moving it adds almost no scope. The stubs were minted before dec_003-dec_005 and lack the boot-hook, deferred_kickoffs, and two-comments-one-turn requirements.
+  Honors: Success criteria: an interrupted turn resumes at most once; feat_017_001 is the smallest shippable slice that is safe on its own; frugal testing..
 ## Amendment log
 
 _(none)_
