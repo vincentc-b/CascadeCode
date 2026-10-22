@@ -92,9 +92,6 @@ This is intentionally one feature: none of the individual changes is a useful in
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
-- 2026-10-22 · Epic Manager · Default the completed-epic display limit to 10 and fall back to 10 for missing, malformed, or non-positive configuration.
-- 2026-10-22 · Epic Manager · Deliver the complete behavior as one feature; exclude pagination, preference persistence, and new archive infrastructure.
-- 2026-10-22 · Epic Manager · Reuse existing completed ordering and repository metadata/path conventions, applying the bound only at the board presentation boundary.
 
 - `dec_001` · 2026-10-22 · Epic Manager · **Configuration default and fallback**
   Chose Use 10 as the completed-epic display limit when configuration is absent, malformed, or non-positive..
@@ -110,6 +107,7 @@ This is intentionally one feature: none of the individual changes is a useful in
   Chose Preserve existing completed-epic ordering and repository metadata/path conventions; apply the limit only at the board/view-model boundary..
   Rationale: This avoids changing domain semantics, adding storage, or hard-coding a repository host while ensuring the newest items are retained.
   Honors: The approved requirement to show recent completed work and link to full repository history..
+
 ## Amendment log
 
 _(none)_
