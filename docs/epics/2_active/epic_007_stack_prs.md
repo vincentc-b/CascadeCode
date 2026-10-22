@@ -45,7 +45,7 @@ Persist or derive the selected upstream feature and base branch through the exis
 
 - The feature dependency graph is authoritative for both dispatch order and pull request stacking.
 - Stacking is permitted only after a predecessor reaches the existing completed state; it must not relax approval, failure, cancellation, or blocking gates.
-- Choose the nearest unmerged predecessor in a chain; never skip an incomplete predecessor.
+- Choose the uniquely nearest unmerged predecessor in dependency ancestry; never skip an incomplete predecessor. If multiple incomparable completed-but-unmerged predecessors remain, fail closed because one pull request cannot represent multiple bases.
 - Scheduler and reconciliation operations must remain idempotent under retries and restarts.
 - Keep provider-specific pull request operations behind the existing GitHub/integration boundary.
 - Preserve current behavior for non-stacked work and avoid introducing a custom merge queue.
@@ -76,6 +76,7 @@ Persist or derive the selected upstream feature and base branch through the exis
 
 - Does the current GitHub integration observe native base retargeting after an upstream merge, or must reconciliation explicitly update the downstream pull request? Resolve during implementation against the adapter's observed contract; no separate discovery feature is warranted.
 - If a completed predecessor's branch or pull request cannot be resolved, fail closed with a visible blocked reason rather than falling back to the epic base.
+- A dependency fan-in with multiple incomparable completed-but-unmerged predecessors is not stackable. Block with a visible ambiguity reason until reconciliation leaves one uniquely nearest unmerged predecessor.
 
 ## Decision log
 
