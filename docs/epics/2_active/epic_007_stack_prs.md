@@ -85,6 +85,11 @@ Persist or derive the selected upstream feature and base branch through the exis
   Chose Permit stacking only from a completed-but-unmerged predecessor and fail closed when its branch or pull request cannot be resolved..
   Rationale: This captures the lead-time benefit without allowing downstream work to build on unstable or ambiguous state.
   Honors: Existing approval and dependency gates, idempotent dispatch, and system reliability..
+
+- `dec_002` · 2026-10-22 · Epic Manager · **Architecture**
+  Chose Use the existing declared feature dependency graph as the sole definition of pull request stack order..
+  Rationale: A second ordering model would create drift and additional lifecycle state without adding user value.
+  Honors: The approved brief's sequential feature semantics and the requirement that downstream work follow its priors..
 ## Amendment log
 
 _(none)_
