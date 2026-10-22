@@ -15,7 +15,10 @@ from pathlib import Path
 import pytest
 
 from cascade.workspace import WorkspaceError, init_workspace, up
+from cascade.workspace.kickoff import kickoff_turn, wait_for_background_kickoffs
 from cascade.workspace.lock import SupervisorLock
+from cascade.workspace.types import KickoffReason
+from cascade.workspace.up import resume_legally_active_graphs
 from tests.support import make_git_repo
 
 
@@ -135,3 +138,56 @@ def test_up_stops_when_loaded_python_source_changes(
     with pytest.raises(WorkspaceError, match=r"Python source changed.*restart `cascade up`"):
         up(root, port=port)
     updater.join(timeout=5)
+
+
+def test_long_inflight_resume_does_not_block_startup_progression(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    turn_started = threading.Event()
+    release_turn = threading.Event()
+    startup_progressed = threading.Event()
+    repairs: list[str] = []
+
+    monkeypatch.setattr(
+        "cascade.workspace.integration_worktree.retire_terminal_registered_worktrees",
+        lambda _root: repairs.append("retire"),
+    )
+    monkeypatch.setattr(
+        "cascade.workspace.integration_worktree.repair_all_registered",
+        lambda _root: repairs.append("repair"),
+    )
+
+    def long_model_turn(_reason: KickoffReason, _root: Path) -> None:
+        turn_started.set()
+        release_turn.wait()
+
+    monkeypatch.setattr("cascade.workspace.kickoff._run_kickoff", long_model_turn)
+
+    def resume_one_graph(root: Path) -> None:
+        kickoff_turn(
+            KickoffReason(
+                kind="resume_inflight",
+                work_id="epic_startup_test",
+                by="watchdog",
+                root=root,
+            )
+        )
+
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.resume_inflight_graphs", resume_one_graph
+    )
+
+    def startup() -> None:
+        resume_legally_active_graphs(tmp_path)
+        startup_progressed.set()
+
+    thread = threading.Thread(target=startup, daemon=True)
+    thread.start()
+    try:
+        assert turn_started.wait(timeout=1)
+        assert startup_progressed.wait(timeout=1)
+        assert repairs == ["retire", "repair"]
+    finally:
+        release_turn.set()
+        thread.join(timeout=2)
+        assert wait_for_background_kickoffs(timeout=2)

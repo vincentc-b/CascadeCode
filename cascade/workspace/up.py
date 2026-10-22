@@ -44,18 +44,22 @@ def _source_fingerprint(root: Path = _CASCADE_SOURCE_ROOT) -> str:
 
 
 def resume_legally_active_graphs(root: Path) -> None:
-    """Recreate missing integration worktrees for registered branches (no dispatch)."""
+    """Repair registered worktrees and queue interrupted turns (no new dispatch)."""
 
     from cascade.workspace.integration_worktree import (
         repair_all_registered,
         retire_terminal_registered_worktrees,
     )
-    from cascade.workspace.kickoff import resume_inflight_graphs
+    from cascade.workspace.kickoff import deferred_kickoffs, resume_inflight_graphs
 
     repo = Path(root).resolve()
     retire_terminal_registered_worktrees(repo)
     repair_all_registered(repo)
-    resume_inflight_graphs(repo)
+    # Model turns can take minutes.  Queue only those turns in the established
+    # per-graph background workers so watchdog startup is not held behind one
+    # recovered graph; the structural worktree repair above remains ordered.
+    with deferred_kickoffs():
+        resume_inflight_graphs(repo)
 
 
 def _has_board_layout(path: Path) -> bool:
