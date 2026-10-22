@@ -169,3 +169,41 @@ def test_board_history_unavailable_without_git_remote(tmp_path: Path) -> None:
     assert history["available"] is False
     assert history["url"] is None
     assert history["path"] == "docs/epics/3_completed"
+
+
+def test_board_exposes_history_when_no_completed_epics(war_room_server) -> None:
+    base, _root, _server = war_room_server
+    status, payload, _headers = _get(f"{base}/api/board")
+    assert status == HTTPStatus.OK
+    assert payload["epics"]["3_completed"] == []
+    history = payload["board"]["completed_epics_history"]
+    assert history["path"] == "docs/epics/3_completed"
+    assert history["available"] is True
+    assert "docs/epics/3_completed" in history["url"]
+
+
+def test_board_http_renders_when_history_unavailable(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Active", tier="epic", status="active")
+    port = _free_port()
+    server = serve(root=root, host="127.0.0.1", port=port)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{port}"
+    try:
+        status, payload, _headers = _get(f"{base}/api/board")
+        assert status == HTTPStatus.OK
+        history = payload["board"]["completed_epics_history"]
+        assert history["available"] is False
+        assert history["url"] is None
+
+        status, home_html, _headers = _get(f"{base}/")
+        assert status == HTTPStatus.OK
+        assert 'id="war-room-board"' in home_html
+        epics_tier = home_html.split('data-tier="epics"')[1].split('data-tier="features"')[0]
+        assert "data-board-completed-history" in epics_tier
+        assert "board-column-completed-collapsed" in epics_tier
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)

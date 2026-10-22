@@ -70,4 +70,44 @@ const filteredView = applyBoardLens(lensView, lensFocus);
 assert.equal(countVisibleInColumn(filteredView, "features", "3_completed"), 1);
 assert.equal(countVisibleInColumn(lensView, "features", "3_completed"), 2);
 
+const boundedEpicsView = {
+  epics: {
+    "1_backlog": [],
+    "2_active": [{ id: "epic_active", title: "Active" }],
+    "3_completed": [
+      { id: "epic_008", title: "Done 8" },
+      { id: "epic_009", title: "Done 9" },
+      { id: "epic_010", title: "Done 10" },
+    ],
+  },
+  features: { "1_backlog": [], "2_active": [], "3_completed": [] },
+  tasks: { "1_backlog": [], "2_active": [], "3_completed": [] },
+};
+
+function completedEpicIds(view) {
+  return (view.epics["3_completed"] || []).map(function (row) {
+    return row.id;
+  });
+}
+
+let boundedFocus = defaultBoardFocus();
+boundedFocus = toggleEpicSelection(boundedFocus, "epic_active", boundedEpicsView);
+const boundedIds = completedEpicIds(boundedEpicsView);
+assert.deepEqual(boundedIds, ["epic_008", "epic_009", "epic_010"]);
+
+boundedFocus = toggleCompletedCollapsed(boundedFocus, "epics");
+assert.deepEqual(completedEpicIds(boundedEpicsView), boundedIds);
+assert.equal(
+  countVisibleInColumn(applyBoardLens(boundedEpicsView, boundedFocus), "epics", "3_completed"),
+  3
+);
+assert.equal(boundedFocus.selected_epic_id, "epic_active");
+
+boundedFocus = toggleCompletedCollapsed(boundedFocus, "epics");
+assert.deepEqual(completedEpicIds(boundedEpicsView), boundedIds);
+assert.equal(
+  countVisibleInColumn(applyBoardLens(boundedEpicsView, boundedFocus), "epics", "3_completed"),
+  3
+);
+
 console.log("board_focus_collapse_cases: ok");
