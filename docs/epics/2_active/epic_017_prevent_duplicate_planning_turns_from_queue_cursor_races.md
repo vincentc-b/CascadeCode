@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_017_001
 - feat_017_002
+- feat_017_003
 depends_on: []
 owners:
 - epic_manager
@@ -95,6 +96,7 @@ Planning graphs can repeatedly process the same queue events when queue ingestio
 - Existing tests to extend instead of duplicating: `tests/workspace/test_kickoff.py`, `tests/workspace/test_human_comment_kickoff.py`, `tests/watchdog/test_queue.py`, `tests/workspace/test_up.py`, `tests/watchdog/test_watchdog.py`. That last file monkeypatches `deliver_queue_kickoffs` and `kickoff_graph_queue_event` by name, so keep those entry points.
 
 ## Feature breakdown
+- feat_017_003
 - feat_017_001
 - feat_017_002
 
