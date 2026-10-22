@@ -116,6 +116,11 @@ _(none)_
   Chose Require a durable feature-to-pull-request link in project state before a feature can enter the completed state. In reply to: cmt_001.
   Rationale: Downstream stacking depends on resolving the completed predecessor's pull request and branch deterministically; completion without that identity would create an unsafe, unrecoverable gap.
   Honors: The human's tracking requirement, fail-closed safety, deterministic retries, and artifact-driven lifecycle state..
+
+- `dec_007` · 2026-10-22 · Epic Manager · **Scope**
+  Chose Limit stacked dispatch in this epic to linear dependency chains; dependency fan-in is unsupported and fails closed with a visible topology reason. This supersedes dec_004's unique-nearest fan-in handling for this epic. In reply to: cmt_001.
+  Rationale: A pull request has one base, and linear-only support meets the core lead-time goal without adding graph-selection behavior that the requested scope does not need.
+  Honors: The human's scope direction, the existing dependency graph, deterministic behavior, and the smallest complete vertical slice..
 ## Amendment log
 
 _(none)_
