@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -240,6 +241,52 @@ def test_approval_apis_return_conflict_for_board_failures(
                 urllib.request.urlopen(req)
             assert exc_info.value.code == HTTPStatus.CONFLICT
             assert json.loads(exc_info.value.read().decode()) == {"error": message}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_approval_apis_can_finish_after_generic_request_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import socket
+    import threading
+
+    root = make_repo(tmp_path, git=False)
+    from cascade.war_room.server import serve
+
+    def slow_approval(*args: object, **kwargs: object) -> dict[str, bool]:
+        time.sleep(0.1)
+        return {"newly_approved": True}
+
+    monkeypatch.setattr("cascade.approvals.approve_epic_plan", slow_approval)
+    monkeypatch.setattr("cascade.approvals.approve_feature", slow_approval)
+    monkeypatch.setattr("cascade.war_room.server.REQUEST_DEADLINE_S", 0.05)
+    monkeypatch.setattr("cascade.war_room.server.APPROVAL_DEADLINE_S", 0.5)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    server = serve(root=root, host="127.0.0.1", port=port)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        for endpoint, work_id in (
+            ("approve_epic_plan", "epic_001"),
+            ("approve_feature", "feat_001"),
+        ):
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/{endpoint}",
+                method="POST",
+                data=json.dumps({"id": work_id}).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                payload = json.loads(resp.read().decode())
+            assert resp.status == HTTPStatus.OK
+            assert payload == {"newly_approved": True}
     finally:
         server.shutdown()
         server.server_close()
