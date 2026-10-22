@@ -10,6 +10,7 @@ from cascade.agent.errors import ProviderConfigError
 from cascade.agent.providers import ALL_PROVIDER_IDS, ProviderId, parse_provider_id
 
 _TIER_KEYS = ("epic", "feature", "task", "boss")
+_DEFAULT_COMPLETED_EPIC_DISPLAY_LIMIT = 10
 
 
 class ConfigError(Exception):
@@ -42,6 +43,25 @@ class AutomationConfig:
     enabled: bool = True
     poll_seconds: float = 15.0
     remote: str = "origin"
+
+
+def completed_epic_display_limit(root: Path) -> int:
+    """War Room cap on completed epics shown. Missing or invalid values default to 10."""
+
+    data = _load_cascade_toml(root)
+    war_room = data.get("war_room")
+    if not isinstance(war_room, dict):
+        return _DEFAULT_COMPLETED_EPIC_DISPLAY_LIMIT
+    if "completed_epic_display_limit" not in war_room:
+        return _DEFAULT_COMPLETED_EPIC_DISPLAY_LIMIT
+    value = war_room["completed_epic_display_limit"]
+    if isinstance(value, bool):
+        return _DEFAULT_COMPLETED_EPIC_DISPLAY_LIMIT
+    if isinstance(value, int) and value > 0:
+        return value
+    if isinstance(value, float) and value.is_integer() and int(value) > 0:
+        return int(value)
+    return _DEFAULT_COMPLETED_EPIC_DISPLAY_LIMIT
 
 
 def task_parallelism(root: Path) -> int:

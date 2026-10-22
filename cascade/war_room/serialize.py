@@ -336,4 +336,17 @@ def board_view_from_index(board, *, root: Path) -> dict:
             # final location, but operationally the feature remains in flight.
             folder = "2_active"
         view[key][folder].append(item)
+
+    from cascade.war_room.completed_epics import (
+        bound_completed_epic_rows,
+        completed_epics_board_settings,
+    )
+
+    settings = completed_epics_board_settings(root)
+    limit = int(settings["completed_epic_display_limit"])
+    view["epics"]["3_completed"] = bound_completed_epic_rows(
+        view["epics"]["3_completed"],
+        limit=limit,
+    )
+    view["board"] = settings
     return view
