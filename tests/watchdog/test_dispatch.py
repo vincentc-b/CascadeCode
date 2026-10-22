@@ -109,15 +109,15 @@ def test_dispatch_feature_by_human_and_boss_and_unmet_deps(tmp_path: Path) -> No
     human = dispatch_feature("feat_001", "human", root=root)
     boss = dispatch_feature("feat_002", "boss", root=root)
     assert human.ok and human.event is not None
-    assert boss.ok and boss.event is not None
+    assert boss.ok is False
+    assert boss.reason == "feature_awaiting_merge"
     assert human.event.type == "FeatureReadyToPlan"
     assert human.event.payload["by"] == "human"
     assert human.event.payload["feature_id"] == "feat_001"
-    assert boss.event.payload["by"] == "boss"
-    assert boss.event.payload["id"] == "feat_002"
+    assert boss.event is None
     assert read_doc("feat_001", root=root).meta.status == "active"
-    assert read_doc("feat_002", root=root).meta.path.parent.name == "2_active"
-    assert booted == ["feat_001", "feat_002"]
+    assert read_doc("feat_002", root=root).meta.path.parent.name == "1_backlog"
+    assert booted == ["feat_001"]
 
     refused = dispatch_feature("feat_003", "human", root=root)
     assert refused.ok is False

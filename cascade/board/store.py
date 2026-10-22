@@ -104,9 +104,9 @@ def _write_doc(doc: WorkDoc, root: Path | None) -> str | None:
     )
 
     trunk = locate_trunk(repo)
-    board = merged_board(trunk)
-    _reject_new_doc_id_collision(doc, board, repo)
-    validate_doc(doc, board)
+    # Collisions are per-checkout; merged_board also indexes other worktrees and snapshots.
+    _reject_new_doc_id_collision(doc, list_board(repo), repo)
+    validate_doc(doc, merged_board(trunk))
     previous_bytes = doc.meta.path.read_bytes() if doc.meta.path.exists() else None
     doc.meta.path.parent.mkdir(parents=True, exist_ok=True)
     doc.meta.path.write_text(render_doc(doc), encoding="utf-8")
@@ -170,6 +170,11 @@ def _move_doc(work_id: WorkId, dest_column: Column, root: Path | None) -> str | 
     doc.meta.status = status_for_column(dest_column)
     doc.meta.path = new_path
     doc.meta.updated = date.today()
+    if dest_column == "completed" and doc.meta.tier == "feature":
+        from cascade.stacked_dispatch import refusal_if_feature_completion_without_pr
+
+        if refusal := refusal_if_feature_completion_without_pr(doc.meta.id, root=repo):
+            raise SchemaError(refusal)
     validate_doc(doc, merged_board(locate_trunk(repo)))
     if new_path != old_path and new_path.exists():
         raise SchemaError(f"destination already exists: {new_path}")

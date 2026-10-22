@@ -54,10 +54,29 @@ def test_final_task_merge_synthesizes_closeout_and_opens_review(
     _completed_feature_board(root)
     opened: list[str] = []
     monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
-    monkeypatch.setattr(
-        "cascade.review.ensure_feature_review",
-        lambda feature_id, *, root: opened.append(feature_id),
-    )
+    def _open_review(feature_id: str, *, root: Path):
+        opened.append(feature_id)
+        state_path = root / ".cascade" / "reviews.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(
+            json.dumps(
+                {
+                    feature_id: {
+                        "url": f"https://github.example/o/r/pull/{feature_id}",
+                        "number": "1",
+                        "forge": "github",
+                        "source_branch": "feat/feat_001",
+                        "target_branch": "epic/epic_001",
+                        "draft": False,
+                    }
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return None
+
+    monkeypatch.setattr("cascade.review.ensure_feature_review", _open_review)
 
     on_task_merged("task_001", root=root)
 
@@ -95,9 +114,9 @@ def test_review_open_toast_is_linked_idempotent_and_restart_safe(
         "cascade.feature.publication.prepare_feature_publication",
         lambda *_args, **_kwargs: publication_order.append("prepare"),
     )
-    from cascade.board.store import move_doc
+    from cascade.boss.rollup import write_closeout
 
-    move_doc("feat_001", "completed", root=root)
+    write_closeout("feat_001", "Done.", root=root)
     create_kwargs: list[dict[str, object]] = []
 
     def create(*_args, **kwargs) -> MergeRequest:
@@ -108,6 +127,9 @@ def test_review_open_toast_is_linked_idempotent_and_restart_safe(
     monkeypatch.setattr("cascade.review.create_merge_request", create)
 
     assert ensure_feature_review("feat_001", root=root) == mr
+    from cascade.board.store import move_doc
+
+    move_doc("feat_001", "completed", root=root)
     assert ensure_feature_review("feat_001", root=root).url == mr.url
     assert create_kwargs == [
         {
@@ -156,9 +178,9 @@ def test_saved_review_retries_linked_toast_after_append_failure(
         "cascade.feature.publication.prepare_feature_publication",
         lambda *_args, **_kwargs: None,
     )
-    from cascade.board.store import move_doc
+    from cascade.boss.rollup import write_closeout
 
-    move_doc("feat_001", "completed", root=root)
+    write_closeout("feat_001", "Done.", root=root)
 
     def create(*_args, **_kwargs) -> MergeRequest:
         creates.append("created")
@@ -197,7 +219,31 @@ def test_merged_review_releases_next_dependent_feature_on_next_pass(
     (root / "cascade.toml").write_text("[automation]\nenabled = true\n", encoding="utf-8")
     _completed_feature_board(root, sibling=True)
     monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
-    monkeypatch.setattr("cascade.review.ensure_feature_review", lambda *_args, **_kwargs: None)
+    def _ensure(feature_id: str, *, root: Path):
+        state_path = root / ".cascade" / "reviews.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(
+            json.dumps(
+                {
+                    feature_id: {
+                        "url": f"https://github.example/o/r/pull/{feature_id}",
+                        "number": "1",
+                        "forge": "github",
+                        "source_branch": "feat/feat_001",
+                        "target_branch": "epic/epic_001",
+                        "draft": False,
+                    }
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return None
+
+    monkeypatch.setattr("cascade.review.ensure_feature_review", _ensure)
+    from cascade.boss.rollup import write_closeout
+
+    write_closeout("feat_001", "Done.", root=root)
     review_pending = True
     monkeypatch.setattr(
         "cascade.review.feature_review_pending",
@@ -226,9 +272,6 @@ def test_polling_merged_review_does_not_create_source_completion_commit(
 ) -> None:
     root = make_repo(tmp_path, git=False)
     _completed_feature_board(root)
-    from cascade.board.store import move_doc
-
-    move_doc("feat_001", "completed", root=root)
     state_path = root / ".cascade" / "reviews.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(
@@ -248,6 +291,10 @@ def test_polling_merged_review_does_not_create_source_completion_commit(
         ),
         encoding="utf-8",
     )
+    from cascade.board.store import move_doc
+
+    monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+    move_doc("feat_001", "completed", root=root)
     monkeypatch.setattr(
         "cascade.review.merge_request_snapshot",
         lambda *_args, **_kwargs: {"state": "merged", "comments": []},

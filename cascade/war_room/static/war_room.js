@@ -32,6 +32,9 @@
     attachmentLabel: document.getElementById("attachment-label"),
     btnDetach: document.getElementById("btn-detach"),
     epicChat: document.getElementById("epic-war-room-chat"),
+    roomSettingsPanel: document.getElementById("room-settings-panel"),
+    roomStackedPrEnabled: document.getElementById("room-stacked-pr-enabled"),
+    roomSettingsStatus: document.getElementById("room-settings-status"),
     flightPanel: document.getElementById("flight-report-panel"),
     flightBody: document.getElementById("flight-report-body"),
     featurePlaceholder: document.getElementById("feature-room-placeholder"),
@@ -86,6 +89,68 @@
 
   /** Statuses the dispatch law accepts for Activate / Dispatch (cascade/watchdog/dispatch.py _OPEN). */
   const OPEN_STATUSES = { backlog: true, ready_to_plan: true };
+
+  function isRoomGraphId(graphId) {
+    return graphId.indexOf("epic_") === 0 || graphId.indexOf("feat_") === 0;
+  }
+
+  let roomSettingsLoadToken = 0;
+
+  function setRoomSettingsStatus(msg, isError) {
+    if (!el.roomSettingsStatus) return;
+    el.roomSettingsStatus.textContent = msg || "";
+    el.roomSettingsStatus.classList.toggle("error", !!isError);
+  }
+
+  async function loadRoomSettings(graphId) {
+    if (!el.roomSettingsPanel || !el.roomStackedPrEnabled) return;
+    if (!isRoomGraphId(graphId)) {
+      el.roomSettingsPanel.hidden = true;
+      setRoomSettingsStatus("");
+      return;
+    }
+    el.roomSettingsPanel.hidden = false;
+    const token = ++roomSettingsLoadToken;
+    el.roomStackedPrEnabled.disabled = true;
+    setRoomSettingsStatus("Loading room settings…");
+    try {
+      const data = await apiGet(
+        "/api/room-settings/" + encodeURIComponent(graphId)
+      );
+      if (token !== roomSettingsLoadToken || graphId !== focusGraphId) return;
+      el.roomStackedPrEnabled.checked = !!data.stacked_pr_enabled;
+      setRoomSettingsStatus("");
+    } catch (err) {
+      if (token !== roomSettingsLoadToken) return;
+      setRoomSettingsStatus(err.message || "Failed to load room settings", true);
+    } finally {
+      if (token === roomSettingsLoadToken) {
+        el.roomStackedPrEnabled.disabled = false;
+      }
+    }
+  }
+
+  async function saveRoomSettings(enabled) {
+    const graphId = focusGraphId;
+    if (!isRoomGraphId(graphId) || !el.roomStackedPrEnabled) return;
+    el.roomStackedPrEnabled.disabled = true;
+    setRoomSettingsStatus("Saving…");
+    try {
+      const data = await apiPost("/api/room-settings/" + encodeURIComponent(graphId), {
+        stacked_pr_enabled: enabled,
+      });
+      if (graphId !== focusGraphId) return;
+      el.roomStackedPrEnabled.checked = !!data.stacked_pr_enabled;
+      setRoomSettingsStatus("");
+    } catch (err) {
+      setRoomSettingsStatus(err.message || "Failed to save room settings", true);
+      await loadRoomSettings(graphId);
+    } finally {
+      if (graphId === focusGraphId) {
+        el.roomStackedPrEnabled.disabled = false;
+      }
+    }
+  }
 
   function setStatus(msg, isError) {
     el.chatStatus.textContent = msg || dispatchBanner;
@@ -888,6 +953,9 @@
         ? "Attached: " + attachedGraphId
         : "Epic War Room";
     el.btnDetach.hidden = !attachedGraphId;
+    loadRoomSettings(focusGraphId).catch(function (err) {
+      setRoomSettingsStatus(err.message || "Failed to load room settings", true);
+    });
   }
 
   let boardRefreshInFlight = null;
@@ -1648,6 +1716,13 @@
   if (el.btnCancelBrief) el.btnCancelBrief.addEventListener("click", function () { el.briefDialog.close(); });
   if (el.briefForm) el.briefForm.addEventListener("submit", submitBrief);
   if (el.btnPullMain) el.btnPullMain.addEventListener("click", pullMain);
+  if (el.roomStackedPrEnabled) {
+    el.roomStackedPrEnabled.addEventListener("change", function () {
+      saveRoomSettings(el.roomStackedPrEnabled.checked).catch(function (err) {
+        setRoomSettingsStatus(err.message || "Failed to save room settings", true);
+      });
+    });
+  }
   if (el.btnRefreshOpenReviews) {
     el.btnRefreshOpenReviews.addEventListener("click", function () {
       refreshOpenReviews({ userInitiated: true }).catch(function (err) {

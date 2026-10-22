@@ -447,6 +447,78 @@ button:disabled {
   color: var(--muted);
 }
 
+.room-settings-panel {
+  margin: 0.75rem 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.room-setting-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.room-setting-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.room-setting-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.room-setting-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.room-setting-toggle input[type="checkbox"] {
+  appearance: none;
+  width: 2.5rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #2a2f3a;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+
+.room-setting-toggle input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 0.12rem;
+  left: 0.12rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #e8eaed;
+  transition: transform 0.15s ease;
+}
+
+.room-setting-toggle input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.room-setting-toggle input[type="checkbox"]:checked::after {
+  transform: translateX(1.1rem);
+}
+
+.room-setting-toggle input[type="checkbox"]:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .open-reviews-panel summary {
   cursor: pointer;
   font-weight: 600;
