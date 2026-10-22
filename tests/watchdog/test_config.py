@@ -10,11 +10,28 @@ from cascade.watchdog import (
     ProvidersConfig,
     dispatch_task,
     read_models_table,
+    completed_epic_display_limit,
     read_providers_config,
     task_parallelism,
 )
 from cascade.board import read_doc
 from tests.support import add_doc, make_repo
+
+
+def test_completed_epic_display_limit_defaults_and_fallbacks(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    assert completed_epic_display_limit(root) == 10
+
+    (root / "cascade.toml").write_text(
+        "[war_room]\ncompleted_epic_display_limit = 5\n", encoding="utf-8"
+    )
+    assert completed_epic_display_limit(root) == 5
+
+    (root / "cascade.toml").write_text(
+        "[war_room]\ncompleted_epic_display_limit = 0\n", encoding="utf-8"
+    )
+    assert completed_epic_display_limit(root) == 10
 
 
 def test_parallelism_defaults_and_rejects_non_integers(tmp_path: Path) -> None:

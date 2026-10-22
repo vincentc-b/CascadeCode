@@ -92,9 +92,10 @@ def test_get_board_shape(war_room_server):
     base, _root, _server = war_room_server
     status, payload, _headers = _get(f"{base}/api/board")
     assert status == HTTPStatus.OK
-    assert set(payload) == {"epics", "features", "tasks"}
-    for tier in payload.values():
-        assert set(tier) == {"1_backlog", "2_active", "3_completed"}
+    assert set(payload) == {"epics", "features", "tasks", "board"}
+    assert payload["board"]["completed_epic_display_limit"] == 10
+    for tier in ("epics", "features", "tasks"):
+        assert set(payload[tier]) == {"1_backlog", "2_active", "3_completed"}
     tasks_active = payload["tasks"]["2_active"]
     assert len(tasks_active) == 1
     assert tasks_active[0]["id"] == "task_001"

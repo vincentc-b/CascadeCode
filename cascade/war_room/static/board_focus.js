@@ -12,7 +12,7 @@
       selected_epic_id: null,
       selected_feature_id: null,
       completed_collapsed: {
-        epics: false,
+        epics: true,
         features: true,
         tasks: true,
       },

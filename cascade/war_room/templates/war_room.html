@@ -92,19 +92,29 @@
               <h3>Epics</h3>
               <div class="board-column" data-column="1_backlog"></div>
               <div class="board-column" data-column="2_active"></div>
-              <div class="board-column board-column-completed" data-column="3_completed">
+              <div
+                class="board-column board-column-completed board-column-completed-collapsed"
+                data-column="3_completed"
+              >
                 <div class="board-column-header board-column-header-completed">
                   <span class="board-column-label">Completed</span>
-                  <button
-                    type="button"
-                    class="board-completed-collapse"
-                    data-board-completed-collapse
-                    data-board-tier="epics"
-                    aria-expanded="true"
-                    aria-label="Toggle completed epics column"
-                  >
-                    Collapse
-                  </button>
+                  <div class="board-column-header-completed-actions">
+                    <span
+                      class="board-completed-history"
+                      data-board-completed-history
+                      data-board-tier="epics"
+                    ></span>
+                    <button
+                      type="button"
+                      class="board-completed-collapse"
+                      data-board-completed-collapse
+                      data-board-tier="epics"
+                      aria-expanded="false"
+                      aria-label="Toggle completed epics column"
+                    >
+                      Expand
+                    </button>
+                  </div>
                 </div>
                 <p
                   class="board-completed-count"
