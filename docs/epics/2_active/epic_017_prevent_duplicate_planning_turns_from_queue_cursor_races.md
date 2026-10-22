@@ -4,7 +4,8 @@ title: Prevent duplicate planning turns from queue cursor races
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_017_001
 depends_on: []
 owners:
 - epic_manager
@@ -76,6 +77,7 @@ Planning graphs can repeatedly process the same queue events when queue ingestio
 - Existing tests to extend instead of duplicating: `tests/workspace/test_kickoff.py`, `tests/workspace/test_human_comment_kickoff.py`, `tests/watchdog/test_queue.py`, `tests/workspace/test_up.py`.
 
 ## Feature breakdown
+- feat_017_001
 
 1. **Serialized queue delivery and monotonic cursor** (`feat` minted at activation). Move ingestion under the per-graph lock and serial job path, coalesce delivery jobs, one turn per batch with the comment/agent/resolution classification above, a monotonic cursor helper for all three tiers. Regression tests: a queue append during an in-flight turn is ingested exactly once and the cursor ends at EOF; N maintenance ticks on an unchanged queue start zero turns; one human comment yields exactly one turn and one reply; agent reply / `CommentResolved` yields zero turns; event ordering in messages matches queue order. This feature alone stops the loop.
 2. **Restart convergence and stall detection** (depends on 1). Route boot resume and watchdog delivery through the same serialized path so an interrupted turn resumes at most once, a behind-cursor graph from before the fix catches up in one bounded delivery and settles idle, and add the delivery log plus stalled-cursor / duplicate-kickoff warning. Tests: simulated restart with an interrupted checkpoint and pending queue lines (bounded invocations, idle at the end), plus a forced stall that emits exactly one warning.
