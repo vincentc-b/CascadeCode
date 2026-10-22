@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-21'
-updated: '2026-10-21'
+updated: '2026-10-22'
 provider: codex
 models:
   feature_lead: gpt-5.6-sol
