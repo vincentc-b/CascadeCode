@@ -2,7 +2,7 @@
 id: feat_011_001
 title: Bound and collapse completed epics board
 tier: feature
-status: active
+status: backlog
 parent: epic_011
 children:
 - task_011_001_001
