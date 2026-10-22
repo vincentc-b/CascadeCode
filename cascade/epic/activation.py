@@ -55,6 +55,12 @@ def activate_epic_on_worktree(
 ) -> None:
     """Move the live epic doc into the epic worktree; leave a trunk pointer."""
 
+    from cascade.workspace.backlog_snapshot import is_snapshot_only_epic
+
+    if is_snapshot_only_epic(work_id, trunk=trunk):
+        _activate_snapshot_epic_on_worktree(work_id, trunk=trunk, epic_wt=epic_wt)
+        return
+
     live_root = epic_wt.path
     doc = read_doc(work_id, root=trunk)
     old_path = doc.meta.path.resolve()
@@ -90,6 +96,26 @@ def activate_epic_on_worktree(
     write_doc(pointer, root=trunk)
     if has_git(trunk) and old_path != pointer.meta.path.resolve():
         commit_paths(trunk, [old_path], f"docs: {work_id} trunk pointer")
+
+
+def _activate_snapshot_epic_on_worktree(
+    work_id: str,
+    *,
+    trunk: Path,
+    epic_wt: IntegrationWorktree,
+) -> None:
+    """Materialize a remote backlog epic on its integration worktree without trunk commits."""
+
+    live_root = epic_wt.path
+    doc = read_doc(work_id, root=trunk)
+    old_name = doc.meta.path.name
+
+    live = WorkDoc(meta=doc.meta, body=doc.body, sha=None)
+    live.meta.status = "active"
+    live.meta.path = (live_root / column_dir("epic", "active") / old_name).resolve()
+    _drop_stale_copies(work_id, tier="epic", keep=live.meta.path, board_root=live_root)
+    write_doc(live, root=live_root)
+    _scrub_child_specs(live_root)
 
 
 def _drop_stale_copies(

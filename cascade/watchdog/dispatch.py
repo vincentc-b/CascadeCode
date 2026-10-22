@@ -18,10 +18,10 @@ from cascade.watchdog.hooks import invoke_boot
 from cascade.watchdog.lock import process_lock
 from cascade.watchdog.skills import SkillPathError, effective_skill_paths, rewrite_skills_section
 from cascade.watchdog.types import DispatchResult, Event, Principal
+from cascade.workspace.backlog_snapshot import resolve_validated_epic_activation_sha
 from cascade.workspace.integration_worktree import (
     create_integration_worktree,
     doc_filesystem_root,
-    epic_brief_committed_on_trunk,
     get_integration_worktree,
     integration_branch,
     merged_board,
@@ -118,13 +118,11 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
         move_doc(work_id, "active", root=root)
         event = _emit(root, work_id, "EpicActivated", {"epic_id": work_id, "by": by})
         return DispatchResult(ok=True, reason=None, event=event)
-    if not epic_brief_committed_on_trunk(work_id, trunk=root):
+    base_sha = resolve_validated_epic_activation_sha(work_id, trunk=root)
+    if base_sha is None:
         return _fail("brief_not_on_trunk")
     if head_sha(root) is None:
         return _fail("bad_state")
-
-    base_sha = head_sha(root)
-    assert base_sha is not None
     branch = integration_branch("epic", work_id)
     epic_wt = create_integration_worktree(
         "epic",
