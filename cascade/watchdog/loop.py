@@ -40,12 +40,14 @@ def clear_watchdog_memory() -> None:
     """Forget toast suppression. Tests call this so cases do not leak."""
 
     from cascade.workspace.flight import clear_flight_memory
+    from cascade.workspace.queue_observability import clear_queue_observability_memory
 
     with process_lock:
         _stuck.clear()
         _orphan_toast_signatures.clear()
         _work_queue_signatures.clear()
         clear_flight_memory()
+    clear_queue_observability_memory()
 
 
 def watchdog_tick(root: Path | None = None) -> None:
@@ -73,8 +75,10 @@ def watchdog_tick(root: Path | None = None) -> None:
 
         refresh_flight_report_if_stale(repo)
     from cascade.watchdog.events import prune_completed_work_queues
+    from cascade.workspace.queue_observability import scan_graph_queue_stalls
 
     prune_completed_work_queues(root=repo)
+    scan_graph_queue_stalls(repo)
 
 
 def _event_tick(root: Path) -> None:
