@@ -85,7 +85,7 @@ def write_doc(doc: WorkDoc, *, root: Path | None = None) -> str | None:
 
     Returns the commit SHA. Returns None when `root` is not a git repository.
     Does not create the repository. If the repo exists but the commit fails,
-    the file is already on disk and GitError is raised.
+    the previous on-disk state is restored and GitError is raised.
     """
 
     with process_lock:
@@ -109,15 +109,24 @@ def _write_doc(doc: WorkDoc, root: Path | None) -> str | None:
     trunk = locate_trunk(repo)
     board = merged_board(trunk)
     validate_doc(doc, board)
+    previous_bytes = doc.meta.path.read_bytes() if doc.meta.path.exists() else None
     doc.meta.path.parent.mkdir(parents=True, exist_ok=True)
     doc.meta.path.write_text(render_doc(doc), encoding="utf-8")
     invalidate_merged_board(trunk)
     commit_root = git_root_for_path(doc.meta.path) if has_git(repo) else repo
-    sha = commit_paths(
-        commit_root,
-        [doc.meta.path],
-        f"docs: {doc.meta.id} {doc.meta.title}",
-    )
+    try:
+        sha = commit_paths(
+            commit_root,
+            [doc.meta.path],
+            f"docs: {doc.meta.id} {doc.meta.title}",
+        )
+    except GitError:
+        if previous_bytes is None:
+            doc.meta.path.unlink(missing_ok=True)
+        else:
+            doc.meta.path.write_bytes(previous_bytes)
+        invalidate_merged_board(trunk)
+        raise
     doc.sha = sha
     return sha
 
