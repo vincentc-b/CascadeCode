@@ -2,7 +2,7 @@
 id: epic_008
 title: Board backlog update fix
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_006
@@ -13,7 +13,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-21'
-updated: '2026-10-21'
+updated: '2026-10-22'
 provider: codex
 models:
   epic_manager: gpt-5.6-sol
