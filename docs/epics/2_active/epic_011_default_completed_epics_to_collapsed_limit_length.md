@@ -100,6 +100,11 @@ This is intentionally one feature: none of the individual changes is a useful in
   Chose Use 10 as the completed-epic display limit when configuration is absent, malformed, or non-positive..
   Rationale: Ten matches the approved brief, keeps the board compact, and gives legacy projects deterministic backward-compatible behavior.
   Honors: Success criteria requiring a configurable N and the requested last-10 default..
+
+- `dec_002` · 2026-10-22 · Epic Manager · **Feature slicing**
+  Chose Ship collapse, bounding, configuration, history link, and focused coverage as one feature (feat_011_001)..
+  Rationale: These changes form one user-visible board contract and have no useful independently shippable subset; one slice reduces coordination and testing overhead.
+  Honors: Ruthless prioritization and the smallest shippable slice..
 ## Amendment log
 
 _(none)_
