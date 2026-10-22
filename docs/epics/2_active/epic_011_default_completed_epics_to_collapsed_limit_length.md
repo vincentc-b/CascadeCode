@@ -105,6 +105,11 @@ This is intentionally one feature: none of the individual changes is a useful in
   Chose Ship collapse, bounding, configuration, history link, and focused coverage as one feature (feat_011_001)..
   Rationale: These changes form one user-visible board contract and have no useful independently shippable subset; one slice reduces coordination and testing overhead.
   Honors: Ruthless prioritization and the smallest shippable slice..
+
+- `dec_003` · 2026-10-22 · Epic Manager · **Implementation boundary**
+  Chose Preserve existing completed-epic ordering and repository metadata/path conventions; apply the limit only at the board/view-model boundary..
+  Rationale: This avoids changing domain semantics, adding storage, or hard-coding a repository host while ensuring the newest items are retained.
+  Honors: The approved requirement to show recent completed work and link to full repository history..
 ## Amendment log
 
 _(none)_
