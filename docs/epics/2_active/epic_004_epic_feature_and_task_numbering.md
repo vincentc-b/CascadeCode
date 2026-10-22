@@ -158,6 +158,11 @@ _(none)_
   Chose Assume no external integration currently persists Cascade work IDs; omit remote-system preflight, migration, and notification from this epic while retaining checks for local runtime identity artifacts..
   Rationale: This records the human-confirmed current-state boundary and avoids speculative integration work. Local checkpoints, queues, worktrees, and branches still exist and can make a backlog rename unsafe.
   Honors: In reply to: cmt_001; the human direction to assume no external integrations persist work IDs, plus the approved backlog-only and atomic-migration constraints..
+
+- `dec_007` · 2026-10-22 · Epic Architect · **Allocation history**
+  Chose Retain a durable high-water mark (or equivalent allocation history) for each epic, feature, and task namespace, and atomically advance it with creation under the existing board process lock..
+  Rationale: Scanning only currently persisted siblings would reuse the highest identifier after hard deletion, contradicting the approved monotonic non-reuse requirement. A small persisted watermark closes that gap without introducing a new service or general transaction system.
+  Honors: The epic success criterion that moved, archived, or deleted work IDs are never reused, and the frugal-engineering preference for the smallest reliable persistence extension..
 ## Amendment log
 
 - 2026-10-22 · Architectural clarification for feat_009 · Required durable per-namespace allocation history and atomic high-water-mark advancement so hard deletion cannot cause ID reuse; added one high-signal deletion/non-reuse integration criterion.
