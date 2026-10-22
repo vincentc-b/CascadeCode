@@ -2,7 +2,7 @@
 id: feat_017_002
 title: Restart convergence and stall detection
 tier: feature
-status: active
+status: backlog
 parent: epic_017
 children:
 - task_017_002_001
