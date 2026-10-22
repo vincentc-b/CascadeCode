@@ -25,6 +25,7 @@ from cascade.watchdog.types import DispatchResult, Event
 from cascade.workspace.integration_worktree import IntegrationWorktree
 from cascade.agent.providers import ProviderId, ProviderStatus
 from cascade.review import OpenReview
+from cascade.war_room.room_settings import RoomSettings
 from cascade.workspace.types import FlightOverlap, FlightReport
 
 _COLUMN_FOLDERS = frozenset({"1_backlog", "2_active", "3_completed"})
@@ -142,6 +143,13 @@ def dispatch_result_to_dict(result: DispatchResult) -> dict:
         "ok": result.ok,
         "reason": result.reason,
         "event": event_to_dict(result.event) if result.event is not None else None,
+    }
+
+
+def room_settings_to_dict(settings: RoomSettings) -> dict[str, object]:
+    return {
+        "graph_id": settings.graph_id,
+        "stacked_pr_enabled": settings.stacked_pr_enabled,
     }
 
 
