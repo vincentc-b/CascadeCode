@@ -74,6 +74,10 @@ The same thread node builder and refresh path must serve both destinations so po
 - 2026-10-22 · Epic Manager · Global and unplaceable threads remain in the existing bottom review tray so inline placement never hides a comment.
 - 2026-10-22 · Epic Manager · Deliver as one end-to-end feature because the behavior is localized to one viewer flow and splitting it would add coordination without independent user value.
 
+- `dec_001` · 2026-10-22 · Epic Manager · **Scope**
+  Chose Limit the epic to plan-viewer placement and presentation; keep comment persistence, APIs, gates, and agent workflows unchanged..
+  Rationale: The existing model already stores line anchors and supports all comment lifecycle operations, so backend work would add risk without serving the requested behavior.
+  Honors: The request that posted comments appear where they were added..
 ## Amendment log
 
 _(none)_
