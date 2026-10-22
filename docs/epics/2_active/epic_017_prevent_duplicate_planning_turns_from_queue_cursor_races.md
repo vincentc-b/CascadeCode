@@ -93,6 +93,10 @@ Testing stance: prefer a small number of system-level tests with a fake planning
 - 2026-10-22 · epic_manager · Ingestion moves into the serialized per-graph job; the watchdog never writes graph checkpoints directly.
 - 2026-10-22 · epic_manager · Two features: the core serialized delivery fix, then restart convergence plus stall detection. Observability is limited to logs and one War Room note.
 
+- `dec_001` · 2026-10-22 · Epic Manager · **Macro-architecture**
+  Chose Queue ingestion (read events, append messages, advance last_queue_offset) runs only inside the serialized per-graph kickoff job under _graph_lock; the watchdog only detects a queue ahead of the cursor and submits a coalesced delivery job..
+  Rationale: The loop comes from an unlocked update_state in deliver_queue_kickoffs that an in-flight graph.invoke checkpoint supersedes, which loses the cursor and the event messages. Making a single writer per graph removes the race at its source and keeps restart safety, because the durable checkpoint cursor stays authoritative. A max-reducer alone would not help, since the in-flight run never sees the write.
+  Honors: Success criteria: at-most-once incorporation, monotonic cursor; constraints: preserve per-graph serialization and non-blocking watchdog, no in-memory-only dedup, backward-compatible checkpoints.
 ## Amendment log
 
 _(none)_
