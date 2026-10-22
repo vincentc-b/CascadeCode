@@ -602,6 +602,15 @@ def _merged_board_uncached(trunk: Path) -> BoardIndex:
             current = by_id.get(work_id)
             if current is None or _meta_preference(meta) > _meta_preference(current):
                 by_id[work_id] = meta
+    from cascade.workspace.backlog_snapshot import read_provenance, snapshot_board
+
+    if read_provenance(trunk) is not None:
+        for work_id, meta in snapshot_board(trunk).by_id.items():
+            if meta.tier != "epic" or meta.path.parent.name != "1_backlog":
+                continue
+            if work_id in by_id:
+                continue
+            by_id[work_id] = meta
     return BoardIndex(by_id=by_id)
 
 
@@ -609,7 +618,15 @@ def doc_filesystem_root(work_id: str, *, trunk: Path) -> Path:
     """Return the checkout root that owns ``work_id``'s markdown file."""
 
     meta = _best_meta_for_id(work_id, trunk=trunk)
-    return git_root_for_path(meta.path)
+    path = meta.path.resolve()
+    from cascade.workspace.backlog_snapshot import snapshot_root
+
+    snap = snapshot_root(trunk).resolve()
+    try:
+        path.relative_to(snap)
+    except ValueError:
+        return git_root_for_path(meta.path)
+    return snap
 
 
 def _best_meta_for_id(work_id: str, *, trunk: Path) -> WorkMeta:

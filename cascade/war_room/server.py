@@ -73,7 +73,8 @@ from cascade.war_room.serialize import comment_to_dict
 from cascade.workspace.kickoff import deferred_kickoffs
 from cascade.watchdog import activate_epic, append_event, dispatch_feature, dispatch_task
 from cascade.watchdog.types import Event
-from cascade.board.errors import GitError
+from cascade.board.errors import BoardError, GitError
+from cascade.workspace.errors import WorkspaceError
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SKILLS_INVALID = object()
@@ -426,7 +427,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
         try:
             payload = sync_briefs(self.server.root, force=True)
-        except (ValueError, GitError, OSError) as exc:
+        except (ValueError, BoardError, WorkspaceError, OSError) as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(HTTPStatus.OK, payload)

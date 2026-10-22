@@ -246,9 +246,13 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         raise GitError(f"epic worktree missing: {doc.meta.parent}")
     from cascade.feature.publication import prepare_feature_publication
 
-    prepare_feature_publication(feature_id, root=trunk)
+    publication = prepare_feature_publication(feature_id, root=trunk)
     push_branch(epic_entry.path, target)
-    push_branch(entry.path, source)
+    remote_lease_sha = getattr(publication, "remote_lease_sha", None)
+    if remote_lease_sha is not None:
+        push_branch(entry.path, source, force_with_lease=remote_lease_sha)
+    else:
+        push_branch(entry.path, source)
     mr = create_merge_request(
         entry.path,
         title=f"{feature_id}: {doc.meta.title}",
@@ -428,8 +432,16 @@ def poll_feature_reviews(root: Path) -> None:
                 try:
                     from cascade.feature.publication import prepare_feature_publication
 
-                    prepare_feature_publication(feature_id, root=trunk)
-                    push_branch(entry.path, mr.source_branch)
+                    publication = prepare_feature_publication(feature_id, root=trunk)
+                    remote_lease_sha = getattr(publication, "remote_lease_sha", None)
+                    if remote_lease_sha is not None:
+                        push_branch(
+                            entry.path,
+                            mr.source_branch,
+                            force_with_lease=remote_lease_sha,
+                        )
+                    else:
+                        push_branch(entry.path, mr.source_branch)
                 except GitError:
                     # Fail closed: never publish checkpoint/merge noise after the
                     # initial review was opened.

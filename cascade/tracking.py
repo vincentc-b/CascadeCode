@@ -61,8 +61,17 @@ def forge_ready(root: Path, remote: str = "origin") -> bool:
     return command is not None and shutil.which(command) is not None
 
 
-def push_branch(root: Path, branch: str, *, remote: str = "origin") -> None:
-    result = _git(["push", "-u", remote, branch], root)
+def push_branch(
+    root: Path,
+    branch: str,
+    *,
+    remote: str = "origin",
+    force_with_lease: str | None = None,
+) -> None:
+    args = ["push", "-u"]
+    if force_with_lease is not None:
+        args.append(f"--force-with-lease=refs/heads/{branch}:{force_with_lease}")
+    result = _git([*args, remote, branch], root)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         raise GitError(detail or f"could not push {branch}")
