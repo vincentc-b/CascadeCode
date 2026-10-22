@@ -26,6 +26,11 @@ from cascade.board.store import (
     read_doc,
     write_doc,
 )
+from cascade.board.backlog_migration import (
+    BacklogMigrationPlan,
+    BacklogMigrationValidationError,
+    build_backlog_migration_plan,
+)
 from cascade.board.work_ids import allocate_hierarchical_id
 from cascade.board.types import (
     BoardIndex,
@@ -52,7 +57,10 @@ __all__ = [
     "WorkMeta",
     "WorkStatus",
     "WorkTier",
+    "BacklogMigrationPlan",
+    "BacklogMigrationValidationError",
     "allocate_hierarchical_id",
+    "build_backlog_migration_plan",
     "allocate_id",
     "column_dir",
     "column_for_status",
