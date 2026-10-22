@@ -127,6 +127,11 @@ _(none)_
   Chose Limit stacked dispatch in this epic to linear dependency chains; dependency fan-in is unsupported and fails closed with a visible topology reason. This supersedes dec_004's unique-nearest fan-in handling for this epic. In reply to: cmt_001.
   Rationale: A pull request has one base, and linear-only support meets the core lead-time goal without adding graph-selection behavior that the requested scope does not need.
   Honors: The human's scope direction, the existing dependency graph, deterministic behavior, and the smallest complete vertical slice..
+
+- `dec_008` · 2026-10-22 · Epic Manager · **Scope**
+  Chose Make stacked pull-request dispatch an explicit per-Cascade-room opt-in through a persisted slider that defaults to off; when disabled, preserve existing dispatch behavior for future eligibility decisions and do not rewrite pull requests already created. In reply to: cmt_002..
+  Rationale: Stacking changes dispatch timing and pull-request bases, so room owners should choose it deliberately. A default-off persisted gate provides a safe rollout while keeping the control and backend behavior aligned.
+  Honors: The human's opt-in request, backward-compatible defaults, room-level ownership, the smallest complete vertical slice, and deterministic behavior..
 ## Amendment log
 
 _(none)_
