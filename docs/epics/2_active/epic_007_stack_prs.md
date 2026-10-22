@@ -111,6 +111,11 @@ _(none)_
   Chose Assume GitHub native base retargeting after predecessor merge; verify and diagnose it in this epic, and defer explicit retargeting to a follow-up feature if implementation evidence disproves the assumption. In reply to: cmt_001.
   Rationale: This keeps the first release to the smallest useful slice while preserving a clear fallback if the provider contract is insufficient.
   Honors: The human's stated assumption, focused scope, visible failure behavior, and avoidance of speculative provider work..
+
+- `dec_006` · 2026-10-22 · Epic Manager · **Lifecycle integrity**
+  Chose Require a durable feature-to-pull-request link in project state before a feature can enter the completed state. In reply to: cmt_001.
+  Rationale: Downstream stacking depends on resolving the completed predecessor's pull request and branch deterministically; completion without that identity would create an unsafe, unrecoverable gap.
+  Honors: The human's tracking requirement, fail-closed safety, deterministic retries, and artifact-driven lifecycle state..
 ## Amendment log
 
 _(none)_
