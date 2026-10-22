@@ -87,6 +87,8 @@ def reset_kickoff_test_state() -> None:
 
     _defer_turns.set(False)
     clear_kickoff_delivery_state()
+    with _registry_lock:
+        _graph_locks.clear()
 
 
 def wait_for_background_kickoffs(timeout: float = 30.0) -> bool:
@@ -180,7 +182,7 @@ def _report_background_failure(work_id: str, exc: Exception, repo: Path) -> None
 
 
 def resume_inflight_graphs(root: Path) -> None:
-    """Continue interrupted turns only; idle graphs stay idle."""
+    """Resume interrupted turns and catch up queue cursors via the delivery path."""
 
     repo = Path(root).resolve()
     from cascade.workspace.integration_worktree import merged_board
@@ -194,17 +196,14 @@ def resume_inflight_graphs(root: Path) -> None:
             continue
         if meta.tier == "task":
             continue
-        if not _graph_has_inflight_turn(work_id, meta.tier, root=repo, feature_id=meta.parent):
-            continue
-        kickoff_turn(
-            KickoffReason(
-                kind="resume_inflight",
-                work_id=work_id,
-                by="watchdog",
-                root=repo,
-                feature_id=meta.parent if meta.tier == "task" else None,
-            )
+        feature_id = meta.parent if meta.tier == "task" else None
+        inflight = _graph_has_inflight_turn(
+            work_id, meta.tier, root=repo, feature_id=feature_id
         )
+        ahead = _queue_is_ahead(work_id, meta.tier, root=repo, feature_id=feature_id)
+        if not inflight and not ahead:
+            continue
+        _schedule_queue_delivery(work_id, meta.tier, repo, feature_id)
 
 
 def kickoff_human_comment(doc_id: str, comment_id: str, *, root: Path) -> bool:
@@ -342,6 +341,84 @@ def _run_queue_delivery(
             _model_turn_authorized.reset(token)
 
 
+def _log_queue_delivery(
+    work_id: str,
+    *,
+    cursor_before: int,
+    cursor_after: int,
+    queue_size: int,
+    turn_started: bool,
+) -> None:
+    _log.info(
+        "graph queue delivery work_id=%s cursor_before=%s cursor_after=%s "
+        "queue_size=%s turn_started=%s",
+        work_id,
+        cursor_before,
+        cursor_after,
+        queue_size,
+        turn_started,
+        extra={
+            "work_id": work_id,
+            "cursor_before": cursor_before,
+            "cursor_after": cursor_after,
+            "queue_size": queue_size,
+            "turn_started": turn_started,
+        },
+    )
+
+
+def _resume_inflight_turn_if_needed(
+    work_id: str,
+    tier: str,
+    repo: Path,
+    feature_id: str | None,
+) -> bool:
+    """Re-read ``snapshot.next`` under the graph lock and resume at most once."""
+
+    if not _graph_has_inflight_turn(work_id, tier, root=repo, feature_id=feature_id):
+        return False
+    if tier == "epic":
+        from cascade.epic.checkpoint import thread_config
+        from cascade.epic.graph import ensure_epic_graph
+
+        graph = ensure_epic_graph(work_id, root=repo)
+        config = thread_config(work_id)
+    elif tier == "feature":
+        from cascade.feature.checkpoint import thread_config
+        from cascade.feature.graph import ensure_feature_graph
+
+        graph = ensure_feature_graph(work_id, root=repo)
+        config = thread_config(work_id)
+    else:
+        from cascade.task.checkpoint import thread_config
+        from cascade.task.graph import ensure_task_graph
+
+        graph = ensure_task_graph(work_id, root=repo, feature_id=feature_id)
+        config = thread_config(work_id)
+    snapshot = graph.get_state(config)
+    if not snapshot.next:
+        return False
+    if not _checkpoint_has_models(work_id, tier, root=repo, feature_id=feature_id):
+        return False
+    cursor_before = _queue_offset(work_id, tier, root=repo, feature_id=feature_id)
+    queue_size = queue_byte_size(work_id, root=repo)
+    _log_queue_delivery(
+        work_id,
+        cursor_before=cursor_before,
+        cursor_after=cursor_before,
+        queue_size=queue_size,
+        turn_started=True,
+    )
+    _invoke_role_turn(
+        work_id,
+        tier,
+        root=repo,
+        feature_id=feature_id,
+        resume=True,
+    )
+    return True
+
+
 def _run_queue_delivery_locked(
     work_id: str,
     tier: str,
@@ -350,9 +427,12 @@ def _run_queue_delivery_locked(
 ) -> None:
     from cascade.watchdog.events import read_events
 
+    _resume_inflight_turn_if_needed(work_id, tier, repo, feature_id)
+
     for _pass in range(2):
         before = _queue_offset(work_id, tier, root=repo, feature_id=feature_id)
-        if queue_byte_size(work_id, root=repo) <= before:
+        queue_size = queue_byte_size(work_id, root=repo)
+        if queue_size <= before:
             return
         new_events, new_offset = read_events(work_id, before, root=repo)
         if not new_events:
@@ -369,6 +449,13 @@ def _run_queue_delivery_locked(
         )
         if after <= before:
             return
+        _log_queue_delivery(
+            work_id,
+            cursor_before=before,
+            cursor_after=after,
+            queue_size=queue_size,
+            turn_started=bool(staged),
+        )
         if staged:
             kickoff_turn(
                 KickoffReason(
