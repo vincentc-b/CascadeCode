@@ -7,7 +7,8 @@ from pathlib import Path
 
 from cascade.agent.providers import parse_provider_id
 from cascade.board.errors import CycleError, SchemaError, StatusMismatch
-from cascade.board.paths import infer_repo_root, legal_folder, parse_work_id
+from cascade.board.paths import infer_repo_root, legal_folder
+from cascade.board.work_ids import validate_work_id_identity
 from cascade.board.types import BoardIndex, WorkDoc, WorkMeta, WorkTier
 
 _REQUIRED_HEADINGS: dict[WorkTier, tuple[str, ...]] = {
@@ -76,9 +77,7 @@ def validate_doc(doc: WorkDoc, board: BoardIndex) -> None:
 
 
 def _check_identity(meta: WorkMeta) -> None:
-    tier, _number = parse_work_id(meta.id)
-    if tier != meta.tier:
-        raise SchemaError(f"id {meta.id} does not match tier {meta.tier}")
+    validate_work_id_identity(meta.id, tier=meta.tier, parent=meta.parent)
     stem = meta.path.stem
     if not (stem == meta.id or stem.startswith(meta.id + "_")):
         raise SchemaError(f"filename {meta.path.name} does not match id {meta.id}")

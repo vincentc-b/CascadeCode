@@ -12,6 +12,7 @@ from cascade.agent.errors import ProviderConfigError
 from cascade.agent.providers import parse_provider_id
 from cascade.board.errors import SchemaError
 from cascade.board.paths import parse_work_id
+from cascade.board.work_ids import tier_of_work_id
 from cascade.board.types import WorkDoc, WorkMeta, WorkStatus, WorkTier
 
 _REQUIRED_KEYS = (
@@ -121,7 +122,7 @@ def _meta_from_mapping(loaded: dict[str, object], path: Path) -> WorkMeta:
     work_id = loaded["id"]
     if not isinstance(work_id, str):
         raise SchemaError("id must be a string")
-    tier_from_id, _number = parse_work_id(work_id)
+    tier_from_id = tier_of_work_id(work_id)
 
     title = loaded["title"]
     if not isinstance(title, str) or not title.strip() or "\n" in title:

@@ -17,6 +17,7 @@ from cascade.board.paths import (
     parse_work_id,
     status_for_column,
 )
+from cascade.board.id_reservations import reset_id_reservations
 from cascade.board.store import (
     allocate_id,
     list_board,
@@ -25,6 +26,7 @@ from cascade.board.store import (
     read_doc,
     write_doc,
 )
+from cascade.board.work_ids import allocate_hierarchical_id
 from cascade.board.types import (
     BoardIndex,
     Column,
@@ -50,6 +52,7 @@ __all__ = [
     "WorkMeta",
     "WorkStatus",
     "WorkTier",
+    "allocate_hierarchical_id",
     "allocate_id",
     "column_dir",
     "column_for_status",
@@ -61,6 +64,7 @@ __all__ = [
     "parse_work_id",
     "pin_parent",
     "read_doc",
+    "reset_id_reservations",
     "status_for_column",
     "validate_doc",
     "write_doc",

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextvars import ContextVar
 from datetime import date
 from pathlib import Path
 
@@ -15,6 +14,11 @@ from cascade.board.gitutil import (
     path_for_work_id,
     read_blob,
 )
+from cascade.board.id_reservations import (
+    reset_id_reservations,
+    reserve_work_id,
+    reserved_work_ids,
+)
 from cascade.board.lock import process_lock
 from cascade.board.parse import parse_doc, parse_text, render_doc
 from cascade.board.paths import column_dir, format_work_id, parse_work_id, status_for_column
@@ -23,18 +27,6 @@ from cascade.board.validate import validate_doc
 
 _COLUMNS = ("1_backlog", "2_active", "3_completed")
 _TIER_DIRS = (("epic", "epics"), ("feature", "features"), ("task", "tasks"))
-_reserved_ids: ContextVar[frozenset[str]] = ContextVar(
-    "cascade_reserved_ids",
-    default=frozenset(),
-)
-
-
-def reset_id_reservations() -> None:
-    """Drop in-memory ids reserved by allocate_id. Tests isolate calls with this."""
-
-    _reserved_ids.set(frozenset())
-
-
 def list_board(root: Path) -> BoardIndex:
     """Scan `docs/{epics,features,tasks}/{column}` and index by id. No cache."""
 
@@ -62,7 +54,7 @@ def list_board(root: Path) -> BoardIndex:
 def allocate_id(tier: WorkTier, board: BoardIndex) -> WorkId:
     """Next free NNN for `tier`. Numbers present on the board or reserved are not reused."""
 
-    reserved = set(_reserved_ids.get())
+    reserved = set(reserved_work_ids())
     used: set[int] = set()
     for work_id in list(board.by_id) + list(reserved):
         try:
@@ -75,8 +67,7 @@ def allocate_id(tier: WorkTier, board: BoardIndex) -> WorkId:
     while number in used:
         number += 1
     work_id = format_work_id(tier, number)
-    reserved.add(work_id)
-    _reserved_ids.set(frozenset(reserved))
+    reserve_work_id(work_id)
     return work_id
 
 
