@@ -35,7 +35,6 @@ def sync_briefs(root: Path, *, force: bool = False) -> dict[str, object]:
     key = str(repo)
     if not force and now - _last_remote_poll.get(key, 0.0) < cfg.poll_seconds:
         return {"ok": True, "skipped": True, "new_briefs": []}
-    _last_remote_poll[key] = now
     before = {
         meta.id for meta in merged_board(repo).by_id.values()
         if meta.tier == "epic" and column_for_status(meta.status) == "backlog"
@@ -60,6 +59,7 @@ def sync_briefs(root: Path, *, force: bool = False) -> dict[str, object]:
 
         sha = fast_forward_trunk(repo, trunk_branch, remote=cfg.remote)
         payload_extras = {}
+    _last_remote_poll[key] = now
     after = {
         meta.id for meta in merged_board(repo).by_id.values()
         if meta.tier == "epic" and column_for_status(meta.status) == "backlog"
