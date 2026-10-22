@@ -108,6 +108,10 @@ This is intentionally one feature: none of the individual changes is a useful in
   Rationale: This avoids changing domain semantics, adding storage, or hard-coding a repository host while ensuring the newest items are retained.
   Honors: The approved requirement to show recent completed work and link to full repository history..
 
+- `dec_004` · 2026-10-22 · Epic Architect · **History-link degradation**
+  Chose When repository metadata is unavailable, keep the history-link affordance visible but disabled using the application's established unavailable-link behavior..
+  Rationale: This preserves page availability while keeping the epic's visible-link contract internally consistent and avoiding fabricated or host-specific URLs.
+  Honors: Success criterion 5, the cross-module link-visibility constraint, and the existing repository metadata boundary..
 ## Amendment log
 
 _(none)_
