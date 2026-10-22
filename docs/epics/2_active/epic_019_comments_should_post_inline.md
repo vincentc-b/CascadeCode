@@ -70,24 +70,22 @@ The same thread node builder and refresh path must serve both destinations so po
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
-- 2026-10-22 · Epic Manager · Scope is limited to client-side placement and presentation; comment persistence, APIs, gates, and agent workflows remain unchanged.
-- 2026-10-22 · Epic Manager · Global and unplaceable threads remain in the existing bottom review tray so inline placement never hides a comment.
-- 2026-10-22 · Epic Manager · Deliver as one end-to-end feature because the behavior is localized to one viewer flow and splitting it would add coordination without independent user value.
 
 - `dec_001` · 2026-10-22 · Epic Manager · **Scope**
-  Chose Limit the epic to plan-viewer placement and presentation; keep comment persistence, APIs, gates, and agent workflows unchanged..
+  Chose Limit the epic to plan-viewer placement and presentation; keep comment persistence, APIs, gates, and agent workflows unchanged.
   Rationale: The existing model already stores line anchors and supports all comment lifecycle operations, so backend work would add risk without serving the requested behavior.
-  Honors: The request that posted comments appear where they were added..
+  Honors: The request that posted comments appear where they were added.
 
 - `dec_002` · 2026-10-22 · Epic Architect · **Fallback behavior**
-  Chose Keep whole-plan and unplaceable threads in the existing bottom review tray..
+  Chose Keep whole-plan and unplaceable threads in the existing bottom review tray.
   Rationale: A visible fallback prevents comments from disappearing when an anchor is global, invalid, or cannot be relocated.
-  Honors: Reliable access to every review thread..
+  Honors: Reliable access to every review thread.
 
 - `dec_003` · 2026-10-22 · Epic Architect · **Delivery shape**
-  Chose Deliver the epic as one end-to-end feature..
+  Chose Deliver the epic as one end-to-end feature.
   Rationale: The change is localized to a single viewer flow and has no independently valuable intermediate slice.
-  Honors: Frugal engineering and the smallest shippable scope..
+  Honors: Frugal engineering and the smallest shippable scope.
+
 ## Amendment log
 
 _(none)_
