@@ -79,7 +79,12 @@ _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SKILLS_INVALID = object()
 REQUEST_DEADLINE_S = 10.0
 EPIC_CLOSE_DEADLINE_S = 60.0
+APPROVAL_DEADLINE_S = 60.0
 MAX_CONCURRENT_REQUESTS = 16
+
+_APPROVAL_POST_PATHS = frozenset(
+    {"/api/approve_epic_plan", "/api/approve_feature"}
+)
 
 
 def _merge_failure_status(reason: str | None) -> HTTPStatus:
@@ -213,7 +218,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         return True
 
     def handle(self) -> None:
-        """Serve one connection, and close it if it is still running after 10s."""
+        """Serve one connection, enforcing the deadline for its lifecycle route."""
 
         started = time.monotonic()
         finished = threading.Event()
@@ -222,17 +227,16 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             if finished.wait(REQUEST_DEADLINE_S):
                 return
             path = getattr(self, "path", "").split("?", 1)[0]
-            if (
-                getattr(self, "command", "") == "POST"
-                and path == "/api/confirm_epic_complete"
-                and finished.wait(max(0.0, EPIC_CLOSE_DEADLINE_S - REQUEST_DEADLINE_S))
+            deadline = REQUEST_DEADLINE_S
+            if getattr(self, "command", "") == "POST":
+                if path == "/api/confirm_epic_complete":
+                    deadline = EPIC_CLOSE_DEADLINE_S
+                elif path in _APPROVAL_POST_PATHS:
+                    deadline = APPROVAL_DEADLINE_S
+            if deadline > REQUEST_DEADLINE_S and finished.wait(
+                deadline - REQUEST_DEADLINE_S
             ):
                 return
-            deadline = (
-                EPIC_CLOSE_DEADLINE_S
-                if path == "/api/confirm_epic_complete"
-                else REQUEST_DEADLINE_S
-            )
             self.log_error(
                 "deadline exceeded after %.1fs; closing connection",
                 deadline,
