@@ -122,6 +122,11 @@ Testing stance: prefer a small number of system-level tests with a fake planning
   Chose Root cause confirmed. One locked delivery step in kickoff.py is the only caller of tier ingest_queue and runs first in every serialized job. The boot hooks stop calling ingest_queue. invoke_tool is explicitly kept lock-free..
   Rationale: A spike on langgraph 1.2.14 with SqliteSaver showed an in-flight invoke checkpoint resetting the cursor from 120 to 0 and dropping the event message. The boot hooks in {epic,feature,task}/boot.py were a second unlocked cursor writer that dec_001 did not cover. invoke_tool runs on the SDK tool callback or MCP process while the turn's job holds the lock, so taking the lock there would deadlock, and it never writes the cursor.
   Honors: Success criteria: at-most-once incorporation, monotonic cursor. Constraint: preserve per-graph serialization..
+
+- `dec_004` · 2026-10-22 · Epic Architect · **Cross-module constraints**
+  Chose The watchdog's advance_work and boss-order dispatch paths run inside deferred_kickoffs(). The post-turn queue re-check is a loop inside the running job, not a nested kickoff_turn..
+  Rationale: kickoff_graph_queue_event's only production caller is already deferred, so it doesn't block. But dispatch_* -> _boot_after -> kickoff_turn currently runs model turns synchronously on the watchdog thread, and in the boss path it does so while holding process_lock, which contradicts the premise that the watchdog only submits jobs. The fix is one wrapper per call site. _defer_turns is a contextvar that the drain thread does not inherit, so a nested kickoff_turn inside a job would run synchronously and recurse.
+  Honors: Constraint: the watchdog stays non-blocking. Keep the fix focused (wrapping call sites only, no new watchdog work)..
 ## Amendment log
 
 _(none)_
