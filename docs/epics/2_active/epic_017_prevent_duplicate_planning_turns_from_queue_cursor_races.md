@@ -118,6 +118,10 @@ Testing stance: prefer a small number of system-level tests with a fake planning
   Rationale: Feature 1 alone stops the loop and is the smallest shippable slice. Restart and observability build on the same serialized path, so they are sequenced after it. Dashboards and broader watchdog work are cut as scope creep.
   Honors: Cross-module constraint: keep the fix focused; frugal testing.
 
+- `dec_003` · 2026-10-22 · Epic Architect · **Macro-architecture**
+  Chose Root cause confirmed. One locked delivery step in kickoff.py is the only caller of tier ingest_queue and runs first in every serialized job. The boot hooks stop calling ingest_queue. invoke_tool is explicitly kept lock-free..
+  Rationale: A spike on langgraph 1.2.14 with SqliteSaver showed an in-flight invoke checkpoint resetting the cursor from 120 to 0 and dropping the event message. The boot hooks in {epic,feature,task}/boot.py were a second unlocked cursor writer that dec_001 did not cover. invoke_tool runs on the SDK tool callback or MCP process while the turn's job holds the lock, so taking the lock there would deadlock, and it never writes the cursor.
+  Honors: Success criteria: at-most-once incorporation, monotonic cursor. Constraint: preserve per-graph serialization..
 ## Amendment log
 
 _(none)_
