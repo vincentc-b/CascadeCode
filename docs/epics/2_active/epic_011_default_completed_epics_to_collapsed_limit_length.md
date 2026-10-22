@@ -117,6 +117,11 @@ _(none)_
   Chose When repository metadata is unavailable, keep the history-link affordance visible but disabled using the application's established unavailable-link behavior..
   Rationale: This preserves page availability while keeping the epic's visible-link contract internally consistent and avoiding fabricated or host-specific URLs.
   Honors: Success criterion 5, the cross-module link-visibility constraint, and the existing repository metadata boundary..
+
+- `dec_005` · 2026-10-22 · Epic Manager · **History metadata fallback**
+  Chose When repository metadata cannot determine a completed-history target, allow the completed section to remain empty and do not render a fabricated or disabled history-link affordance. This supersedes dec_004..
+  Rationale: The human clarified that missing history data should produce an empty completed section. This keeps failure behavior simple and removes a misleading non-functional control. In reply to: cmt_001
+  Honors: cmt_001, the board-availability requirement, and the constraint against fabricated repository URLs..
 ## Amendment log
 
 _(none)_
