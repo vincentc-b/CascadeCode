@@ -153,6 +153,11 @@ Testing stance: prefer a small number of system-level tests with a fake planning
   Chose Accept dec_007. feat_017_001's regression assertions gain one more: a comment job that lands on an interrupted checkpoint resumes the cut-off turn once, then stages its message and runs exactly one more turn. It folds into the existing shared scenario tests, so no new test file is added. The source-of-truth note now covers dec_003 through dec_007..
   Rationale: dec_007 widened the resume-first guard to the _stage_human_message write, but no listed test exercised that path. feat_017_002's restart test only covers pending queue lines. The guard ships in feat_017_001, so its proof should ship there too. Otherwise the comment path stays unverified until feat_017_002 lands. It is a single assertion against the same SqliteSaver fixture, so it costs almost nothing.
   Honors: Success criteria: an interrupted turn resumes at most once; human messages are not dropped. Frugal testing: extend shared scenarios rather than add per-function tests..
+
+- `dec_009` · 2026-10-22 · Epic Manager · **Feature breakdown**
+  Chose feat_017_001 is not accepted at epic review until the post-review items are merged: boot hooks stop calling ingest_queue; advance_work and boss-order dispatch run inside deferred_kickoffs(); resume before any state write on an interrupted checkpoint (with the comment-job test); two comments in one batch start one turn; post-turn re-check is a loop in the job; tests use a real SqliteSaver. The lead may amend the active task_017_001_003 or add a follow-up task inside feat_017_001. No new feature is minted..
+  Rationale: task_017_001_003 went active from the pre-review stub, so the no-rework window closed. Merged as written, feat_017_001 would leave an unlocked cursor writer, inline model turns on the watchdog thread (one under process_lock), and a dropped-resume hazard, and feat_017_002 depends on the resume guard and single ingestion path. Minting a separate feature would split one locked job step across two owners and risk duplicate work, so the fix stays inside feat_017_001 with either delivery route allowed.
+  Honors: Success criteria: at-most-once incorporation, monotonic cursor, interrupted turn resumes at most once. Constraint: watchdog stays non-blocking. Smallest change: no new feature..
 ## Amendment log
 
 _(none)_
