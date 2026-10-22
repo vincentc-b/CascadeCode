@@ -31,7 +31,9 @@ _PREFIX: dict[WorkTier, str] = {
 }
 _TIER_FROM_PREFIX = {prefix: tier for tier, prefix in _PREFIX.items()}
 _ID_RE = re.compile(r"^(epic|feat|task)_(\d+)$")
-_FILENAME_ID_RE = re.compile(r"^(epic|feat|task)_\d+")
+_FILENAME_ID_RE = re.compile(
+    r"^(?:epic_\d{3}|feat_\d{3}(?:_\d{3})?|task_\d{3}(?:_\d{3}_\d{3})?)"
+)
 
 
 def column_dir(tier: WorkTier, column: Column) -> Path:

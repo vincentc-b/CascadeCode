@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextvars import ContextVar
 from datetime import date
 from pathlib import Path
 
@@ -15,26 +14,16 @@ from cascade.board.gitutil import (
     path_for_work_id,
     read_blob,
 )
+from cascade.board.id_reservations import reset_id_reservations  # re-exported for tests/tools
 from cascade.board.lock import process_lock
 from cascade.board.parse import parse_doc, parse_text, render_doc
-from cascade.board.paths import column_dir, format_work_id, parse_work_id, status_for_column
+from cascade.board.paths import column_dir, status_for_column
 from cascade.board.types import BoardIndex, Column, WorkDoc, WorkId, WorkTier
 from cascade.board.validate import validate_doc
+from cascade.board.work_ids import allocate_hierarchical_id
 
 _COLUMNS = ("1_backlog", "2_active", "3_completed")
 _TIER_DIRS = (("epic", "epics"), ("feature", "features"), ("task", "tasks"))
-_reserved_ids: ContextVar[frozenset[str]] = ContextVar(
-    "cascade_reserved_ids",
-    default=frozenset(),
-)
-
-
-def reset_id_reservations() -> None:
-    """Drop in-memory ids reserved by allocate_id. Tests isolate calls with this."""
-
-    _reserved_ids.set(frozenset())
-
-
 def list_board(root: Path) -> BoardIndex:
     """Scan `docs/{epics,features,tasks}/{column}` and index by id. No cache."""
 
@@ -59,25 +48,33 @@ def list_board(root: Path) -> BoardIndex:
     return BoardIndex(by_id=by_id)
 
 
-def allocate_id(tier: WorkTier, board: BoardIndex) -> WorkId:
-    """Next free NNN for `tier`. Numbers present on the board or reserved are not reused."""
+def allocate_id(
+    tier: WorkTier,
+    board: BoardIndex,
+    *,
+    parent_id: str | None = None,
+) -> WorkId:
+    """Next canonical hierarchical id for ``tier``, scoped to ``parent_id`` when required."""
 
-    reserved = set(_reserved_ids.get())
-    used: set[int] = set()
-    for work_id in list(board.by_id) + list(reserved):
-        try:
-            found_tier, number = parse_work_id(work_id)
-        except SchemaError:
-            continue
-        if found_tier == tier:
-            used.add(number)
-    number = 1
-    while number in used:
-        number += 1
-    work_id = format_work_id(tier, number)
-    reserved.add(work_id)
-    _reserved_ids.set(frozenset(reserved))
-    return work_id
+    return allocate_hierarchical_id(tier, board, parent_id=parent_id)
+
+
+def _reject_new_doc_id_collision(doc: WorkDoc, board: BoardIndex, repo: Path) -> None:
+    """Reject a second create for ``doc.meta.id`` in the same checkout."""
+
+    if doc.meta.path.exists() or doc.meta.id not in board.by_id:
+        return
+    existing = board.by_id[doc.meta.id]
+    if existing.path.resolve() == doc.meta.path.resolve():
+        return
+    from cascade.workspace.integration_worktree import git_root_for_path
+
+    if has_git(repo):
+        existing_root = git_root_for_path(existing.path.resolve())
+        new_root = git_root_for_path(doc.meta.path.resolve())
+        if existing_root.resolve() != new_root.resolve():
+            return
+    raise SchemaError(f"id collision: {doc.meta.id}")
 
 
 def write_doc(doc: WorkDoc, *, root: Path | None = None) -> str | None:
@@ -108,6 +105,7 @@ def _write_doc(doc: WorkDoc, root: Path | None) -> str | None:
 
     trunk = locate_trunk(repo)
     board = merged_board(trunk)
+    _reject_new_doc_id_collision(doc, board, repo)
     validate_doc(doc, board)
     previous_bytes = doc.meta.path.read_bytes() if doc.meta.path.exists() else None
     doc.meta.path.parent.mkdir(parents=True, exist_ok=True)

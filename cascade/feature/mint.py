@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from cascade.board.errors import NotFound
+from cascade.board.errors import NotFound, SchemaError
+from cascade.board.id_reservations import release_work_id
 from cascade.board.paths import slugify
 from cascade.board.store import allocate_id, list_board, read_doc, write_doc
 from cascade.board.types import WorkDoc, WorkId, WorkMeta
@@ -50,39 +51,51 @@ def mint_task(
         if dep.parent != feature_id:
             raise FeatureToolDenied(f"depends_on {dep_id} is not owned by {feature_id}")
 
-    task_id = allocate_id("task", merged_board(trunk))
     today = date.today()
-    path = checkout / "docs" / "tasks" / "1_backlog" / f"{task_id}_{slugify(title)}.md"
-    if not tool_guard(path, "write", feature_id=feature_id, root=trunk):
-        raise FeatureToolDenied(f"write denied for {path}")
-
     parent_rev = feature.sha
-    doc = WorkDoc(
-        meta=WorkMeta(
-            id=task_id,
-            title=title,
-            tier="task",
-            status="backlog",
-            parent=feature_id,
-            children=[],
-            depends_on=deps,
-            owners=["swe"],
-            skills=skill_paths,
-            parent_rev=parent_rev,
-            created=today,
-            updated=today,
-            path=path,
-        ),
-        body=_task_body(
-            title=title,
-            feature_id=feature_id,
-            depends_on=deps,
-            skills=skill_paths,
-            body_stub=body_stub,
-        ),
-        sha=None,
-    )
-    write_doc(doc, root=checkout)
+    task_id: WorkId | None = None
+    for _attempt in range(8):
+        candidate = allocate_id("task", merged_board(trunk), parent_id=feature_id)
+        path = checkout / "docs" / "tasks" / "1_backlog" / f"{candidate}_{slugify(title)}.md"
+        if not tool_guard(path, "write", feature_id=feature_id, root=trunk):
+            release_work_id(candidate)
+            raise FeatureToolDenied(f"write denied for {path}")
+
+        doc = WorkDoc(
+            meta=WorkMeta(
+                id=candidate,
+                title=title,
+                tier="task",
+                status="backlog",
+                parent=feature_id,
+                children=[],
+                depends_on=deps,
+                owners=["swe"],
+                skills=skill_paths,
+                parent_rev=parent_rev,
+                created=today,
+                updated=today,
+                path=path,
+            ),
+            body=_task_body(
+                title=title,
+                feature_id=feature_id,
+                depends_on=deps,
+                skills=skill_paths,
+                body_stub=body_stub,
+            ),
+            sha=None,
+        )
+        try:
+            write_doc(doc, root=checkout)
+            task_id = candidate
+            break
+        except SchemaError as exc:
+            release_work_id(candidate)
+            if "id collision" not in str(exc):
+                raise
+    if task_id is None:
+        raise SchemaError("failed to allocate task id after persistence retries")
 
     feature = feature_read_doc(feature_id, feature_id=feature_id, root=trunk)
     if task_id not in feature.meta.children:

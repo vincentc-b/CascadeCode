@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from cascade.board.errors import NotFound
+from cascade.board.errors import NotFound, SchemaError
+from cascade.board.id_reservations import release_work_id
 from cascade.board.paths import slugify
 from cascade.board.store import allocate_id, list_board, read_doc
 from cascade.board.types import WorkDoc, WorkMeta
@@ -38,38 +39,51 @@ def mint_feature(
         if board.by_id[dep_id].tier != "feature":
             raise EpicToolDenied(f"depends_on {dep_id} must be a feature")
 
-    feature_id = allocate_id("feature", board)
-    today = date.today()
-    path = repo / "docs" / "features" / "1_backlog" / f"{feature_id}_{slugify(title)}.md"
-    if not tool_guard(path, "write", epic_id=epic_id, root=repo):
-        raise EpicToolDenied(f"write denied for {path}")
-
     epic_doc = epic_read_doc(epic_id, epic_id=epic_id, root=repo)
     provider, models, model = _feature_backend_from_epic(epic_doc)
+    today = date.today()
 
-    doc = WorkDoc(
-        meta=WorkMeta(
-            id=feature_id,
-            title=title,
-            tier="feature",
-            status="backlog",
-            parent=epic_id,
-            children=[],
-            depends_on=deps,
-            owners=["feature_lead", "feature_architect"],
-            skills=[],
-            parent_rev=None,
-            created=today,
-            updated=today,
-            path=path,
-            model=model,
-            models=models,
-            provider=provider,
-        ),
-        body=_feature_body(title=title, epic_id=epic_id, body_stub=body_stub),
-        sha=None,
-    )
-    epic_write_doc(doc, epic_id=epic_id, root=repo)
+    feature_id: str | None = None
+    for _attempt in range(8):
+        board = merged_board(repo)
+        candidate = allocate_id("feature", board, parent_id=epic_id)
+        path = repo / "docs" / "features" / "1_backlog" / f"{candidate}_{slugify(title)}.md"
+        if not tool_guard(path, "write", epic_id=epic_id, root=repo):
+            release_work_id(candidate)
+            raise EpicToolDenied(f"write denied for {path}")
+
+        doc = WorkDoc(
+            meta=WorkMeta(
+                id=candidate,
+                title=title,
+                tier="feature",
+                status="backlog",
+                parent=epic_id,
+                children=[],
+                depends_on=deps,
+                owners=["feature_lead", "feature_architect"],
+                skills=[],
+                parent_rev=None,
+                created=today,
+                updated=today,
+                path=path,
+                model=model,
+                models=models,
+                provider=provider,
+            ),
+            body=_feature_body(title=title, epic_id=epic_id, body_stub=body_stub),
+            sha=None,
+        )
+        try:
+            epic_write_doc(doc, epic_id=epic_id, root=repo)
+            feature_id = candidate
+            break
+        except SchemaError as exc:
+            release_work_id(candidate)
+            if "id collision" not in str(exc):
+                raise
+    if feature_id is None:
+        raise SchemaError("failed to allocate feature id after persistence retries")
 
     epic = epic_read_doc(epic_id, epic_id=epic_id, root=repo)
     if feature_id not in epic.meta.children:

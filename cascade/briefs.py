@@ -13,7 +13,9 @@ from cascade.agent.providers import parse_provider_id
 from cascade.board.errors import GitError
 from cascade.board.gitutil import _run
 from cascade.board.parse import render_doc
+from cascade.board.errors import SchemaError
 from cascade.board.store import list_board
+from cascade.board.work_ids import format_hierarchical_epic_id, parse_work_id_parts
 from cascade.board.types import WorkDoc, WorkMeta
 from cascade.tracking import MergeRequest, create_merge_request, forge_ready, push_branch
 from cascade.watchdog.config import read_providers_config
@@ -75,11 +77,18 @@ def validate_brief(raw: dict[str, object]) -> BriefRequest:
 
 
 def _next_epic_id(root: Path) -> str:
-    numbers = [int(meta.id.split("_", 1)[1]) for meta in list_board(root).by_id.values() if meta.tier == "epic"]
+    numbers: set[int] = set()
+    for meta in list_board(root).by_id.values():
+        if meta.tier != "epic":
+            continue
+        try:
+            numbers.add(parse_work_id_parts(meta.id).segments[0])
+        except SchemaError:
+            continue
     branches = _run(["branch", "-a", "--format=%(refname:short)"], root, check=False)
-    for match in re.finditer(r"cascade/brief/epic_(\d+)", branches.stdout):
-        numbers.append(int(match.group(1)))
-    return f"epic_{(max(numbers, default=0) + 1):03d}"
+    for match in re.finditer(r"cascade/brief/epic_(\d{3})", branches.stdout):
+        numbers.add(int(match.group(1)))
+    return format_hierarchical_epic_id(max(numbers, default=0) + 1)
 
 
 def _slug(title: str) -> str:
