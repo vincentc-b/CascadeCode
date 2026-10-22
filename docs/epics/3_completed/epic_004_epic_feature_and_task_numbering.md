@@ -2,7 +2,7 @@
 id: epic_004
 title: Epic, feature, and task numbering
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_009
