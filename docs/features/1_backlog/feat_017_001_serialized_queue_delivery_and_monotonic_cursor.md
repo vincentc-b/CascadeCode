@@ -17,6 +17,7 @@ provider: cursor
 models:
   feature_lead: claude-opus-5-5
   feature_architect: claude-opus-5-5
+approved_at: '2026-10-22T22:14:46.331172+00:00'
 ---
 # Serialized queue delivery and monotonic cursor
 
