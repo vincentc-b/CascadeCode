@@ -83,6 +83,24 @@ def test_create_task_worktree_branch_and_path(tmp_path: Path) -> None:
     assert get_task_run("task_031") is run
 
 
+def test_create_hierarchical_task_worktree(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    parent_rev = _initial_commit(root)
+    task_id = "task_007_001_001"
+
+    run = create_task_worktree(
+        task_id,
+        root=root,
+        parent_rev=parent_rev,
+        skills=[],
+    )
+
+    assert run.task_id == task_id
+    assert run.branch == f"task/{task_id}"
+    assert run.worktree == worktree_path(task_id, root=root).resolve()
+    assert run.worktree.is_dir()
+
+
 def test_worktree_is_separate_from_main_checkout(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     _initial_commit(root)

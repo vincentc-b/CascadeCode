@@ -11,7 +11,7 @@ from typing import Literal
 
 from cascade.board.errors import GitError
 from cascade.board.gitutil import head_sha
-from cascade.board.paths import parse_work_id
+from cascade.board.work_ids import tier_of_work_id
 from cascade.watchdog.hooks import register_teardown_hook
 
 TaskRunState = Literal[
@@ -216,7 +216,7 @@ def _branch_exists(root: Path, branch: str) -> bool:
 def _validate_task_id(task_id: str) -> None:
     if "/" in task_id or ".." in task_id:
         raise ValueError(f"invalid task id for worktree: {task_id!r}")
-    tier, _ = parse_work_id(task_id)
+    tier = tier_of_work_id(task_id)
     if tier != "task":
         raise ValueError(f"worktree id must be a task work id: {task_id!r}")
 

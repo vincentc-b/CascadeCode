@@ -95,7 +95,7 @@ def prune_completed_work_queues(*, root: Path | None = None) -> list[str]:
         return []
 
     from cascade.board.errors import SchemaError
-    from cascade.board.paths import parse_work_id
+    from cascade.board.work_ids import tier_of_work_id
     from cascade.workspace.integration_worktree import merged_board
 
     board = merged_board(repo)
@@ -103,7 +103,7 @@ def prune_completed_work_queues(*, root: Path | None = None) -> list[str]:
     for path in sorted(queue_dir.glob("*.jsonl")):
         work_id = path.stem
         try:
-            parse_work_id(work_id)
+            tier_of_work_id(work_id)
         except SchemaError:
             continue
         meta = board.by_id.get(work_id)

@@ -148,6 +148,26 @@ def test_attach_detach_and_chat_store_without_reply(sidecar_board):
     assert status == HTTPStatus.FORBIDDEN
 
 
+def test_attach_hierarchical_feature_returns_briefing(sidecar_board):
+    base, root = sidecar_board
+    feature_id = "feat_001_001"
+    add_doc(
+        root,
+        id=feature_id,
+        title="Hierarchical feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+    )
+
+    status, attach = _post(f"{base}/api/attach", {"graph_id": feature_id})
+
+    assert status == HTTPStatus.OK
+    assert attach["doc"]["meta"]["id"] == feature_id
+    assert attach["recent_messages"] == []
+    assert (root / ".cascade" / "checkpoints" / f"{feature_id}.sqlite").is_file()
+
+
 def test_chat_empty_when_missing_sidecar(sidecar_board):
     base, _root = sidecar_board
     status, messages = _get(f"{base}/api/chat/epic_001")

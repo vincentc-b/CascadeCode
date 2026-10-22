@@ -7,7 +7,7 @@ from pathlib import Path
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from cascade.board.paths import parse_work_id
+from cascade.board.work_ids import tier_of_work_id
 
 _connections: dict[str, sqlite3.Connection] = {}
 _savers: dict[str, SqliteSaver] = {}
@@ -16,7 +16,7 @@ _savers: dict[str, SqliteSaver] = {}
 def _validate_checkpoint_feature_id(feature_id: str) -> None:
     if "/" in feature_id or ".." in feature_id:
         raise ValueError(f"invalid feature checkpoint id: {feature_id!r}")
-    tier, _ = parse_work_id(feature_id)
+    tier = tier_of_work_id(feature_id)
     if tier != "feature":
         raise ValueError(f"checkpoint id must be a feature work id: {feature_id!r}")
 

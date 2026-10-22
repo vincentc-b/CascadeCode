@@ -51,6 +51,17 @@ def test_checkpoint_file_created(tmp_path: Path) -> None:
     assert path.parent == root / ".cascade" / "checkpoints"
 
 
+def test_hierarchical_feature_checkpoint_file_created(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    feature_id = "feat_007_001"
+
+    ensure_feature_graph(feature_id, root=root)
+
+    path = checkpoint_path(feature_id, root=root)
+    assert path.is_file()
+    assert path.name == "feat_007_001.sqlite"
+
+
 def test_ingest_human_persists_across_ensure(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     human = {"role": "human", "content": "Plan tasks"}

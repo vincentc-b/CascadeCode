@@ -152,6 +152,32 @@ def test_prune_removes_only_terminal_work_queues(tmp_path: Path) -> None:
         assert (root / "docs" / "_queue" / f"{dest}.jsonl").is_file()
 
 
+def test_prune_recognizes_hierarchical_work_id(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    task_id = "task_007_001_001"
+    add_doc(root, id="epic_007", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_007_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_007",
+    )
+    add_doc(
+        root,
+        id=task_id,
+        title="Done",
+        tier="task",
+        status="completed",
+        parent="feat_007_001",
+    )
+    append_event(task_id, _event("Lifecycle", task_id), root=root)
+
+    assert prune_completed_work_queues(root=root) == [task_id]
+    assert not (root / "docs" / "_queue" / f"{task_id}.jsonl").exists()
+
+
 def test_prune_keeps_completed_feature_awaiting_review(
     tmp_path: Path, monkeypatch
 ) -> None:

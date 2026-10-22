@@ -55,6 +55,17 @@ def test_checkpoint_file_created(tmp_path: Path) -> None:
     assert path.parent == root / ".cascade" / "checkpoints"
 
 
+def test_hierarchical_task_checkpoint_file_created(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    task_id = "task_007_001_001"
+
+    ensure_task_graph(task_id, root=root, feature_id="feat_007_001")
+
+    path = checkpoint_path(task_id, root=root)
+    assert path.is_file()
+    assert path.name == "task_007_001_001.sqlite"
+
+
 def test_ingest_queue_advances_offset_and_is_idempotent(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     event = Event(
