@@ -2,7 +2,7 @@
 id: epic_011
 title: default "completed" epics to collapsed, limit length
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_011_001
