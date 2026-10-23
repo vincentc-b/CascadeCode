@@ -447,13 +447,22 @@ def _worktree_cleanliness(repo: Path) -> SyncBlockReason | None:
     untracked = _run(
         ["ls-files", "--others", "--exclude-standard"], repo, check=False
     )
-    if untracked.returncode == 0 and untracked.stdout.strip():
+    untracked_source = [
+        path
+        for path in untracked.stdout.splitlines()
+        if path and not _managed_runtime_path(path)
+    ]
+    if untracked.returncode != 0 or untracked_source:
         return "local_changes"
     return None
 
 
+def _managed_runtime_path(rel: str) -> bool:
+    return rel.startswith((".cascade/", "docs/_queue/", "docs/_war_room/"))
+
+
 def _operator_trunk_ignored(rel: str) -> bool:
-    return rel.startswith((".cascade/", "docs/_queue/"))
+    return _managed_runtime_path(rel)
 
 
 def _operator_trunk_cleanliness(repo: Path) -> SyncBlockReason | None:
