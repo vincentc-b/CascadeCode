@@ -20,6 +20,7 @@ provider: cursor
 models:
   epic_manager: claude-opus-5-5
   epic_architect: claude-opus-5-5
+plan_approved_at: '2026-10-23T02:49:31.008029+00:00'
 ---
 # Graceful supervisor updates without War Room outage
 
