@@ -19,6 +19,7 @@ provider: cursor
 models:
   epic_manager: claude-opus-5-5
   epic_architect: claude-opus-5-5
+plan_approved_at: '2026-10-23T03:13:51.808473+00:00'
 ---
 # Make late-minted features visibly approvable
 
