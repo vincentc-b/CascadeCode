@@ -88,6 +88,9 @@ def watchdog_tick(root: Path | None = None) -> None:
     from cascade.workspace.convergence import publish_convergence_diagnostics
 
     publish_convergence_diagnostics(root=repo)
+    from cascade.workspace.in_flight_turn_watchdog import maintain_in_flight_turn_progress
+
+    maintain_in_flight_turn_progress(repo)
 
 
 def _event_tick(root: Path) -> None:

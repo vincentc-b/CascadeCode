@@ -53,6 +53,9 @@ def register_turn(role: str) -> Iterator[LiveTurn]:
     with _lock:
         _live[live.turn_id] = live
     try:
+        from cascade.workspace.in_flight_turn_watchdog import notify_turn_registered
+
+        notify_turn_registered(live)
         yield live
     finally:
         with _lock:

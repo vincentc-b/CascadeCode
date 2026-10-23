@@ -360,6 +360,65 @@ def write_stall_disposition(
         return dict(merged)
 
 
+def read_in_flight_turn(task_id: str, *, root: Path) -> dict[str, Any] | None:
+    """Return in-flight turn binding for a running task, if any."""
+
+    repo = resolve_root(root)
+    with process_lock:
+        record = _read(repo).get(task_id)
+    if record is None:
+        return None
+    row = record.get("in_flight_turn")
+    return dict(row) if isinstance(row, dict) else None
+
+
+def patch_in_flight_turn(
+    task_id: str, patch: dict[str, Any], *, root: Path
+) -> dict[str, Any]:
+    """Merge in-flight turn metadata into the execution sidecar."""
+
+    repo = resolve_root(root)
+    with process_lock:
+        records = _read(repo)
+        record = dict(records.get(task_id, {"task_id": task_id}))
+        current = record.get("in_flight_turn")
+        merged = dict(current) if isinstance(current, dict) else {}
+        merged.update(patch)
+        record["in_flight_turn"] = merged
+        records[task_id] = record
+        _write(repo, records)
+        return dict(merged)
+
+
+def clear_in_flight_turn(task_id: str, *, root: Path) -> None:
+    repo = resolve_root(root)
+    with process_lock:
+        records = _read(repo)
+        record = records.get(task_id)
+        if record is None:
+            return
+        record = dict(record)
+        record.pop("in_flight_turn", None)
+        records[task_id] = record
+        _write(repo, records)
+
+
+def running_tasks_with_in_flight_turns(root: Path) -> list[tuple[str, dict[str, Any]]]:
+    """Return running tasks that currently expose an in-flight turn binding."""
+
+    repo = resolve_root(root)
+    with process_lock:
+        records = _read(repo)
+    rows: list[tuple[str, dict[str, Any]]] = []
+    for task_id, record in records.items():
+        if record.get("phase") != "running":
+            continue
+        turn = record.get("in_flight_turn")
+        if isinstance(turn, dict) and turn.get("turn_id"):
+            rows.append((task_id, dict(turn)))
+    return rows
+
+
 def mark_stall_recovery_queued(
     task_id: str, *, root: Path, now: datetime | None = None
 ) -> dict[str, Any]:
