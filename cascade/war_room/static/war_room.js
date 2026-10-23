@@ -584,7 +584,7 @@
       btn.textContent = "Approving…";
       dispatch("/api/approve_feature", { id: item.id })
         .then(function (body) {
-          if (body && body.ok) {
+          if (body && body.ok && !body.dispatch_pending) {
             setStatus("Feature " + item.id + " approved.", false);
           }
         })
@@ -867,7 +867,10 @@
   async function dispatch(path, payload) {
     try {
       const { body } = await apiPost(path, payload);
-      if (!body.ok) {
+      if (body.dispatch_pending) {
+        dispatchBanner = "Approval saved; dispatch pending: " + (body.dispatch_error || "retrying");
+        setStatus(dispatchBanner, true);
+      } else if (!body.ok) {
         dispatchBanner = body.reason ? "Dispatch failed: " + body.reason : "Dispatch failed";
         setStatus(dispatchBanner, true);
       } else {

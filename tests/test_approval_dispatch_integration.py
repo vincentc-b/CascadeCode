@@ -140,6 +140,35 @@ def test_epic_approval_dispatch_does_not_wait_for_completion_maintenance(
     assert read_doc("feat_001", root=root).meta.path.parent.name == "2_active"
 
 
+def test_epic_approval_reports_pending_when_dispatch_fails_then_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _enable_automation(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Ready", tier="feature", parent="epic_001")
+    _quiet_dispatch(monkeypatch)
+
+    def fail_dispatch(_root: Path) -> None:
+        raise RuntimeError("temporary dispatch failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            "cascade.automation.reconcile_approval_dispatch",
+            fail_dispatch,
+        )
+        result = approve_epic_plan("epic_001", root=root)
+
+    assert result["ok"] is True
+    assert result["dispatch_pending"] is True
+    assert result["dispatch_error"] == "temporary dispatch failure"
+    assert feature_approved("feat_001", root=root)
+    assert read_doc("feat_001", root=root).meta.path.parent.name == "1_backlog"
+
+    assert reconcile_approval_dispatch(root)["features"] == ["feat_001"]
+    assert read_doc("feat_001", root=root).meta.path.parent.name == "2_active"
+
+
 def test_advance_dispatches_before_maintenance_and_after_dependency_release(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
