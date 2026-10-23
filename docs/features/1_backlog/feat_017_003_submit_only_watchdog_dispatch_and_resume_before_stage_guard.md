@@ -2,7 +2,7 @@
 id: feat_017_003
 title: Submit-only watchdog dispatch and resume-before-stage guard
 tier: feature
-status: active
+status: backlog
 parent: epic_017
 children:
 - task_017_003_001
