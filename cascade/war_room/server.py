@@ -126,10 +126,15 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         RequestHandlerClass: type[BaseHTTPRequestHandler],
         *,
         root: Path,
+        listen_socket: socket.socket | None = None,
     ) -> None:
         host, _port = server_address
-        assert_loopback_host(host)
+        if listen_socket is None:
+            assert_loopback_host(host)
+        else:
+            assert_loopback_host(listen_socket.getsockname()[0])
         self.root = Path(root).resolve()
+        self._listen_socket = listen_socket
         install_epic_boot_hook(self.root)
         install_feature_boot_hook(self.root)
         install_task_boot_hook(self.root)
@@ -143,6 +148,13 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         self.attachment = AttachmentState()
         self._request_slots = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
         super().__init__(server_address, RequestHandlerClass)
+
+    def server_bind(self) -> None:
+        if self._listen_socket is not None:
+            self.socket = self._listen_socket
+            self.server_address = self.socket.getsockname()
+            return
+        super().server_bind()
 
     def process_request(self, request: socket.socket, client_address: tuple[str, int]) -> None:
         """Bound handler work so timed-out clients cannot create unlimited threads."""
@@ -938,11 +950,23 @@ def serve(
     host: str = "127.0.0.1",
     port: int = 8765,
     handler_class: type[WarRoomRequestHandler] = WarRoomRequestHandler,
+    listen_socket: socket.socket | None = None,
 ) -> WarRoomHTTPServer:
-    """Create and return a configured server (caller runs serve_forever or thread)."""
+    """Create and return a configured server (caller runs serve_forever or thread).
 
-    assert_loopback_host(host)
-    return WarRoomHTTPServer((host, port), handler_class, root=root)
+    When ``listen_socket`` is set, the server accepts on that fd (launcher-owned
+    bind) instead of opening a new socket.
+    """
+
+    if listen_socket is None:
+        assert_loopback_host(host)
+        address: tuple[str, int] = (host, port)
+    else:
+        bound_host, bound_port = listen_socket.getsockname()[:2]
+        address = (bound_host, bound_port)
+    return WarRoomHTTPServer(
+        address, handler_class, root=root, listen_socket=listen_socket
+    )
 
 
 def main() -> None:
