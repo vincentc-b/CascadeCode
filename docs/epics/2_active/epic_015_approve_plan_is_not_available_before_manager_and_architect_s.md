@@ -171,6 +171,11 @@ _None. Implementation discovery may choose storage and endpoint names but must p
   Chose Treat readiness as a server-authoritative derived state requiring valid manager and architect sign-offs on the current plan revision and no unresolved open questions..
   Rationale: A single predicate prevents UI-only bypasses and keeps sign-off, read-model capability, and approval validation consistent.
   Honors: Success criteria: both roles must sign off, open questions block sign-off, and approval is unavailable until ready..
+
+- `dec_002` · 2026-10-23 · Epic Manager · **Sign-off invalidation**
+  Chose Bind sign-offs to the canonical plan revision so material plan edits make prior sign-offs stale..
+  Rationale: Human approval must apply to the plan the two roles actually reviewed, without introducing a second version counter.
+  Honors: The core requirement that manager and architect sign off on the plan before approval..
 ## Amendment log
 
 _(none)_
