@@ -4,7 +4,8 @@ title: Make late-minted features visibly approvable
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_020_001
 depends_on: []
 owners:
 - epic_manager
@@ -46,6 +47,7 @@ Preserve per-feature approved_at as durable authority and preserve the current s
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_020_001
 
 The Epic Team will create and sequence feature plans here.
 
