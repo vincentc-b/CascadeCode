@@ -116,6 +116,10 @@ None blocking feature planning. Feature owners may choose exact field names and 
 
 - 2026-10-22 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-10-23 · Epic Manager · **Architecture**
+  Chose Use one supervisor health projection to separate HTTP liveness from automation readiness, fed by startup, watchdog, and reconciliation activity..
+  Rationale: Operators need an authoritative contract rather than unrelated endpoint and loop signals; a read-only process-local projection fits the single-supervisor architecture without adding storage.
+  Honors: Success criteria: expose startup/readiness and loop state; cross-module constraint: separate local process liveness from workflow convergence..
 ## Amendment log
 
 _(none)_
