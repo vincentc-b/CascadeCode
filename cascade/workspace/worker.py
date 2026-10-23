@@ -32,6 +32,18 @@ ENV_LOCK_TOKEN = "CASCADE_SUPERVISOR_LOCK_TOKEN"
 READINESS_MESSAGE = b"ready\n"
 EXIT_UPDATE = 75
 
+_worker_draining: threading.Event | None = None
+
+
+def worker_draining_event() -> threading.Event:
+    """Return the active worker's draining event (set when shutdown begins)."""
+
+    if _worker_draining is None:
+        raise WorkspaceError(
+            "worker draining event is unavailable outside an active run_worker"
+        )
+    return _worker_draining
+
 
 @dataclass(frozen=True)
 class LauncherHandshake:
@@ -91,8 +103,12 @@ def _write_readiness(readiness_fd: int) -> None:
 def run_worker(*, stop_event: threading.Event | None = None) -> int:
     """Run until operator stop (0), source update (75), or crash (other non-zero)."""
 
+    global _worker_draining
+
     handshake = parse_launcher_handshake()
     operator_stop = stop_event if stop_event is not None else threading.Event()
+    draining = threading.Event()
+    _worker_draining = draining
 
     def on_operator_stop(_signum: int, _frame: object | None) -> None:
         operator_stop.set()
@@ -100,7 +116,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> int:
     signal.signal(signal.SIGTERM, on_operator_stop)
     signal.signal(signal.SIGINT, on_operator_stop)
 
-    from cascade.war_room.server import serve
+    from cascade.war_room.server import join_http_handlers, serve
     from cascade.watchdog.loop import run_watchdog
 
     ws = prepare_up()
@@ -111,12 +127,15 @@ def run_worker(*, stop_event: threading.Event | None = None) -> int:
     def should_stop() -> bool:
         nonlocal next_source_check_at, source_changed
         if operator_stop.is_set():
+            draining.set()
             return True
         now = time.monotonic()
         if now < next_source_check_at:
             return False
         next_source_check_at = now + _SOURCE_CHECK_INTERVAL_SECONDS
         source_changed = _source_fingerprint() != source_at_start
+        if source_changed:
+            draining.set()
         return source_changed
 
     try:
@@ -124,7 +143,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> int:
     except OSError as exc:
         _fail(f"invalid inherited listen fd {handshake.listen_fd}: {exc}")
 
-    server = serve(root=ws.path, listen_socket=listen_socket)
+    server = serve(root=ws.path, listen_socket=listen_socket, draining=draining)
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
     try:
@@ -132,9 +151,12 @@ def run_worker(*, stop_event: threading.Event | None = None) -> int:
         _write_readiness(handshake.readiness_fd)
         run_watchdog(root=ws.path, stop_when=should_stop)
     finally:
+        draining.set()
         server.shutdown()
+        join_http_handlers(server)
         server.server_close()
         server_thread.join(timeout=10)
+        _worker_draining = None
 
     if operator_stop.is_set():
         return 0
