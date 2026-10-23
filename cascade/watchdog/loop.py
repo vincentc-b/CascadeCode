@@ -67,8 +67,10 @@ def watchdog_tick(root: Path | None = None) -> None:
     with process_lock:
         _maybe_enqueue_orphan_toasts(repo)
     from cascade.automation import advance_work, poll_reviews
+    from cascade.workspace.kickoff import deferred_kickoffs
 
-    advance_work(repo)
+    with deferred_kickoffs():
+        advance_work(repo)
     poll_reviews(repo)
     with process_lock:
         from cascade.workspace.flight import refresh_flight_report_if_stale
@@ -189,8 +191,10 @@ def run_watchdog(
 
     reconcile_completion_with_prompts(root=repo)
     from cascade.automation import advance_work
+    from cascade.workspace.kickoff import deferred_kickoffs
 
-    advance_work(repo)
+    with deferred_kickoffs():
+        advance_work(repo)
 
     last_maintenance_at: float | None = None
 
