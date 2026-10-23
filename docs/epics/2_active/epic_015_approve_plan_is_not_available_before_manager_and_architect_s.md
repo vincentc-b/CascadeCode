@@ -86,7 +86,7 @@ A sign-off records the role and plan revision. Readiness is computed rather than
 
 - **Sign off:** permitted only to the corresponding required role, only against the current revision, and only when unresolved open questions are absent.
 - **Edit plan:** creates a new material revision; prior sign-offs no longer satisfy readiness.
-- **Approve plan:** permitted only when the derived state is `ready_for_review`; otherwise return the existing domain-validation error shape.
+- **Approve plan:** permitted only when the derived state is `ready_for_review`; validate readiness and commit approval atomically against the same current plan state, otherwise return the existing domain-validation error shape.
 - Repeated sign-off for the same role and revision is idempotent.
 
 ### Read model and UI
@@ -107,6 +107,7 @@ The existing plan entry point renders the state. The approval action uses the se
 - “Open questions” must use the board's canonical unresolved-question representation. Do not infer readiness from arbitrary prose outside that representation.
 - State transitions and sign-offs must be persisted so page refreshes and concurrent clients agree.
 - Approval validation and readiness computation share the same domain predicate.
+- Approval validation and the approved-state write must be concurrency-safe: a plan revision or unresolved-question change cannot commit between the readiness check and approval.
 - Accessibility: disabled state is semantic, status text does not rely on color alone, and the activity indicator respects reduced-motion preferences.
 - Preserve existing API error conventions and approved-plan behavior.
 
@@ -144,7 +145,7 @@ If no canonical machine-readable unresolved-question state exists, the implement
 - **Open questions:** given unresolved questions, either role's sign-off request is rejected with an actionable reason.
 - **Both sign-offs:** given no unresolved questions and both roles signed the current revision, the UI shows ready and approval is accepted.
 - **Revision changed:** given both roles signed revision A, when the plan becomes revision B, approval is disabled until both sign revision B.
-- **Concurrent/stale client:** given readiness changed after page load, the server's current evaluation wins and the UI refreshes the state after rejection.
+- **Concurrent/stale client:** given readiness changed after page load—or changes concurrently with approval—the server's current evaluation wins, approval is not committed from a stale predicate, and the UI refreshes the state after rejection.
 - **Existing approved epic:** given a plan approved before this capability ships, it remains approved.
 
 ## Delivery and test strategy
@@ -152,7 +153,7 @@ If no canonical machine-readable unresolved-question state exists, the implement
 Prefer a small set of high-signal tests:
 
 - Domain/API transition table for the readiness invariant and command authorization.
-- Integration test proving activation → two sign-offs → enabled approval → approval.
+- Integration test proving activation → two sign-offs → enabled approval → approval, including one concurrent mutation/approval case at the persistence boundary.
 - One UI test for disabled reason and status transition.
 - No redundant unit tests for selectors already exercised by those flows.
 
