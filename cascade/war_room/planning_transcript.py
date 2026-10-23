@@ -44,6 +44,8 @@ def append_planning_turn_to_chat(
 
 def _should_skip(body: str) -> bool:
     lowered = body.lower()
+    if "turn failed" in lowered:
+        return True
     return any(lowered.startswith(prefix) for prefix in _SKIP_BODY_PREFIXES)
 
 

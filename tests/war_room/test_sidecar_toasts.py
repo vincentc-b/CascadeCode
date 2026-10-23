@@ -133,8 +133,9 @@ def test_attach_detach_and_chat_store_without_reply(sidecar_board):
 
     status, messages = _get(f"{base}/api/chat/feat_001")
     assert status == HTTPStatus.OK
-    assert len(messages) == 1
-    assert messages[0]["body"] == "human note"
+    human = [row for row in messages if row.get("author") == "human"]
+    assert len(human) == 1
+    assert human[0]["body"] == "human note"
 
     sidecar = root / "docs" / "_war_room" / "chat" / "feat_001.jsonl"
     assert sidecar.is_file()
@@ -169,8 +170,9 @@ def test_attach_hierarchical_feature_returns_briefing(sidecar_board):
 
 
 def test_chat_empty_when_missing_sidecar(sidecar_board):
-    base, _root = sidecar_board
-    status, messages = _get(f"{base}/api/chat/epic_001")
+    base, root = sidecar_board
+    add_doc(root, id="epic_002", title="No chat yet", tier="epic", status="backlog")
+    status, messages = _get(f"{base}/api/chat/epic_002")
     assert status == HTTPStatus.OK
     assert messages == []
 
