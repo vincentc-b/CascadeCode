@@ -503,7 +503,7 @@ def test_planning_tools_write_into_integration_checkouts(tmp_path: Path) -> None
 
 def test_active_feature_planning_ignores_stale_trunk_backlog_copy(tmp_path: Path) -> None:
     from cascade.feature.mint import mint_task
-    from cascade.feature.scoped_docs import feature_read_doc
+    from cascade.feature.scoped_docs import feature_read_doc, feature_write_doc
 
     root = make_repo(tmp_path)
     (root / ".gitignore").write_text(".cascade/\n", encoding="utf-8")
@@ -537,3 +537,12 @@ def test_active_feature_planning_ignores_stale_trunk_backlog_copy(tmp_path: Path
     assert read_doc(task_id, root=checkout).meta.parent == "feat_001"
     assert task_id in read_doc("feat_001", root=checkout).meta.children
     assert read_doc("feat_001", root=root).meta.status == "backlog"
+
+    # A graph may submit the stale WorkDoc it ingested before dispatch. Writes
+    # must still target the authoritative active copy in the feature checkout.
+    stale = read_doc("feat_001", root=root)
+    stale.body += "\n\n## Closeout\n\nCompleted from stale input.\n"
+    feature_write_doc(stale, feature_id="feat_001", root=root)
+
+    assert "Completed from stale input." in read_doc("feat_001", root=checkout).body
+    assert read_doc("feat_001", root=root).body == feature.body

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 
 from cascade.board.errors import NotFound
@@ -135,9 +136,22 @@ def feature_write_doc(doc: WorkDoc, *, feature_id: str, root: Path) -> str | Non
             f"feature {feature_id} is blocked awaiting amendment resolution; "
             "cannot change status away from blocked"
         )
-    if not tool_guard(doc.meta.path, "write", feature_id=feature_id, root=repo):
-        raise FeatureToolDenied(f"write denied for {doc.meta.path}")
-    return write_doc(doc, root=checkout if doc.meta.path.resolve().is_relative_to(checkout) else repo)
+    # Treat the checkout's current path as authoritative. A graph can retain a
+    # WorkDoc loaded before dispatch, whose path still names the trunk backlog
+    # copy; allowing that stale path to choose the write root either denies the
+    # closeout or updates the wrong document.
+    target = current.meta.path.resolve()
+    if not tool_guard(target, "write", feature_id=feature_id, root=repo):
+        raise FeatureToolDenied(f"write denied for {target}")
+    updated = deepcopy(doc)
+    if doc.meta.path.resolve() != target:
+        # A pre-dispatch snapshot also carries stale lifecycle metadata
+        # (backlog status, no children, no approval timestamp). Keep the
+        # authoritative metadata and apply only the team's proposed body.
+        updated.meta = deepcopy(current.meta)
+    else:
+        updated.meta.path = target
+    return write_doc(updated, root=checkout)
 
 
 def list_children(*, feature_id: str, root: Path) -> list[WorkMeta]:
