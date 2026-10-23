@@ -2,7 +2,7 @@
 id: feat_012_002
 title: Bounded convergence detection and durable diagnostics
 tier: feature
-status: active
+status: completed
 parent: epic_012
 children:
 - task_012_002_001
