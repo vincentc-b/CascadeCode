@@ -40,6 +40,7 @@ def clear_watchdog_memory() -> None:
     """Forget toast suppression. Tests call this so cases do not leak."""
 
     from cascade.workspace.convergence import clear_convergence_diagnostic_memory
+    from cascade.workspace.turn_progress import clear_turn_progress_memory
     from cascade.workspace.flight import clear_flight_memory
     from cascade.workspace.queue_observability import clear_queue_observability_memory
 
@@ -50,6 +51,7 @@ def clear_watchdog_memory() -> None:
         clear_flight_memory()
     clear_queue_observability_memory()
     clear_convergence_diagnostic_memory()
+    clear_turn_progress_memory()
 
 
 def watchdog_tick(root: Path | None = None) -> None:

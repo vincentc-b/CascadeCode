@@ -11,6 +11,7 @@ _log = logging.getLogger(__name__)
 
 _DEFAULT_WORKER_DRAIN_SECONDS = 120.0
 _DEFAULT_CONVERGENCE_STALL_THRESHOLD_SECONDS = 600.0
+_DEFAULT_TURN_PROGRESS_NO_PROGRESS_DEADLINE_SECONDS = 600.0
 
 from cascade.agent.errors import ProviderConfigError
 from cascade.agent.providers import (
@@ -100,6 +101,25 @@ def completed_epic_display_limit(root: Path) -> int:
     if isinstance(value, float) and value.is_integer() and int(value) > 0:
         return int(value)
     return _DEFAULT_COMPLETED_EPIC_DISPLAY_LIMIT
+
+
+def turn_progress_no_progress_deadline_seconds(root: Path) -> float:
+    """Monotonic seconds without useful turn progress before the watchdog may act."""
+
+    data = _load_cascade_toml(root)
+    turn_progress = data.get("turn_progress")
+    if not isinstance(turn_progress, dict):
+        return _DEFAULT_TURN_PROGRESS_NO_PROGRESS_DEADLINE_SECONDS
+    if "no_progress_deadline_seconds" not in turn_progress:
+        return _DEFAULT_TURN_PROGRESS_NO_PROGRESS_DEADLINE_SECONDS
+    value = turn_progress["no_progress_deadline_seconds"]
+    if isinstance(value, bool):
+        return _DEFAULT_TURN_PROGRESS_NO_PROGRESS_DEADLINE_SECONDS
+    if isinstance(value, (int, float)):
+        seconds = float(value)
+        if seconds > 0:
+            return seconds
+    return _DEFAULT_TURN_PROGRESS_NO_PROGRESS_DEADLINE_SECONDS
 
 
 def convergence_stall_threshold_seconds(root: Path) -> float:
