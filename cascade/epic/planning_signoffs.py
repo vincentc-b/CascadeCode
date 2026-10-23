@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -13,7 +14,8 @@ from cascade.board.context import resolve_root
 from cascade.board.errors import NotFound
 from cascade.comments.store import read_comments
 from cascade.comments.slug import section_slug
-from cascade.board.gitutil import has_git, last_commit_touching
+from cascade.board.errors import GitError
+from cascade.board.gitutil import commit_paths, has_git, last_commit_touching
 from cascade.board.lock import process_lock
 from cascade.board.store import read_doc
 from cascade.workspace.doc_root import resolve_doc_worktree
@@ -98,10 +100,14 @@ def canonical_plan_revision(epic_id: str, *, root: Path) -> str | None:
     doc = read_doc(epic_id, root=repo)
     if doc.sha:
         return doc.sha
-    if not has_git(repo):
+    if has_git(repo):
+        rel = doc.meta.path.resolve().relative_to(repo.resolve())
+        return last_commit_touching(repo, rel)
+    try:
+        content = doc.meta.path.read_bytes()
+    except OSError:
         return None
-    rel = doc.meta.path.resolve().relative_to(repo.resolve())
-    return last_commit_touching(repo, rel)
+    return hashlib.sha1(content).hexdigest()
 
 
 def read_plan_sign_offs(epic_id: str, *, root: Path) -> tuple[PlanSignOff, ...]:
@@ -258,7 +264,36 @@ def record_plan_sign_off(
             return False
         updated = (*existing, PlanSignOff(role=role, plan_revision=plan_revision, signed_at=when))
         _write_sidecar(path, updated)
+        _commit_sidecar(epic_id, path, root=root, role=role)
     return True
+
+
+def _commit_sidecar(
+    epic_id: str,
+    path: Path,
+    *,
+    root: Path,
+    role: PlanningRole,
+) -> None:
+    repo = resolve_root(root)
+    if not has_git(repo):
+        return
+    from cascade.workspace.integration_worktree import (
+        git_root_for_path,
+        invalidate_merged_board,
+        locate_trunk,
+    )
+
+    commit_root = git_root_for_path(path)
+    try:
+        commit_paths(
+            commit_root,
+            [path],
+            f"docs: {epic_id} plan sign-off ({role})",
+        )
+    except GitError:
+        return
+    invalidate_merged_board(locate_trunk(repo))
 
 
 def hydrate_plan_sign_offs(epic_id: str, *, root: Path) -> None:

@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-from cascade.approvals import approve_epic_plan
 from cascade.comments.store import comment, resolve_comment
 from cascade.epic.planning_signoffs import (
     InvalidPlanningRole,
@@ -23,7 +22,13 @@ from cascade.epic.planning_signoffs import (
     current_valid_sign_offs,
     sign_off_epic_plan,
 )
-from tests.support import EPIC_BODY, add_doc, commit_board, make_repo
+from tests.support import (
+    EPIC_BODY,
+    add_doc,
+    approve_epic_plan_when_ready,
+    commit_board,
+    make_repo,
+)
 
 
 @pytest.fixture
@@ -148,7 +153,7 @@ def test_resolved_open_question_allows_sign_off(board: Path) -> None:
 
 def test_approved_epic_rejects_sign_off(board: Path) -> None:
     revision = _revision(board)
-    approve_epic_plan("epic_001", root=board)
+    approve_epic_plan_when_ready("epic_001", root=board)
     with pytest.raises(Exception, match="already approved"):
         sign_off_epic_plan("epic_001", "epic_manager", revision, root=board)
 

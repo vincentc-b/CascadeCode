@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from cascade.briefs import build_brief_doc, create_brief, validate_brief
-from cascade.approvals import approve_epic_plan, epic_plan_approved
+from cascade.approvals import epic_plan_approved
+from tests.support import approve_epic_plan_when_ready
 from cascade.tracking import (
     MergeRequest,
     _unsafe_tracked_changes,
@@ -144,11 +145,13 @@ def test_detects_gitlab_remote(tmp_path: Path, monkeypatch) -> None:
 def test_epic_plan_approval_requires_feature_plan_and_persists(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    from cascade.approvals import approve_epic_plan
+
     with pytest.raises(ValueError, match="no feature plans"):
         approve_epic_plan("epic_001", root=root)
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
 
-    result = approve_epic_plan("epic_001", root=root)
+    result = approve_epic_plan_when_ready("epic_001", root=root)
 
     assert result["features"] == ["feat_001"]
     assert epic_plan_approved("epic_001", root=root) is True

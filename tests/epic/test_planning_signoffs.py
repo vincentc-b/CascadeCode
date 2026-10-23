@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from cascade.approvals import approve_epic_plan, epic_plan_approved
+from cascade.approvals import epic_plan_approved
 from cascade.board.store import read_doc, write_doc
 from cascade.epic.planning_signoffs import (
     InvalidPlanningRole,
@@ -20,7 +20,7 @@ from cascade.epic.planning_signoffs import (
     sidecar_path,
     valid_sign_offs_for_revision,
 )
-from tests.support import EPIC_BODY, add_doc, commit_board, make_repo
+from tests.support import EPIC_BODY, add_doc, approve_epic_plan_when_ready, commit_board, make_repo
 
 
 @pytest.fixture
@@ -135,10 +135,11 @@ def test_new_revision_adds_role_sign_off_without_dropping_old(board: Path) -> No
 
 
 def test_approved_epic_unchanged_and_hydration_skips_sidecar(board: Path) -> None:
-    approve_epic_plan("epic_001", root=board)
+    approve_epic_plan_when_ready("epic_001", root=board)
     assert epic_plan_approved("epic_001", root=board) is True
+    before = read_plan_sign_offs("epic_001", root=board)
     hydrate_plan_sign_offs("epic_001", root=board)
-    assert not sidecar_path("epic_001", root=board).exists()
+    assert read_plan_sign_offs("epic_001", root=board) == before
 
 
 def test_invalid_role_rejected(board: Path) -> None:

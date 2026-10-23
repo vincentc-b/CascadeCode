@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from cascade.approvals import approve_epic_plan, approve_feature, feature_approved
+from cascade.approvals import approve_feature, feature_approved
+from tests.support import approve_epic_plan_when_ready
 from cascade.automation import advance_work, reconcile_approval_dispatch, reset_automation_memory
 from cascade.board.store import move_doc, read_doc
 from cascade.boss.view import compute_boss_view
@@ -72,7 +73,7 @@ def test_epic_approval_dispatches_current_children(
     add_doc(root, id="feat_002", title="Two", tier="feature", parent="epic_001")
     _quiet_dispatch(monkeypatch)
 
-    approve_epic_plan("epic_001", root=root)
+    approve_epic_plan_when_ready("epic_001", root=root)
 
     assert feature_approved("feat_001", root=root)
     assert feature_approved("feat_002", root=root)
@@ -99,7 +100,7 @@ def test_git_worktree_copies_cannot_hide_epic_child_approvals(
     assert activate_epic("epic_001", "human", root=root).ok
     _quiet_dispatch(monkeypatch)
 
-    approve_epic_plan("epic_001", root=root)
+    approve_epic_plan_when_ready("epic_001", root=root)
 
     board = merged_board(root)
     assert board.by_id["feat_001"].path.parent.name == "2_active"
@@ -134,7 +135,7 @@ def test_epic_approval_dispatch_does_not_wait_for_completion_maintenance(
         slow_maintenance,
     )
 
-    approve_epic_plan("epic_001", root=root)
+    approve_epic_plan_when_ready("epic_001", root=root)
 
     assert feature_approved("feat_001", root=root)
     assert read_doc("feat_001", root=root).meta.path.parent.name == "2_active"
@@ -157,7 +158,7 @@ def test_epic_approval_reports_pending_when_dispatch_fails_then_retries(
             "cascade.automation.reconcile_approval_dispatch",
             fail_dispatch,
         )
-        result = approve_epic_plan("epic_001", root=root)
+        result = approve_epic_plan_when_ready("epic_001", root=root)
 
     assert result["ok"] is True
     assert result["dispatch_pending"] is True
@@ -335,7 +336,7 @@ def test_child_added_after_epic_approval_stays_unapproved(
     add_doc(root, id="feat_001", title="One", tier="feature", parent="epic_001")
     _quiet_dispatch(monkeypatch)
 
-    approve_epic_plan("epic_001", root=root)
+    approve_epic_plan_when_ready("epic_001", root=root)
     add_doc(root, id="feat_002", title="Later", tier="feature", parent="epic_001")
 
     reset_automation_memory()
