@@ -110,10 +110,6 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
-- 2026-10-23 · epic_manager · Architecture: long-lived launcher holds the lock and listening socket; a replaceable worker process per code version; sequential restart, no overlap.
-- 2026-10-23 · epic_manager · Recovery reuses the existing checkpoint resume path (`resume_legally_active_graphs`) rather than a new state-transfer protocol.
-- 2026-10-23 · epic_manager · Scope cuts: no blue/green overlap, no in-process hot reload, no platform daemon units.
-- 2026-10-23 · epic_manager · Three-feature breakdown; 001 first, 002 and 003 in parallel after it; integration tests owned per feature.
 
 - `dec_001` · 2026-10-23 · Epic Manager · **Macro-architecture**
   Chose A long-lived launcher holds the supervisor lock and the listening socket for its whole life and spawns one replaceable worker process per code version, restarting sequentially with no overlap. The worker exits 75 on a source update, 0 on operator stop, and any other code counts as a crash..
