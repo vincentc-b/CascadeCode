@@ -2,7 +2,7 @@
 id: feat_019_001
 title: Render anchored review threads inline
 tier: feature
-status: active
+status: backlog
 parent: epic_019
 children:
 - task_019_001_001
