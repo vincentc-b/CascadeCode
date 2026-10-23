@@ -196,6 +196,11 @@ _None. Implementation discovery may choose storage and endpoint names but must p
   Chose Preserve already-approved plans and initialize active unapproved epics without valid sign-offs..
   Rationale: Avoid retroactively changing terminal records while safely enforcing the rule for work still awaiting approval.
   Honors: Existing workflow integrity while closing the premature-approval path..
+
+- `dec_006` · 2026-10-23 · Epic Architect · **Approval atomicity**
+  Chose Evaluate the shared readiness predicate and commit plan approval atomically against the same current plan state..
+  Rationale: Without a transaction, lock, or compare-and-swap equivalent, a concurrent plan edit or open-question change could invalidate readiness after validation but before approval is persisted.
+  Honors: The server-authoritative gate, revision-bound sign-offs, open-question blocking, and stale-client acceptance scenario..
 ## Amendment log
 
 _(none)_
