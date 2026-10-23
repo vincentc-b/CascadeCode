@@ -2,7 +2,7 @@
 id: feat_016_002
 title: War Room branch update action and actionable recovery
 tier: feature
-status: active
+status: backlog
 parent: epic_016
 children:
 - task_016_002_001
