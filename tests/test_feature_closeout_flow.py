@@ -52,10 +52,11 @@ def test_final_task_merge_synthesizes_closeout_and_opens_review(
 ) -> None:
     root = make_repo(tmp_path, git=False)
     _completed_feature_board(root)
-    opened: list[str] = []
+    opened: list[tuple[str, str, str]] = []
     monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
     def _open_review(feature_id: str, *, root: Path):
-        opened.append(feature_id)
+        feature = read_doc(feature_id, root=root)
+        opened.append((feature_id, feature.meta.status, feature.meta.path.parent.name))
         state_path = root / ".cascade" / "reviews.json"
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(
@@ -84,7 +85,7 @@ def test_final_task_merge_synthesizes_closeout_and_opens_review(
     assert feature.meta.status == "completed"
     assert feature.meta.path.parent.name == "3_completed"
     assert "Completed child work: `task_001` (Finished task)." in feature.body
-    assert opened == ["feat_001"]
+    assert opened == [("feat_001", "completed", "3_completed")]
 
 
 def test_review_open_toast_is_linked_idempotent_and_restart_safe(

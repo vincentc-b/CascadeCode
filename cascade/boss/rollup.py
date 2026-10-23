@@ -112,11 +112,20 @@ def try_complete_feature(
         from cascade.stacked_dispatch import feature_pull_request_linked
 
         if review_enabled(repo):
+            # Publication snapshots the feature branch's current tree. Move the
+            # plan first so the review—and therefore the epic branch after the
+            # review merges—contains the terminal document rather than an active
+            # copy that can outrank the local completed copy on the merged board.
+            owner_root = _feature_owner_root(feature_id, doc, repo)
+            move_doc(
+                feature_id,
+                "completed",
+                root=owner_root,
+                preparing_feature_review=True,
+            )
             mr = ensure_feature_review(feature_id, root=repo)
             if mr is None and not feature_pull_request_linked(feature_id, root=repo):
                 return False
-            owner_root = _feature_owner_root(feature_id, doc, repo)
-            move_doc(feature_id, "completed", root=owner_root)
             return False
 
     if review_merged:

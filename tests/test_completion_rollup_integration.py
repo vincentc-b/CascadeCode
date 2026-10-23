@@ -74,7 +74,7 @@ def _epic_completed_events(*, root: Path) -> list[object]:
     return [event for event in events if event.type == "EpicCompleted"]
 
 
-def test_task_merge_leaves_open_review_without_feature_completed_event(
+def test_task_merge_completes_plan_before_review_without_terminal_event(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = make_repo(tmp_path, git=False)
@@ -85,8 +85,8 @@ def test_task_merge_leaves_open_review_without_feature_completed_event(
     on_task_merged("task_001", root=root)
 
     feature = read_doc("feat_001", root=root)
-    assert feature.meta.status == "active"
-    assert feature.meta.path.parent.name == "2_active"
+    assert feature.meta.status == "completed"
+    assert feature.meta.path.parent.name == "3_completed"
     assert _feature_completed_events("epic_001", root=root) == []
 
 

@@ -36,7 +36,7 @@ def _feature_with_tasks(root: Path) -> None:
     )
 
 
-def test_open_merge_request_blocks_terminal_feature_completion(
+def test_open_merge_request_prepares_completed_plan_but_blocks_terminal_event(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = make_repo(tmp_path, git=False)
@@ -48,8 +48,39 @@ def test_open_merge_request_blocks_terminal_feature_completion(
     reconcile_completion(root)
 
     feature = read_doc("feat_001", root=root)
-    assert feature.meta.status == "active"
-    assert feature.meta.path.parent.name == "2_active"
+    assert feature.meta.status == "completed"
+    assert feature.meta.path.parent.name == "3_completed"
+    epic_events, _ = read_events("epic_001", 0, root=root)
+    assert not any(event.type == "FeatureCompleted" for event in epic_events)
+
+
+def test_reconcile_retries_review_for_prepared_completed_feature(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    opened: list[str] = []
+    monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+    monkeypatch.setattr(
+        "cascade.review.feature_review_pending",
+        lambda feature_id, *, root: feature_id == "feat_001",
+    )
+    monkeypatch.setattr(
+        "cascade.review.ensure_feature_review",
+        lambda feature_id, *, root: opened.append(feature_id),
+    )
+
+    reconcile_completion(root)
+
+    assert opened == ["feat_001"]
     epic_events, _ = read_events("epic_001", 0, root=root)
     assert not any(event.type == "FeatureCompleted" for event in epic_events)
 

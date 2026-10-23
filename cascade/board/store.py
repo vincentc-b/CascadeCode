@@ -129,20 +129,39 @@ def _write_doc(doc: WorkDoc, root: Path | None) -> str | None:
     return sha
 
 
-def move_doc(work_id: WorkId, dest_column: Column, *, root: Path | None = None) -> str | None:
+def move_doc(
+    work_id: WorkId,
+    dest_column: Column,
+    *,
+    root: Path | None = None,
+    preparing_feature_review: bool = False,
+) -> str | None:
     """Rename into the destination column and set that column's default status.
 
     Does not check dispatch authority. Validation runs before the file moves.
+    ``preparing_feature_review`` narrowly permits the completion commit that must
+    be present before the feature branch is pushed to create its review.
     Commit message matches write_doc. Returns the SHA, or None when there is no git repo.
     """
 
     if dest_column not in ("backlog", "active", "completed"):
         raise SchemaError(f"unknown column: {dest_column!r}")
     with process_lock:
-        return _move_doc(work_id, dest_column, root)
+        return _move_doc(
+            work_id,
+            dest_column,
+            root,
+            preparing_feature_review=preparing_feature_review,
+        )
 
 
-def _move_doc(work_id: WorkId, dest_column: Column, root: Path | None) -> str | None:
+def _move_doc(
+    work_id: WorkId,
+    dest_column: Column,
+    root: Path | None,
+    *,
+    preparing_feature_review: bool,
+) -> str | None:
     from cascade.workspace.integration_worktree import doc_filesystem_root, is_trunk_pointer
 
     repo = resolve_root(root)
@@ -170,7 +189,11 @@ def _move_doc(work_id: WorkId, dest_column: Column, root: Path | None) -> str | 
     doc.meta.status = status_for_column(dest_column)
     doc.meta.path = new_path
     doc.meta.updated = date.today()
-    if dest_column == "completed" and doc.meta.tier == "feature":
+    if (
+        dest_column == "completed"
+        and doc.meta.tier == "feature"
+        and not preparing_feature_review
+    ):
         from cascade.stacked_dispatch import refusal_if_feature_completion_without_pr
 
         if refusal := refusal_if_feature_completion_without_pr(doc.meta.id, root=repo):

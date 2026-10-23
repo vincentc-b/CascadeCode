@@ -31,7 +31,10 @@ def reconcile_completion(root: Path | None = None) -> dict[str, list[str]]:
 
     board = merged_board(trunk)
     for meta in sorted(board.by_id.values(), key=lambda row: row.id):
-        if meta.tier != "feature" or meta.path.parent.name != "2_active":
+        if meta.tier != "feature" or meta.path.parent.name not in (
+            "2_active",
+            "3_completed",
+        ):
             continue
         epic_id = meta.parent or ""
         before = feature_completed_recorded(meta.id, epic_id, root=repo) if epic_id else False
