@@ -32,14 +32,18 @@ epic_018
 
 When the worker decides to exit for an update or operator stop, it enters **draining**: it stops starting new work, lets accepted work finish within a bound, cancels what is left safely, and leaves it to the existing checkpoint resume path (`resume_legally_active_graphs`) in the next worker. Because resume re-runs an interrupted role node from the start, every board tool must be replay-safe and every board write must survive a kill (epic dec_005, dec_007, dec_010).
 
-## Builds on feat_018_001 (completed)
+## Builds on feat_018_001 (completed, verified against merged code; epic dec_012, dec_013)
 
-Per the epic's "Handoff seams from feat_018_001" (dec_009, dec_010), this feature extends 001's code rather than editing its launcher loop:
+001 did not ship a shutdown entry point. Shutdown is the inline `finally` block in `cascade/workspace/worker.py::run_worker`, and the exit code is inferred afterwards. This feature owns `run_worker`'s shutdown and exit codes, and stays out of `cascade/workspace/launcher.py` (feature 3 owns it):
 
-- The drain goes **inside** 001's single worker shutdown entry point, for both reasons (`update` and `stop`). feat_018_003 adds its preflight in front of that entry point for `update` only; do not move or duplicate it.
-- The launcher already forwards an operator stop once and waits without a short timeout, so the drain needs no launcher change.
+- **Extract the shutdown function.** Pull the `finally` block into one function taking a reason: `update`, `stop`, or `launcher_lost`. The drain goes inside it for `update` and `stop`. Feature 3 runs its preflight in the source-change branch of `should_stop`, before a stop is reported; do not move or duplicate it.
+- **Fix the fallback exit code.** `run_worker`'s trailing `return 0` (watchdog returned with neither flag set) makes the launcher treat it as an operator stop and exit, silently bringing the outage back. Return a non-zero crash code instead.
+- **Detect launcher loss.** The worker runs in its own session and never holds the supervisor lock. If the launcher dies without forwarding a stop (SIGKILL, OOM kill, terminal hangup), the lock is released while the worker keeps running, and a fresh `cascade up` could resume the same graphs beside it. Record the launcher pid at start and treat a changed `os.getppid()` as launcher loss. Check it as the first line of `should_stop` and in every drain wait loop. With `launcher_lost`, skip the drain: close the server, SIGTERM agent pids, wait 5s, exit non-zero.
+- **Idempotent SIGTERM handler.** Until feature 3 lands, the launcher re-sends SIGTERM every 0.2s while stopping; repeated signals must not restart or shorten the drain.
+- The launcher already waits for the worker without a short timeout after forwarding a stop, so the drain needs no launcher change.
 - Agents, MCP tool servers and git stay in the worker's process group; this feature must not introduce `setsid` / `start_new_session` / `process_group`.
-- Before building, confirm these seams against the merged 001 code. If one is missing or shaped differently, raise an upward question rather than reworking 001's launcher loop inside this feature.
+
+Feature 3 also edits `run_worker` (the source-change branch of `should_stop`, and the readiness line). Whichever feature merges second rebases.
 
 ## Acceptance
 
@@ -52,8 +56,9 @@ Per the epic's "Handoff seams from feat_018_001" (dec_009, dec_010), this featur
 ### Turn drain and cancellation (epic dec_007, dec_010)
 
 - The watchdog stops dispatching new model turns and queue deliveries once draining begins.
-- In-flight model turns get a bounded drain window (default 120s, `cascade.toml` override). At expiry the worker sends SIGTERM to each agent CLI **pid** (agents stay in the worker's process group, per dec_010), waits 5s, then exits with the shutdown reason's code (75 for update, 0 for stop). The launcher's `killpg` of the worker group (feature 1) covers anything left, including MCP tool-server grandchildren. HTTP join and turn drain run concurrently.
+- In-flight model turns get a bounded drain window (default 120s, `cascade.toml` override). At expiry the worker sends SIGTERM to each agent CLI **pid** (agents stay in the worker's process group, per dec_010), waits 5s, then exits with the shutdown reason's code (75 for `update`, 0 for `stop`). The launcher's `killpg` of the worker group (feature 1) covers anything left, including MCP tool-server grandchildren. HTTP join and turn drain run concurrently.
 - Cancelled turns are resumed once by the next worker from durable checkpoints. Queued events that arrive during drain stay in their durable queues and are delivered by the next worker.
+- On launcher loss, the worker stops serving and cancels its turns within about 10s, with no drain (dec_013).
 
 ### Replay-safe board effects (epic dec_005, dec_007)
 
@@ -69,11 +74,12 @@ Per the epic's "Handoff seams from feat_018_001" (dec_009, dec_010), this featur
 - (a) A write in flight when the update triggers is persisted and acknowledged; a write arriving during drain gets `503 updating`.
 - (b) Replay contract: a fake-provider turn calls `record_decision` and `mint_feature`, outlives the drain window, is cancelled, and is resumed once after restart; the board shows exactly one decision and one feature.
 - (c) A queued event during drain is delivered after restart.
+- (d) Launcher loss: SIGKILL the launcher while a fake turn runs; the worker and the fake agent are gone within about 10s.
 - No per-tool idempotency unit-test matrix and no unit test for the atomic write; test (b) covers both paths.
 
 ## Out of scope
 
-Zero-downtime overlap of old and new workers. Per-tool-call checkpointing and a durable cross-worker effect journal (cut in epic). Stale `index.lock` sweep (feature 1). Preflight, backoff and status file (feature 3). Changes to the launcher loop.
+Zero-downtime overlap of old and new workers. Per-tool-call checkpointing and a durable cross-worker effect journal (cut in epic). Stale `index.lock` sweep (feature 1). Preflight, backoff, status file, readiness placement and any edit to `launcher.py` (feature 3).
 
 ## Data structures
 
@@ -97,7 +103,7 @@ _(empty — Feature Team mints tasks after dispatch)_
 ## Risks & upward questions
 
 - The replay-safe tools and atomic writes are independent of the drain and can be the first task; they also fix duplicate effects after ordinary crashes.
-- feat_018_003 works in the same shutdown entry point in parallel. Keep the drain inside it and the preflight in front of it so the two merge without conflict.
+- Feature 3 edits other lines of `run_worker` in parallel. Keep to the `finally` block, the exit codes, and the launcher-loss line at the top of `should_stop`.
 
 ## Decision log
 
