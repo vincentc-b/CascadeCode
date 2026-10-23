@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -191,6 +192,44 @@ def test_synthesized_closeout_from_trunk_commits_on_feature_worktree(
         text=True,
     ).stdout
     assert status == ""
+
+
+def test_rollup_uses_live_feature_when_trunk_has_stale_backlog_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    _stacked_board(root)
+    feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)
+    move_doc("task_001", "completed", root=root)
+    write_closeout("feat_001", "All child work is complete.", root=root)
+    # A trunk copy can outlive activation. It must not override the live spec.
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    assert read_doc("feat_001", root=root).meta.status == "backlog"
+    assert read_doc_resolved("feat_001", root=root).meta.status == "active"
+
+    opened: list[str] = []
+    monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+
+    def open_review(feature_id: str, *, root: Path) -> object:
+        opened.append(feature_id)
+        state_path = root / ".cascade" / "reviews.json"
+        state_path.write_text(json.dumps({feature_id: {
+            "url": "https://example.test/pull/1",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+        }}), encoding="utf-8")
+        return object()
+
+    monkeypatch.setattr(
+        "cascade.review.ensure_feature_review", open_review,
+    )
+
+    assert try_complete_feature("feat_001", root=root) is False
+    assert opened == ["feat_001"]
+    live = read_doc_in_worktree("feat_001", feat_wt)
+    assert live.meta.status == "completed"
+    assert "All child work is complete." in live.body
 
 
 def test_promote_epic_to_trunk_fails_when_epic_branch_absent(tmp_path: Path) -> None:
