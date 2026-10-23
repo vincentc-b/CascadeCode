@@ -110,6 +110,80 @@ def test_missing_file_and_stale_offset_reread(tmp_path: Path) -> None:
     assert offset == len(data)
 
 
+def test_offset_read_seeks_past_large_acknowledged_prefix(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    path = root / "docs" / "_queue" / "boss.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(b"{}\n" * 400_000)
+    acknowledged_size = path.stat().st_size
+    append_event("boss", _event("BossDispatchRequested", "boss", id="feat_001"), root=root)
+
+    original_open = Path.open
+    bytes_read = 0
+    earliest_read = acknowledged_size
+
+    class TrackedReader:
+        def __init__(self, handle):
+            self.handle = handle
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            self.handle.close()
+
+        def seek(self, *args):
+            return self.handle.seek(*args)
+
+        def tell(self):
+            return self.handle.tell()
+
+        def read(self, *args):
+            nonlocal bytes_read, earliest_read
+            earliest_read = min(earliest_read, self.handle.tell())
+            data = self.handle.read(*args)
+            bytes_read += len(data)
+            return data
+
+        def readline(self, *args):
+            nonlocal bytes_read, earliest_read
+            earliest_read = min(earliest_read, self.handle.tell())
+            data = self.handle.readline(*args)
+            bytes_read += len(data)
+            return data
+
+    def tracked_open(self, mode="r", *args, **kwargs):
+        handle = original_open(self, mode, *args, **kwargs)
+        if self == path and mode == "rb":
+            return TrackedReader(handle)
+        return handle
+
+    monkeypatch.setattr(Path, "open", tracked_open)
+    events, offset = read_events("boss", acknowledged_size, root=root)
+
+    assert [event.type for event in events] == ["BossDispatchRequested"]
+    assert offset == path.stat().st_size
+    assert earliest_read >= acknowledged_size - 1
+    assert bytes_read < 1024
+
+
+def test_offset_inside_line_skips_that_line(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    append_event("boss", _event("First", "boss"), root=root)
+    path = root / "docs" / "_queue" / "boss.jsonl"
+    first_size = path.stat().st_size
+    append_event("boss", _event("Second", "boss"), root=root)
+
+    events, offset = read_events("boss", 10, root=root)
+
+    assert [event.type for event in events] == ["Second"]
+    assert offset == path.stat().st_size
+    assert first_size < offset
+
+
 def test_remove_queue_if_unchanged_preserves_concurrent_suffix(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     append_event("boss", _event("BossDrainRequested", "boss"), root=root)

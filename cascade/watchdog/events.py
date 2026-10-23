@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import BinaryIO
 
 from cascade.board.context import resolve_root
 from cascade.watchdog.lock import process_lock
@@ -48,10 +49,11 @@ def read_events(
     queue_dest = _safe_dest(dest)
     path = _queue_path(repo, queue_dest)
     with process_lock:
-        if not path.exists():
+        try:
+            with path.open("rb") as handle:
+                return _decode_stream(handle, after_offset)
+        except FileNotFoundError:
             return [], 0
-        data = path.read_bytes()
-    return _decode_buffer(data, after_offset)
 
 
 def remove_queue_if_unchanged(
@@ -156,25 +158,33 @@ def _encode(event: Event) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
-def _decode_buffer(data: bytes, after_offset: int) -> tuple[list[Event], int]:
+def _decode_stream(handle: BinaryIO, after_offset: int) -> tuple[list[Event], int]:
+    """Read complete lines from a byte cursor without loading its acknowledged prefix."""
+
+    handle.seek(0, 2)
+    size = handle.tell()
     if after_offset < 0:
         after_offset = 0
-    if after_offset > len(data):
+    if after_offset > size:
         after_offset = 0
     start = after_offset
-    if start > 0 and data[start - 1 : start] != b"\n":
-        newline = data.find(b"\n", start)
-        if newline < 0:
-            return [], start
-        start = newline + 1
+    if start > 0:
+        handle.seek(start - 1)
+        if handle.read(1) != b"\n":
+            handle.seek(start)
+            skipped = handle.readline(size - start)
+            if not skipped.endswith(b"\n"):
+                return [], start
+            start = handle.tell()
+    handle.seek(start)
     events: list[Event] = []
     position = start
-    while position < len(data):
-        newline = data.find(b"\n", position)
-        if newline < 0:
+    while position < size:
+        raw = handle.readline(size - position)
+        if not raw.endswith(b"\n"):
             break
-        raw = data[position:newline]
-        position = newline + 1
+        position = handle.tell()
+        raw = raw[:-1]
         if not raw.strip():
             continue
         try:
