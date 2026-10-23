@@ -2,7 +2,7 @@
 id: epic_018
 title: Graceful supervisor updates without War Room outage
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_018_001
