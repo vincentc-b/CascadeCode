@@ -18,6 +18,7 @@ provider: cursor
 models:
   feature_lead: claude-opus-5-5
   feature_architect: claude-opus-5-5
+approved_at: '2026-10-23T02:49:27.969137+00:00'
 ---
 # Update failure containment: preflight, bounded backoff, degraded responder, and health status
 
