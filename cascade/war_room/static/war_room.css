@@ -35,6 +35,17 @@ body {
   padding: 1rem 1.25rem 2rem;
 }
 
+.supervisor-status-banner {
+  color: #ffb4a8;
+  background: #2a1512;
+  border: 1px solid #5c2f28;
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .war-room-header {
   display: flex;
   align-items: center;

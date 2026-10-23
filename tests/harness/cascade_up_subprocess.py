@@ -94,6 +94,16 @@ def http_get(url: str) -> tuple[int, dict[str, str], bytes]:
         return resp.status, headers, resp.read()
 
 
+def get_supervisor_health(base: str) -> tuple[int, dict | None]:
+    """Fetch ``GET /api/health`` for feat_018_003 integration assertions."""
+
+    status, _, raw = http_get(f"{base}/api/health")
+    payload = json.loads(raw.decode())
+    if payload is not None and not isinstance(payload, dict):
+        raise AssertionError(f"unexpected /api/health payload: {payload!r}")
+    return status, payload
+
+
 def http_post_json(
     url: str,
     payload: dict | None = None,
