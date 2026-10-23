@@ -1,4 +1,4 @@
-"""``cascade probe`` operator entry (harness lifecycle only in task_012_003_001)."""
+"""``cascade probe`` operator entry (feat_012_003)."""
 
 from __future__ import annotations
 
@@ -39,10 +39,34 @@ def register_probe_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Emit a single JSON object on stdout",
     )
 
+    run = probe_sub.add_parser(
+        "run",
+        help="Exercise synthetic lifecycle success and stall scenarios",
+    )
+    run.add_argument(
+        "--parent",
+        type=Path,
+        default=None,
+        help="Directory that will contain the new workspace (default: system temp)",
+    )
+    run.add_argument(
+        "--debug-retain",
+        action="store_true",
+        help="Keep the workspace on disk after the run (debug only)",
+    )
+    run.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a single JSON object on stdout",
+    )
+
 
 def run_probe_command(args: argparse.Namespace) -> None:
     if args.probe_command == "prepare":
         _run_prepare(args)
+        return
+    if args.probe_command == "run":
+        _run_lifecycle(args)
         return
     raise SystemExit(f"unknown probe command: {args.probe_command!r}")
 
@@ -74,3 +98,44 @@ def _run_prepare(args: argparse.Namespace) -> None:
         print(json.dumps(payload))
     else:
         print(f"probe workspace ok ({payload['workspace']})")
+
+
+def _run_lifecycle(args: argparse.Namespace) -> None:
+    from cascade.probe.lifecycle import run_lifecycle_probe
+
+    try:
+        if args.debug_retain:
+            workspace = smoke_probe_harness(
+                retain_artifacts=True,
+                parent_dir=args.parent,
+            )
+            report = run_lifecycle_probe(workspace)
+            payload = {
+                "ok": report.ok,
+                "failing_phase": report.failing_phase,
+                "phases": report.to_dict()["phases"],
+                "workspace": str(workspace.root),
+                "retained": True,
+            }
+        else:
+            with probe_workspace(parent_dir=args.parent) as workspace:
+                report = run_lifecycle_probe(workspace)
+                payload = {
+                    "ok": report.ok,
+                    "failing_phase": report.failing_phase,
+                    "phases": report.to_dict()["phases"],
+                    "workspace": str(workspace.root),
+                    "retained": False,
+                }
+    except (ProbeError, ProbeTimeoutError) as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(1) from exc
+
+    if args.json:
+        print(json.dumps(payload))
+    else:
+        status = "ok" if payload["ok"] else "failed"
+        phase = payload.get("failing_phase") or "none"
+        print(f"probe lifecycle {status} (failing_phase={phase})")
+    if not payload["ok"]:
+        raise SystemExit(1)
