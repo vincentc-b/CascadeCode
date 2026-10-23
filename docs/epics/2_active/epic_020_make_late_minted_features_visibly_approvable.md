@@ -43,13 +43,14 @@ What exists today (verified on trunk):
 
 - `cascade/approvals.py::approve_feature`: sets `approved_at` once (idempotent; returns `newly_approved`), then calls `advance_work`, which runs `reconcile_approval_dispatch` when automation is enabled.
 - `POST /api/approve_feature` in `cascade/war_room/server.py`: errors map to 409. Every POST runs inside `deferred_kickoffs()`, so `dispatch_feature` → `kickoff_turn` queues the feature-planning model turn in the background instead of running it on the request thread.
-- `dispatch_feature` already enforces the gates under a process lock: open status, `unmet_deps`, `not_approved`, `feature_awaiting_merge`, and sibling block. Once a feature moves to active, a second dispatch fails with `bad_state`, so repeated approvals cannot dispatch twice.
+- `dispatch_feature` already enforces the gates under a process lock: open status, `unmet_deps`, `not_approved`, `feature_awaiting_merge`, and sibling block (also reported as `feature_awaiting_merge`). After those gates it can still refuse through `ensure_feature_dispatch_selection` (stacked base unavailable) and the blocking-comment gate. Once a feature moves to active, a second dispatch fails with `bad_state`, so repeated approvals cannot dispatch twice.
+- `reconcile_approval_dispatch` only tries features listed in `compute_boss_view().dispatchable_features` (`cascade/boss/view.py`). That list is a second copy of the gates with slightly different checks (`feature_dependency_ready`, `feature_merge_gated`, a `1_backlog` path check). Reconcile then applies a third check: the parent epic must be active.
 - `serialize.py` exposes `approved` and `approved_at` on feature rows. It does not expose why a feature is still in backlog.
 - `war_room.js` has "Approve plan" and "Approved" controls for epics, but feature rows have no approval control.
 
 What this epic adds:
 
-1. **A read-only readiness predicate** (feat_020_001). The gate logic moves out of `_dispatch_feature` into one pure function that both `dispatch_feature` and the board serializer call. Feature rows gain `readiness: {approved, blockers[]}`. The predicate has no side effects: it never calls `ensure_feature_dispatch_selection`, writes, emits events, or takes the dispatch lock.
+1. **A read-only readiness predicate** (feat_020_001). The gate logic from all three sites (`_dispatch_feature`, the boss-view feature filter, and reconcile's active-epic check) moves into one pure function. The dispatcher, the boss view, reconcile, and the board serializer all call it. It also covers the post-gate refusals through their read-only forms (`plan_feature_dispatch`, `refusal_if_blocked`). Feature rows gain `readiness: {approved, blockers[]}`. The predicate has no side effects: it never calls `ensure_feature_dispatch_selection`, writes, emits events, or takes the dispatch lock. `DispatchResult.reason` values stay the same.
 2. **A War Room control** (feat_020_002). Feature rows show an "Awaiting feature approval" status and an "Approve feature" button that calls the existing `/api/approve_feature`, with pending, success, and error feedback. After approval, rows show the remaining blockers. One integration test covers the full late-mint path.
 
 Data flow: an operator clicks the button, which POSTs `/api/approve_feature`. The handler persists `approved_at`, then runs `advance_work` → `reconcile_approval_dispatch` → `dispatch_feature` (the canonical gates). On success the kickoff is queued in the background and the HTTP response returns. On the next board refresh, the readiness predicate shows the feature as active, or still in backlog with its real blocker.
@@ -60,7 +61,8 @@ Preserve per-feature approved_at as durable authority and preserve the current s
 
 Rules added during planning:
 
-- Displayed blockers and actual dispatch decisions must come from the same predicate. A UI-only copy of the gate logic is not allowed.
+- Displayed blockers and actual dispatch decisions must come from the same predicate. A UI-only copy of the gate logic is not allowed. This includes the boss-view filter that reconcile relies on.
+- The refactor must not loosen any gate. Where the current copies differ, the predicate must be at least as strict as their conjunction.
 - The approval action stays on the loopback War Room HTTP surface. No agent or MCP tool gains an approve capability.
 - Feature labels use feature-row vocabulary ("Awaiting feature approval", "Approve feature"). They must not reuse or restyle epic_015's epic-level "Approve plan" controls.
 
@@ -68,6 +70,8 @@ Rules added during planning:
 
 - `cascade/approvals.py` (`approve_feature`, `feature_approved`): reused, not modified.
 - `cascade/watchdog/dispatch.py` (`dispatch_feature` gates): refactored to call the shared readiness predicate, with no behavior change.
+- `cascade/boss/view.py` (`compute_boss_view` feature filter): refactored to call the shared predicate, with no behavior change.
+- `cascade/stacked_dispatch.py` (`plan_feature_dispatch`, `read_feature_dispatch_selection`) and `cascade/comments/gate.py` (`refusal_if_blocked`): reused read-only by the predicate.
 - `cascade/automation.py` (`reconcile_approval_dispatch`): reused. Its active-parent-epic check is reported as the `epic_inactive` blocker.
 - `cascade/workspace/kickoff.py` (`deferred_kickoffs`, `kickoff_turn`): reused for background kickoff.
 - `cascade/war_room/serialize.py` and `static/war_room.js`: extended.
@@ -82,7 +86,7 @@ The work is a strict sequence; there is no parallelism worth the coordination co
 
 ## Open questions
 
-- Resolved: which implementation risks should be settled before the first feature starts? See the decision log. The risks are readiness-vs-dispatch drift, the side-effecting `ensure_feature_dispatch_selection`, and proof that no model turn runs inline.
+- Resolved: which implementation risks should be settled before the first feature starts? See the decision log. The risks are readiness-vs-dispatch drift (across all three gate sites), the side-effecting `ensure_feature_dispatch_selection`, and proof that no model turn runs inline.
 
 ## Known limitations (accepted)
 
