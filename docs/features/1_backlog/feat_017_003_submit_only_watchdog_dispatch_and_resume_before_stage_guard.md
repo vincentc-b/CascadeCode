@@ -13,11 +13,12 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-22'
-updated: '2026-10-22'
+updated: '2026-10-23'
 provider: cursor
 models:
   feature_lead: claude-opus-5-5
   feature_architect: claude-opus-5-5
+approved_at: '2026-10-23T00:16:21.432399+00:00'
 ---
 # Submit-only watchdog dispatch and resume-before-stage guard
 
