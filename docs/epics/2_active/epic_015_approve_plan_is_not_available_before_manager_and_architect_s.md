@@ -186,6 +186,11 @@ _None. Implementation discovery may choose storage and endpoint names but must p
   Chose Deliver two sequenced features: the authoritative domain/API gate, then the existing UI's readiness presentation..
   Rationale: The backend gate is independently security-correct; the UI feature then consumes its stable contract with minimal coupling.
   Honors: Frugal delivery of the smallest complete, enforceable user flow..
+
+- `dec_005` · 2026-10-23 · Epic Manager · **Compatibility**
+  Chose Preserve already-approved plans and initialize active unapproved epics without valid sign-offs..
+  Rationale: Avoid retroactively changing terminal records while safely enforcing the rule for work still awaiting approval.
+  Honors: Existing workflow integrity while closing the premature-approval path..
 ## Amendment log
 
 _(none)_
