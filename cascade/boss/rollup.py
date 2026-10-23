@@ -90,7 +90,9 @@ def try_complete_feature(
             )
         return True
 
-    doc = read_doc(feature_id, root=repo)
+    from cascade.workspace.doc_root import read_doc_resolved
+
+    doc = read_doc_resolved(feature_id, root=repo)
     # Closeout must not depend on another model turn after the last child lands.
     # A Feature Architect may replace this paragraph with a richer summary, but
     # the deterministic fallback records exactly which completed work unlocked
@@ -103,7 +105,7 @@ def try_complete_feature(
         paragraph = _synthesized_closeout(feature_id, board)
         if paragraph is not None:
             write_closeout(feature_id, paragraph, root=repo)
-            doc = read_doc(feature_id, root=repo)
+            doc = read_doc_resolved(feature_id, root=repo)
     if not _rollup_gates_pass(feature_id, doc.body, board, repo):
         return False
 
