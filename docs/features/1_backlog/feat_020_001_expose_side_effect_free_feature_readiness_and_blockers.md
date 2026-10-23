@@ -78,3 +78,7 @@ None.
 ## Decision log
 
 None yet.
+
+## Closeout
+
+Completed child work: `task_020_001_001` (Extract pure feature readiness predicate and route _dispatch_feature through it), `task_020_001_002` (Route compute_boss_view and reconcile_approval_dispatch through the readiness predicate), `task_020_001_003` (Serialize readiness on backlog/open feature rows and add one /api/board test).
