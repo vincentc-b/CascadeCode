@@ -499,3 +499,55 @@ def test_planning_tools_write_into_integration_checkouts(tmp_path: Path) -> None
             ["git", "status", "--porcelain"], cwd=checkout, capture_output=True, text=True
         )
         assert status.stdout == ""
+
+
+def test_active_feature_planning_ignores_stale_trunk_backlog_copy(tmp_path: Path) -> None:
+    from cascade.boss.rollup import write_closeout
+    from cascade.feature.mint import mint_task
+    from cascade.feature.scoped_docs import feature_read_doc, feature_write_doc
+
+    root = make_repo(tmp_path)
+    (root / ".gitignore").write_text(".cascade/\n", encoding="utf-8")
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    feature = add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        parent="epic_001",
+    )
+    stale_path = feature.meta.path
+    stale_bytes = stale_path.read_bytes()
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
+    _chain(root)
+
+    # Reproduce a stale trunk snapshot while the dispatched Feature is active
+    # and authoritative in its integration checkout.
+    stale_path.parent.mkdir(parents=True, exist_ok=True)
+    stale_path.write_bytes(stale_bytes)
+
+    active = feature_read_doc("feat_001", feature_id="feat_001", root=root)
+    assert active.meta.status == "active"
+    assert active.meta.path.is_relative_to(
+        integration_worktree_path("feature", "feat_001", trunk=root)
+    )
+
+    task_id = mint_task("Planned task", feature_id="feat_001", root=root)
+    checkout = integration_worktree_path("feature", "feat_001", trunk=root)
+    assert read_doc(task_id, root=checkout).meta.parent == "feat_001"
+    assert task_id in read_doc("feat_001", root=checkout).meta.children
+    assert read_doc("feat_001", root=root).meta.status == "backlog"
+
+    # A graph may submit the stale WorkDoc it ingested before dispatch. Writes
+    # must still target the authoritative active copy in the feature checkout.
+    stale = read_doc("feat_001", root=root)
+    stale.body += "\n\n## Closeout\n\nCompleted from stale input.\n"
+    feature_write_doc(stale, feature_id="feat_001", root=root)
+
+    assert "Completed from stale input." in read_doc("feat_001", root=checkout).body
+    assert read_doc("feat_001", root=root).body == feature.body
+
+    write_closeout("feat_001", "Deterministic rollup closeout.", root=root)
+    assert "Deterministic rollup closeout." in read_doc("feat_001", root=checkout).body
+    assert read_doc("feat_001", root=root).body == feature.body

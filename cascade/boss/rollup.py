@@ -25,7 +25,9 @@ def write_closeout(feature_id: WorkId, paragraph: str, *, root: Path | None = No
     """Ensure the feature doc has a ## Closeout section with ``paragraph``. Does not move columns."""
 
     repo = resolve_root(root)
-    doc = read_doc(feature_id, root=repo)
+    from cascade.workspace.doc_root import read_doc_resolved
+
+    doc = read_doc_resolved(feature_id, root=repo)
     if doc.meta.tier != "feature":
         raise NotFound(feature_id)
     doc.body = _upsert_closeout_section(doc.body, paragraph)

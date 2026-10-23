@@ -119,7 +119,8 @@ def mint_task(
 
 def _require_feature(feature_id: str, root: Path) -> WorkDoc:
     try:
-        feature = read_doc(feature_id, root=root)
+        checkout = feature_checkout_root(feature_id, trunk=root)
+        feature = read_doc(feature_id, root=checkout)
     except NotFound:
         raise FeatureToolDenied(f"unknown work id {feature_id}") from None
     if feature.meta.tier != "feature":
