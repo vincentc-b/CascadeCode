@@ -92,6 +92,11 @@ Feature 2 depends on Feature 1.
   Chose Use one shared branch synchronization and typed merge-diagnostics boundary for manual updates and lifecycle merges..
   Rationale: Task, feature, and epic merge paths currently share Git mechanics but collapse distinct failure modes. A single boundary prevents policy drift, centralizes cleanup guarantees, and gives the War Room one stable contract.
   Honors: Success criteria for safe updates, actionable merge recovery, idempotency, and lifecycle serialization..
+
+- `dec_002` · 2026-10-23 · Epic Manager · **Cross-module constraints**
+  Chose Resolve feature update bases from the persisted dispatch/review selection, not the current stacked-PR toggle or a newly inferred dependency target..
+  Rationale: A published feature branch must continue to track the durable base chosen when its review identity was established; recomputing from mutable room settings could silently change merge topology.
+  Honors: The existing default-off stacked-PR behavior and durable PR target selection remain authoritative..
 ## Amendment log
 
 _(none)_
