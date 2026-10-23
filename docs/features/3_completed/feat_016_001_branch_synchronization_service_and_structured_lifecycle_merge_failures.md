@@ -2,7 +2,7 @@
 id: feat_016_001
 title: Branch synchronization service and structured lifecycle merge failures
 tier: feature
-status: active
+status: completed
 parent: epic_016
 children:
 - task_016_001_001
