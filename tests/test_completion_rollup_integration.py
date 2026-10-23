@@ -109,6 +109,7 @@ def test_tasks_first_then_merged_review_via_poll_reviews(
         lambda *_args, **_kwargs: SimpleNamespace(path=root),
     )
     monkeypatch.setattr("cascade.review.fast_forward_branch", lambda *_args, **_kwargs: "sha")
+    monkeypatch.setattr("cascade.review.push_branch", lambda *_args, **_kwargs: None)
 
     poll_reviews(root)
 
