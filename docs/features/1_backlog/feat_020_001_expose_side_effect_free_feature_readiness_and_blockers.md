@@ -17,6 +17,7 @@ provider: cursor
 models:
   feature_lead: claude-opus-5-5
   feature_architect: claude-opus-5-5
+approved_at: '2026-10-23T03:13:48.012930+00:00'
 ---
 # Expose side-effect-free feature readiness and blockers
 
