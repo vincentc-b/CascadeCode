@@ -18,6 +18,7 @@ provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-10-23T00:57:04.202342+00:00'
 ---
 # War Room branch update action and actionable recovery
 
