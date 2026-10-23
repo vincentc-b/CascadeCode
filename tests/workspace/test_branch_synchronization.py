@@ -86,6 +86,31 @@ def test_already_current_is_no_op(tmp_path: Path) -> None:
     assert result.no_op is True
 
 
+def test_epic_update_keeps_live_spec_over_managed_trunk_pointer(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+
+    assert activate_epic("epic_001", "human", root=root).ok
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+    inspection = inspect_branch_synchronization("epic_001", root=root)
+    assert inspection.ok and inspection.state is not None
+    assert inspection.state.behind > 0
+
+    result = update_integration_branch("epic_001", root=root)
+
+    assert result.ok
+    assert result.reason is None
+    live = (epic_wt / "docs/epics/2_active/epic_001_epic.md").read_text(
+        encoding="utf-8"
+    )
+    assert "integration_worktree:" not in live
+    assert "Live epic spec is on branch" not in live
+    follow_up = inspect_branch_synchronization("epic_001", root=root)
+    assert follow_up.ok and follow_up.state is not None
+    assert follow_up.state.behind == 0
+
+
 def _seed_predecessor_review(root: Path, feature_id: str) -> None:
     path = root / ".cascade" / "reviews.json"
     path.parent.mkdir(parents=True, exist_ok=True)
