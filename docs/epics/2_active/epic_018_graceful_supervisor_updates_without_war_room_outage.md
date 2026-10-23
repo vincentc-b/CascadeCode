@@ -125,6 +125,11 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
   Chose Three features: feat_018_001 (launcher/worker relaunch) first; feat_018_002 (graceful drain) and feat_018_003 (preflight, backoff, degraded responder, health) in parallel after it. Each owns its integration tests against a real cascade up subprocess; no separate test-only feature.
   Rationale: 001 alone removes the outage and is the smallest shippable slice. 002 and 003 touch different seams (worker shutdown vs launcher retry/status) so they can proceed concurrently. System-level tests per feature give high signal without a redundant test feature
   Honors: Bounded downtime and restart-storm prevention; integration-test success criterion; frugal testing.
+
+- `dec_004` · 2026-10-23 · Epic Manager · **Macro-architecture**
+  Chose Recover interrupted work through the existing checkpoint resume path (resume_legally_active_graphs / resume_inflight_graphs) after a bounded drain, instead of building a new live state-transfer protocol between workers.
+  Rationale: The durable checkpoints, queues and worktrees already survive a process restart, and resume is already exercised on every startup. Adding a second handoff mechanism would duplicate it and add risk. The remaining exactly-once gap for cancelled turns is tracked as an open question for the Epic Architect
+  Honors: Checkpoints, queues, comments and worktree state as durable handoff boundaries; drain when possible, recover exactly once otherwise.
 ## Amendment log
 
 _(none)_
