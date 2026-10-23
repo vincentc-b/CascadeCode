@@ -96,12 +96,19 @@ def _consume_explicit_events(root: Path, *, force_work_queues: bool) -> None:
     with process_lock:
         tick_boss_consumer()
 
+    from cascade.workspace.kickoff import (
+        deferred_kickoffs,
+        deliver_queue_kickoffs,
+        retry_failed_queue_kickoffs,
+    )
+
+    with deferred_kickoffs():
+        retry_failed_queue_kickoffs(root)
+
     signature = _work_queue_signature(root)
     previous = _work_queue_signatures.get(root.resolve())
     if not force_work_queues and signature == previous:
         return
-
-    from cascade.workspace.kickoff import deferred_kickoffs, deliver_queue_kickoffs
 
     # Model turns can take minutes. Enqueue them so this supervisory loop keeps
     # scanning health, retrying merges, and dispatching independent work.
