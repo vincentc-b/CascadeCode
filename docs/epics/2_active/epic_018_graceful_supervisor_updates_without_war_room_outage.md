@@ -169,6 +169,11 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
   Chose Drain HTTP by switching to tracked non-daemon handler threads joined within the longest route deadline plus margin (about 65s), sending Connection: close on every response while draining, serving GETs and answering writes with 503 updating until the join finishes.
   Rationale: The War Room has no long-poll or streaming endpoints and every connection already has a hard per-route deadline (10s, or 60s for approvals and epic close), so the join is bounded without new timeouts. Connection: close stops idle keep-alive sockets from holding threads
   Honors: New HTTP work rejected with an explicit updating response; accepted writes not lost; bounded listener downtime.
+
+- `dec_007` · 2026-10-23 · Epic Architect · **Macro-architecture**
+  Chose Make kills safe: doc writes become atomic (temp file then os.replace); after killpg the launcher removes stale .git/index.lock files in Cascade-managed worktrees and only reports one in the product trunk; drain-window expiry sends SIGTERM to agent process groups, waits 5s, then exits 75.
+  Rationale: board/store.py writes with non-atomic write_text and then commits, so a kill mid-tool can truncate a doc or leave index.lock blocking every later commit. With turns allowed up to 3600s, cancellation happens on most updates, not rarely. Holding the supervisor lock with the old group dead makes Cascade-worktree locks stale by construction; the trunk may have a human running git
+  Honors: No orphaned subprocesses or stale-lock blockage; accepted writes not lost; product-trunk workspace validation.
 ## Amendment log
 
 _(none)_
