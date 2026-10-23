@@ -58,11 +58,18 @@ def _write_response(
 
 
 def _json_body(status: SupervisorStatus | None, *, error: str | None = None) -> bytes:
+    from cascade.workspace.supervisor_readiness import (
+        project_supervisor_health,
+        snapshot_readiness_evidence,
+    )
+
+    evidence = snapshot_readiness_evidence()
+    payload_obj = project_supervisor_health(status, evidence, http_serving=True)
     payload: dict[str, object]
-    if status is None:
+    if payload_obj is None:
         payload = {"error": error or "degraded", "state": "degraded"}
     else:
-        payload = dict(status)
+        payload = dict(payload_obj)
         if error is not None:
             payload["error"] = error
     return json.dumps(payload, indent=2, sort_keys=True).encode("utf-8") + b"\n"

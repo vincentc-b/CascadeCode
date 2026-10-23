@@ -156,13 +156,41 @@ def test_get_api_health_reads_supervisor_status(war_room_server):
     assert payload["state"] == "update_blocked"
     assert payload["last_error"]["message"] == "preflight failed"
     assert payload["next_action"] == "Fix the syntax error and save again."
+    assert payload["http"]["live"] is True
+    assert payload["automation"]["ready"] is False
 
 
 def test_get_api_health_null_when_status_file_missing(war_room_server):
     base, _root, _server = war_room_server
     status, payload, _ = _get(f"{base}/api/health")
     assert status == HTTPStatus.OK
-    assert payload is None
+    assert payload is not None
+    assert payload["http"]["live"] is True
+    assert payload["automation"]["ready"] is False
+
+
+def test_http_live_while_automation_not_ready_then_becomes_ready(war_room_server):
+    from cascade.workspace.supervisor_readiness import (
+        observe_startup_phase,
+        record_loop_success,
+        reset_supervisor_readiness_for_tests,
+    )
+
+    base, _root, _server = war_room_server
+    reset_supervisor_readiness_for_tests()
+    status, payload, _ = _get(f"{base}/api/health")
+    assert status == HTTPStatus.OK
+    assert payload["http"]["live"] is True
+    assert payload["automation"]["ready"] is False
+
+    observe_startup_phase("ready")
+    record_loop_success("watchdog")
+    record_loop_success("reconciliation")
+
+    status, payload, _ = _get(f"{base}/api/health")
+    assert status == HTTPStatus.OK
+    assert payload["http"]["live"] is True
+    assert payload["automation"]["ready"] is True
 
 
 def test_get_api_health_served_while_draining(war_room_server):

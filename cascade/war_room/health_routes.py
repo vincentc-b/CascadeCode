@@ -5,7 +5,7 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-from cascade.workspace.supervisor_status import read_supervisor_status
+from cascade.workspace.supervisor_readiness import read_supervisor_health_projection
 
 if TYPE_CHECKING:
     from cascade.war_room.server import WarRoomRequestHandler
@@ -16,5 +16,8 @@ def register_health_routes(handler_cls: type[WarRoomRequestHandler]) -> None:
 
 
 def handle_get_health(handler: WarRoomRequestHandler) -> None:
-    status = read_supervisor_status(handler.server.root)
-    handler._json_response(HTTPStatus.OK, status)
+    payload = read_supervisor_health_projection(
+        handler.server.root,
+        http_serving=True,
+    )
+    handler._json_response(HTTPStatus.OK, payload)
