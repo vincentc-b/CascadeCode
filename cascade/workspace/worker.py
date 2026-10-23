@@ -31,6 +31,7 @@ from cascade.workspace.up import (
 ENV_LISTEN_FD = "CASCADE_SUPERVISOR_LISTEN_FD"
 ENV_READINESS_FD = "CASCADE_SUPERVISOR_READINESS_FD"
 ENV_LOCK_TOKEN = "CASCADE_SUPERVISOR_LOCK_TOKEN"
+ENV_LOCK_FD = "CASCADE_SUPERVISOR_LOCK_FD"
 
 READINESS_MESSAGE = b"ready\n"
 EXIT_UPDATE = 75
@@ -41,6 +42,7 @@ CANCEL_GRACE_S = 5.0
 class LauncherHandshake:
     listen_fd: int
     readiness_fd: int
+    lock_fd: int
     lock_token: str
 
 
@@ -57,7 +59,7 @@ def parse_launcher_handshake(
     env = environ if environ is not None else os.environ
     missing = [
         name
-        for name in (ENV_LISTEN_FD, ENV_READINESS_FD, ENV_LOCK_TOKEN)
+        for name in (ENV_LISTEN_FD, ENV_READINESS_FD, ENV_LOCK_FD, ENV_LOCK_TOKEN)
         if not env.get(name)
     ]
     if missing:
@@ -75,13 +77,18 @@ def parse_launcher_handshake(
     try:
         listen_fd = int(env[ENV_LISTEN_FD])
         readiness_fd = int(env[ENV_READINESS_FD])
+        lock_fd = int(env[ENV_LOCK_FD])
     except ValueError:
         _fail(
-            f"{ENV_LISTEN_FD} and {ENV_READINESS_FD} must be integer file descriptors"
+            f"{ENV_LISTEN_FD}, {ENV_READINESS_FD}, and {ENV_LOCK_FD} must be "
+            "integer file descriptors"
         )
 
     return LauncherHandshake(
-        listen_fd=listen_fd, readiness_fd=readiness_fd, lock_token=token
+        listen_fd=listen_fd,
+        readiness_fd=readiness_fd,
+        lock_fd=lock_fd,
+        lock_token=token,
     )
 
 
@@ -97,18 +104,28 @@ def drain_and_shutdown(
     server_thread: threading.Thread,
     *,
     root: Path,
-    reason: Literal["update", "stop", "crash"],
+    reason: Literal["update", "stop", "crash", "launcher_lost"],
     drain_seconds: float,
+    launcher_parent_pid: int | None = None,
 ) -> bool:
     """Drain HTTP handlers and live turns, then shut down the War Room server."""
 
     from cascade.agent.turn_registry import cancel_live_turns, wait_until_idle
     from cascade.war_room.server import HTTP_HANDLER_JOIN_TIMEOUT_S, REQUEST_DEADLINE_S
 
-    begin_drain()
+    if reason != "launcher_lost":
+        begin_drain()
     snapshot = server.snapshot_handler_threads()
     started = time.monotonic()
-    turn_window = 0.0 if reason == "crash" else drain_seconds
+    if reason in ("crash", "launcher_lost"):
+        turn_window = 0.0
+    else:
+        turn_window = drain_seconds
+
+    def _launcher_parent_gone() -> bool:
+        return (
+            launcher_parent_pid is not None and os.getppid() != launcher_parent_pid
+        )
 
     http_abandoned: list[str] = []
     cancelled_turn_count = 0
@@ -118,11 +135,31 @@ def drain_and_shutdown(
             server.join_handler_threads(snapshot, timeout=HTTP_HANDLER_JOIN_TIMEOUT_S)
         )
 
+    def _wait_idle_or_parent_gone(timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if _launcher_parent_gone():
+                return False
+            if wait_until_idle(min(0.05, max(0.0, deadline - time.monotonic()))):
+                return True
+        return wait_until_idle(0.0)
+
+    def _grace_after_agent_sigterm() -> None:
+        deadline = time.monotonic() + CANCEL_GRACE_S
+        while time.monotonic() < deadline:
+            if _launcher_parent_gone():
+                return
+            wait_until_idle(min(0.05, max(0.0, deadline - time.monotonic())))
+
     def _turn_drain() -> None:
         nonlocal cancelled_turn_count
-        if not wait_until_idle(turn_window):
+        if reason == "launcher_lost" or _launcher_parent_gone():
             cancelled_turn_count = len(cancel_live_turns())
-            wait_until_idle(CANCEL_GRACE_S)
+            _grace_after_agent_sigterm()
+            return
+        if not _wait_idle_or_parent_gone(turn_window):
+            cancelled_turn_count = len(cancel_live_turns())
+            _wait_idle_or_parent_gone(CANCEL_GRACE_S)
 
     http_thread = threading.Thread(target=_http_join, name="worker-http-drain", daemon=True)
     turn_thread = threading.Thread(target=_turn_drain, name="worker-turn-drain", daemon=True)
@@ -158,6 +195,8 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     """Run until operator stop (0), source update (75), or crash (other non-zero)."""
 
     handshake = parse_launcher_handshake()
+    # Inherited ``handshake.lock_fd`` (supervisor lock) stays open until process exit.
+    launcher_parent_pid = os.getppid()
     operator_stop = stop_event if stop_event is not None else threading.Event()
 
     def on_operator_stop(_signum: int, _frame: object | None) -> None:
@@ -175,12 +214,17 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     source_at_start = _source_fingerprint()
     source_changed = False
     next_source_check_at = time.monotonic() + _SOURCE_CHECK_INTERVAL_SECONDS
-    shutdown_reason: Literal["update", "stop", "crash"] = "stop"
+    shutdown_reason: Literal["update", "stop", "crash", "launcher_lost"] = "stop"
+    launcher_lost = False
     abnormal_exit = False
     handlers_abandoned = False
 
     def should_stop() -> bool:
-        nonlocal next_source_check_at, source_changed, shutdown_reason
+        nonlocal next_source_check_at, source_changed, shutdown_reason, launcher_lost
+        if os.getppid() != launcher_parent_pid:
+            shutdown_reason = "launcher_lost"
+            launcher_lost = True
+            return True
         if operator_stop.is_set():
             begin_drain()
             shutdown_reason = "stop"
@@ -219,6 +263,8 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     finally:
         if abnormal_exit and not operator_stop.is_set() and not source_changed:
             shutdown_reason = "crash"
+        elif launcher_lost:
+            shutdown_reason = "launcher_lost"
         elif operator_stop.is_set():
             shutdown_reason = "stop"
         elif source_changed:
@@ -229,6 +275,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
             root=ws.path,
             reason=shutdown_reason,
             drain_seconds=drain_seconds,
+            launcher_parent_pid=launcher_parent_pid,
         )
         if abnormal_exit and handlers_abandoned:
             traceback.print_exc()
@@ -236,6 +283,8 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
             sys.stderr.flush()
             os._exit(1)
 
+    if launcher_lost:
+        return 1, handlers_abandoned
     if operator_stop.is_set():
         return 0, handlers_abandoned
     if source_changed:

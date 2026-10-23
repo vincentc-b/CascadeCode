@@ -193,6 +193,7 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
                 return abandoned
             for thread in pending:
                 thread.join(timeout=min(1.0, max(0.0, deadline - now)))
+        return abandoned
 
     def server_bind(self) -> None:
         if self._listen_socket is not None:

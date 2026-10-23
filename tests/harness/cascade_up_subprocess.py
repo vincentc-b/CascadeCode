@@ -202,6 +202,16 @@ def touch_cascade_source(install_root: Path) -> None:
     init_py.write_text(init_py.read_text(encoding="utf-8") + "\n", encoding="utf-8")
 
 
+def process_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def poll_until(predicate, *, timeout: float = 30.0, interval: float = 0.05) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:

@@ -115,6 +115,7 @@ def up(
                 workspace_root=ws.path,
                 listen_sock=listen_sock,
                 lock_token=str(lock.path.resolve()),
+                lock_fd=lock.fileno(),
                 stop_when=stop_when,
             )
         finally:

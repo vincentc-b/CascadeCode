@@ -38,6 +38,7 @@ READINESS_MESSAGE = b"ready\n"
 ENV_LISTEN_FD = "CASCADE_SUPERVISOR_LISTEN_FD"
 ENV_READINESS_FD = "CASCADE_SUPERVISOR_READINESS_FD"
 ENV_LOCK_TOKEN = "CASCADE_SUPERVISOR_LOCK_TOKEN"
+ENV_LOCK_FD = "CASCADE_SUPERVISOR_LOCK_FD"
 
 _WORKER_MODULE = "cascade.workspace.worker"
 _CASCADE_SOURCE_PARENT = str(Path(__file__).resolve().parents[2])
@@ -45,6 +46,17 @@ _CASCADE_SOURCE_PARENT = str(Path(__file__).resolve().parents[2])
 
 class _StopRequested(Exception):
     """Internal control flow for a stop requested during worker startup."""
+
+
+class _EscalatedStop(Exception):
+    """Second operator signal while stopping: kill worker group and exit."""
+
+
+@dataclass
+class _OperatorStopState:
+    requested: bool = False
+    worker_stop_forwarded: bool = False
+    escalate: bool = False
 
 
 @dataclass
@@ -179,12 +191,14 @@ def _spawn_worker(
     *,
     workspace_root: Path,
     listen_fd: int,
+    lock_fd: int,
     lock_token: str,
 ) -> tuple[subprocess.Popen[bytes], int, int]:
     readiness_r, readiness_w = os.pipe()
     env = os.environ.copy()
     env[ENV_LISTEN_FD] = str(listen_fd)
     env[ENV_READINESS_FD] = str(readiness_w)
+    env[ENV_LOCK_FD] = str(lock_fd)
     env[ENV_LOCK_TOKEN] = lock_token
     current_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (
@@ -198,7 +212,7 @@ def _spawn_worker(
             [sys.executable, "-m", _WORKER_MODULE],
             cwd=workspace_root,
             env=env,
-            pass_fds=(listen_fd, readiness_w),
+            pass_fds=(listen_fd, readiness_w, lock_fd),
             start_new_session=True,
             stdin=subprocess.DEVNULL,
         )
@@ -217,6 +231,7 @@ def run_launcher_loop(
     workspace_root: Path,
     listen_sock: socket.socket,
     lock_token: str,
+    lock_fd: int,
     stop_when: Callable[[], bool] | None = None,
 ) -> None:
     """Spawn workers on ``listen_sock`` until operator stop or ``stop_when``."""
@@ -224,22 +239,37 @@ def run_launcher_loop(
     source_fingerprint()
 
     listen_fd = listen_sock.fileno()
-    operator_stop = False
+    stop_state = _OperatorStopState()
     installed_signal_handlers = threading.current_thread() is threading.main_thread()
     previous_handlers: dict[int, signal.Handlers] = {}
     status_ctx = _LauncherStatusContext(workspace_root=workspace_root)
 
     def on_operator_signal(_signum: int, _frame: object | None) -> None:
-        nonlocal operator_stop
-        operator_stop = True
+        if stop_state.requested and stop_state.worker_stop_forwarded:
+            stop_state.escalate = True
+        stop_state.requested = True
 
     if installed_signal_handlers:
-        for signum in (signal.SIGINT, signal.SIGTERM):
+        for signum in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
             previous_handlers[signum] = signal.getsignal(signum)
             signal.signal(signum, on_operator_signal)
 
     def stop_requested() -> bool:
-        return operator_stop or (stop_when is not None and stop_when())
+        return stop_state.requested or (stop_when is not None and stop_when())
+
+    def raise_if_escalated(
+        pgid: int, *, proc: subprocess.Popen[bytes] | None = None
+    ) -> None:
+        if not stop_state.escalate:
+            return
+        _kill_worker_group(pgid, proc=proc)
+        if proc is not None:
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=10)
+        raise _EscalatedStop()
 
     try:
         while True:
@@ -257,6 +287,7 @@ def run_launcher_loop(
             proc, readiness_fd, pgid = _spawn_worker(
                 workspace_root=workspace_root,
                 listen_fd=listen_fd,
+                lock_fd=lock_fd,
                 lock_token=lock_token,
             )
             try:
@@ -265,6 +296,9 @@ def run_launcher_loop(
                     proc=proc,
                     stop_requested=stop_requested,
                 )
+            except _EscalatedStop:
+                status_ctx.apply_sweep(post_worker_exit(workspace_root))
+                return
             except _StopRequested:
                 _launcher_transition(
                     status_ctx,
@@ -305,18 +339,18 @@ def run_launcher_loop(
                 last_error=None,
             )
 
-            draining_logged = False
             while True:
+                raise_if_escalated(pgid, proc=proc)
                 if stop_requested():
-                    if not draining_logged:
+                    if not stop_state.worker_stop_forwarded:
                         _launcher_transition(
                             status_ctx,
                             state="draining",
                             log_line="cascade launcher: draining worker",
                             worker_pid=proc.pid,
                         )
-                        draining_logged = True
-                    proc.send_signal(signal.SIGTERM)
+                        proc.send_signal(signal.SIGTERM)
+                        stop_state.worker_stop_forwarded = True
                 try:
                     code = proc.wait(timeout=0.2)
                 except subprocess.TimeoutExpired:
