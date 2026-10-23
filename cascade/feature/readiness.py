@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from cascade.approvals import feature_approved
 from cascade.board.types import BoardIndex, WorkMeta
 from cascade.workspace.integration_worktree import merged_board
 
@@ -34,6 +33,7 @@ def compute_feature_readiness(
     *,
     root: Path,
     board: BoardIndex | None = None,
+    pending_review_ids: frozenset[str] | None = None,
 ) -> FeatureReadiness | None:
     """Return approval and stable blocker codes for a backlog/open feature."""
 
@@ -42,7 +42,7 @@ def compute_feature_readiness(
     if meta is None or meta.tier != "feature":
         return None
 
-    approved = feature_approved(feature_id, root=root)
+    approved = meta.approved_at is not None
     blockers: list[str] = []
 
     if meta.status not in _OPEN:
@@ -63,12 +63,14 @@ def compute_feature_readiness(
 
     from cascade.stacked_dispatch import feature_merge_gated
 
-    if feature_merge_gated(meta, board, root=root):
+    if feature_merge_gated(meta, board, root=root, pending_review_ids=pending_review_ids):
         blockers.append("feature_awaiting_merge")
 
     from cascade.stacked_dispatch import feature_dispatch_blocked_by_sibling
 
-    if feature_dispatch_blocked_by_sibling(meta, board, root=root):
+    if feature_dispatch_blocked_by_sibling(
+        meta, board, root=root, pending_review_ids=pending_review_ids
+    ):
         blockers.append("sibling_blocked")
 
     parent = board.by_id.get(meta.parent)
@@ -82,7 +84,7 @@ def compute_feature_readiness(
     from cascade.comments.gate import refusal_if_blocked
 
     review_refusal: str | None = None
-    if blocked := refusal_if_blocked(feature_id, root=root):
+    if blocked := refusal_if_blocked(feature_id, root=root, board=board):
         blockers.append("review_threads_blocking")
         review_refusal = blocked
 

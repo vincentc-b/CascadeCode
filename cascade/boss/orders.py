@@ -30,7 +30,6 @@ from cascade.board.store import list_board
 from cascade.boss.view import compute_boss_view
 from cascade.watchdog.dispatch import dispatch_feature, dispatch_task
 from cascade.watchdog.types import Event
-from cascade.workspace.kickoff import deferred_kickoffs
 
 
 def process_boss_event(event: Event, *, root: Path | None = None) -> None:
@@ -44,6 +43,8 @@ def process_boss_event(event: Event, *, root: Path | None = None) -> None:
 
 
 def _handle_dispatch_requested(payload: dict[str, object], root: Path) -> None:
+    from cascade.workspace.kickoff import deferred_kickoffs
+
     kind = payload.get("kind")
     work_id = payload.get("id")
     if kind not in ("feature", "task") or not isinstance(work_id, str) or not work_id:
@@ -56,6 +57,8 @@ def _handle_dispatch_requested(payload: dict[str, object], root: Path) -> None:
 
 
 def _handle_drain_requested(payload: dict[str, object], root: Path) -> None:
+    from cascade.workspace.kickoff import deferred_kickoffs
+
     feature_id = payload.get("feature_id")
     if not isinstance(feature_id, str) or not feature_id:
         return

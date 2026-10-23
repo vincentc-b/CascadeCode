@@ -329,6 +329,12 @@ def board_view_from_index(board, *, root: Path) -> dict:
     reviews = feature_review_views(
         {meta.id for meta in metas if meta.tier == "feature"}, root=root
     )
+    pending_review_ids = frozenset(
+        feature_id
+        for feature_id, review in reviews.items()
+        if review is not None
+        and review.get("state") in {"preparing_review", "awaiting_review"}
+    )
     sync_views = branch_sync_views(metas, root=root)
 
     columns = ("1_backlog", "2_active", "3_completed")
@@ -351,7 +357,12 @@ def board_view_from_index(board, *, root: Path) -> dict:
         if _backlog_open_feature(meta):
             from cascade.feature.readiness import compute_feature_readiness
 
-            readiness = compute_feature_readiness(meta.id, root=root, board=board)
+            readiness = compute_feature_readiness(
+                meta.id,
+                root=root,
+                board=board,
+                pending_review_ids=pending_review_ids,
+            )
             if readiness is not None:
                 item["readiness"] = feature_readiness_to_dict(readiness)
         review = item.get("review")

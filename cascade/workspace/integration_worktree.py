@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import shutil
@@ -10,7 +11,7 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Callable, Iterator, Literal
 
@@ -30,6 +31,9 @@ _MERGED_BOARD_CACHE_TTL_S = 2.0
 _registry_thread_lock = threading.RLock()
 _merged_board_cache_lock = threading.RLock()
 _merged_board_cache: dict[Path, tuple[float, BoardIndex]] = {}
+_board_snapshot: contextvars.ContextVar[tuple[Path, BoardIndex] | None] = (
+    contextvars.ContextVar("_board_snapshot", default=None)
+)
 
 
 @dataclass(frozen=True)
@@ -566,6 +570,9 @@ def merged_board(trunk: Path) -> BoardIndex:
     """
 
     trunk = locate_trunk(trunk).resolve()
+    snapshot = _board_snapshot.get()
+    if snapshot is not None and snapshot[0] == trunk:
+        return snapshot[1]
     now = time.monotonic()
     with _merged_board_cache_lock:
         cached = _merged_board_cache.get(trunk)
@@ -574,6 +581,17 @@ def merged_board(trunk: Path) -> BoardIndex:
         board = _merged_board_uncached(trunk)
         _merged_board_cache[trunk] = (time.monotonic() + _MERGED_BOARD_CACHE_TTL_S, board)
         return board
+
+
+@contextmanager
+def merged_board_snapshot(trunk: Path, board: BoardIndex) -> Iterator[None]:
+    """Reuse one board view during a read-only response on this context."""
+
+    token = _board_snapshot.set((locate_trunk(trunk).resolve(), board))
+    try:
+        yield
+    finally:
+        _board_snapshot.reset(token)
 
 
 def _merged_board_uncached(trunk: Path) -> BoardIndex:
@@ -591,8 +609,17 @@ def _merged_board_uncached(trunk: Path) -> BoardIndex:
         and not is_trunk_pointer(meta)
     }
     by_id: dict[str, WorkMeta] = {}
+    # Approvals are monotonic decisions. A newer integration checkout can carry
+    # an older copy of the plan, so its preferred path/status must not erase an
+    # approval already written in another checkout (often the product trunk).
+    approvals = {}
+    plan_approvals = {}
     for board in boards:
         for work_id, meta in board.by_id.items():
+            if meta.tier == "feature" and meta.approved_at is not None:
+                approvals.setdefault(work_id, meta.approved_at)
+            if meta.tier == "epic" and meta.plan_approved_at is not None:
+                plan_approvals.setdefault(work_id, meta.plan_approved_at)
             if work_id in completed_trunk_epics:
                 # Closing an epic makes the product-trunk document authoritative.
                 # Registered worktrees are retained for history/recovery and can
@@ -602,6 +629,12 @@ def _merged_board_uncached(trunk: Path) -> BoardIndex:
             current = by_id.get(work_id)
             if current is None or _meta_preference(meta) > _meta_preference(current):
                 by_id[work_id] = meta
+    for work_id, approved_at in approvals.items():
+        if work_id in by_id:
+            by_id[work_id] = replace(by_id[work_id], approved_at=approved_at)
+    for work_id, approved_at in plan_approvals.items():
+        if work_id in by_id:
+            by_id[work_id] = replace(by_id[work_id], plan_approved_at=approved_at)
     from cascade.workspace.backlog_snapshot import read_provenance, snapshot_board
 
     if read_provenance(trunk) is not None:

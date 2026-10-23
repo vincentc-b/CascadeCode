@@ -26,6 +26,7 @@ from cascade.board.store import move_doc, read_doc
 from cascade.board.types import WorkId
 from cascade.comments.store import read_comments
 from cascade.watchdog.events import append_event, read_events
+from cascade.watchdog.lock import process_lock
 from cascade.watchdog.types import Event, Principal
 
 _TOAST_KIND = "epic_ready_to_close"
@@ -107,26 +108,27 @@ def surface_epic_close_prompt(epic_id: WorkId, *, root: Path | None = None) -> N
     if not epic_ready_to_close(epic_id, root=repo):
         return
     key = (str(repo.resolve()), epic_id)
-    if key in _surfaced_prompts:
-        return
-    _surfaced_prompts.add(key)
     message = f"Epic {epic_id} is ready to close"
-    append_event(
-        "war_room",
-        Event(
-            type="Toast",
-            ts=datetime.now(timezone.utc),
-            payload={
-                "kind": _TOAST_KIND,
-                "id": epic_id,
-                "epic_id": epic_id,
-                "message": message,
-                "body": message,
-            },
-            dest="war_room",
-        ),
-        root=repo,
-    )
+    with process_lock:
+        if key in _surfaced_prompts:
+            return
+        append_event(
+            "war_room",
+            Event(
+                type="Toast",
+                ts=datetime.now(timezone.utc),
+                payload={
+                    "kind": _TOAST_KIND,
+                    "id": epic_id,
+                    "epic_id": epic_id,
+                    "message": message,
+                    "body": message,
+                },
+                dest="war_room",
+            ),
+            root=repo,
+        )
+        _surfaced_prompts.add(key)
 
 
 def epic_completed_recorded(epic_id: WorkId, *, root: Path) -> bool:

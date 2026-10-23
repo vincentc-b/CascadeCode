@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import threading
 from datetime import date
 from http import HTTPStatus
 
 import pytest
 
+import cascade.workspace.integration_worktree as integration_worktree
 from cascade.board.parse import render_doc
+from cascade.board.store import move_doc
 from cascade.board.paths import column_dir, column_for_status, slugify
 from cascade.board.types import WorkDoc, WorkMeta
 from cascade.boss.view import compute_boss_view
@@ -128,3 +131,43 @@ def test_board_serializes_backlog_feature_readiness(war_room_server) -> None:
     boss = compute_boss_view(root=root)
     assert "feat_004" in boss.dispatchable_features
     assert "feat_005" not in boss.dispatchable_features
+
+
+def test_board_endpoint_reuses_one_board_scan(
+    war_room_server, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base, root, _server = war_room_server
+    integration_worktree.invalidate_merged_board(root)
+    monkeypatch.setattr(integration_worktree, "_MERGED_BOARD_CACHE_TTL_S", 0.0)
+    scans = 0
+    original = integration_worktree._merged_board_uncached
+
+    def counting_scan(trunk):
+        nonlocal scans
+        scans += 1
+        return original(trunk)
+
+    monkeypatch.setattr(integration_worktree, "_merged_board_uncached", counting_scan)
+    status, _payload, _headers = _get(f"{base}/api/board")
+
+    assert status == HTTPStatus.OK
+    assert scans == 1
+
+
+def test_board_snapshot_preserves_pending_review_blockers(war_room_server) -> None:
+    base, root, _server = war_room_server
+    move_doc("feat_002", "completed", root=root)
+    state_path = root / ".cascade" / "reviews.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps({"feat_002": {"url": "https://example.test/pull/2", "closed": False}}),
+        encoding="utf-8",
+    )
+
+    status, payload, _headers = _get(f"{base}/api/board")
+
+    assert status == HTTPStatus.OK
+    dependent = _feature_row(payload, "feat_003")
+    sibling = _feature_row(payload, "feat_004")
+    assert _has_blocker(dependent["readiness"]["blockers"], "feature_awaiting_merge")
+    assert _has_blocker(sibling["readiness"]["blockers"], "sibling_blocked")

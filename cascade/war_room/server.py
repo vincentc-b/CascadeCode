@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 from cascade.board.errors import NotFound
 from cascade.workspace.doc_root import read_doc_resolved
-from cascade.workspace.integration_worktree import merged_board
+from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from cascade.boss.epic_complete import confirm_epic_complete_result
 from cascade.boss.graph import install_boss_consumer
 from cascade.boss.merge import merge_task_branch
@@ -145,9 +145,8 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         install_task_boot_hook(self.root)
         install_task_wiring(self.root)
         install_boss_consumer(self.root)
-        from cascade.completion_reconcile import reconcile_completion_with_prompts
-
-        reconcile_completion_with_prompts(root=self.root)
+        # The watchdog owns completion reconciliation. It can perform remote
+        # review I/O, so HTTP listener construction must not wait for it.
         load_epic_tools()
         load_feature_tools()
         self.attachment = AttachmentState()
@@ -922,7 +921,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
     def _handle_board(self) -> None:
         board = merged_board(self.server.root)
-        payload = board_view_from_index(board, root=self.server.root)
+        with merged_board_snapshot(self.server.root, board):
+            payload = board_view_from_index(board, root=self.server.root)
         self._json_response(HTTPStatus.OK, payload)
 
     def _handle_doc(self, work_id: str) -> None:

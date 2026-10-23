@@ -330,6 +330,12 @@ body {
   color: var(--muted);
 }
 
+.task-merge-blocker {
+  color: #fecaca;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
 button {
   background: #2d333b;
   color: var(--text);

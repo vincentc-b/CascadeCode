@@ -93,8 +93,8 @@ def test_parent_epic_at_parent_rev(board):
     write_doc(pinned, root=root)
     pin_parent("feat_001", "epic_001", root=root)
 
-    live = deepcopy(epic)
-    live.body = epic.body + "\n\n## Decision log\n\n- dec_live · newer text\n"
+    live = read_doc("epic_001", root=root)
+    live.body += "\n\n## Decision log\n\n- dec_live · newer text\n"
     write_doc(live, root=root)
 
     doc = feature_read_doc("epic_001", feature_id="feat_001", root=root)

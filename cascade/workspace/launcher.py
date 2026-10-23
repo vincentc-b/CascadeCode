@@ -8,7 +8,7 @@ and relaunch. It must not import changing Cascade packages.
 from __future__ import annotations
 
 import os
-import select
+import selectors
 import signal
 import socket
 import subprocess
@@ -194,6 +194,14 @@ def post_worker_exit(workspace_root: Path) -> GitLockSweepResult:
     return sweep_stale_git_locks(workspace_root)
 
 
+def _readable(fileobj: int | socket.socket, timeout: float) -> bool:
+    """Wait for readiness without ``select()``'s low file descriptor limit."""
+
+    with selectors.DefaultSelector() as poller:
+        poller.register(fileobj, selectors.EVENT_READ)
+        return bool(poller.select(timeout))
+
+
 def _wait_readiness(
     readiness_fd: int,
     *,
@@ -212,8 +220,7 @@ def _wait_readiness(
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("worker did not report readiness in time")
-        ready, _, _ = select.select([readiness_fd], [], [], min(remaining, 0.2))
-        if not ready:
+        if not _readable(readiness_fd, min(remaining, 0.2)):
             continue
         chunk = os.read(readiness_fd, 4096)
         if not chunk:
@@ -309,8 +316,7 @@ def _run_degraded_responder(
                 worker_pid=None,
             )
             return True
-        ready, _, _ = select.select([listen_sock], [], [], 0.5)
-        if not ready:
+        if not _readable(listen_sock, 0.5):
             continue
         try:
             conn, _addr = listen_sock.accept()

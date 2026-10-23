@@ -8,9 +8,12 @@ from pathlib import Path
 import pytest
 
 from cascade.approvals import approve_epic_plan, approve_feature, feature_approved
-from cascade.automation import reconcile_approval_dispatch, reset_automation_memory
+from cascade.automation import advance_work, reconcile_approval_dispatch, reset_automation_memory
 from cascade.board.store import move_doc, read_doc
+from cascade.boss.view import compute_boss_view
 from cascade.watchdog import activate_epic, dispatch_feature, read_events
+from cascade.war_room.serialize import board_view_from_index
+from cascade.workspace.integration_worktree import merged_board
 from tests.support import add_doc, commit_board, make_repo
 
 
@@ -75,6 +78,122 @@ def test_epic_approval_dispatches_current_children(
     assert feature_approved("feat_002", root=root)
     assert read_doc("feat_001", root=root).meta.path.parent.name == "2_active"
     assert read_doc("feat_002", root=root).meta.path.parent.name == "1_backlog"
+
+
+def test_git_worktree_copies_cannot_hide_epic_child_approvals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _enable_automation(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="First", tier="feature", parent="epic_001")
+    add_doc(
+        root,
+        id="feat_002",
+        title="Next",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001"],
+    )
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    _quiet_dispatch(monkeypatch)
+
+    approve_epic_plan("epic_001", root=root)
+
+    board = merged_board(root)
+    assert board.by_id["feat_001"].path.parent.name == "2_active"
+    assert board.by_id["feat_001"].approved_at is not None
+    assert board.by_id["feat_002"].approved_at is not None
+    assert feature_approved("feat_001", root=root)
+    assert feature_approved("feat_002", root=root)
+    assert "feat_002" not in compute_boss_view(root=root).dispatchable_features
+    rows = board_view_from_index(board, root=root)["features"]
+    waiting = next(row for row in rows["1_backlog"] if row["id"] == "feat_002")
+    assert waiting["approved"] is True
+    assert waiting["readiness"]["approved"] is True
+    assert any(code.startswith("unmet_deps") for code in waiting["readiness"]["blockers"])
+    assert "not_approved" not in waiting["readiness"]["blockers"]
+
+
+def test_epic_approval_dispatch_does_not_wait_for_completion_maintenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _enable_automation(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Ready", tier="feature", parent="epic_001")
+    _quiet_dispatch(monkeypatch)
+
+    def slow_maintenance(*_args, **_kwargs):
+        raise AssertionError("approval must not run completion maintenance")
+
+    monkeypatch.setattr("cascade.task_rollup.retry_pending_task_merges", slow_maintenance)
+    monkeypatch.setattr(
+        "cascade.completion_reconcile.reconcile_completion_with_prompts",
+        slow_maintenance,
+    )
+
+    approve_epic_plan("epic_001", root=root)
+
+    assert feature_approved("feat_001", root=root)
+    assert read_doc("feat_001", root=root).meta.path.parent.name == "2_active"
+
+
+def test_epic_approval_reports_pending_when_dispatch_fails_then_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _enable_automation(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Ready", tier="feature", parent="epic_001")
+    _quiet_dispatch(monkeypatch)
+
+    def fail_dispatch(_root: Path) -> None:
+        raise RuntimeError("temporary dispatch failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            "cascade.automation.reconcile_approval_dispatch",
+            fail_dispatch,
+        )
+        result = approve_epic_plan("epic_001", root=root)
+
+    assert result["ok"] is True
+    assert result["dispatch_pending"] is True
+    assert result["dispatch_error"] == "temporary dispatch failure"
+    assert feature_approved("feat_001", root=root)
+    assert read_doc("feat_001", root=root).meta.path.parent.name == "1_backlog"
+
+    assert reconcile_approval_dispatch(root)["features"] == ["feat_001"]
+    assert read_doc("feat_001", root=root).meta.path.parent.name == "2_active"
+
+
+def test_advance_dispatches_before_maintenance_and_after_dependency_release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _enable_automation(root)
+    calls: list[str] = []
+
+    def dispatch(_root: Path) -> dict[str, list[str]]:
+        calls.append("dispatch")
+        return {"features": ["feat_001"] if len(calls) == 1 else ["feat_002"], "tasks": []}
+
+    monkeypatch.setattr("cascade.automation.reconcile_approval_dispatch", dispatch)
+    monkeypatch.setattr(
+        "cascade.task_rollup.retry_pending_task_merges",
+        lambda _root: calls.append("merges"),
+    )
+    monkeypatch.setattr(
+        "cascade.completion_reconcile.reconcile_completion_with_prompts",
+        lambda *, root: calls.append("completion"),
+    )
+
+    result = advance_work(root)
+
+    assert calls == ["dispatch", "merges", "completion", "dispatch"]
+    assert result == {"features": ["feat_001", "feat_002"], "tasks": []}
 
 
 def test_dependency_blocks_dispatch_until_completed(

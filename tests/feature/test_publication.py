@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,6 +10,7 @@ from cascade.board.errors import GitError
 from cascade.board.store import move_doc, read_doc
 from cascade.boss.merge import merge_task_branch
 from cascade.feature.publication import prepare_feature_publication, validate_feature_publication
+from cascade.feature.publication import _build_publication_tail
 from cascade.review import ensure_feature_review
 from cascade.task.git_tools import swe_commit
 from cascade.task.worktree import clear_task_runs, get_task_run
@@ -97,6 +99,68 @@ def test_prepare_feature_publication_folds_history_to_one_commit_per_task(
     assert feature.meta.status == "completed"
     assert feature.meta.path.parent.name == "3_completed"
     assert _git(feature_entry.path, "status", "--porcelain", "--untracked-files=no") == ""
+
+
+def test_publication_reuses_integration_resolution_for_conflicting_task_patch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    worker = root / "worker.py"
+    worker.write_text("STATE = 'base'\n", encoding="utf-8")
+    _git(root, "add", "worker.py")
+    _git(root, "commit", "-m", "base")
+    base = _git(root, "rev-parse", "HEAD")
+
+    _git(root, "checkout", "-b", "task-one", base)
+    worker.write_text("STATE = 'one'\n", encoding="utf-8")
+    _git(root, "commit", "-am", "task one", "-m", "Cascade-Task: task_001")
+    first = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "-b", "feature", base)
+    _git(root, "merge", "--no-ff", "task-one", "-m", "integrate one")
+
+    _git(root, "checkout", "-b", "task-two", base)
+    worker.write_text("STATE = 'two'\n", encoding="utf-8")
+    (root / "second.py").write_text("SECOND = True\n", encoding="utf-8")
+    _git(root, "add", "worker.py", "second.py")
+    _git(root, "commit", "-m", "task two", "-m", "Cascade-Task: task_002")
+    second = _git(root, "rev-parse", "HEAD")
+    conflict = subprocess.run(
+        ["git", "merge", "--no-ff", "feature", "-m", "resolve both"],
+        cwd=root, capture_output=True, text=True,
+    )
+    assert conflict.returncode != 0
+    worker.write_text("STATE = 'one and two'\n", encoding="utf-8")
+    _git(root, "add", "worker.py")
+    _git(root, "commit", "-m", "resolve both")
+    _git(root, "checkout", "feature")
+    _git(root, "merge", "--ff-only", "task-two")
+
+    _git(root, "checkout", "-b", "task-three")
+    (root / "third.py").write_text("THIRD = True\n", encoding="utf-8")
+    _git(root, "add", "third.py")
+    _git(root, "commit", "-m", "task three", "-m", "Cascade-Task: task_003")
+    third = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "feature")
+    _git(root, "merge", "--ff-only", "task-three")
+    final = _git(root, "rev-parse", "HEAD")
+    monkeypatch.setattr(
+        "cascade.feature.publication.read_doc",
+        lambda task_id, *, root: SimpleNamespace(meta=SimpleNamespace(title=task_id)),
+    )
+
+    tip = _build_publication_tail(
+        root, base_sha=base, final_tree_ref=final,
+        task_ids=["task_001", "task_002", "task_003"],
+        task_commits=[first, second, third],
+    )
+    history = validate_feature_publication(
+        "feat_001", source_root=root, source_ref=tip, base_ref=base,
+        expected_task_ids=["task_001", "task_002", "task_003"],
+    )
+    assert len(history.commits) == 3
+    assert _git(root, "show", f"{history.commits[1]}:worker.py") == "STATE = 'one and two'"
+    assert _git(root, "show", f"{history.commits[1]}:second.py") == "SECOND = True"
+    assert _git(root, "rev-parse", f"{tip}^{{tree}}") == _git(root, "rev-parse", f"{final}^{{tree}}")
 
 
 def test_review_force_pushes_normalized_history_with_exact_lease(

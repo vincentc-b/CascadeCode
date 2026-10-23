@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
+import os
+import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cascade.board.errors import GitError, NotFound
-from cascade.board.store import read_doc
+from cascade.board.errors import BoardError, GitError, NotFound
+from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
 from cascade.tracking import (
     MergeRequest,
     create_merge_request,
@@ -19,6 +23,7 @@ from cascade.tracking import (
     reply_to_merge_request,
 )
 from cascade.watchdog.events import append_event
+from cascade.watchdog.lock import process_lock
 from cascade.watchdog.types import Event
 from cascade.workspace.integration_worktree import (
     get_integration_worktree,
@@ -104,9 +109,72 @@ def _load(root: Path) -> dict[str, dict[str, object]]:
 def _save(root: Path, state: dict[str, dict[str, object]]) -> None:
     path = _state_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(".tmp")
-    temp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temp.replace(path)
+    temp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=".reviews.", suffix=".tmp", delete=False,
+        ) as handle:
+            temp_name = handle.name
+            handle.write(json.dumps(state, indent=2, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+        temp_name = None
+    finally:
+        if temp_name is not None:
+            Path(temp_name).unlink(missing_ok=True)
+
+
+@contextmanager
+def _registry_write_lock(root: Path):
+    """Serialize short read-modify-write steps across worker and CLI processes."""
+
+    lock_path = _state_path(root).with_suffix(".lock")
+    with process_lock:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+b") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _update_record(
+    root: Path,
+    feature_id: str,
+    changes: dict[str, object],
+    *,
+    create: bool = False,
+    only_if_absent: bool = False,
+) -> dict[str, object] | None:
+    """Merge one feature's fields into the latest registry without losing peers."""
+
+    with _registry_write_lock(root):
+        state = _load(root)
+        existing = state.get(feature_id)
+        if not isinstance(existing, dict):
+            if not create:
+                return None
+            existing = {}
+        elif only_if_absent and existing:
+            return dict(existing)
+        updated = dict(existing)
+        updated.update(changes)
+        if "seen_comments" in changes:
+            previous_seen = existing.get("seen_comments")
+            previous_seen = previous_seen if isinstance(previous_seen, list) else []
+            incoming_seen = changes["seen_comments"]
+            incoming_seen = incoming_seen if isinstance(incoming_seen, list) else []
+            updated["seen_comments"] = sorted(
+                {str(row) for row in previous_seen}
+                | {str(row) for row in incoming_seen}
+            )
+        if updated != existing:
+            state[feature_id] = updated
+            _save(root, state)
+        return updated
 
 
 def review_enabled(root: Path) -> bool:
@@ -234,7 +302,7 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
     existing = state.get(feature_id)
     if existing:
         mr = _record_to_mr(existing)
-        _ensure_opened_toast(feature_id, mr, existing, state=state, root=trunk)
+        _ensure_opened_toast(feature_id, mr, existing, root=trunk)
         return mr
     entry = get_integration_worktree(trunk, "feature", feature_id)
     if entry is None:
@@ -280,7 +348,7 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         target_branch=target,
         draft=False,
     )
-    state[feature_id] = {
+    record = _update_record(trunk, feature_id, {
         "url": mr.url,
         "number": mr.number,
         "forge": mr.forge,
@@ -289,10 +357,11 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         "draft": False,
         "seen_comments": [],
         "toast_notified": False,
-    }
-    _save(trunk, state)
-    _ensure_opened_toast(feature_id, mr, state[feature_id], state=state, root=trunk)
-    return mr
+    }, create=True, only_if_absent=True)
+    assert record is not None
+    recorded_mr = _record_to_mr(record)
+    _ensure_opened_toast(feature_id, recorded_mr, record, root=trunk)
+    return mr if recorded_mr.url == mr.url else recorded_mr
 
 
 def _ensure_opened_toast(
@@ -300,7 +369,6 @@ def _ensure_opened_toast(
     mr: MergeRequest,
     record: dict[str, object],
     *,
-    state: dict[str, dict[str, object]],
     root: Path,
 ) -> None:
     """Deliver the linked review notification at least once across restarts."""
@@ -322,9 +390,7 @@ def _ensure_opened_toast(
         ),
         root=root,
     )
-    record["toast_notified"] = True
-    state[feature_id] = record
-    _save(root, state)
+    _update_record(root, feature_id, {"toast_notified": True})
 
 
 def reconcile_feature_review_completions(root: Path) -> list[str]:
@@ -333,7 +399,6 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
     trunk = locate_trunk(root)
     state = _load(trunk)
     finalized: list[str] = []
-    changed = False
     from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
 
     for feature_id, record in list(state.items()):
@@ -357,14 +422,11 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
             else True
         )
         if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-            record["closed"] = True
-            changed = True
+            _update_record(trunk, feature_id, {"closed": True})
             if epic_id and not before and feature_completed_recorded(
                 feature_id, epic_id, root=trunk
             ):
                 finalized.append(feature_id)
-    if changed:
-        _save(trunk, state)
     return finalized
 
 
@@ -387,15 +449,44 @@ def _finalize_merged_review_record(
 
     try:
         _sync_merged_target(trunk, mr)
+        epic_root = _close_merged_feature_on_target(feature_id, record, trunk=trunk)
+        # The accepted source tree may still have an active feature document.
+        # Publish its terminal lifecycle commit before acknowledging closure.
+        push_branch(epic_root, mr.target_branch)
         return try_complete_feature(feature_id, root=trunk, review_merged=True)
-    except GitError:
+    except (BoardError, OSError):
         return False
+
+
+def _close_merged_feature_on_target(
+    feature_id: str, record: dict[str, object], *, trunk: Path
+) -> Path:
+    """Persist completion on the epic line after its accepted review merge.
+
+    The source feature doc is moved locally after initial MR publication. That
+    local lifecycle commit is not part of the forge merge, so the accepted epic
+    tree can still contain the active copy. Complete that copy before recording
+    the review as closed or releasing dependent Features.
+    """
+
+    epic_id = _review_target_epic(record)
+    entry = get_integration_worktree(trunk, "epic", epic_id) if epic_id else None
+    if entry is None or not entry.path.is_dir():
+        raise GitError(f"epic worktree missing for merged feature {feature_id}")
+    doc = read_doc_in_worktree(feature_id, entry.path)
+    if doc.meta.tier != "feature" or doc.meta.parent != epic_id:
+        raise GitError(f"merged feature target mismatch: {feature_id}")
+    if doc.meta.status == "completed" and doc.meta.path.parent.name == "3_completed":
+        return entry.path
+    if doc.meta.status != "active" or doc.meta.path.parent.name != "2_active":
+        raise GitError(f"merged feature is not active on epic branch: {feature_id}")
+    move_doc(feature_id, "completed", root=entry.path)
+    return entry.path
 
 
 def poll_feature_reviews(root: Path) -> None:
     trunk = locate_trunk(root)
     state = _load(trunk)
-    changed = False
     for feature_id, record in list(state.items()):
         if record.get("closed"):
             continue
@@ -434,15 +525,20 @@ def poll_feature_reviews(root: Path) -> None:
                 ),
                 root=trunk,
             )
-        record["seen_comments"] = sorted(seen)
+        # Persist deliveries before any later publication/finalization failure.
+        # Merge with the latest record so parallel reviews cannot be reopened.
+        _update_record(trunk, feature_id, {"seen_comments": sorted(seen)})
         if snapshot.get("state") == "merged":
             if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-                record["closed"] = True
+                _update_record(trunk, feature_id, {"closed": True})
             else:
                 # Do not acknowledge completion until the local epic worktree
                 # contains the exact tree accepted by the forge.
                 continue
         else:
+            current = review_record_for_feature(feature_id, root=trunk)
+            if current is None or current.get("closed"):
+                continue
             entry = get_integration_worktree(trunk, "feature", feature_id)
             if entry is not None:
                 try:
@@ -462,9 +558,6 @@ def poll_feature_reviews(root: Path) -> None:
                     # Fail closed: never publish checkpoint/merge noise after the
                     # initial review was opened.
                     continue
-        changed = True
-    if changed:
-        _save(trunk, state)
 
 
 def _sync_merged_target(trunk: Path, mr: MergeRequest) -> str:
@@ -525,13 +618,4 @@ def persist_review_target_branch(
     """Mirror a verified forge base into the durable review registry."""
 
     trunk = locate_trunk(root)
-    state = _load(trunk)
-    record = state.get(feature_id)
-    if not isinstance(record, dict):
-        return
-    if str(record.get("target_branch") or "") == target_branch:
-        return
-    updated = dict(record)
-    updated["target_branch"] = target_branch
-    state[feature_id] = updated
-    _save(trunk, state)
+    _update_record(trunk, feature_id, {"target_branch": target_branch})
