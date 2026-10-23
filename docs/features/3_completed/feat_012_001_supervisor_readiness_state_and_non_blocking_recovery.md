@@ -2,7 +2,7 @@
 id: feat_012_001
 title: Supervisor readiness state and non-blocking recovery
 tier: feature
-status: active
+status: completed
 parent: epic_012
 children:
 - task_012_001_001
