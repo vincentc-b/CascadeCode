@@ -59,9 +59,12 @@ function createElement(tag) {
       return child;
     },
     insertBefore(newChild, refChild) {
-      newChild.parentNode = this;
       const idx = this.children.indexOf(refChild);
-      if (idx === -1) this.children.push(newChild);
+      if (refChild !== null && idx === -1) {
+        throw new Error("NotFoundError: reference child is not a child of this node");
+      }
+      newChild.parentNode = this;
+      if (refChild === null) this.children.push(newChild);
       else this.children.splice(idx, 0, newChild);
       return newChild;
     },
@@ -99,6 +102,11 @@ function createElement(tag) {
     set(value) {
       el._text = value;
       el.children = [];
+    },
+  });
+  Object.defineProperty(el, "firstChild", {
+    get() {
+      return el.children.length ? el.children[0] : null;
     },
   });
   Object.defineProperty(el, "innerHTML", {
