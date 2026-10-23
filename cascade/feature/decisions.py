@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cascade.board.decision_log import append_to_decision_log
+from cascade.board.decision_log import append_to_decision_log, find_matching_decision_id
 from cascade.board.types import WorkDoc
 from cascade.feature.registry import register_feature_tool
 from cascade.feature.scoped_docs import feature_read_doc, feature_write_doc
@@ -28,6 +28,9 @@ def record_decision(
     """Append one entry to the Feature decision log and commit via feature_write_doc."""
 
     doc = feature_read_doc(feature_id, feature_id=feature_id, root=root)
+    existing = find_matching_decision_id(doc.body, section=section, choice=choice)
+    if existing is not None:
+        return existing
     decision_id, new_body = append_to_decision_log(
         doc.body,
         section=section,
