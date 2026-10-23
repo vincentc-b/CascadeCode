@@ -88,6 +88,10 @@ Feature 2 depends on Feature 1.
 
 - 2026-10-22 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-10-23 · Epic Manager · **Macro-architecture**
+  Chose Use one shared branch synchronization and typed merge-diagnostics boundary for manual updates and lifecycle merges..
+  Rationale: Task, feature, and epic merge paths currently share Git mechanics but collapse distinct failure modes. A single boundary prevents policy drift, centralizes cleanup guarantees, and gives the War Room one stable contract.
+  Honors: Success criteria for safe updates, actionable merge recovery, idempotency, and lifecycle serialization..
 ## Amendment log
 
 _(none)_
