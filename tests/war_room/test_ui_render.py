@@ -306,6 +306,8 @@ def test_brief_and_sync_controls_in_html(ui_server):
     _status, html, _headers = _get_html(f"{base}/")
     assert 'id="btn-create-brief"' in html
     assert 'id="btn-pull-main"' in html
+    assert "Refresh briefs" in html
+    assert "app updates are handled separately" in html
     assert 'id="brief-form"' in html
     assert 'name="manager_model"' in html
     assert 'name="architect_model"' in html
