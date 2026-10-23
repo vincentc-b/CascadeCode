@@ -20,6 +20,15 @@ from typing import Literal, NoReturn
 
 from cascade.workspace.drain import begin_drain, draining_event
 from cascade.workspace.errors import WorkspaceError
+from cascade.workspace.supervisor_status import (
+    LastError,
+    SupervisorState,
+    SupervisorStatus,
+    read_supervisor_status,
+    utc_now_iso,
+    write_supervisor_status,
+)
+from cascade.workspace.update_preflight import run_update_preflight
 from cascade.workspace.up import (
     _SOURCE_CHECK_INTERVAL_SECONDS,
     _source_fingerprint,
@@ -97,6 +106,47 @@ def _write_readiness(readiness_fd: int) -> None:
         os.write(readiness_fd, READINESS_MESSAGE)
     except OSError as exc:
         _fail(f"failed to write readiness to launcher pipe: {exc}")
+
+
+def _worker_supervisor_status(
+    workspace_root: Path,
+    *,
+    state: SupervisorState,
+    last_error: LastError | None = None,
+    next_action: str | None = None,
+) -> SupervisorStatus:
+    existing = read_supervisor_status(workspace_root)
+    now = utc_now_iso()
+    previous_state = existing.get("state") if existing else None
+    since = existing["since"] if existing and previous_state == state else now
+    return {
+        "state": state,
+        "worker_pid": os.getpid(),
+        "restart_count": int(existing.get("restart_count", 0)) if existing else 0,
+        "last_error": last_error,
+        "next_action": next_action,
+        "trunk_lock_warning": existing.get("trunk_lock_warning") if existing else None,
+        "since": since,
+        "updated_at": now,
+    }
+
+
+def _publish_worker_supervisor_state(
+    workspace_root: Path,
+    *,
+    state: SupervisorState,
+    last_error: LastError | None = None,
+    next_action: str | None = None,
+) -> None:
+    write_supervisor_status(
+        workspace_root,
+        _worker_supervisor_status(
+            workspace_root,
+            state=state,
+            last_error=last_error,
+            next_action=next_action,
+        ),
+    )
 
 
 def drain_and_shutdown(
@@ -213,6 +263,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     drain_seconds = worker_drain_seconds(ws.path)
     source_at_start = _source_fingerprint()
     source_changed = False
+    blocked_preflight_fingerprint: str | None = None
     next_source_check_at = time.monotonic() + _SOURCE_CHECK_INTERVAL_SECONDS
     shutdown_reason: Literal["update", "stop", "crash", "launcher_lost"] = "stop"
     launcher_lost = False
@@ -221,6 +272,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
 
     def should_stop() -> bool:
         nonlocal next_source_check_at, source_changed, shutdown_reason, launcher_lost
+        nonlocal blocked_preflight_fingerprint
         if os.getppid() != launcher_parent_pid:
             shutdown_reason = "launcher_lost"
             launcher_lost = True
@@ -233,11 +285,36 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
         if now < next_source_check_at:
             return False
         next_source_check_at = now + _SOURCE_CHECK_INTERVAL_SECONDS
-        source_changed = _source_fingerprint() != source_at_start
-        if source_changed:
-            begin_drain()
-            shutdown_reason = "update"
-        return source_changed
+        fingerprint = _source_fingerprint()
+        if fingerprint == source_at_start:
+            return False
+        if fingerprint == blocked_preflight_fingerprint:
+            return False
+        preflight = run_update_preflight(ws.path)
+        if not preflight.ok:
+            blocked_preflight_fingerprint = fingerprint
+            _publish_worker_supervisor_state(
+                ws.path,
+                state="update_blocked",
+                last_error={
+                    "exit_code": preflight.exit_code,
+                    "stderr_tail": preflight.stderr_tail or None,
+                    "message": preflight.message,
+                },
+                next_action="Fix the syntax error and save again.",
+            )
+            return False
+        blocked_preflight_fingerprint = None
+        _publish_worker_supervisor_state(
+            ws.path,
+            state="serving",
+            last_error=None,
+            next_action=None,
+        )
+        source_changed = True
+        begin_drain()
+        shutdown_reason = "update"
+        return True
 
     try:
         listen_socket = socket.socket(fileno=handshake.listen_fd)
