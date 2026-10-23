@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import threading
-import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -14,33 +11,11 @@ from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.init import _BOARD_TIERS
 from cascade.workspace.lock import SupervisorLock
 from cascade.workspace.trunk import resolve_product_trunk
+from cascade.workspace.source_fingerprint import source_fingerprint as _source_fingerprint
 from cascade.workspace.types import WorkspaceRoot
 
 
-_CASCADE_SOURCE_ROOT = Path(__file__).resolve().parents[1]
 _SOURCE_CHECK_INTERVAL_SECONDS = 1.0
-
-
-def _source_fingerprint(root: Path = _CASCADE_SOURCE_ROOT) -> str:
-    """Return a stable fingerprint of the Python source loaded by the supervisor."""
-
-    digest = hashlib.sha256()
-    try:
-        paths = sorted(
-            root.rglob("*.py"), key=lambda path: path.relative_to(root).as_posix()
-        )
-        for path in paths:
-            relative = path.relative_to(root).as_posix().encode()
-            digest.update(len(relative).to_bytes(4, "big"))
-            digest.update(relative)
-            body = path.read_bytes()
-            digest.update(len(body).to_bytes(8, "big"))
-            digest.update(body)
-    except OSError as exc:
-        # A checkout can briefly remove or replace files.  Treat that as a
-        # source change rather than letting a read race preserve stale code.
-        return f"unreadable:{type(exc).__name__}:{exc}"
-    return digest.hexdigest()
 
 
 def resume_legally_active_graphs(root: Path) -> None:
@@ -117,54 +92,33 @@ def up(
     port: int = 8765,
     stop_when: Callable[[], bool] | None = None,
 ) -> None:
-    """Bind War Room and watchdog to ``root``; block until ``stop_when`` or process exit.
+    """Long-lived launcher: lock, listen socket, and replaceable workers.
 
     Takes ``.cascade/supervisor.lock`` for the root; a second ``up`` refuses while held.
-    Lock is released when this function returns (normal exit, ``stop_when``, or error after acquire).
-    ``up`` does not dispatch or check out integration branches in ``--root``.
-    If its loaded Cascade Python source changes, it exits and requires a restart instead
-    of continuing to serve with a mixture of old imports and new files.
+    The launcher binds the War Room listen socket once and respawns
+    ``python -m cascade.workspace.worker`` on source updates (exit 75) or crashes.
+    Lock and listener stay up across worker restarts until operator stop or ``stop_when``.
     """
 
-    from cascade.war_room.server import assert_loopback_host, serve
-    from cascade.watchdog.loop import run_watchdog
+    from cascade.war_room.server import assert_loopback_host
+    from cascade.workspace.launcher import bind_listen_socket, run_launcher_loop
 
     assert_loopback_host(host)
     ws = prepare_up(root)
-    source_at_start = _source_fingerprint()
-    source_changed = False
-    next_source_check_at = time.monotonic() + _SOURCE_CHECK_INTERVAL_SECONDS
-
-    def should_stop() -> bool:
-        nonlocal next_source_check_at, source_changed
-        if stop_when is not None and stop_when():
-            return True
-        now = time.monotonic()
-        if now < next_source_check_at:
-            return False
-        next_source_check_at = now + _SOURCE_CHECK_INTERVAL_SECONDS
-        source_changed = _source_fingerprint() != source_at_start
-        return source_changed
 
     lock = SupervisorLock(ws.path)
     lock.acquire(blocking=False)
     try:
-        server = serve(root=ws.path, host=host, port=port)
-        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-        server_thread.start()
+        listen_sock = bind_listen_socket(host=host, port=port)
         try:
-            # Bind the operator UI before potentially long agent resume turns.
-            # Recovery can then be observed instead of looking like a dead app.
-            resume_legally_active_graphs(ws.path)
-            run_watchdog(root=ws.path, stop_when=should_stop)
+            run_launcher_loop(
+                workspace_root=ws.path,
+                listen_sock=listen_sock,
+                lock_token=str(lock.path.resolve()),
+                lock_fd=lock.fileno(),
+                stop_when=stop_when,
+            )
         finally:
-            server.shutdown()
-            server.server_close()
-            server_thread.join(timeout=10)
+            listen_sock.close()
     finally:
         lock.release()
-    if source_changed:
-        raise WorkspaceError(
-            "Cascade Python source changed while the supervisor was running; "
-            "restart `cascade up` to load the current code"
-        )

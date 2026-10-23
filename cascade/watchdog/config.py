@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+_log = logging.getLogger(__name__)
+
+_DEFAULT_WORKER_DRAIN_SECONDS = 120.0
+
 from cascade.agent.errors import ProviderConfigError
-from cascade.agent.providers import ALL_PROVIDER_IDS, ProviderId, parse_provider_id
+from cascade.agent.providers import (
+    ALL_PROVIDER_IDS,
+    ProviderId,
+    fake_provider_enabled,
+    parse_provider_id,
+)
 
 _TIER_KEYS = ("epic", "feature", "task", "boss")
 _DEFAULT_COMPLETED_EPIC_DISPLAY_LIMIT = 10
@@ -43,6 +53,33 @@ class AutomationConfig:
     enabled: bool = True
     poll_seconds: float = 15.0
     remote: str = "origin"
+
+
+def worker_drain_seconds(root: Path) -> float:
+    """Turn drain window before SIGTERM cancellation. Invalid values default to 120s."""
+
+    data = _load_cascade_toml(root)
+    worker = data.get("worker")
+    if not isinstance(worker, dict):
+        return _DEFAULT_WORKER_DRAIN_SECONDS
+    if "drain_seconds" not in worker:
+        return _DEFAULT_WORKER_DRAIN_SECONDS
+    value = worker["drain_seconds"]
+    if isinstance(value, bool):
+        _log.warning(
+            "cascade.toml [worker].drain_seconds must be a positive number; using %.1f",
+            _DEFAULT_WORKER_DRAIN_SECONDS,
+        )
+        return _DEFAULT_WORKER_DRAIN_SECONDS
+    if isinstance(value, (int, float)):
+        seconds = float(value)
+        if seconds > 0:
+            return seconds
+    _log.warning(
+        "cascade.toml [worker].drain_seconds must be a positive number; using %.1f",
+        _DEFAULT_WORKER_DRAIN_SECONDS,
+    )
+    return _DEFAULT_WORKER_DRAIN_SECONDS
 
 
 def completed_epic_display_limit(root: Path) -> int:
@@ -212,7 +249,11 @@ def read_providers_config(root: Path) -> ProvidersConfig:
         raise ConfigError(str(exc)) from exc
 
     tables = _empty_provider_tables()
-    for provider_id in ALL_PROVIDER_IDS:
+    provider_ids: list[ProviderId] = list(ALL_PROVIDER_IDS)
+    if fake_provider_enabled():
+        tables["fake"] = ModelsTable()
+        provider_ids.append("fake")
+    for provider_id in provider_ids:
         if provider_id in providers_raw:
             tables[provider_id] = _models_table_from_mapping(
                 providers_raw[provider_id],

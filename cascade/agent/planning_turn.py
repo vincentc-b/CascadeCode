@@ -120,7 +120,7 @@ async def _run_sandbox_turn(
     scratch = sandbox.scratch_dir
     effects_path = scratch / ".cascade_effects.jsonl"
     collector = ToolEffectCollector()
-    if provider == "cursor":
+    if provider in ("cursor", "fake"):
         turn = RoleTurn(
             role=role,
             provider=provider,
@@ -141,7 +141,7 @@ async def _run_sandbox_turn(
         )
     try:
         result = await run_role(turn)
-        if provider == "cursor":
+        if provider in ("cursor", "fake"):
             tool_effects = list(collector.effects)
         else:
             tool_effects = merge_tool_effects_from_file(effects_path)
