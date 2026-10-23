@@ -200,6 +200,11 @@ feat_018_002 and feat_018_003 start from 001's code in parallel. So they do not 
   Chose feat_018_001 ships minimal handoff seams for 002 and 003: a single worker shutdown entry point (no drain), a single launcher state-transition function (stderr log only, no status file), readiness signalled only once the War Room is serving, a fixed ~1s delay on crash relaunch (backoff and degraded mode stay in 003), stale-lock sweep results returned as data, and no changes to board tools or board/store.py.
   Rationale: 002 and 003 build on 001 in parallel; without agreed extension points both would rewrite the same shutdown and launcher-loop code and collide at merge. Pinning the seams now costs 001 almost nothing and keeps each later feature's scope additive
   Honors: Bounded downtime and restart-storm prevention; operator stop distinct from update restart; smallest shippable slice for 001.
+
+- `dec_010` · 2026-10-23 · Epic Architect · **Macro-architecture**
+  Chose Agent CLIs, MCP tool servers and git stay in the worker's process group (no setsid/start_new_session); drain cancellation SIGTERMs agent pids rather than per-agent groups, and the launcher's killpg of the worker group sweeps the rest. This refines dec_007's 'agent process groups' wording. Also extends dec_009's seams: the shutdown entry point takes a reason (update|stop); the launcher forwards an operator signal to the worker pid once and waits without a short timeout, escalating to killpg on a second signal; the worker serves on the inherited fd before running resume and signals ready then; the source fingerprint is a stdlib-only function the launcher imports once at start..
+  Rationale: Giving each agent its own group would hide it from the launcher's killpg and reintroduce orphans, contradicting the sweep that dec_001/dec_007 rely on. The extra seams are the points where 002 (drain length, stop path) and 003 (preflight on update only, degraded-mode change detection) would otherwise have to edit 001's launcher loop, so pinning them keeps both features additive. Serving before resume keeps the backlog wait short
+  Honors: No orphaned agent subprocesses; operator stop distinct from update restart; no mixed modules in the launcher; bounded listener downtime..
 ## Amendment log
 
 _(none)_
