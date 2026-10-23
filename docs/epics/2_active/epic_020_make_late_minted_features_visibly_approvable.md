@@ -37,25 +37,57 @@ A feature minted after its epic plan was approved correctly remains unapproved, 
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+Most of the backend path already exists. This epic adds visibility and a UI control; it does not add a new approval mechanism.
+
+What exists today (verified on trunk):
+
+- `cascade/approvals.py::approve_feature`: sets `approved_at` once (idempotent; returns `newly_approved`), then calls `advance_work`, which runs `reconcile_approval_dispatch` when automation is enabled.
+- `POST /api/approve_feature` in `cascade/war_room/server.py`: errors map to 409. Every POST runs inside `deferred_kickoffs()`, so `dispatch_feature` → `kickoff_turn` queues the feature-planning model turn in the background instead of running it on the request thread.
+- `dispatch_feature` already enforces the gates under a process lock: open status, `unmet_deps`, `not_approved`, `feature_awaiting_merge`, and sibling block. Once a feature moves to active, a second dispatch fails with `bad_state`, so repeated approvals cannot dispatch twice.
+- `serialize.py` exposes `approved` and `approved_at` on feature rows. It does not expose why a feature is still in backlog.
+- `war_room.js` has "Approve plan" and "Approved" controls for epics, but feature rows have no approval control.
+
+What this epic adds:
+
+1. **A read-only readiness predicate** (feat_020_001). The gate logic moves out of `_dispatch_feature` into one pure function that both `dispatch_feature` and the board serializer call. Feature rows gain `readiness: {approved, blockers[]}`. The predicate has no side effects: it never calls `ensure_feature_dispatch_selection`, writes, emits events, or takes the dispatch lock.
+2. **A War Room control** (feat_020_002). Feature rows show an "Awaiting feature approval" status and an "Approve feature" button that calls the existing `/api/approve_feature`, with pending, success, and error feedback. After approval, rows show the remaining blockers. One integration test covers the full late-mint path.
+
+Data flow: an operator clicks the button, which POSTs `/api/approve_feature`. The handler persists `approved_at`, then runs `advance_work` → `reconcile_approval_dispatch` → `dispatch_feature` (the canonical gates). On success the kickoff is queued in the background and the HTTP response returns. On the next board refresh, the readiness predicate shows the feature as active, or still in backlog with its real blocker.
 
 ## Cross-module constraints
 
 Preserve per-feature approved_at as durable authority and preserve the current snapshot semantics for epic-plan approval. Only a human may grant the missing approval. Reuse /api/approve_feature and canonical dispatch/reconciliation rather than adding a second approval store or bypass. Coordinate labels/readiness presentation with epic_015, but do not make this work depend on auto-approval or broaden epic_015's planner sign-off scope. Re-approval and refreshes must not duplicate worktrees, queue events, or model turns.
 
+Rules added during planning:
+
+- Displayed blockers and actual dispatch decisions must come from the same predicate. A UI-only copy of the gate logic is not allowed.
+- The approval action stays on the loopback War Room HTTP surface. No agent or MCP tool gains an approve capability.
+- Feature labels use feature-row vocabulary ("Awaiting feature approval", "Approve feature"). They must not reuse or restyle epic_015's epic-level "Approve plan" controls.
+
 ## Core dependencies
 
-To be identified during epic planning.
+- `cascade/approvals.py` (`approve_feature`, `feature_approved`): reused, not modified.
+- `cascade/watchdog/dispatch.py` (`dispatch_feature` gates): refactored to call the shared readiness predicate, with no behavior change.
+- `cascade/automation.py` (`reconcile_approval_dispatch`): reused. Its active-parent-epic check is reported as the `epic_inactive` blocker.
+- `cascade/workspace/kickoff.py` (`deferred_kickoffs`, `kickoff_turn`): reused for background kickoff.
+- `cascade/war_room/serialize.py` and `static/war_room.js`: extended.
+- epic_015 (active): presentation coordination only, with no code dependency.
 
 ## Feature breakdown
-- feat_020_002
-- feat_020_001
 
-The Epic Team will create and sequence feature plans here.
+1. **feat_020_001: Expose side-effect-free feature readiness and blockers.** No dependencies. A behavior-preserving extraction of the dispatch gates plus `readiness` on feature rows. It ships alone because it is useful on its own (it removes the "appears stuck" ambiguity in API payloads) and keeps the dispatch refactor reviewable.
+2. **feat_020_002: War Room feature approval control with end-to-end late-mint test.** Depends on feat_020_001. Adds the UI button, status text, and feedback, plus the single integration test required by the success criteria, including the no-duplicate-dispatch, no-inline-model-turn, and blocked-sibling checks.
+
+The work is a strict sequence; there is no parallelism worth the coordination cost at this size.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+- Resolved: which implementation risks should be settled before the first feature starts? See the decision log. The risks are readiness-vs-dispatch drift, the side-effecting `ensure_feature_dispatch_selection`, and proof that no model turn runs inline.
+
+## Known limitations (accepted)
+
+- With automation disabled, approval persists but nothing is scheduled automatically (this is current `_maybe_advance_after_approval` behavior). The row then shows no blockers, and the existing manual dispatch path applies. This epic does not change that.
+- `advance_work` still runs synchronously within the approval request (brief sync and reconciliation, but no model turn). The existing 60s `APPROVAL_DEADLINE_S` covers it. Moving it fully off-thread is out of scope unless the integration test shows a real latency problem.
 
 ## Decision log
 
