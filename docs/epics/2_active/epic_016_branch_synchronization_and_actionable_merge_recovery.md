@@ -4,7 +4,8 @@ title: Branch synchronization and actionable merge recovery
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_016_001
 depends_on: []
 owners:
 - epic_manager
@@ -62,6 +63,7 @@ Do not fetch or mutate remotes as part of Update branch; compare and merge the l
 - War Room board serialization, POST routing, and active-card rendering for state and actions.
 
 ## Feature breakdown
+- feat_016_001
 
 1. **Branch synchronization service and structured lifecycle merge failures**
    - Resolve tier-aware bases from authoritative persisted state.
