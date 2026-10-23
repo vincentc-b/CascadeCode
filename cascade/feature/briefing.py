@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cascade.board.errors import NotFound
-from cascade.workspace.doc_root import read_doc_resolved, resolve_doc_worktree
+from cascade.workspace.doc_root import read_doc_resolved
 from cascade.workspace.integration_worktree import locate_trunk
 from cascade.board.types import WorkDoc
 from cascade.comments.store import read_comments
@@ -66,7 +66,11 @@ def _recent_graph_messages(feature_id: str, *, root: Path, limit: int = 20) -> l
     graph = ensure_feature_graph(feature_id, root=root)
     snapshot = graph.get_state(thread_config(feature_id))
     values = snapshot.values or {}
-    messages = list(values.get("messages") or [])
+    messages = [
+        item
+        for item in (values.get("messages") or [])
+        if isinstance(item, dict) and item.get("role") == "human"
+    ]
     if limit <= 0:
         return []
     return messages[-limit:]
@@ -84,8 +88,6 @@ def build_briefing_pack(
     feature = read_doc_resolved(feature_id, root=trunk)
     if feature.meta.tier != "feature":
         raise ValueError(f"{feature_id} is not a feature")
-    doc_root = resolve_doc_worktree(feature_id, root=trunk)
-
     open_comments = [
         row for row in read_comments(feature_id, root=trunk) if row.state == "open"
     ]
