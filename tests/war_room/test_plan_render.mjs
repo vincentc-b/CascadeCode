@@ -23,6 +23,8 @@ const {
   isSectionThread,
   findAnchorLineInRange,
   placementForRootThread,
+  partitionRootThreads,
+  groupCommentThreads,
   mermaidNodeHasDiagram,
   safeUrl,
 } = require(join(staticDir, "plan_viewer.js"));
@@ -203,5 +205,83 @@ const docMiss = placementForRootThread(
 );
 assert.equal(docMiss.outdated, true);
 assert.equal(docMiss.gutterLine, 1);
+
+const partitionDoc = `# Plan
+
+## Scope
+
+Alpha snippet here.
+
+## Other
+
+Tail.
+`;
+
+const lineComments = [
+  {
+    id: "cmt_a",
+    section: "scope",
+    anchor: "Alpha snippet here",
+    line_start: 5,
+    line_end: 5,
+    doc_sha: "live",
+    body: "first",
+  },
+  {
+    id: "cmt_b",
+    section: "scope",
+    anchor: "Alpha snippet here",
+    line_start: 5,
+    line_end: 5,
+    doc_sha: "live",
+    body: "second",
+  },
+  { id: "cmt_global", section: "general", body: "whole plan", line_start: null },
+  {
+    id: "cmt_outdated_inline",
+    section: "scope",
+    anchor: "deleted text",
+    line_start: 4,
+    line_end: 4,
+    doc_sha: "old",
+    body: "outdated but inline",
+  },
+];
+const threads = groupCommentThreads(lineComments);
+const blockLines = { 1: true, 3: true, 5: true, 9: true };
+const partitioned = partitionRootThreads(threads, partitionDoc, "live", blockLines);
+assert.equal(partitioned.trayThreads.length, 1);
+assert.equal(partitioned.trayThreads[0].root.id, "cmt_global");
+assert.equal(partitioned.inlineByBlock["5"].length, 2);
+assert.equal(partitioned.inlineByBlock["5"][0].root.id, "cmt_a");
+assert.equal(partitioned.inlineByBlock["5"][1].root.id, "cmt_b");
+assert.equal(partitioned.inlineByBlock["3"].length, 1);
+assert.equal(partitioned.inlineByBlock["3"][0].root.id, "cmt_outdated_inline");
+assert.equal(partitioned.placementInfo.outdated.cmt_outdated_inline, true);
+
+const unplaceableComment = {
+  id: "cmt_unplaceable",
+  section: "missing-section",
+  anchor: "nowhere",
+  line_start: 2,
+  line_end: 2,
+  doc_sha: "old",
+  body: "tray fallback",
+};
+const trayOnly = partitionRootThreads(
+  groupCommentThreads([unplaceableComment]),
+  partitionDoc,
+  "live",
+  { 3: true, 5: true, 9: true }
+);
+assert.equal(trayOnly.trayThreads.length, 1);
+assert.equal(trayOnly.trayThreads[0].root.id, "cmt_unplaceable");
+assert.equal(trayOnly.placementInfo.outdated.cmt_unplaceable, true);
+
+const repartition = partitionRootThreads(threads, partitionDoc, "live", blockLines);
+assert.deepEqual(
+  repartition.inlineByBlock["5"].map((t) => t.root.id),
+  partitioned.inlineByBlock["5"].map((t) => t.root.id)
+);
 
 console.log("plan_render cases ok");
