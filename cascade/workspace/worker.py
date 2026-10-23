@@ -346,9 +346,17 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     )
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
+    from cascade.workspace.supervisor_readiness import (
+        observe_http_live,
+        observe_startup_phase,
+    )
+
+    observe_http_live(live=True)
     _write_readiness(handshake.readiness_fd)
+    observe_startup_phase("recovery")
     try:
         resume_legally_active_graphs(ws.path)
+        observe_startup_phase("watchdog")
         run_watchdog(root=ws.path, stop_when=should_stop)
     except BaseException:
         abnormal_exit = True
