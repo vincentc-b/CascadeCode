@@ -2,7 +2,7 @@
 id: feat_012_003
 title: Disposable synthetic lifecycle readiness probe
 tier: feature
-status: active
+status: completed
 parent: epic_012
 children:
 - task_012_003_001
