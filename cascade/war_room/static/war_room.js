@@ -372,14 +372,14 @@
 
   async function pullMain() {
     el.btnPullMain.disabled = true;
-    el.syncStatus.textContent = "Pulling…";
+    el.syncStatus.textContent = "Refreshing briefs…";
     try {
       const response = await apiPost("/api/sync/pull", {});
       const added = response.body.new_briefs || [];
-      el.syncStatus.textContent = added.length ? "Imported " + added.join(", ") : "Main is current";
+      el.syncStatus.textContent = added.length ? "Imported briefs: " + added.join(", ") : "No new briefs";
       await refreshBoard();
     } catch (err) {
-      el.syncStatus.textContent = (err.body && err.body.error) || err.message || "Pull failed";
+      el.syncStatus.textContent = (err.body && err.body.error) || err.message || "Brief refresh failed";
       el.syncStatus.classList.add("error");
     } finally {
       el.btnPullMain.disabled = false;
