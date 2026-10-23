@@ -2,7 +2,7 @@
 id: feat_018_002
 title: 'Graceful worker drain: reject new writes as updating, finish in-flight requests and turns, recover the rest from checkpoints'
 tier: feature
-status: active
+status: backlog
 parent: epic_018
 children:
 - task_018_002_001
