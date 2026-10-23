@@ -115,6 +115,11 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
   Chose A long-lived launcher holds the supervisor lock and the listening socket for its whole life and spawns one replaceable worker process per code version, restarting sequentially with no overlap. The worker exits 75 on a source update, 0 on operator stop, and any other code counts as a crash..
   Rationale: Never releasing the lock or unbinding the port removes the connection-refused window and stale-lock risk. A fresh process per version avoids mixing modules. This is far less machinery than blue/green handoff or fd passing between peers.
   Honors: Single-supervisor invariant; no mixed old/new modules; operator shutdown distinct from update restart; launcher/process contract without platform daemons..
+
+- `dec_002` · 2026-10-23 · Epic Manager · **Macro-architecture**
+  Chose Recover interrupted work through the existing checkpoint resume path (resume_legally_active_graphs / resume_inflight_graphs) after a bounded drain, instead of building a new live state-transfer protocol between workers.
+  Rationale: The durable checkpoints, queues and worktrees already survive a process restart, and resume is already exercised on every startup. Adding a second handoff mechanism would duplicate it and add risk. The remaining exactly-once gap for cancelled turns is tracked as an open question for the Epic Architect
+  Honors: Checkpoints, queues, comments and worktree state as durable handoff boundaries; drain when possible, recover exactly once otherwise.
 ## Amendment log
 
 _(none)_
