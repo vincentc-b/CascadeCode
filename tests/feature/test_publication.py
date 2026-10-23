@@ -8,6 +8,7 @@ import pytest
 from cascade.board.errors import GitError
 from cascade.board.store import move_doc, read_doc
 from cascade.boss.merge import merge_task_branch
+from cascade.boss.rollup import try_complete_feature
 from cascade.feature.publication import prepare_feature_publication, validate_feature_publication
 from cascade.review import ensure_feature_review
 from cascade.task.git_tools import swe_commit
@@ -32,7 +33,10 @@ def _git(root: Path, *args: str) -> str:
 
 
 def _completed_feature(
-    tmp_path: Path, *, remote_state: str = "missing"
+    tmp_path: Path,
+    *,
+    remote_state: str = "missing",
+    complete_plan: bool = True,
 ) -> tuple[Path, IntegrationWorktree]:
     root = make_repo(tmp_path)
     (root / "README.md").write_text("board\n", encoding="utf-8")
@@ -80,7 +84,8 @@ def _completed_feature(
     swe_commit("implement value", task_id="task_001", task_run=run, root=root)
     assert merge_task_branch("task_001", root=root).ok
 
-    move_doc("feat_001", "completed", root=feature_entry.path)
+    if complete_plan:
+        move_doc("feat_001", "completed", root=feature_entry.path)
     return root, feature_entry
 
 
@@ -140,6 +145,47 @@ def test_review_force_pushes_normalized_history_with_exact_lease(
         expected_task_ids=["task_001"],
     )
     assert history.task_ids == ("task_001",)
+
+
+def test_rollup_publishes_completed_plan_in_review_branch(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root, feature_entry = _completed_feature(tmp_path, complete_plan=False)
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    _git(root, "remote", "add", "origin", str(remote))
+    monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+    monkeypatch.setattr(
+        "cascade.review.create_merge_request",
+        lambda _root, **kwargs: MergeRequest(
+            url="https://example.test/review/2",
+            number="2",
+            forge="github",
+            source_branch=str(kwargs["source_branch"]),
+            target_branch=str(kwargs["target_branch"]),
+            draft=False,
+        ),
+    )
+
+    assert try_complete_feature("feat_001", root=root) is False
+
+    published_tip = _git(remote, "rev-parse", "refs/heads/feat/feat_001")
+    published_paths = _git(remote, "ls-tree", "-r", "--name-only", published_tip).splitlines()
+    completed = [
+        path
+        for path in published_paths
+        if path.startswith("docs/features/3_completed/feat_001_")
+    ]
+    active = [
+        path
+        for path in published_paths
+        if path.startswith("docs/features/2_active/feat_001_")
+    ]
+    assert len(completed) == 1
+    assert active == []
+    feature = read_doc("feat_001", root=feature_entry.path)
+    assert feature.meta.status == "completed"
+    assert feature.meta.path.parent.name == "3_completed"
 
 
 def test_prepare_feature_publication_replaces_ancestor_prepublication_remote(
