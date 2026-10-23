@@ -343,7 +343,9 @@ def _auto_merge_finished_task(task_id: str, root: Path) -> None:
             fail_task(task_id, reason, root=root)
             return
         from cascade.task_rollup import queue_task_merge, retry_pending_task_merges
+        from cascade.task.execution import mark_awaiting_merge
 
+        mark_awaiting_merge(task_id, root=root)
         queue_task_merge(task_id, root=root)
         retry_pending_task_merges(root)
     except Exception:

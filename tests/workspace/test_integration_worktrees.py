@@ -162,6 +162,41 @@ def test_active_task_with_fresh_live_lease_is_not_resumed_twice(tmp_path: Path) 
     assert get_task_run("task_001") is None
 
 
+def test_merge_ready_task_is_not_restarted_as_swe_work(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    _chain(root)
+    assert dispatch_task("task_001", "human", root=root).ok
+
+    from cascade.task.execution import mark_awaiting_merge, mark_merge_blocked
+    from cascade.task_rollup import queue_task_merge
+    from cascade.task.wiring import restore_active_task_runs
+    from cascade.task.worktree import clear_task_runs, get_task_run
+
+    mark_awaiting_merge("task_001", root=root)
+    clear_task_runs()
+    assert restore_active_task_runs(root) == []
+    assert get_task_run("task_001") is None
+
+    # Older execution records may still say running even though the merge
+    # queue proves the SWE turn already finished.
+    from cascade.task.execution import mark_running
+
+    mark_running("task_001", root=root)
+    queue_task_merge("task_001", root=root)
+    assert restore_active_task_runs(root) == []
+    assert get_task_run("task_001") is None
+
+    mark_merge_blocked(
+        "task_001", root=root, reason="branch_conflict", conflict_paths=("worker.py",),
+        source_sha="source1", target_sha="target1",
+    )
+    assert restore_active_task_runs(root) == []
+    assert get_task_run("task_001") is None
+
+
 def test_active_task_with_stale_lease_is_reclaimed_once(tmp_path: Path) -> None:
     from datetime import datetime, timedelta, timezone
 

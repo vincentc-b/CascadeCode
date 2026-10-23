@@ -654,6 +654,13 @@
       status.setAttribute("aria-label", "Execution status: " + execution.label);
       row.appendChild(status);
 
+      if (execution.kind === "blocked" && execution.detail) {
+        const detail = document.createElement("div");
+        detail.className = "task-merge-blocker";
+        detail.textContent = execution.detail;
+        row.appendChild(detail);
+      }
+
       const branch = document.createElement("div");
       branch.className = "task-branch";
       branch.textContent = "task/" + item.id;
@@ -777,6 +784,22 @@
       execution.health || execution.phase || item.execution_status ||
       item.runtime_status || item.execution_state || ""
     ).toLowerCase();
+    if (runtime === "merge_blocked") {
+      const blocker = execution.merge_blocker || {};
+      const paths = Array.isArray(blocker.conflict_paths) ? blocker.conflict_paths : [];
+      const detail = paths.length ? "Conflicting files: " + paths.join(", ") :
+        "Merge refused: " + (blocker.reason || "unknown reason");
+      const recovery = blocker.reason === "branch_conflict" ?
+        "Resolve the Task branch against its Feature branch, then retry Merge task." :
+        "Check the merge refusal, then retry Merge task.";
+      return {
+        kind: "blocked", label: "Merge blocked", detail: detail,
+        title: detail + ". " + recovery,
+      };
+    }
+    if (runtime === "awaiting_merge") {
+      return { kind: "queued", label: "Awaiting merge", title: "Validated task is waiting to merge into its Feature branch." };
+    }
     if (
       runtime === "stale" || runtime === "stuck" || runtime === "stalled" ||
       runtime === "unhealthy"
