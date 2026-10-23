@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from langgraph.graph import END, START, StateGraph
 
+from cascade.agent.errors import TurnCancelledForDrain
 from cascade.agent.graph_turn import (
     clear_turn_model_override,
     format_turn_prompt,
@@ -296,6 +297,8 @@ def _swe_role_content(state: TaskGraphState) -> str:
                 run_role_fn=_run_role_fn,
             )
         )
+    except TurnCancelledForDrain:
+        raise
     except RuntimeError as exc:
         return f"swe: {exc}"
 

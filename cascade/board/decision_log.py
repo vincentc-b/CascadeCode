@@ -6,10 +6,42 @@ import re
 from datetime import date
 
 _DEC_ID_RE = re.compile(r"dec_(\d{3})\b")
+_DECISION_ENTRY_RE = re.compile(
+    r"- `(dec_\d{3})` · [^·]+ · [^·]+ · \*\*(.+?)\*\*\n  Chose (.+?)\.\n",
+    re.MULTILINE,
+)
 
 
 def single_line(value: str) -> str:
     return " ".join(value.split())
+
+
+def find_matching_decision_id(
+    body: str,
+    *,
+    section: str,
+    choice: str,
+) -> str | None:
+    """Return an existing decision id when section and choice match (replay-safe)."""
+
+    match = re.search(r"^## Decision log\s*$", body, re.MULTILINE)
+    if not match:
+        return None
+
+    start = match.end()
+    if start < len(body) and body[start] == "\n":
+        start += 1
+
+    next_heading = re.search(r"^## ", body[start:], re.MULTILINE)
+    section_end = start + next_heading.start() if next_heading else len(body)
+    section_text = body[start:section_end]
+
+    want_section = single_line(section)
+    want_choice = single_line(choice)
+    for entry in _DECISION_ENTRY_RE.finditer(section_text):
+        if single_line(entry.group(2)) == want_section and single_line(entry.group(3)) == want_choice:
+            return entry.group(1)
+    return None
 
 
 def append_to_decision_log(

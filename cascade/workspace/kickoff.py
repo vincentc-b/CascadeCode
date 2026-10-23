@@ -11,10 +11,12 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from cascade.agent.errors import TurnCancelledForDrain
 from cascade.board.context import resolve_root
 from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
 from cascade.watchdog.queue_cursor import queue_byte_size, resolve_last_queue_offset
+from cascade.workspace.drain import is_draining
 from cascade.workspace.types import KickoffReason
 
 _log = logging.getLogger(__name__)
@@ -124,6 +126,12 @@ def _run_kickoff(reason: KickoffReason, repo: Path) -> None:
 
 
 def _submit_background(work_id: str, job: Callable[[], None]) -> None:
+    if is_draining():
+        _log.info(
+            "dropping background kickoff job for %s (worker draining)",
+            work_id,
+        )
+        return
     with _registry_lock:
         pending = _graph_queues.get(work_id)
         if pending is None:
@@ -142,7 +150,13 @@ def _drain_background(work_id: str, pending: "queue.Queue[Callable[[], None]]") 
     while True:
         job = pending.get()
         try:
-            job()
+            if is_draining():
+                _log.info(
+                    "dropping background kickoff job for %s (worker draining)",
+                    work_id,
+                )
+            else:
+                job()
         except Exception:
             _log.exception("background kickoff job crashed for %s", work_id)
         finally:
@@ -152,6 +166,11 @@ def _drain_background(work_id: str, pending: "queue.Queue[Callable[[], None]]") 
 def _run_background_kickoff(reason: KickoffReason, repo: Path) -> None:
     try:
         _run_kickoff(reason, repo)
+    except TurnCancelledForDrain:
+        _log.info(
+            "background kickoff turn cancelled for drain work_id=%s",
+            reason.work_id,
+        )
     except Exception as exc:
         _log.exception("background kickoff turn failed for %s", reason.work_id)
         _report_background_failure(reason.work_id, exc, repo)

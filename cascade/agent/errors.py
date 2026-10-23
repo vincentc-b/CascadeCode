@@ -44,3 +44,11 @@ class ProviderToolHostError(Exception):
 
 class ProviderCliTimeoutError(ProviderCliError):
     """CLI subprocess exceeded the turn timeout."""
+
+
+class TurnCancelledForDrain(Exception):
+    """Model turn ended because the worker entered drain shutdown."""
+
+    def __init__(self, role: str) -> None:
+        self.role = role
+        super().__init__(f"turn cancelled for worker drain ({role})")

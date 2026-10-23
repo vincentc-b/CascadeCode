@@ -18,7 +18,7 @@ from pathlib import Path
 
 from typing import Literal
 
-ProviderId = Literal["cursor", "claude", "codex"]
+ProviderId = Literal["cursor", "claude", "codex", "fake"]
 AuthSource = Literal["env", "user-store", "cli-session", "missing"]
 
 _ENV_KEYS: dict[ProviderId, str] = {
@@ -149,6 +149,11 @@ def _cli_session_token(provider: ProviderId) -> str | None:
 def credential_auth_source(provider: ProviderId) -> AuthSource:
     """Return how auth would resolve for ``provider`` (no secret values)."""
 
+    if provider == "fake":
+        from cascade.agent.providers import fake_provider_enabled
+
+        return "env" if fake_provider_enabled() else "missing"
+
     if _env_token(provider) is not None:
         return "env"
     if _user_store_token(provider) is not None:
@@ -160,6 +165,13 @@ def credential_auth_source(provider: ProviderId) -> AuthSource:
 
 def resolve_credential(provider: ProviderId) -> Credential | None:
     """First match wins: env, user store, CLI session (claude/codex only)."""
+
+    if provider == "fake":
+        from cascade.agent.providers import fake_provider_enabled
+
+        if not fake_provider_enabled():
+            return None
+        return Credential(provider="fake", token="fake")
 
     env = _env_token(provider)
     if env is not None:

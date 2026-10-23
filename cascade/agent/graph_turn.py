@@ -13,6 +13,7 @@ from cascade.agent.errors import (
     ProviderNotAuthenticatedError,
     ProviderNotImplementedError,
     ProviderNotInstalledError,
+    TurnCancelledForDrain,
 )
 from cascade.agent.providers import ProviderId
 from cascade.agent.types import RoleId, RoleResult
@@ -256,6 +257,8 @@ async def run_planning_role_turn(
             root=repo,
             **turn_kwargs,
         )
+    except TurnCancelledForDrain:
+        raise
     except CursorAgentError as exc:
         return startup_error_message(role, exc)
     except (

@@ -39,6 +39,11 @@ def mint_feature(
         if board.by_id[dep_id].tier != "feature":
             raise EpicToolDenied(f"depends_on {dep_id} must be a feature")
 
+    board = merged_board(repo)
+    existing_id = _existing_child_feature_id(board, epic_id=epic_id, title=title)
+    if existing_id is not None:
+        return existing_id
+
     epic_doc = epic_read_doc(epic_id, epic_id=epic_id, root=repo)
     provider, models, model = _feature_backend_from_epic(epic_doc)
     today = date.today()
@@ -118,6 +123,20 @@ def list_children(*, epic_id: str, root: Path) -> list[WorkMeta]:
             continue
         result.append(meta)
     return result
+
+
+def _existing_child_feature_id(board, *, epic_id: str, title: str) -> str | None:
+    """Replay-safe lookup: same title under the same epic returns the existing id."""
+
+    normalized = title.strip()
+    for meta in board.by_id.values():
+        if (
+            meta.tier == "feature"
+            and meta.parent == epic_id
+            and meta.title == normalized
+        ):
+            return meta.id
+    return None
 
 
 def _require_epic(epic_id: str, root: Path) -> WorkDoc:

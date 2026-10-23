@@ -108,6 +108,9 @@ def reply_comment(
     text = body.strip()
     if not text:
         raise CommentStoreError("empty body")
+    existing = _find_duplicate_reply(doc_id, comment_id, author, text, repo)
+    if existing is not None:
+        return existing
     owning = _owning_graph(doc_id, trunk)
     record = _append_comment(
         doc_id=doc_id,
@@ -336,6 +339,19 @@ def _thread_ids(comments: list[Comment], root_id: str) -> set[str]:
                 targets.add(child_id)
                 queue.append(child_id)
     return targets
+
+
+def _find_duplicate_reply(
+    doc_id: str,
+    parent_id: str,
+    author: str,
+    body: str,
+    root: Path,
+) -> str | None:
+    for row in _load_sidecar(doc_id, root):
+        if row.parent == parent_id and row.author == author and row.body == body:
+            return row.id
+    return None
 
 
 def _require_comment(doc_id: str, comment_id: str, *, root: Path) -> Comment:

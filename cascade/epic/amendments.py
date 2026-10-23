@@ -63,6 +63,18 @@ def resolve_amendment(
         )
 
     if record.state in _TERMINAL:
+        feature = read_doc(record.feature_id, root=repo)
+        if feature.meta.status != "blocked":
+            if record.state == "accepted":
+                if choice != "accept":
+                    raise ResolveAmendmentError(f"amendment {record.id} is already accepted")
+                sha = _epic_head_sha(epic_id, root=repo) or feature.meta.parent_rev
+                return sha
+            if record.state == "rejected":
+                if choice != "reject":
+                    raise ResolveAmendmentError(f"amendment {record.id} is already rejected")
+                return None
+            raise ResolveAmendmentError(f"amendment {record.id} is already {record.state}")
         return _finish_terminal_retry(record, choice=choice, epic_id=epic_id, root=repo)
     if record.state == "revise_pending":
         raise ResolveAmendmentError(
