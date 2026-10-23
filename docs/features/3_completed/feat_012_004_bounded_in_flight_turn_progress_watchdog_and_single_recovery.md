@@ -2,7 +2,7 @@
 id: feat_012_004
 title: Bounded in-flight turn progress watchdog and single recovery
 tier: feature
-status: active
+status: completed
 parent: epic_012
 children:
 - task_012_004_001
