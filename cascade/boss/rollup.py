@@ -107,11 +107,14 @@ def try_complete_feature(
 
     if not review_merged:
         from cascade.review import ensure_feature_review, review_enabled
+        from cascade.stacked_dispatch import feature_pull_request_linked
 
         if review_enabled(repo):
+            mr = ensure_feature_review(feature_id, root=repo)
+            if mr is None and not feature_pull_request_linked(feature_id, root=repo):
+                return False
             owner_root = _feature_owner_root(feature_id, doc, repo)
             move_doc(feature_id, "completed", root=owner_root)
-            ensure_feature_review(feature_id, root=repo)
             return False
 
     if review_merged:

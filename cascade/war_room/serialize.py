@@ -25,6 +25,7 @@ from cascade.watchdog.types import DispatchResult, Event
 from cascade.workspace.integration_worktree import IntegrationWorktree
 from cascade.agent.providers import ProviderId, ProviderStatus
 from cascade.review import OpenReview
+from cascade.war_room.room_settings import RoomSettings
 from cascade.workspace.types import FlightOverlap, FlightReport
 
 _COLUMN_FOLDERS = frozenset({"1_backlog", "2_active", "3_completed"})
@@ -82,6 +83,11 @@ def work_meta_to_dict(
             from cascade.review import feature_review_view
 
             value["review"] = feature_review_view(meta.id, root=root)
+        from cascade.stacked_dispatch import feature_stacked_dispatch_view
+
+        stacked = feature_stacked_dispatch_view(meta.id, root=root)
+        if stacked is not None:
+            value["stacked_dispatch"] = stacked
     return value
 
 
@@ -142,6 +148,13 @@ def dispatch_result_to_dict(result: DispatchResult) -> dict:
         "ok": result.ok,
         "reason": result.reason,
         "event": event_to_dict(result.event) if result.event is not None else None,
+    }
+
+
+def room_settings_to_dict(settings: RoomSettings) -> dict[str, object]:
+    return {
+        "graph_id": settings.graph_id,
+        "stacked_pr_enabled": settings.stacked_pr_enabled,
     }
 
 
@@ -323,4 +336,17 @@ def board_view_from_index(board, *, root: Path) -> dict:
             # final location, but operationally the feature remains in flight.
             folder = "2_active"
         view[key][folder].append(item)
+
+    from cascade.war_room.completed_epics import (
+        bound_completed_epic_rows,
+        completed_epics_board_settings,
+    )
+
+    settings = completed_epics_board_settings(root)
+    limit = int(settings["completed_epic_display_limit"])
+    view["epics"]["3_completed"] = bound_completed_epic_rows(
+        view["epics"]["3_completed"],
+        limit=limit,
+    )
+    view["board"] = settings
     return view

@@ -44,8 +44,15 @@ def prepare_feature_publication(feature_id: str, *, root: Path) -> PublicationHi
         raise GitError(f"feature worktree missing: {feature_id}")
     source = integration_branch("feature", feature_id)
     target_doc = read_doc(feature_id, root=entry.path)
-    if target_doc.meta.status != "completed" or target_doc.meta.path.parent.name != "3_completed":
-        raise GitError(f"{feature_id} must be moved to 3_completed before publication")
+    publication_ready = (
+        target_doc.meta.status == "completed"
+        and target_doc.meta.path.parent.name == "3_completed"
+    ) or (
+        target_doc.meta.status == "active"
+        and target_doc.meta.path.parent.name == "2_active"
+    )
+    if not publication_ready:
+        raise GitError(f"{feature_id} must be ready for review publication")
 
     task_ids = _completed_task_ids(feature_id, entry.path)
     if not task_ids:

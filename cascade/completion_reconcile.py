@@ -25,6 +25,10 @@ def reconcile_completion(root: Path | None = None) -> dict[str, list[str]]:
 
     features.extend(reconcile_feature_review_completions(repo))
 
+    from cascade.stacked_dispatch import reconcile_stacked_native_retargeting
+
+    reconcile_stacked_native_retargeting(repo)
+
     board = merged_board(trunk)
     for meta in sorted(board.by_id.values(), key=lambda row: row.id):
         if meta.tier != "feature" or meta.path.parent.name != "2_active":

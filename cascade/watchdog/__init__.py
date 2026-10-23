@@ -5,6 +5,7 @@ from cascade.watchdog.config import (
     ConfigError,
     ModelsTable,
     ProvidersConfig,
+    completed_epic_display_limit,
     read_automation_config,
     read_models_table,
     read_providers_config,
@@ -39,6 +40,7 @@ from cascade.watchdog.types import (
 __all__ = [
     "ConfigError",
     "AutomationConfig",
+    "completed_epic_display_limit",
     "ModelConfigError",
     "ModelSource",
     "ModelsTable",

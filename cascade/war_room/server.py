@@ -57,6 +57,12 @@ from cascade.war_room.provider_routes import (
     try_handle_provider_post,
 )
 from cascade.war_room.review_routes import register_review_routes
+from cascade.war_room.room_settings_routes import (
+    register_room_settings_routes,
+    room_settings_api_path_exists,
+    try_handle_room_settings_get,
+    try_handle_room_settings_post,
+)
 from cascade.war_room.sidecar_routes import _parse_graph_id_from_chat_path, register_sidecar_routes
 from cascade.war_room.views import render_plan_page, render_war_room_page
 from cascade.comments import section_slug
@@ -294,6 +300,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
         if try_handle_amendment_get(self):
             return
+        if try_handle_room_settings_get(self):
+            return
         if path in ("/", "/war-room"):
             self._serve_war_room_html()
             return
@@ -324,6 +332,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if try_handle_amendment_post(self, body):
             return
         if try_handle_provider_post(self, body):
+            return
+        if try_handle_room_settings_post(self, body):
             return
         routes = self._exact_post_routes()
         if path not in routes:
@@ -506,9 +516,18 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if result.ok:
             self._json_response(HTTPStatus.OK, {"ok": True, "epic_id": epic_id})
             return
+        payload: dict[str, Any] = {
+            "ok": False,
+            "reason": result.reason or "close_failed",
+            "epic_id": epic_id,
+        }
+        if result.blocker_ids:
+            payload["blocker_ids"] = list(result.blocker_ids)
+        if result.reason == "open_human_comments":
+            payload["plan_url"] = f"/plan/{epic_id}#plan-comments"
         self._json_response(
             HTTPStatus.OK,
-            {"ok": False, "reason": result.reason or "close_failed", "epic_id": epic_id},
+            payload,
         )
 
     def _handle_boss_drain(self, body: dict[str, Any]) -> None:
@@ -876,6 +895,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return True
         if provider_api_path_exists(path):
             return True
+        if room_settings_api_path_exists(path):
+            return True
         return False
 
     def _method_not_allowed(self) -> None:
@@ -912,6 +933,7 @@ register_sidecar_routes(WarRoomRequestHandler)
 register_amendment_routes(WarRoomRequestHandler)
 register_provider_routes(WarRoomRequestHandler)
 register_review_routes(WarRoomRequestHandler)
+register_room_settings_routes(WarRoomRequestHandler)
 
 if __name__ == "__main__":
     main()

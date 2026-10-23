@@ -130,8 +130,24 @@ def test_completed_column_collapse_controls_in_html(ui_server):
     assert html.count("board-completed-collapse") >= 3
     for tier in ("epics", "features", "tasks"):
         assert f'data-board-tier="{tier}"' in html
+    epics_tier = html.split('data-tier="epics"')[1].split('data-tier="features"')[0]
+    assert "data-board-completed-history" in epics_tier
+    assert 'aria-expanded="false"' in epics_tier
+    assert "Expand" in epics_tier
+    assert "board-column-completed-collapsed" in epics_tier
     assert html.index("/static/board_focus.js") < html.index("/static/open_reviews_pane.js")
     assert html.index("/static/open_reviews_pane.js") < html.index("/static/war_room.js")
+
+
+def test_war_room_js_renders_completed_epics_history_link():
+    js_path = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    )
+    source = js_path.read_text(encoding="utf-8")
+    assert "renderCompletedEpicsHistory" in source
+    assert "completed_epics_history" in source
+    assert "board-action-link-unavailable" in source
+    assert "Repository history link unavailable." in source
 
 
 def test_war_room_js_renders_toast_body():
@@ -154,6 +170,15 @@ def test_war_room_js_renders_toast_body():
     assert "EPIC_CLOSE_DEADLINE_MS = 60000" in source
     assert 'setStatus("Closing epic " + epicId + "…", false)' in source
     assert '"Epic close timed out after 60s"' in source
+
+
+def test_war_room_js_explains_epic_close_comment_blockers():
+    source = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    ).read_text(encoding="utf-8")
+
+    assert 'body.reason === "open_human_comments"' in source
+    assert 'body.plan_url || ("/plan/" + epicId + "#plan-comments")' in source
 
 
 def test_task_execution_controls_and_board_polling_are_load_safe():

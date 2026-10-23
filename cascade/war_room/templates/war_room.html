@@ -92,19 +92,29 @@
               <h3>Epics</h3>
               <div class="board-column" data-column="1_backlog"></div>
               <div class="board-column" data-column="2_active"></div>
-              <div class="board-column board-column-completed" data-column="3_completed">
+              <div
+                class="board-column board-column-completed board-column-completed-collapsed"
+                data-column="3_completed"
+              >
                 <div class="board-column-header board-column-header-completed">
                   <span class="board-column-label">Completed</span>
-                  <button
-                    type="button"
-                    class="board-completed-collapse"
-                    data-board-completed-collapse
-                    data-board-tier="epics"
-                    aria-expanded="true"
-                    aria-label="Toggle completed epics column"
-                  >
-                    Collapse
-                  </button>
+                  <div class="board-column-header-completed-actions">
+                    <span
+                      class="board-completed-history"
+                      data-board-completed-history
+                      data-board-tier="epics"
+                    ></span>
+                    <button
+                      type="button"
+                      class="board-completed-collapse"
+                      data-board-completed-collapse
+                      data-board-tier="epics"
+                      aria-expanded="false"
+                      aria-label="Toggle completed epics column"
+                    >
+                      Expand
+                    </button>
+                  </div>
                 </div>
                 <p
                   class="board-completed-count"
@@ -201,6 +211,24 @@
                 <p class="flight-empty">Loading…</p>
               </div>
             </section>
+            <div id="room-settings-panel" class="room-settings-panel" hidden>
+              <label class="room-setting-toggle" for="room-stacked-pr-enabled">
+                <span class="room-setting-copy">
+                  <span class="room-setting-label">Stacked pull requests</span>
+                  <span class="room-setting-hint"
+                    >When enabled, approved features may dispatch before a completed predecessor
+                    merges. Affects future dispatch only.</span
+                  >
+                </span>
+                <input
+                  type="checkbox"
+                  id="room-stacked-pr-enabled"
+                  name="stacked_pr_enabled"
+                  role="switch"
+                />
+              </label>
+              <p id="room-settings-status" class="status-line" aria-live="polite"></p>
+            </div>
             <p class="chat-meta">Graph: <code id="chat-graph-id">${epic_graph_id}</code></p>
             <div id="chat-messages" class="chat-messages" role="log"></div>
             <form id="chat-compose" class="chat-compose">

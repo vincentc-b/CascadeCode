@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
-from cascade.board import read_doc
+from cascade.board import move_doc, read_doc
 from cascade.comments.store import comment
 from cascade.boss.epic_complete import reset_epic_close_prompt_surfaces
 from cascade.boss.epic_complete import EpicCompleteResult
@@ -467,7 +467,29 @@ def test_confirm_epic_complete_success_and_refusal(dispatch_board, tmp_path):
     code, body = _post(f"{base}/api/confirm_epic_complete", {"id": "epic_001"})
     assert code == HTTPStatus.OK
     assert body["ok"] is False
-    assert body["reason"] == "not_ready"
+    assert body["reason"] == "child_features_incomplete"
+    assert body["blocker_ids"] == ["feat_001", "feat_002", "feat_004"]
+
+
+def test_confirm_epic_complete_reports_open_comment_blocker(dispatch_board):
+    base, root = dispatch_board
+    move_doc("feat_001", "completed", root=root)
+    move_doc("feat_002", "completed", root=root)
+    move_doc("feat_004", "completed", root=root)
+    comment_id = comment(
+        "epic_001", "Scope", "Please settle this first.", author="human", root=root
+    )
+
+    status, body = _post(f"{base}/api/confirm_epic_complete", {"id": "epic_001"})
+
+    assert status == HTTPStatus.OK
+    assert body == {
+        "ok": False,
+        "reason": "open_human_comments",
+        "epic_id": "epic_001",
+        "blocker_ids": [comment_id],
+        "plan_url": "/plan/epic_001#plan-comments",
+    }
 
 
 def test_confirm_epic_complete_surfaces_single_attempt_failure(

@@ -150,11 +150,33 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
     from cascade.approvals import feature_approved
+    from cascade.review import feature_review_pending
 
     if not feature_approved(work_id, root=root):
         return _fail("not_approved")
-    if _epic_has_feature_awaiting_merge(meta.parent, root=root):
+    from cascade.stacked_dispatch import ensure_feature_dispatch_selection
+    from cascade.war_room.room_settings import effective_stacked_pr_enabled
+
+    stacked = effective_stacked_pr_enabled(work_id, meta.parent, root=root)
+    if not stacked:
+        for dep_id in meta.depends_on:
+            dep = board.by_id.get(dep_id)
+            if dep is not None and dep.tier == "feature" and feature_review_pending(
+                dep_id, root=root
+            ):
+                return _fail("feature_awaiting_merge")
+        if _epic_has_feature_awaiting_merge(meta.parent, root=root):
+            return _fail("feature_awaiting_merge")
+    from cascade.stacked_dispatch import feature_dispatch_blocked_by_sibling
+
+    if feature_dispatch_blocked_by_sibling(meta, board, root=root):
         return _fail("feature_awaiting_merge")
+    dispatch_plan = ensure_feature_dispatch_selection(
+        work_id, meta, board, root=root
+    )
+    if not dispatch_plan.ok:
+        return _fail(dispatch_plan.reason or "bad_state")
+    assert dispatch_plan.selection is not None
     from cascade.comments.gate import refusal_if_blocked
 
     if blocked := refusal_if_blocked(work_id, root=root):
@@ -174,7 +196,7 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
     epic_wt = get_integration_worktree(root, "epic", epic_id)
     if epic_wt is None:
         return _fail("bad_state")
-    base_ref = epic_wt.branch
+    base_ref = dispatch_plan.selection.base_branch
     if head_sha(root) is None:
         return _fail("bad_state")
 
@@ -349,13 +371,13 @@ def _place_task_active(
     if source_root.resolve() == board_root.resolve():
         save_doc(doc, previous_path=previous, root=board_root)
         return
-    write_doc(doc, root=board_root)
     _drop_stale_copies(
         work_id,
         tier=doc.meta.tier,
         keep=doc.meta.path,
         board_root=board_root,
     )
+    write_doc(doc, root=board_root)
     if previous.exists() and previous != doc.meta.path.resolve():
         previous.unlink()
         if has_git(source_root):
@@ -363,6 +385,11 @@ def _place_task_active(
 
 
 def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
+    if meta.tier == "feature" and meta.parent:
+        from cascade.stacked_dispatch import feature_dependency_ready
+        from cascade.war_room.room_settings import effective_stacked_pr_enabled
+
+        return feature_dependency_ready(meta, board, root=root)
     for dep_id in meta.depends_on:
         dep = board.by_id.get(dep_id)
         if dep is None or dep.status != "completed" or dep.path.parent.name != "3_completed":
@@ -413,13 +440,13 @@ def _relocate_active(work_id: str, *, dest_root: Path, trunk: Path) -> None:
     tier = doc.meta.tier
     doc.meta.status = "active"
     doc.meta.path = (dest_root / column_dir(tier, "active") / old_path.name).resolve()
-    write_doc(doc, root=dest_root)
     _drop_stale_copies(
         work_id,
         tier=doc.meta.tier,
         keep=doc.meta.path,
         board_root=dest_root,
     )
+    write_doc(doc, root=dest_root)
     if old_path.exists() and old_path != doc.meta.path.resolve():
         old_path.unlink()
         if has_git(source_root) and source_root.resolve() != dest_root.resolve():

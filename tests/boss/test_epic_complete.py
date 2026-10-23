@@ -8,6 +8,7 @@ from pathlib import Path
 from cascade.board.store import move_doc, read_doc
 from cascade.boss.epic_complete import (
     confirm_epic_complete,
+    confirm_epic_complete_result,
     epic_ready_to_close,
     on_feature_completed,
     reset_epic_close_prompt_surfaces,
@@ -70,6 +71,9 @@ def test_epic_ready_when_all_features_completed(tmp_path: Path) -> None:
 def test_epic_not_ready_when_child_feature_still_active(tmp_path: Path) -> None:
     root = _epic_board(tmp_path, feat_two_completed=False)
     assert epic_ready_to_close("epic_001", root=root) is False
+    result = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert result.reason == "child_features_incomplete"
+    assert result.blocker_ids == ("feat_002",)
 
 
 def test_epic_without_minted_features_is_not_ready(tmp_path: Path) -> None:
@@ -77,7 +81,8 @@ def test_epic_without_minted_features_is_not_ready(tmp_path: Path) -> None:
     add_doc(root, id="epic_001", title="Empty epic", tier="epic", status="active")
 
     assert epic_ready_to_close("epic_001", root=root) is False
-    assert confirm_epic_complete("epic_001", "human", root=root) is False
+    result = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert result.reason == "no_child_features"
     assert read_doc("epic_001", root=root).meta.status == "active"
 
 
@@ -101,6 +106,8 @@ def test_epic_not_ready_while_completed_feature_awaits_review(tmp_path: Path) ->
     )
 
     assert epic_ready_to_close("epic_001", root=root) is False
+    result = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert result.reason == "pending_feature_review"
 
 
 def test_human_confirm_moves_epic_and_emits_event(tmp_path: Path) -> None:
@@ -154,10 +161,12 @@ def test_non_human_confirm_refused_even_when_epic_already_completed(tmp_path: Pa
 
 def test_open_human_comment_on_epic_blocks(tmp_path: Path) -> None:
     root = _epic_board(tmp_path)
-    comment("epic_001", "Scope", "wait", author="human", root=root)
+    comment_id = comment("epic_001", "Scope", "wait", author="human", root=root)
 
     assert epic_ready_to_close("epic_001", root=root) is False
-    assert confirm_epic_complete("epic_001", "human", root=root) is False
+    result = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert result.reason == "open_human_comments"
+    assert result.blocker_ids == (comment_id,)
     assert read_doc("epic_001", root=root).meta.status == "active"
 
 

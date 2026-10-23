@@ -32,6 +32,9 @@
     attachmentLabel: document.getElementById("attachment-label"),
     btnDetach: document.getElementById("btn-detach"),
     epicChat: document.getElementById("epic-war-room-chat"),
+    roomSettingsPanel: document.getElementById("room-settings-panel"),
+    roomStackedPrEnabled: document.getElementById("room-stacked-pr-enabled"),
+    roomSettingsStatus: document.getElementById("room-settings-status"),
     flightPanel: document.getElementById("flight-report-panel"),
     flightBody: document.getElementById("flight-report-body"),
     featurePlaceholder: document.getElementById("feature-room-placeholder"),
@@ -86,6 +89,68 @@
 
   /** Statuses the dispatch law accepts for Activate / Dispatch (cascade/watchdog/dispatch.py _OPEN). */
   const OPEN_STATUSES = { backlog: true, ready_to_plan: true };
+
+  function isRoomGraphId(graphId) {
+    return graphId.indexOf("epic_") === 0 || graphId.indexOf("feat_") === 0;
+  }
+
+  let roomSettingsLoadToken = 0;
+
+  function setRoomSettingsStatus(msg, isError) {
+    if (!el.roomSettingsStatus) return;
+    el.roomSettingsStatus.textContent = msg || "";
+    el.roomSettingsStatus.classList.toggle("error", !!isError);
+  }
+
+  async function loadRoomSettings(graphId) {
+    if (!el.roomSettingsPanel || !el.roomStackedPrEnabled) return;
+    if (!isRoomGraphId(graphId)) {
+      el.roomSettingsPanel.hidden = true;
+      setRoomSettingsStatus("");
+      return;
+    }
+    el.roomSettingsPanel.hidden = false;
+    const token = ++roomSettingsLoadToken;
+    el.roomStackedPrEnabled.disabled = true;
+    setRoomSettingsStatus("Loading room settings…");
+    try {
+      const data = await apiGet(
+        "/api/room-settings/" + encodeURIComponent(graphId)
+      );
+      if (token !== roomSettingsLoadToken || graphId !== focusGraphId) return;
+      el.roomStackedPrEnabled.checked = !!data.stacked_pr_enabled;
+      setRoomSettingsStatus("");
+    } catch (err) {
+      if (token !== roomSettingsLoadToken) return;
+      setRoomSettingsStatus(err.message || "Failed to load room settings", true);
+    } finally {
+      if (token === roomSettingsLoadToken) {
+        el.roomStackedPrEnabled.disabled = false;
+      }
+    }
+  }
+
+  async function saveRoomSettings(enabled) {
+    const graphId = focusGraphId;
+    if (!isRoomGraphId(graphId) || !el.roomStackedPrEnabled) return;
+    el.roomStackedPrEnabled.disabled = true;
+    setRoomSettingsStatus("Saving…");
+    try {
+      const data = await apiPost("/api/room-settings/" + encodeURIComponent(graphId), {
+        stacked_pr_enabled: enabled,
+      });
+      if (graphId !== focusGraphId) return;
+      el.roomStackedPrEnabled.checked = !!data.stacked_pr_enabled;
+      setRoomSettingsStatus("");
+    } catch (err) {
+      setRoomSettingsStatus(err.message || "Failed to save room settings", true);
+      await loadRoomSettings(graphId);
+    } finally {
+      if (graphId === focusGraphId) {
+        el.roomStackedPrEnabled.disabled = false;
+      }
+    }
+  }
 
   function setStatus(msg, isError) {
     el.chatStatus.textContent = msg || dispatchBanner;
@@ -302,6 +367,34 @@
     return tierEl.querySelector('[data-column="3_completed"]');
   }
 
+  function unavailableActionLink(label, title) {
+    const link = document.createElement("span");
+    link.className = "board-action-link board-action-link-unavailable";
+    link.setAttribute("role", "link");
+    link.setAttribute("aria-disabled", "true");
+    link.title = title;
+    link.textContent = label;
+    return link;
+  }
+
+  function renderCompletedEpicsHistory(tierEl, view) {
+    if (!tierEl) return;
+    const slot = tierEl.querySelector('[data-board-completed-history][data-board-tier="epics"]');
+    if (!slot) return;
+    slot.innerHTML = "";
+    if (!view || !view.board) return;
+    const history = view.board.completed_epics_history;
+    if (!history) return;
+    const label = history.path || "Completed epics history";
+    if (history.available && history.url) {
+      slot.appendChild(actionLink(label, history.url));
+    } else {
+      slot.appendChild(
+        unavailableActionLink(label, "Repository history link unavailable.")
+      );
+    }
+  }
+
   function renderCompletedColumn(tierEl, tier, visibleView) {
     const columnWrap = completedColumnElements(tierEl);
     if (!columnWrap || !boardFocus || !BoardFocusApi) return;
@@ -360,6 +453,9 @@
         });
       });
       renderCompletedColumn(tierEl, tier, visibleView);
+      if (tier === "epics") {
+        renderCompletedEpicsHistory(tierEl, view);
+      }
     });
   }
 
@@ -674,7 +770,22 @@
         setStatus("Epic " + epicId + " closed.", false);
         await refreshBoard();
       } else {
-        setStatus("Epic close refused: " + (body.reason || "not_ready"), true);
+        const blockers = (body.blocker_ids || []).join(", ");
+        if (body.reason === "open_human_comments") {
+          setStatus(
+            "Epic close refused: resolve open human comments " + blockers +
+              " in " + (body.plan_url || ("/plan/" + epicId + "#plan-comments")),
+            true
+          );
+        } else if (body.reason === "child_features_incomplete") {
+          setStatus("Epic close refused: child features incomplete: " + blockers, true);
+        } else if (body.reason === "no_child_features") {
+          setStatus("Epic close refused: this epic has no child features.", true);
+        } else if (body.reason === "pending_feature_review") {
+          setStatus("Epic close refused: a child feature review is still pending.", true);
+        } else {
+          setStatus("Epic close refused: " + (body.reason || "not_ready"), true);
+        }
       }
     } catch (err) {
       const timedOut = err && (err.name === "TimeoutError" || err.name === "AbortError");
@@ -888,6 +999,9 @@
         ? "Attached: " + attachedGraphId
         : "Epic War Room";
     el.btnDetach.hidden = !attachedGraphId;
+    loadRoomSettings(focusGraphId).catch(function (err) {
+      setRoomSettingsStatus(err.message || "Failed to load room settings", true);
+    });
   }
 
   let boardRefreshInFlight = null;
@@ -1648,6 +1762,13 @@
   if (el.btnCancelBrief) el.btnCancelBrief.addEventListener("click", function () { el.briefDialog.close(); });
   if (el.briefForm) el.briefForm.addEventListener("submit", submitBrief);
   if (el.btnPullMain) el.btnPullMain.addEventListener("click", pullMain);
+  if (el.roomStackedPrEnabled) {
+    el.roomStackedPrEnabled.addEventListener("change", function () {
+      saveRoomSettings(el.roomStackedPrEnabled.checked).catch(function (err) {
+        setRoomSettingsStatus(err.message || "Failed to save room settings", true);
+      });
+    });
+  }
   if (el.btnRefreshOpenReviews) {
     el.btnRefreshOpenReviews.addEventListener("click", function () {
       refreshOpenReviews({ userInitiated: true }).catch(function (err) {

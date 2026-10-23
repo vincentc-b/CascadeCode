@@ -55,6 +55,68 @@ def detect_forge(root: Path, remote: str = "origin") -> Forge | None:
     return None
 
 
+def _strip_git_suffix(name: str) -> str:
+    return name[:-4] if name.endswith(".git") else name
+
+
+def remote_repo_web_base(url: str, *, forge: Forge) -> str | None:
+    """Normalize an origin remote URL to a forge web repo root."""
+
+    raw = url.strip()
+    if forge == "github":
+        match = re.match(r"git@github\.com:(?P<owner>[^/]+)/(?P<repo>.+)$", raw)
+        if match:
+            repo = _strip_git_suffix(match.group("repo"))
+            return f"https://github.com/{match.group('owner')}/{repo}"
+        match = re.match(r"https?://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)", raw)
+        if match:
+            repo = _strip_git_suffix(match.group("repo"))
+            return f"https://github.com/{match.group('owner')}/{repo}"
+        return None
+
+    match = re.match(r"git@(?P<host>[^:]+):(?P<path>.+)$", raw)
+    if match:
+        path = _strip_git_suffix(match.group("path"))
+        return f"https://{match.group('host')}/{path}"
+    match = re.match(r"https?://(?P<host>[^/]+)/(?P<path>.+)$", raw)
+    if match:
+        path = _strip_git_suffix(match.group("path").rstrip("/"))
+        return f"https://{match.group('host')}/{path}"
+    return None
+
+
+def completed_epics_history_url(
+    root: Path,
+    *,
+    remote: str = "origin",
+    rel_path: str = "docs/epics/3_completed",
+) -> str | None:
+    """Web URL for browsing all completed epic documents, when origin metadata allows."""
+
+    from cascade.board.gitutil import has_git
+    from cascade.workspace.errors import WorkspaceError
+    from cascade.workspace.trunk import resolve_product_trunk
+
+    if not has_git(root):
+        return None
+    raw_url = remote_url(root, remote)
+    if not raw_url:
+        return None
+    forge = detect_forge(root, remote)
+    if forge is None:
+        return None
+    base = remote_repo_web_base(raw_url, forge=forge)
+    if base is None:
+        return None
+    try:
+        branch = resolve_product_trunk(root)
+    except WorkspaceError:
+        return None
+    if forge == "github":
+        return f"{base}/tree/{branch}/{rel_path}"
+    return f"{base}/-/tree/{branch}/{rel_path}"
+
+
 def forge_ready(root: Path, remote: str = "origin") -> bool:
     forge = detect_forge(root, remote)
     command = "gh" if forge == "github" else "glab" if forge == "gitlab" else None
@@ -161,7 +223,7 @@ def merge_request_snapshot(
     if mr.forge == "github":
         args = [
             "gh", "pr", "view", mr.url, "--json",
-            "state,isDraft,comments,reviews,url",
+            "state,isDraft,comments,reviews,url,baseRefName",
         ]
     else:
         args = ["glab", "mr", "view", mr.url, "--output", "json"]
@@ -193,12 +255,19 @@ def merge_request_snapshot(
                 except json.JSONDecodeError:
                     pass
         state = str(raw.get("state") or "").lower()
+        target_branch = str(raw.get("baseRefName") or "").strip()
     else:
         comments = list(raw.get("notes") or raw.get("discussions") or [])
         state = str(raw.get("state") or "").lower()
         if raw.get("merged_at"):
             state = "merged"
-    return {"state": state, "comments": comments, "url": mr.url}
+        target_branch = str(
+            raw.get("target_branch") or raw.get("targetBranch") or ""
+        ).strip()
+    out: dict[str, object] = {"state": state, "comments": comments, "url": mr.url}
+    if target_branch:
+        out["target_branch"] = target_branch
+    return out
 
 
 def reply_to_merge_request(

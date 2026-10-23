@@ -125,6 +125,41 @@ def test_attach_returns_briefing_and_emits_human_attached(briefing_board) -> Non
     )
 
 
+def test_attach_accepts_hierarchical_feature_id(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=True)
+    feature_id = "feat_007_001"
+    add_doc(root, id="epic_007", title="Root epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id=feature_id, title="Feature", tier="feature", parent="epic_007")
+    pin_parent(feature_id, "epic_007", root=root)
+    from cascade.epic.boot import install_epic_boot_hook
+    from cascade.feature.boot import install_feature_boot_hook
+
+    install_epic_boot_hook(root)
+    install_feature_boot_hook(root)
+    commit_board(root)
+    assert activate_epic("epic_007", "human", root=root).ok
+    approve_board_feature(root, feature_id)
+    assert dispatch_feature(feature_id, "human", root=root).ok
+
+    port = _free_port()
+    server = serve(root=root, host="127.0.0.1", port=port)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        status, attach = _post(
+            f"http://127.0.0.1:{port}/api/attach",
+            {"graph_id": feature_id},
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert status == HTTPStatus.OK
+    assert attach["doc"]["meta"]["id"] == feature_id
+    assert (root / ".cascade" / "checkpoints" / f"{feature_id}.sqlite").is_file()
+
+
 def test_detach_emits_human_detached(briefing_board) -> None:
     base, root = briefing_board
     _post(f"{base}/api/attach", {"graph_id": "feat_001"})
