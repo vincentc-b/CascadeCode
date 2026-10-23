@@ -94,14 +94,6 @@ _APPROVAL_POST_PATHS = frozenset(
 )
 
 
-def _merge_failure_status(reason: str | None) -> HTTPStatus:
-    if reason == "task_not_found":
-        return HTTPStatus.NOT_FOUND
-    if reason == "merge_conflict":
-        return HTTPStatus.CONFLICT
-    return HTTPStatus.BAD_REQUEST
-
-
 def _boss_view_to_dict(view: BossView) -> dict[str, object]:
     return {
         "dispatchable_features": list(view.dispatchable_features),
@@ -378,6 +370,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/dispatch_feature": lambda h, b: h._handle_dispatch_feature(b),
             "/api/dispatch_task": lambda h, b: h._handle_dispatch_task(b),
             "/api/merge_task_branch": lambda h, b: h._handle_merge_task_branch(b),
+            "/api/update_integration_branch": lambda h, b: h._handle_update_integration_branch(
+                b
+            ),
             "/api/ask_boss_dispatch": lambda h, b: h._handle_ask_boss_dispatch(b),
             "/api/confirm_epic_complete": lambda h, b: h._handle_confirm_epic_complete(b),
             "/api/boss_drain": lambda h, b: h._handle_boss_drain(b),
@@ -485,17 +480,42 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         result = dispatch_task(work_id, "human", skills=skills, root=self.server.root)
         self._json_response(HTTPStatus.OK, dispatch_result_to_dict(result))
 
+    def _handle_update_integration_branch(self, body: dict[str, Any]) -> None:
+        from cascade.war_room.branch_sync import (
+            branch_sync_update_to_dict,
+            run_branch_sync_update,
+            sync_failure_http_status,
+        )
+
+        work_id = self._require_work_id(body)
+        if work_id is None:
+            return
+        result = run_branch_sync_update(work_id, root=self.server.root)
+        payload = branch_sync_update_to_dict(result, work_id=work_id)
+        if result.ok:
+            self._json_response(HTTPStatus.OK, payload)
+            return
+        self._json_response(sync_failure_http_status(result.reason), payload)
+
     def _handle_merge_task_branch(self, body: dict[str, Any]) -> None:
+        from cascade.war_room.branch_sync import (
+            lifecycle_merge_failure_payload,
+            sync_failure_http_status,
+        )
+
         task_id = self._require_work_id(body)
         if task_id is None:
             return
         result = merge_task_branch(task_id, root=self.server.root)
         if not result.ok:
-            status = _merge_failure_status(result.reason)
-            self._json_response(
-                status,
-                {"ok": False, "reason": result.reason, "branch": result.branch, "task_id": task_id},
+            status = sync_failure_http_status(result.reason)
+            payload = lifecycle_merge_failure_payload(
+                reason=result.reason,
+                conflict_paths=result.conflict_paths,
+                branch=result.branch,
+                task_id=task_id,
             )
+            self._json_response(status, payload)
             return
         on_task_merged(task_id, root=self.server.root)
         self._json_response(
@@ -516,6 +536,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if result.ok:
             self._json_response(HTTPStatus.OK, {"ok": True, "epic_id": epic_id})
             return
+        from cascade.war_room.branch_sync import actionable_sync_failure_payload
+
         payload: dict[str, Any] = {
             "ok": False,
             "reason": result.reason or "close_failed",
@@ -525,6 +547,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             payload["blocker_ids"] = list(result.blocker_ids)
         if result.reason == "open_human_comments":
             payload["plan_url"] = f"/plan/{epic_id}#plan-comments"
+        sync_payload = actionable_sync_failure_payload(
+            reason=result.reason,
+            conflict_paths=result.conflict_paths,
+        )
+        for key in ("guidance", "conflict_paths", "merge_aborted"):
+            if key in sync_payload:
+                payload[key] = sync_payload[key]
         self._json_response(
             HTTPStatus.OK,
             payload,
