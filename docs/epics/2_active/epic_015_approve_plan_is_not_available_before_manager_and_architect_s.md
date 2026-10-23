@@ -176,6 +176,11 @@ _None. Implementation discovery may choose storage and endpoint names but must p
   Chose Bind sign-offs to the canonical plan revision so material plan edits make prior sign-offs stale..
   Rationale: Human approval must apply to the plan the two roles actually reviewed, without introducing a second version counter.
   Honors: The core requirement that manager and architect sign off on the plan before approval..
+
+- `dec_003` · 2026-10-23 · Epic Manager · **Planning status semantics**
+  Chose Use Planning in progress for unmet readiness and Ready for review for met readiness; do not implement live agent presence..
+  Rationale: This provides the requested wait/review signal without adding unreliable presence infrastructure.
+  Honors: The requested churning indicator and distinct feedback-ready treatment..
 ## Amendment log
 
 _(none)_
