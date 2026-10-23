@@ -39,6 +39,7 @@ _MAINTENANCE_INTERVAL_SECONDS = 10.0
 def clear_watchdog_memory() -> None:
     """Forget toast suppression. Tests call this so cases do not leak."""
 
+    from cascade.workspace.convergence import clear_convergence_diagnostic_memory
     from cascade.workspace.flight import clear_flight_memory
     from cascade.workspace.queue_observability import clear_queue_observability_memory
 
@@ -48,6 +49,7 @@ def clear_watchdog_memory() -> None:
         _work_queue_signatures.clear()
         clear_flight_memory()
     clear_queue_observability_memory()
+    clear_convergence_diagnostic_memory()
 
 
 def watchdog_tick(root: Path | None = None) -> None:
@@ -81,6 +83,9 @@ def watchdog_tick(root: Path | None = None) -> None:
 
     prune_completed_work_queues(root=repo)
     scan_graph_queue_stalls(repo)
+    from cascade.workspace.convergence import publish_convergence_diagnostics
+
+    publish_convergence_diagnostics(root=repo)
 
 
 def _event_tick(root: Path) -> None:
