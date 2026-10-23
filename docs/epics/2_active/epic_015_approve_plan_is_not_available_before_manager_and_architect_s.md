@@ -19,6 +19,7 @@ provider: codex
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
+plan_approved_at: '2026-10-23T23:43:06.774872+00:00'
 ---
 # Approve plan only after manager and architect sign-off
 
