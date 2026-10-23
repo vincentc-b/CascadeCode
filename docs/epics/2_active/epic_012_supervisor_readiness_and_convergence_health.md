@@ -8,6 +8,7 @@ children:
 - feat_012_001
 - feat_012_002
 - feat_012_003
+- feat_012_004
 depends_on: []
 owners:
 - epic_manager
@@ -81,6 +82,7 @@ flowchart LR
 No new daemon, database, hosted monitor, or alternate lifecycle store is required.
 
 ## Feature breakdown
+- feat_012_004
 
 1. **feat_012_001 — Supervisor readiness state and non-blocking recovery**
    Establish the health projection, startup ordering, API/War Room presentation, and evidence that recovered model turns cannot hold watchdog startup.
