@@ -38,7 +38,7 @@ def compute_boss_view(*, root: Path | None = None) -> BossView:
 
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
-        if meta.tier == "feature" and _backlog_open(meta):
+        if meta.tier == "feature" and _backlog_open(meta) and meta.parent:
             readiness = compute_feature_readiness(work_id, root=repo, board=board)
             if readiness is not None and feature_boss_dispatchable(readiness):
                 dispatchable_features.append(work_id)
@@ -68,7 +68,6 @@ def _backlog_open(meta: WorkMeta) -> bool:
 def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
     if meta.tier == "feature" and meta.parent:
         from cascade.stacked_dispatch import feature_dependency_ready
-        from cascade.war_room.room_settings import effective_stacked_pr_enabled
 
         return feature_dependency_ready(meta, board, root=root)
     for dep_id in meta.depends_on:

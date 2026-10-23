@@ -9,7 +9,6 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 
@@ -17,7 +16,13 @@ from cascade.war_room.server import serve
 from cascade.war_room.toasts import events_to_toasts
 from cascade.watchdog import activate_epic, append_event, dispatch_feature, read_events
 from cascade.watchdog.types import Event
-from tests.support import TEST_MODEL_ID, add_doc, install_fake_planning_turns, make_repo, approve_board_feature
+from tests.support import (
+    TEST_MODEL_ID,
+    add_doc,
+    approve_board_feature,
+    install_fake_planning_turns,
+    make_repo,
+)
 
 
 def _free_port() -> int:

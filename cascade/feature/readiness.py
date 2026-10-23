@@ -49,7 +49,7 @@ def compute_feature_readiness(
         return FeatureReadiness(approved=approved, blockers=blockers)
 
     if not meta.parent:
-        return FeatureReadiness(approved=approved, blockers=blockers)
+        return FeatureReadiness(approved=approved, blockers=["epic_inactive"])
 
     if not _backlog_open(meta):
         blockers.append("not_in_backlog")

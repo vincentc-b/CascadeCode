@@ -372,7 +372,6 @@ def _place_task_active(
 def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
     if meta.tier == "feature" and meta.parent:
         from cascade.stacked_dispatch import feature_dependency_ready
-        from cascade.war_room.room_settings import effective_stacked_pr_enabled
 
         return feature_dependency_ready(meta, board, root=root)
     for dep_id in meta.depends_on:

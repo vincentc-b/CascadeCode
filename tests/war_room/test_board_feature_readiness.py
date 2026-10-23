@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import threading
-
+from datetime import date
 from http import HTTPStatus
 
 import pytest
 
+from cascade.board.parse import render_doc
+from cascade.board.paths import column_dir, column_for_status, slugify
+from cascade.board.types import WorkDoc, WorkMeta
 from cascade.boss.view import compute_boss_view
 from cascade.war_room.server import serve
-from tests.support import add_doc, approve_board_feature, make_repo
+from tests.support import FEATURE_BODY, add_doc, approve_board_feature, make_repo
 from tests.war_room.test_http_read import _free_port, _get
 
 
@@ -25,6 +28,31 @@ def _feature_row(payload: dict, feature_id: str) -> dict:
 def _has_blocker(blockers: list[str], code: str) -> bool:
     prefix = code + ":"
     return any(item == code or item.startswith(prefix) for item in blockers)
+
+
+def _write_parentless_feature(root, *, id: str, title: str) -> None:
+    column = column_for_status("backlog")
+    path = root / column_dir("feature", column) / f"{id}_{slugify(title)}.md"
+    doc = WorkDoc(
+        meta=WorkMeta(
+            id=id,
+            title=title,
+            tier="feature",
+            status="backlog",
+            parent=None,
+            children=[],
+            depends_on=[],
+            owners=["tester"],
+            skills=[],
+            parent_rev=None,
+            created=date(2026, 10, 9),
+            updated=date(2026, 10, 9),
+            path=path,
+        ),
+        body=FEATURE_BODY,
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_doc(doc), encoding="utf-8")
 
 
 @pytest.fixture
@@ -60,6 +88,7 @@ def war_room_server(tmp_path):
         tier="feature",
         parent="epic_001",
     )
+    _write_parentless_feature(root, id="feat_005", title="No parent epic")
     approve_board_feature(root, "feat_003")
     approve_board_feature(root, "feat_004")
     port = _free_port()
@@ -93,5 +122,9 @@ def test_board_serializes_backlog_feature_readiness(war_room_server) -> None:
     assert ready["readiness"]["approved"] is True
     assert ready["readiness"]["blockers"] == []
 
+    orphan = _feature_row(payload, "feat_005")
+    assert _has_blocker(orphan["readiness"]["blockers"], "epic_inactive")
+
     boss = compute_boss_view(root=root)
     assert "feat_004" in boss.dispatchable_features
+    assert "feat_005" not in boss.dispatchable_features
