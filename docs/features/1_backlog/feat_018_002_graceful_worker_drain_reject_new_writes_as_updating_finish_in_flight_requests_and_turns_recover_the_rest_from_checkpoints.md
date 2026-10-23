@@ -30,7 +30,16 @@ epic_018
 
 ## Intent
 
-When the worker decides to exit for an update or operator stop, it enters **draining**: it stops starting new work, lets accepted work finish within a bound, cancels what is left safely, and leaves it to the existing checkpoint resume path (`resume_legally_active_graphs`) in the next worker. Because resume re-runs an interrupted role node from the start, every board tool must be replay-safe and every board write must survive a kill (epic dec_005, dec_007).
+When the worker decides to exit for an update or operator stop, it enters **draining**: it stops starting new work, lets accepted work finish within a bound, cancels what is left safely, and leaves it to the existing checkpoint resume path (`resume_legally_active_graphs`) in the next worker. Because resume re-runs an interrupted role node from the start, every board tool must be replay-safe and every board write must survive a kill (epic dec_005, dec_007, dec_010).
+
+## Builds on feat_018_001 (completed)
+
+Per the epic's "Handoff seams from feat_018_001" (dec_009, dec_010), this feature extends 001's code rather than editing its launcher loop:
+
+- The drain goes **inside** 001's single worker shutdown entry point, for both reasons (`update` and `stop`). feat_018_003 adds its preflight in front of that entry point for `update` only; do not move or duplicate it.
+- The launcher already forwards an operator stop once and waits without a short timeout, so the drain needs no launcher change.
+- Agents, MCP tool servers and git stay in the worker's process group; this feature must not introduce `setsid` / `start_new_session` / `process_group`.
+- Before building, confirm these seams against the merged 001 code. If one is missing or shaped differently, raise an upward question rather than reworking 001's launcher loop inside this feature.
 
 ## Acceptance
 
@@ -40,10 +49,10 @@ When the worker decides to exit for an update or operator stop, it enters **drai
 - Every response while draining sets `Connection: close`, so idle keep-alive connections do not hold handler threads.
 - Handler threads become tracked, non-daemon threads (bounded by `MAX_CONCURRENT_REQUESTS`) and are joined with a bound of the longest route deadline plus margin (about 65s). Handlers still running after that are logged and abandoned. An accepted write within its route deadline is never cut off mid-handler.
 
-### Turn drain and cancellation (epic dec_007)
+### Turn drain and cancellation (epic dec_007, dec_010)
 
 - The watchdog stops dispatching new model turns and queue deliveries once draining begins.
-- In-flight model turns get a bounded drain window (default 120s, `cascade.toml` override). At expiry the worker sends SIGTERM to each agent's process group, waits 5s, then exits 75; the launcher's `killpg` (feature 1) covers anything left. HTTP join and turn drain run concurrently.
+- In-flight model turns get a bounded drain window (default 120s, `cascade.toml` override). At expiry the worker sends SIGTERM to each agent CLI **pid** (agents stay in the worker's process group, per dec_010), waits 5s, then exits with the shutdown reason's code (75 for update, 0 for stop). The launcher's `killpg` of the worker group (feature 1) covers anything left, including MCP tool-server grandchildren. HTTP join and turn drain run concurrently.
 - Cancelled turns are resumed once by the next worker from durable checkpoints. Queued events that arrive during drain stay in their durable queues and are delivered by the next worker.
 
 ### Replay-safe board effects (epic dec_005, dec_007)
@@ -64,7 +73,7 @@ When the worker decides to exit for an update or operator stop, it enters **drai
 
 ## Out of scope
 
-Zero-downtime overlap of old and new workers. Per-tool-call checkpointing and a durable cross-worker effect journal (cut in epic). Stale `index.lock` sweep (feature 1).
+Zero-downtime overlap of old and new workers. Per-tool-call checkpointing and a durable cross-worker effect journal (cut in epic). Stale `index.lock` sweep (feature 1). Preflight, backoff and status file (feature 3). Changes to the launcher loop.
 
 ## Data structures
 
@@ -87,7 +96,8 @@ _(empty — Feature Team mints tasks after dispatch)_
 
 ## Risks & upward questions
 
-- The replay-safe tools and atomic writes do not depend on feature 1's launcher. If feature 1 slips, the Feature Team may land them first as a standalone task; they also fix duplicate effects after ordinary crashes.
+- The replay-safe tools and atomic writes are independent of the drain and can be the first task; they also fix duplicate effects after ordinary crashes.
+- feat_018_003 works in the same shutdown entry point in parallel. Keep the drain inside it and the preflight in front of it so the two merge without conflict.
 
 ## Decision log
 
