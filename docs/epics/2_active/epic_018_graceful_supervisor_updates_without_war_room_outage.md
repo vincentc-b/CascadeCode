@@ -120,6 +120,11 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
   Chose Cut blue/green overlap of two workers, in-process importlib hot reload, shipped systemd/launchd units, and Windows support.
   Rationale: Keeping the socket bound in the launcher already removes refused connections, so overlap buys only seconds and costs the single-supervisor guarantee. Hot reload mixes modules. Daemon units and Windows serve no stated user problem and fcntl locking is already POSIX-only
   Honors: Single-supervisor invariant; no mixed modules; avoid platform-specific daemon assumptions.
+
+- `dec_003` · 2026-10-23 · Epic Manager · **Feature breakdown**
+  Chose Three features: feat_018_001 (launcher/worker relaunch) first; feat_018_002 (graceful drain) and feat_018_003 (preflight, backoff, degraded responder, health) in parallel after it. Each owns its integration tests against a real cascade up subprocess; no separate test-only feature.
+  Rationale: 001 alone removes the outage and is the smallest shippable slice. 002 and 003 touch different seams (worker shutdown vs launcher retry/status) so they can proceed concurrently. System-level tests per feature give high signal without a redundant test feature
+  Honors: Bounded downtime and restart-storm prevention; integration-test success criterion; frugal testing.
 ## Amendment log
 
 _(none)_
