@@ -2,16 +2,18 @@
 id: feat_020_002
 title: War Room feature approval control with end-to-end late-mint test
 tier: feature
-status: backlog
+status: completed
 parent: epic_020
-children: []
+children:
+- task_020_002_001
+- task_020_002_002
 depends_on:
 - feat_020_001
 owners:
 - feature_lead
 - feature_architect
 skills: []
-parent_rev: null
+parent_rev: 699ae822358ba89462451b1c126fedd6597644de
 created: '2026-10-23'
 updated: '2026-10-23'
 provider: cursor
@@ -76,6 +78,8 @@ flowchart TD
 ```
 
 ## Task breakdown
+- task_020_002_002
+- task_020_002_001
 
 _(empty — Feature Team mints tasks after dispatch)_
 
@@ -86,3 +90,7 @@ None.
 ## Decision log
 
 None yet.
+
+## Closeout
+
+Completed child work: `task_020_002_001` (War Room feature row: approve control, request feedback, and blocker text), `task_020_002_002` (End-to-end integration test: late-minted feature approval and single dispatch).
