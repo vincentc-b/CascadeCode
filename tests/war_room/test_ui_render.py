@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 import socket
+import subprocess
 import threading
 import urllib.request
 from http import HTTPStatus
@@ -209,7 +211,7 @@ def test_task_execution_controls_and_board_polling_are_load_safe():
     assert '"Retry is available only when execution is blocked."' in source
     assert 'boardRefreshInFlight = apiGet("/api/board?_=" + Date.now())' in source
     assert source.count('apiGet("/api/board') == 1
-    assert "return refreshBoard({ refreshRelated: false })" in source
+    assert "return refreshBoard({ refreshRelated: false, forceFresh: false })" in source
     assert "setInterval(pollBoard" not in source
     assert "scheduleBoardPoll(boardPollDelayMs)" in source
     assert "Math.min(BOARD_POLL_MAX_MS, boardPollDelayMs * 2)" in source
@@ -232,6 +234,15 @@ def test_startup_does_not_duplicate_board_related_requests():
     assert "refreshBossView();" not in bootstrap
     assert "pollChatSidecar()," not in bootstrap
     assert "relatedRefreshInFlight" in source
+
+
+def test_war_room_refresh_races():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not on PATH")
+    cases = Path(__file__).with_name("war_room_refresh_races.mjs")
+    result = subprocess.run([node, str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_task_execution_status_styles_include_healthy_and_blocked_states():

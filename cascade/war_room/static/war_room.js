@@ -1058,11 +1058,14 @@
     const userInitiated = !options || options.userInitiated !== false;
     try {
       const messages = await fetchChatMessages(graphId);
+      if (graphId !== focusGraphId) return [];
       renderChatMessages(messages);
       if (userInitiated) clearChatPollDiagnostic();
       return messages;
     } catch (err) {
-      reportChatLoadFailure(err, { userInitiated: userInitiated });
+      if (graphId === focusGraphId) {
+        reportChatLoadFailure(err, { userInitiated: userInitiated });
+      }
       return [];
     }
   }
@@ -1176,9 +1179,16 @@
   let boardRefreshInFlight = null;
   let relatedRefreshInFlight = null;
 
-  /** Share the expensive board request across startup, polling, and user actions. */
-  function loadBoardView() {
-    if (boardRefreshInFlight) return boardRefreshInFlight;
+  /** Share idle reads, but fetch again after an action if an older read is pending. */
+  function loadBoardView(forceFresh) {
+    if (boardRefreshInFlight) {
+      if (forceFresh) {
+        return boardRefreshInFlight.catch(function () {}).then(function () {
+          return loadBoardView();
+        });
+      }
+      return boardRefreshInFlight;
+    }
     boardRefreshInFlight = apiGet("/api/board?_=" + Date.now())
       .then(function (view) {
         renderBoard(view);
@@ -1201,8 +1211,9 @@
 
   async function refreshBoard(options) {
     const refreshRelated = !options || options.refreshRelated !== false;
+    const forceFresh = !options || options.forceFresh !== false;
     try {
-      await loadBoardView();
+      await loadBoardView(forceFresh);
       if (refreshRelated) {
         await refreshRelatedPanels();
       }
@@ -1215,7 +1226,7 @@
 
   /** Keep lifecycle controls current even when no toast is emitted or a toast is replayed. */
   function pollBoard() {
-    return refreshBoard({ refreshRelated: false });
+    return refreshBoard({ refreshRelated: false, forceFresh: false });
   }
 
   const BOARD_POLL_BASE_MS = 3000;
