@@ -88,7 +88,7 @@ Consequences and contract:
 - Doc writes become atomic (write a temp file in the same directory, then `os.replace`). Together with the stale `index.lock` sweep, this means a kill can never corrupt a doc or block the next commit.
 - "Recovered exactly once" therefore means the following: each interrupted turn is resumed once, and none of its landed effects is applied twice. A resumed model may still choose *different* wording for something it already did. That is the same as an operator re-running a turn. It is acceptable and is not deduplicated.
 - Per-tool-call checkpointing was rejected. A provider CLI session cannot be resumed partway through, so the node would still re-run from the start. It would add graph machinery without removing the replay.
-- **Cancellation is a normal path, not a rare fallback.** `DEFAULT_CLI_TIMEOUT_SEC` is 3600s, so turns can far outlast any sensible drain window. When the window expires, the worker sends SIGTERM to each agent's process group, waits a short grace period (5s), and then exits 75. The launcher's `killpg` covers anything left.
+- **Cancellation is a normal path, not a rare fallback.** `DEFAULT_CLI_TIMEOUT_SEC` is 3600s, so turns can far outlast any sensible drain window. When the window expires, the worker sends SIGTERM to each agent CLI process (by pid; agents stay in the worker's process group, see dec_010), waits a short grace period (5s), and then exits 75. The launcher's `killpg` of the worker's group then covers anything left, including MCP tool-server grandchildren.
 
 ### HTTP handler drain (resolved by Epic Architect)
 
@@ -104,6 +104,7 @@ Consequences and contract:
 - Treat graph checkpoints, queues, comments, and worktree state as durable handoff boundaries.
 - Every board tool effect must be replay-safe, because a resumed turn re-runs its whole role node. New tools that append or create must declare their natural idempotency key.
 - A board write interrupted by a kill must not corrupt a doc or leave a lock that blocks the next commit.
+- Every subprocess the worker starts (agent CLIs, MCP tool servers, git) stays in the worker's process group. Nothing under the worker may call `setsid` or use `start_new_session` / `process_group`, or the launcher's `killpg` cannot reach it.
 - Avoid platform-specific daemon assumptions where possible; define a clear launcher/process contract for environments that host Cascade.
 - Bound listener downtime and prevent restart storms through readiness checks, retry limits, and backoff.
 - Keep operator-initiated shutdown distinct from source-triggered update restart.
@@ -130,9 +131,12 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
 
 feat_018_002 and feat_018_003 start from 001's code in parallel. So they do not rewrite the same lines, 001 ships these seams in their simplest form and nothing beyond them:
 
-- **One worker shutdown path.** Every worker exit (source change or operator stop) goes through a single entry point that stops the watchdog and the server and exits with the contract code. In 001 it does no drain. 002 adds the drain inside it; 003 adds the preflight in front of it.
+- **One worker shutdown path, with a reason.** Every worker exit goes through a single entry point that takes a reason (`update` or `stop`), stops the watchdog and the server, and exits with the contract code (75 or 0). In 001 it does no drain. 002 adds the drain inside it for both reasons; 003 adds the preflight in front of it for `update` only.
+- **Operator stop is forwarded once and waited out.** The launcher forwards an operator SIGINT/SIGTERM to the worker pid as SIGTERM, and the worker's handler calls the shutdown entry point with `stop`. The launcher then waits for the worker without a short timeout, because 002's drain can take about max(turn window, 65s) + 5s. A second operator signal makes the launcher `killpg` the worker group at once. Fixing this in 001 means 002 never edits the launcher loop.
+- **Agents stay in the worker's process group.** 001 spawns the worker as a process-group leader and must not move agent CLIs or their MCP tool servers into their own sessions. 002 cancels turns by signalling agent pids, and the launcher's `killpg` sweeps the rest.
 - **One launcher state-transition point.** Launcher state changes (serving, restarting, stopping) go through one function that logs a stderr line. 003 makes it also write `supervisor_status.json`; 001 does not write the file.
-- **Readiness means serving.** The worker writes to the readiness pipe only once the War Room is serving on the inherited fd. 003's backoff and its 60s counter reset key off this signal, so its meaning is fixed.
+- **Readiness means serving.** The worker starts serving on the inherited fd *before* running `resume_legally_active_graphs`, and writes to the readiness pipe once serving. That lets the kernel backlog drain immediately instead of waiting on resume. 003's backoff and its 60s counter reset key off this signal, so its meaning is fixed.
+- **Source fingerprint is a stdlib-only function.** It lives in a module with no Cascade imports beyond the stdlib, and the launcher imports it once at start. The worker uses it for change detection; 003's degraded responder reuses it in the launcher to relaunch on the next source change without importing changing modules.
 - **Minimal crash relaunch.** In 001, an exit other than 0 or 75 relaunches after a fixed short delay (about 1s) so a crash loop cannot spin hot. Exponential backoff, attempt limits and the degraded responder belong to 003.
 - **Sweep results are returned, not just logged.** The stale `index.lock` sweep returns the locks it removed and any product-trunk lock it found, so 003 can surface the trunk warning in status and the banner.
 - **Board tools and `board/store.py` are not touched by 001.** They belong to 002, which may land them early as a standalone task.
