@@ -167,6 +167,10 @@ _None. Implementation discovery may choose storage and endpoint names but must p
 - 2026-10-23 · Epic Manager · Scope is split into an authoritative domain/API gate followed by its UI presentation.
 - 2026-10-23 · Epic Manager · Existing approved epics remain approved; active unapproved epics default to no valid sign-offs.
 
+- `dec_001` · 2026-10-23 · Epic Manager · **Plan readiness invariant**
+  Chose Treat readiness as a server-authoritative derived state requiring valid manager and architect sign-offs on the current plan revision and no unresolved open questions..
+  Rationale: A single predicate prevents UI-only bypasses and keeps sign-off, read-model capability, and approval validation consistent.
+  Honors: Success criteria: both roles must sign off, open questions block sign-off, and approval is unavailable until ready..
 ## Amendment log
 
 _(none)_
