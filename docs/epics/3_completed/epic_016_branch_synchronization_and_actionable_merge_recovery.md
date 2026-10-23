@@ -2,7 +2,7 @@
 id: epic_016
 title: Branch synchronization and actionable merge recovery
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_016_001
