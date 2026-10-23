@@ -2,7 +2,7 @@
 id: feat_020_001
 title: Expose side-effect-free feature readiness and blockers
 tier: feature
-status: active
+status: completed
 parent: epic_020
 children:
 - task_020_001_001
