@@ -174,6 +174,11 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
   Chose Make kills safe: doc writes become atomic (temp file then os.replace); after killpg the launcher removes stale .git/index.lock files in Cascade-managed worktrees and only reports one in the product trunk; drain-window expiry sends SIGTERM to agent process groups, waits 5s, then exits 75.
   Rationale: board/store.py writes with non-atomic write_text and then commits, so a kill mid-tool can truncate a doc or leave index.lock blocking every later commit. With turns allowed up to 3600s, cancellation happens on most updates, not rarely. Holding the supervisor lock with the old group dead makes Cascade-worktree locks stale by construction; the trunk may have a human running git
   Honors: No orphaned subprocesses or stale-lock blockage; accepted writes not lost; product-trunk workspace validation.
+
+- `dec_008` · 2026-10-23 · Epic Manager · **Feature breakdown**
+  Chose Fold the Epic Architect's dec_005-dec_007 scope into the minted feature stubs before dispatch: stale index.lock sweep into feat_018_001; replay-safe tools, atomic doc writes, Connection: close, bounded handler join and SIGTERM-then-exit cancellation into feat_018_002; trunk index.lock warning in status/banner into feat_018_003. Keep replay safety inside feat_018_002 rather than minting a fourth feature.
+  Rationale: The stubs were drafted before the architect's findings and would have sent feature teams an incomplete contract. Replay safety is independent of the launcher, but a separate feature adds coordination overhead for a small change; 002's lead may land it first as a standalone task if 001 slips. Each addition rides on an existing integration test rather than new unit-test matrices
+  Honors: Recovered exactly once; no stale-lock blockage; actionable diagnostics; frugal testing.
 ## Amendment log
 
 _(none)_
