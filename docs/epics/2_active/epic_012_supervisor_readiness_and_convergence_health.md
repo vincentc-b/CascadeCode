@@ -120,6 +120,11 @@ None blocking feature planning. Feature owners may choose exact field names and 
   Chose Use one supervisor health projection to separate HTTP liveness from automation readiness, fed by startup, watchdog, and reconciliation activity..
   Rationale: Operators need an authoritative contract rather than unrelated endpoint and loop signals; a read-only process-local projection fits the single-supervisor architecture without adding storage.
   Honors: Success criteria: expose startup/readiness and loop state; cross-module constraint: separate local process liveness from workflow convergence..
+
+- `dec_002` · 2026-10-23 · Epic Manager · **Convergence**
+  Chose Define stalled work as unchanged, currently dispatchable work beyond a bounded threshold, using Boss View dispatch predicates plus durable progress signatures and one diagnostic per unchanged episode..
+  Rationale: Reusing dispatch law prevents false positives from approval, dependency, sibling, review, and capacity gates; episode deduplication makes the signal durable without toast spam.
+  Honors: Constraints: no gate bypass, no duplicate work, reuse Boss View, queue cursors, watchdog cadence, and War Room toasts..
 ## Amendment log
 
 _(none)_
