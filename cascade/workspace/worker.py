@@ -12,6 +12,7 @@ import socket
 import sys
 import threading
 import time
+import traceback
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -229,6 +230,16 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
             reason=shutdown_reason,
             drain_seconds=drain_seconds,
         )
+        if (
+            abnormal_exit
+            and not operator_stop.is_set()
+            and not source_changed
+            and handlers_abandoned
+        ):
+            traceback.print_exc()
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os._exit(1)
 
     if operator_stop.is_set():
         return 0, handlers_abandoned
