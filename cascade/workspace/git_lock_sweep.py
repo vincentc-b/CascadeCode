@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 _INDEX_LOCK = "index.lock"
 _WORKTREES_DIR = Path(".cascade") / "worktrees"
+
+
+@dataclass(frozen=True)
+class GitLockSweepResult:
+    removed_lock_paths: tuple[str, ...]
+    trunk_index_lock_path: str | None
 
 
 def _read_gitdir(dot_git: Path) -> Path | None:
@@ -42,38 +49,45 @@ def _index_lock_candidates(checkout: Path) -> list[Path]:
     return unique
 
 
-def _remove_lock(lock_path: Path) -> None:
+def _remove_lock(lock_path: Path) -> bool:
     try:
         lock_path.unlink()
     except FileNotFoundError:
-        return
+        return False
     except OSError as exc:
         print(
             f"cascade launcher: failed to remove stale git lock {lock_path}: {exc}",
             file=sys.stderr,
         )
-        return
+        return False
     print(f"cascade launcher: removed stale git lock {lock_path}", file=sys.stderr)
+    return True
 
 
-def sweep_stale_git_locks(repo_root: Path) -> None:
+def sweep_stale_git_locks(repo_root: Path) -> GitLockSweepResult:
     """Drop stale ``index.lock`` in Cascade worktrees; warn on product trunk only."""
 
     root = repo_root.resolve()
     trunk_lock = root / ".git" / _INDEX_LOCK
+    trunk_index_lock_path: str | None = None
     if trunk_lock.is_file():
+        trunk_index_lock_path = str(trunk_lock)
         print(
             f"cascade launcher: warning: product trunk has {_INDEX_LOCK} at {trunk_lock}",
             file=sys.stderr,
         )
 
+    removed: list[str] = []
     worktrees_root = root / _WORKTREES_DIR
-    if not worktrees_root.is_dir():
-        return
+    if worktrees_root.is_dir():
+        for entry in sorted(worktrees_root.iterdir()):
+            if not entry.is_dir():
+                continue
+            for lock_path in _index_lock_candidates(entry):
+                if lock_path.is_file() and _remove_lock(lock_path):
+                    removed.append(str(lock_path.resolve()))
 
-    for entry in sorted(worktrees_root.iterdir()):
-        if not entry.is_dir():
-            continue
-        for lock_path in _index_lock_candidates(entry):
-            if lock_path.is_file():
-                _remove_lock(lock_path)
+    return GitLockSweepResult(
+        removed_lock_paths=tuple(removed),
+        trunk_index_lock_path=trunk_index_lock_path,
+    )

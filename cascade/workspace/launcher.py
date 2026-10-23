@@ -16,9 +16,18 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from cascade.workspace.git_lock_sweep import sweep_stale_git_locks
+from cascade.workspace.git_lock_sweep import GitLockSweepResult, sweep_stale_git_locks
+from cascade.workspace.source_fingerprint import source_fingerprint
+from cascade.workspace.supervisor_status import (
+    LastError,
+    SupervisorState,
+    SupervisorStatus,
+    utc_now_iso,
+    write_supervisor_status,
+)
 
 EXIT_UPDATE = 75
 CRASH_RESTART_DELAY_S = 1.0
@@ -38,6 +47,54 @@ class _StopRequested(Exception):
     """Internal control flow for a stop requested during worker startup."""
 
 
+@dataclass
+class _LauncherStatusContext:
+    workspace_root: Path
+    restart_count: int = 0
+    worker_pid: int | None = None
+    last_error: LastError | None = None
+    next_action: str | None = None
+    trunk_lock_warning: str | None = None
+    _state: SupervisorState = "restarting"
+    _since: str = field(default_factory=utc_now_iso)
+
+    def apply_sweep(self, sweep: GitLockSweepResult) -> None:
+        if sweep.trunk_index_lock_path is not None:
+            self.trunk_lock_warning = sweep.trunk_index_lock_path
+
+
+def _launcher_transition(
+    ctx: _LauncherStatusContext,
+    *,
+    state: SupervisorState,
+    log_line: str,
+    worker_pid: int | None | object = ...,
+    last_error: LastError | None | object = ...,
+    next_action: str | None | object = ...,
+) -> None:
+    print(log_line, file=sys.stderr)
+    if state != ctx._state:
+        ctx._state = state
+        ctx._since = utc_now_iso()
+    if worker_pid is not ...:
+        ctx.worker_pid = worker_pid  # type: ignore[assignment]
+    if last_error is not ...:
+        ctx.last_error = last_error  # type: ignore[assignment]
+    if next_action is not ...:
+        ctx.next_action = next_action  # type: ignore[assignment]
+    status: SupervisorStatus = {
+        "state": ctx._state,
+        "worker_pid": ctx.worker_pid,
+        "restart_count": ctx.restart_count,
+        "last_error": ctx.last_error,
+        "next_action": ctx.next_action,
+        "trunk_lock_warning": ctx.trunk_lock_warning,
+        "since": ctx._since,
+        "updated_at": utc_now_iso(),
+    }
+    write_supervisor_status(ctx.workspace_root, status)
+
+
 def bind_listen_socket(*, host: str, port: int) -> socket.socket:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -50,10 +107,10 @@ def bind_listen_socket(*, host: str, port: int) -> socket.socket:
     return sock
 
 
-def post_worker_exit(workspace_root: Path) -> None:
+def post_worker_exit(workspace_root: Path) -> GitLockSweepResult:
     """Hook after the worker process group is gone: sweep stale git locks."""
 
-    sweep_stale_git_locks(workspace_root)
+    return sweep_stale_git_locks(workspace_root)
 
 
 def _wait_readiness(
@@ -164,10 +221,13 @@ def run_launcher_loop(
 ) -> None:
     """Spawn workers on ``listen_sock`` until operator stop or ``stop_when``."""
 
+    source_fingerprint()
+
     listen_fd = listen_sock.fileno()
     operator_stop = False
     installed_signal_handlers = threading.current_thread() is threading.main_thread()
     previous_handlers: dict[int, signal.Handlers] = {}
+    status_ctx = _LauncherStatusContext(workspace_root=workspace_root)
 
     def on_operator_signal(_signum: int, _frame: object | None) -> None:
         nonlocal operator_stop
@@ -186,6 +246,14 @@ def run_launcher_loop(
             if stop_requested():
                 return
 
+            _launcher_transition(
+                status_ctx,
+                state="restarting",
+                log_line="cascade launcher: restarting worker",
+                worker_pid=None,
+                last_error=None,
+            )
+
             proc, readiness_fd, pgid = _spawn_worker(
                 workspace_root=workspace_root,
                 listen_fd=listen_fd,
@@ -198,26 +266,56 @@ def run_launcher_loop(
                     stop_requested=stop_requested,
                 )
             except _StopRequested:
-                _kill_worker_group(pgid, proc=proc)
-                proc.wait(timeout=30)
-                post_worker_exit(workspace_root)
-                return
-            except (OSError, RuntimeError, TimeoutError) as exc:
-                print(
-                    f"cascade launcher: worker readiness failed: {exc}",
-                    file=sys.stderr,
+                _launcher_transition(
+                    status_ctx,
+                    state="draining",
+                    log_line="cascade launcher: draining worker (stop during startup)",
+                    worker_pid=proc.pid,
                 )
                 _kill_worker_group(pgid, proc=proc)
                 proc.wait(timeout=30)
-                post_worker_exit(workspace_root)
+                status_ctx.apply_sweep(post_worker_exit(workspace_root))
+                return
+            except (OSError, RuntimeError, TimeoutError) as exc:
+                _launcher_transition(
+                    status_ctx,
+                    state="restarting",
+                    log_line=f"cascade launcher: worker readiness failed: {exc}",
+                    worker_pid=proc.pid,
+                    last_error={
+                        "exit_code": proc.returncode,
+                        "stderr_tail": None,
+                        "message": str(exc),
+                    },
+                )
+                _kill_worker_group(pgid, proc=proc)
+                proc.wait(timeout=30)
+                status_ctx.apply_sweep(post_worker_exit(workspace_root))
                 if not _wait_for_restart_delay(stop_requested):
                     return
                 continue
             finally:
                 os.close(readiness_fd)
 
+            _launcher_transition(
+                status_ctx,
+                state="serving",
+                log_line=f"cascade launcher: worker ready (pid {proc.pid})",
+                worker_pid=proc.pid,
+                last_error=None,
+            )
+
+            draining_logged = False
             while True:
                 if stop_requested():
+                    if not draining_logged:
+                        _launcher_transition(
+                            status_ctx,
+                            state="draining",
+                            log_line="cascade launcher: draining worker",
+                            worker_pid=proc.pid,
+                        )
+                        draining_logged = True
                     proc.send_signal(signal.SIGTERM)
                 try:
                     code = proc.wait(timeout=0.2)
@@ -232,12 +330,30 @@ def run_launcher_loop(
                 proc.kill()
                 proc.wait(timeout=10)
 
-            post_worker_exit(workspace_root)
+            sweep = post_worker_exit(workspace_root)
+            status_ctx.apply_sweep(sweep)
 
             if stop_requested() or code == 0:
                 return
             if code == EXIT_UPDATE:
+                _launcher_transition(
+                    status_ctx,
+                    state="restarting",
+                    log_line="cascade launcher: worker exited for source update",
+                    worker_pid=None,
+                )
                 continue
+            _launcher_transition(
+                status_ctx,
+                state="restarting",
+                log_line=f"cascade launcher: worker exited unexpectedly (code {code})",
+                worker_pid=None,
+                last_error={
+                    "exit_code": code,
+                    "stderr_tail": None,
+                    "message": f"worker exited with code {code}",
+                },
+            )
             if not _wait_for_restart_delay(stop_requested):
                 return
     finally:
