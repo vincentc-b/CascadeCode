@@ -48,8 +48,70 @@ def bind_listen_socket(*, host: str, port: int) -> socket.socket:
     return sock
 
 
-def post_worker_exit(_workspace_root: Path) -> None:
+def post_worker_exit(workspace_root: Path) -> None:
     """Hook after the worker process group is gone (git lock sweep in task_018_001_004)."""
+
+    sweep_stale_git_locks(workspace_root)
+
+
+def _remove_stale_index_lock(lock_path: Path, *, context: Path) -> None:
+    if not lock_path.is_file():
+        return
+    try:
+        lock_path.unlink()
+    except OSError as exc:
+        print(
+            f"cascade launcher: failed to remove stale index.lock at {lock_path}: {exc}",
+            file=sys.stderr,
+        )
+        return
+    print(
+        f"cascade launcher: removed stale index.lock under {context}",
+        file=sys.stderr,
+    )
+
+
+def _gitdir_from_dot_git(dot_git: Path) -> Path | None:
+    try:
+        first_line = dot_git.read_text(encoding="utf-8").splitlines()[0]
+    except (OSError, IndexError):
+        return None
+    prefix = "gitdir: "
+    if not first_line.startswith(prefix):
+        return None
+    raw = first_line[len(prefix) :].strip()
+    if not raw:
+        return None
+    gitdir = Path(raw)
+    if not gitdir.is_absolute():
+        gitdir = (dot_git.parent / gitdir).resolve()
+    return gitdir
+
+
+def sweep_stale_git_locks(repo_root: Path) -> None:
+    """Remove stale ``index.lock`` files under Cascade-managed worktrees (stdlib-only)."""
+
+    root = Path(repo_root).resolve()
+    worktrees_dir = root / ".cascade" / "worktrees"
+    if worktrees_dir.is_dir():
+        for entry in sorted(worktrees_dir.iterdir(), key=lambda p: p.name):
+            if not entry.is_dir():
+                continue
+            dot_git = entry / ".git"
+            if dot_git.is_dir():
+                _remove_stale_index_lock(dot_git / "index.lock", context=entry)
+            elif dot_git.is_file():
+                gitdir = _gitdir_from_dot_git(dot_git)
+                if gitdir is not None:
+                    _remove_stale_index_lock(gitdir / "index.lock", context=entry)
+
+    trunk_lock = root / ".git" / "index.lock"
+    if trunk_lock.is_file():
+        print(
+            f"cascade launcher: warning: trunk index.lock present at {trunk_lock} "
+            "(not removed; human may be running git on the product trunk)",
+            file=sys.stderr,
+        )
 
 
 def _wait_readiness(
