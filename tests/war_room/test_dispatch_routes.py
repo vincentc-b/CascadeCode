@@ -514,6 +514,11 @@ def test_confirm_epic_complete_surfaces_single_attempt_failure(
         "ok": False,
         "reason": "merge_conflict",
         "epic_id": "epic_001",
+        "conflict_paths": [],
+        "merge_aborted": True,
+        "guidance": (
+            "Resolve the listed file conflicts in the integration worktree, then retry."
+        ),
     }
     complete.assert_called_once_with("epic_001", "human", root=root)
 
