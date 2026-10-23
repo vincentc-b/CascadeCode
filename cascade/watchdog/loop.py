@@ -23,7 +23,7 @@ from cascade.watchdog.types import Event
 
 # Appearances already toasted. This suppresses duplicate toasts, not retries.
 _stuck: set[tuple[str, int, int]] = set()
-_orphan_toast_signatures: set[frozenset[tuple[str, str]]] = set()
+_orphan_toast_signatures: dict[Path, frozenset[tuple[str, str]]] = {}
 # Work queues are the latency-sensitive watchdog input. Remember their cheap
 # filesystem signature so idle polls do not rebuild the merged board merely to
 # discover that no graph has anything new to ingest.
@@ -373,15 +373,17 @@ def _orphan_signature(records: list[OrphanRecord]) -> frozenset[tuple[str, str]]
 
 
 def _maybe_enqueue_orphan_toasts(root: Path) -> None:
+    repo = root.resolve()
     try:
-        records = detect_orphans(root=root)
+        records = detect_orphans(root=repo)
     except Exception:
         # Unparseable board files must not abort the tick (see _consider).
         return
     if not records:
+        _orphan_toast_signatures.pop(repo, None)
         return
     signature = _orphan_signature(records)
-    if signature in _orphan_toast_signatures:
+    if signature == _orphan_toast_signatures.get(repo):
         return
     for record in records:
         event = Event(
@@ -391,10 +393,10 @@ def _maybe_enqueue_orphan_toasts(root: Path) -> None:
             dest="war_room",
         )
         try:
-            append_event("war_room", event, root=root)
+            append_event("war_room", event, root=repo)
         except OSError:
             return
-    _orphan_toast_signatures.add(signature)
+    _orphan_toast_signatures[repo] = signature
 
 
 def _toast(root: Path, work_id: str, message: str) -> None:
