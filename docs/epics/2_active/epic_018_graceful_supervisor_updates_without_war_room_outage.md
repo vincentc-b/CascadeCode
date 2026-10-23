@@ -116,10 +116,10 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
   Rationale: Never releasing the lock or unbinding the port removes the connection-refused window and stale-lock risk. A fresh process per version avoids mixing modules. This is far less machinery than blue/green handoff or fd passing between peers.
   Honors: Single-supervisor invariant; no mixed old/new modules; operator shutdown distinct from update restart; launcher/process contract without platform daemons..
 
-- `dec_002` · 2026-10-23 · Epic Manager · **Macro-architecture**
-  Chose Recover interrupted work through the existing checkpoint resume path (resume_legally_active_graphs / resume_inflight_graphs) after a bounded drain, instead of building a new live state-transfer protocol between workers.
-  Rationale: The durable checkpoints, queues and worktrees already survive a process restart, and resume is already exercised on every startup. Adding a second handoff mechanism would duplicate it and add risk. The remaining exactly-once gap for cancelled turns is tracked as an open question for the Epic Architect
-  Honors: Checkpoints, queues, comments and worktree state as durable handoff boundaries; drain when possible, recover exactly once otherwise.
+- `dec_002` · 2026-10-23 · Epic Manager · **Feature breakdown**
+  Chose Cut blue/green overlap of two workers, in-process importlib hot reload, shipped systemd/launchd units, and Windows support.
+  Rationale: Keeping the socket bound in the launcher already removes refused connections, so overlap buys only seconds and costs the single-supervisor guarantee. Hot reload mixes modules. Daemon units and Windows serve no stated user problem and fcntl locking is already POSIX-only
+  Honors: Single-supervisor invariant; no mixed modules; avoid platform-specific daemon assumptions.
 ## Amendment log
 
 _(none)_
