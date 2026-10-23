@@ -102,6 +102,11 @@ The work is a strict sequence; there is no parallelism worth the coordination co
   Chose Risks to settle before feat_020_001 starts: (1) the readiness predicate must exclude ensure_feature_dispatch_selection and every write, event, or lock; (2) dispatch_feature must call the same predicate, with existing dispatch tests as the regression guard; (3) the feat_020_002 integration test must assert that the kickoff is queued in the background, not run on the request thread, and that a second approve or refresh adds no dispatch, worktree, queue event, or kickoff..
   Rationale: These are the only ways this epic could weaken an existing guarantee: a side-effecting read, UI/dispatch drift, or a blocking or duplicated model turn. Everything else is additive.
   Honors: Re-approval and refreshes must not duplicate worktrees, queue events, or model turns; approval request returns without waiting for a model turn.
+
+- `dec_003` · 2026-10-23 · Epic Manager · **Scope**
+  Chose Accept two limitations: with automation disabled, approval only persists (manual dispatch still applies); and advance_work stays synchronous within the approval request under the existing 60s APPROVAL_DEADLINE_S. Feature-row labels use their own vocabulary and do not touch epic_015's epic-level Approve plan controls..
+  Rationale: Both limitations are current behavior and involve no model turn. Changing them would expand scope without serving the core operator problem. Separate label vocabulary avoids coupling to epic_015 while keeping the presentation consistent.
+  Honors: Do not depend on auto-approval or broaden epic_015 scope; snapshot semantics of epic-plan approval unchanged.
 ## Amendment log
 
 _(none)_
