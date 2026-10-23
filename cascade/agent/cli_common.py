@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from cascade.agent.errors import ProviderCliError, ProviderCliTimeoutError
+from cascade.agent.turn_registry import set_current_turn_pid
 from cascade.agent.types import RoleResult, RoleTurn
 
 PLANNING_ROLES: frozenset[str] = frozenset(
@@ -212,6 +213,9 @@ async def run_subprocess_turn(
         )
     except OSError as err:
         raise ProviderCliError(f"failed to spawn CLI: {err}") from err
+
+    if proc.pid is not None:
+        set_current_turn_pid(proc.pid)
 
     try:
         stdout, stderr = await asyncio.wait_for(

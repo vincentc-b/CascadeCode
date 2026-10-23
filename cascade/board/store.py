@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from datetime import date
 from pathlib import Path
 
@@ -24,6 +26,33 @@ from cascade.board.work_ids import allocate_hierarchical_id
 
 _COLUMNS = ("1_backlog", "2_active", "3_completed")
 _TIER_DIRS = (("epic", "epics"), ("feature", "features"), ("task", "tasks"))
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write ``text`` to ``path`` via a same-directory temp file and ``os.replace``."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_name = handle.name
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+        temp_name = None
+    finally:
+        if temp_name is not None:
+            Path(temp_name).unlink(missing_ok=True)
+
+
 def list_board(root: Path) -> BoardIndex:
     """Scan `docs/{epics,features,tasks}/{column}` and index by id. No cache."""
 
@@ -107,9 +136,16 @@ def _write_doc(doc: WorkDoc, root: Path | None) -> str | None:
     # Collisions are per-checkout; merged_board also indexes other worktrees and snapshots.
     _reject_new_doc_id_collision(doc, list_board(repo), repo)
     validate_doc(doc, merged_board(trunk))
+    if doc.meta.path.exists() and doc.sha is not None and has_git(repo):
+        rel = doc.meta.path.resolve().relative_to(repo.resolve())
+        current_sha = last_commit_touching(repo, rel)
+        if current_sha is not None and current_sha != doc.sha:
+            raise SchemaError(
+                f"stale sha for {doc.meta.id}: document changed since read (expected {doc.sha})"
+            )
     previous_bytes = doc.meta.path.read_bytes() if doc.meta.path.exists() else None
-    doc.meta.path.parent.mkdir(parents=True, exist_ok=True)
-    doc.meta.path.write_text(render_doc(doc), encoding="utf-8")
+    rendered = render_doc(doc)
+    _atomic_write_text(doc.meta.path, rendered)
     invalidate_merged_board(trunk)
     commit_root = git_root_for_path(doc.meta.path) if has_git(repo) else repo
     try:
@@ -178,8 +214,7 @@ def _move_doc(work_id: WorkId, dest_column: Column, root: Path | None) -> str | 
     validate_doc(doc, merged_board(locate_trunk(repo)))
     if new_path != old_path and new_path.exists():
         raise SchemaError(f"destination already exists: {new_path}")
-    new_path.parent.mkdir(parents=True, exist_ok=True)
-    new_path.write_text(render_doc(doc), encoding="utf-8")
+    _atomic_write_text(new_path, render_doc(doc))
     if new_path != old_path and old_path.exists():
         old_path.unlink()
     invalidate_merged_board(locate_trunk(repo))
@@ -220,7 +255,7 @@ def _save_doc(doc: WorkDoc, previous_path: Path, root: Path | None) -> str | Non
     previous_bytes = previous.read_bytes() if previous.exists() else None
     new_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        new_path.write_text(render_doc(doc), encoding="utf-8")
+        _atomic_write_text(new_path, render_doc(doc))
         if new_path != previous and previous.exists():
             previous.unlink()
         invalidate_merged_board(locate_trunk(repo))

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 from dataclasses import dataclass
 from typing import Literal
 
 from cascade.agent.errors import ProviderConfigError
 
-ProviderId = Literal["cursor", "claude", "codex"]
+ProviderId = Literal["cursor", "claude", "codex", "fake"]
 AuthSource = Literal["env", "user-store", "cli-session", "missing"]
 
 ALL_PROVIDER_IDS: tuple[ProviderId, ...] = ("cursor", "claude", "codex")
@@ -23,6 +24,10 @@ class ProviderStatus:
     auth_source: AuthSource
 
 
+def fake_provider_enabled() -> bool:
+    return os.environ.get("CASCADE_ENABLE_FAKE_PROVIDER") == "1"
+
+
 def _cursor_installed() -> bool:
     return importlib.util.find_spec("cursor_sdk") is not None
 
@@ -32,19 +37,27 @@ def _cli_installed(name: str) -> bool:
 
 
 def probe_provider(provider_id: ProviderId) -> ProviderStatus:
+    if provider_id == "fake" and not fake_provider_enabled():
+        raise ProviderConfigError(f"unknown provider id: {provider_id!r}")
     if provider_id == "cursor":
         installed = _cursor_installed()
     elif provider_id == "claude":
         installed = _cli_installed("claude")
     elif provider_id == "codex":
         installed = _cli_installed("codex")
+    elif provider_id == "fake":
+        installed = True
     else:
         raise ProviderConfigError(f"unknown provider id: {provider_id!r}")
 
     from cascade.agent.credentials import credential_auth_source
 
-    auth_source = credential_auth_source(provider_id)
-    authenticated = auth_source != "missing"
+    if provider_id == "fake":
+        auth_source = "env"
+        authenticated = True
+    else:
+        auth_source = credential_auth_source(provider_id)
+        authenticated = auth_source != "missing"
     return ProviderStatus(
         id=provider_id,
         installed=installed,
@@ -65,6 +78,10 @@ def parse_provider_id(value: object) -> ProviderId:
     stripped = value.strip()
     if not stripped:
         raise ProviderConfigError("provider id must not be blank")
+    if stripped == "fake":
+        if fake_provider_enabled():
+            return "fake"
+        raise ProviderConfigError(f"unknown provider id: {stripped!r}")
     if stripped not in ALL_PROVIDER_IDS:
         raise ProviderConfigError(f"unknown provider id: {stripped!r}")
     return stripped  # type: ignore[return-value]

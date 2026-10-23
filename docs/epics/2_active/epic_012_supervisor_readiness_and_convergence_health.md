@@ -22,11 +22,6 @@ models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
 ---
-provider: codex
-models:
-  epic_manager: gpt-5.6-sol
-  epic_architect: gpt-5.6-sol
----
 # Supervisor readiness and convergence health
 
 ## Intent
