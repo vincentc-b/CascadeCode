@@ -477,6 +477,88 @@
     });
   }
 
+  function humanizeFeatureReadinessBlocker(raw) {
+    if (raw === "not_approved") return null;
+    const colon = raw.indexOf(":");
+    const prefix = colon >= 0 ? raw.slice(0, colon) : raw;
+    const payload = colon >= 0 ? raw.slice(colon + 1) : "";
+    switch (prefix) {
+      case "unmet_deps":
+        return "Unmet dependencies: " + payload;
+      case "dispatch_base_unavailable":
+        return "Stacked base unavailable: " + payload;
+      case "feature_awaiting_merge":
+        return "Feature awaiting merge";
+      case "sibling_blocked":
+        return "Sibling feature blocked";
+      case "review_threads_blocking":
+        return "Blocking review threads";
+      case "epic_inactive":
+        return "Epic inactive";
+      case "not_in_backlog":
+        return "Not in backlog";
+      default:
+        return raw;
+    }
+  }
+
+  function appendFeatureReadinessUi(row, actions, item) {
+    const readiness = item.readiness;
+    if (!readiness) return;
+
+    if (!readiness.approved) {
+      const approvalStatus = document.createElement("span");
+      approvalStatus.className = "feature-review-status";
+      approvalStatus.textContent = "Awaiting feature approval";
+      approvalStatus.setAttribute(
+        "aria-label",
+        "Feature approval status: " + approvalStatus.textContent
+      );
+      row.appendChild(approvalStatus);
+      actions.appendChild(featureApproveActionButton(item));
+      return;
+    }
+
+    const lines = (readiness.blockers || [])
+      .map(humanizeFeatureReadinessBlocker)
+      .filter(function (line) { return line; });
+    if (!lines.length) return;
+
+    const blockersEl = document.createElement("div");
+    blockersEl.className = "feature-readiness-blockers";
+    blockersEl.textContent = lines.join(" · ");
+    blockersEl.setAttribute("aria-label", "Feature dispatch blockers: " + lines.join("; "));
+    row.appendChild(blockersEl);
+  }
+
+  function featureApproveActionButton(item) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Approve feature";
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = "Approving…";
+      dispatch("/api/approve_feature", { id: item.id })
+        .then(function (body) {
+          if (body && body.ok) {
+            setStatus("Feature " + item.id + " approved.", false);
+          }
+        })
+        .catch(function (err) {
+          setStatus(err.message || String(err), true);
+        })
+        .finally(function () {
+          if (btn.isConnected) {
+            btn.disabled = false;
+            btn.textContent = "Approve feature";
+          }
+        });
+    });
+    return btn;
+  }
+
   function buildRow(item, tier, column) {
     const row = document.createElement("div");
     row.className = "board-row";
@@ -566,6 +648,7 @@
       }
     }
     if (tier === "features") {
+      appendFeatureReadinessUi(row, actions, item);
       if (column === "2_active") {
         actions.appendChild(actionButton("Open team", function () {
           return attach(item.id, "feature");
