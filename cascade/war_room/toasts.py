@@ -14,6 +14,7 @@ _API_KINDS = frozenset(
         "comment",
         "blocked",
         "task_failed",
+        "task_merge_blocked",
         "task_merged",
         "task_ready",
         "illegal_dispatch",

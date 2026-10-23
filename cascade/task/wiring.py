@@ -176,9 +176,11 @@ def restore_active_task_runs(root: Path) -> list[tuple[str, str]]:
 
     repo = Path(root).resolve()
     from cascade.workspace.integration_worktree import integration_branch, merged_board
-    from cascade.task.execution import execution_lease_is_live
+    from cascade.task.execution import execution_lease_is_live, execution_view
+    from cascade.task_rollup import pending_task_merges
 
     restored: list[tuple[str, str]] = []
+    awaiting_merge = pending_task_merges(repo)
     for task_id, meta in sorted(merged_board(repo).by_id.items()):
         if (
             meta.tier != "task"
@@ -186,7 +188,15 @@ def restore_active_task_runs(root: Path) -> list[tuple[str, str]]:
             or meta.path.parent.name != "2_active"
             or not meta.parent
             or get_task_run(task_id) is not None
+            or task_id in awaiting_merge
         ):
+            continue
+        execution = execution_view(task_id, root=repo)
+        if execution is not None and execution.get("phase") in {
+            "awaiting_merge", "merge_blocked"
+        }:
+            # A finished SWE turn needs merge reconciliation, not another model
+            # turn after restart.
             continue
         # Another live supervisor worker still owns this turn.  Do not create a
         # second TaskRun or append a duplicate resume event.  Dead-owner and

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import Mapping
 from pathlib import Path
@@ -23,7 +24,9 @@ from cascade.agent.errors import (
     ProviderNotAuthenticatedError,
     ProviderNotImplementedError,
     ProviderNotInstalledError,
+    TurnCancelledForDrain,
 )
+from cascade.agent.turn_registry import register_turn
 from cascade.agent.providers import parse_provider_id, probe_provider
 from cascade.agent.types import RoleId, RoleResult, RoleResultStatus, RoleTurn
 
@@ -143,6 +146,33 @@ async def _run_cursor_role(turn: RoleTurn, *, api_key: str) -> RoleResult:
     )
 
 
+def _raise_if_turn_cancelled(role: str, live) -> None:
+    if live is not None and live.cancelled:
+        raise TurnCancelledForDrain(role)
+
+
+async def _dispatch_role(turn: RoleTurn, *, provider, credential) -> RoleResult:
+    if provider == "cursor":
+        return await _run_cursor_role(turn, api_key=credential.token)
+
+    if provider == "claude":
+        from cascade.agent.claude_cli import run_claude_role
+
+        return await run_claude_role(turn, token=credential.token)
+
+    if provider == "codex":
+        from cascade.agent.codex_cli import run_codex_role
+
+        return await run_codex_role(turn, token=credential.token)
+
+    if provider == "fake":
+        from cascade.agent.fake_provider import run_fake_role
+
+        return await run_fake_role(turn)
+
+    raise ProviderNotImplementedError(f"provider {provider!r} dispatch is not implemented yet")
+
+
 async def run_role(turn: RoleTurn) -> RoleResult:
     provider = parse_provider_id(turn.provider)
     validate_model_id(turn.model_id)
@@ -160,17 +190,14 @@ async def run_role(turn: RoleTurn) -> RoleResult:
             f"no credential configured for provider {provider!r}"
         )
 
-    if provider == "cursor":
-        return await _run_cursor_role(turn, api_key=credential.token)
-
-    if provider == "claude":
-        from cascade.agent.claude_cli import run_claude_role
-
-        return await run_claude_role(turn, token=credential.token)
-
-    if provider == "codex":
-        from cascade.agent.codex_cli import run_codex_role
-
-        return await run_codex_role(turn, token=credential.token)
-
-    raise ProviderNotImplementedError(f"provider {provider!r} dispatch is not implemented yet")
+    with register_turn(turn.role) as live:
+        try:
+            result = await _dispatch_role(turn, provider=provider, credential=credential)
+        except asyncio.CancelledError:
+            _raise_if_turn_cancelled(turn.role, live)
+            raise
+        except Exception:
+            _raise_if_turn_cancelled(turn.role, live)
+            raise
+        _raise_if_turn_cancelled(turn.role, live)
+        return result

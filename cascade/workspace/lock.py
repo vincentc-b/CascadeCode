@@ -43,14 +43,16 @@ class SupervisorLock:
         handle.flush()
         self._handle = handle
 
+    def fileno(self) -> int:
+        if self._handle is None:
+            raise RuntimeError("SupervisorLock is not held")
+        return self._handle.fileno()
+
     def release(self) -> None:
         if self._handle is None:
             return
-        try:
-            fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
-        finally:
-            self._handle.close()
-            self._handle = None
+        self._handle.close()
+        self._handle = None
 
     def __enter__(self) -> SupervisorLock:
         self.acquire()

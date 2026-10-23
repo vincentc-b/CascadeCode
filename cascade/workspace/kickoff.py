@@ -11,10 +11,12 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from cascade.agent.errors import TurnCancelledForDrain
 from cascade.board.context import resolve_root
 from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
 from cascade.watchdog.queue_cursor import queue_byte_size, resolve_last_queue_offset
+from cascade.workspace.drain import is_draining
 from cascade.workspace.types import KickoffReason
 
 _log = logging.getLogger(__name__)
@@ -38,6 +40,7 @@ _COMMENT_QUEUE_TYPES = frozenset({"CommentPosted", "CommentReplied", "CommentRes
 _graph_locks: dict[str, threading.RLock] = {}
 _graph_queues: dict[str, "queue.Queue[Callable[[], None]]"] = {}
 _pending_queue_delivery: set[str] = set()
+_failed_queue_delivery: dict[tuple[Path, str], tuple[str, str | None, int, float]] = {}
 _registry_lock = threading.Lock()
 
 
@@ -80,6 +83,7 @@ def clear_kickoff_delivery_state() -> None:
 
     with _registry_lock:
         _pending_queue_delivery.clear()
+        _failed_queue_delivery.clear()
 
 
 def reset_kickoff_test_state() -> None:
@@ -123,7 +127,13 @@ def _run_kickoff(reason: KickoffReason, repo: Path) -> None:
             _model_turn_authorized.reset(token)
 
 
-def _submit_background(work_id: str, job: Callable[[], None]) -> None:
+def _submit_background(work_id: str, job: Callable[[], None]) -> bool:
+    if is_draining():
+        _log.info(
+            "dropping background kickoff job for %s (worker draining)",
+            work_id,
+        )
+        return False
     with _registry_lock:
         pending = _graph_queues.get(work_id)
         if pending is None:
@@ -136,13 +146,20 @@ def _submit_background(work_id: str, job: Callable[[], None]) -> None:
                 daemon=True,
             ).start()
     pending.put(job)
+    return True
 
 
 def _drain_background(work_id: str, pending: "queue.Queue[Callable[[], None]]") -> None:
     while True:
         job = pending.get()
         try:
-            job()
+            if is_draining():
+                _log.info(
+                    "dropping background kickoff job for %s (worker draining)",
+                    work_id,
+                )
+            else:
+                job()
         except Exception:
             _log.exception("background kickoff job crashed for %s", work_id)
         finally:
@@ -152,6 +169,11 @@ def _drain_background(work_id: str, pending: "queue.Queue[Callable[[], None]]") 
 def _run_background_kickoff(reason: KickoffReason, repo: Path) -> None:
     try:
         _run_kickoff(reason, repo)
+    except TurnCancelledForDrain:
+        _log.info(
+            "background kickoff turn cancelled for drain work_id=%s",
+            reason.work_id,
+        )
     except Exception as exc:
         _log.exception("background kickoff turn failed for %s", reason.work_id)
         _report_background_failure(reason.work_id, exc, repo)
@@ -201,9 +223,11 @@ def resume_inflight_graphs(root: Path) -> None:
             work_id, meta.tier, root=repo, feature_id=feature_id
         )
         ahead = _queue_is_ahead(work_id, meta.tier, root=repo, feature_id=feature_id)
-        if not inflight and not ahead:
+        if not inflight and not ahead and not _unanswered_staged_input(
+            work_id, meta.tier, root=repo, feature_id=feature_id
+        ):
             continue
-        _schedule_queue_delivery(work_id, meta.tier, repo, feature_id)
+        _schedule_queue_delivery(work_id, meta.tier, repo, feature_id, retry_staged=True)
 
 
 def kickoff_human_comment(doc_id: str, comment_id: str, *, root: Path) -> bool:
@@ -262,6 +286,22 @@ def deliver_queue_kickoffs(root: Path) -> None:
         _schedule_queue_delivery(work_id, meta.tier, repo, feature_id)
 
 
+def retry_failed_queue_kickoffs(root: Path) -> None:
+    """Retry failed deliveries from memory without scanning every graph queue."""
+
+    repo = Path(root).resolve()
+    now = time.monotonic()
+    with _registry_lock:
+        due = [
+            (work_id, tier, feature_id)
+            for (failed_root, work_id), (tier, feature_id, _attempts, retry_at)
+            in _failed_queue_delivery.items()
+            if failed_root == repo and retry_at <= now
+        ]
+    for work_id, tier, feature_id in due:
+        _schedule_queue_delivery(work_id, tier, repo, feature_id, retry_staged=True)
+
+
 def kickoff_graph_queue_event(
     work_id: str,
     *,
@@ -299,11 +339,13 @@ def _schedule_queue_delivery(
     tier: str,
     repo: Path,
     feature_id: str | None,
+    *,
+    retry_staged: bool = False,
 ) -> None:
     if _defer_turns.get():
-        _submit_queue_delivery(work_id, tier, repo, feature_id)
+        _submit_queue_delivery(work_id, tier, repo, feature_id, retry_staged=retry_staged)
         return
-    _run_queue_delivery(work_id, tier, repo, feature_id)
+    _run_queue_delivery(work_id, tier, repo, feature_id, retry_staged=retry_staged)
 
 
 def _submit_queue_delivery(
@@ -311,6 +353,8 @@ def _submit_queue_delivery(
     tier: str,
     repo: Path,
     feature_id: str | None,
+    *,
+    retry_staged: bool = False,
 ) -> None:
     with _registry_lock:
         if work_id in _pending_queue_delivery:
@@ -319,12 +363,27 @@ def _submit_queue_delivery(
 
     def job() -> None:
         try:
-            _run_queue_delivery(work_id, tier, repo, feature_id)
+            _run_queue_delivery(work_id, tier, repo, feature_id, retry_staged=retry_staged)
+        except Exception:
+            with _registry_lock:
+                key = (repo, work_id)
+                previous = _failed_queue_delivery.get(key)
+                attempts = (previous[2] if previous else 0) + 1
+                delay = min(60.0, 2.0 ** min(attempts, 6))
+                _failed_queue_delivery[key] = (
+                    tier, feature_id, attempts, time.monotonic() + delay
+                )
+            raise
+        else:
+            with _registry_lock:
+                _failed_queue_delivery.pop((repo, work_id), None)
         finally:
             with _registry_lock:
                 _pending_queue_delivery.discard(work_id)
 
-    _submit_background(work_id, job)
+    if not _submit_background(work_id, job):
+        with _registry_lock:
+            _pending_queue_delivery.discard(work_id)
 
 
 def _run_queue_delivery(
@@ -332,11 +391,15 @@ def _run_queue_delivery(
     tier: str,
     repo: Path,
     feature_id: str | None,
+    *,
+    retry_staged: bool = False,
 ) -> None:
     with _graph_lock(work_id):
         token = _model_turn_authorized.set(True)
         try:
-            _run_queue_delivery_locked(work_id, tier, repo, feature_id)
+            _run_queue_delivery_locked(
+                work_id, tier, repo, feature_id, retry_staged=retry_staged
+            )
         finally:
             _model_turn_authorized.reset(token)
 
@@ -424,10 +487,25 @@ def _run_queue_delivery_locked(
     tier: str,
     repo: Path,
     feature_id: str | None,
+    *,
+    retry_staged: bool = False,
 ) -> None:
     from cascade.watchdog.events import read_events
 
     _resume_inflight_turn_if_needed(work_id, tier, repo, feature_id)
+
+    if retry_staged and _unanswered_staged_input(
+        work_id, tier, root=repo, feature_id=feature_id
+    ):
+        kickoff_turn(
+            KickoffReason(
+                kind="queue_event",
+                work_id=work_id,
+                by="watchdog",
+                root=repo,
+                feature_id=feature_id,
+            )
+        )
 
     for _pass in range(2):
         before = _queue_offset(work_id, tier, root=repo, feature_id=feature_id)
@@ -909,6 +987,24 @@ def _has_turn_input(
     if not state:
         return False
     return latest_input(state.get("messages") or []) is not None
+
+
+def _unanswered_staged_input(
+    work_id: str,
+    tier: str,
+    *,
+    root: Path,
+    feature_id: str | None,
+) -> bool:
+    """True when the last checkpointed message is input with no role reply yet."""
+
+    state = _graph_state(work_id, tier, root=root, feature_id=feature_id)
+    if not state or not _checkpoint_has_models(
+        work_id, tier, root=root, feature_id=feature_id
+    ):
+        return False
+    messages = state.get("messages") or []
+    return bool(messages) and messages[-1].get("role") in {"event", "human"}
 
 
 def _queue_offset(

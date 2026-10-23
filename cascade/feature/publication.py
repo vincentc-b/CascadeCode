@@ -277,15 +277,45 @@ def _build_publication_tail(
                     capture_output=True,
                 )
                 if applied.returncode != 0:
-                    raise GitError(
-                        applied.stderr.decode(errors="replace").strip()
-                        or f"could not fold {task_id} into publication history"
+                    # Concurrent Tasks may edit the same lines. The integration
+                    # merge already contains the reviewed resolution, so use
+                    # its tree instead of trying to resolve the patch again.
+                    snapshot = _integration_merge_snapshot(
+                        root, source_sha, final_tree_ref, task_commits[position + 1 :]
                     )
+                    if snapshot is None:
+                        raise GitError(
+                            applied.stderr.decode(errors="replace").strip()
+                            or f"could not fold {task_id} into publication history"
+                        )
+                    _git_env(root, env, "read-tree", "--reset", snapshot)
             tree = _git_env(root, env, "write-tree").stdout.strip()
             title = read_doc(task_id, root=root).meta.title
             message = f"task/{task_id}: {title}\n\n{_TRAILER} {task_id}\n"
             parent = _git_env(root, env, "commit-tree", tree, "-p", parent, "-m", message).stdout.strip()
         return parent
+
+
+def _integration_merge_snapshot(
+    root: Path,
+    source_sha: str,
+    final_ref: str,
+    later_task_commits: list[str],
+) -> str | None:
+    """Find the merge that integrated a Task before any later Task landed."""
+
+    merges = _git(root, "rev-list", "--merges", "--reverse", final_ref).stdout.splitlines()
+    for merge_sha in merges:
+        parents = _git(root, "show", "-s", "--format=%P", merge_sha).stdout.split()
+        if len(parents) != 2:
+            continue
+        source_in_parents = [_is_ancestor(root, source_sha, parent) for parent in parents]
+        if source_in_parents.count(True) != 1:
+            continue
+        if any(_is_ancestor(root, later_sha, merge_sha) for later_sha in later_task_commits):
+            return None
+        return merge_sha
+    return None
 
 
 def _task_trailers(message: str) -> list[str]:

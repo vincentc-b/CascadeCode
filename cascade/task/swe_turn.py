@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from cascade.agent import CursorAgentError, RoleResult, RoleTurn, run_role
+from cascade.agent.errors import TurnCancelledForDrain
 from cascade.task.swe_mcp import build_swe_custom_tools, build_swe_mcp_servers
 from cascade.task.git_tools import (
     _assert_commit_paths_allowed,
@@ -168,6 +169,8 @@ async def run_swe_turn(
     lease_heartbeat = asyncio.create_task(keep_lease_alive())
     try:
         role_result = await invoke(turn)
+    except TurnCancelledForDrain:
+        raise
     except CursorAgentError as exc:
         may_retry = route_swe_turn_failure(task_id, exc, root=repo)
         return SweTurnResult(

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 import socket
+import subprocess
 import threading
 import urllib.request
 from http import HTTPStatus
@@ -58,6 +60,7 @@ def test_get_home_is_server_rendered_html(ui_server):
         assert 'id="war-room-board"' in html
         assert 'id="epic-war-room-chat"' in html
         assert 'id="toast-stream"' in html
+        assert 'id="supervisor-status-banner"' in html
         assert "Branch pattern: task/" in html
         assert 'id="branch-label-example">task_001<' in html
         assert "Timed out after 10s" in html
@@ -181,6 +184,19 @@ def test_war_room_js_explains_epic_close_comment_blockers():
     assert 'body.plan_url || ("/plan/" + epicId + "#plan-comments")' in source
 
 
+def test_supervisor_health_banner_polls_api_health():
+    js_path = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    )
+    source = js_path.read_text(encoding="utf-8")
+
+    assert 'apiGet("/api/health")' in source
+    assert "pollSupervisorHealth()" in source
+    assert 'state !== "serving"' in source
+    assert "trunk_lock_warning" in source
+    assert "updateSupervisorBanner" in source
+
+
 def test_task_execution_controls_and_board_polling_are_load_safe():
     js_path = (
         Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
@@ -195,7 +211,7 @@ def test_task_execution_controls_and_board_polling_are_load_safe():
     assert '"Retry is available only when execution is blocked."' in source
     assert 'boardRefreshInFlight = apiGet("/api/board?_=" + Date.now())' in source
     assert source.count('apiGet("/api/board') == 1
-    assert "return refreshBoard({ refreshRelated: false })" in source
+    assert "return refreshBoard({ refreshRelated: false, forceFresh: false })" in source
     assert "setInterval(pollBoard" not in source
     assert "scheduleBoardPoll(boardPollDelayMs)" in source
     assert "Math.min(BOARD_POLL_MAX_MS, boardPollDelayMs * 2)" in source
@@ -218,6 +234,15 @@ def test_startup_does_not_duplicate_board_related_requests():
     assert "refreshBossView();" not in bootstrap
     assert "pollChatSidecar()," not in bootstrap
     assert "relatedRefreshInFlight" in source
+
+
+def test_war_room_refresh_races():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not on PATH")
+    cases = Path(__file__).with_name("war_room_refresh_races.mjs")
+    result = subprocess.run([node, str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_task_execution_status_styles_include_healthy_and_blocked_states():
@@ -281,6 +306,8 @@ def test_brief_and_sync_controls_in_html(ui_server):
     _status, html, _headers = _get_html(f"{base}/")
     assert 'id="btn-create-brief"' in html
     assert 'id="btn-pull-main"' in html
+    assert "Refresh briefs" in html
+    assert "app updates are handled separately" in html
     assert 'id="brief-form"' in html
     assert 'name="manager_model"' in html
     assert 'name="architect_model"' in html

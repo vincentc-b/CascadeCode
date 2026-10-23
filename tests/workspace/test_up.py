@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 import socket
 import subprocess
 import threading
@@ -80,6 +81,29 @@ def test_up_starts_war_room_on_trunk(tmp_path: Path) -> None:
         thread.join(timeout=10)
 
 
+def test_launcher_readiness_accepts_high_file_descriptor() -> None:
+    import fcntl
+
+    from cascade.workspace.launcher import _wait_readiness
+
+    read_fd, write_fd = os.pipe()
+    high_fd = fcntl.fcntl(read_fd, fcntl.F_DUPFD, 1024)
+
+    class RunningWorker:
+        returncode = None
+
+        def poll(self):
+            return None
+
+    try:
+        os.write(write_fd, b"ready\n")
+        _wait_readiness(high_fd, proc=RunningWorker(), stop_requested=lambda: False)
+    finally:
+        os.close(high_fd)
+        os.close(read_fd)
+        os.close(write_fd)
+
+
 def test_up_refuses_integration_branch_checkout(tmp_path: Path) -> None:
     root = make_git_repo(tmp_path)
     init_workspace(root)
@@ -113,7 +137,7 @@ def test_up_refuses_without_board_layout(tmp_path: Path) -> None:
         up(root, port=_free_port(), stop_when=lambda: True)
 
 
-def test_up_stops_when_loaded_python_source_changes(
+def test_up_keeps_listener_after_loaded_python_source_changes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = make_git_repo(tmp_path)
@@ -125,19 +149,44 @@ def test_up_stops_when_loaded_python_source_changes(
     module.write_text("VERSION = 1\n", encoding="utf-8")
     port = _free_port()
     up_module = importlib.import_module("cascade.workspace.up")
+    worker_module = importlib.import_module("cascade.workspace.worker")
     fingerprint = up_module._source_fingerprint
     monkeypatch.setattr(up_module, "_source_fingerprint", lambda: fingerprint(source))
+    monkeypatch.setattr(worker_module, "_source_fingerprint", lambda: fingerprint(source))
     monkeypatch.setattr(up_module, "_SOURCE_CHECK_INTERVAL_SECONDS", 0.01)
+    monkeypatch.setattr(worker_module, "_SOURCE_CHECK_INTERVAL_SECONDS", 0.01)
+    stop = threading.Event()
+    relaunched = threading.Event()
 
     def update_after_start() -> None:
-        _wait_for_http(f"http://127.0.0.1:{port}/api/board")
+        base = f"http://127.0.0.1:{port}"
+        _wait_for_http(f"{base}/api/board")
         module.write_text("VERSION = 2\n", encoding="utf-8")
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline:
+            try:
+                _wait_for_http(f"{base}/api/board", timeout=1.0)
+            except AssertionError:
+                time.sleep(0.05)
+                continue
+            relaunched.set()
+            return
+        raise AssertionError("listener did not recover after source change")
 
     updater = threading.Thread(target=update_after_start, daemon=True)
+    thread = threading.Thread(
+        target=up,
+        kwargs={"root": root, "port": port, "stop_when": stop.is_set},
+        daemon=True,
+    )
+    thread.start()
     updater.start()
-    with pytest.raises(WorkspaceError, match=r"Python source changed.*restart `cascade up`"):
-        up(root, port=port)
-    updater.join(timeout=5)
+    try:
+        updater.join(timeout=20)
+        assert relaunched.is_set()
+    finally:
+        stop.set()
+        thread.join(timeout=15)
 
 
 def test_long_inflight_resume_does_not_block_startup_progression(

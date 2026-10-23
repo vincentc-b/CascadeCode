@@ -32,6 +32,13 @@
   </head>
   <body>
     <div id="war-room-app" data-default-epic-graph-id="${epic_graph_id}">
+      <div
+        id="supervisor-status-banner"
+        class="supervisor-status-banner"
+        hidden
+        role="status"
+        aria-live="polite"
+      ></div>
       <header class="war-room-header">
         <div class="war-room-title">
           <h1>War Room</h1>
@@ -39,7 +46,7 @@
         </div>
         <div class="war-room-primary-actions">
           <button type="button" id="btn-create-brief">Create brief</button>
-          <button type="button" id="btn-pull-main" class="btn-secondary">Pull main</button>
+          <button type="button" id="btn-pull-main" class="btn-secondary" title="Refresh remote epic briefs; app updates are handled separately">Refresh briefs</button>
           <span id="sync-status" class="status-line" aria-live="polite"></span>
         </div>
         <div id="attachment-chrome" class="attachment-chrome">

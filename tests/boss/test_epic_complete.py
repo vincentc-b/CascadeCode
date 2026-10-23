@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+import cascade.boss.epic_complete as epic_complete_module
+
 from cascade.board.store import move_doc, read_doc
 from cascade.boss.epic_complete import (
     confirm_epic_complete,
@@ -210,6 +214,31 @@ def test_surface_prompt_idempotent_within_process(tmp_path: Path) -> None:
     surface_epic_close_prompt("epic_001", root=root)
     surface_epic_close_prompt("epic_001", root=root)
 
+    assert len(_war_room_toasts(root, kind="epic_ready_to_close")) == 1
+
+
+def test_close_prompt_retries_after_queue_append_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _epic_board(tmp_path)
+    reset_epic_close_prompt_surfaces()
+    real_append = epic_complete_module.append_event
+    attempts = 0
+
+    def append_once_failed(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("queue unavailable")
+        return real_append(*args, **kwargs)
+
+    monkeypatch.setattr(epic_complete_module, "append_event", append_once_failed)
+    with pytest.raises(OSError, match="queue unavailable"):
+        surface_epic_close_prompt("epic_001", root=root)
+    surface_epic_close_prompt("epic_001", root=root)
+    surface_epic_close_prompt("epic_001", root=root)
+
+    assert attempts == 2
     assert len(_war_room_toasts(root, kind="epic_ready_to_close")) == 1
 
 

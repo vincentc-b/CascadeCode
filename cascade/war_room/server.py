@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 from cascade.board.errors import NotFound
 from cascade.workspace.doc_root import read_doc_resolved
-from cascade.workspace.integration_worktree import merged_board
+from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from cascade.boss.epic_complete import confirm_epic_complete_result
 from cascade.boss.graph import install_boss_consumer
 from cascade.boss.merge import merge_task_branch
@@ -56,6 +56,7 @@ from cascade.war_room.provider_routes import (
     register_provider_routes,
     try_handle_provider_post,
 )
+from cascade.war_room.health_routes import register_health_routes
 from cascade.war_room.review_routes import register_review_routes
 from cascade.war_room.room_settings_routes import (
     register_room_settings_routes,
@@ -88,6 +89,9 @@ REQUEST_DEADLINE_S = 10.0
 EPIC_CLOSE_DEADLINE_S = 60.0
 APPROVAL_DEADLINE_S = 60.0
 MAX_CONCURRENT_REQUESTS = 16
+HTTP_HANDLER_JOIN_TIMEOUT_S = EPIC_CLOSE_DEADLINE_S + 5.0
+DRAIN_RETRY_AFTER_S = 5
+_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 _APPROVAL_POST_PATHS = frozenset(
     {"/api/approve_epic_plan", "/api/approve_feature"}
@@ -116,7 +120,7 @@ def assert_loopback_host(host: str) -> str:
 class WarRoomHTTPServer(ThreadingHTTPServer):
     """HTTPServer scoped to a repo root. One request cannot block the rest."""
 
-    daemon_threads = True
+    daemon_threads = False
     allow_reuse_address = True
     request_queue_size = 64
 
@@ -126,23 +130,76 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         RequestHandlerClass: type[BaseHTTPRequestHandler],
         *,
         root: Path,
+        listen_socket: socket.socket | None = None,
+        draining: threading.Event | None = None,
     ) -> None:
         host, _port = server_address
-        assert_loopback_host(host)
+        if listen_socket is None:
+            assert_loopback_host(host)
+        else:
+            assert_loopback_host(listen_socket.getsockname()[0])
         self.root = Path(root).resolve()
+        self._listen_socket = listen_socket
         install_epic_boot_hook(self.root)
         install_feature_boot_hook(self.root)
         install_task_boot_hook(self.root)
         install_task_wiring(self.root)
         install_boss_consumer(self.root)
-        from cascade.completion_reconcile import reconcile_completion_with_prompts
-
-        reconcile_completion_with_prompts(root=self.root)
+        # The watchdog owns completion reconciliation. It can perform remote
+        # review I/O, so HTTP listener construction must not wait for it.
         load_epic_tools()
         load_feature_tools()
         self.attachment = AttachmentState()
         self._request_slots = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
+        self._draining = draining if draining is not None else threading.Event()
+        self._handler_threads: set[threading.Thread] = set()
+        self._handler_threads_lock = threading.Lock()
         super().__init__(server_address, RequestHandlerClass)
+
+    def is_draining(self) -> bool:
+        return self._draining.is_set()
+
+    def snapshot_handler_threads(self) -> list[threading.Thread]:
+        """Return a drain-start snapshot of live tracked handlers."""
+
+        with self._handler_threads_lock:
+            return [thread for thread in self._handler_threads if thread.is_alive()]
+
+    def join_handler_threads(
+        self,
+        threads: list[threading.Thread],
+        *,
+        timeout: float = HTTP_HANDLER_JOIN_TIMEOUT_S,
+    ) -> list[str]:
+        """Wait for ``threads``; return names of threads still alive at the deadline."""
+
+        deadline = time.monotonic() + timeout
+        pending = list(threads)
+        abandoned: list[str] = []
+        while pending:
+            pending = [t for t in pending if t.is_alive()]
+            if not pending:
+                return abandoned
+            now = time.monotonic()
+            if now >= deadline:
+                for thread in pending:
+                    abandoned.append(thread.name)
+                    sys.stderr.write(
+                        "war room drain: abandoning handler thread "
+                        f"{thread.name!r} still alive after {timeout:.0f}s\n"
+                    )
+                    sys.stderr.flush()
+                return abandoned
+            for thread in pending:
+                thread.join(timeout=min(1.0, max(0.0, deadline - now)))
+        return abandoned
+
+    def server_bind(self) -> None:
+        if self._listen_socket is not None:
+            self.socket = self._listen_socket
+            self.server_address = self.socket.getsockname()
+            return
+        super().server_bind()
 
     def process_request(self, request: socket.socket, client_address: tuple[str, int]) -> None:
         """Bound handler work so timed-out clients cannot create unlimited threads."""
@@ -164,21 +221,33 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
                 pass
             self.shutdown_request(request)
             return
-        try:
-            super().process_request(request, client_address)
-        except Exception:
-            self._request_slots.release()
-            raise
+        worker = threading.Thread(
+            target=self._run_handler_thread,
+            args=(request, client_address),
+            name="war-room-handler",
+            daemon=False,
+        )
+        with self._handler_threads_lock:
+            self._handler_threads.add(worker)
+        worker.start()
 
-    def process_request_thread(
+    def _run_handler_thread(
         self,
         request: socket.socket,
         client_address: tuple[str, int],
     ) -> None:
+        current = threading.current_thread()
         try:
-            super().process_request_thread(request, client_address)
+            try:
+                self.finish_request(request, client_address)
+            except Exception:
+                self.handle_error(request, client_address)
+            finally:
+                self.shutdown_request(request)
         finally:
             self._request_slots.release()
+            with self._handler_threads_lock:
+                self._handler_threads.discard(current)
 
 
 GetRoute = Callable[["WarRoomRequestHandler"], None]
@@ -215,6 +284,51 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         self.send_response_only(HTTPStatus.CONTINUE)
         BaseHTTPRequestHandler.end_headers(self)
         return True
+
+    def handle_one_request(self) -> None:
+        try:
+            self.raw_requestline = self.rfile.readline(65537)
+            if len(self.raw_requestline) > 65536:
+                self.requestline = ""
+                self.request_version = ""
+                self.command = ""
+                self.path = ""
+                self.send_error(HTTPStatus.REQUEST_URI_TOO_LONG)
+                return
+            if not self.raw_requestline:
+                self.close_connection = True
+                return
+            if not self.parse_request():
+                return
+            if (
+                self.server.is_draining()
+                and self.command in _MUTATING_METHODS
+            ):
+                self._respond_updating()
+                return
+            mname = "do_" + self.command
+            if not hasattr(self, mname):
+                self.send_error(
+                    HTTPStatus.NOT_IMPLEMENTED,
+                    "Unsupported method (%r)" % self.command,
+                )
+                return
+            method = getattr(self, mname)
+            method()
+            self.wfile.flush()
+        except TimeoutError as exc:
+            self.log_error("Request timed out: %r", exc)
+            self.close_connection = True
+
+    def _respond_updating(self) -> None:
+        body = b'{"error":"updating"}'
+        self.send_response(HTTPStatus.SERVICE_UNAVAILABLE)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Retry-After", str(DRAIN_RETRY_AFTER_S))
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def handle(self) -> None:
         """Serve one connection, enforcing the deadline for its lifecycle route."""
@@ -807,7 +921,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
     def _handle_board(self) -> None:
         board = merged_board(self.server.root)
-        payload = board_view_from_index(board, root=self.server.root)
+        with merged_board_snapshot(self.server.root, board):
+            payload = board_view_from_index(board, root=self.server.root)
         self._json_response(HTTPStatus.OK, payload)
 
     def _handle_doc(self, work_id: str) -> None:
@@ -938,11 +1053,28 @@ def serve(
     host: str = "127.0.0.1",
     port: int = 8765,
     handler_class: type[WarRoomRequestHandler] = WarRoomRequestHandler,
+    listen_socket: socket.socket | None = None,
+    draining: threading.Event | None = None,
 ) -> WarRoomHTTPServer:
-    """Create and return a configured server (caller runs serve_forever or thread)."""
+    """Create and return a configured server (caller runs serve_forever or thread).
 
-    assert_loopback_host(host)
-    return WarRoomHTTPServer((host, port), handler_class, root=root)
+    When ``listen_socket`` is set, the server accepts on that fd (launcher-owned
+    bind) instead of opening a new socket.
+    """
+
+    if listen_socket is None:
+        assert_loopback_host(host)
+        address: tuple[str, int] = (host, port)
+    else:
+        bound_host, bound_port = listen_socket.getsockname()[:2]
+        address = (bound_host, bound_port)
+    return WarRoomHTTPServer(
+        address,
+        handler_class,
+        root=root,
+        listen_socket=listen_socket,
+        draining=draining,
+    )
 
 
 def main() -> None:
@@ -963,6 +1095,7 @@ register_amendment_routes(WarRoomRequestHandler)
 register_provider_routes(WarRoomRequestHandler)
 register_review_routes(WarRoomRequestHandler)
 register_room_settings_routes(WarRoomRequestHandler)
+register_health_routes(WarRoomRequestHandler)
 
 if __name__ == "__main__":
     main()

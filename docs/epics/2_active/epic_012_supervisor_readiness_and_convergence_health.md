@@ -1,6 +1,6 @@
 ---
-id: epic_018
-title: Graceful supervisor updates without War Room outage
+id: epic_012
+title: Supervisor readiness and convergence health
 tier: epic
 status: active
 parent: null
@@ -13,18 +13,18 @@ skills: []
 parent_rev: null
 created: '2026-10-22'
 updated: '2026-10-23'
-provider: cursor
+provider: codex
 models:
-  epic_manager: claude-opus-5-5
-  epic_architect: claude-opus-5-5
-integration_branch: epic/epic_018
-integration_worktree: .cascade/worktrees/epic_epic_018
+  epic_manager: gpt-5.6-sol
+  epic_architect: gpt-5.6-sol
+integration_branch: epic/epic_012
+integration_worktree: .cascade/worktrees/epic_epic_012
 ---
-# Graceful supervisor updates without War Room outage
+# Supervisor readiness and convergence health
 
 ## Intent
 
-Live epic spec is on branch `epic/epic_018` (worktree `.cascade/worktrees/epic_epic_018`). Edit there, not on the product trunk.
+Live epic spec is on branch `epic/epic_012` (worktree `.cascade/worktrees/epic_epic_012`). Edit there, not on the product trunk.
 
 ## Macro-architecture
 

@@ -126,6 +126,7 @@ def update_integration_branch(
         checkout = _resolve_integration_checkout(trunk, kind, work_id)
         if checkout is None:
             return BranchSyncUpdateResult(ok=False, reason="checkout_missing")
+        meta = merged_board(trunk).by_id.get(work_id)
 
         if state.behind == 0:
             return BranchSyncUpdateResult(ok=True, no_op=True, merge_sha=head_sha(checkout))
@@ -145,6 +146,14 @@ def update_integration_branch(
             )
 
         conflict_paths = _validated_unmerged_paths(checkout)
+        resolved_sha = _resolve_managed_pointer_conflict(
+            checkout,
+            meta=meta,
+            state=state,
+            conflict_paths=conflict_paths,
+        )
+        if resolved_sha is not None:
+            return BranchSyncUpdateResult(ok=True, merge_sha=resolved_sha)
         _run(["merge", "--abort"], checkout, check=False)
         if not _merge_state_clean(checkout):
             return BranchSyncUpdateResult(ok=False, reason="invariant")
@@ -157,6 +166,66 @@ def update_integration_branch(
             reason="branch_conflict",
             conflict_paths=conflict_paths,
         )
+
+
+def _resolve_managed_pointer_conflict(
+    checkout: Path,
+    *,
+    meta: WorkMeta | None,
+    state: BranchSyncState,
+    conflict_paths: tuple[str, ...],
+) -> str | None:
+    """Keep the live integration spec when its managed base pointer conflicts.
+
+    Activation writes the authoritative document to the new integration branch
+    and then writes a pointer at the same active path on its base branch. A later
+    base update sees those independently-added files as a conflict even though
+    their ownership is unambiguous. Resolve only that single, recognizable
+    pointer conflict; all content conflicts remain aborted for explicit review.
+    """
+
+    if meta is None or len(conflict_paths) != 1:
+        return None
+    try:
+        live_rel = meta.path.resolve().relative_to(checkout.resolve()).as_posix()
+    except ValueError:
+        return None
+    if conflict_paths != (live_rel,):
+        return None
+
+    pointer = _run(
+        ["show", f"{state.base_branch}:{live_rel}"], checkout, check=False
+    )
+    live = _run(["show", f":2:{live_rel}"], checkout, check=False)
+    if pointer.returncode != 0 or live.returncode != 0:
+        return None
+
+    pointer_markers = (
+        f"id: {state.work_id}",
+        f"integration_branch: {state.work_branch}",
+        f"Live {state.tier} spec is on branch `{state.work_branch}`",
+    )
+    if not all(marker in pointer.stdout for marker in pointer_markers):
+        return None
+    if f"id: {state.work_id}" not in live.stdout:
+        return None
+    if "integration_worktree:" in live.stdout:
+        return None
+
+    if _run(["checkout", "--ours", "--", live_rel], checkout, check=False).returncode != 0:
+        return None
+    if _run(["add", "--", live_rel], checkout, check=False).returncode != 0:
+        return None
+    if _validated_unmerged_paths(checkout):
+        return None
+    commit = _run(
+        ["-c", "commit.gpgsign=false", "commit", "--no-edit"],
+        checkout,
+        check=False,
+    )
+    if commit.returncode != 0 or not _merge_state_clean(checkout):
+        return None
+    return head_sha(checkout)
 
 
 def preflight_integration_sync(
@@ -378,13 +447,22 @@ def _worktree_cleanliness(repo: Path) -> SyncBlockReason | None:
     untracked = _run(
         ["ls-files", "--others", "--exclude-standard"], repo, check=False
     )
-    if untracked.returncode == 0 and untracked.stdout.strip():
+    untracked_source = [
+        path
+        for path in untracked.stdout.splitlines()
+        if path and not _managed_runtime_path(path)
+    ]
+    if untracked.returncode != 0 or untracked_source:
         return "local_changes"
     return None
 
 
+def _managed_runtime_path(rel: str) -> bool:
+    return rel.startswith((".cascade/", "docs/_queue/", "docs/_war_room/"))
+
+
 def _operator_trunk_ignored(rel: str) -> bool:
-    return rel.startswith((".cascade/", "docs/_queue/"))
+    return _managed_runtime_path(rel)
 
 
 def _operator_trunk_cleanliness(repo: Path) -> SyncBlockReason | None:

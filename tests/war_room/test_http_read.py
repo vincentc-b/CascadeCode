@@ -88,6 +88,22 @@ def test_server_binds_loopback(war_room_server):
     assert host == "127.0.0.1"
 
 
+def test_http_listener_starts_without_completion_reconciliation(
+    tmp_path, monkeypatch
+):
+    root = make_repo(tmp_path, git=False)
+
+    def blocked_reconciliation(*_args, **_kwargs):
+        raise AssertionError("HTTP startup must not run completion reconciliation")
+
+    monkeypatch.setattr(
+        "cascade.completion_reconcile.reconcile_completion_with_prompts",
+        blocked_reconciliation,
+    )
+    server = serve(root=root, host="127.0.0.1", port=_free_port())
+    server.server_close()
+
+
 def test_get_board_shape(war_room_server):
     base, _root, _server = war_room_server
     status, payload, _headers = _get(f"{base}/api/board")
@@ -131,6 +147,77 @@ def test_get_doc_and_missing(war_room_server):
     code, err = _get_expect_error(f"{base}/api/doc/task_999")
     assert code == HTTPStatus.NOT_FOUND
     assert "error" in err
+
+
+def test_get_api_health_reads_supervisor_status(war_room_server):
+    base, root, _server = war_room_server
+    from cascade.workspace.supervisor_status import utc_now_iso, write_supervisor_status
+
+    now = utc_now_iso()
+    write_supervisor_status(
+        root,
+        {
+            "state": "update_blocked",
+            "worker_pid": 4242,
+            "restart_count": 0,
+            "last_error": {"message": "preflight failed"},
+            "next_action": "Fix the syntax error and save again.",
+            "trunk_lock_warning": None,
+            "since": now,
+            "updated_at": now,
+        },
+    )
+    status, payload, _ = _get(f"{base}/api/health")
+    assert status == HTTPStatus.OK
+    assert payload["state"] == "update_blocked"
+    assert payload["last_error"]["message"] == "preflight failed"
+    assert payload["next_action"] == "Fix the syntax error and save again."
+
+
+def test_get_api_health_null_when_status_file_missing(war_room_server):
+    base, _root, _server = war_room_server
+    status, payload, _ = _get(f"{base}/api/health")
+    assert status == HTTPStatus.OK
+    assert payload is None
+
+
+def test_get_api_health_served_while_draining(war_room_server):
+    base, root, server = war_room_server
+    from cascade.workspace.drain import reset_drain_for_tests
+    from cascade.workspace.supervisor_status import utc_now_iso, write_supervisor_status
+
+    now = utc_now_iso()
+    write_supervisor_status(
+        root,
+        {
+            "state": "draining",
+            "worker_pid": 1,
+            "restart_count": 0,
+            "last_error": None,
+            "next_action": None,
+            "trunk_lock_warning": None,
+            "since": now,
+            "updated_at": now,
+        },
+    )
+    server._draining.set()
+    try:
+        status, payload, _ = _get(f"{base}/api/health")
+        assert status == HTTPStatus.OK
+        assert payload["state"] == "draining"
+        req = urllib.request.Request(
+            f"{base}/api/comment",
+            method="POST",
+            data=b'{"id":"epic_001","body":"probe"}',
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(req)
+        assert exc_info.value.code == HTTPStatus.SERVICE_UNAVAILABLE
+        assert json.loads(exc_info.value.read().decode())["error"] == "updating"
+    finally:
+        server._draining.clear()
+        reset_drain_for_tests()
 
 
 def test_get_brief_template(war_room_server):

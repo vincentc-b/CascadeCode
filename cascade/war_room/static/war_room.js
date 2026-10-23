@@ -79,6 +79,7 @@
     btnCloseBrief: document.getElementById("btn-close-brief"),
     btnCancelBrief: document.getElementById("btn-cancel-brief"),
     btnSubmitBrief: document.getElementById("btn-submit-brief"),
+    supervisorBanner: document.getElementById("supervisor-status-banner"),
   };
 
   const AGENT_CHAT_AUTHORS = {
@@ -228,6 +229,47 @@
     reportChatLoadFailure(err);
   }
 
+  function supervisorBannerText(health) {
+    if (!health || typeof health !== "object") return "";
+    const state = health.state;
+    const trunkLock = health.trunk_lock_warning;
+    const show =
+      (typeof trunkLock === "string" && trunkLock.length > 0) ||
+      (typeof state === "string" && state.length > 0 && state !== "serving");
+    if (!show) return "";
+    const parts = [];
+    if (state) parts.push("Supervisor: " + state);
+    const lastError = health.last_error;
+    if (lastError && typeof lastError === "object") {
+      const message = lastError.message || lastError.stderr_tail;
+      if (message) parts.push(String(message));
+    }
+    if (health.next_action) parts.push(String(health.next_action));
+    if (trunkLock) parts.push("Trunk lock: " + trunkLock);
+    return parts.join(" — ");
+  }
+
+  function updateSupervisorBanner(health) {
+    if (!el.supervisorBanner) return;
+    const text = supervisorBannerText(health);
+    if (!text) {
+      el.supervisorBanner.hidden = true;
+      el.supervisorBanner.textContent = "";
+      return;
+    }
+    el.supervisorBanner.textContent = text;
+    el.supervisorBanner.hidden = false;
+  }
+
+  async function pollSupervisorHealth() {
+    try {
+      const health = await apiGet("/api/health");
+      updateSupervisorBanner(health);
+    } catch (_err) {
+      /* ignore transient health poll errors */
+    }
+  }
+
   async function apiGet(path) {
     const resp = await fetch(path, { signal: deadlineSignal(), cache: "no-store" });
     const text = await resp.text();
@@ -330,14 +372,14 @@
 
   async function pullMain() {
     el.btnPullMain.disabled = true;
-    el.syncStatus.textContent = "Pulling…";
+    el.syncStatus.textContent = "Refreshing briefs…";
     try {
       const response = await apiPost("/api/sync/pull", {});
       const added = response.body.new_briefs || [];
-      el.syncStatus.textContent = added.length ? "Imported " + added.join(", ") : "Main is current";
+      el.syncStatus.textContent = added.length ? "Imported briefs: " + added.join(", ") : "No new briefs";
       await refreshBoard();
     } catch (err) {
-      el.syncStatus.textContent = (err.body && err.body.error) || err.message || "Pull failed";
+      el.syncStatus.textContent = (err.body && err.body.error) || err.message || "Brief refresh failed";
       el.syncStatus.classList.add("error");
     } finally {
       el.btnPullMain.disabled = false;
@@ -477,6 +519,88 @@
     });
   }
 
+  function humanizeFeatureReadinessBlocker(raw) {
+    if (raw === "not_approved") return null;
+    const colon = raw.indexOf(":");
+    const prefix = colon >= 0 ? raw.slice(0, colon) : raw;
+    const payload = colon >= 0 ? raw.slice(colon + 1) : "";
+    switch (prefix) {
+      case "unmet_deps":
+        return "Unmet dependencies: " + payload;
+      case "dispatch_base_unavailable":
+        return "Stacked base unavailable: " + payload;
+      case "feature_awaiting_merge":
+        return "Feature awaiting merge";
+      case "sibling_blocked":
+        return "Sibling feature blocked";
+      case "review_threads_blocking":
+        return "Blocking review threads";
+      case "epic_inactive":
+        return "Epic inactive";
+      case "not_in_backlog":
+        return "Not in backlog";
+      default:
+        return raw;
+    }
+  }
+
+  function appendFeatureReadinessUi(row, actions, item) {
+    const readiness = item.readiness;
+    if (!readiness) return;
+
+    if (!readiness.approved) {
+      const approvalStatus = document.createElement("span");
+      approvalStatus.className = "feature-review-status";
+      approvalStatus.textContent = "Awaiting feature approval";
+      approvalStatus.setAttribute(
+        "aria-label",
+        "Feature approval status: " + approvalStatus.textContent
+      );
+      row.appendChild(approvalStatus);
+      actions.appendChild(featureApproveActionButton(item));
+      return;
+    }
+
+    const lines = (readiness.blockers || [])
+      .map(humanizeFeatureReadinessBlocker)
+      .filter(function (line) { return line; });
+    if (!lines.length) return;
+
+    const blockersEl = document.createElement("div");
+    blockersEl.className = "feature-readiness-blockers";
+    blockersEl.textContent = lines.join(" · ");
+    blockersEl.setAttribute("aria-label", "Feature dispatch blockers: " + lines.join("; "));
+    row.appendChild(blockersEl);
+  }
+
+  function featureApproveActionButton(item) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Approve feature";
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = "Approving…";
+      dispatch("/api/approve_feature", { id: item.id })
+        .then(function (body) {
+          if (body && body.ok && !body.dispatch_pending) {
+            setStatus("Feature " + item.id + " approved.", false);
+          }
+        })
+        .catch(function (err) {
+          setStatus(err.message || String(err), true);
+        })
+        .finally(function () {
+          if (btn.isConnected) {
+            btn.disabled = false;
+            btn.textContent = "Approve feature";
+          }
+        });
+    });
+    return btn;
+  }
+
   function buildRow(item, tier, column) {
     const row = document.createElement("div");
     row.className = "board-row";
@@ -530,6 +654,13 @@
       status.setAttribute("aria-label", "Execution status: " + execution.label);
       row.appendChild(status);
 
+      if (execution.kind === "blocked" && execution.detail) {
+        const detail = document.createElement("div");
+        detail.className = "task-merge-blocker";
+        detail.textContent = execution.detail;
+        row.appendChild(detail);
+      }
+
       const branch = document.createElement("div");
       branch.className = "task-branch";
       branch.textContent = "task/" + item.id;
@@ -566,6 +697,7 @@
       }
     }
     if (tier === "features") {
+      appendFeatureReadinessUi(row, actions, item);
       if (column === "2_active") {
         actions.appendChild(actionButton("Open team", function () {
           return attach(item.id, "feature");
@@ -652,6 +784,22 @@
       execution.health || execution.phase || item.execution_status ||
       item.runtime_status || item.execution_state || ""
     ).toLowerCase();
+    if (runtime === "merge_blocked") {
+      const blocker = execution.merge_blocker || {};
+      const paths = Array.isArray(blocker.conflict_paths) ? blocker.conflict_paths : [];
+      const detail = paths.length ? "Conflicting files: " + paths.join(", ") :
+        "Merge refused: " + (blocker.reason || "unknown reason");
+      const recovery = blocker.reason === "branch_conflict" ?
+        "Resolve the Task branch against its Feature branch, then retry Merge task." :
+        "Check the merge refusal, then retry Merge task.";
+      return {
+        kind: "blocked", label: "Merge blocked", detail: detail,
+        title: detail + ". " + recovery,
+      };
+    }
+    if (runtime === "awaiting_merge") {
+      return { kind: "queued", label: "Awaiting merge", title: "Validated task is waiting to merge into its Feature branch." };
+    }
     if (
       runtime === "stale" || runtime === "stuck" || runtime === "stalled" ||
       runtime === "unhealthy"
@@ -742,7 +890,10 @@
   async function dispatch(path, payload) {
     try {
       const { body } = await apiPost(path, payload);
-      if (!body.ok) {
+      if (body.dispatch_pending) {
+        dispatchBanner = "Approval saved; dispatch pending: " + (body.dispatch_error || "retrying");
+        setStatus(dispatchBanner, true);
+      } else if (!body.ok) {
         dispatchBanner = body.reason ? "Dispatch failed: " + body.reason : "Dispatch failed";
         setStatus(dispatchBanner, true);
       } else {
@@ -933,11 +1084,14 @@
     const userInitiated = !options || options.userInitiated !== false;
     try {
       const messages = await fetchChatMessages(graphId);
+      if (graphId !== focusGraphId) return [];
       renderChatMessages(messages);
       if (userInitiated) clearChatPollDiagnostic();
       return messages;
     } catch (err) {
-      reportChatLoadFailure(err, { userInitiated: userInitiated });
+      if (graphId === focusGraphId) {
+        reportChatLoadFailure(err, { userInitiated: userInitiated });
+      }
       return [];
     }
   }
@@ -1051,9 +1205,16 @@
   let boardRefreshInFlight = null;
   let relatedRefreshInFlight = null;
 
-  /** Share the expensive board request across startup, polling, and user actions. */
-  function loadBoardView() {
-    if (boardRefreshInFlight) return boardRefreshInFlight;
+  /** Share idle reads, but fetch again after an action if an older read is pending. */
+  function loadBoardView(forceFresh) {
+    if (boardRefreshInFlight) {
+      if (forceFresh) {
+        return boardRefreshInFlight.catch(function () {}).then(function () {
+          return loadBoardView();
+        });
+      }
+      return boardRefreshInFlight;
+    }
     boardRefreshInFlight = apiGet("/api/board?_=" + Date.now())
       .then(function (view) {
         renderBoard(view);
@@ -1076,8 +1237,9 @@
 
   async function refreshBoard(options) {
     const refreshRelated = !options || options.refreshRelated !== false;
+    const forceFresh = !options || options.forceFresh !== false;
     try {
-      await loadBoardView();
+      await loadBoardView(forceFresh);
       if (refreshRelated) {
         await refreshRelatedPanels();
       }
@@ -1090,7 +1252,7 @@
 
   /** Keep lifecycle controls current even when no toast is emitted or a toast is replayed. */
   function pollBoard() {
-    return refreshBoard({ refreshRelated: false });
+    return refreshBoard({ refreshRelated: false, forceFresh: false });
   }
 
   const BOARD_POLL_BASE_MS = 3000;
@@ -1836,10 +1998,14 @@
       refreshProviders(),
       refreshOpenReviews({ userInitiated: false }),
       pollToasts(),
+      pollSupervisorHealth(),
     ]);
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     if (!document.hidden) scheduleBoardPoll(boardPollDelayMs);
+    setInterval(function () {
+      if (!document.hidden) pollSupervisorHealth();
+    }, 3000);
     setInterval(function () {
       if (!document.hidden) pollToasts();
     }, 2000);

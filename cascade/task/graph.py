@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from langgraph.graph import END, START, StateGraph
 
+from cascade.agent.errors import TurnCancelledForDrain
 from cascade.agent.graph_turn import (
     clear_turn_model_override,
     format_turn_prompt,
@@ -296,6 +297,8 @@ def _swe_role_content(state: TaskGraphState) -> str:
                 run_role_fn=_run_role_fn,
             )
         )
+    except TurnCancelledForDrain:
+        raise
     except RuntimeError as exc:
         return f"swe: {exc}"
 
@@ -340,7 +343,9 @@ def _auto_merge_finished_task(task_id: str, root: Path) -> None:
             fail_task(task_id, reason, root=root)
             return
         from cascade.task_rollup import queue_task_merge, retry_pending_task_merges
+        from cascade.task.execution import mark_awaiting_merge
 
+        mark_awaiting_merge(task_id, root=root)
         queue_task_merge(task_id, root=root)
         retry_pending_task_merges(root)
     except Exception:

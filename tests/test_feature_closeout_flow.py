@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,7 +14,8 @@ from cascade.board.store import read_doc
 from cascade.boss.rollup import on_task_merged, try_complete_feature
 from cascade.review import ensure_feature_review
 from cascade.tracking import MergeRequest
-from cascade.watchdog.events import read_events
+from cascade.watchdog.events import append_event, read_events
+from cascade.watchdog.types import Event
 from tests.support import add_doc, make_repo
 
 
@@ -308,6 +310,7 @@ def test_polling_merged_review_does_not_create_source_completion_commit(
         "cascade.review.fast_forward_branch",
         lambda path, branch: synced.append((path, branch)) or "merged-sha",
     )
+    monkeypatch.setattr("cascade.review.push_branch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "cascade.boss.rollup.move_doc",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("post-merge move")),
@@ -320,3 +323,105 @@ def test_polling_merged_review_does_not_create_source_completion_commit(
     assert synced == [(root, "epic/epic_001")]
     feature = read_doc("feat_001", root=root)
     assert feature.meta.status == "completed"
+
+
+def test_merged_review_closes_active_feature_copy_on_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _completed_feature_board(root)
+    state_path = root / ".cascade" / "reviews.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({
+        "feat_001": {
+            "url": "https://github.example/o/r/pull/20",
+            "number": "20",
+            "forge": "github",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "draft": False,
+            "seen_comments": [],
+            "toast_notified": True,
+        }
+    }), encoding="utf-8")
+    monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+    monkeypatch.setattr(
+        "cascade.review.merge_request_snapshot",
+        lambda *_args, **_kwargs: {"state": "merged", "comments": []},
+    )
+    monkeypatch.setattr(
+        "cascade.review.get_integration_worktree",
+        lambda *_args, **_kwargs: SimpleNamespace(path=root),
+    )
+    monkeypatch.setattr("cascade.review.fast_forward_branch", lambda *_args: "merged-sha")
+    pushes: list[str] = []
+
+    def push_target(_root: Path, branch: str) -> None:
+        pushes.append(branch)
+        if len(pushes) == 1:
+            from cascade.board.errors import GitError
+
+            raise GitError("temporary push failure")
+
+    monkeypatch.setattr("cascade.review.push_branch", push_target)
+
+    assert read_doc("feat_001", root=root).meta.status == "active"
+    review_module.poll_feature_reviews(root)
+    assert read_doc("feat_001", root=root).meta.status == "completed"
+    assert json.loads(state_path.read_text(encoding="utf-8"))["feat_001"].get("closed") is None
+    events, _ = read_events("epic_001", 0, root=root)
+    assert not any(event.type == "FeatureCompleted" for event in events)
+    review_module.poll_feature_reviews(root)
+    review_module.poll_feature_reviews(root)
+
+    feature = read_doc("feat_001", root=root)
+    assert feature.meta.status == "completed"
+    assert feature.meta.path.parent.name == "3_completed"
+    assert json.loads(state_path.read_text(encoding="utf-8"))["feat_001"]["closed"] is True
+    events, _ = read_events("epic_001", 0, root=root)
+    assert len([event for event in events if event.type == "FeatureCompleted"]) == 1
+    assert pushes == ["epic/epic_001", "epic/epic_001"]
+
+
+def test_closed_review_repairs_active_target_even_after_completion_event(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _completed_feature_board(root)
+    state_path = root / ".cascade" / "reviews.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({
+        "feat_001": {
+            "url": "https://github.example/o/r/pull/20",
+            "number": "20",
+            "forge": "github",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "draft": False,
+            "closed": True,
+        }
+    }), encoding="utf-8")
+    append_event("epic_001", Event(
+        type="FeatureCompleted",
+        ts=datetime.now(timezone.utc),
+        payload={"feature_id": "feat_001"},
+        dest="epic_001",
+    ), root=root)
+    monkeypatch.setattr(
+        "cascade.review.get_integration_worktree",
+        lambda *_args, **_kwargs: SimpleNamespace(path=root),
+    )
+    monkeypatch.setattr("cascade.review.fast_forward_branch", lambda *_args: "merged-sha")
+    pushes: list[str] = []
+    monkeypatch.setattr(
+        "cascade.review.push_branch", lambda _root, branch: pushes.append(branch)
+    )
+
+    assert review_module.reconcile_feature_review_completions(root) == []
+    assert read_doc("feat_001", root=root).meta.status == "completed"
+    assert pushes == ["epic/epic_001"]
+
+    assert review_module.reconcile_feature_review_completions(root) == []
+    events, _ = read_events("epic_001", 0, root=root)
+    assert len([event for event in events if event.type == "FeatureCompleted"]) == 1
+    assert pushes == ["epic/epic_001"]

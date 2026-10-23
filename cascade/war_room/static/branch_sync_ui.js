@@ -121,7 +121,14 @@
 
       const syncBlock = renderBranchSyncSummary(document, item.branch_sync);
       if (syncBlock) {
-        row.insertBefore(syncBlock, actionsEl);
+        if (actionsEl && actionsEl.parentNode === row) {
+          row.insertBefore(syncBlock, actionsEl);
+        } else {
+          // buildRow decorates the row before attaching its actions. Appending
+          // here still places the summary immediately before actions once the
+          // caller appends them, and avoids an invalid DOM insertBefore call.
+          row.appendChild(syncBlock);
+        }
       }
 
       if (!shouldShowUpdateBranch(item.branch_sync)) return;

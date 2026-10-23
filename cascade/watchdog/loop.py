@@ -23,7 +23,7 @@ from cascade.watchdog.types import Event
 
 # Appearances already toasted. This suppresses duplicate toasts, not retries.
 _stuck: set[tuple[str, int, int]] = set()
-_orphan_toast_signatures: set[frozenset[tuple[str, str]]] = set()
+_orphan_toast_signatures: dict[Path, frozenset[tuple[str, str]]] = {}
 # Work queues are the latency-sensitive watchdog input. Remember their cheap
 # filesystem signature so idle polls do not rebuild the merged board merely to
 # discover that no graph has anything new to ingest.
@@ -96,12 +96,19 @@ def _consume_explicit_events(root: Path, *, force_work_queues: bool) -> None:
     with process_lock:
         tick_boss_consumer()
 
+    from cascade.workspace.kickoff import (
+        deferred_kickoffs,
+        deliver_queue_kickoffs,
+        retry_failed_queue_kickoffs,
+    )
+
+    with deferred_kickoffs():
+        retry_failed_queue_kickoffs(root)
+
     signature = _work_queue_signature(root)
     previous = _work_queue_signatures.get(root.resolve())
     if not force_work_queues and signature == previous:
         return
-
-    from cascade.workspace.kickoff import deferred_kickoffs, deliver_queue_kickoffs
 
     # Model turns can take minutes. Enqueue them so this supervisory loop keeps
     # scanning health, retrying merges, and dispatching independent work.
@@ -187,14 +194,19 @@ def run_watchdog(
 
     install_kickoff(repo)
     _resume_reclaimable_task_runs(repo)
+    from cascade.automation import reconcile_approval_dispatch
+    from cascade.workspace.kickoff import deferred_kickoffs
+
+    # Start work already authorized by durable approval before completion
+    # reconciliation, which may need slow remote review I/O. Completion still
+    # runs on startup even when automation is disabled.
+    with deferred_kickoffs():
+        reconcile_approval_dispatch(repo)
     from cascade.completion_reconcile import reconcile_completion_with_prompts
 
     reconcile_completion_with_prompts(root=repo)
-    from cascade.automation import advance_work
-    from cascade.workspace.kickoff import deferred_kickoffs
-
     with deferred_kickoffs():
-        advance_work(repo)
+        reconcile_approval_dispatch(repo)
 
     last_maintenance_at: float | None = None
 
@@ -376,15 +388,17 @@ def _orphan_signature(records: list[OrphanRecord]) -> frozenset[tuple[str, str]]
 
 
 def _maybe_enqueue_orphan_toasts(root: Path) -> None:
+    repo = root.resolve()
     try:
-        records = detect_orphans(root=root)
+        records = detect_orphans(root=repo)
     except Exception:
         # Unparseable board files must not abort the tick (see _consider).
         return
     if not records:
+        _orphan_toast_signatures.pop(repo, None)
         return
     signature = _orphan_signature(records)
-    if signature in _orphan_toast_signatures:
+    if signature == _orphan_toast_signatures.get(repo):
         return
     for record in records:
         event = Event(
@@ -394,10 +408,10 @@ def _maybe_enqueue_orphan_toasts(root: Path) -> None:
             dest="war_room",
         )
         try:
-            append_event("war_room", event, root=root)
+            append_event("war_room", event, root=repo)
         except OSError:
             return
-    _orphan_toast_signatures.add(signature)
+    _orphan_toast_signatures[repo] = signature
 
 
 def _toast(root: Path, work_id: str, message: str) -> None:

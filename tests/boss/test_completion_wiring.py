@@ -124,13 +124,20 @@ def test_watchdog_startup_reconciles(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = make_repo(tmp_path, git=False)
-    reconciled = MagicMock(return_value={"features": [], "epics": []})
+    order: list[str] = []
+    reconciled = MagicMock(
+        side_effect=lambda *, root: order.append("completion")
+        or {"features": [], "epics": []}
+    )
     monkeypatch.setattr(
         "cascade.completion_reconcile.reconcile_completion_with_prompts",
         reconciled,
     )
     monkeypatch.setattr("cascade.task.wiring.restore_active_task_runs", lambda _root: [])
-    monkeypatch.setattr("cascade.automation.advance_work", lambda _root: {"features": [], "tasks": []})
+    monkeypatch.setattr(
+        "cascade.automation.reconcile_approval_dispatch",
+        lambda _root: order.append("dispatch") or {"features": [], "tasks": []},
+    )
     monkeypatch.setattr("cascade.watchdog.loop.watchdog_tick", lambda *_args, **_kwargs: None)
 
     from cascade.watchdog.loop import run_watchdog
@@ -138,3 +145,4 @@ def test_watchdog_startup_reconciles(
     run_watchdog(root=root, poll_interval=0.01, stop_when=lambda: True)
 
     reconciled.assert_called_once_with(root=root.resolve())
+    assert order == ["dispatch", "completion", "dispatch"]

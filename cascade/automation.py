@@ -132,13 +132,20 @@ def advance_work(root: Path) -> dict[str, list[str]]:
     cfg = read_automation_config(repo)
     if not cfg.enabled:
         return {"features": [], "tasks": []}
+    # First honor already durable approvals. Merge/review maintenance can take
+    # a long time (including network I/O), so it must not gate independent work.
+    result = reconcile_approval_dispatch(repo)
     from cascade.task_rollup import retry_pending_task_merges
 
     retry_pending_task_merges(repo)
     from cascade.completion_reconcile import reconcile_completion_with_prompts
 
     reconcile_completion_with_prompts(root=repo)
-    return reconcile_approval_dispatch(repo)
+    # Completion may release dependencies in this same tick.
+    released = reconcile_approval_dispatch(repo)
+    for tier in result:
+        result[tier].extend(released[tier])
+    return result
 
 
 def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
@@ -154,17 +161,16 @@ def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
     if not cfg.enabled:
         return result
 
-    from cascade.approvals import feature_approved
+    from cascade.feature.readiness import compute_feature_readiness
+
     board = merged_board(repo)
     view = compute_boss_view(root=repo)
     for feature_id in view.dispatchable_features:
         meta = board.by_id.get(feature_id)
         if meta is None:
             continue
-        parent = board.by_id.get(meta.parent or "")
-        if parent is None or parent.path.parent.name != "2_active":
-            continue
-        if not feature_approved(feature_id, root=repo):
+        readiness = compute_feature_readiness(feature_id, root=repo, board=board)
+        if readiness is None or "epic_inactive" in readiness.blockers:
             continue
         dispatched = dispatch_feature(feature_id, "boss", root=repo)
         if dispatched.ok:
