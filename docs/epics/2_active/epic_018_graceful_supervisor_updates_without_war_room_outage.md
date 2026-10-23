@@ -115,6 +115,10 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
 - 2026-10-23 · epic_manager · Scope cuts: no blue/green overlap, no in-process hot reload, no platform daemon units.
 - 2026-10-23 · epic_manager · Three-feature breakdown; 001 first, 002 and 003 in parallel after it; integration tests owned per feature.
 
+- `dec_001` · 2026-10-23 · Epic Manager · **Macro-architecture**
+  Chose A long-lived launcher holds the supervisor lock and the listening socket for its whole life and spawns one replaceable worker process per code version, restarting sequentially with no overlap. The worker exits 75 on a source update, 0 on operator stop, and any other code counts as a crash..
+  Rationale: Never releasing the lock or unbinding the port removes the connection-refused window and stale-lock risk. A fresh process per version avoids mixing modules. This is far less machinery than blue/green handoff or fd passing between peers.
+  Honors: Single-supervisor invariant; no mixed old/new modules; operator shutdown distinct from update restart; launcher/process contract without platform daemons..
 ## Amendment log
 
 _(none)_
