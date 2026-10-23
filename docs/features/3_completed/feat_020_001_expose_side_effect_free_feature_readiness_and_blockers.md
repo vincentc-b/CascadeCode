@@ -2,15 +2,19 @@
 id: feat_020_001
 title: Expose side-effect-free feature readiness and blockers
 tier: feature
-status: backlog
+status: completed
 parent: epic_020
-children: []
+children:
+- task_020_001_001
+- task_020_001_002
+- task_020_001_003
+- task_020_001_004
 depends_on: []
 owners:
 - feature_lead
 - feature_architect
 skills: []
-parent_rev: null
+parent_rev: 2dad16cac6036e1b558d63654c05a054c032e695
 created: '2026-10-23'
 updated: '2026-10-23'
 provider: cursor
@@ -67,6 +71,10 @@ flowchart TD
 ```
 
 ## Task breakdown
+- task_020_001_004
+- task_020_001_003
+- task_020_001_002
+- task_020_001_001
 
 _(empty — Feature Team mints tasks after dispatch)_
 
@@ -77,3 +85,22 @@ None.
 ## Decision log
 
 None yet.
+
+- `dec_001` · 2026-10-23 · Feature Lead · **Architect constraints**
+  Chose The predicate reports `not_in_backlog` for the boss-view filter, but `dispatch_refusal_from_readiness` excludes it from the dispatch order, so `_dispatch_feature` keeps ignoring the `1_backlog` path check as it did before..
+  Rationale: Only the old boss view checked the `1_backlog` path. Keeping it boss-view-only preserves both paths' existing behaviour, and nothing gets looser.
+  Honors: No loosening; Dispatch results stay the same.
+
+- `dec_002` · 2026-10-23 · Feature Lead · **Architect constraints**
+  Chose `epic_inactive` is reported by the predicate and enforced by `reconcile_approval_dispatch`. Manual `dispatch_feature` and the boss-view filter (`feature_boss_dispatchable`) ignore it..
+  Rationale: Before this feature, only reconcile checked for an active parent epic. Keeping enforcement there preserves manual-dispatch behaviour, and the board can now still show the blocker.
+  Honors: Dispatch results stay the same.
+
+- `dec_003` · 2026-10-23 · Feature Lead · **Architect constraints**
+  Chose A feature with no parent epic gets the single blocker `epic_inactive` from `compute_feature_readiness`, and `compute_boss_view` also requires `meta.parent`. Dispatch is unchanged and still refuses these features with `bad_state` (task_020_001_004)..
+  Rationale: Task 002 let the boss view list parentless open features as dispatchable, even unapproved ones, and reconcile would retry a failing dispatch on them every cycle. This restores the old strictness. Listing only `epic_inactive` is enough to stop dispatch, and `approved` is still reported in its own field.
+  Honors: No loosening; Dispatch results stay the same..
+
+## Closeout
+
+Completed all four readiness tasks: one shared side-effect-free predicate now drives dispatch, Boss view, approval reconciliation, and War Room serialization, including the parentless-feature guard. The attach/chat normalization changes from task 3 were retained because reverting them makes the current sidecar behavior tests fail.

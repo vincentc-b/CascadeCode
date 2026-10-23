@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import date, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from cascade.amendments.types import Amendment
 from cascade.board.types import WorkDoc, WorkMeta
@@ -28,8 +28,12 @@ from cascade.review import OpenReview
 from cascade.war_room.room_settings import RoomSettings
 from cascade.workspace.types import FlightOverlap, FlightReport
 
+if TYPE_CHECKING:
+    from cascade.feature.readiness import FeatureReadiness
+
 _COLUMN_FOLDERS = frozenset({"1_backlog", "2_active", "3_completed"})
 _TIER_TO_VIEW_KEY = {"epic": "epics", "feature": "features", "task": "tasks"}
+_OPEN_FEATURE_STATUS = frozenset({"backlog", "ready_to_plan"})
 
 
 def _date_iso(value: date) -> str:
@@ -284,6 +288,18 @@ def providers_view_to_dict(
     }
 
 
+def feature_readiness_to_dict(readiness: "FeatureReadiness") -> dict[str, Any]:
+    return {"approved": readiness.approved, "blockers": list(readiness.blockers)}
+
+
+def _backlog_open_feature(meta: WorkMeta) -> bool:
+    return (
+        meta.tier == "feature"
+        and meta.status in _OPEN_FEATURE_STATUS
+        and meta.path.parent.name == "1_backlog"
+    )
+
+
 def open_review_to_dict(review: OpenReview) -> dict[str, Any]:
     ctx = review.context
     return {
@@ -332,6 +348,12 @@ def board_view_from_index(board, *, root: Path) -> dict:
             branch_sync=sync_views.get(meta.id),
             sidecars_preloaded=True,
         )
+        if _backlog_open_feature(meta):
+            from cascade.feature.readiness import compute_feature_readiness
+
+            readiness = compute_feature_readiness(meta.id, root=root, board=board)
+            if readiness is not None:
+                item["readiness"] = feature_readiness_to_dict(readiness)
         review = item.get("review")
         if (
             meta.tier == "feature"

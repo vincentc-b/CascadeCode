@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-_log = logging.getLogger(__name__)
-
 from cascade.comments.types import AGENT_AUTHORS
 from cascade.war_room.chat_store import append_transcript_message, read_messages
 from cascade.watchdog.lock import process_lock
+
+_log = logging.getLogger(__name__)
 
 _SKIP_BODY_PREFIXES = (
     "turn failed",
@@ -44,6 +44,8 @@ def append_planning_turn_to_chat(
 
 def _should_skip(body: str) -> bool:
     lowered = body.lower()
+    if "turn failed" in lowered:
+        return True
     return any(lowered.startswith(prefix) for prefix in _SKIP_BODY_PREFIXES)
 
 
