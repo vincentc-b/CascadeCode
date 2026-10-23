@@ -55,6 +55,61 @@ def test_watchdog_queue_kickoff_does_not_wait_for_model_turn(
         release.set()
 
 
+def test_watchdog_tick_advance_work_does_not_run_turn_on_calling_thread(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.automation import reset_automation_memory
+    from cascade.board.store import read_doc, write_doc
+    from cascade.workspace.kickoff import (
+        install_kickoff,
+        reset_kickoff_test_state,
+        wait_for_background_kickoffs,
+    )
+
+    root = make_repo(tmp_path, git=False)
+    install_kickoff(root)
+    reset_kickoff_test_state()
+    reset_automation_memory()
+    root.joinpath("cascade.toml").write_text(
+        "[automation]\nenabled = true\npoll_seconds = 1\n",
+        encoding="utf-8",
+    )
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    feature = read_doc("feat_001", root=root)
+    feature.meta.approved_at = datetime.now(timezone.utc)
+    write_doc(feature, root=root)
+
+    caller = threading.get_ident()
+    entered = threading.Event()
+    release = threading.Event()
+    turn_threads: list[int] = []
+
+    def slow_run_kickoff(_reason, _repo) -> None:
+        turn_threads.append(threading.get_ident())
+        entered.set()
+        release.wait(timeout=5)
+
+    monkeypatch.setattr("cascade.workspace.kickoff._run_kickoff", slow_run_kickoff)
+    monkeypatch.setattr("cascade.automation.maybe_sync_briefs", lambda _root: None)
+    monkeypatch.setattr("cascade.automation.poll_reviews", lambda _root: None)
+    monkeypatch.setattr("cascade.workspace.kickoff.deliver_queue_kickoffs", lambda _root: None)
+
+    started = time.monotonic()
+    watchdog_tick(root)
+    elapsed = time.monotonic() - started
+    try:
+        assert elapsed < 0.5
+        assert entered.wait(timeout=1)
+        assert turn_threads
+        assert turn_threads[0] != caller
+    finally:
+        release.set()
+        wait_for_background_kickoffs(timeout=5)
+
+
 def test_periodic_stale_task_reclaim_enqueues_one_resume(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

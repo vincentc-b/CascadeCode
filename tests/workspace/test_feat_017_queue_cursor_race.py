@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 
 from cascade.epic.graph import clear_epic_graph_sessions
-from cascade.feature.graph import clear_feature_graph_sessions, ingest_queue
+from cascade.feature.checkpoint import thread_config
+from cascade.feature.graph import clear_feature_graph_sessions, ensure_feature_graph, ingest_queue
 from cascade.watchdog.hooks import clear_hooks
 from cascade.watchdog.loop import clear_watchdog_memory
 from cascade.workspace.kickoff import deliver_queue_kickoffs, kickoff_turn, wait_for_background_kickoffs
@@ -25,6 +26,18 @@ from tests.harness.queue_delivery import (
     seed_active_feature_board,
 )
 from tests.support import make_repo
+
+_FEATURE_PLANNING_ROLES_PER_INVOKE = 2
+
+
+def _simulate_interrupted_checkpoint(feature_id: str, *, root: Path) -> None:
+    graph = ensure_feature_graph(feature_id, root=root)
+    config = thread_config(feature_id)
+    snapshot = graph.get_state(config)
+    assert not snapshot.next
+    graph.update_state(config, dict(snapshot.values or {}), as_node="feature_lead")
+    interrupted = graph.get_state(config)
+    assert interrupted.next
 
 
 @dataclass
@@ -200,3 +213,42 @@ def test_unchanged_queue_maintenance_ticks_start_zero_turns(
         assert wait_for_background_kickoffs(timeout=15)
 
     assert runner.turn_count == turns_after_catchup
+
+
+def test_comment_on_interrupted_checkpoint_resumes_once_then_stages_and_turns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = CountingBlockedTurnRunner()
+    runner.install(monkeypatch)
+
+    root = make_repo(tmp_path, models=True, role_skills=True)
+    feature_id = seed_active_feature_board(root)
+    boot_feature_graph(root, feature_id)
+    _simulate_interrupted_checkpoint(feature_id, root=root)
+
+    human_content = "cmt_001 on feat_017_001 #Intent\nplease review scope"
+    turns_before = runner.turn_count
+
+    kickoff_turn(
+        KickoffReason(
+            kind="comment",
+            work_id=feature_id,
+            by="watchdog",
+            root=root,
+            message={"role": "human", "content": human_content},
+        )
+    )
+    assert wait_for_background_kickoffs(timeout=15)
+
+    assert (
+        runner.turn_count - turns_before
+        == 2 * _FEATURE_PLANNING_ROLES_PER_INVOKE
+    )
+
+    values = feature_graph_values(feature_id, root=root)
+    human_messages = [m for m in values.get("messages") or [] if m.get("role") == "human"]
+    assert any(human_content in m.get("content", "") for m in human_messages)
+
+    graph = ensure_feature_graph(feature_id, root=root)
+    assert not graph.get_state(thread_config(feature_id)).next

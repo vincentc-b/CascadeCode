@@ -633,6 +633,25 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
     if reason.kind in ("human_message", "comment") and reason.message is not None:
         meta = doc.meta if doc is not None else None
         feature_id = reason.feature_id or (doc.meta.parent if doc else None)
+        if _graph_has_inflight_turn(
+            reason.work_id,
+            tier,
+            root=repo,
+            feature_id=feature_id,
+        ) and _checkpoint_has_models(
+            reason.work_id,
+            tier,
+            root=repo,
+            feature_id=feature_id,
+        ):
+            _invoke_role_turn(
+                reason.work_id,
+                tier,
+                root=repo,
+                feature_id=feature_id,
+                model_id=reason.model_id,
+                resume=True,
+            )
         _stage_human_message(
             reason.work_id,
             tier,

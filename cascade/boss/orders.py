@@ -30,6 +30,7 @@ from cascade.board.store import list_board
 from cascade.boss.view import compute_boss_view
 from cascade.watchdog.dispatch import dispatch_feature, dispatch_task
 from cascade.watchdog.types import Event
+from cascade.workspace.kickoff import deferred_kickoffs
 
 
 def process_boss_event(event: Event, *, root: Path | None = None) -> None:
@@ -47,10 +48,11 @@ def _handle_dispatch_requested(payload: dict[str, object], root: Path) -> None:
     work_id = payload.get("id")
     if kind not in ("feature", "task") or not isinstance(work_id, str) or not work_id:
         return
-    if kind == "feature":
-        dispatch_feature(work_id, "boss", root=root)
-    else:
-        dispatch_task(work_id, "boss", root=root)
+    with deferred_kickoffs():
+        if kind == "feature":
+            dispatch_feature(work_id, "boss", root=root)
+        else:
+            dispatch_task(work_id, "boss", root=root)
 
 
 def _handle_drain_requested(payload: dict[str, object], root: Path) -> None:
@@ -60,10 +62,11 @@ def _handle_drain_requested(payload: dict[str, object], root: Path) -> None:
 
     view = compute_boss_view(root=root)
     board = list_board(root)
-    for task_id in view.dispatchable_tasks:
-        meta = board.by_id.get(task_id)
-        if meta is None or meta.parent != feature_id:
-            continue
-        result = dispatch_task(task_id, "boss", root=root)
-        if not result.ok and result.reason == "cap":
-            break
+    with deferred_kickoffs():
+        for task_id in view.dispatchable_tasks:
+            meta = board.by_id.get(task_id)
+            if meta is None or meta.parent != feature_id:
+                continue
+            result = dispatch_task(task_id, "boss", root=root)
+            if not result.ok and result.reason == "cap":
+                break
