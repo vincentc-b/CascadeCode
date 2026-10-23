@@ -752,6 +752,122 @@
     return map;
   }
 
+  function mergePreservedThreadExtras(into, from) {
+    if (!from) {
+      return into;
+    }
+    Object.keys(from).forEach(function (id) {
+      if (!into[id]) {
+        into[id] = from[id];
+        return;
+      }
+      into[id] = into[id].concat(from[id]);
+    });
+    return into;
+  }
+
+  function collectReplyDrafts(container) {
+    var replyDrafts = {};
+    if (!container || !container.querySelectorAll) {
+      return replyDrafts;
+    }
+    var existingThreads = container.querySelectorAll(".plan-comment-thread[data-comment-id]");
+    for (var draftIndex = 0; draftIndex < existingThreads.length; draftIndex += 1) {
+      var existingId = existingThreads[draftIndex].getAttribute("data-comment-id");
+      var existingInput = existingThreads[draftIndex].querySelector(
+        ".plan-comment-reply-form textarea"
+      );
+      if (existingId && existingInput && existingInput.value) {
+        replyDrafts[existingId] = existingInput.value;
+      }
+    }
+    return replyDrafts;
+  }
+
+  function mergeReplyDrafts(into, from) {
+    if (!from) {
+      return into;
+    }
+    Object.keys(from).forEach(function (id) {
+      if (!into[id]) {
+        into[id] = from[id];
+      }
+    });
+    return into;
+  }
+
+  function clearManagedInlineThreadContainers(bodyEl) {
+    if (!bodyEl || !bodyEl.querySelectorAll) {
+      return;
+    }
+    var containers = bodyEl.querySelectorAll(".plan-inline-threads");
+    for (var i = 0; i < containers.length; i += 1) {
+      containers[i].remove();
+    }
+  }
+
+  function blockLinesPresentInBody(bodyEl) {
+    var map = {};
+    if (!bodyEl || !bodyEl.querySelectorAll) {
+      return map;
+    }
+    var blocks = bodyEl.querySelectorAll("[data-src-line]");
+    for (var i = 0; i < blocks.length; i += 1) {
+      var line = blocks[i].getAttribute("data-src-line");
+      if (line != null && line !== "") {
+        map[String(line)] = true;
+      }
+    }
+    return map;
+  }
+
+  function placementsForRoots(roots, docBody, docSha) {
+    var byId = {};
+    var outdated = {};
+    (roots || []).forEach(function (root) {
+      if (root.line_start == null) {
+        byId[root.id] = null;
+        return;
+      }
+      var placement = placementForRootThread(root, docBody, docSha);
+      byId[root.id] = placement;
+      if (placement.outdated) {
+        outdated[root.id] = true;
+      }
+    });
+    return { byId: byId, outdated: outdated };
+  }
+
+  function partitionRootThreads(threads, docBody, docSha, availableBlockLines) {
+    var inlineByBlock = {};
+    var trayThreads = [];
+    var roots = (threads || []).map(function (thread) {
+      return thread.root;
+    });
+    var placementInfo = placementsForRoots(roots, docBody, docSha);
+    (threads || []).forEach(function (thread) {
+      var root = thread.root;
+      var placement = placementInfo.byId[root.id];
+      if (root.line_start != null && placement) {
+        var blockLine = blockStartLineForSourceLine(docBody, placement.gutterLine);
+        var key = String(blockLine);
+        if (availableBlockLines && availableBlockLines[key]) {
+          if (!inlineByBlock[key]) {
+            inlineByBlock[key] = [];
+          }
+          inlineByBlock[key].push(thread);
+          return;
+        }
+      }
+      trayThreads.push(thread);
+    });
+    return {
+      inlineByBlock: inlineByBlock,
+      trayThreads: trayThreads,
+      placementInfo: placementInfo,
+    };
+  }
+
   function clearPlanThreadGutters(bodyEl) {
     if (!bodyEl || !bodyEl.querySelectorAll) {
       return;
@@ -1142,86 +1258,106 @@
       return btn;
     }
 
-    function placementsForRoots(roots) {
-      var byId = {};
-      var outdated = {};
-      (roots || []).forEach(function (root) {
-        if (root.line_start == null) {
-          byId[root.id] = null;
-          return;
+    function buildThreadBlock(thread, placementInfo, preserved, replyDrafts) {
+      var root = thread.root;
+      var block = document.createElement("div");
+      block.className = "plan-comment-thread";
+      if (root.state === "resolved") {
+        block.classList.add("resolved");
+      }
+      if (placementInfo.outdated[root.id]) {
+        block.classList.add("outdated");
+      }
+      block.setAttribute("role", "listitem");
+      block.setAttribute("data-comment-id", root.id);
+      block.id = "plan-thread-" + root.id;
+      block.appendChild(buildCommentNode(root, !!placementInfo.outdated[root.id]));
+      var replies = thread.replies;
+      if (replies.length) {
+        var replyWrap = document.createElement("div");
+        replyWrap.className = "plan-comment-replies";
+        replies.forEach(function (reply) {
+          replyWrap.appendChild(buildCommentNode(reply));
+        });
+        block.appendChild(replyWrap);
+      }
+      if (root.state !== "resolved") {
+        block.appendChild(buildResolveControl(root.id));
+        var replyForm = buildReplyForm(root.id);
+        var replyDraft = replyDrafts[root.id];
+        if (replyDraft) {
+          replyForm.querySelector("textarea").value = replyDraft;
         }
-        var placement = placementForRootThread(root, docBody, docSha);
-        byId[root.id] = placement;
-        if (placement.outdated) {
-          outdated[root.id] = true;
-        }
-      });
-      return { byId: byId, outdated: outdated };
+        block.appendChild(replyForm);
+      }
+      var extras = preserved[root.id];
+      if (extras) {
+        extras.forEach(function (node) {
+          block.appendChild(node);
+        });
+      }
+      return block;
     }
 
     function renderCommentThreads(comments) {
       var preserved = collectPreservedThreadExtras(threadEl);
-      var replyDrafts = {};
-      var existingThreads = threadEl.querySelectorAll(
-        ".plan-comment-thread[data-comment-id]"
-      );
-      for (var draftIndex = 0; draftIndex < existingThreads.length; draftIndex += 1) {
-        var existingId = existingThreads[draftIndex].getAttribute("data-comment-id");
-        var existingInput = existingThreads[draftIndex].querySelector(
-          ".plan-comment-reply-form textarea"
-        );
-        if (existingId && existingInput && existingInput.value) {
-          replyDrafts[existingId] = existingInput.value;
-        }
+      if (bodyEl) {
+        mergePreservedThreadExtras(preserved, collectPreservedThreadExtras(bodyEl));
+      }
+      var replyDrafts = collectReplyDrafts(threadEl);
+      if (bodyEl) {
+        mergeReplyDrafts(replyDrafts, collectReplyDrafts(bodyEl));
       }
       threadEl.innerHTML = "";
+      if (bodyEl) {
+        clearManagedInlineThreadContainers(bodyEl);
+      }
       var threads = groupCommentThreads(comments);
       var roots = threads.map(function (thread) {
         return thread.root;
       });
-      var placementInfo = placementsForRoots(roots);
+      var availableBlockLines = blockLinesPresentInBody(bodyEl);
+      var partition = partitionRootThreads(threads, docBody, docSha, availableBlockLines);
+      var placementInfo = partition.placementInfo;
       if (bodyEl) {
         applyPlanThreadGutters(bodyEl, docBody, roots, placementInfo.byId);
       }
-      threads.forEach(function (thread) {
-        var root = thread.root;
-        var block = document.createElement("div");
-        block.className = "plan-comment-thread";
-        if (root.state === "resolved") {
-          block.classList.add("resolved");
-        }
-        if (placementInfo.outdated[root.id]) {
-          block.classList.add("outdated");
-        }
-        block.setAttribute("role", "listitem");
-        block.setAttribute("data-comment-id", root.id);
-        block.id = "plan-thread-" + root.id;
-        block.appendChild(buildCommentNode(root, !!placementInfo.outdated[root.id]));
-        var replies = thread.replies;
-        if (replies.length) {
-          var replyWrap = document.createElement("div");
-          replyWrap.className = "plan-comment-replies";
-          replies.forEach(function (reply) {
-            replyWrap.appendChild(buildCommentNode(reply));
-          });
-          block.appendChild(replyWrap);
-        }
-        if (root.state !== "resolved") {
-          block.appendChild(buildResolveControl(root.id));
-          var replyForm = buildReplyForm(root.id);
-          var replyDraft = replyDrafts[root.id];
-          if (replyDraft) {
-            replyForm.querySelector("textarea").value = replyDraft;
+      var renderedThreadIds = {};
+      if (bodyEl) {
+        var blockNodes = bodyEl.querySelectorAll("[data-src-line]");
+        for (var blockIndex = 0; blockIndex < blockNodes.length; blockIndex += 1) {
+          var blockNode = blockNodes[blockIndex];
+          var lineKey = blockNode.getAttribute("data-src-line");
+          var inlineGroup = lineKey != null ? partition.inlineByBlock[String(lineKey)] : null;
+          if (!inlineGroup || !inlineGroup.length) {
+            continue;
           }
-          block.appendChild(replyForm);
-        }
-        var extras = preserved[root.id];
-        if (extras) {
-          extras.forEach(function (node) {
-            block.appendChild(node);
+          var inlineContainer = document.createElement("div");
+          inlineContainer.className = "plan-inline-threads";
+          inlineContainer.setAttribute("role", "list");
+          inlineContainer.setAttribute("aria-label", "Review threads for this plan block");
+          inlineGroup.forEach(function (thread) {
+            if (renderedThreadIds[thread.root.id]) {
+              return;
+            }
+            renderedThreadIds[thread.root.id] = true;
+            inlineContainer.appendChild(
+              buildThreadBlock(thread, placementInfo, preserved, replyDrafts)
+            );
           });
+          if (inlineContainer.childNodes.length) {
+            insertAfter(blockNode, inlineContainer);
+          }
         }
-        threadEl.appendChild(block);
+      }
+      partition.trayThreads.forEach(function (thread) {
+        if (renderedThreadIds[thread.root.id]) {
+          return;
+        }
+        renderedThreadIds[thread.root.id] = true;
+        threadEl.appendChild(
+          buildThreadBlock(thread, placementInfo, preserved, replyDrafts)
+        );
       });
     }
 
@@ -1415,6 +1551,10 @@
     blockStartLineForSourceLine: blockStartLineForSourceLine,
     rootCommentPayload: rootCommentPayload,
     groupCommentThreads: groupCommentThreads,
+    partitionRootThreads: partitionRootThreads,
+    placementsForRoots: placementsForRoots,
+    blockLinesPresentInBody: blockLinesPresentInBody,
+    clearManagedInlineThreadContainers: clearManagedInlineThreadContainers,
     findMermaidFences: findMermaidFences,
     workIdFromDocHref: workIdFromDocHref,
     planHrefFromRelative: planHrefFromRelative,
