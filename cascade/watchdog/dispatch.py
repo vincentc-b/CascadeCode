@@ -416,6 +416,13 @@ def _relocate_active(work_id: str, *, dest_root: Path, trunk: Path) -> None:
     doc = read_doc(work_id, root=source_root)
     old_path = doc.meta.path.resolve()
     tier = doc.meta.tier
+    if tier == "feature":
+        # The source selected for relocation may be a stale copy from an
+        # integration branch. Preserve the durable approval from the merged
+        # supervisor view in the new active document.
+        approved = merged_board(trunk).by_id.get(work_id)
+        if approved is not None:
+            doc.meta.approved_at = approved.approved_at
     doc.meta.status = "active"
     doc.meta.path = (dest_root / column_dir(tier, "active") / old_path.name).resolve()
     _drop_stale_copies(

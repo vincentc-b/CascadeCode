@@ -10,7 +10,7 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Callable, Iterator, Literal
 
@@ -591,8 +591,17 @@ def _merged_board_uncached(trunk: Path) -> BoardIndex:
         and not is_trunk_pointer(meta)
     }
     by_id: dict[str, WorkMeta] = {}
+    # Approvals are monotonic decisions. A newer integration checkout can carry
+    # an older copy of the plan, so its preferred path/status must not erase an
+    # approval already written in another checkout (often the product trunk).
+    approvals = {}
+    plan_approvals = {}
     for board in boards:
         for work_id, meta in board.by_id.items():
+            if meta.tier == "feature" and meta.approved_at is not None:
+                approvals.setdefault(work_id, meta.approved_at)
+            if meta.tier == "epic" and meta.plan_approved_at is not None:
+                plan_approvals.setdefault(work_id, meta.plan_approved_at)
             if work_id in completed_trunk_epics:
                 # Closing an epic makes the product-trunk document authoritative.
                 # Registered worktrees are retained for history/recovery and can
@@ -602,6 +611,12 @@ def _merged_board_uncached(trunk: Path) -> BoardIndex:
             current = by_id.get(work_id)
             if current is None or _meta_preference(meta) > _meta_preference(current):
                 by_id[work_id] = meta
+    for work_id, approved_at in approvals.items():
+        if work_id in by_id:
+            by_id[work_id] = replace(by_id[work_id], approved_at=approved_at)
+    for work_id, approved_at in plan_approvals.items():
+        if work_id in by_id:
+            by_id[work_id] = replace(by_id[work_id], plan_approved_at=approved_at)
     from cascade.workspace.backlog_snapshot import read_provenance, snapshot_board
 
     if read_provenance(trunk) is not None:

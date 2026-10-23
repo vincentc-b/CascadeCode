@@ -149,6 +149,9 @@ def feature_write_doc(doc: WorkDoc, *, feature_id: str, root: Path) -> str | Non
         # (backlog status, no children, no approval timestamp). Keep the
         # authoritative metadata and apply only the team's proposed body.
         updated.meta = deepcopy(current.meta)
+        # The stale document's revision belongs to its old checkout. The
+        # current active copy supplies the optimistic concurrency token.
+        updated.sha = current.sha
     else:
         updated.meta.path = target
     return write_doc(updated, root=checkout)

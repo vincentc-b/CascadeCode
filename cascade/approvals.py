@@ -79,6 +79,8 @@ def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
 
 
 def _set_feature_approved(feature_id: str, *, root: Path) -> bool:
+    if feature_approved(feature_id, root=root):
+        return False
     doc = read_doc(feature_id, root=root)
     if doc.meta.approved_at is not None:
         return False
@@ -92,9 +94,12 @@ def _maybe_advance_after_approval(root: Path) -> None:
 
     if not read_automation_config(root).enabled:
         return
-    from cascade.automation import advance_work
+    from cascade.automation import reconcile_approval_dispatch
 
-    advance_work(root)
+    # Approval is the dispatch trigger. Broad completion maintenance can involve
+    # remote review calls or pending merges and must not hold this HTTP request
+    # ahead of newly eligible work.
+    reconcile_approval_dispatch(root)
 
 
 def _set_epic_plan_approved(epic_id: str, *, root: Path) -> bool:
