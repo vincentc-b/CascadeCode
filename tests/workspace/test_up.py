@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 import socket
 import subprocess
 import threading
@@ -78,6 +79,29 @@ def test_up_starts_war_room_on_trunk(tmp_path: Path) -> None:
     finally:
         stop.set()
         thread.join(timeout=10)
+
+
+def test_launcher_readiness_accepts_high_file_descriptor() -> None:
+    import fcntl
+
+    from cascade.workspace.launcher import _wait_readiness
+
+    read_fd, write_fd = os.pipe()
+    high_fd = fcntl.fcntl(read_fd, fcntl.F_DUPFD, 1024)
+
+    class RunningWorker:
+        returncode = None
+
+        def poll(self):
+            return None
+
+    try:
+        os.write(write_fd, b"ready\n")
+        _wait_readiness(high_fd, proc=RunningWorker(), stop_requested=lambda: False)
+    finally:
+        os.close(high_fd)
+        os.close(read_fd)
+        os.close(write_fd)
 
 
 def test_up_refuses_integration_branch_checkout(tmp_path: Path) -> None:
