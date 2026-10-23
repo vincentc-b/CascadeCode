@@ -239,6 +239,7 @@ def test_promote_epic_to_trunk_lands_epic_branch_on_main(tmp_path: Path) -> None
         base_ref="HEAD",
         trunk=root,
     )
+    commit_board(root, message="integration worktree registry")
     epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
     _commit_in_worktree(epic_wt, "promote_me.txt", "epic payload\n", "epic commit")
 
@@ -280,6 +281,7 @@ def test_confirm_epic_complete_promotes_before_moving_doc(tmp_path: Path) -> Non
         base_ref="HEAD",
         trunk=root,
     )
+    commit_board(root, message="integration worktree registry")
     epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
     _commit_in_worktree(epic_wt, "promote_me.txt", "epic payload\n", "epic commit")
 
@@ -292,6 +294,7 @@ def test_confirm_epic_complete_promotes_before_moving_doc(tmp_path: Path) -> Non
         status="completed",
         parent="epic_001",
     )
+    commit_board(root)
 
     assert confirm_epic_complete("epic_001", "human", root=root) is True
     assert (root / "promote_me.txt").is_file()
@@ -388,7 +391,7 @@ def test_epic_promotion_does_not_resolve_unrelated_conflicts(tmp_path: Path) -> 
     promote = promote_epic_to_trunk("epic_001", root=root)
 
     assert promote.ok is False
-    assert promote.reason == "merge_conflict"
+    assert promote.reason == "branch_conflict"
     assert (root / "collision.txt").read_text(encoding="utf-8") == "product trunk\n"
     assert not (root / ".git" / "MERGE_HEAD").exists()
     pointer = read_doc_in_worktree("epic_001", root)

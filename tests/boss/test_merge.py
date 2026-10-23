@@ -170,7 +170,7 @@ def test_merge_conflict_leaves_task_active(tmp_path: Path) -> None:
     result = merge_task_branch(task_id, root=root)
 
     assert result.ok is False
-    assert result.reason == "merge_conflict"
+    assert result.reason == "branch_conflict"
     task = read_doc(task_id, root=root)
     assert task.meta.status == "active"
     assert task.meta.path == root / column_dir("task", "active") / task.meta.path.name
