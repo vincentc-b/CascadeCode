@@ -95,6 +95,7 @@ def mock_help(monkeypatch: pytest.MonkeyPatch) -> None:
 class _FakeProc:
     def __init__(self, *, returncode: int, stdout: bytes, stderr: bytes = b"") -> None:
         self.returncode = returncode
+        self.pid = None
         self._stdout = stdout
         self._stderr = stderr
 
