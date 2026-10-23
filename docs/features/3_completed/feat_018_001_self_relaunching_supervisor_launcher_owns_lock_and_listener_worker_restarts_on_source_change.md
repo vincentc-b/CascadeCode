@@ -2,7 +2,7 @@
 id: feat_018_001
 title: 'Self-relaunching supervisor: launcher owns lock and listener, worker restarts on source change'
 tier: feature
-status: active
+status: completed
 parent: epic_018
 children:
 - task_018_001_001
