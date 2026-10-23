@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
+
+_DEFAULT_WORKER_DRAIN_SECONDS = 120.0
 
 from cascade.agent.errors import ProviderConfigError
 from cascade.agent.providers import ALL_PROVIDER_IDS, ProviderId, parse_provider_id
@@ -43,6 +48,33 @@ class AutomationConfig:
     enabled: bool = True
     poll_seconds: float = 15.0
     remote: str = "origin"
+
+
+def worker_drain_seconds(root: Path) -> float:
+    """Turn drain window before SIGTERM cancellation. Invalid values default to 120s."""
+
+    data = _load_cascade_toml(root)
+    worker = data.get("worker")
+    if not isinstance(worker, dict):
+        return _DEFAULT_WORKER_DRAIN_SECONDS
+    if "drain_seconds" not in worker:
+        return _DEFAULT_WORKER_DRAIN_SECONDS
+    value = worker["drain_seconds"]
+    if isinstance(value, bool):
+        _log.warning(
+            "cascade.toml [worker].drain_seconds must be a positive number; using %.1f",
+            _DEFAULT_WORKER_DRAIN_SECONDS,
+        )
+        return _DEFAULT_WORKER_DRAIN_SECONDS
+    if isinstance(value, (int, float)):
+        seconds = float(value)
+        if seconds > 0:
+            return seconds
+    _log.warning(
+        "cascade.toml [worker].drain_seconds must be a positive number; using %.1f",
+        _DEFAULT_WORKER_DRAIN_SECONDS,
+    )
+    return _DEFAULT_WORKER_DRAIN_SECONDS
 
 
 def completed_epic_display_limit(root: Path) -> int:

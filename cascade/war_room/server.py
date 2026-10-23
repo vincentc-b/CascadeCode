@@ -159,26 +159,35 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
     def is_draining(self) -> bool:
         return self._draining.is_set()
 
+    def snapshot_handler_threads(self) -> list[threading.Thread]:
+        with self._handler_threads_lock:
+            return list(self._handler_threads)
+
     def join_handler_threads(
-        self, *, timeout: float = HTTP_HANDLER_JOIN_TIMEOUT_S
-    ) -> None:
-        """Wait for in-flight handler threads (bounded by longest route deadline)."""
+        self,
+        threads: list[threading.Thread],
+        *,
+        timeout: float = HTTP_HANDLER_JOIN_TIMEOUT_S,
+    ) -> list[str]:
+        """Wait for ``threads``; return names of threads still alive at the deadline."""
 
         deadline = time.monotonic() + timeout
-        while True:
-            with self._handler_threads_lock:
-                pending = [t for t in self._handler_threads if t.is_alive()]
+        pending = list(threads)
+        abandoned: list[str] = []
+        while pending:
+            pending = [t for t in pending if t.is_alive()]
             if not pending:
-                return
+                return abandoned
             now = time.monotonic()
             if now >= deadline:
                 for thread in pending:
+                    abandoned.append(thread.name)
                     sys.stderr.write(
                         "war room drain: abandoning handler thread "
                         f"{thread.name!r} still alive after {timeout:.0f}s\n"
                     )
                     sys.stderr.flush()
-                return
+                return abandoned
             for thread in pending:
                 thread.join(timeout=min(1.0, max(0.0, deadline - now)))
 
@@ -1032,16 +1041,6 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
     def _method_not_allowed(self) -> None:
         self._json_error(HTTPStatus.METHOD_NOT_ALLOWED, "method not allowed")
-
-
-def join_http_handlers(
-    server: WarRoomHTTPServer,
-    *,
-    timeout: float = HTTP_HANDLER_JOIN_TIMEOUT_S,
-) -> None:
-    """Join tracked handler threads after ``shutdown`` (for worker drain)."""
-
-    server.join_handler_threads(timeout=timeout)
 
 
 def serve(
