@@ -2,7 +2,7 @@
 id: epic_019
 title: Comments should post inline
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_019_001
@@ -13,7 +13,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-22'
-updated: '2026-10-22'
+updated: '2026-10-23'
 provider: codex
 models:
   epic_manager: gpt-5.6-sol
