@@ -9,10 +9,10 @@ from typing import Literal
 
 from cascade.agent.errors import ProviderConfigError
 
-ProviderId = Literal["cursor", "claude", "codex"]
+ProviderId = Literal["cursor", "claude", "codex", "fake"]
 AuthSource = Literal["env", "user-store", "cli-session", "missing"]
 
-ALL_PROVIDER_IDS: tuple[ProviderId, ...] = ("cursor", "claude", "codex")
+ALL_PROVIDER_IDS: tuple[ProviderId, ...] = ("cursor", "claude", "codex", "fake")
 
 
 @dataclass(frozen=True)
@@ -38,13 +38,19 @@ def probe_provider(provider_id: ProviderId) -> ProviderStatus:
         installed = _cli_installed("claude")
     elif provider_id == "codex":
         installed = _cli_installed("codex")
+    elif provider_id == "fake":
+        installed = True
     else:
         raise ProviderConfigError(f"unknown provider id: {provider_id!r}")
 
     from cascade.agent.credentials import credential_auth_source
 
-    auth_source = credential_auth_source(provider_id)
-    authenticated = auth_source != "missing"
+    if provider_id == "fake":
+        auth_source = "env"
+        authenticated = True
+    else:
+        auth_source = credential_auth_source(provider_id)
+        authenticated = auth_source != "missing"
     return ProviderStatus(
         id=provider_id,
         installed=installed,

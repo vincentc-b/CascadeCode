@@ -18,7 +18,7 @@ from pathlib import Path
 
 from typing import Literal
 
-ProviderId = Literal["cursor", "claude", "codex"]
+ProviderId = Literal["cursor", "claude", "codex", "fake"]
 AuthSource = Literal["env", "user-store", "cli-session", "missing"]
 
 _ENV_KEYS: dict[ProviderId, str] = {
@@ -160,6 +160,9 @@ def credential_auth_source(provider: ProviderId) -> AuthSource:
 
 def resolve_credential(provider: ProviderId) -> Credential | None:
     """First match wins: env, user store, CLI session (claude/codex only)."""
+
+    if provider == "fake":
+        return Credential(provider="fake", token="fake")
 
     env = _env_token(provider)
     if env is not None:

@@ -17,10 +17,17 @@ from cascade.agent import (
 )
 
 
-def test_probe_providers_returns_three_entries_with_expected_ids() -> None:
+def test_probe_providers_returns_four_entries_with_expected_ids() -> None:
     statuses = probe_providers()
-    assert len(statuses) == 3
+    assert len(statuses) == 4
     assert [s.id for s in statuses] == list(ALL_PROVIDER_IDS)
+
+
+def test_fake_provider_always_installed_and_authenticated() -> None:
+    status = probe_provider("fake")
+    assert status.installed is True
+    assert status.authenticated is True
+    assert status.auth_source == "env"
 
 
 @pytest.mark.parametrize("provider_id", ["cursor", "claude", "codex"])
@@ -70,7 +77,7 @@ def test_provider_status_only_documented_fields() -> None:
     assert fields == {"id", "installed", "authenticated", "auth_source"}
 
 
-@pytest.mark.parametrize("provider_id", ["cursor", "claude", "codex"])
+@pytest.mark.parametrize("provider_id", ["cursor", "claude", "codex", "fake"])
 def test_parse_provider_id_accepts_legal_ids(provider_id: str) -> None:
     assert parse_provider_id(provider_id) == provider_id
 

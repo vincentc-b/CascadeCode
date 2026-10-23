@@ -165,6 +165,11 @@ async def _dispatch_role(turn: RoleTurn, *, provider, credential) -> RoleResult:
 
         return await run_codex_role(turn, token=credential.token)
 
+    if provider == "fake":
+        from cascade.agent.fake_provider import run_fake_role
+
+        return await run_fake_role(turn)
+
     raise ProviderNotImplementedError(f"provider {provider!r} dispatch is not implemented yet")
 
 
