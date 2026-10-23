@@ -31,8 +31,13 @@ def approve_feature(feature_id: str, *, root: Path) -> dict[str, object]:
     if meta is None or meta.tier != "feature":
         raise ValueError("feature approval requires a feature on the board")
     newly = _set_feature_approved(feature_id, root=repo)
-    _maybe_advance_after_approval(repo)
-    return {"ok": True, "feature_id": feature_id, "newly_approved": newly}
+    result: dict[str, object] = {
+        "ok": True, "feature_id": feature_id, "newly_approved": newly
+    }
+    if warning := _maybe_advance_after_approval(repo):
+        result["dispatch_pending"] = True
+        result["dispatch_error"] = warning
+    return result
 
 
 def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
@@ -74,11 +79,16 @@ def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
                 ),
                 root=repo,
             )
-    _maybe_advance_after_approval(repo)
-    return {"ok": True, "epic_id": epic_id, "features": children}
+    result: dict[str, object] = {"ok": True, "epic_id": epic_id, "features": children}
+    if warning := _maybe_advance_after_approval(repo):
+        result["dispatch_pending"] = True
+        result["dispatch_error"] = warning
+    return result
 
 
 def _set_feature_approved(feature_id: str, *, root: Path) -> bool:
+    if feature_approved(feature_id, root=root):
+        return False
     doc = read_doc(feature_id, root=root)
     if doc.meta.approved_at is not None:
         return False
@@ -87,14 +97,22 @@ def _set_feature_approved(feature_id: str, *, root: Path) -> bool:
     return True
 
 
-def _maybe_advance_after_approval(root: Path) -> None:
+def _maybe_advance_after_approval(root: Path) -> str | None:
     from cascade.watchdog.config import read_automation_config
+    from cascade.automation import reconcile_approval_dispatch
 
-    if not read_automation_config(root).enabled:
-        return
-    from cascade.automation import advance_work
-
-    advance_work(root)
+    # Approval is the dispatch trigger. Broad completion maintenance can involve
+    # remote review calls or pending merges and must not hold this HTTP request
+    # ahead of newly eligible work.
+    try:
+        if not read_automation_config(root).enabled:
+            return None
+        reconcile_approval_dispatch(root)
+    except Exception as exc:
+        # Approval is already durable. The watchdog can retry dispatch; report
+        # that delay without claiming the approval itself failed.
+        return str(exc) or type(exc).__name__
+    return None
 
 
 def _set_epic_plan_approved(epic_id: str, *, root: Path) -> bool:

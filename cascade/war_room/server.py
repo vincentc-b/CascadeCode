@@ -145,9 +145,8 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         install_task_boot_hook(self.root)
         install_task_wiring(self.root)
         install_boss_consumer(self.root)
-        from cascade.completion_reconcile import reconcile_completion_with_prompts
-
-        reconcile_completion_with_prompts(root=self.root)
+        # The watchdog owns completion reconciliation. It can perform remote
+        # review I/O, so HTTP listener construction must not wait for it.
         load_epic_tools()
         load_feature_tools()
         self.attachment = AttachmentState()

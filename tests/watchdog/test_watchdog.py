@@ -464,6 +464,27 @@ def test_orphan_toast_enqueued_once_and_retries_after_append_failure(
     assert len([event for event in again if event.payload.get("kind") == "orphan"]) == 1
 
 
+def test_orphan_toast_reappears_after_the_board_is_repaired(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Open task", tier="task", parent="feat_001")
+
+    move_doc("feat_001", "completed", root=root)
+    watchdog_tick(root)
+    watchdog_tick(root)
+
+    move_doc("feat_001", "backlog", root=root)
+    watchdog_tick(root)
+
+    move_doc("feat_001", "completed", root=root)
+    watchdog_tick(root)
+
+    events, _ = read_events("war_room", 0, root=root)
+    orphan_toasts = [event for event in events if event.payload.get("kind") == "orphan"]
+    assert [event.payload["id"] for event in orphan_toasts] == ["task_001", "task_001"]
+
+
 def test_non_utf8_file_does_not_escape_or_stay_active(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     garbage = root / "docs" / "tasks" / "2_active" / "task_099_garbage.md"

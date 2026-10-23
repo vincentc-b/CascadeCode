@@ -132,13 +132,20 @@ def advance_work(root: Path) -> dict[str, list[str]]:
     cfg = read_automation_config(repo)
     if not cfg.enabled:
         return {"features": [], "tasks": []}
+    # First honor already durable approvals. Merge/review maintenance can take
+    # a long time (including network I/O), so it must not gate independent work.
+    result = reconcile_approval_dispatch(repo)
     from cascade.task_rollup import retry_pending_task_merges
 
     retry_pending_task_merges(repo)
     from cascade.completion_reconcile import reconcile_completion_with_prompts
 
     reconcile_completion_with_prompts(root=repo)
-    return reconcile_approval_dispatch(repo)
+    # Completion may release dependencies in this same tick.
+    released = reconcile_approval_dispatch(repo)
+    for tier in result:
+        result[tier].extend(released[tier])
+    return result
 
 
 def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
