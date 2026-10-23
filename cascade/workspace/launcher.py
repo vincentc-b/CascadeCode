@@ -320,7 +320,11 @@ def _run_degraded_responder(
             status = read_supervisor_status(status_ctx.workspace_root)
             if status is None:
                 status = status_ctx.snapshot_status()
-            serve_one_degraded_request(conn, status=status)
+            serve_one_degraded_request(
+                conn,
+                workspace_root=status_ctx.workspace_root,
+                status=status,
+            )
 
 
 def _spawn_worker(

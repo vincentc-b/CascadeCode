@@ -164,6 +164,12 @@ def _drain_background(work_id: str, pending: "queue.Queue[Callable[[], None]]") 
 
 
 def _run_background_kickoff(reason: KickoffReason, repo: Path) -> None:
+    from cascade.workspace.supervisor_readiness import (
+        note_recovery_turn_finished,
+        note_recovery_turn_started,
+    )
+
+    note_recovery_turn_started(reason.work_id)
     try:
         _run_kickoff(reason, repo)
     except TurnCancelledForDrain:
@@ -174,9 +180,18 @@ def _run_background_kickoff(reason: KickoffReason, repo: Path) -> None:
     except Exception as exc:
         _log.exception("background kickoff turn failed for %s", reason.work_id)
         _report_background_failure(reason.work_id, exc, repo)
+    finally:
+        note_recovery_turn_finished(reason.work_id)
 
 
 def _report_background_failure(work_id: str, exc: Exception, repo: Path) -> None:
+    from cascade.workspace.supervisor_readiness import record_recovery_failure
+
+    record_recovery_failure(
+        work_id,
+        code="background_error",
+        message=str(exc),
+    )
     if work_id.startswith("task_"):
         try:
             from cascade.task.failure import fail_task
@@ -222,6 +237,9 @@ def resume_inflight_graphs(root: Path) -> None:
         ahead = _queue_is_ahead(work_id, meta.tier, root=repo, feature_id=feature_id)
         if not inflight and not ahead:
             continue
+        from cascade.workspace.supervisor_readiness import record_recovery_enqueued
+
+        record_recovery_enqueued(work_id)
         _schedule_queue_delivery(work_id, meta.tier, repo, feature_id)
 
 

@@ -188,8 +188,24 @@ def run_watchdog(
     install_kickoff(repo)
     _resume_reclaimable_task_runs(repo)
     from cascade.completion_reconcile import reconcile_completion_with_prompts
+    from cascade.workspace.supervisor_readiness import (
+        record_loop_error,
+        record_loop_started,
+        record_loop_success,
+    )
 
-    reconcile_completion_with_prompts(root=repo)
+    record_loop_started("reconciliation")
+    try:
+        reconcile_completion_with_prompts(root=repo)
+    except Exception as exc:
+        record_loop_error(
+            "reconciliation",
+            code=type(exc).__name__,
+            message=str(exc) or type(exc).__name__,
+        )
+        raise
+    else:
+        record_loop_success("reconciliation")
     from cascade.automation import advance_work
     from cascade.workspace.kickoff import deferred_kickoffs
 
@@ -211,14 +227,21 @@ def run_watchdog(
         try:
             if maintenance_due:
                 _resume_reclaimable_task_runs(repo)
+                record_loop_started("watchdog")
                 watchdog_tick(root)
+                record_loop_success("watchdog")
                 last_maintenance_at = time.monotonic()
             else:
                 _event_tick(repo)
-        except Exception:
+        except Exception as exc:
             # The War Room and watchdog intentionally share one supervisor.
             # A transient forge/git failure must not tear down the HTTP server;
             # keep the loop alive and leave a full traceback in supervisor.log.
+            record_loop_error(
+                "watchdog",
+                code=type(exc).__name__,
+                message=str(exc) or type(exc).__name__,
+            )
             traceback.print_exc()
         if stop_when is not None and stop_when():
             return
