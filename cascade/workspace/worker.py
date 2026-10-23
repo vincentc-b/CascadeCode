@@ -230,12 +230,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
             reason=shutdown_reason,
             drain_seconds=drain_seconds,
         )
-        if (
-            abnormal_exit
-            and not operator_stop.is_set()
-            and not source_changed
-            and handlers_abandoned
-        ):
+        if abnormal_exit and handlers_abandoned:
             traceback.print_exc()
             sys.stdout.flush()
             sys.stderr.flush()
