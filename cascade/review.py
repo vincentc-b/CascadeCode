@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cascade.board.errors import GitError, NotFound
-from cascade.board.store import read_doc
+from cascade.board.errors import BoardError, GitError, NotFound
+from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
 from cascade.tracking import (
     MergeRequest,
     create_merge_request,
@@ -387,9 +387,39 @@ def _finalize_merged_review_record(
 
     try:
         _sync_merged_target(trunk, mr)
+        epic_root = _close_merged_feature_on_target(feature_id, record, trunk=trunk)
+        # The accepted source tree may still have an active feature document.
+        # Publish its terminal lifecycle commit before acknowledging closure.
+        push_branch(epic_root, mr.target_branch)
         return try_complete_feature(feature_id, root=trunk, review_merged=True)
-    except GitError:
+    except (BoardError, OSError):
         return False
+
+
+def _close_merged_feature_on_target(
+    feature_id: str, record: dict[str, object], *, trunk: Path
+) -> Path:
+    """Persist completion on the epic line after its accepted review merge.
+
+    The source feature doc is moved locally after initial MR publication. That
+    local lifecycle commit is not part of the forge merge, so the accepted epic
+    tree can still contain the active copy. Complete that copy before recording
+    the review as closed or releasing dependent Features.
+    """
+
+    epic_id = _review_target_epic(record)
+    entry = get_integration_worktree(trunk, "epic", epic_id) if epic_id else None
+    if entry is None or not entry.path.is_dir():
+        raise GitError(f"epic worktree missing for merged feature {feature_id}")
+    doc = read_doc_in_worktree(feature_id, entry.path)
+    if doc.meta.tier != "feature" or doc.meta.parent != epic_id:
+        raise GitError(f"merged feature target mismatch: {feature_id}")
+    if doc.meta.status == "completed" and doc.meta.path.parent.name == "3_completed":
+        return entry.path
+    if doc.meta.status != "active" or doc.meta.path.parent.name != "2_active":
+        raise GitError(f"merged feature is not active on epic branch: {feature_id}")
+    move_doc(feature_id, "completed", root=entry.path)
+    return entry.path
 
 
 def poll_feature_reviews(root: Path) -> None:
