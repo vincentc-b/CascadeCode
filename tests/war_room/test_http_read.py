@@ -169,6 +169,27 @@ def test_get_api_health_null_when_status_file_missing(war_room_server):
     assert payload["automation"]["ready"] is False
 
 
+def test_get_api_health_exposes_readiness_projection_shape(war_room_server):
+    from cascade.workspace.supervisor_readiness import record_loop_success
+
+    base, _root, _server = war_room_server
+    record_loop_success("watchdog", at="2026-01-01T00:00:01+00:00")
+    status, payload, _ = _get(f"{base}/api/health")
+    assert status == HTTPStatus.OK
+    assert set(payload.keys()) >= {"http", "automation", "loops", "recovery"}
+    assert payload["loops"]["watchdog"]["last_success_at"] == "2026-01-01T00:00:01+00:00"
+    assert "phase" in payload["automation"]
+    assert "degraded_reasons" in payload["automation"]
+
+
+def test_get_api_health_does_not_mutate_board_docs(war_room_server):
+    base, root, _server = war_room_server
+    before = sorted(p.name for p in (root / "docs").rglob("*.md"))
+    _get(f"{base}/api/health")
+    after = sorted(p.name for p in (root / "docs").rglob("*.md"))
+    assert before == after
+
+
 def test_http_live_while_automation_not_ready_then_becomes_ready(war_room_server):
     from cascade.workspace.supervisor_readiness import (
         observe_startup_phase,

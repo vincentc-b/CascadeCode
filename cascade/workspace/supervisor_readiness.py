@@ -323,9 +323,34 @@ def read_supervisor_health_projection(
     workspace_root: Path,
     *,
     http_serving: bool = False,
+    status: SupervisorStatus | None = None,
 ) -> SupervisorHealthProjection | None:
     """Read-only merge of on-disk supervisor status and in-process readiness evidence."""
 
-    status = read_supervisor_status(workspace_root)
+    if status is None:
+        status = read_supervisor_status(workspace_root)
     evidence = snapshot_readiness_evidence()
     return project_supervisor_health(status, evidence, http_serving=http_serving)
+
+
+def supervisor_health_http_payload(
+    workspace_root: Path,
+    *,
+    http_serving: bool,
+    status: SupervisorStatus | None = None,
+    error: str | None = None,
+) -> dict[str, object]:
+    """Authoritative JSON body for War Room and launcher health responses."""
+
+    payload_obj = read_supervisor_health_projection(
+        workspace_root,
+        http_serving=http_serving,
+        status=status,
+    )
+    if payload_obj is None:
+        payload: dict[str, object] = {"error": error or "degraded", "state": "degraded"}
+    else:
+        payload = dict(payload_obj)
+        if error is not None:
+            payload["error"] = error
+    return payload

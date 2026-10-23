@@ -1,11 +1,11 @@
-"""War Room GET /api/health — supervisor status for the War Room banner (feat_018_003)."""
+"""War Room GET /api/health — supervisor readiness for the War Room banner (feat_012_001)."""
 
 from __future__ import annotations
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-from cascade.workspace.supervisor_readiness import read_supervisor_health_projection
+from cascade.workspace.supervisor_readiness import supervisor_health_http_payload
 
 if TYPE_CHECKING:
     from cascade.war_room.server import WarRoomRequestHandler
@@ -16,8 +16,5 @@ def register_health_routes(handler_cls: type[WarRoomRequestHandler]) -> None:
 
 
 def handle_get_health(handler: WarRoomRequestHandler) -> None:
-    payload = read_supervisor_health_projection(
-        handler.server.root,
-        http_serving=True,
-    )
+    payload = supervisor_health_http_payload(handler.server.root, http_serving=True)
     handler._json_response(HTTPStatus.OK, payload)
