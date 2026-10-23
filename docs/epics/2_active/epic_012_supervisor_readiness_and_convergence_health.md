@@ -150,6 +150,11 @@ None blocking feature planning. Feature owners may choose exact field names and 
   Chose Deliver three sequenced features: readiness/non-blocking recovery, convergence diagnostics, then an isolated synthetic lifecycle probe..
   Rationale: This is the smallest dependency-ordered slice that establishes the observable contract, builds diagnosis on it, and validates the integrated lifecycle without introducing an always-on canary or mutating the live board.
   Honors: Product-manager scope discipline and the success criterion for a disposable synthetic probe..
+
+- `dec_004` · 2026-10-23 · Epic Manager · **Incident containment and recovery**
+  Chose Treat a pending provider await, live bridge process, and lease renewal as transport/process liveness only. After a configurable bounded interval with no provider event, completed tool call, checkpoint advancement, or task-worktree file/content advancement, cancel only the affected turn through the feat_018_002 drain/cancellation seam, preserve dirty task state, emit one durable actionable diagnostic, and schedule at most one supervised recovery for the unchanged episode..
+  Rationale: The incident showed that supervisor-coroutine heartbeat renewal can report healthy for an indefinitely connected but useless provider turn. A separate progress clock catches that failure while a turn-scoped, episode-idempotent response contains the hung bridge without killing the War Room, discarding recoverable work, or creating a retry storm. Depending on feat_018_002 avoids concurrent, conflicting changes in swe_turn/execution.
+  Honors: Human incident request for process/transport versus progress liveness, bounded no-progress detection, targeted cancellation, dirty-work preservation, one diagnostic, at most one recovery, a forever-connected provider regression, and sequencing with Epic 18..
 ## Amendment log
 
 _(none)_
