@@ -25,8 +25,6 @@ models:
 
 epic_020
 
-## Scope
-
 ## Intent
 
 Give operators a visible, human-only way to approve a feature that was minted after its epic plan was approved, and prove the full path works end to end.
