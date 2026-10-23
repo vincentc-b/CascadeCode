@@ -181,6 +181,11 @@ _None. Implementation discovery may choose storage and endpoint names but must p
   Chose Use Planning in progress for unmet readiness and Ready for review for met readiness; do not implement live agent presence..
   Rationale: This provides the requested wait/review signal without adding unreliable presence infrastructure.
   Honors: The requested churning indicator and distinct feedback-ready treatment..
+
+- `dec_004` · 2026-10-23 · Epic Manager · **Delivery scope**
+  Chose Deliver two sequenced features: the authoritative domain/API gate, then the existing UI's readiness presentation..
+  Rationale: The backend gate is independently security-correct; the UI feature then consumes its stable contract with minimal coupling.
+  Honors: Frugal delivery of the smallest complete, enforceable user flow..
 ## Amendment log
 
 _(none)_
