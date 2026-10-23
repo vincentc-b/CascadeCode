@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_012_001
+- feat_012_002
 depends_on: []
 owners:
 - epic_manager
@@ -42,6 +43,7 @@ The filesystem board remains lifecycle truth. Health checks must be read-only ag
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_012_002
 - feat_012_001
 
 The Epic Team will create and sequence feature plans here.
