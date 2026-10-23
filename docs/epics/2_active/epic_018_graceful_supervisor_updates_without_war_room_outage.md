@@ -126,6 +126,17 @@ Consequences and contract:
 
 Each feature owns its integration tests against a real `cascade up` subprocess and a fake provider. The epic's test criterion is covered across the three features: source-change detection and port continuity (001), active turns and queued events (002), failed startup and automatic recovery (003). No separate test-only feature. For 002, one integration test covers the replay contract: a fake-provider turn calls `record_decision` and `mint_feature`, and is then cancelled by an update before its node completes. After resume, the board must show exactly one decision and one feature. Idempotency gets no per-tool unit-test matrix.
 
+### Handoff seams from feat_018_001 (sequencing)
+
+feat_018_002 and feat_018_003 start from 001's code in parallel. So they do not rewrite the same lines, 001 ships these seams in their simplest form and nothing beyond them:
+
+- **One worker shutdown path.** Every worker exit (source change or operator stop) goes through a single entry point that stops the watchdog and the server and exits with the contract code. In 001 it does no drain. 002 adds the drain inside it; 003 adds the preflight in front of it.
+- **One launcher state-transition point.** Launcher state changes (serving, restarting, stopping) go through one function that logs a stderr line. 003 makes it also write `supervisor_status.json`; 001 does not write the file.
+- **Readiness means serving.** The worker writes to the readiness pipe only once the War Room is serving on the inherited fd. 003's backoff and its 60s counter reset key off this signal, so its meaning is fixed.
+- **Minimal crash relaunch.** In 001, an exit other than 0 or 75 relaunches after a fixed short delay (about 1s) so a crash loop cannot spin hot. Exponential backoff, attempt limits and the degraded responder belong to 003.
+- **Sweep results are returned, not just logged.** The stale `index.lock` sweep returns the locks it removed and any product-trunk lock it found, so 003 can surface the trunk warning in status and the banner.
+- **Board tools and `board/store.py` are not touched by 001.** They belong to 002, which may land them early as a standalone task.
+
 ### Explicitly cut
 
 - Zero-downtime blue/green overlap of two workers. It conflicts with the single-supervisor invariant, and the socket backlog already prevents refused connections.
