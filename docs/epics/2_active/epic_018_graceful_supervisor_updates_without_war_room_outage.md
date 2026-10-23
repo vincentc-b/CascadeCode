@@ -191,6 +191,11 @@ feat_018_002 and feat_018_003 start from 001's code in parallel. So they do not 
   Chose Fold the Epic Architect's dec_005-dec_007 scope into the minted feature stubs before dispatch: stale index.lock sweep into feat_018_001; replay-safe tools, atomic doc writes, Connection: close, bounded handler join and SIGTERM-then-exit cancellation into feat_018_002; trunk index.lock warning in status/banner into feat_018_003. Keep replay safety inside feat_018_002 rather than minting a fourth feature.
   Rationale: The stubs were drafted before the architect's findings and would have sent feature teams an incomplete contract. Replay safety is independent of the launcher, but a separate feature adds coordination overhead for a small change; 002's lead may land it first as a standalone task if 001 slips. Each addition rides on an existing integration test rather than new unit-test matrices
   Honors: Recovered exactly once; no stale-lock blockage; actionable diagnostics; frugal testing.
+
+- `dec_009` · 2026-10-23 · Epic Manager · **Feature breakdown**
+  Chose feat_018_001 ships minimal handoff seams for 002 and 003: a single worker shutdown entry point (no drain), a single launcher state-transition function (stderr log only, no status file), readiness signalled only once the War Room is serving, a fixed ~1s delay on crash relaunch (backoff and degraded mode stay in 003), stale-lock sweep results returned as data, and no changes to board tools or board/store.py.
+  Rationale: 002 and 003 build on 001 in parallel; without agreed extension points both would rewrite the same shutdown and launcher-loop code and collide at merge. Pinning the seams now costs 001 almost nothing and keeps each later feature's scope additive
+  Honors: Bounded downtime and restart-storm prevention; operator stop distinct from update restart; smallest shippable slice for 001.
 ## Amendment log
 
 _(none)_
