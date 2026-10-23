@@ -154,17 +154,16 @@ def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
     if not cfg.enabled:
         return result
 
-    from cascade.approvals import feature_approved
+    from cascade.feature.readiness import compute_feature_readiness
+
     board = merged_board(repo)
     view = compute_boss_view(root=repo)
     for feature_id in view.dispatchable_features:
         meta = board.by_id.get(feature_id)
         if meta is None:
             continue
-        parent = board.by_id.get(meta.parent or "")
-        if parent is None or parent.path.parent.name != "2_active":
-            continue
-        if not feature_approved(feature_id, root=repo):
+        readiness = compute_feature_readiness(feature_id, root=repo, board=board)
+        if readiness is None or "epic_inactive" in readiness.blockers:
             continue
         dispatched = dispatch_feature(feature_id, "boss", root=repo)
         if dispatched.ok:

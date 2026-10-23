@@ -93,6 +93,12 @@ def compute_feature_readiness(
     )
 
 
+def feature_boss_dispatchable(readiness: FeatureReadiness) -> bool:
+    """True when the feature passes the boss-view dispatch filter (excludes ``epic_inactive``)."""
+
+    return not any(code for code in readiness.blockers if code != "epic_inactive")
+
+
 def dispatch_refusal_from_readiness(readiness: FeatureReadiness) -> str | None:
     """Map the first dispatch-relevant blocker to ``DispatchResult.reason``."""
 
