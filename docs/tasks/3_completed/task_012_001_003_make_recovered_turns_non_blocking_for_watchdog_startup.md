@@ -2,7 +2,7 @@
 id: task_012_001_003
 title: Make recovered turns non-blocking for watchdog startup
 tier: task
-status: active
+status: completed
 parent: feat_012_001
 children: []
 depends_on:

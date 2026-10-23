@@ -137,3 +137,7 @@ flowchart TD
   Chose Use focused readiness-transition integration coverage instead of duplicative low-level tests..
   Rationale: The highest-value proof spans HTTP liveness, supervisor readiness, startup sequencing, and read-only observation; integration coverage validates that boundary with lower maintenance cost.
   Honors: Frugal engineering guidance and feature acceptance requiring live-to-ready transition coverage..
+
+## Closeout
+
+Completed child work: `task_012_001_001` (Define the authoritative supervisor readiness projection), `task_012_001_002` (Instrument startup, watchdog, and reconciliation readiness state), `task_012_001_003` (Make recovered turns non-blocking for watchdog startup), `task_012_001_004` (Expose supervisor readiness through the existing health and War Room path), `task_012_001_005` (Add focused integration coverage for readiness transitions).

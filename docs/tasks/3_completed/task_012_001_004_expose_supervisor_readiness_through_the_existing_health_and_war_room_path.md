@@ -2,7 +2,7 @@
 id: task_012_001_004
 title: Expose supervisor readiness through the existing health and War Room path
 tier: task
-status: backlog
+status: completed
 parent: feat_012_001
 children: []
 depends_on:
@@ -11,7 +11,7 @@ depends_on:
 owners:
 - swe
 skills: []
-parent_rev: 90a67ca2f1c4b4ec021ec871c777492e8979bb7d
+parent_rev: 0cedad81a73dc6079de09dd2851d65e1d117faf2
 created: '2026-10-23'
 updated: '2026-10-23'
 ---

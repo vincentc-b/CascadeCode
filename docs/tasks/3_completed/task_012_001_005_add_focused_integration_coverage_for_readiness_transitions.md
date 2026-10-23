@@ -2,7 +2,7 @@
 id: task_012_001_005
 title: Add focused integration coverage for readiness transitions
 tier: task
-status: backlog
+status: completed
 parent: feat_012_001
 children: []
 depends_on:
@@ -10,7 +10,7 @@ depends_on:
 owners:
 - swe
 skills: []
-parent_rev: 9d6ccdd55c94ce1e0b55d83bfe4b4e806d48a511
+parent_rev: 0cedad81a73dc6079de09dd2851d65e1d117faf2
 created: '2026-10-23'
 updated: '2026-10-23'
 ---

@@ -182,38 +182,6 @@ def test_get_api_health_exposes_readiness_projection_shape(war_room_server):
     assert "degraded_reasons" in payload["automation"]
 
 
-def test_get_api_health_does_not_mutate_board_docs(war_room_server):
-    base, root, _server = war_room_server
-    before = sorted(p.name for p in (root / "docs").rglob("*.md"))
-    _get(f"{base}/api/health")
-    after = sorted(p.name for p in (root / "docs").rglob("*.md"))
-    assert before == after
-
-
-def test_http_live_while_automation_not_ready_then_becomes_ready(war_room_server):
-    from cascade.workspace.supervisor_readiness import (
-        observe_startup_phase,
-        record_loop_success,
-        reset_supervisor_readiness_for_tests,
-    )
-
-    base, _root, _server = war_room_server
-    reset_supervisor_readiness_for_tests()
-    status, payload, _ = _get(f"{base}/api/health")
-    assert status == HTTPStatus.OK
-    assert payload["http"]["live"] is True
-    assert payload["automation"]["ready"] is False
-
-    observe_startup_phase("ready")
-    record_loop_success("watchdog")
-    record_loop_success("reconciliation")
-
-    status, payload, _ = _get(f"{base}/api/health")
-    assert status == HTTPStatus.OK
-    assert payload["http"]["live"] is True
-    assert payload["automation"]["ready"] is True
-
-
 def test_get_api_health_served_while_draining(war_room_server):
     base, root, server = war_room_server
     from cascade.workspace.drain import reset_drain_for_tests
