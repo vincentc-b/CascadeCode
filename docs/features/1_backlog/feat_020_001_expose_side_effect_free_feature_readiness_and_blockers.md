@@ -30,7 +30,7 @@ The War Room serializes `approved` for features but not why a backlog feature ha
 
 ## Scope
 
-- Extract the gate checks in `cascade/watchdog/dispatch.py::_dispatch_feature` (open status/parent, `unmet_deps`, `not_approved`, dependency/epic `feature_awaiting_merge`, sibling block) plus the active-parent-epic check from `automation.reconcile_approval_dispatch` into one pure predicate module. `dispatch_feature` must call the same predicate, so the displayed reason and the actual dispatch decision cannot drift.
+- Extract the gate checks in `cascade/watchdog/dispatch.py::_dispatch_feature` (open status/parent, `unmet_deps`, `not_approved`, dependency/epic `feature_awaiting_merge`, sibling block), the feature filter in `cascade/boss/view.py::compute_boss_view`, and the active-parent-epic check from `automation.reconcile_approval_dispatch` into one pure predicate module. `dispatch_feature`, `compute_boss_view`, reconcile, and the board serializer must all call the same predicate, so the displayed reason and the actual dispatch decision cannot drift (see Architect constraints below).
 - The predicate must not call `ensure_feature_dispatch_selection`, write files, append events, or take the dispatch process lock.
 - Serialize on feature rows in `cascade/war_room/serialize.py` (backlog/open features only): `readiness: {"approved": bool, "blockers": [codes]}`. Approval is reported independently of the other blockers, so an unapproved feature with unmet dependencies shows both.
 - Codes are stable strings: `not_approved`, `unmet_deps` (with the dependency ids), `feature_awaiting_merge`, `sibling_blocked`, `dispatch_base_unavailable` (with the underlying reason), `review_threads_blocking`, `epic_inactive`.
