@@ -17,12 +17,14 @@ from typing import Callable, Literal
 from cascade.board.context import resolve_root
 from cascade.board.types import BoardIndex, WorkMeta
 from cascade.boss.view import compute_boss_view
-from cascade.watchdog.events import read_events
+from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.queue_cursor import queue_byte_size
+from cascade.watchdog.types import Event
 
 ConvergenceState = Literal["stalled", "progressing", "gated", "recovered"]
 
 DEFAULT_CONVERGENCE_STALL_THRESHOLD_SECONDS = 600.0
+_CONVERGENCE_STALL_TOAST_KIND = "convergence_stall"
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,7 @@ class _Episode:
 
 _episodes: dict[str, _Episode] = {}
 _prev_state: dict[str, ConvergenceState] = {}
+_emitted_stall_evidence: dict[str, tuple[str, str | None, float]] = {}
 _clock: Callable[[], float] = time.monotonic
 
 
@@ -52,8 +55,15 @@ def reset_convergence_detection_for_tests() -> None:
 
     _episodes.clear()
     _prev_state.clear()
+    _emitted_stall_evidence.clear()
     global _clock
     _clock = time.monotonic
+
+
+def clear_convergence_diagnostic_memory() -> None:
+    """Forget emitted stall diagnostics (tests only)."""
+
+    _emitted_stall_evidence.clear()
 
 
 def set_convergence_clock_for_tests(clock: Callable[[], float]) -> None:
@@ -110,6 +120,55 @@ def observe_convergence_states(*, root: Path | None = None) -> list[ConvergenceO
 
     _drop_stale_episodes({obs.work_id for obs in observations})
     return observations
+
+
+def publish_convergence_diagnostics(*, root: Path | None = None) -> None:
+    """Emit deduplicated War Room toasts for dispatchable items beyond the stall threshold."""
+
+    from datetime import datetime, timezone
+
+    repo = resolve_root(root)
+    threshold = _stall_threshold_seconds(repo)
+    observations = observe_convergence_states(root=repo)
+    for obs in observations:
+        if obs.state != "stalled":
+            _emitted_stall_evidence.pop(obs.work_id, None)
+            continue
+        evidence = (obs.progress_signature, obs.blocker, threshold)
+        if _emitted_stall_evidence.get(obs.work_id) == evidence:
+            continue
+        _emitted_stall_evidence[obs.work_id] = evidence
+        stalled_for = obs.stalled_for_seconds
+        stalled_text = f"{stalled_for:.0f}s" if stalled_for is not None else "unknown duration"
+        blocker = obs.blocker or "no_durable_progress"
+        message = (
+            f"{obs.work_id} ({obs.tier}) dispatchable but stalled: "
+            f"{blocker} for {stalled_text} (threshold {threshold:.0f}s)"
+        )
+        payload: dict[str, object] = {
+            "kind": _CONVERGENCE_STALL_TOAST_KIND,
+            "id": obs.work_id,
+            "message": message,
+            "body": message,
+            "tier": obs.tier,
+            "blocker": blocker,
+            "stall_threshold_seconds": threshold,
+            "stalled_for_seconds": stalled_for,
+            "progress_signature": obs.progress_signature,
+        }
+        try:
+            append_event(
+                "war_room",
+                Event(
+                    type="Toast",
+                    ts=datetime.now(timezone.utc),
+                    payload=payload,
+                    dest="war_room",
+                ),
+                root=repo,
+            )
+        except OSError:
+            _emitted_stall_evidence.pop(obs.work_id, None)
 
 
 def _observe_item(
