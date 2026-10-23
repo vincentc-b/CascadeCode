@@ -18,6 +18,7 @@ provider: cursor
 models:
   feature_lead: claude-opus-5-5
   feature_architect: claude-opus-5-5
+approved_at: '2026-10-23T03:13:48.299409+00:00'
 ---
 # War Room feature approval control with end-to-end late-mint test
 
