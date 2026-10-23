@@ -315,6 +315,79 @@ def _execution_view_from_record(
     return {**record, "health": health, "heartbeat_age_seconds": age_seconds}
 
 
+def read_stall_disposition(
+    task_id: str, episode_signature: str, *, root: Path
+) -> dict[str, Any] | None:
+    """Return durable stall disposition for one episode signature, if recorded."""
+
+    repo = resolve_root(root)
+    with process_lock:
+        record = _read(repo).get(task_id)
+    if record is None:
+        return None
+    dispositions = record.get("stall_dispositions")
+    if not isinstance(dispositions, dict):
+        return None
+    row = dispositions.get(episode_signature)
+    return dict(row) if isinstance(row, dict) else None
+
+
+def write_stall_disposition(
+    task_id: str,
+    episode_signature: str,
+    patch: dict[str, Any],
+    *,
+    root: Path,
+) -> dict[str, Any]:
+    """Merge one episode-keyed stall disposition into the execution sidecar."""
+
+    repo = resolve_root(root)
+    with process_lock:
+        records = _read(repo)
+        record = dict(records.get(task_id, {"task_id": task_id}))
+        dispositions = record.get("stall_dispositions")
+        if not isinstance(dispositions, dict):
+            dispositions = {}
+        else:
+            dispositions = dict(dispositions)
+        current = dispositions.get(episode_signature)
+        merged = dict(current) if isinstance(current, dict) else {}
+        merged.update(patch)
+        dispositions[episode_signature] = merged
+        record["stall_dispositions"] = dispositions
+        records[task_id] = record
+        _write(repo, records)
+        return dict(merged)
+
+
+def mark_stall_recovery_queued(
+    task_id: str, *, root: Path, now: datetime | None = None
+) -> dict[str, Any]:
+    """Requeue the same attempt after a bounded in-flight stall (no retry-loop counter)."""
+
+    repo = resolve_root(root)
+    current = now or _now()
+    with process_lock:
+        records = _read(repo)
+        record = dict(records.get(task_id, {}))
+        record.update(
+            {
+                "task_id": task_id,
+                "attempt": int(record.get("attempt") or 1),
+                "phase": "queued",
+                "outcome": None,
+                "queued_at": _iso(current),
+                "heartbeat_at": _iso(current),
+                "finished_at": None,
+                "owner_pid": None,
+                "owner_start_token": None,
+            }
+        )
+        records[task_id] = record
+        _write(repo, records)
+        return dict(record)
+
+
 def execution_lease_is_live(
     task_id: str,
     *,
