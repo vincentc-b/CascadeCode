@@ -141,6 +141,26 @@ feat_018_002 and feat_018_003 start from 001's code in parallel. So they do not 
 - **Sweep results are returned, not just logged.** The stale `index.lock` sweep returns the locks it removed and any product-trunk lock it found, so 003 can surface the trunk warning in status and the banner.
 - **Board tools and `board/store.py` are not touched by 001.** They belong to 002, which may land them early as a standalone task.
 
+### Seams as shipped by feat_018_001 (verified against merged code, dec_012)
+
+001's own spec was drafted from the epic revision before dec_009/dec_010, so only some of the seams above shipped. Checked against `epic/epic_018` after the 001 merge (`cascade/workspace/launcher.py`, `worker.py`, `git_lock_sweep.py`):
+
+**Present as planned:** the worker is spawned with `start_new_session=True`, and nothing else under `cascade/` calls `setsid` / `start_new_session` / `process_group`. The War Room serves on the inherited fd before `resume_legally_active_graphs`. Crash relaunch waits a fixed `CRASH_RESTART_DELAY_S = 1.0`. After forwarding a stop, the launcher waits for the worker with no timeout. The sweep lives in stdlib-only `git_lock_sweep.py` and runs from `post_worker_exit` after the group kill on every exit path. Board tools and `board/store.py` are untouched.
+
+**Gaps, each with one owner.** Nobody reopens 001; the owning feature closes the gap as part of its own work.
+
+- **No shutdown entry point with a reason; owner 002.** Shutdown is the inline `finally` block in `worker.run_worker`, and the exit code is inferred afterwards from `operator_stop` / `source_changed`. The trailing fallback `return 0` (watchdog returned with neither flag set) is read by the launcher as an operator stop, so the launcher exits and the outage comes back silently. 002 extracts the shutdown into one function taking `update` | `stop`, puts its drain inside it, and turns that fallback into a non-zero crash code. This matches 002's `task_018_002_002`, which already owns the `run_worker` stop path.
+- **Preflight placement; owner 003.** 003 runs the preflight in the source-change branch of `run_worker`'s `should_stop`, before it reports a stop. On failure it keeps serving, records `update_blocked`, and remembers the failed fingerprint so it retries only on the next change. 003 does not edit the shutdown function.
+- **Readiness is written after resume, not once serving; owner 003.** Move the single `_write_readiness` call to just after the server thread starts. Backoff and the 60s reset depend on it.
+- **Fingerprint is not stdlib-only; owner 003.** `_source_fingerprint` lives in `up.py`, which imports Cascade modules, and the launcher does not import it. 003 moves it to a stdlib-only module (with `up.py` re-exporting it for the worker) and imports it in the launcher for the degraded responder.
+- **No launcher state-transition function; owner 003.** The launcher prints ad hoc lines. 003 adds the single function and the `supervisor_status.json` write together.
+- **Sweep returns nothing; owner 003.** `sweep_stale_git_locks` returns `None` and only prints. 003 makes it return the removed locks and any trunk lock path.
+- **No second-signal escalation; owner 003.** While stopping, the launcher re-sends SIGTERM to the worker every 0.2s and never escalates. Once 002's drain makes a stop take up to about 190s, an impatient operator's only option is to hard-kill the launcher. That leaves the worker's session running, still holding the listening socket but not the supervisor lock, so a fresh `cascade up` could start beside it. 003 adds: a second operator signal calls `_kill_worker_group` at once. 003 owns this because it is the only feature that edits `launcher.py`; 002 stays out of `launcher.py`. 002 must keep the worker's SIGTERM handler idempotent, because repeated SIGTERMs arrive throughout the drain.
+
+**Merge note:** 002 and 003 both edit `run_worker`, in different places. 002 changes the `finally` block and the exit codes. 003 changes `should_stop` and moves the readiness line. Whichever merges second rebases; no other overlap is expected.
+
+**002's working spec is stale.** The feature spec on `feat/feat_018_002` still says the drain-window expiry sends SIGTERM to "each agent's process group" and "exits 75". The binding contract is dec_010/dec_011: SIGTERM each agent CLI **pid** (agents stay in the worker's group), wait 5s, then exit with the shutdown reason's code (75 for `update`, 0 for `stop`).
+
 ### Explicitly cut
 
 - Zero-downtime blue/green overlap of two workers. It conflicts with the single-supervisor invariant, and the socket backlog already prevents refused connections.
