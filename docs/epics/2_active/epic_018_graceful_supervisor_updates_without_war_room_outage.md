@@ -4,7 +4,8 @@ title: Graceful supervisor updates without War Room outage
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_018_001
 depends_on: []
 owners:
 - epic_manager
@@ -53,6 +54,7 @@ To be developed by the Epic Manager and Epic Architect after activation.
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_018_001
 
 The Epic Team will create and sequence feature plans here.
 
