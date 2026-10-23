@@ -159,6 +159,11 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
   Chose Recover interrupted work through the existing checkpoint resume path (resume_legally_active_graphs / resume_inflight_graphs) after a bounded drain, instead of building a new live state-transfer protocol between workers.
   Rationale: The durable checkpoints, queues and worktrees already survive a process restart, and resume is already exercised on every startup. Adding a second handoff mechanism would duplicate it and add risk. The remaining exactly-once gap for cancelled turns is tracked as an open question for the Epic Architect
   Honors: Checkpoints, queues, comments and worktree state as durable handoff boundaries; drain when possible, recover exactly once otherwise.
+
+- `dec_005` · 2026-10-23 · Epic Architect · **Macro-architecture**
+  Chose Make turn recovery exactly-once by making every board tool replay-safe on a natural key (record_decision by section+choice, mint_feature by parent+title, reply_comment by comment+author+body, resolve_amendment as a no-op when already resolved), keeping write_doc's sha compare-and-swap, and treating turn delivery as at-least-once; per-tool-call checkpointing rejected.
+  Rationale: Code shows checkpoints persist only at role-node boundaries, tools commit to disk synchronously during the turn, and resume re-runs the whole node, so landed effects are replayed today. A provider CLI session cannot resume partway through, so per-tool checkpoints would not stop the node re-running; idempotent tools fix replay for update cancels and ordinary crashes alike, with one integration test
+  Honors: In-flight work recovered exactly once from durable checkpoints; checkpoints, queues and comments as durable handoff boundaries; frugal testing.
 ## Amendment log
 
 _(none)_
