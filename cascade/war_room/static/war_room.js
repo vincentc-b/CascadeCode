@@ -14,8 +14,10 @@
   let amendmentEpicId = defaultEpicId;
 
   const BoardFocusApi = globalThis.BoardFocus;
+  const BranchSyncUiApi = globalThis.BranchSyncUi;
   let boardFocus = BoardFocusApi ? BoardFocusApi.defaultBoardFocus() : null;
   let lastBoardView = null;
+  let branchSyncRowHelpers = null;
 
   const el = {
     board: document.getElementById("war-room-board"),
@@ -576,6 +578,9 @@
     if (tier === "tasks") {
       const retryable = column === "2_active" && item.status === "blocked";
       if (column === "2_active") {
+        actions.appendChild(actionButton("Merge task", function () {
+          return mergeTask(item.id, row);
+        }));
         actions.appendChild(actionButton(
           "Retry",
           function () { return askBoss("task", item.id); },
@@ -622,6 +627,11 @@
         );
         renderBoard(lastBoardView);
       });
+    }
+
+    const syncHelpers = branchSyncHelpers();
+    if (syncHelpers) {
+      syncHelpers.appendBranchSyncToRow(row, item, column, actions);
     }
 
     row.appendChild(actions);
@@ -689,6 +699,33 @@
     return btn;
   }
 
+
+  function branchSyncHelpers() {
+    if (!branchSyncRowHelpers && BranchSyncUiApi && BranchSyncUiApi.createBranchSyncRowHelpers) {
+      branchSyncRowHelpers = BranchSyncUiApi.createBranchSyncRowHelpers({
+        document: document,
+        apiPost: apiPost,
+        refreshBoard: refreshBoard,
+        setStatus: setStatus,
+        actionButton: actionButton,
+      });
+    }
+    return branchSyncRowHelpers;
+  }
+
+  function mergeFailureMessage(body) {
+    if (BranchSyncUiApi && BranchSyncUiApi.actionableStatusMessage) {
+      return BranchSyncUiApi.actionableStatusMessage(body, "Merge failed");
+    }
+    return "Merge failed: " + ((body && body.reason) || "unknown");
+  }
+
+  function epicCloseFailureMessage(body) {
+    if (BranchSyncUiApi && BranchSyncUiApi.actionableStatusMessage && body.guidance) {
+      return BranchSyncUiApi.actionableStatusMessage(body, "Epic close refused");
+    }
+    return null;
+  }
   function actionLink(label, href) {
     const link = document.createElement("a");
     link.className = "board-action-link";
@@ -737,23 +774,26 @@
     }
   }
 
-  async function mergeTask(id) {
+  async function mergeTask(id, row) {
+    const helpers = branchSyncHelpers();
     try {
       const { body } = await apiPost("/api/merge_task_branch", { id: id });
       if (body.ok) {
         dispatchBanner = "";
+        if (helpers && row) helpers.clearRecovery(row);
         setStatus(
           "Merged " + id + " (" + (body.branch || "") + ") @ " + (body.merge_sha || ""),
           false
         );
         await refreshBoard();
       } else {
-        setStatus("Merge failed: " + (body.reason || "unknown"), true);
+        if (helpers && row) helpers.showRecovery(row, body);
+        setStatus(mergeFailureMessage(body), true);
       }
     } catch (err) {
-      const reason =
-        err.body && err.body.reason ? err.body.reason : err.message || "merge failed";
-      setStatus("Merge failed: " + reason, true);
+      const failureBody = err.body || { reason: err.message || "merge failed" };
+      if (helpers && row) helpers.showRecovery(row, failureBody);
+      setStatus(mergeFailureMessage(failureBody), true);
     }
   }
 
@@ -784,7 +824,11 @@
         } else if (body.reason === "pending_feature_review") {
           setStatus("Epic close refused: a child feature review is still pending.", true);
         } else {
-          setStatus("Epic close refused: " + (body.reason || "not_ready"), true);
+          const syncMsg = epicCloseFailureMessage(body);
+          setStatus(
+            syncMsg || ("Epic close refused: " + (body.reason || "not_ready")),
+            true
+          );
         }
       }
     } catch (err) {

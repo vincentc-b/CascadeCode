@@ -795,3 +795,28 @@ button:disabled {
 #toast-list li.toast-amendment:hover {
   color: var(--accent);
 }
+
+
+.branch-sync-block {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
+.branch-sync-summary-error {
+  color: #ffb4a8;
+}
+
+.branch-sync-recovery {
+  font-size: 0.72rem;
+  color: #ffb4a8;
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid #5c2b2b;
+  border-radius: 4px;
+  background: rgb(255 180 168 / 6%);
+}
+
+.branch-sync-recovery-detail {
+  color: var(--muted);
+}

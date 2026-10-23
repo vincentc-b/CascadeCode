@@ -46,6 +46,7 @@ def work_meta_to_dict(
     root: Path | None = None,
     execution: dict[str, Any] | None = None,
     review: dict[str, object] | None = None,
+    branch_sync: dict[str, Any] | None = None,
     sidecars_preloaded: bool = False,
 ) -> dict:
     value = {
@@ -88,6 +89,8 @@ def work_meta_to_dict(
         stacked = feature_stacked_dispatch_view(meta.id, root=root)
         if stacked is not None:
             value["stacked_dispatch"] = stacked
+    if branch_sync is not None:
+        value["branch_sync"] = branch_sync
     return value
 
 
@@ -301,6 +304,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
 
     from cascade.review import feature_review_views
     from cascade.task.execution import execution_views
+    from cascade.war_room.branch_sync import branch_sync_views
 
     metas = sorted(board.by_id.values(), key=lambda meta: meta.id)
     executions = execution_views(
@@ -309,6 +313,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
     reviews = feature_review_views(
         {meta.id for meta in metas if meta.tier == "feature"}, root=root
     )
+    sync_views = branch_sync_views(metas, root=root)
 
     columns = ("1_backlog", "2_active", "3_completed")
     view: dict[str, dict[str, list]] = {
@@ -324,6 +329,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
             root=root,
             execution=executions.get(meta.id),
             review=reviews.get(meta.id),
+            branch_sync=sync_views.get(meta.id),
             sidecars_preloaded=True,
         )
         review = item.get("review")

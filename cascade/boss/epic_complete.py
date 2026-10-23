@@ -38,6 +38,7 @@ class EpicCompleteResult:
     ok: bool
     reason: str | None = None
     blocker_ids: tuple[WorkId, ...] = ()
+    conflict_paths: tuple[str, ...] = ()
 
 
 def reset_epic_close_prompt_surfaces() -> None:
@@ -199,7 +200,9 @@ def _finish_epic_completion_result(
             pass
         else:
             return EpicCompleteResult(
-                ok=False, reason=promote_result.reason or "promote_failed"
+                ok=False,
+                reason=promote_result.reason or "promote_failed",
+                conflict_paths=promote_result.conflict_paths,
             )
     trunk = locate_trunk(repo)
     move_doc(epic_id, "completed", root=repo)
