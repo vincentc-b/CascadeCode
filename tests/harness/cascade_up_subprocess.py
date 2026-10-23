@@ -94,6 +94,47 @@ def http_get(url: str) -> tuple[int, dict[str, str], bytes]:
         return resp.status, headers, resp.read()
 
 
+def get_supervisor_health(base: str) -> tuple[int, dict | None]:
+    """Fetch ``GET /api/health`` for feat_018_003 integration assertions."""
+
+    url = f"{base}/api/health"
+    try:
+        status, _, raw = http_get(url)
+    except urllib.error.HTTPError as exc:
+        status = exc.code
+        raw = exc.read()
+    payload = json.loads(raw.decode())
+    if payload is not None and not isinstance(payload, dict):
+        raise AssertionError(f"unexpected /api/health payload: {payload!r}")
+    return status, payload
+
+
+def inject_worker_startup_crash(install_root: Path) -> None:
+    """Force the next worker process to exit before readiness (integration tests)."""
+
+    worker_py = install_root / "cascade" / "workspace" / "worker.py"
+    text = worker_py.read_text(encoding="utf-8")
+    marker = "    _attach_launcher_log_stderr()\n"
+    injection = (
+        "    _attach_launcher_log_stderr()\n"
+        "    raise SystemExit(42)\n"
+    )
+    if injection in text:
+        return
+    if marker not in text:
+        raise RuntimeError(
+            "worker.py layout changed; cannot inject startup crash "
+            "(expected _attach_launcher_log_stderr marker)"
+        )
+    worker_py.write_text(text.replace(marker, injection, 1), encoding="utf-8")
+
+
+def clear_worker_startup_crash(install_root: Path) -> None:
+    worker_py = install_root / "cascade" / "workspace" / "worker.py"
+    text = worker_py.read_text(encoding="utf-8")
+    worker_py.write_text(text.replace("    raise SystemExit(42)\n", "", 1), encoding="utf-8")
+
+
 def http_post_json(
     url: str,
     payload: dict | None = None,
@@ -190,6 +231,16 @@ def copy_cascade_for_subprocess(tmp_path: Path) -> Path:
 def touch_cascade_source(install_root: Path) -> None:
     init_py = install_root / "cascade" / "__init__.py"
     init_py.write_text(init_py.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+
+def process_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def poll_until(predicate, *, timeout: float = 30.0, interval: float = 0.05) -> None:

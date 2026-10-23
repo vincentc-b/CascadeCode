@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Callable
 from pathlib import Path
 
@@ -12,33 +11,11 @@ from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.init import _BOARD_TIERS
 from cascade.workspace.lock import SupervisorLock
 from cascade.workspace.trunk import resolve_product_trunk
+from cascade.workspace.source_fingerprint import source_fingerprint as _source_fingerprint
 from cascade.workspace.types import WorkspaceRoot
 
 
-_CASCADE_SOURCE_ROOT = Path(__file__).resolve().parents[1]
 _SOURCE_CHECK_INTERVAL_SECONDS = 1.0
-
-
-def _source_fingerprint(root: Path = _CASCADE_SOURCE_ROOT) -> str:
-    """Return a stable fingerprint of the Python source loaded by the supervisor."""
-
-    digest = hashlib.sha256()
-    try:
-        paths = sorted(
-            root.rglob("*.py"), key=lambda path: path.relative_to(root).as_posix()
-        )
-        for path in paths:
-            relative = path.relative_to(root).as_posix().encode()
-            digest.update(len(relative).to_bytes(4, "big"))
-            digest.update(relative)
-            body = path.read_bytes()
-            digest.update(len(body).to_bytes(8, "big"))
-            digest.update(body)
-    except OSError as exc:
-        # A checkout can briefly remove or replace files.  Treat that as a
-        # source change rather than letting a read race preserve stale code.
-        return f"unreadable:{type(exc).__name__}:{exc}"
-    return digest.hexdigest()
 
 
 def resume_legally_active_graphs(root: Path) -> None:
@@ -138,6 +115,7 @@ def up(
                 workspace_root=ws.path,
                 listen_sock=listen_sock,
                 lock_token=str(lock.path.resolve()),
+                lock_fd=lock.fileno(),
                 stop_when=stop_when,
             )
         finally:

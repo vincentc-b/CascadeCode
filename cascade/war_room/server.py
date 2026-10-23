@@ -56,6 +56,7 @@ from cascade.war_room.provider_routes import (
     register_provider_routes,
     try_handle_provider_post,
 )
+from cascade.war_room.health_routes import register_health_routes
 from cascade.war_room.review_routes import register_review_routes
 from cascade.war_room.room_settings_routes import (
     register_room_settings_routes,
@@ -192,6 +193,7 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
                 return abandoned
             for thread in pending:
                 thread.join(timeout=min(1.0, max(0.0, deadline - now)))
+        return abandoned
 
     def server_bind(self) -> None:
         if self._listen_socket is not None:
@@ -1093,6 +1095,7 @@ register_amendment_routes(WarRoomRequestHandler)
 register_provider_routes(WarRoomRequestHandler)
 register_review_routes(WarRoomRequestHandler)
 register_room_settings_routes(WarRoomRequestHandler)
+register_health_routes(WarRoomRequestHandler)
 
 if __name__ == "__main__":
     main()

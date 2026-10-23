@@ -79,6 +79,7 @@
     btnCloseBrief: document.getElementById("btn-close-brief"),
     btnCancelBrief: document.getElementById("btn-cancel-brief"),
     btnSubmitBrief: document.getElementById("btn-submit-brief"),
+    supervisorBanner: document.getElementById("supervisor-status-banner"),
   };
 
   const AGENT_CHAT_AUTHORS = {
@@ -226,6 +227,47 @@
   function reportLoadFailure(err) {
     reportBoardLoadFailure(err);
     reportChatLoadFailure(err);
+  }
+
+  function supervisorBannerText(health) {
+    if (!health || typeof health !== "object") return "";
+    const state = health.state;
+    const trunkLock = health.trunk_lock_warning;
+    const show =
+      (typeof trunkLock === "string" && trunkLock.length > 0) ||
+      (typeof state === "string" && state.length > 0 && state !== "serving");
+    if (!show) return "";
+    const parts = [];
+    if (state) parts.push("Supervisor: " + state);
+    const lastError = health.last_error;
+    if (lastError && typeof lastError === "object") {
+      const message = lastError.message || lastError.stderr_tail;
+      if (message) parts.push(String(message));
+    }
+    if (health.next_action) parts.push(String(health.next_action));
+    if (trunkLock) parts.push("Trunk lock: " + trunkLock);
+    return parts.join(" — ");
+  }
+
+  function updateSupervisorBanner(health) {
+    if (!el.supervisorBanner) return;
+    const text = supervisorBannerText(health);
+    if (!text) {
+      el.supervisorBanner.hidden = true;
+      el.supervisorBanner.textContent = "";
+      return;
+    }
+    el.supervisorBanner.textContent = text;
+    el.supervisorBanner.hidden = false;
+  }
+
+  async function pollSupervisorHealth() {
+    try {
+      const health = await apiGet("/api/health");
+      updateSupervisorBanner(health);
+    } catch (_err) {
+      /* ignore transient health poll errors */
+    }
   }
 
   async function apiGet(path) {
@@ -1836,10 +1878,14 @@
       refreshProviders(),
       refreshOpenReviews({ userInitiated: false }),
       pollToasts(),
+      pollSupervisorHealth(),
     ]);
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     if (!document.hidden) scheduleBoardPoll(boardPollDelayMs);
+    setInterval(function () {
+      if (!document.hidden) pollSupervisorHealth();
+    }, 3000);
     setInterval(function () {
       if (!document.hidden) pollToasts();
     }, 2000);

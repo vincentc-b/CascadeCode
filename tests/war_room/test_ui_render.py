@@ -58,6 +58,7 @@ def test_get_home_is_server_rendered_html(ui_server):
         assert 'id="war-room-board"' in html
         assert 'id="epic-war-room-chat"' in html
         assert 'id="toast-stream"' in html
+        assert 'id="supervisor-status-banner"' in html
         assert "Branch pattern: task/" in html
         assert 'id="branch-label-example">task_001<' in html
         assert "Timed out after 10s" in html
@@ -179,6 +180,19 @@ def test_war_room_js_explains_epic_close_comment_blockers():
 
     assert 'body.reason === "open_human_comments"' in source
     assert 'body.plan_url || ("/plan/" + epicId + "#plan-comments")' in source
+
+
+def test_supervisor_health_banner_polls_api_health():
+    js_path = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    )
+    source = js_path.read_text(encoding="utf-8")
+
+    assert 'apiGet("/api/health")' in source
+    assert "pollSupervisorHealth()" in source
+    assert 'state !== "serving"' in source
+    assert "trunk_lock_warning" in source
+    assert "updateSupervisorBanner" in source
 
 
 def test_task_execution_controls_and_board_polling_are_load_safe():

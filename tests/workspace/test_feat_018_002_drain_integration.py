@@ -13,6 +13,7 @@ from cascade.feature.graph import ensure_feature_graph
 from cascade.watchdog import append_event
 from cascade.watchdog.types import Event
 from tests.harness.cascade_up_subprocess import (
+    get_supervisor_health,
     http_get,
     http_post_json,
     poll_until,
@@ -96,6 +97,13 @@ def test_in_flight_write_survives_drain_and_new_writes_get_503_updating(tmp_path
         poll_until(lambda: slow_started.is_file(), timeout=10.0)
         touch_cascade_source(proc.install_root)
         poll_updating_post(proc.base)
+        health_status, health = get_supervisor_health(proc.base)
+        assert health_status == 200
+        assert health is not None
+        assert health.get("state") in ("serving", "draining", "restarting")
+        get_status, get_headers, _ = http_get(f"{proc.base}/api/health")
+        assert get_status == 200
+        assert get_headers.get("connection", "").lower() == "close"
         get_status, get_headers, _ = http_get(f"{proc.base}/api/board")
         assert get_status == 200
         assert get_headers.get("connection", "").lower() == "close"
