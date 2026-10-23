@@ -97,6 +97,11 @@ Feature 2 depends on Feature 1.
   Chose Resolve feature update bases from the persisted dispatch/review selection, not the current stacked-PR toggle or a newly inferred dependency target..
   Rationale: A published feature branch must continue to track the durable base chosen when its review identity was established; recomputing from mutable room settings could silently change merge topology.
   Honors: The existing default-off stacked-PR behavior and durable PR target selection remain authoritative..
+
+- `dec_003` · 2026-10-23 · Epic Manager · **Feature breakdown**
+  Chose Deliver the epic as two ordered features: the synchronization/diagnostics domain service first, then War Room state and controls..
+  Rationale: The UI depends on a stable typed backend contract, while lifecycle correctness can be implemented and tested independently. Two slices are the smallest split that preserves clear ownership without fragmenting Git policy.
+  Honors: Ruthless scope control and focused, high-signal integration testing..
 ## Amendment log
 
 _(none)_
