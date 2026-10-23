@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_018_001
 - feat_018_002
+- feat_018_003
 depends_on: []
 owners:
 - epic_manager
@@ -55,6 +56,7 @@ To be developed by the Epic Manager and Epic Architect after activation.
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_018_003
 - feat_018_002
 - feat_018_001
 
