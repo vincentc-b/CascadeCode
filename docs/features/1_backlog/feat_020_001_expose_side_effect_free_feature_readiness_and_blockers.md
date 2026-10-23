@@ -24,8 +24,6 @@ models:
 
 epic_020
 
-## Scope
-
 ## Intent
 
 The War Room serializes `approved` for features but not why a backlog feature has not started. Add a read-only readiness view so the UI can show "Awaiting feature approval" and, after approval, the real remaining blocker.
