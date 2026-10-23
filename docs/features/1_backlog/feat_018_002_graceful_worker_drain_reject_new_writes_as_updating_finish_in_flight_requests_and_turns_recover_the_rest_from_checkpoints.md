@@ -18,6 +18,7 @@ provider: cursor
 models:
   feature_lead: claude-opus-5-5
   feature_architect: claude-opus-5-5
+approved_at: '2026-10-23T02:49:25.598259+00:00'
 ---
 # Graceful worker drain: reject new writes as updating, finish in-flight requests and turns, recover the rest from checkpoints
 
