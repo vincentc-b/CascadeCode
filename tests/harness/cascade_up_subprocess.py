@@ -245,6 +245,7 @@ def start_cascade_up_on_root(
     subprocess_cwd.mkdir(exist_ok=True)
     env = os.environ.copy()
     env["PYTHONPATH"] = str(install_root)
+    env["CASCADE_ENABLE_FAKE_PROVIDER"] = "1"
     if extra_env:
         env.update(extra_env)
     if enable_drain_routes:

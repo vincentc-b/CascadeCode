@@ -12,7 +12,12 @@ _log = logging.getLogger(__name__)
 _DEFAULT_WORKER_DRAIN_SECONDS = 120.0
 
 from cascade.agent.errors import ProviderConfigError
-from cascade.agent.providers import ALL_PROVIDER_IDS, ProviderId, parse_provider_id
+from cascade.agent.providers import (
+    ALL_PROVIDER_IDS,
+    ProviderId,
+    fake_provider_enabled,
+    parse_provider_id,
+)
 
 _TIER_KEYS = ("epic", "feature", "task", "boss")
 _DEFAULT_COMPLETED_EPIC_DISPLAY_LIMIT = 10
@@ -244,7 +249,11 @@ def read_providers_config(root: Path) -> ProvidersConfig:
         raise ConfigError(str(exc)) from exc
 
     tables = _empty_provider_tables()
-    for provider_id in ALL_PROVIDER_IDS:
+    provider_ids: list[ProviderId] = list(ALL_PROVIDER_IDS)
+    if fake_provider_enabled():
+        tables["fake"] = ModelsTable()
+        provider_ids.append("fake")
+    for provider_id in provider_ids:
         if provider_id in providers_raw:
             tables[provider_id] = _models_table_from_mapping(
                 providers_raw[provider_id],
