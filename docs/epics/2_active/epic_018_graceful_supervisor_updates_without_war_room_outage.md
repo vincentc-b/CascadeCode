@@ -164,6 +164,11 @@ Each feature owns its integration tests against a real `cascade up` subprocess a
   Chose Make turn recovery exactly-once by making every board tool replay-safe on a natural key (record_decision by section+choice, mint_feature by parent+title, reply_comment by comment+author+body, resolve_amendment as a no-op when already resolved), keeping write_doc's sha compare-and-swap, and treating turn delivery as at-least-once; per-tool-call checkpointing rejected.
   Rationale: Code shows checkpoints persist only at role-node boundaries, tools commit to disk synchronously during the turn, and resume re-runs the whole node, so landed effects are replayed today. A provider CLI session cannot resume partway through, so per-tool checkpoints would not stop the node re-running; idempotent tools fix replay for update cancels and ordinary crashes alike, with one integration test
   Honors: In-flight work recovered exactly once from durable checkpoints; checkpoints, queues and comments as durable handoff boundaries; frugal testing.
+
+- `dec_006` · 2026-10-23 · Epic Architect · **Macro-architecture**
+  Chose Drain HTTP by switching to tracked non-daemon handler threads joined within the longest route deadline plus margin (about 65s), sending Connection: close on every response while draining, serving GETs and answering writes with 503 updating until the join finishes.
+  Rationale: The War Room has no long-poll or streaming endpoints and every connection already has a hard per-route deadline (10s, or 60s for approvals and epic close), so the join is bounded without new timeouts. Connection: close stops idle keep-alive sockets from holding threads
+  Honors: New HTTP work rejected with an explicit updating response; accepted writes not lost; bounded listener downtime.
 ## Amendment log
 
 _(none)_
