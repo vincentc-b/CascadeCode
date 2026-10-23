@@ -160,8 +160,10 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         return self._draining.is_set()
 
     def snapshot_handler_threads(self) -> list[threading.Thread]:
+        """Return a drain-start snapshot of live tracked handlers."""
+
         with self._handler_threads_lock:
-            return list(self._handler_threads)
+            return [thread for thread in self._handler_threads if thread.is_alive()]
 
     def join_handler_threads(
         self,
