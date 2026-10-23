@@ -147,40 +147,25 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("bad_state")
     if not meta.parent:
         return _fail("bad_state")
-    if not _deps_met(board, meta, root=root):
-        return _fail("unmet_deps")
-    from cascade.approvals import feature_approved
-    from cascade.review import feature_review_pending
+    from cascade.feature.readiness import (
+        compute_feature_readiness,
+        dispatch_refusal_from_readiness,
+    )
 
-    if not feature_approved(work_id, root=root):
-        return _fail("not_approved")
+    readiness = compute_feature_readiness(work_id, root=root, board=board)
+    if readiness is None:
+        return _fail("not_found")
+    if reason := dispatch_refusal_from_readiness(readiness):
+        return _fail(reason)
+
     from cascade.stacked_dispatch import ensure_feature_dispatch_selection
-    from cascade.war_room.room_settings import effective_stacked_pr_enabled
 
-    stacked = effective_stacked_pr_enabled(work_id, meta.parent, root=root)
-    if not stacked:
-        for dep_id in meta.depends_on:
-            dep = board.by_id.get(dep_id)
-            if dep is not None and dep.tier == "feature" and feature_review_pending(
-                dep_id, root=root
-            ):
-                return _fail("feature_awaiting_merge")
-        if _epic_has_feature_awaiting_merge(meta.parent, root=root):
-            return _fail("feature_awaiting_merge")
-    from cascade.stacked_dispatch import feature_dispatch_blocked_by_sibling
-
-    if feature_dispatch_blocked_by_sibling(meta, board, root=root):
-        return _fail("feature_awaiting_merge")
     dispatch_plan = ensure_feature_dispatch_selection(
         work_id, meta, board, root=root
     )
     if not dispatch_plan.ok:
         return _fail(dispatch_plan.reason or "bad_state")
     assert dispatch_plan.selection is not None
-    from cascade.comments.gate import refusal_if_blocked
-
-    if blocked := refusal_if_blocked(work_id, root=root):
-        return _fail(blocked)
 
     if not has_git(root):
         move_doc(work_id, "active", root=root)
@@ -400,12 +385,6 @@ def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
             if feature_review_pending(dep_id, root=root):
                 return False
     return True
-
-
-def _epic_has_feature_awaiting_merge(epic_id: str, *, root: Path) -> bool:
-    from cascade.review import epic_has_pending_feature_review
-
-    return epic_has_pending_feature_review(epic_id, root=root)
 
 
 def _active_task_count(board: BoardIndex) -> int:
