@@ -96,8 +96,9 @@ def feature_read_doc(work_id: str, *, feature_id: str, root: Path) -> WorkDoc:
             raise FeatureToolDenied(f"read denied for {live_path}")
         return doc
 
+    checkout = feature_checkout_root(feature_id, trunk=repo)
     try:
-        doc = read_doc(work_id, root=repo)
+        doc = read_doc(work_id, root=checkout)
     except NotFound:
         raise FeatureToolDenied(f"unknown work id {work_id}") from None
 
@@ -127,7 +128,8 @@ def feature_write_doc(doc: WorkDoc, *, feature_id: str, root: Path) -> str | Non
         raise FeatureToolDenied(
             f"write denied: doc id {doc.meta.id!r} != active feature {feature_id!r}"
         )
-    current = read_doc(feature_id, root=repo)
+    checkout = feature_checkout_root(feature_id, trunk=repo)
+    current = read_doc(feature_id, root=checkout)
     if current.meta.status == "blocked" and doc.meta.status != "blocked":
         raise FeatureToolDenied(
             f"feature {feature_id} is blocked awaiting amendment resolution; "
@@ -135,7 +137,6 @@ def feature_write_doc(doc: WorkDoc, *, feature_id: str, root: Path) -> str | Non
         )
     if not tool_guard(doc.meta.path, "write", feature_id=feature_id, root=repo):
         raise FeatureToolDenied(f"write denied for {doc.meta.path}")
-    checkout = feature_checkout_root(feature_id, trunk=repo)
     return write_doc(doc, root=checkout if doc.meta.path.resolve().is_relative_to(checkout) else repo)
 
 
