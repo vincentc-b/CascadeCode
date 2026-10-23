@@ -21,6 +21,7 @@ provider: codex
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
+plan_approved_at: '2026-10-23T20:18:56.441193+00:00'
 ---
 # Supervisor readiness and convergence health
 
