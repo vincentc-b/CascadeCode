@@ -2,7 +2,7 @@
 id: epic_020
 title: Make late-minted features visibly approvable
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_020_001
