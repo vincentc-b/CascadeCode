@@ -11,17 +11,22 @@ from typing import Literal
 
 from cascade.board.context import resolve_root
 from cascade.board.errors import NotFound
+from cascade.comments.store import read_comments
+from cascade.comments.slug import section_slug
 from cascade.board.gitutil import has_git, last_commit_touching
 from cascade.board.lock import process_lock
 from cascade.board.store import read_doc
 from cascade.workspace.doc_root import resolve_doc_worktree
-from cascade.workspace.integration_worktree import locate_trunk
+from cascade.workspace.integration_worktree import locate_trunk, merged_board
 
 PlanningRole = Literal["epic_manager", "epic_architect"]
+PlanningSignOffActor = PlanningRole | Literal["human"]
 
 REQUIRED_PLANNING_ROLES: frozenset[PlanningRole] = frozenset(
     ("epic_manager", "epic_architect")
 )
+
+OPEN_QUESTIONS_SECTION = section_slug("Open questions")
 
 _SIDECAR_DIR = Path("docs") / "epics" / "2_active" / "_planning_signoffs"
 _SCHEMA_VERSION = 1
@@ -34,6 +39,18 @@ class PlanSignOffError(Exception):
 
 class InvalidPlanningRole(PlanSignOffError):
     """Role is not a required planning sign-off role."""
+
+
+class UnauthorizedPlanningSignOff(PlanSignOffError):
+    """Agent attempted to sign off for a role other than its own."""
+
+
+class StalePlanRevision(PlanSignOffError):
+    """Client expected plan revision no longer matches the canonical revision."""
+
+
+class UnresolvedOpenQuestions(PlanSignOffError):
+    """Epic still has open canonical open-question threads."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +156,80 @@ def current_valid_sign_offs(epic_id: str, *, root: Path) -> dict[PlanningRole, P
     if revision is None:
         return {}
     return valid_sign_offs_for_revision(read_plan_sign_offs(epic_id, root=root), revision)
+
+
+def unresolved_canonical_open_questions(epic_id: str, *, root: Path) -> tuple[str, ...]:
+    """Open root comment ids anchored to the epic's Open questions section."""
+
+    hits: list[str] = []
+    for row in read_comments(epic_id, root=root):
+        if row.parent is not None:
+            continue
+        if row.state != "open":
+            continue
+        if section_slug(row.section) != OPEN_QUESTIONS_SECTION:
+            continue
+        hits.append(row.id)
+    return tuple(hits)
+
+
+def sign_off_epic_plan(
+    epic_id: str,
+    role: PlanningRole,
+    plan_revision: str,
+    *,
+    root: Path,
+    actor: PlanningSignOffActor = "human",
+) -> dict[str, object]:
+    """Record the caller's planning-role sign-off for the current canonical revision."""
+
+    if role not in REQUIRED_PLANNING_ROLES:
+        raise InvalidPlanningRole(f"invalid planning role {role!r}")
+    if actor != "human":
+        if actor not in REQUIRED_PLANNING_ROLES:
+            raise InvalidPlanningRole(f"invalid planning actor {actor!r}")
+        if actor != role:
+            raise UnauthorizedPlanningSignOff(
+                f"{actor!r} cannot sign off for {role!r}"
+            )
+
+    repo = resolve_root(root)
+    board = merged_board(repo)
+    meta = board.by_id.get(epic_id)
+    if meta is None or meta.tier != "epic":
+        raise PlanSignOffError(f"{epic_id} is not an active epic")
+    if meta.path.parent.name != "2_active":
+        raise PlanSignOffError("epic plan sign-off requires an active epic team")
+    if meta.plan_approved_at is not None:
+        raise PlanSignOffError(f"epic plan for {epic_id} is already approved")
+
+    canonical = canonical_plan_revision(epic_id, root=repo)
+    if canonical is None:
+        raise PlanSignOffError(f"canonical plan revision unavailable for {epic_id}")
+    if plan_revision != canonical:
+        raise StalePlanRevision(
+            f"stale plan revision for {epic_id}: canonical is {canonical}, expected {plan_revision}"
+        )
+
+    open_questions = unresolved_canonical_open_questions(epic_id, root=repo)
+    if open_questions:
+        joined = ", ".join(open_questions)
+        raise UnresolvedOpenQuestions(
+            f"unresolved open question(s) on {epic_id}: {joined}"
+        )
+
+    newly_signed = record_plan_sign_off(epic_id, role, canonical, root=repo)
+    valid = current_valid_sign_offs(epic_id, root=repo)
+    return {
+        "ok": True,
+        "epic_id": epic_id,
+        "role": role,
+        "plan_revision": canonical,
+        "newly_signed": newly_signed,
+        "sign_offs": {
+            signed_role: row.to_dict() for signed_role, row in valid.items()
+        },
+    }
 
 
 def record_plan_sign_off(
