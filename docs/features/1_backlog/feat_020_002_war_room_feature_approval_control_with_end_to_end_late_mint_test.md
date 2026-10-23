@@ -33,7 +33,7 @@ Give operators a visible, human-only way to approve a feature that was minted af
 
 - `cascade/war_room/static/war_room.js` feature rows: when `readiness.approved` is false, show an "Awaiting feature approval" status and an "Approve feature" button that POSTs `/api/approve_feature` with `{id}`. Reuse the existing `actionButton`/`dispatch` helpers and the epic "Approve plan"/"Approved" pattern.
 - Feedback: disable the button and show a pending state while the request is in flight. On success, show a confirmation and refresh the board. On a 409 or network error, surface the server message in the existing toast/error area and re-enable the button.
-- Once approved, render the remaining `readiness.blockers` as human-readable text (dependency ids, awaiting merge/review, sibling, epic inactive). When there are no blockers, render nothing extra; the feature moves to active through normal reconciliation.
+- Once approved, render the remaining `readiness.blockers` as human-readable text: dependency ids, awaiting merge/review, sibling, stacked base unavailable (with reason), blocking review threads, and epic inactive. Unknown codes render verbatim rather than being hidden. When there are no blockers, render nothing extra; the feature moves to active through normal reconciliation.
 - Backend: no new endpoint or store. Only touch `approvals.py` or the handler if the integration test exposes a real defect.
 
 ## Acceptance (one integration test, browser-level or HTTP + rendered-board level)
