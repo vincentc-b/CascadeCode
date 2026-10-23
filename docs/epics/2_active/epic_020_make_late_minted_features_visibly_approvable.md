@@ -93,6 +93,10 @@ The work is a strict sequence; there is no parallelism worth the coordination co
 
 - 2026-10-23 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-10-23 · Epic Manager · **Macro-architecture**
+  Chose Two sequential features: feat_020_001 (pure readiness predicate shared by dispatch_feature and the board serializer) then feat_020_002 (War Room approve control plus one end-to-end late-mint integration test). Do not add a new endpoint, approval store, or agent-facing approve tool..
+  Rationale: approve_feature, /api/approve_feature, idempotent approved_at, deferred_kickoffs on all POSTs, and dispatch gates already exist on trunk. The gap is visibility and a UI control. Sharing a single predicate stops the displayed blocker from drifting away from the real dispatch decision.
+  Honors: Reuse /api/approve_feature and canonical dispatch; per-feature approved_at stays authoritative; human-only approval; no duplicate dispatch.
 ## Amendment log
 
 _(none)_
