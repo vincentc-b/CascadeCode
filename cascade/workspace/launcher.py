@@ -19,18 +19,25 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from cascade.workspace.degraded_responder import serve_one_degraded_request
 from cascade.workspace.git_lock_sweep import GitLockSweepResult, sweep_stale_git_locks
 from cascade.workspace.source_fingerprint import source_fingerprint
 from cascade.workspace.supervisor_status import (
     LastError,
     SupervisorState,
     SupervisorStatus,
+    read_supervisor_status,
     utc_now_iso,
     write_supervisor_status,
 )
 
 EXIT_UPDATE = 75
-CRASH_RESTART_DELAY_S = 1.0
+POST_READY_CRASH_DELAY_S = 1.0
+BACKOFF_INITIAL_S = 1.0
+BACKOFF_MAX_S = 30.0
+MAX_PRE_READY_ATTEMPTS = 5
+READY_RESET_S = 60.0
+STDERR_TAIL_MAX_BYTES = 8192
 LISTEN_BACKLOG = 64
 READINESS_TIMEOUT_S = 300.0
 READINESS_MESSAGE = b"ready\n"
@@ -39,6 +46,7 @@ ENV_LISTEN_FD = "CASCADE_SUPERVISOR_LISTEN_FD"
 ENV_READINESS_FD = "CASCADE_SUPERVISOR_READINESS_FD"
 ENV_LOCK_TOKEN = "CASCADE_SUPERVISOR_LOCK_TOKEN"
 ENV_LOCK_FD = "CASCADE_SUPERVISOR_LOCK_FD"
+ENV_LOG_STDERR_FD = "CASCADE_SUPERVISOR_LOG_STDERR_FD"
 
 _WORKER_MODULE = "cascade.workspace.worker"
 _CASCADE_SOURCE_PARENT = str(Path(__file__).resolve().parents[2])
@@ -73,6 +81,67 @@ class _LauncherStatusContext:
     def apply_sweep(self, sweep: GitLockSweepResult) -> None:
         if sweep.trunk_index_lock_path is not None:
             self.trunk_lock_warning = sweep.trunk_index_lock_path
+
+    def snapshot_status(self) -> SupervisorStatus:
+        return {
+            "state": self._state,
+            "worker_pid": self.worker_pid,
+            "restart_count": self.restart_count,
+            "last_error": self.last_error,
+            "next_action": self.next_action,
+            "trunk_lock_warning": self.trunk_lock_warning,
+            "since": self._since,
+            "updated_at": utc_now_iso(),
+        }
+
+
+class _StderrForwarder:
+    """Forward worker stderr to the launcher and keep a bounded tail."""
+
+    def __init__(self, *, max_bytes: int = STDERR_TAIL_MAX_BYTES) -> None:
+        self._max_bytes = max_bytes
+        self._tail = ""
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+
+    def start(self, stream: object) -> None:
+        self._thread = threading.Thread(
+            target=self._run,
+            args=(stream,),
+            name="launcher-worker-stderr",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _run(self, stream: object) -> None:
+        readline = getattr(stream, "readline", None)
+        if readline is None:
+            return
+        while True:
+            try:
+                chunk = readline()
+            except (OSError, ValueError):
+                break
+            if not chunk:
+                break
+            try:
+                sys.stderr.buffer.write(chunk)
+                sys.stderr.buffer.flush()
+            except OSError:
+                pass
+            text = chunk.decode("utf-8", errors="replace")
+            with self._lock:
+                self._tail += text
+                if len(self._tail) > self._max_bytes:
+                    self._tail = self._tail[-self._max_bytes :]
+
+    def tail(self) -> str:
+        with self._lock:
+            return self._tail
+
+    def join(self, timeout: float | None = None) -> None:
+        if self._thread is not None:
+            self._thread.join(timeout=timeout)
 
 
 def _launcher_transition(
@@ -176,15 +245,82 @@ def _kill_worker_group(
         pass
 
 
-def _wait_for_restart_delay(stop_requested: Callable[[], bool]) -> bool:
-    """Return false when shutdown interrupts the crash-restart delay."""
+def _backoff_delay_s(restart_count: int) -> float:
+    """Exponential backoff after a pre-ready failure (1s doubling, capped at 30s)."""
 
-    deadline = time.monotonic() + CRASH_RESTART_DELAY_S
+    if restart_count <= 0:
+        return BACKOFF_INITIAL_S
+    exponent = min(restart_count - 1, 20)
+    return min(BACKOFF_INITIAL_S * (2**exponent), BACKOFF_MAX_S)
+
+
+def _wait_for_delay(
+    delay_s: float, stop_requested: Callable[[], bool]
+) -> bool:
+    """Return false when shutdown interrupts a restart delay."""
+
+    deadline = time.monotonic() + delay_s
     while time.monotonic() < deadline:
         if stop_requested():
             return False
         time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
     return not stop_requested()
+
+
+def _pre_ready_next_action(restart_count: int) -> str:
+    if restart_count >= MAX_PRE_READY_ATTEMPTS:
+        return (
+            "Fix the worker error and save Cascade source; the launcher will "
+            "retry automatically on the next change. To retry now, stop and "
+            "rerun `cascade up`."
+        )
+    return (
+        "The launcher is retrying with exponential backoff. Fix source errors "
+        "or wait for the next automatic attempt."
+    )
+
+
+def _run_degraded_responder(
+    *,
+    listen_sock: socket.socket,
+    status_ctx: _LauncherStatusContext,
+    stop_requested: Callable[[], bool],
+    stop_state: _OperatorStopState,
+) -> bool:
+    """Hold the listen socket and serve 503 until source changes. Returns True to relaunch."""
+
+    fingerprint_at_entry = source_fingerprint()
+    _launcher_transition(
+        status_ctx,
+        state="degraded",
+        log_line="cascade launcher: degraded (worker unavailable)",
+        worker_pid=None,
+        next_action=_pre_ready_next_action(status_ctx.restart_count),
+    )
+    while True:
+        if stop_state.escalate or stop_requested():
+            return False
+        if source_fingerprint() != fingerprint_at_entry:
+            status_ctx.restart_count = 0
+            _launcher_transition(
+                status_ctx,
+                state="restarting",
+                log_line="cascade launcher: source changed, relaunching worker",
+                worker_pid=None,
+            )
+            return True
+        ready, _, _ = select.select([listen_sock], [], [], 0.5)
+        if not ready:
+            continue
+        try:
+            conn, _addr = listen_sock.accept()
+        except OSError:
+            continue
+        with conn:
+            status = read_supervisor_status(status_ctx.workspace_root)
+            if status is None:
+                status = status_ctx.snapshot_status()
+            serve_one_degraded_request(conn, status=status)
 
 
 def _spawn_worker(
@@ -200,6 +336,8 @@ def _spawn_worker(
     env[ENV_READINESS_FD] = str(readiness_w)
     env[ENV_LOCK_FD] = str(lock_fd)
     env[ENV_LOCK_TOKEN] = lock_token
+    log_stderr_fd = os.dup(2)
+    env[ENV_LOG_STDERR_FD] = str(log_stderr_fd)
     current_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (
         _CASCADE_SOURCE_PARENT
@@ -212,16 +350,19 @@ def _spawn_worker(
             [sys.executable, "-m", _WORKER_MODULE],
             cwd=workspace_root,
             env=env,
-            pass_fds=(listen_fd, readiness_w, lock_fd),
+            pass_fds=(listen_fd, readiness_w, lock_fd, log_stderr_fd),
             start_new_session=True,
             stdin=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
     except BaseException:
         os.close(readiness_r)
         os.close(readiness_w)
+        os.close(log_stderr_fd)
         raise
     else:
         os.close(readiness_w)
+        os.close(log_stderr_fd)
     pgid = proc.pid
     return proc, readiness_r, pgid
 
@@ -290,6 +431,55 @@ def run_launcher_loop(
                 lock_fd=lock_fd,
                 lock_token=lock_token,
             )
+            stderr_forwarder = _StderrForwarder()
+            if proc.stderr is not None:
+                stderr_forwarder.start(proc.stderr)
+
+            def _finalize_worker() -> None:
+                _kill_worker_group(pgid, proc=proc)
+                try:
+                    proc.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=10)
+                stderr_forwarder.join(timeout=2.0)
+                status_ctx.apply_sweep(post_worker_exit(workspace_root))
+
+            def _handle_pre_ready_failure(exc: BaseException) -> bool:
+                """Return True to continue the outer spawn loop, False to exit the launcher."""
+
+                status_ctx.restart_count += 1
+                _kill_worker_group(pgid, proc=proc)
+                try:
+                    proc.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=10)
+                stderr_forwarder.join(timeout=2.0)
+                exit_code = proc.returncode
+                _launcher_transition(
+                    status_ctx,
+                    state="restarting",
+                    log_line=f"cascade launcher: worker readiness failed: {exc}",
+                    worker_pid=proc.pid,
+                    last_error={
+                        "exit_code": exit_code,
+                        "stderr_tail": stderr_forwarder.tail() or None,
+                        "message": str(exc),
+                    },
+                    next_action=_pre_ready_next_action(status_ctx.restart_count),
+                )
+                status_ctx.apply_sweep(post_worker_exit(workspace_root))
+                if status_ctx.restart_count >= MAX_PRE_READY_ATTEMPTS:
+                    return _run_degraded_responder(
+                        listen_sock=listen_sock,
+                        status_ctx=status_ctx,
+                        stop_requested=stop_requested,
+                        stop_state=stop_state,
+                    )
+                delay = _backoff_delay_s(status_ctx.restart_count)
+                return _wait_for_delay(delay, stop_requested)
+
             try:
                 _wait_readiness(
                     readiness_fd,
@@ -297,7 +487,7 @@ def run_launcher_loop(
                     stop_requested=stop_requested,
                 )
             except _EscalatedStop:
-                status_ctx.apply_sweep(post_worker_exit(workspace_root))
+                _finalize_worker()
                 return
             except _StopRequested:
                 _launcher_transition(
@@ -306,26 +496,10 @@ def run_launcher_loop(
                     log_line="cascade launcher: draining worker (stop during startup)",
                     worker_pid=proc.pid,
                 )
-                _kill_worker_group(pgid, proc=proc)
-                proc.wait(timeout=30)
-                status_ctx.apply_sweep(post_worker_exit(workspace_root))
+                _finalize_worker()
                 return
             except (OSError, RuntimeError, TimeoutError) as exc:
-                _launcher_transition(
-                    status_ctx,
-                    state="restarting",
-                    log_line=f"cascade launcher: worker readiness failed: {exc}",
-                    worker_pid=proc.pid,
-                    last_error={
-                        "exit_code": proc.returncode,
-                        "stderr_tail": None,
-                        "message": str(exc),
-                    },
-                )
-                _kill_worker_group(pgid, proc=proc)
-                proc.wait(timeout=30)
-                status_ctx.apply_sweep(post_worker_exit(workspace_root))
-                if not _wait_for_restart_delay(stop_requested):
+                if not _handle_pre_ready_failure(exc):
                     return
                 continue
             finally:
@@ -337,10 +511,29 @@ def run_launcher_loop(
                 log_line=f"cascade launcher: worker ready (pid {proc.pid})",
                 worker_pid=proc.pid,
                 last_error=None,
+                next_action=None,
             )
+            ready_since = time.monotonic()
+            restart_count_reset = False
 
             while True:
                 raise_if_escalated(pgid, proc=proc)
+                if (
+                    not restart_count_reset
+                    and status_ctx.restart_count > 0
+                    and time.monotonic() - ready_since >= READY_RESET_S
+                ):
+                    status_ctx.restart_count = 0
+                    restart_count_reset = True
+                    _launcher_transition(
+                        status_ctx,
+                        state="serving",
+                        log_line=(
+                            f"cascade launcher: worker stable (pid {proc.pid}); "
+                            "restart counter reset"
+                        ),
+                        worker_pid=proc.pid,
+                    )
                 if stop_requested():
                     if not stop_state.worker_stop_forwarded:
                         _launcher_transition(
@@ -357,19 +550,12 @@ def run_launcher_loop(
                     continue
                 break
 
-            _kill_worker_group(pgid)
-            try:
-                proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=10)
-
-            sweep = post_worker_exit(workspace_root)
-            status_ctx.apply_sweep(sweep)
+            _finalize_worker()
 
             if stop_requested() or code == 0:
                 return
             if code == EXIT_UPDATE:
+                status_ctx.restart_count = 0
                 _launcher_transition(
                     status_ctx,
                     state="restarting",
@@ -384,11 +570,11 @@ def run_launcher_loop(
                 worker_pid=None,
                 last_error={
                     "exit_code": code,
-                    "stderr_tail": None,
+                    "stderr_tail": stderr_forwarder.tail() or None,
                     "message": f"worker exited with code {code}",
                 },
             )
-            if not _wait_for_restart_delay(stop_requested):
+            if not _wait_for_delay(POST_READY_CRASH_DELAY_S, stop_requested):
                 return
     finally:
         if installed_signal_handlers:

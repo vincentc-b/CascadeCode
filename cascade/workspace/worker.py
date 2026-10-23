@@ -41,6 +41,7 @@ ENV_LISTEN_FD = "CASCADE_SUPERVISOR_LISTEN_FD"
 ENV_READINESS_FD = "CASCADE_SUPERVISOR_READINESS_FD"
 ENV_LOCK_TOKEN = "CASCADE_SUPERVISOR_LOCK_TOKEN"
 ENV_LOCK_FD = "CASCADE_SUPERVISOR_LOCK_FD"
+ENV_LOG_STDERR_FD = "CASCADE_SUPERVISOR_LOG_STDERR_FD"
 
 READINESS_MESSAGE = b"ready\n"
 EXIT_UPDATE = 75
@@ -99,6 +100,22 @@ def parse_launcher_handshake(
         lock_fd=lock_fd,
         lock_token=token,
     )
+
+
+def _attach_launcher_log_stderr() -> None:
+    """Duplicate the launcher's stderr onto fd 2 so logs survive stderr piping."""
+
+    raw = os.environ.get(ENV_LOG_STDERR_FD)
+    if not raw:
+        return
+    try:
+        log_fd = int(raw)
+    except ValueError:
+        return
+    try:
+        os.dup2(log_fd, 2)
+    except OSError:
+        return
 
 
 def _write_readiness(readiness_fd: int) -> None:
@@ -245,6 +262,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     """Run until operator stop (0), source update (75), or crash (other non-zero)."""
 
     handshake = parse_launcher_handshake()
+    _attach_launcher_log_stderr()
     # Inherited ``handshake.lock_fd`` (supervisor lock) stays open until process exit.
     launcher_parent_pid = os.getppid()
     operator_stop = stop_event if stop_event is not None else threading.Event()
@@ -328,9 +346,9 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     )
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
+    _write_readiness(handshake.readiness_fd)
     try:
         resume_legally_active_graphs(ws.path)
-        _write_readiness(handshake.readiness_fd)
         run_watchdog(root=ws.path, stop_when=should_stop)
     except BaseException:
         abnormal_exit = True
