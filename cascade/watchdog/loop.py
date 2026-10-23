@@ -194,11 +194,19 @@ def run_watchdog(
 
     install_kickoff(repo)
     _resume_reclaimable_task_runs(repo)
-    from cascade.automation import advance_work
+    from cascade.automation import reconcile_approval_dispatch
     from cascade.workspace.kickoff import deferred_kickoffs
 
+    # Start work already authorized by durable approval before completion
+    # reconciliation, which may need slow remote review I/O. Completion still
+    # runs on startup even when automation is disabled.
     with deferred_kickoffs():
-        advance_work(repo)
+        reconcile_approval_dispatch(repo)
+    from cascade.completion_reconcile import reconcile_completion_with_prompts
+
+    reconcile_completion_with_prompts(root=repo)
+    with deferred_kickoffs():
+        reconcile_approval_dispatch(repo)
 
     last_maintenance_at: float | None = None
 
