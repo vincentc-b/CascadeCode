@@ -401,9 +401,30 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
     finalized: list[str] = []
     from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
 
+    board = merged_board(trunk) if any(record.get("closed") for record in state.values()) else None
+
     for feature_id, record in list(state.items()):
         if record.get("closed"):
             epic_id = _review_target_epic(record)
+            if board is not None and _closed_review_has_active_target(
+                feature_id, record, board=board, trunk=trunk
+            ):
+                # Older supervisors could record closure before completing the
+                # accepted feature copy on its epic branch. Repair that state
+                # even when the completion event was already emitted.
+                try:
+                    mr = _record_to_mr(record)
+                except (GitError, ValueError, KeyError):
+                    continue
+                before = bool(
+                    epic_id and feature_completed_recorded(feature_id, epic_id, root=trunk)
+                )
+                if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
+                    if epic_id and not before and feature_completed_recorded(
+                        feature_id, epic_id, root=trunk
+                    ):
+                        finalized.append(feature_id)
+                continue
             if epic_id and not feature_completed_recorded(feature_id, epic_id, root=trunk):
                 if try_complete_feature(feature_id, root=trunk, review_merged=True):
                     finalized.append(feature_id)
@@ -428,6 +449,22 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
             ):
                 finalized.append(feature_id)
     return finalized
+
+
+def _closed_review_has_active_target(
+    feature_id: str, record: dict[str, object], *, board, trunk: Path
+) -> bool:
+    epic_id = _review_target_epic(record)
+    entry = get_integration_worktree(trunk, "epic", epic_id) if epic_id else None
+    meta = board.by_id.get(feature_id)
+    return bool(
+        entry is not None
+        and meta is not None
+        and meta.tier == "feature"
+        and meta.status == "active"
+        and meta.path.parent.name == "2_active"
+        and meta.path.is_relative_to(entry.path)
+    )
 
 
 def _review_target_epic(record: dict[str, object]) -> str | None:
