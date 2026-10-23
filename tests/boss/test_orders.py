@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import subprocess
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -18,6 +20,16 @@ from cascade.boss.graph import (
 from cascade.watchdog import activate_epic, append_event, dispatch_feature, dispatch_task
 from cascade.watchdog.types import Event
 from tests.support import add_doc, commit_board, make_repo, approve_board_feature
+
+
+def test_kickoff_imports_before_watchdog_in_fresh_process() -> None:
+    result = subprocess.run(
+        [sys.executable, "-c", "from cascade.workspace.kickoff import deferred_kickoffs"],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def _boss_event(event_type: str, **payload: object) -> Event:
