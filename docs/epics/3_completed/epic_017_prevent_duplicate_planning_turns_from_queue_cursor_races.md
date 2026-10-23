@@ -2,7 +2,7 @@
 id: epic_017
 title: Prevent duplicate planning turns from queue cursor races
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_017_001
@@ -15,7 +15,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-22'
-updated: '2026-10-22'
+updated: '2026-10-23'
 provider: cursor
 models:
   epic_manager: claude-opus-5-5
