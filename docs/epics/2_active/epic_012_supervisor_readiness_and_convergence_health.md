@@ -22,21 +22,28 @@ models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
 ---
+provider: codex
+models:
+  epic_manager: gpt-5.6-sol
+  epic_architect: gpt-5.6-sol
+---
 # Supervisor readiness and convergence health
 
 ## Intent
 
-Make Cascade distinguish HTTP availability from lifecycle automation readiness, and detect when eligible work is not converging. Operators should be told when startup recovery, a stalled consumer, or another subsystem prevents approved features or dependency-ready tasks from dispatching.
+Make Cascade distinguish HTTP availability, process/transport liveness, and useful lifecycle progress. Detect both dispatchable work that is not converging and an in-flight model turn whose provider await remains connected while provider events, tool completions, checkpoints, and task files make no progress. Operators should receive a bounded, actionable diagnosis and one safe recovery attempt without losing dirty task work or taking down the War Room.
 
 ### Success criteria
 
-Expose supervisor startup and readiness state; report whether the watchdog and automation reconciliation loops are running; detect dispatchable work that remains unchanged beyond a bounded threshold; emit a durable War Room diagnostic naming the item and observed blocker; keep long model-turn recovery from blocking watchdog startup; and provide a disposable synthetic lifecycle probe that never mutates the live board.
+Expose supervisor startup and readiness state; report whether the watchdog and automation reconciliation loops are running; detect dispatchable work and in-flight turns that remain without useful progress beyond bounded thresholds; emit durable War Room diagnostics naming the item, evidence, cancellation outcome, and recovery disposition; keep long model-turn recovery from blocking watchdog startup; preserve dirty task work during targeted turn cancellation; schedule at most one supervised recovery per unchanged stall episode; and provide a disposable synthetic lifecycle probe that never mutates the live board.
 
 ## Macro-architecture
 
 The supervisor owns a process-local health recorder with an immutable read projection. Startup, the fast watchdog event loop, and the slower lifecycle-maintenance/reconciliation pass publish phase, last-started, last-success, and last-error evidence. The existing health API and War Room consume that projection, explicitly reporting HTTP liveness separately from automation readiness. Recovery performs structural repair synchronously but queues resumable model work onto the existing per-graph background workers before watchdog polling begins.
 
 Convergence monitoring runs on the existing watchdog maintenance cadence. It reuses the authoritative Boss View/dispatch predicates to select approved features and dependency-ready tasks, then correlates durable board state, queue size/cursors, execution leases, and lifecycle events into a stable observation signature. A dispatchable item whose signature has not changed for the configured bounded interval produces one durable War Room event containing the item id, elapsed time, and best-known blocker. A changed signature or loss of eligibility clears the episode; a later stall may emit again. The monitor observes and diagnoses only—it never dispatches or changes lifecycle state.
+
+An in-flight turn progress watchdog consumes explicit progress signals from provider events, completed tool calls, checkpoint advancement, and task-worktree file/content advancement. A pending provider await, open transport, live bridge process, or lease renewal is liveness evidence only. When useful progress remains unchanged past the configured monotonic deadline, it uses the turn-scoped drain/cancellation primitive delivered by `feat_018_002`, bounds graceful termination and targeted force-kill to that provider/bridge process tree, preserves checkpoint and dirty worktree state, appends one durable diagnostic, and schedules at most one supervised recovery for the unchanged episode. The supervisor, War Room, unrelated turns, and graph workers remain live.
 
 A synthetic probe exercises the same public supervisor/lifecycle seams in a temporary initialized git repository. It drives a success path and a controlled stall, asserts readiness and diagnostic transitions, and removes the workspace afterward unless explicit debug retention is requested. Production board paths are not valid probe mutation targets.
 
@@ -54,18 +61,24 @@ flowchart LR
   BV[Boss View dispatch predicates] --> CV
   QE[Board, queues, cursors, leases, events] --> CV
   CV -->|deduplicated durable diagnostic| WR
+  ST[SWE turn progress signals] --> TW[In-flight turn watchdog]
+  E18[feat_018_002 drain/cancel seam] --> TW
+  TW -->|targeted cancellation + one diagnostic| WR
+  TW -->|at most one supervised recovery| BG
   PR[Disposable probe repository] --> UP
 ```
 
 ## Cross-module constraints
 
 - The filesystem board remains lifecycle truth.
-- Health observation is read-only against live work; the sole durable write is a diagnostic event in the existing War Room stream.
-- Readiness and convergence code must not dispatch, bypass approval/dependency/parallelism gates, alter work status, or spawn duplicate graph work.
+- Readiness and convergence observation are read-only against live work. For a bounded in-flight no-progress episode, the only permitted remediation is turn-scoped cancellation through the `feat_018_002` seam plus at most one supervised recovery; durable task files, checkpoint evidence, and dirty worktree content are preserved.
+- Readiness and dispatch-convergence code must not dispatch, bypass approval/dependency/parallelism gates, alter work status, or spawn duplicate graph work. In-flight recovery must be episode-idempotent and may enqueue no more than one replacement turn.
 - One authoritative dispatchability predicate must serve Boss View and convergence monitoring; do not fork the gate logic.
 - Use monotonic time for in-process elapsed thresholds and UTC timestamps for operator-facing evidence. Tests inject time rather than sleep.
 - A successful HTTP response means only that the local server is live. Automation readiness additionally requires startup recovery to be scheduled and the watchdog and reconciliation loops to have completed successfully within their expected bounds.
-- Diagnostic deduplication must survive normal polling without hiding a later distinct stall episode; durable event history remains append-only.
+- Diagnostic deduplication and recovery idempotency must survive normal polling, cancellation callbacks, and supervisor restarts without hiding a later distinct stall episode; durable event history remains append-only.
+- Process/transport liveness, lease renewal, and a pending provider await never refresh useful-progress time. Only provider events, completed tool calls, checkpoint advancement, or task-worktree file/content advancement do.
+- Cancellation targets the affected turn's provider/bridge process tree only. Any escalation from graceful termination to force-kill is bounded and must not signal the supervisor, War Room, watchdog, unrelated turns, or broad process-name matches.
 - Keep status payloads free of credentials, prompts, and model output. Blocker details are bounded and operator-actionable.
 - Prefer integration tests across supervisor/API/event seams. Add unit tests only for clock/deduplication edge behavior not economically covered there.
 
@@ -78,11 +91,11 @@ flowchart LR
 - Queue cursor, task execution lease, and durable watchdog event stores.
 - Existing War Room health/API rendering and Toast event path.
 - Workspace initialization and temporary git-repository test helpers.
+- `feat_018_002` graceful worker drain and turn-scoped cancellation primitives. `feat_012_004` must wait for that feature and reuse its seam; it must not concurrently introduce another `swe_turn`/execution cancellation path.
 
 No new daemon, database, hosted monitor, or alternate lifecycle store is required.
 
 ## Feature breakdown
-- feat_012_004
 
 1. **feat_012_001 — Supervisor readiness state and non-blocking recovery**
    Establish the health projection, startup ordering, API/War Room presentation, and evidence that recovered model turns cannot hold watchdog startup.
@@ -90,8 +103,10 @@ No new daemon, database, hosted monitor, or alternate lifecycle store is require
    Depends on feat_012_001. Reuse dispatch law, track durable progress signatures, and emit deduplicated actionable stall diagnostics.
 3. **feat_012_003 — Disposable synthetic lifecycle readiness probe**  
    Depends on feat_012_001 and feat_012_002. Validate ready, progressing, stalled, and recovered behavior in an isolated temporary workspace.
+4. **feat_012_004 — Bounded in-flight turn progress watchdog and single recovery**  
+   Depends on feat_012_002 and external `feat_018_002`. Distinguish connected-process liveness from useful turn progress, perform targeted cancellation through the shared Epic 18 seam, preserve dirty work, emit one actionable diagnostic, and schedule at most one supervised recovery.
 
-This sequence makes the observable contract available first, builds diagnosis against it second, and reserves the full synthetic proof for the integrated behavior.
+The first three features retain their readiness/convergence sequence. Feature 004 is deliberately gated behind Epic 18's cancellation work so planning may proceed without concurrent implementation in the same `swe_turn`/execution surface.
 
 ## Acceptance scenarios
 
@@ -101,14 +116,17 @@ This sequence makes the observable contract available first, builds diagnosis ag
 4. Repeated polls with identical evidence do not spam events. Relevant progress clears the episode, and a later independent stall can emit a new diagnostic.
 5. Gated, unapproved, at-capacity, already-running, completed, or otherwise non-dispatchable work is not falsely diagnosed as stalled.
 6. The disposable probe demonstrates healthy convergence and a controlled stall, returns a bounded pass/fail result, and leaves the live board byte-for-byte untouched.
+7. A provider call stays connected forever while producing no provider event or completed tool call and causing no checkpoint or task-file advancement; lease renewal does not mask the stall, and the injected-clock regression reaches the no-progress deadline without sleeping.
+8. Expiry cancels only the stalled turn's provider/bridge process tree, including bounded targeted force-kill when graceful termination is ignored; the War Room, supervisor, watchdog, unrelated turns, dirty task worktree, and last checkpoint/result evidence survive.
+9. Concurrent polls and cancellation callbacks yield one actionable durable diagnostic and at most one supervised replacement for the unchanged episode. The diagnostic includes task/turn/provider identity, last useful progress, elapsed time, cancellation outcome, preserved-work state, and recovery disposition.
 
 ## Scope cuts
 
-- No automatic remediation, redispatch, gate bypass, process restart, or task cancellation.
+- No automatic remediation or task cancellation except the narrowly scoped, episode-idempotent `feat_012_004` behavior: cancel one provably no-progress turn through the `feat_018_002` turn-scoped seam and schedule at most one supervised recovery. No gate bypass, whole-supervisor restart, broad process kill, unrelated-turn cancellation, dirty-work reset, or unbounded retry.
 - No generic metrics platform, historical dashboard, alert routing, or remote telemetry.
 - No separate health database or new queue format.
 - No always-on synthetic canary and no probe execution against a live workspace.
-- No attempt to diagnose arbitrary model quality or guarantee completion time; this epic detects lack of observable lifecycle progress.
+- No attempt to diagnose arbitrary model quality, impose a blanket maximum turn duration, or guarantee completion time; this epic detects lack of observable lifecycle progress.
 
 ## Open questions
 
