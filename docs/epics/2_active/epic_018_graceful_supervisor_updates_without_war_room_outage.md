@@ -64,16 +64,45 @@ cascade up (launcher, long-lived, stdlib-only loop)
 - **No connection-refused gap.** Because the listening socket stays bound in the launcher, connections during a restart wait in the kernel backlog and are served by the next worker. The "port rebinding" criterion is met by never unbinding.
 - **Fresh process per code version.** Each worker imports the current source once; the launcher does not import changing Cascade modules after start. Old and new modules are never mixed in one process.
 - **Exit-code contract (worker to launcher):** `0` operator stop, the launcher exits. `75` update, relaunch now. Anything else is a crash: relaunch with bounded backoff. Operator SIGINT/SIGTERM goes to the launcher, which forwards a stop. This keeps operator shutdown distinct from update restarts.
-- **Orphan sweep.** After any worker exit the launcher `killpg`s the worker's process group, which includes agent CLI subprocesses.
+- **Orphan and stale-lock sweep.** After any worker exit the launcher `killpg`s the worker's process group, which includes agent CLI subprocesses and their stdio MCP tool servers. Once the group is gone, any `.git/index.lock` left in a Cascade-managed worktree (`.cascade/worktrees/*`) is stale by construction, because the launcher holds the supervisor lock, and is removed with a log line. A leftover `index.lock` in the product trunk is only reported in diagnostics, because a human may be running git there.
 - **Drain then resume.** The worker drains: it answers writes with `503 updating`, finishes accepted HTTP handlers, and gives model turns a bounded window. Anything still unfinished goes to the existing checkpoint resume in the next worker.
 - **Fail safe.** The old worker preflights the new source in a throwaway subprocess before draining. A failed preflight keeps the old worker serving. If a new worker never becomes ready, the launcher backs off and ends in a degraded responder (503 plus diagnostics on the same socket) that recovers automatically on the next source change.
 - **Hosting contract.** External hosts (shell, tmux, systemd, containers) run `cascade up` once and only need to restart it if the *launcher* exits non-zero. That only happens for configuration or validation errors at startup. The design uses POSIX fd inheritance, process groups and flock, the same platform assumptions as today's lock. No daemon manager is required.
+
+### Turn recovery semantics (resolved by Epic Architect)
+
+Findings from code:
+
+- Graph checkpoints (`cascade/{epic,feature,task}/checkpoint.py`, LangGraph `SqliteSaver`) persist only at **node boundaries**. A role turn (for example the epic `manager` or `architect` node) is one node that runs one whole agent CLI session.
+- Board tools apply their effects **synchronously, during the turn**. Tool calls go from the agent CLI to the `cascade.agent.mcp_stdio` subprocess (or to in-process custom tools for Cursor), then through `dispatch_planning_tool` to `invoke_tool`, which writes and commits on disk at once. They never pass through War Room HTTP, so the drain's `503 updating` does not affect in-flight turns.
+- The queue cursor (`last_queue_offset`) is committed **before** the turn starts, and `snapshot.next` marks the role node as in flight. On restart, `_resume_inflight_turn_if_needed` re-invokes that node **from the start**, at most once per resume.
+- The per-turn effect journal (`.cascade_effects.jsonl`) lives in the scratch sandbox and is deleted after every turn, so resume cannot see it.
+- `board/store.py::write_doc` uses a non-atomic `write_text` and then a git commit. A kill during a tool call can leave a truncated doc or a stale `.git/index.lock`.
+
+Consequences and contract:
+
+- **Turn delivery is at-least-once, and the resumed turn re-runs in full.** Queued events are never lost. Effects that landed before the kill **are** replayed unless the tool is replay-safe.
+- `write_doc` is a full-body compare-and-swap on `sha`, and the re-run re-reads the doc first, so it is replay-safe as is. `resolve_amendment` is a state transition and is replay-safe if it treats an already-resolved amendment as a no-op.
+- `record_decision`, `mint_feature` and `reply_comment` append or create, so they are **not** replay-safe. They become idempotent on a natural key: an identical decision (same section and choice) already in the log, a child feature with the same title under the same parent, or an identical reply body by the same author on the same comment. In each case the tool returns the existing id and does nothing. The `append_event` inside `mint_feature` fires only on an actual creation.
+- Doc writes become atomic (write a temp file in the same directory, then `os.replace`). Together with the stale `index.lock` sweep, this means a kill can never corrupt a doc or block the next commit.
+- "Recovered exactly once" therefore means the following: each interrupted turn is resumed once, and none of its landed effects is applied twice. A resumed model may still choose *different* wording for something it already did. That is the same as an operator re-running a turn. It is acceptable and is not deduplicated.
+- Per-tool-call checkpointing was rejected. A provider CLI session cannot be resumed partway through, so the node would still re-run from the start. It would add graph machinery without removing the replay.
+- **Cancellation is a normal path, not a rare fallback.** `DEFAULT_CLI_TIMEOUT_SEC` is 3600s, so turns can far outlast any sensible drain window. When the window expires, the worker sends SIGTERM to each agent's process group, waits a short grace period (5s), and then exits 75. The launcher's `killpg` covers anything left.
+
+### HTTP handler drain (resolved by Epic Architect)
+
+- There are no long-poll or streaming endpoints. The War Room has no blocking waits outside `WarRoomRequestHandler.handle`, and chat is fetched by a plain GET. Every connection already has a hard per-route deadline: `REQUEST_DEADLINE_S` (10s), or `APPROVAL_DEADLINE_S` / `EPIC_CLOSE_DEADLINE_S` (60s) for the approval and epic-close POSTs.
+- Drain switches the server to tracked, non-daemon handler threads (at most `MAX_CONCURRENT_REQUESTS`) and joins them, bounded by the longest route deadline plus a small margin (about 65s). Handlers that are still running after that are logged and abandoned. Their side effects go through the same replay-safe tools and atomic writes as above.
+- While draining, every response sets `Connection: close`, so idle HTTP/1.1 keep-alive connections do not hold handler threads. Reads (GET) keep being served until the join finishes, and writes get `503 updating` with `Retry-After`.
+- The HTTP join and the turn drain run concurrently, so the worst-case drain is about max(turn window, 65s), plus the 5s grace.
 
 ## Cross-module constraints
 
 - Preserve the existing single-supervisor invariant and product-trunk workspace validation.
 - Do not mix old and new Python modules within one long-lived process.
 - Treat graph checkpoints, queues, comments, and worktree state as durable handoff boundaries.
+- Every board tool effect must be replay-safe, because a resumed turn re-runs its whole role node. New tools that append or create must declare their natural idempotency key.
+- A board write interrupted by a kill must not corrupt a doc or leave a lock that blocks the next commit.
 - Avoid platform-specific daemon assumptions where possible; define a clear launcher/process contract for environments that host Cascade.
 - Bound listener downtime and prevent restart storms through readiness checks, retry limits, and backoff.
 - Keep operator-initiated shutdown distinct from source-triggered update restart.
@@ -83,29 +112,29 @@ cascade up (launcher, long-lived, stdlib-only loop)
 - `cascade/workspace/up.py` (entry, source fingerprint), `cascade/workspace/lock.py` (`SupervisorLock`), `cascade/cli.py` (`up` command).
 - `cascade/war_room/server.py` (`WarRoomHTTPServer`, `serve`): must accept a pre-bound socket and support a draining mode.
 - `cascade/watchdog/loop.py` (`run_watchdog`, `stop_when`): must stop dispatch on drain.
-- `cascade/workspace/kickoff.py` (`resume_inflight_graphs`, checkpoint inflight detection): the recovery path.
+- `cascade/workspace/kickoff.py` (`resume_inflight_graphs`, `_resume_inflight_turn_if_needed`): the recovery path.
 - `cascade/agent/cli_common.py`: agent subprocess lifetime and cancellation.
+- `cascade/board/store.py` (`write_doc`), `cascade/epic/decisions.py`, `cascade/feature/decisions.py`, `cascade/epic/mint.py`, `cascade/comments/store.py`: replay-safe and atomic effects.
 - Python stdlib only (`socket`, `subprocess`, `os`, `signal`, `fcntl`); no new third-party dependencies.
 
 ## Feature breakdown
 
-1. **feat_018_001: Self-relaunching supervisor.** Launcher owns the lock and listener; the worker restarts on source change (exit 75); process-group sweep; readiness pipe; operator stop vs update. *Start first; this alone removes the outage.*
-2. **feat_018_002: Graceful worker drain.** `503 updating` for writes, join accepted handlers, bounded turn drain, then exactly-once checkpoint resume. Depends on 001.
+1. **feat_018_001: Self-relaunching supervisor.** Launcher owns the lock and listener; the worker restarts on source change (exit 75); process-group sweep plus stale `index.lock` sweep in Cascade-managed worktrees; readiness pipe; operator stop vs update. *Start first; this alone removes the outage.*
+2. **feat_018_002: Graceful worker drain.** `503 updating` for writes, `Connection: close` while draining, tracked handler threads joined within the longest route deadline, bounded turn drain with SIGTERM-then-exit cancellation, replay-safe `record_decision` / `mint_feature` / `reply_comment` / `resolve_amendment`, atomic doc writes, then checkpoint resume. Depends on 001.
 3. **feat_018_003: Update failure containment.** Preflight before drain, bounded backoff, degraded responder, `supervisor_status.json`, `/api/health`, War Room banner. Depends on 001; can run in parallel with 002.
 
-Each feature owns its integration tests against a real `cascade up` subprocess and a fake provider. The epic's test criterion is covered across the three features: source-change detection and port continuity (001), active turns and queued events (002), failed startup and automatic recovery (003). No separate test-only feature.
+Each feature owns its integration tests against a real `cascade up` subprocess and a fake provider. The epic's test criterion is covered across the three features: source-change detection and port continuity (001), active turns and queued events (002), failed startup and automatic recovery (003). No separate test-only feature. For 002, one integration test covers the replay contract: a fake-provider turn calls `record_decision` and `mint_feature`, and is then cancelled by an update before its node completes. After resume, the board must show exactly one decision and one feature. Idempotency gets no per-tool unit-test matrix.
 
 ### Explicitly cut
 
 - Zero-downtime blue/green overlap of two workers. It conflicts with the single-supervisor invariant, and the socket backlog already prevents refused connections.
 - In-process hot reload (`importlib.reload`). It violates the no-mixed-modules constraint.
 - Shipping systemd/launchd units or Windows support.
+- Per-tool-call graph checkpointing and a durable cross-worker effect journal. Natural-key idempotency covers replay with less machinery.
 
 ## Open questions
 
-- **Exactly-once resume (resolve before feat_018_002 builds cancellation):** if a model turn is cancelled after some tool effects (write_doc, record_decision, mint_feature, reply_comment) have landed but before the checkpoint advances, does resume replay them? The Epic Architect should confirm the checkpoint and tool-effect ordering in `cascade/*/checkpoint.py`, and decide between idempotency keys on effects and checkpointing per tool call. Until then, drain-first (wait out the window) is the default, and cancellation is the fallback.
-- **Handler-thread draining (feat_018_002):** `daemon_threads=True` lets `server.shutdown()` abandon in-flight handlers. Confirm that switching to tracked, joined handler threads (bounded by `MAX_CONCURRENT_REQUESTS`) has no long-poll endpoints that would block the drain. Chat polling may need a short server-side timeout during drain.
-- **Drain window default:** 120s is proposed. Revisit against `DEFAULT_CLI_TIMEOUT_SEC` and typical turn length. This is config, not architecture.
+- **Drain window default:** 120s, as config. Turns can run up to 3600s, so expect long turns to be cancelled and resumed on every update. Raise the default only if resume cost shows up in practice.
 
 ## Decision log
 
