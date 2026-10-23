@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_015_001
+- feat_015_002
 depends_on: []
 owners:
 - epic_manager
@@ -119,6 +120,7 @@ The existing plan entry point renders the state. The approval action uses the se
 If no canonical machine-readable unresolved-question state exists, the implementation must add the smallest explicit field within the planning domain; markdown text parsing is not acceptable.
 
 ## Feature breakdown
+- feat_015_002
 - feat_015_001
 
 1. **Authoritative epic-plan readiness and approval gate**
