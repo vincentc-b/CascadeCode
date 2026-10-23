@@ -15,7 +15,7 @@ from typing import Any, Literal
 from cascade.board.context import resolve_root
 from cascade.watchdog.lock import process_lock
 
-ExecutionPhase = Literal["queued", "running", "terminal"]
+ExecutionPhase = Literal["queued", "running", "awaiting_merge", "merge_blocked", "terminal"]
 ExecutionOutcome = Literal["succeeded", "failed"]
 DEFAULT_STALE_AFTER = timedelta(minutes=2)
 # A validation miss gets two corrective turns before the third miss fails.
@@ -131,9 +131,73 @@ def mark_running(task_id: str, *, root: Path, now: datetime | None = None) -> di
                 "owner_start_token": _process_start_token(os.getpid()),
             }
         )
+        record.pop("merge_blocker", None)
         records[task_id] = record
         _write(repo, records)
         return dict(record)
+
+
+def mark_awaiting_merge(task_id: str, *, root: Path, now: datetime | None = None) -> None:
+    """The SWE turn has ended and its validated commit is waiting to land."""
+
+    repo = resolve_root(root)
+    current = now or _now()
+    with process_lock:
+        records = _read(repo)
+        record = records.get(task_id)
+        if record is None or record.get("phase") == "terminal":
+            return
+        record.update(
+            phase="awaiting_merge",
+            heartbeat_at=_iso(current),
+            last_error=None,
+            owner_pid=None,
+            owner_start_token=None,
+        )
+        record.pop("merge_blocker", None)
+        records[task_id] = record
+        _write(repo, records)
+
+
+def mark_merge_blocked(
+    task_id: str,
+    *,
+    root: Path,
+    reason: str,
+    conflict_paths: tuple[str, ...],
+    source_sha: str | None,
+    target_sha: str | None,
+    now: datetime | None = None,
+) -> bool:
+    """Persist an actionable merge refusal; return true only for a new blocker."""
+
+    repo = resolve_root(root)
+    current = now or _now()
+    blocker = {
+        "reason": reason,
+        "conflict_paths": list(conflict_paths),
+        "source_sha": source_sha,
+        "target_sha": target_sha,
+    }
+    with process_lock:
+        records = _read(repo)
+        record = records.get(task_id)
+        if record is None or record.get("phase") == "terminal":
+            return False
+        changed = record.get("phase") != "merge_blocked" or record.get("merge_blocker") != blocker
+        if not changed:
+            return False
+        record.update(
+            phase="merge_blocked",
+            heartbeat_at=_iso(current),
+            last_error=reason,
+            owner_pid=None,
+            owner_start_token=None,
+            merge_blocker=blocker,
+        )
+        records[task_id] = record
+        _write(repo, records)
+        return True
 
 
 def heartbeat(task_id: str, *, root: Path, now: datetime | None = None) -> None:
@@ -207,6 +271,7 @@ def mark_validation_retry(task_id: str, error: str, *, root: Path) -> int:
                 "owner_start_token": None,
             }
         )
+        record.pop("merge_blocker", None)
         records[task_id] = record
         _write(repo, records)
         return failures
@@ -241,6 +306,7 @@ def mark_terminal(
                 "owner_start_token": None,
             }
         )
+        record.pop("merge_blocker", None)
         records[task_id] = record
         _write(repo, records)
         return dict(record)
@@ -298,6 +364,8 @@ def _execution_view_from_record(
     age_seconds: float | None = None
     if record.get("phase") == "terminal":
         health = str(record.get("outcome") or "failed")
+    elif record.get("phase") in {"awaiting_merge", "merge_blocked"}:
+        health = str(record["phase"])
     else:
         try:
             heartbeat_at = datetime.fromisoformat(str(record["heartbeat_at"]))

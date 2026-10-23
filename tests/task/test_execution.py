@@ -8,6 +8,8 @@ from cascade.task.execution import (
     execution_lease_is_live,
     heartbeat,
     mark_queued,
+    mark_awaiting_merge,
+    mark_merge_blocked,
     mark_running,
     mark_terminal,
     mark_validation_retry,
@@ -71,6 +73,35 @@ def test_execution_views_reads_sidecar_once(tmp_path: Path, monkeypatch) -> None
     assert calls == 1
     assert views["task_001"]["health"] == "queued"
     assert views["task_002"]["health"] == "queued"
+
+
+def test_merge_states_remain_actionable_after_heartbeat_expires(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001", status="active")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001", status="active")
+    started = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    mark_queued("task_001", root=root, now=started)
+    mark_running("task_001", root=root, now=started)
+    mark_awaiting_merge("task_001", root=root, now=started)
+    awaiting = execution_view("task_001", root=root, now=started + timedelta(hours=1))
+    assert awaiting["health"] == "awaiting_merge"
+    assert awaiting["owner_pid"] is None
+
+    kwargs = dict(
+        root=root, reason="branch_conflict", conflict_paths=("cascade/workspace/worker.py",),
+        source_sha="source1", target_sha="target1", now=started,
+    )
+    assert mark_merge_blocked("task_001", **kwargs)
+    assert not mark_merge_blocked("task_001", **kwargs)
+    blocked = execution_view("task_001", root=root, now=started + timedelta(hours=1))
+    assert blocked["health"] == "merge_blocked"
+    assert blocked["merge_blocker"]["conflict_paths"] == ["cascade/workspace/worker.py"]
+    item = board_view_from_index(merged_board(root), root=root)["tasks"]["2_active"][0]
+    assert item["execution"]["merge_blocker"] == blocked["merge_blocker"]
+
+    mark_terminal("task_001", "succeeded", root=root)
+    assert "merge_blocker" not in execution_view("task_001", root=root)
 
 
 def test_new_queue_attempt_increments_and_clears_terminal_error(tmp_path: Path) -> None:
