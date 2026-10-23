@@ -502,6 +502,7 @@ def test_planning_tools_write_into_integration_checkouts(tmp_path: Path) -> None
 
 
 def test_active_feature_planning_ignores_stale_trunk_backlog_copy(tmp_path: Path) -> None:
+    from cascade.boss.rollup import write_closeout
     from cascade.feature.mint import mint_task
     from cascade.feature.scoped_docs import feature_read_doc, feature_write_doc
 
@@ -545,4 +546,8 @@ def test_active_feature_planning_ignores_stale_trunk_backlog_copy(tmp_path: Path
     feature_write_doc(stale, feature_id="feat_001", root=root)
 
     assert "Completed from stale input." in read_doc("feat_001", root=checkout).body
+    assert read_doc("feat_001", root=root).body == feature.body
+
+    write_closeout("feat_001", "Deterministic rollup closeout.", root=root)
+    assert "Deterministic rollup closeout." in read_doc("feat_001", root=checkout).body
     assert read_doc("feat_001", root=root).body == feature.body
