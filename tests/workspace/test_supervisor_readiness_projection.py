@@ -90,4 +90,40 @@ def test_read_projection_is_side_effect_free_on_board(tmp_path: Path) -> None:
     after = sorted(p.name for p in (root / "docs").rglob("*.md"))
     assert before == after
 
+def test_recovery_failure_surfaces_in_projection() -> None:
+    from cascade.workspace.supervisor_readiness import (
+        record_recovery_enqueued,
+        record_recovery_failure,
+    )
+
+    record_recovery_enqueued("feat_001")
+    record_recovery_failure(
+        "feat_001",
+        code="background_error",
+        message="boom",
+        at="2026-01-01T00:00:00+00:00",
+    )
+    payload = project_supervisor_health(None, snapshot_readiness_evidence(), http_serving=True)
+    assert payload is not None
+    assert payload["recovery"]["failures"][0]["work_id"] == "feat_001"
+    assert "recovery:feat_001:background_error" in payload["automation"]["degraded_reasons"]
+
+
+def test_recovery_in_flight_does_not_block_automation_ready_alone() -> None:
+    from cascade.workspace.supervisor_readiness import (
+        note_recovery_turn_finished,
+        note_recovery_turn_started,
+        record_recovery_enqueued,
+    )
+
+    record_recovery_enqueued("feat_001")
+    note_recovery_turn_started("feat_001")
+    observe_startup_phase("ready")
+    record_loop_success("watchdog", at="2026-01-01T00:00:01+00:00")
+    record_loop_success("reconciliation", at="2026-01-01T00:00:02+00:00")
+    payload = project_supervisor_health(None, snapshot_readiness_evidence(), http_serving=True)
+    assert payload is not None
+    assert payload["recovery"]["in_flight"] == 1
+    assert payload["automation"]["ready"] is True
+    note_recovery_turn_finished("feat_001")
 

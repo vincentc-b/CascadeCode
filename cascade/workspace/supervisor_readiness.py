@@ -46,6 +46,18 @@ class HttpLiveness(TypedDict):
     live: bool
 
 
+class RecoveryFailure(TypedDict):
+    work_id: str
+    code: str
+    message: str
+    at: str
+
+
+class RecoveryProgress(TypedDict):
+    in_flight: int
+    failures: list[RecoveryFailure]
+
+
 class AutomationReadiness(TypedDict):
     ready: bool
     phase: StartupPhase
@@ -69,6 +81,7 @@ class SupervisorHealthProjection(TypedDict, total=False):
     http: HttpLiveness
     automation: AutomationReadiness
     loops: LoopBundle
+    recovery: RecoveryProgress
 
 
 @dataclass
@@ -86,6 +99,8 @@ class SupervisorReadinessEvidence:
     http_live: bool = False
     watchdog: _LoopEvidence = field(default_factory=_LoopEvidence)
     reconciliation: _LoopEvidence = field(default_factory=_LoopEvidence)
+    recovery_in_flight: int = 0
+    recovery_failures: list[RecoveryFailure] = field(default_factory=list)
 
     def has_signal(self) -> bool:
         return self.http_live or self.startup_phase != "starting" or bool(
@@ -93,11 +108,14 @@ class SupervisorReadinessEvidence:
             or self.watchdog.last_success_at
             or self.reconciliation.last_started_at
             or self.reconciliation.last_success_at
+            or self.recovery_in_flight
+            or self.recovery_failures
         )
 
 
 _lock = threading.Lock()
 _evidence = SupervisorReadinessEvidence()
+_recovery_work_ids: set[str] = set()
 
 
 def reset_supervisor_readiness_for_tests() -> None:
@@ -106,6 +124,7 @@ def reset_supervisor_readiness_for_tests() -> None:
     global _evidence
     with _lock:
         _evidence = SupervisorReadinessEvidence()
+        _recovery_work_ids.clear()
 
 
 def snapshot_readiness_evidence() -> SupervisorReadinessEvidence:
@@ -133,6 +152,8 @@ def snapshot_readiness_evidence() -> SupervisorReadinessEvidence:
                     else None
                 ),
             ),
+            recovery_in_flight=_evidence.recovery_in_flight,
+            recovery_failures=[dict(row) for row in _evidence.recovery_failures],
         )
 
 
@@ -146,6 +167,52 @@ def observe_http_live(*, live: bool) -> None:
 def observe_startup_phase(phase: StartupPhase) -> None:
     with _lock:
         _evidence.startup_phase = phase
+
+
+def record_recovery_enqueued(work_id: str) -> None:
+    """Mark a graph whose recovered turn was queued during startup recovery."""
+
+    with _lock:
+        _recovery_work_ids.add(work_id)
+
+
+def note_recovery_turn_started(work_id: str) -> None:
+    with _lock:
+        if work_id not in _recovery_work_ids:
+            return
+        _evidence.recovery_in_flight += 1
+
+
+def note_recovery_turn_finished(work_id: str) -> None:
+    with _lock:
+        if work_id not in _recovery_work_ids:
+            return
+        _recovery_work_ids.discard(work_id)
+        if _evidence.recovery_in_flight > 0:
+            _evidence.recovery_in_flight -= 1
+
+
+def record_recovery_failure(
+    work_id: str,
+    *,
+    code: str,
+    message: str,
+    at: str | None = None,
+) -> None:
+    stamp = at or utc_now_iso()
+    failure: RecoveryFailure = {
+        "work_id": work_id,
+        "code": code,
+        "message": message,
+        "at": stamp,
+    }
+    with _lock:
+        if work_id not in _recovery_work_ids:
+            return
+        _recovery_work_ids.discard(work_id)
+        if _evidence.recovery_in_flight > 0:
+            _evidence.recovery_in_flight -= 1
+        _evidence.recovery_failures.append(failure)
 
 
 def record_loop_started(loop: LoopName, *, at: str | None = None) -> None:
@@ -211,6 +278,8 @@ def _automation_readiness(
         reasons.append("watchdog:no_success_yet")
     if evidence.reconciliation.last_success_at is None:
         reasons.append("reconciliation:no_success_yet")
+    for failure in evidence.recovery_failures:
+        reasons.append(f"recovery:{failure['work_id']}:{failure['code']}")
 
     # Stable order for tests and UI diffs.
     reasons = list(dict.fromkeys(reasons))
@@ -235,10 +304,15 @@ def project_supervisor_health(
         "watchdog": _loop_activity(evidence.watchdog),
         "reconciliation": _loop_activity(evidence.reconciliation),
     }
+    recovery: RecoveryProgress = {
+        "in_flight": evidence.recovery_in_flight,
+        "failures": [dict(row) for row in evidence.recovery_failures],
+    }
     projection: SupervisorHealthProjection = {
         "http": {"live": http_live},
         "automation": automation,
         "loops": loops,
+        "recovery": recovery,
     }
     if status is not None:
         projection.update(status)  # type: ignore[typeddict-item]
