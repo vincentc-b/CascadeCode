@@ -26,6 +26,26 @@ class MergeResult:
     merge_sha: str | None = None
     branch: str | None = None
     target_branch: str | None = None
+    conflict_paths: tuple[str, ...] = ()
+
+
+def _merge_result_from_sync(
+    sync,
+    *,
+    branch: str,
+    target_branch: str | None = None,
+) -> MergeResult:
+    reason = sync.reason
+    if reason == "checkout_missing":
+        reason = "merge_target_missing"
+    return MergeResult(
+        ok=sync.ok,
+        reason=reason,
+        merge_sha=sync.merge_sha,
+        branch=branch,
+        target_branch=target_branch,
+        conflict_paths=sync.conflict_paths,
+    )
 
 
 def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
@@ -63,44 +83,33 @@ def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
         return MergeResult(ok=False, reason=align_reason or "wrong_branch", branch=branch)
 
     target_branch = f"feat/{feature_id}"
-    merge_root = _feature_merge_checkout(trunk, feature_id)
-    if merge_root is None:
-        return MergeResult(
-            ok=False,
-            reason="merge_target_missing",
-            branch=branch,
-            target_branch=target_branch,
+    from cascade.workspace.branch_synchronization import merge_lifecycle_source
+    from cascade.workspace.integration_worktree import repair_missing_worktree
+
+    merge_root = None
+    repaired = repair_missing_worktree("feature", feature_id, trunk=trunk)
+    if repaired is not None:
+        merge_root = repaired.path
+    pre_merge_sha = head_sha(merge_root) if merge_root is not None else None
+    worktree_clean = _worktree_clean(merge_root) if merge_root is not None else False
+
+    sync = merge_lifecycle_source(
+        feature_id,
+        branch,
+        source_work_id=task_id,
+        root=trunk,
+    )
+    if not sync.ok:
+        return _merge_result_from_sync(
+            sync, branch=branch, target_branch=target_branch
         )
 
-    if not _branch_exists(trunk, branch):
-        return MergeResult(
-            ok=False,
-            reason="branch_missing",
-            branch=branch,
-            target_branch=target_branch,
-        )
+    if merge_root is None and repaired is not None:
+        merge_root = repaired.path
+    elif merge_root is None:
+        merge_root = _feature_merge_checkout(trunk, feature_id)
 
-    if _current_branch(merge_root) != target_branch:
-        if _run(["checkout", target_branch], merge_root, check=False).returncode != 0:
-            return MergeResult(
-                ok=False,
-                reason="merge_target_missing",
-                branch=branch,
-                target_branch=target_branch,
-            )
-
-    pre_merge_sha = head_sha(merge_root)
-    worktree_clean = _worktree_clean(merge_root)
-
-    merge_sha = _merge_branch(merge_root, branch)
-    if merge_sha is None:
-        return MergeResult(
-            ok=False,
-            reason="merge_conflict",
-            branch=branch,
-            target_branch=target_branch,
-        )
-
+    merge_sha = sync.merge_sha
     created_merge_commit = (
         pre_merge_sha is not None
         and merge_sha is not None
@@ -202,13 +211,6 @@ def merge_feature_branch(feature_id: str, *, root: Path | None = None) -> MergeR
         return MergeResult(ok=False, reason="missing_parent", branch=source_branch)
 
     target_branch = f"epic/{epic_id}"
-    if not _branch_exists(trunk, source_branch):
-        return MergeResult(
-            ok=False,
-            reason="branch_missing",
-            branch=source_branch,
-            target_branch=target_branch,
-        )
 
     aligned, align_reason = _operator_on_product_trunk(trunk)
     if not aligned:
@@ -219,44 +221,22 @@ def merge_feature_branch(feature_id: str, *, root: Path | None = None) -> MergeR
             target_branch=target_branch,
         )
 
-    merge_root = _epic_merge_checkout(trunk, epic_id)
-    if merge_root is None:
-        return MergeResult(
-            ok=False,
-            reason="merge_target_missing",
-            branch=source_branch,
-            target_branch=target_branch,
-        )
+    from cascade.workspace.branch_synchronization import merge_lifecycle_source
 
-    if not _branch_exists(trunk, target_branch):
-        return MergeResult(
-            ok=False,
-            reason="merge_target_missing",
-            branch=source_branch,
-            target_branch=target_branch,
-        )
-
-    if _current_branch(merge_root) != target_branch:
-        if _run(["checkout", target_branch], merge_root, check=False).returncode != 0:
-            return MergeResult(
-                ok=False,
-                reason="merge_target_missing",
-                branch=source_branch,
-                target_branch=target_branch,
-            )
-
-    merge_sha = _merge_branch(merge_root, source_branch)
-    if merge_sha is None:
-        return MergeResult(
-            ok=False,
-            reason="merge_conflict",
-            branch=source_branch,
-            target_branch=target_branch,
+    sync = merge_lifecycle_source(
+        epic_id,
+        source_branch,
+        source_work_id=feature_id,
+        root=trunk,
+    )
+    if not sync.ok:
+        return _merge_result_from_sync(
+            sync, branch=source_branch, target_branch=target_branch
         )
 
     return MergeResult(
         ok=True,
-        merge_sha=merge_sha,
+        merge_sha=sync.merge_sha,
         branch=source_branch,
         target_branch=target_branch,
     )
@@ -274,10 +254,6 @@ def promote_epic_to_trunk(epic_id: str, *, root: Path | None = None) -> MergeRes
     if not _branch_exists(trunk, source_branch):
         return MergeResult(ok=False, reason="branch_missing", branch=source_branch)
 
-    aligned, align_reason = _operator_on_product_trunk(trunk)
-    if not aligned:
-        return MergeResult(ok=False, reason=align_reason or "wrong_branch", branch=source_branch)
-
     try:
         product_trunk = _mainline_branch(trunk)
     except Exception:
@@ -286,29 +262,31 @@ def promote_epic_to_trunk(epic_id: str, *, root: Path | None = None) -> MergeRes
         return MergeResult(ok=False, reason="ambiguous_trunk", branch=source_branch)
 
     target_branch = product_trunk
-    if _current_branch(trunk) != target_branch:
-        return MergeResult(
-            ok=False,
-            reason="wrong_branch",
-            branch=source_branch,
-            target_branch=target_branch,
-        )
-    if not _index_clean(trunk):
-        return MergeResult(
-            ok=False,
-            reason="dirty_index",
-            branch=source_branch,
-            target_branch=target_branch,
-        )
 
-    merge_sha = _merge_epic_branch(trunk, source_branch, epic_id)
-    if merge_sha is None:
-        return MergeResult(
-            ok=False,
-            reason="merge_conflict",
-            branch=source_branch,
-            target_branch=target_branch,
-        )
+    from cascade.watchdog.lock import process_lock
+    from cascade.workspace.branch_synchronization import preflight_epic_trunk_promotion
+
+    with process_lock:
+        preflight = preflight_epic_trunk_promotion(epic_id, root=trunk)
+        if not preflight.ok:
+            return MergeResult(
+                ok=False,
+                reason=preflight.reason,
+                branch=source_branch,
+                target_branch=target_branch,
+            )
+
+        merge_sha = _merge_epic_branch(trunk, source_branch, epic_id)
+        if merge_sha is None:
+            from cascade.workspace.branch_synchronization import validated_unmerged_paths
+
+            return MergeResult(
+                ok=False,
+                reason="branch_conflict",
+                branch=source_branch,
+                target_branch=target_branch,
+                conflict_paths=validated_unmerged_paths(trunk),
+            )
 
     return MergeResult(
         ok=True,

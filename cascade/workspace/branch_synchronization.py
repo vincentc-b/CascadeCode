@@ -19,7 +19,7 @@ from cascade.workspace.integration_worktree import (
     repair_missing_worktree,
 )
 from cascade.workspace.kickoff import _graph_has_inflight_turn
-from cascade.workspace.trunk import resolve_product_trunk
+from cascade.workspace.trunk import is_integration_branch, resolve_product_trunk
 from cascade.watchdog.lock import process_lock
 
 SyncBlockReason = str
@@ -172,6 +172,145 @@ def preflight_integration_sync(
     return BranchSyncUpdateResult(ok=True)
 
 
+def preflight_lifecycle_merge_target(
+    work_id: str, *, root: Path | None = None
+) -> BranchSyncUpdateResult:
+    """Preflight the integration checkout that will receive a lifecycle merge."""
+
+    trunk = locate_trunk(resolve_root(root))
+    if not has_git(trunk):
+        return BranchSyncUpdateResult(ok=False, reason="not_a_git_repo")
+
+    board = merged_board(trunk)
+    meta = board.by_id.get(work_id)
+    if meta is None:
+        return BranchSyncUpdateResult(ok=False, reason="not_found")
+    kind = _integration_kind(meta.tier)
+    if kind is None:
+        return BranchSyncUpdateResult(ok=False, reason="wrong_tier")
+    if column_for_status(meta.status) != "active" or meta.status != "active":
+        return BranchSyncUpdateResult(ok=False, reason="not_active")
+
+    work_branch = integration_branch(kind, work_id)
+    if not _branch_exists(trunk, work_branch):
+        return BranchSyncUpdateResult(ok=False, reason="branch_missing")
+
+    blocked = _preflight_blocked(meta, kind, trunk)
+    if blocked is not None:
+        return BranchSyncUpdateResult(ok=False, reason=blocked)
+    return BranchSyncUpdateResult(ok=True)
+
+
+def preflight_epic_trunk_promotion(
+    epic_id: str, *, root: Path | None = None
+) -> BranchSyncUpdateResult:
+    """Preflight merging ``epic/{id}`` into the operator product-trunk checkout."""
+
+    trunk = locate_trunk(resolve_root(root))
+    if not has_git(trunk):
+        return BranchSyncUpdateResult(ok=False, reason="not_a_git_repo")
+
+    blocked = _operator_trunk_cleanliness(trunk)
+    if blocked is not None:
+        return BranchSyncUpdateResult(ok=False, reason=blocked)
+
+    board = merged_board(trunk)
+    meta = board.by_id.get(epic_id)
+    if meta is not None:
+        if meta.tier != "epic":
+            return BranchSyncUpdateResult(ok=False, reason="wrong_tier")
+        if column_for_status(meta.status) != "active" or meta.status != "active":
+            return BranchSyncUpdateResult(ok=False, reason="not_active")
+        if _graph_has_inflight_turn(
+            epic_id, "epic", root=trunk, feature_id=None
+        ):
+            return BranchSyncUpdateResult(ok=False, reason="busy")
+
+    current = _current_branch(trunk)
+    if current is None:
+        return BranchSyncUpdateResult(ok=False, reason="wrong_branch")
+    if is_integration_branch(current):
+        return BranchSyncUpdateResult(ok=False, reason="wrong_branch")
+    try:
+        product = resolve_product_trunk(trunk)
+    except WorkspaceError:
+        return BranchSyncUpdateResult(ok=False, reason="ambiguous_trunk")
+    if current != product:
+        return BranchSyncUpdateResult(ok=False, reason="wrong_branch")
+
+    return BranchSyncUpdateResult(ok=True)
+
+
+def merge_lifecycle_source(
+    checkout_work_id: str,
+    source_branch: str,
+    *,
+    source_work_id: str | None = None,
+    root: Path | None = None,
+) -> BranchSyncUpdateResult:
+    """Merge ``source_branch`` into the integration checkout for ``checkout_work_id``."""
+
+    trunk = locate_trunk(resolve_root(root))
+    if not has_git(trunk):
+        return BranchSyncUpdateResult(ok=False, reason="not_a_git_repo")
+
+    with process_lock:
+        preflight = preflight_lifecycle_merge_target(checkout_work_id, root=trunk)
+        if not preflight.ok:
+            return preflight
+
+        if source_work_id is not None:
+            board = merged_board(trunk)
+            source_meta = board.by_id.get(source_work_id)
+            if source_meta is not None:
+                feature_id = (
+                    source_meta.parent if source_meta.tier == "task" else None
+                )
+                if _graph_has_inflight_turn(
+                    source_work_id,
+                    source_meta.tier,
+                    root=trunk,
+                    feature_id=feature_id,
+                ):
+                    return BranchSyncUpdateResult(ok=False, reason="busy")
+
+        board = merged_board(trunk)
+        meta = board.by_id.get(checkout_work_id)
+        if meta is None:
+            return BranchSyncUpdateResult(ok=False, reason="not_found")
+        kind = _integration_kind(meta.tier)
+        if kind is None:
+            return BranchSyncUpdateResult(ok=False, reason="wrong_tier")
+
+        checkout = _resolve_integration_checkout(trunk, kind, checkout_work_id)
+        if checkout is None:
+            return BranchSyncUpdateResult(ok=False, reason="checkout_missing")
+
+        if not _branch_exists(trunk, source_branch):
+            return BranchSyncUpdateResult(ok=False, reason="branch_missing")
+
+        pre_sha = head_sha(checkout)
+        if pre_sha is None:
+            return BranchSyncUpdateResult(ok=False, reason="invariant")
+
+        if _run(["merge", source_branch, "--no-edit"], checkout, check=False).returncode == 0:
+            return BranchSyncUpdateResult(ok=True, merge_sha=head_sha(checkout))
+
+        conflict_paths = _validated_unmerged_paths(checkout)
+        _run(["merge", "--abort"], checkout, check=False)
+        if not _merge_state_clean(checkout):
+            return BranchSyncUpdateResult(ok=False, reason="invariant")
+        if head_sha(checkout) != pre_sha:
+            _run(["reset", "--hard", pre_sha], checkout, check=False)
+        if head_sha(checkout) != pre_sha:
+            return BranchSyncUpdateResult(ok=False, reason="invariant")
+        return BranchSyncUpdateResult(
+            ok=False,
+            reason="branch_conflict",
+            conflict_paths=conflict_paths,
+        )
+
+
 def _integration_kind(tier: WorkTier) -> IntegrationKind | None:
     if tier == "epic":
         return "epic"
@@ -244,6 +383,40 @@ def _worktree_cleanliness(repo: Path) -> SyncBlockReason | None:
     return None
 
 
+def _operator_trunk_ignored(rel: str) -> bool:
+    return rel.startswith((".cascade/", "docs/_queue/"))
+
+
+def _operator_trunk_cleanliness(repo: Path) -> SyncBlockReason | None:
+    """Product-trunk cleanliness for epic promotion (ignore linked worktree mounts)."""
+
+    if _run(["diff", "--cached", "--quiet", "HEAD"], repo, check=False).returncode != 0:
+        return "dirty_index"
+    diff = _run(["diff", "--name-only", "HEAD"], repo, check=False)
+    if diff.returncode != 0:
+        return "local_changes"
+    operator_changes = [
+        path
+        for path in diff.stdout.splitlines()
+        if path and not _operator_trunk_ignored(path)
+    ]
+    if operator_changes:
+        return "local_changes"
+    untracked = _run(
+        ["ls-files", "--others", "--exclude-standard"], repo, check=False
+    )
+    if untracked.returncode != 0:
+        return "local_changes"
+    operator_untracked = [
+        path
+        for path in untracked.stdout.splitlines()
+        if path and not _operator_trunk_ignored(path)
+    ]
+    if operator_untracked:
+        return "local_changes"
+    return None
+
+
 def _ahead_behind(
     repo: Path, work_branch: str, base_branch: str
 ) -> tuple[int | None, int | None]:
@@ -283,6 +456,12 @@ def _current_branch(repo: Path) -> str | None:
 def _branch_exists(repo: Path, branch: str) -> bool:
     result = _run(["show-ref", "--verify", f"refs/heads/{branch}"], repo, check=False)
     return result.returncode == 0
+
+
+def validated_unmerged_paths(repo: Path) -> tuple[str, ...]:
+    """Repository-relative unmerged paths during an in-progress merge (validated)."""
+
+    return _validated_unmerged_paths(repo)
 
 
 def _validated_unmerged_paths(repo: Path) -> tuple[str, ...]:

@@ -97,7 +97,7 @@ _APPROVAL_POST_PATHS = frozenset(
 def _merge_failure_status(reason: str | None) -> HTTPStatus:
     if reason == "task_not_found":
         return HTTPStatus.NOT_FOUND
-    if reason == "merge_conflict":
+    if reason in ("merge_conflict", "branch_conflict"):
         return HTTPStatus.CONFLICT
     return HTTPStatus.BAD_REQUEST
 

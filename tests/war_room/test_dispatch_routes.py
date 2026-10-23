@@ -368,7 +368,7 @@ def test_merge_task_branch_conflict_409_leaves_task_active(merge_server):
     code, body = _post_expect_error(f"{base}/api/merge_task_branch", {"id": "task_001"})
     assert code == HTTPStatus.CONFLICT
     assert body["ok"] is False
-    assert body["reason"] == "merge_conflict"
+    assert body["reason"] == "branch_conflict"
 
     task = read_doc("task_001", root=root)
     assert task.meta.status == "active"
