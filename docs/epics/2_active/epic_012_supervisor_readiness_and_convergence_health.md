@@ -125,6 +125,11 @@ None blocking feature planning. Feature owners may choose exact field names and 
   Chose Define stalled work as unchanged, currently dispatchable work beyond a bounded threshold, using Boss View dispatch predicates plus durable progress signatures and one diagnostic per unchanged episode..
   Rationale: Reusing dispatch law prevents false positives from approval, dependency, sibling, review, and capacity gates; episode deduplication makes the signal durable without toast spam.
   Honors: Constraints: no gate bypass, no duplicate work, reuse Boss View, queue cursors, watchdog cadence, and War Room toasts..
+
+- `dec_003` · 2026-10-23 · Epic Manager · **Delivery scope**
+  Chose Deliver three sequenced features: readiness/non-blocking recovery, convergence diagnostics, then an isolated synthetic lifecycle probe..
+  Rationale: This is the smallest dependency-ordered slice that establishes the observable contract, builds diagnosis on it, and validates the integrated lifecycle without introducing an always-on canary or mutating the live board.
+  Honors: Product-manager scope discipline and the success criterion for a disposable synthetic probe..
 ## Amendment log
 
 _(none)_
