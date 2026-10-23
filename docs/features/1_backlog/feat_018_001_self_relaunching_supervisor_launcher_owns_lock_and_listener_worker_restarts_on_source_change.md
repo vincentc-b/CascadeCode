@@ -17,6 +17,7 @@ provider: cursor
 models:
   feature_lead: claude-opus-5-5
   feature_architect: claude-opus-5-5
+approved_at: '2026-10-23T02:49:25.181699+00:00'
 ---
 # Self-relaunching supervisor: launcher owns lock and listener, worker restarts on source change
 
