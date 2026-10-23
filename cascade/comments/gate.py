@@ -8,6 +8,7 @@ from pathlib import Path
 
 from cascade.board.context import resolve_root
 from cascade.board.store import read_doc
+from cascade.board.types import BoardIndex
 from cascade.comments.slug import section_slug
 from cascade.comments.store import read_comments
 from cascade.comments.types import Comment
@@ -43,12 +44,14 @@ def is_section_thread(doc_id: str, section: str, *, root: Path) -> bool:
     return False
 
 
-def blocking_threads_for(work_id: str, *, root: Path) -> GateResult:
+def blocking_threads_for(
+    work_id: str, *, root: Path, board: BoardIndex | None = None
+) -> GateResult:
     """Return open blocking roots on this work and ancestors that still block ``work_id``."""
 
     repo = resolve_root(root)
     trunk = locate_trunk(repo)
-    board = merged_board(trunk)
+    board = board if board is not None else merged_board(trunk)
     warnings = _unmatched_cite_warnings(board, root=repo)
     blocking_roots = _load_blocking_roots(work_id, board, root=repo)
     hits: list[GateThread] = []
@@ -80,10 +83,12 @@ def gate_refusal_reason(result: GateResult) -> str:
     return text
 
 
-def refusal_if_blocked(work_id: str, *, root: Path) -> str | None:
+def refusal_if_blocked(
+    work_id: str, *, root: Path, board: BoardIndex | None = None
+) -> str | None:
     """Return refusal text when ``work_id`` is blocked by open review threads."""
 
-    gate = blocking_threads_for(work_id, root=root)
+    gate = blocking_threads_for(work_id, root=root, board=board)
     if gate.blocked:
         return gate_refusal_reason(gate)
     return None

@@ -139,6 +139,7 @@ def epic_blocks_feature_dispatch(
     root: Path,
     epic_id: str,
     dispatching_feature_id: str | None = None,
+    pending_review_ids: frozenset[str] | None = None,
 ) -> bool:
     """True when this sibling feature prevents another feature dispatch in the epic."""
 
@@ -148,13 +149,24 @@ def epic_blocks_feature_dispatch(
         return False
     if blocking_meta.path.parent.name == "2_active" and blocking_meta.status != "completed":
         return True
-    if feature_review_pending(blocking_meta.id, root=root):
+    pending = (
+        blocking_meta.id in pending_review_ids
+        if pending_review_ids is not None
+        else feature_review_pending(blocking_meta.id, root=root)
+    )
+    if pending:
         candidate = dispatching_feature_id or blocking_meta.id
         return not effective_stacked_pr_enabled(candidate, epic_id, root=root)
     return False
 
 
-def feature_merge_gated(meta: WorkMeta, board: BoardIndex, *, root: Path) -> bool:
+def feature_merge_gated(
+    meta: WorkMeta,
+    board: BoardIndex,
+    *,
+    root: Path,
+    pending_review_ids: frozenset[str] | None = None,
+) -> bool:
     """True when merge-gated dispatch rules block this feature (stacked opt-in off)."""
 
     epic_id = meta.parent or ""
@@ -162,6 +174,19 @@ def feature_merge_gated(meta: WorkMeta, board: BoardIndex, *, root: Path) -> boo
         return True
     if effective_stacked_pr_enabled(meta.id, epic_id, root=root):
         return False
+    if pending_review_ids is not None:
+        if any(
+            dep_id in pending_review_ids
+            for dep_id in meta.depends_on
+            if (dep := board.by_id.get(dep_id)) is not None and dep.tier == "feature"
+        ):
+            return True
+        return any(
+            feature.id in pending_review_ids
+            for feature in board.by_id.values()
+            if feature.tier == "feature" and feature.parent == epic_id
+        )
+
     from cascade.review import epic_has_pending_feature_review, feature_review_pending
 
     for dep_id in meta.depends_on:
@@ -174,7 +199,11 @@ def feature_merge_gated(meta: WorkMeta, board: BoardIndex, *, root: Path) -> boo
 
 
 def feature_dispatch_blocked_by_sibling(
-    meta: WorkMeta, board: BoardIndex, *, root: Path
+    meta: WorkMeta,
+    board: BoardIndex,
+    *,
+    root: Path,
+    pending_review_ids: frozenset[str] | None = None,
 ) -> bool:
     epic_id = meta.parent or ""
     if not epic_id:
@@ -187,6 +216,7 @@ def feature_dispatch_blocked_by_sibling(
             root=root,
             epic_id=epic_id,
             dispatching_feature_id=meta.id,
+            pending_review_ids=pending_review_ids,
         ):
             return True
     return False

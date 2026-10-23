@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import shutil
@@ -30,6 +31,9 @@ _MERGED_BOARD_CACHE_TTL_S = 2.0
 _registry_thread_lock = threading.RLock()
 _merged_board_cache_lock = threading.RLock()
 _merged_board_cache: dict[Path, tuple[float, BoardIndex]] = {}
+_board_snapshot: contextvars.ContextVar[tuple[Path, BoardIndex] | None] = (
+    contextvars.ContextVar("_board_snapshot", default=None)
+)
 
 
 @dataclass(frozen=True)
@@ -566,6 +570,9 @@ def merged_board(trunk: Path) -> BoardIndex:
     """
 
     trunk = locate_trunk(trunk).resolve()
+    snapshot = _board_snapshot.get()
+    if snapshot is not None and snapshot[0] == trunk:
+        return snapshot[1]
     now = time.monotonic()
     with _merged_board_cache_lock:
         cached = _merged_board_cache.get(trunk)
@@ -574,6 +581,17 @@ def merged_board(trunk: Path) -> BoardIndex:
         board = _merged_board_uncached(trunk)
         _merged_board_cache[trunk] = (time.monotonic() + _MERGED_BOARD_CACHE_TTL_S, board)
         return board
+
+
+@contextmanager
+def merged_board_snapshot(trunk: Path, board: BoardIndex) -> Iterator[None]:
+    """Reuse one board view during a read-only response on this context."""
+
+    token = _board_snapshot.set((locate_trunk(trunk).resolve(), board))
+    try:
+        yield
+    finally:
+        _board_snapshot.reset(token)
 
 
 def _merged_board_uncached(trunk: Path) -> BoardIndex:
