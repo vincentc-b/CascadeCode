@@ -940,10 +940,13 @@
   }
 
   function initPlanComments(workId, tier, options) {
+    options = options || {};
     if (tier === "task") {
+      if (options.testHooks) {
+        return { skipped: true };
+      }
       return;
     }
-    options = options || {};
     var docBody = options.docBody != null ? String(options.docBody) : "";
     var docSha = options.docSha != null ? String(options.docSha) : "";
     var bodyEl = options.bodyEl || document.getElementById("plan-body");
@@ -1469,6 +1472,16 @@
       installPlanGutters(bodyEl, beginRootFromLine);
     }
 
+    if (options.testHooks) {
+      return {
+        renderComments: renderCommentThreads,
+        loadComments: loadComments,
+        getCommentStatus: function () {
+          return statusEl ? statusEl.textContent : "";
+        },
+      };
+    }
+
     panel.hidden = false;
     loadComments().catch(function (err) {
       setCommentStatus(err && err.message ? err.message : "Could not load comments", true);
@@ -1565,5 +1578,6 @@
     runMermaidDiagrams: runMermaidDiagrams,
     loadMermaidScript: loadMermaidScript,
     MERMAID_SCRIPT_SRC: MERMAID_SCRIPT_SRC,
+    initPlanComments: initPlanComments,
   };
 });
