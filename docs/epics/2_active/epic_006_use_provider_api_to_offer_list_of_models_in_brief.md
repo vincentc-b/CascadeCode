@@ -105,6 +105,10 @@ No new external service, durable cache, or scheduler is a prerequisite.
 - 2026-10-24 · Epic Manager · Use one selected provider with per-role model defaults across epic, feature, and task layers; reject arbitrary new model text.
 - 2026-10-24 · Epic Manager · Preserve historical briefs without migration; validate new or edited selections against current discovery.
 
+- `dec_001` · 2026-10-24 · Epic Manager · **Architecture sequencing**
+  Chose Establish a shared, fault-isolated provider/model inventory before replacing brief inputs..
+  Rationale: Provider availability and model validation need one authoritative boundary; otherwise the UI would duplicate provider-specific behavior and cannot isolate failures.
+  Honors: Success criteria requiring only available providers and models obtained from provider APIs..
 ## Amendment log
 
 _(none)_
