@@ -20,45 +20,90 @@ models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
 ---
-# Use provider api to offer list of models in brief
+# Use provider API to offer list of models in brief
 
 ## Intent
 
-When creating a brief, there is a drop-down for provider, but the models for the Epic Manager and  architects are simple text boxes. If these models are not valid, it will create issues downstream. Can we instead pull a list of valid models from the provider, and populate a drop-down of models that can be used? This could potentially be done asyncronously every so often with the available providers (if we aren't signed in or a provider is not installed, ignore). I also think we should pick the feature and task defaults here.
-Also, providers that are not currently available/installed should not be offered as an option.
+Brief creation must not accept provider/model combinations that downstream agents cannot use. Replace free-text model entry with choices discovered from installed, authenticated provider APIs, and capture defaults for every role layer created from the brief.
+
+The initial delivery validates this at brief-creation time without introducing a background synchronization service.
 
 ### Success criteria
 
-Creating a feature brief offers a drop-down of available models.
-The provider drop-down only contains available providers.
-The available models are obtained from the actual provider api.
-The models are chosen for the full agent stack (epic, feature, task)
+- The provider selector contains only providers that are installed/configured and successfully report availability.
+- Offered models come from the selected provider's actual API response; the UI does not own a static model list.
+- Brief creation uses selectors, not arbitrary model text, for all configured epic, feature, and task roles.
+- The selected provider and per-role model defaults are persisted and used by downstream work creation.
+- One unavailable or failing provider does not prevent healthy providers from being offered.
+- When no provider is usable, submission is disabled with a clear, recoverable state.
+- A representative end-to-end test covers discovery, selection, persistence, and reload/use of saved defaults.
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+1. Each provider integration exposes capability discovery returning its canonical provider identifier and current models.
+2. A provider inventory service queries only installed/configured integrations, isolates adapter failures, normalizes results, and applies a small bounded freshness cache around successful responses.
+3. The existing application boundary exposes that inventory to brief creation, including loading, empty-availability, and refresh-failure states.
+4. The brief UI selects one available provider and renders model selectors for every epic, feature, and task role represented by the brief schema. Changing provider clears or revalidates incompatible selections.
+5. The existing brief write path validates selections against the current inventory, persists provider plus per-role defaults, and supplies those defaults when downstream feature and task work is minted.
+
+Provider-specific API and authentication behavior stays inside existing integrations; the UI consumes one normalized contract.
 
 ## Cross-module constraints
 
-To be refined by the Epic Team during planning.
+- Provider APIs are authoritative for selectable models. Static UI model catalogs are out of scope.
+- Credentials and raw provider errors must not cross the application boundary or appear in client-visible responses/logs.
+- Discovery is fault-isolated: one timeout, missing login, or absent installation makes only that provider unavailable.
+- Cache freshness must be explicit and bounded. Refresh on expiry or user request is sufficient; a scheduler or durable background job is not required.
+- The server revalidates submitted provider/model identifiers; client selectors are not a trust boundary.
+- Existing saved briefs with unavailable historical values remain readable; this epic governs new or edited selections and does not require migration.
+- Reuse the existing brief schema and role naming. Expand it only where full-stack defaults cannot already be represented.
+- Concentrate tests on the provider inventory boundary and one end-to-end brief flow; redundant per-component coverage is not required.
 
 ## Core dependencies
 
-To be identified during epic planning.
+- Existing provider integration registry/configuration and authentication state.
+- Provider APIs that enumerate usable models.
+- Existing brief creation/read persistence boundary.
+- Existing propagation path from epic defaults to feature/task work.
+
+No new external service, durable cache, or scheduler is a prerequisite.
 
 ## Feature breakdown
-- feat_006_002
-- feat_006_001
 
-The Epic Team will create and sequence feature plans here.
+1. **feat_006_001 — Discover available providers and models**
+   - Add normalized discovery across installed/configured provider integrations.
+   - Filter unavailable providers, isolate partial failures, and apply bounded caching/refresh.
+   - Expose a safe UI-facing inventory contract.
+   - Prove API-derived results, filtering, partial failure, and refresh behavior.
+
+2. **feat_006_002 — Select provider and full-stack model defaults in brief**  
+   Depends on: feat_006_001
+   - Replace free-text model fields with inventory-backed selectors.
+   - Cover all epic, feature, and task roles represented by the brief schema.
+   - Validate and persist selections, then propagate them through downstream work creation.
+   - Cover loading/empty/error states and one representative end-to-end flow.
+
+## Non-goals
+
+- A continuously running or durable provider synchronization subsystem.
+- Model pricing, benchmarking, recommendation, ranking, or automatic “best model” selection.
+- Installing providers or signing users into providers from the brief screen.
+- Migrating or rewriting historical briefs.
+- Supporting arbitrary model identifiers that the provider API did not return.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+- During feature planning, map the existing brief-schema role keys to the epic/feature/task selectors; preserve current role names.
+- Confirm each provider's model-list API and authentication probe. A provider without safe enumeration remains unavailable rather than falling back to a hard-coded list.
+- Choose the shortest cache TTL that avoids noisy calls while keeping availability credible; this is an implementation parameter, not a product promise.
 
 ## Decision log
 
 - 2026-10-21 · Human · Brief approved through merge request review.
+- 2026-10-24 · Epic Manager · Deliver provider discovery as a shared, fault-isolated backend inventory before changing the brief UI.
+- 2026-10-24 · Epic Manager · Use bounded on-demand caching; exclude periodic background synchronization from the initial scope.
+- 2026-10-24 · Epic Manager · Use one selected provider with per-role model defaults across epic, feature, and task layers; reject arbitrary new model text.
+- 2026-10-24 · Epic Manager · Preserve historical briefs without migration; validate new or edited selections against current discovery.
 
 ## Amendment log
 
