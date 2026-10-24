@@ -92,13 +92,17 @@ body {
   background: var(--bg); color: var(--text); border: 1px solid var(--border);
   border-radius: 6px; padding: 0.55rem; font: inherit;
 }
-.brief-model-grid { display: grid; grid-template-columns: 0.7fr 1fr 1fr; gap: 0.75rem; }
+.brief-model-stack { display: flex; flex-direction: column; gap: 0.75rem; }
+.brief-role-selectors { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.brief-role-row { display: flex; flex-direction: column; gap: 0.35rem; }
+.brief-role-suggestion { color: var(--muted); font-size: 0.8rem; }
+.brief-inventory-retry { align-self: flex-start; }
 .dialog-actions { justify-content: flex-end; }
 .brief-result a { color: var(--accent); font-weight: 600; }
 
 @media (max-width: 760px) {
   .war-room-header, .war-room-primary-actions { align-items: flex-start; flex-wrap: wrap; }
-  .brief-model-grid { grid-template-columns: 1fr; }
+  .brief-role-selectors { grid-template-columns: 1fr; }
 }
 
 .attachment-chrome {

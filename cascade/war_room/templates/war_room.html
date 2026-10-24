@@ -68,20 +68,14 @@
           <label>Intent <textarea name="intent" rows="4" required placeholder="What problem should the team solve, and for whom?"></textarea></label>
           <label>Success criteria <textarea name="success_criteria" rows="3" required placeholder="Observable outcomes that mean this epic is done"></textarea></label>
           <label>Constraints <textarea name="constraints" rows="3" placeholder="Compatibility, architecture, delivery, or operational constraints"></textarea></label>
-          <div class="brief-model-grid">
+          <div class="brief-model-stack">
             <label>Provider
-              <select name="provider" id="brief-provider" required></select>
+              <select id="brief-provider" required></select>
             </label>
-            <label>Epic Manager model
-              <input name="manager_model" id="brief-manager-model" required />
-              <small id="brief-manager-suggestion"></small>
-            </label>
-            <label>Epic Architect model
-              <input name="architect_model" id="brief-architect-model" required />
-              <small id="brief-architect-suggestion"></small>
-            </label>
+            <div id="brief-role-selectors" class="brief-role-selectors" aria-live="polite"></div>
           </div>
           <p id="brief-status" class="status-line" aria-live="polite"></p>
+          <button type="button" id="btn-brief-inventory-retry" class="btn-secondary brief-inventory-retry" hidden>Retry model inventory</button>
           <div id="brief-result" class="brief-result" hidden></div>
           <div class="dialog-actions">
             <button type="button" id="btn-cancel-brief" class="btn-secondary">Cancel</button>
@@ -339,6 +333,7 @@
     <script src="/static/open_reviews_pane.js"></script>
     <script src="/static/branch_sync_ui.js"></script>
     <script src="/static/epic_plan_readiness_ui.js"></script>
+    <script src="/static/brief_defaults_ui.js"></script>
     <script src="/static/war_room.js?v=20261018"></script>
   </body>
 </html>

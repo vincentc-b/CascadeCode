@@ -6,7 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from cascade.agent.discovery.inventory import clear_provider_inventory_cache, get_provider_inventory
+from cascade.agent.discovery.types import DiscoveredModel, ProviderDiscoverySnapshot
 from cascade.briefs import build_brief_doc, create_brief, validate_brief
+from tests.agent.test_provider_inventory import _fake_discover, _unavailable
 from cascade.approvals import epic_plan_approved
 from tests.support import approve_epic_plan_when_ready
 from cascade.tracking import (
@@ -34,28 +37,67 @@ def _request() -> dict[str, object]:
         "provider": "codex",
         "manager_model": "gpt-manager",
         "architect_model": "gpt-architect",
+        "models": {
+            "epic_manager": "gpt-manager",
+            "epic_architect": "gpt-architect",
+            "feature_lead": "gpt-feature-lead",
+            "feature_architect": "gpt-feature-architect",
+            "swe": "gpt-swe",
+        },
     }
 
 
+@pytest.fixture(autouse=True)
+def _brief_inventory(monkeypatch) -> None:
+    clear_provider_inventory_cache()
+    models = (
+        DiscoveredModel(id="gpt-manager", display_name="Manager"),
+        DiscoveredModel(id="gpt-architect", display_name="Architect"),
+        DiscoveredModel(id="gpt-feature-lead", display_name="Feature lead"),
+        DiscoveredModel(id="gpt-feature-architect", display_name="Feature architect"),
+        DiscoveredModel(id="gpt-swe", display_name="SWE"),
+    )
+    mapping = {
+        "cursor": _unavailable("cursor", failure="not_installed"),
+        "claude": _unavailable("claude", failure="not_authenticated"),
+        "codex": ProviderDiscoverySnapshot(
+            provider_id="codex",
+            available=True,
+            models=models,
+        ),
+    }
+
+    def _get_inventory(**kwargs: object) -> object:
+        return get_provider_inventory(
+            discover=_fake_discover(mapping),
+            ttl_seconds=60.0,
+            now=10.0,
+            force_refresh=bool(kwargs.get("force_refresh")),
+        )
+
+    monkeypatch.setattr("cascade.briefs.get_provider_inventory", _get_inventory)
+    yield
+    clear_provider_inventory_cache()
+
+
 def test_brief_doc_carries_role_models_and_template_sections(tmp_path: Path) -> None:
-    request = validate_brief(_request())
+    request = validate_brief(_request(), root=tmp_path)
     path = tmp_path / "docs/epics/1_backlog/epic_004_search_experience.md"
     doc = build_brief_doc(request, "epic_004", path)
 
     assert doc.meta.provider == "codex"
-    assert doc.meta.models == {
-        "epic_manager": "gpt-manager",
-        "epic_architect": "gpt-architect",
-    }
+    assert doc.meta.models == _request()["models"]
     assert "## Intent" in doc.body
     assert "## Feature breakdown" in doc.body
 
 
-def test_validate_brief_requires_both_team_models() -> None:
+def test_validate_brief_requires_both_team_models(tmp_path: Path) -> None:
     raw = _request()
     raw["architect_model"] = ""
-    with pytest.raises(ValueError, match="architect model"):
-        validate_brief(raw)
+    raw["models"] = dict(raw["models"])
+    raw["models"]["epic_architect"] = ""
+    with pytest.raises(ValueError, match="epic_architect model"):
+        validate_brief(raw, root=tmp_path)
 
 
 def test_create_brief_uses_remote_trunk_and_commits_only_markdown(

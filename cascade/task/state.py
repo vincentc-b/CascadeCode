@@ -17,3 +17,5 @@ class TaskGraphState(TypedDict):
     model_sources: NotRequired[dict[str, str]]
     provider_ids: NotRequired[dict[str, str]]
     provider_sources: NotRequired[dict[str, str]]
+    reasoning_ids: NotRequired[dict[str, str]]
+    reasoning_sources: NotRequired[dict[str, str]]

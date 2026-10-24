@@ -55,6 +55,12 @@ def seed_feature_role_models(
             "feature_architect": architect.provider_source,
         },
     }
+    if lead.reasoning:
+        update.setdefault("reasoning_ids", {})["feature_lead"] = lead.reasoning
+        update.setdefault("reasoning_sources", {})["feature_lead"] = lead.reasoning_source or "document-role"
+    if architect.reasoning:
+        update.setdefault("reasoning_ids", {})["feature_architect"] = architect.reasoning
+        update.setdefault("reasoning_sources", {})["feature_architect"] = architect.reasoning_source or "document-role"
     snapshot = graph.get_state(config)
     if not snapshot.values:
         update["feature_id"] = feature_id

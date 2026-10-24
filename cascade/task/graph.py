@@ -16,6 +16,7 @@ from cascade.agent.graph_turn import (
     model_for_role,
     no_input_message,
     provider_for_role,
+    reasoning_for_role,
     run_coro_sync,
 )
 from cascade.task.checkpoint import drop_task_checkpoint, get_checkpointer, thread_config
@@ -66,6 +67,11 @@ def seed_task_role_models(
         "provider_ids": {"swe": swe.provider},
         "provider_sources": {"swe": swe.provider_source},
     }
+    if swe.reasoning:
+        update["reasoning_ids"] = {"swe": swe.reasoning}
+        update["reasoning_sources"] = {
+            "swe": swe.reasoning_source or "document-role",
+        }
     snapshot = graph.get_state(config)
     if not snapshot.values:
         update.update(_empty_state(task_id, feature_id, 0, root=root))
@@ -269,6 +275,7 @@ def _swe_role_content(state: TaskGraphState) -> str:
     if provider_id is None:
         return missing_provider_message("swe")
 
+    reasoning_level, reasoning_source = reasoning_for_role(state, "swe")
     task_id = state.get("task_id") or ""
     repo = _repo_for_state(task_id)
     prompt = format_turn_prompt(
@@ -277,6 +284,8 @@ def _swe_role_content(state: TaskGraphState) -> str:
         provider_source=provider_source,
         model_id=model_id,
         model_source=model_source,
+        reasoning_level=reasoning_level,
+        reasoning_source=reasoning_source,
     )
 
     from cascade.task.swe_turn import default_swe_commit_message, run_swe_turn
@@ -293,6 +302,7 @@ def _swe_role_content(state: TaskGraphState) -> str:
                 model_id=model_id,
                 prompt=prompt,
                 root=repo,
+                reasoning_level=reasoning_level,
                 commit_message=default_swe_commit_message(task_id),
                 run_role_fn=_run_role_fn,
             )

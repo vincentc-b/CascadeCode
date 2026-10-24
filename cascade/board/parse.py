@@ -83,6 +83,8 @@ def render_doc(doc: WorkDoc) -> str:
         payload["provider"] = meta.provider
     if meta.models:
         payload["models"] = dict(meta.models)
+    if meta.reasoning:
+        payload["reasoning"] = dict(meta.reasoning)
     if meta.integration_branch is not None:
         payload["integration_branch"] = meta.integration_branch
     if meta.integration_worktree is not None:
@@ -160,6 +162,7 @@ def _meta_from_mapping(loaded: dict[str, object], path: Path) -> WorkMeta:
         model=_optional_model(loaded),
         provider=_optional_provider(loaded),
         models=_optional_models(loaded),
+        reasoning=_optional_models(loaded, field="reasoning"),
         integration_branch=_optional_integration_str(loaded, "integration_branch"),
         integration_worktree=_optional_integration_str(loaded, "integration_worktree"),
         cites=_optional_cites(loaded),
@@ -246,18 +249,22 @@ def _optional_provider(loaded: dict[str, object]) -> str | None:
         raise
 
 
-def _optional_models(loaded: dict[str, object]) -> dict[str, str] | None:
-    if "models" not in loaded:
+def _optional_models(
+    loaded: dict[str, object],
+    *,
+    field: str = "models",
+) -> dict[str, str] | None:
+    if field not in loaded:
         return None
-    value = loaded["models"]
+    value = loaded[field]
     if not isinstance(value, dict):
-        raise SchemaError("models must be a mapping")
+        raise SchemaError(f"{field} must be a mapping")
     result: dict[str, str] = {}
     for key, item in value.items():
         if not isinstance(key, str):
-            raise SchemaError("models must be a mapping with string keys")
+            raise SchemaError(f"{field} must be a mapping with string keys")
         if not isinstance(item, str) or not item.strip():
-            raise SchemaError(f"models.{key} must be a non-blank string")
+            raise SchemaError(f"{field}.{key} must be a non-blank string")
         result[key] = item.strip()
     if not result:
         return None

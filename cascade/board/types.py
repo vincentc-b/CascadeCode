@@ -34,6 +34,7 @@ class WorkMeta:
     path: Path
     model: str | None = None
     models: dict[str, str] | None = None
+    reasoning: dict[str, str] | None = None
     provider: ProviderId | None = None
     integration_branch: str | None = None
     integration_worktree: str | None = None

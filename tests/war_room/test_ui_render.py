@@ -139,6 +139,7 @@ def test_completed_column_collapse_controls_in_html(ui_server):
     assert "Expand" in epics_tier
     assert "board-column-completed-collapsed" in epics_tier
     assert html.index("/static/board_focus.js") < html.index("/static/open_reviews_pane.js")
+    assert html.index("/static/brief_defaults_ui.js") < html.index("/static/war_room.js")
     assert html.index("/static/open_reviews_pane.js") < html.index("/static/war_room.js")
 
 
@@ -340,8 +341,9 @@ def test_brief_and_sync_controls_in_html(ui_server):
     assert "Refresh briefs" in html
     assert "app updates are handled separately" in html
     assert 'id="brief-form"' in html
-    assert 'name="manager_model"' in html
-    assert 'name="architect_model"' in html
+    assert 'id="brief-role-selectors"' in html
+    assert 'id="btn-brief-inventory-retry"' in html
+    assert 'name="manager_model"' not in html
     assert "Create merge request" in html
 
 
