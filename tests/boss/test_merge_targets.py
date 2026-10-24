@@ -17,6 +17,7 @@ from cascade.boss.epic_complete import confirm_epic_complete
 from cascade.boss import merge as merge_module
 from cascade.boss.merge import merge_feature_branch, merge_task_branch, promote_epic_to_trunk
 from cascade.boss.rollup import try_complete_feature, write_closeout
+from cascade.completion_reconcile import reconcile_completion
 from cascade.task.worktree import clear_task_runs, create_task_worktree
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 from cascade.workspace.doc_root import read_doc_resolved, resolve_doc_worktree
@@ -390,6 +391,27 @@ def test_activated_epic_closes_through_real_git_promotion(tmp_path: Path) -> Non
     ).stdout == ""
 
 
+def test_ready_epic_auto_closes_with_runtime_comment_sidecar(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(
+        root, id="feat_001", title="Feature", tier="feature",
+        status="completed", parent="epic_001",
+    )
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+
+    sidecar = root / "docs/_comments/epic_099.jsonl"
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text('{"author":"human"}\n', encoding="utf-8")
+
+    assert reconcile_completion(root)["epics"] == ["epic_001"]
+    assert read_doc("epic_001", root=root).meta.status == "completed"
+    assert sidecar.read_text(encoding="utf-8") == '{"author":"human"}\n'
+    assert reconcile_completion(root)["epics"] == []
+
+
 def test_epic_promotion_refuses_preexisting_staged_changes(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     _initial_commit(root)
@@ -431,6 +453,7 @@ def test_epic_promotion_does_not_resolve_unrelated_conflicts(tmp_path: Path) -> 
 
     assert promote.ok is False
     assert promote.reason == "branch_conflict"
+    assert "collision.txt" in promote.conflict_paths
     assert (root / "collision.txt").read_text(encoding="utf-8") == "product trunk\n"
     assert not (root / ".git" / "MERGE_HEAD").exists()
     pointer = read_doc_in_worktree("epic_001", root)

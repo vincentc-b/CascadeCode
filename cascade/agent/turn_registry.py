@@ -14,6 +14,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
+CANCEL_GRACE_S = 5.0
+
 _current_turn: contextvars.ContextVar[LiveTurn | None] = contextvars.ContextVar(
     "_current_turn",
     default=None,
@@ -51,6 +53,9 @@ def register_turn(role: str) -> Iterator[LiveTurn]:
     with _lock:
         _live[live.turn_id] = live
     try:
+        from cascade.workspace.in_flight_turn_watchdog import notify_turn_registered
+
+        notify_turn_registered(live)
         yield live
     finally:
         with _lock:
@@ -63,6 +68,11 @@ def set_current_turn_pid(pid: int) -> None:
     if live is None:
         return
     live.pid = pid
+
+
+def get_live_turn(turn_id: str) -> LiveTurn | None:
+    with _lock:
+        return _live.get(turn_id)
 
 
 def live_turns() -> list[LiveTurn]:
@@ -83,14 +93,55 @@ def wait_until_idle(timeout: float) -> bool:
         return not _live
 
 
+def _request_cancel_turn(turn: LiveTurn) -> None:
+    turn.cancelled = True
+    if turn.pid is not None:
+        try:
+            os.kill(turn.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    turn.loop.call_soon_threadsafe(turn.task.cancel)
+
+
+def cancel_live_turn(
+    turn_id: str,
+    *,
+    grace_seconds: float = CANCEL_GRACE_S,
+    escalate_to_sigkill: bool = False,
+) -> tuple[LiveTurn | None, bool]:
+    """Cancel one registered turn by id (SIGTERM; optional bounded SIGKILL).
+
+    Returns ``(turn, force_kill_applied)``. Unknown ids return ``(None, False)``.
+    """
+
+    with _lock:
+        turn = _live.get(turn_id)
+    if turn is None:
+        return None, False
+
+    pid = turn.pid
+    _request_cancel_turn(turn)
+    force_kill = False
+    if pid is not None and escalate_to_sigkill and grace_seconds > 0:
+        deadline = time.monotonic() + grace_seconds
+        while time.monotonic() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                pid = None
+                break
+            time.sleep(0.05)
+        if pid is not None:
+            try:
+                os.kill(pid, signal.SIGKILL)
+                force_kill = True
+            except ProcessLookupError:
+                pass
+    return turn, force_kill
+
+
 def cancel_live_turns() -> list[LiveTurn]:
     turns = live_turns()
     for turn in turns:
-        turn.cancelled = True
-        if turn.pid is not None:
-            try:
-                os.kill(turn.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-        turn.loop.call_soon_threadsafe(turn.task.cancel)
+        _request_cancel_turn(turn)
     return turns

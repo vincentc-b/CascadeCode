@@ -205,6 +205,20 @@ def test_untracked_managed_runtime_sidecar_does_not_block_update(tmp_path: Path)
     assert inspection.update_blocked_reason is None
 
 
+def test_untracked_comment_sidecar_does_not_block_update(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    _stacked_board(root)
+
+    feat_wt = integration_worktree_path("feature", "feat_001", trunk=root)
+    sidecar = feat_wt / "docs/_comments/feat_001.jsonl"
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text('{"author":"human"}\n', encoding="utf-8")
+
+    inspection = inspect_branch_synchronization("feat_001", root=root)
+    assert inspection.update_blocked_reason is None
+
+
 def test_conflict_aborts_and_restores_head(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     _initial_commit(root)

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import cascade.review as review_module
-from cascade.approvals import approve_epic_plan
+from tests.support import approve_epic_plan_when_ready
 from cascade.automation import advance_work
 from cascade.board.store import read_doc
 from cascade.boss.rollup import on_task_merged, try_complete_feature
@@ -253,7 +253,7 @@ def test_merged_review_releases_next_dependent_feature_on_next_pass(
     )
     monkeypatch.setattr("cascade.watchdog.dispatch.invoke_boot", lambda *_args: None)
     monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args: None)
-    approve_epic_plan("epic_001", root=root)
+    approve_epic_plan_when_ready("epic_001", root=root)
 
     first = advance_work(root)
     assert first["features"] == []

@@ -24,7 +24,7 @@ from cascade.board.store import read_doc
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.watchdog.events import read_events
 from cascade.workspace.integration_worktree import integration_worktree_path
-from tests.support import add_doc, commit_board, make_repo
+from tests.support import add_doc, approve_epic_plan_when_ready, commit_board, make_repo
 
 
 def test_missing_approval_is_unapproved(tmp_path: Path) -> None:
@@ -57,7 +57,7 @@ def test_epic_approval_snapshots_children_and_is_idempotent(tmp_path: Path) -> N
     add_doc(root, id="feat_001", title="One", tier="feature", parent="epic_001")
     add_doc(root, id="feat_002", title="Two", tier="feature", parent="epic_001")
 
-    first = approve_epic_plan("epic_001", root=root)
+    first = approve_epic_plan_when_ready("epic_001", root=root)
     assert first["features"] == ["feat_001", "feat_002"]
     assert epic_plan_approved("epic_001", root=root) is True
     assert feature_approved("feat_001", root=root) is True
@@ -77,7 +77,7 @@ def test_child_added_after_epic_approval_stays_unapproved(tmp_path: Path) -> Non
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(root, id="feat_001", title="One", tier="feature", parent="epic_001")
-    approve_epic_plan("epic_001", root=root)
+    approve_epic_plan_when_ready("epic_001", root=root)
 
     add_doc(root, id="feat_002", title="Later", tier="feature", parent="epic_001")
 
@@ -96,7 +96,7 @@ def test_epic_approval_commits_docs_in_their_owning_checkouts(tmp_path: Path) ->
     trunk_before = _head(root)
     epic_before = _head(epic_root)
 
-    approve_epic_plan("epic_001", root=root)
+    approve_epic_plan_when_ready("epic_001", root=root)
 
     assert _head(root) != trunk_before
     assert _head(epic_root) != epic_before
@@ -119,6 +119,9 @@ def test_epic_approval_marks_plan_only_after_all_children_succeed(
 
     monkeypatch.setattr("cascade.approvals._set_feature_approved", fail_child)
 
+    from tests.support import sign_off_both_planning_roles
+
+    sign_off_both_planning_roles("epic_001", root=root)
     with pytest.raises(RuntimeError, match="could not approve feat_001"):
         approve_epic_plan("epic_001", root=root)
 

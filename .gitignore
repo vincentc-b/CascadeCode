@@ -4,4 +4,6 @@ __pycache__/
 .venv/
 .cascade/
 docs/_queue/*.jsonl
+docs/_comments/*.jsonl
+docs/_war_room/chat/*.jsonl
 .env

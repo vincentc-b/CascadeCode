@@ -22,6 +22,7 @@ _API_KINDS = frozenset(
         "orphan",
         "task_retry_proposed",
         "flight_overlap",
+        "convergence_stall",
         "brief_imported",
         "epic_plan_approved",
         "feature_review_opened",

@@ -18,23 +18,40 @@ from cascade.workspace.types import WorkspaceRoot
 _SOURCE_CHECK_INTERVAL_SECONDS = 1.0
 
 
-def resume_legally_active_graphs(root: Path) -> None:
-    """Repair registered worktrees and queue interrupted turns (no new dispatch)."""
+def repair_registered_worktrees(root: Path) -> None:
+    """Retire terminal registrations and repair missing integration worktrees."""
 
     from cascade.workspace.integration_worktree import (
         repair_all_registered,
         retire_terminal_registered_worktrees,
     )
-    from cascade.workspace.kickoff import deferred_kickoffs, resume_inflight_graphs
 
     repo = Path(root).resolve()
     retire_terminal_registered_worktrees(repo)
     repair_all_registered(repo)
+
+
+def submit_recovered_turns(root: Path) -> None:
+    """Queue interrupted graph turns through per-graph background workers."""
+
+    from cascade.workspace.kickoff import deferred_kickoffs, resume_inflight_graphs
+    from cascade.workspace.supervisor_readiness import observe_startup_phase
+
+    repo = Path(root).resolve()
+    observe_startup_phase("recovery")
     # Model turns can take minutes.  Queue only those turns in the established
     # per-graph background workers so watchdog startup is not held behind one
-    # recovered graph; the structural worktree repair above remains ordered.
+    # recovered graph; structural worktree repair remains ordered before this call.
     with deferred_kickoffs():
         resume_inflight_graphs(repo)
+    observe_startup_phase("watchdog")
+
+
+def resume_legally_active_graphs(root: Path) -> None:
+    """Repair registered worktrees and queue interrupted turns (no new dispatch)."""
+
+    repair_registered_worktrees(root)
+    submit_recovered_turns(root)
 
 
 def _has_board_layout(path: Path) -> bool:
