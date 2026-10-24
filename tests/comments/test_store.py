@@ -20,6 +20,7 @@ from cascade.comments.store import (
 )
 from cascade.comments.types import Comment
 from cascade.watchdog import read_events
+from cascade.watchdog import activate_epic
 from tests.support import add_doc, make_repo
 
 
@@ -110,6 +111,28 @@ def test_legacy_sidecar_without_new_keys(board: Path) -> None:
     assert row.line_end is None
     assert row.doc_sha is None
     assert row.blocks == ()
+
+
+def test_pre_activation_comment_remains_readable_and_replyable(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    first = comment(
+        "epic_001", "general", "Allow reasoning overrides", author="human", root=root
+    )
+    assert first == "cmt_001"
+    assert activate_epic("epic_001", "human", root=root).ok
+
+    rows = read_comments("epic_001", root=root)
+    assert [(row.id, row.body) for row in rows] == [
+        ("cmt_001", "Allow reasoning overrides")
+    ]
+    reply = reply_comment(
+        "epic_001", first, "Included in the plan", author="epic_manager", root=root
+    )
+    assert reply == "cmt_002"
+    second = comment("epic_001", "general", "Another request", author="human", root=root)
+    assert second == "cmt_003"
+    assert len(read_comments("epic_001", root=root)) == 3
 
 
 def test_new_fields_round_trip(board: Path) -> None:
