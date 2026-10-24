@@ -109,6 +109,11 @@ No new external service, durable cache, or scheduler is a prerequisite.
   Chose Establish a shared, fault-isolated provider/model inventory before replacing brief inputs..
   Rationale: Provider availability and model validation need one authoritative boundary; otherwise the UI would duplicate provider-specific behavior and cannot isolate failures.
   Honors: Success criteria requiring only available providers and models obtained from provider APIs..
+
+- `dec_002` · 2026-10-24 · Epic Manager · **Refresh policy**
+  Chose Use bounded on-demand caching with expiry or explicit refresh; do not build periodic background synchronization in the initial epic..
+  Rationale: It avoids repeated API calls while keeping the first delivery small; durable scheduling adds operational cost without being required to validate briefs.
+  Honors: The brief's suggestion that asynchronous refresh is optional, plus the frugal smallest-shippable-slice constraint..
 ## Amendment log
 
 _(none)_
