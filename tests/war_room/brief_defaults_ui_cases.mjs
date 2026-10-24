@@ -1,0 +1,127 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const {
+  initialSelection,
+  applyProviderChange,
+  applyRoleModelChange,
+  canSubmitBrief,
+  buildSubmitPayload,
+  reasoningChoices,
+  briefStatusMessage,
+} = require(join(repoRoot, "cascade/war_room/static/brief_defaults_ui.js"));
+
+const inventory = {
+  availability: "partial",
+  loading: false,
+  default_provider: "codex",
+  providers: [
+    {
+      id: "codex",
+      display_name: "Codex",
+      models: [
+        { id: "gpt-manager", display_name: "Manager" },
+        { id: "gpt-architect", display_name: "Architect" },
+        { id: "gpt-feature-lead", display_name: "Feature lead" },
+        { id: "gpt-feature-architect", display_name: "Feature architect" },
+        {
+          id: "gpt-swe",
+          display_name: "SWE",
+          reasoning: {
+            default_level: "medium",
+            override_levels: ["low", "high"],
+            default_only: false,
+          },
+        },
+      ],
+    },
+    {
+      id: "cursor",
+      display_name: "Cursor",
+      models: [{ id: "composer-2.5", display_name: "Composer 2.5" }],
+    },
+  ],
+  refresh: { forced: false, failed: false, error: null },
+};
+
+const template = {
+  provider: "codex",
+  providers: ["codex", "cursor"],
+  models: {
+    epic_manager: "gpt-manager",
+    epic_architect: "gpt-architect",
+    feature_lead: "gpt-feature-lead",
+    feature_architect: "gpt-feature-architect",
+    swe: "gpt-swe",
+  },
+  provider_models: {
+    codex: {
+      epic_manager: "gpt-manager",
+      epic_architect: "gpt-architect",
+      feature_lead: "gpt-feature-lead",
+      feature_architect: "gpt-feature-architect",
+      swe: "gpt-swe",
+    },
+    cursor: {
+      epic_manager: "composer-2.5",
+      epic_architect: "composer-2.5",
+      feature_lead: "composer-2.5",
+      feature_architect: "composer-2.5",
+      swe: "composer-2.5",
+    },
+  },
+  suggestions: {},
+  tracking_ready: true,
+};
+
+let selection = initialSelection(inventory, template);
+assert.equal(selection.provider, "codex");
+assert.equal(selection.models.epic_manager, "gpt-manager");
+assert.equal(selection.models.swe, "gpt-swe");
+
+selection = applyProviderChange(inventory, template, selection, "cursor");
+assert.equal(selection.provider, "cursor");
+assert.equal(selection.models.epic_manager, "composer-2.5");
+assert.equal(selection.reasoning.swe, "");
+
+selection = applyProviderChange(inventory, template, selection, "codex");
+assert.equal(selection.models.swe, "gpt-swe");
+selection.reasoning.swe = "high";
+assert.equal(selection.reasoning.swe, "high");
+selection.reasoning.swe = "turbo";
+assert.equal(canSubmitBrief(inventory, selection, true), false);
+selection.reasoning.swe = "high";
+
+const sweModel = inventory.providers[0].models[4];
+const choices = reasoningChoices(sweModel);
+assert.ok(choices);
+assert.equal(choices[0].value, "");
+assert.deepEqual(
+  choices.map((item) => item.value),
+  ["", "low", "high"]
+);
+
+assert.equal(canSubmitBrief(inventory, selection, true), true);
+assert.equal(canSubmitBrief(inventory, selection, false), false);
+assert.equal(
+  canSubmitBrief({ loading: false, providers: [] }, selection, true),
+  false
+);
+
+const payload = buildSubmitPayload(
+  { title: "T", intent: "I", success_criteria: "S", constraints: "" },
+  selection
+);
+assert.equal(payload.provider, "codex");
+assert.equal(payload.models.swe, "gpt-swe");
+assert.equal(payload.reasoning.swe, "high");
+
+const emptyStatus = briefStatusMessage({ loading: false, providers: [] }, true);
+assert.match(emptyStatus.text, /No usable provider/);
+assert.equal(emptyStatus.error, true);
+
+console.log("brief_defaults_ui_cases: ok");
