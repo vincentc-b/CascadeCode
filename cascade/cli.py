@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from cascade.probe.cli import register_probe_parser, run_probe_command
 from cascade.workspace import WorkspaceError, init_workspace, up
 
 
@@ -31,6 +32,8 @@ def main(argv: list[str] | None = None) -> None:
     up_parser.add_argument("--host", default="127.0.0.1", help="Loopback bind address")
     up_parser.add_argument("--port", type=int, default=8765, help="HTTP port")
 
+    register_probe_parser(subparsers)
+
     args = parser.parse_args(argv)
 
     if args.command == "init":
@@ -51,6 +54,10 @@ def main(argv: list[str] | None = None) -> None:
         except (WorkspaceError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             raise SystemExit(1) from exc
+        return
+
+    if args.command == "probe":
+        run_probe_command(args)
         return
 
 

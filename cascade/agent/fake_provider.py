@@ -46,10 +46,27 @@ async def _drain_replay_architect(turn: RoleTurn) -> RoleResult:
     return RoleResult(text="drain-replay finished", status="finished")
 
 
+async def _forever_connected(turn: RoleTurn) -> RoleResult:
+    from cascade.workspace.in_flight_turn_watchdog import (
+        clear_provider_transport,
+        mark_provider_transport_active,
+    )
+
+    mark_provider_transport_active()
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    finally:
+        clear_provider_transport()
+    return RoleResult(text=f"{turn.role}:stalled", status="error")
+
+
 async def run_fake_role(turn: RoleTurn) -> RoleResult:
     scenario = (turn.model_id or "").strip() or _SCENARIO_FAST
     if scenario == _SCENARIO_FAST:
         return RoleResult(text=f"{turn.role}:ok", status="finished")
+    if scenario == "forever-connected":
+        return await _forever_connected(turn)
     if scenario == "drain-replay" and turn.role == "epic_architect":
         return await _drain_replay_architect(turn)
     return RoleResult(text=f"{turn.role}:{scenario}", status="finished")
