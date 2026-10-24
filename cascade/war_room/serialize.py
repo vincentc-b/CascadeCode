@@ -23,6 +23,13 @@ from cascade.comments.types import Comment
 from cascade.feature.briefing import BriefingPack
 from cascade.watchdog.types import DispatchResult, Event
 from cascade.workspace.integration_worktree import IntegrationWorktree
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryFailure,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel, ReasoningCapability
 from cascade.agent.providers import ProviderId, ProviderStatus
 from cascade.review import OpenReview
 from cascade.war_room.room_settings import RoomSettings
@@ -298,6 +305,87 @@ def providers_view_to_dict(
     return {
         "default": default,
         "providers": [provider_status_to_dict(item) for item in statuses],
+    }
+
+
+def reasoning_capability_to_dict(capability: ReasoningCapability | None) -> dict[str, Any] | None:
+    if capability is None:
+        return None
+    return {
+        "default_level": capability.default_level,
+        "override_levels": list(capability.override_levels),
+        "default_only": not capability.supports_overrides,
+    }
+
+
+def inventory_freshness_to_dict(freshness: InventoryFreshness) -> dict[str, Any]:
+    return {
+        "from_cache": freshness.from_cache,
+        "fetched_at": freshness.fetched_at,
+        "expires_at": freshness.expires_at,
+        "ttl_seconds": freshness.ttl_seconds,
+    }
+
+
+def provider_inventory_model_to_dict(model: DiscoveredModel) -> dict[str, Any]:
+    return {
+        "id": model.id,
+        "display_name": model.display_name,
+        "reasoning": reasoning_capability_to_dict(model.reasoning),
+    }
+
+
+def provider_inventory_item_to_dict(item: ProviderInventoryItem) -> dict[str, Any]:
+    return {
+        "id": item.provider_id,
+        "display_name": item.display_name,
+        "models": [provider_inventory_model_to_dict(model) for model in item.models],
+    }
+
+
+def provider_inventory_failure_to_dict(failure: ProviderInventoryFailure) -> dict[str, Any]:
+    return {
+        "id": failure.provider_id,
+        "reason": failure.reason,
+        "message": failure.message,
+    }
+
+
+def _brief_inventory_availability(result: ProviderInventoryResult) -> str:
+    if result.providers:
+        if result.failures:
+            return "partial"
+        return "available"
+    return "unavailable"
+
+
+def brief_provider_inventory_to_dict(
+    result: ProviderInventoryResult,
+    *,
+    default_provider: ProviderId,
+    force_refresh: bool = False,
+    refresh_failed: bool = False,
+    refresh_error: str | None = None,
+) -> dict[str, Any]:
+    """UI-facing brief provider inventory (feat_006 / task_006_001_003)."""
+
+    available_ids = {item.provider_id for item in result.providers}
+    selected_default = default_provider if default_provider in available_ids else None
+    if selected_default is None and result.providers:
+        selected_default = result.providers[0].provider_id
+
+    return {
+        "availability": _brief_inventory_availability(result),
+        "loading": False,
+        "default_provider": selected_default,
+        "providers": [provider_inventory_item_to_dict(item) for item in result.providers],
+        "failures": [provider_inventory_failure_to_dict(item) for item in result.failures],
+        "freshness": inventory_freshness_to_dict(result.freshness),
+        "refresh": {
+            "forced": force_refresh,
+            "failed": refresh_failed,
+            "error": refresh_error,
+        },
     }
 
 
