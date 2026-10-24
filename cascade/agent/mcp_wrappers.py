@@ -174,6 +174,10 @@ def dispatch_planning_tool(
     tool_args = _normalize_planning_tool_args(
         tier, name, dict(args), scope_id=scope_id, repo=repo
     )
+    if tier == "epic" and name == "reply_comment" and role in (
+        "epic_manager", "epic_architect"
+    ):
+        tool_args["author"] = role
     if tier == "epic" and name == "sign_off_plan":
         from cascade.epic.planning_signoffs import sign_off_epic_plan
 

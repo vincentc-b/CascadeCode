@@ -17,6 +17,7 @@ from cascade.agent import CursorAgentError
 from cascade.agent.planning_turn import run_epic_planning_turn
 from cascade.agent.types import RoleResult
 from cascade.comments.store import comment
+from cascade.comments.store import read_comments
 from cascade.epic.plan_readiness import compute_epic_plan_readiness
 from cascade.epic.planning_signoffs import canonical_plan_revision
 from cascade.epic.wiring import load_epic_tools
@@ -230,6 +231,13 @@ def test_epic_planning_tools_read_comment_and_sign_off_own_revision(
         role="epic_manager",
     )
     assert record["body"] == "Allow reasoning overrides"
+    dispatch_planning_tool(
+        "epic", "reply_comment",
+        {"comment_id": comment_id, "body": "Reviewed", "author": "epic_manager"},
+        scope_id="epic_001", repo_root=root, collector=collector,
+        role="epic_architect",
+    )
+    assert read_comments("epic_001", root=root)[-1].author == "epic_architect"
     revision = canonical_plan_revision("epic_001", root=root)
     assert revision is not None
 
