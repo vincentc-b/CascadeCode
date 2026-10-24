@@ -44,12 +44,21 @@ _REQUIRED_HEADINGS: dict[WorkTier, tuple[str, ...]] = {
     ),
 }
 _TIER_DIR = {"epic": "epics", "feature": "features", "task": "tasks"}
+_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+_EPIC_STACK_MODEL_KEYS = frozenset(
+    {
+        "epic_manager",
+        "epic_architect",
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    }
+)
 _LEGAL_MODEL_KEYS: dict[WorkTier, frozenset[str]] = {
-    "epic": frozenset({"epic_manager", "epic_architect"}),
+    "epic": _EPIC_STACK_MODEL_KEYS,
     "feature": frozenset({"feature_lead", "feature_architect"}),
     "task": frozenset({"swe"}),
 }
-_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 def validate_doc(doc: WorkDoc, board: BoardIndex) -> None:
@@ -58,6 +67,7 @@ def validate_doc(doc: WorkDoc, board: BoardIndex) -> None:
     meta = doc.meta
     _check_identity(meta)
     _check_model_frontmatter(meta)
+    _check_reasoning_frontmatter(meta)
     _check_provider_frontmatter(meta)
     _check_approval_frontmatter(meta)
     if meta.tier in ("feature", "task") and not meta.parent:
@@ -115,6 +125,21 @@ def _check_model_frontmatter(meta: WorkMeta) -> None:
             raise SchemaError(f"{meta.id} models key {key!r} is not legal for tier {meta.tier}")
         if not isinstance(value, str) or not value.strip():
             raise SchemaError(f"models.{key} must be a non-blank string")
+
+
+def _check_reasoning_frontmatter(meta: WorkMeta) -> None:
+    if meta.reasoning is None:
+        return
+    if not isinstance(meta.reasoning, dict):
+        raise SchemaError("reasoning must be a mapping")
+    legal = _LEGAL_MODEL_KEYS[meta.tier]
+    for key, value in meta.reasoning.items():
+        if not isinstance(key, str):
+            raise SchemaError("reasoning must be a mapping with string keys")
+        if key not in legal:
+            raise SchemaError(f"{meta.id} reasoning key {key!r} is not legal for tier {meta.tier}")
+        if not isinstance(value, str) or not value.strip():
+            raise SchemaError(f"reasoning.{key} must be a non-blank string")
 
 
 def _check_folder(meta: WorkMeta) -> None:

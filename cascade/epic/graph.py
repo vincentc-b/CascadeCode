@@ -55,6 +55,12 @@ def seed_epic_role_models(
             "epic_architect": architect.provider_source,
         },
     }
+    if manager.reasoning:
+        update.setdefault("reasoning_ids", {})["epic_manager"] = manager.reasoning
+        update.setdefault("reasoning_sources", {})["epic_manager"] = manager.reasoning_source or "document-role"
+    if architect.reasoning:
+        update.setdefault("reasoning_ids", {})["epic_architect"] = architect.reasoning
+        update.setdefault("reasoning_sources", {})["epic_architect"] = architect.reasoning_source or "document-role"
     snapshot = graph.get_state(config)
     if not snapshot.values:
         update["epic_id"] = epic_id

@@ -53,6 +53,19 @@ def mint_task(
 
     today = date.today()
     parent_rev = feature.sha
+    from cascade.board.store import read_doc as read_board_doc
+    from cascade.work_backend import task_backend_from_feature
+
+    epic_doc = None
+    if feature.meta.parent:
+        try:
+            epic_doc = read_board_doc(feature.meta.parent, root=trunk)
+        except NotFound:
+            epic_doc = None
+    provider, models, reasoning = task_backend_from_feature(
+        feature.meta,
+        epic=epic_doc.meta if epic_doc is not None else None,
+    )
     task_id: WorkId | None = None
     for _attempt in range(8):
         candidate = allocate_id("task", merged_board(trunk), parent_id=feature_id)
@@ -76,6 +89,9 @@ def mint_task(
                 created=today,
                 updated=today,
                 path=path,
+                provider=provider,  # type: ignore[arg-type]
+                models=models,
+                reasoning=reasoning,
             ),
             body=_task_body(
                 title=title,

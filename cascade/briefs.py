@@ -8,6 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from cascade.agent.discovery.inventory import (
     InventoryFreshness,
@@ -20,9 +21,18 @@ from cascade.board.errors import GitError
 from cascade.board.gitutil import _run
 from cascade.board.parse import render_doc
 from cascade.board.errors import SchemaError
-from cascade.board.store import list_board
+from cascade.board.store import list_board, read_doc
 from cascade.board.work_ids import format_hierarchical_epic_id, parse_work_id_parts
 from cascade.board.types import WorkDoc, WorkMeta
+from cascade.brief_stack import (
+    BRIEF_STACK_ROLES,
+    brief_selection_from_meta,
+    normalize_reasoning_overrides,
+    parse_brief_models,
+    parse_brief_reasoning,
+    role_models_for_provider,
+    validate_models_against_inventory,
+)
 from cascade.tracking import MergeRequest, create_merge_request, forge_ready, push_branch
 from cascade.watchdog.config import read_providers_config
 from cascade.workspace.trunk import resolve_product_trunk
@@ -35,8 +45,16 @@ class BriefRequest:
     success_criteria: str
     constraints: str
     provider: str
-    manager_model: str
-    architect_model: str
+    models: dict[str, str]
+    reasoning: dict[str, str]
+
+    @property
+    def manager_model(self) -> str:
+        return self.models["epic_manager"]
+
+    @property
+    def architect_model(self) -> str:
+        return self.models["epic_architect"]
 
 
 def fetch_brief_provider_inventory(
@@ -76,28 +94,66 @@ def fetch_brief_provider_inventory(
     )
 
 
-def brief_template(root: Path) -> dict[str, object]:
+def _resolve_template_provider(
+    config_default: str,
+    inventory: ProviderInventoryResult,
+) -> str:
+    available = [item.provider_id for item in inventory.providers]
+    if config_default in available:
+        return config_default
+    if available:
+        return available[0]
+    return config_default
+
+
+def brief_template(
+    root: Path,
+    *,
+    epic_id: str | None = None,
+    request_path: str | None = None,
+) -> dict[str, object]:
     config = read_providers_config(root)
-    provider = config.default
-    table = config.tables[provider]
-    provider_models = {}
-    for provider_id, provider_table in config.tables.items():
-        provider_models[provider_id] = {
-            "manager_model": provider_table.roles.get("epic_manager") or provider_table.epic or "",
-            "architect_model": provider_table.roles.get("epic_architect") or provider_table.epic or "",
-        }
-    return {
+    inventory = get_provider_inventory()
+    provider = _resolve_template_provider(config.default, inventory)
+    table = config.tables[provider]  # type: ignore[index]
+    role_models = role_models_for_provider(table)
+    available_providers = [item.provider_id for item in inventory.providers]
+    provider_models = {
+        provider_id: role_models_for_provider(config.tables[provider_id])
+        for provider_id in available_providers
+    }
+    payload: dict[str, object] = {
         "provider": provider,
-        "providers": ["cursor", "claude", "codex"],
-        "manager_model": table.roles.get("epic_manager") or table.epic or "",
-        "architect_model": table.roles.get("epic_architect") or table.epic or "",
+        "providers": available_providers,
+        "roles": list(BRIEF_STACK_ROLES),
+        "models": dict(role_models),
+        "reasoning": {},
         "provider_models": provider_models,
+        "manager_model": role_models["epic_manager"],
+        "architect_model": role_models["epic_architect"],
         "suggestions": {
             "epic_manager": "Use a strong reasoning model for scope, sequencing, and acceptance criteria.",
             "epic_architect": "Use a strong coding/reasoning model for boundaries and cross-feature constraints.",
+            "feature_lead": "Use a strong planning model for feature breakdown and acceptance criteria.",
+            "feature_architect": "Use a strong coding model for feature-level design constraints.",
+            "swe": "Use a fast implementation model for scoped task delivery.",
         },
+        "inventory_available": bool(inventory.providers),
         "tracking_ready": forge_ready(root),
     }
+    if epic_id:
+        try:
+            doc = read_doc(epic_id, root=root)
+        except (SchemaError, OSError, ValueError):
+            doc = None
+        if doc is not None and doc.meta.tier == "epic":
+            payload["saved"] = brief_selection_from_meta(doc.meta)
+    elif request_path:
+        query = parse_qs(urlparse(request_path).query)
+        epic_from_query = (query.get("epic_id") or [None])[0]
+        if isinstance(epic_from_query, str) and epic_from_query.strip():
+            return brief_template(root, epic_id=epic_from_query.strip())
+    return payload
 
 
 def _clean(value: str, field: str) -> str:
@@ -106,16 +162,27 @@ def _clean(value: str, field: str) -> str:
     return value.strip()
 
 
-def validate_brief(raw: dict[str, object]) -> BriefRequest:
+def validate_brief(raw: dict[str, object], *, root: Path) -> BriefRequest:
+    config = read_providers_config(root)
     provider = parse_provider_id(_clean(str(raw.get("provider") or ""), "provider"))
+    table = config.tables[provider]
+    models = parse_brief_models(raw, table=table)
+    reasoning_input = parse_brief_reasoning(raw)
+    inventory = get_provider_inventory()
+    provider_item = validate_models_against_inventory(provider, models, inventory)
+    reasoning = normalize_reasoning_overrides(
+        models,
+        reasoning_input,
+        provider_item=provider_item,
+    )
     return BriefRequest(
         title=_clean(str(raw.get("title") or ""), "title"),
         intent=_clean(str(raw.get("intent") or ""), "intent"),
         success_criteria=_clean(str(raw.get("success_criteria") or ""), "success criteria"),
         constraints=str(raw.get("constraints") or "").strip(),
         provider=provider,
-        manager_model=_clean(str(raw.get("manager_model") or ""), "manager model"),
-        architect_model=_clean(str(raw.get("architect_model") or ""), "architect model"),
+        models=models,
+        reasoning=reasoning,
     )
 
 
@@ -195,10 +262,8 @@ _(none)_
         updated=today,
         path=path,
         provider=request.provider,  # type: ignore[arg-type]
-        models={
-            "epic_manager": request.manager_model,
-            "epic_architect": request.architect_model,
-        },
+        models=dict(request.models),
+        reasoning=dict(request.reasoning) if request.reasoning else None,
     )
     return WorkDoc(meta=meta, body=body)
 
@@ -234,7 +299,7 @@ def create_brief(root: Path, raw: dict[str, object]) -> tuple[str, MergeRequest]
         raise GitError(
             "brief creation requires an authenticated gh or glab CLI matching the origin remote"
         )
-    request = validate_brief(raw)
+    request = validate_brief(raw, root=repo)
     epic_id = _next_epic_id(repo)
     branch = f"cascade/brief/{epic_id}"
     trunk = resolve_product_trunk(repo)
