@@ -2,7 +2,7 @@
 id: feat_006_001
 title: Discover available providers and models
 tier: feature
-status: active
+status: backlog
 parent: epic_006
 children:
 - task_006_001_001
