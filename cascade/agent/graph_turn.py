@@ -19,7 +19,7 @@ from cascade.agent.providers import ProviderId
 from cascade.agent.types import RoleId, RoleResult
 
 if TYPE_CHECKING:
-    from cascade.watchdog.model_resolve import ModelSource, ProviderSource
+    from cascade.watchdog.model_resolve import ModelSource, ProviderSource, ReasoningSource
 
 T = TypeVar("T")
 
@@ -100,6 +100,31 @@ def format_provider_assignment(provider_id: str, source: ProviderSource | None) 
     return f"Assigned provider: {provider_id}"
 
 
+def format_reasoning_assignment(level: str, source: ReasoningSource | None) -> str:
+    if source:
+        return f"Assigned reasoning: {level} (source: {source})"
+    return f"Assigned reasoning: {level}"
+
+
+def reasoning_for_role(
+    state: dict, role: RoleId
+) -> tuple[str | None, ReasoningSource | None]:
+    reasoning_ids = state.get("reasoning_ids") or {}
+    reasoning_sources = state.get("reasoning_sources") or {}
+    raw = reasoning_ids.get(role)
+    if raw is None:
+        return None, None
+    text = str(raw).strip()
+    if not text:
+        return None, None
+    source = reasoning_sources.get(role)
+    if source is not None:
+        source = str(source).strip()  # type: ignore[assignment]
+        if not source:
+            source = None
+    return text, source  # type: ignore[return-value]
+
+
 def format_role_skill_paths(playbooks: list[dict]) -> str:
     paths = [str(entry.get("path", "")) for entry in playbooks]
     return "Role skill paths: " + ", ".join(paths)
@@ -123,6 +148,8 @@ def format_turn_prompt(
     provider_source: ProviderSource | None = None,
     model_id: str | None = None,
     model_source: ModelSource | None = None,
+    reasoning_level: str | None = None,
+    reasoning_source: ReasoningSource | None = None,
     role_skills: list[dict] | None = None,
 ) -> str:
     """Serialize graph messages into a single role prompt."""
@@ -143,6 +170,8 @@ def format_turn_prompt(
         header_parts.append(format_provider_assignment(provider_id, provider_source))
     if model_id:
         header_parts.append(format_model_assignment(model_id, model_source))
+    if reasoning_level:
+        header_parts.append(format_reasoning_assignment(reasoning_level, reasoning_source))
     if role_skills:
         header_parts.append(format_role_skills_block(role_skills))
     if header_parts:
@@ -225,6 +254,8 @@ async def run_planning_role_turn(
     if provider_id is None:
         return missing_provider_message(role)
 
+    reasoning_level, reasoning_source = reasoning_for_role(state, role)
+
     from cascade.watchdog.role_skills import load_role_skills_context
     from cascade.watchdog.skills import SkillPathError
 
@@ -240,6 +271,8 @@ async def run_planning_role_turn(
         provider_source=provider_source,
         model_id=model_id,
         model_source=model_source,
+        reasoning_level=reasoning_level,
+        reasoning_source=reasoning_source,
         role_skills=role_skills,
     )
     prompt = _append_planning_tool_directive(
@@ -255,6 +288,7 @@ async def run_planning_role_turn(
             prompt,
             provider=provider_id,
             root=repo,
+            reasoning_level=reasoning_level,
             **turn_kwargs,
         )
     except TurnCancelledForDrain:

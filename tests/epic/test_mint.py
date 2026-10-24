@@ -58,6 +58,32 @@ def epic_board(tmp_path: Path) -> dict[str, object]:
     return {"root": root, "epic": epic, "existing": existing, "task": task}
 
 
+def test_mint_copies_epic_reasoning(epic_board: dict[str, object]) -> None:
+    from dataclasses import replace
+
+    from cascade.board.types import WorkDoc
+
+    root = epic_board["root"]
+    epic = epic_board["epic"]
+    write_doc(
+        WorkDoc(
+            meta=replace(
+                epic.meta,
+                reasoning={"epic_manager": "high", "epic_architect": "low"},
+            ),
+            body=epic.body,
+            sha=epic.sha,
+        ),
+        root=root,
+    )
+    feature_id = mint_feature("Reasoning child", epic_id="epic_001", root=root)
+    child = read_doc(feature_id, root=root)
+    assert child.meta.reasoning == {
+        "feature_lead": "high",
+        "feature_architect": "low",
+    }
+
+
 def test_mint_copies_epic_provider_and_models(epic_board: dict[str, object]) -> None:
     from dataclasses import replace
 

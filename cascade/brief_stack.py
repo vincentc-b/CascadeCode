@@ -170,6 +170,20 @@ def _validate_reasoning_override(
         raise ValueError(f"{role} reasoning override is not supported for model {model_id}")
 
 
+def legal_model_keys_for_tier(tier: str) -> frozenset[str]:
+    if tier == "epic":
+        return frozenset(BRIEF_STACK_ROLES)
+    if tier == "feature":
+        return frozenset({"feature_lead", "feature_architect"})
+    if tier == "task":
+        return frozenset({"swe"})
+    raise ValueError(f"unknown tier: {tier!r}")
+
+
+def legal_reasoning_keys_for_tier(tier: str) -> frozenset[str]:
+    return legal_model_keys_for_tier(tier)
+
+
 def _require_non_blank(value: str, label: str) -> str:
     stripped = value.strip()
     if not stripped:

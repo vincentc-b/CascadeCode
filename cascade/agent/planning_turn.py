@@ -34,6 +34,7 @@ async def run_epic_planning_turn(
     provider: ProviderId,
     epic_id: str,
     root: Path,
+    reasoning_level: str | None = None,
 ) -> RoleResult:
     if role not in _EPIC_ROLES:
         raise ValueError(f"not an epic planning role: {role}")
@@ -46,6 +47,7 @@ async def run_epic_planning_turn(
         provider=provider,
         model_id=model_id,
         prompt=prompt,
+        reasoning_level=reasoning_level,
         sandbox=PlanningSandbox(
             scratch_dir=scratch,
             repo_root=repo,
@@ -63,6 +65,7 @@ async def run_feature_planning_turn(
     provider: ProviderId,
     feature_id: str,
     root: Path,
+    reasoning_level: str | None = None,
 ) -> RoleResult:
     if role not in _FEATURE_ROLES:
         raise ValueError(f"not a feature planning role: {role}")
@@ -75,6 +78,7 @@ async def run_feature_planning_turn(
         provider=provider,
         model_id=model_id,
         prompt=prompt,
+        reasoning_level=reasoning_level,
         sandbox=PlanningSandbox(
             scratch_dir=scratch,
             repo_root=repo,
@@ -116,6 +120,7 @@ async def _run_sandbox_turn(
     model_id: str,
     prompt: str,
     sandbox: PlanningSandbox,
+    reasoning_level: str | None = None,
 ) -> RoleResult:
     scratch = sandbox.scratch_dir
     effects_path = scratch / ".cascade_effects.jsonl"
@@ -129,6 +134,7 @@ async def _run_sandbox_turn(
             cwd=scratch,
             tools=[],
             custom_tools=build_planning_custom_tools(sandbox, collector),
+            reasoning_level=reasoning_level,
         )
     else:
         turn = RoleTurn(
@@ -138,6 +144,7 @@ async def _run_sandbox_turn(
             prompt=prompt,
             cwd=scratch,
             tools=build_planning_mcp_servers(sandbox),
+            reasoning_level=reasoning_level,
         )
     try:
         result = await run_role(turn)

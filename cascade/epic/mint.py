@@ -45,7 +45,9 @@ def mint_feature(
         return existing_id
 
     epic_doc = epic_read_doc(epic_id, epic_id=epic_id, root=repo)
-    provider, models, model = _feature_backend_from_epic(epic_doc)
+    from cascade.work_backend import feature_backend_from_epic
+
+    provider, models, model, reasoning = feature_backend_from_epic(epic_doc.meta)
     today = date.today()
 
     feature_id: str | None = None
@@ -75,6 +77,7 @@ def mint_feature(
                 model=model,
                 models=models,
                 provider=provider,
+                reasoning=reasoning,
             ),
             body=_feature_body(title=title, epic_id=epic_id, body_stub=body_stub),
             sha=None,
@@ -149,32 +152,6 @@ def _require_epic(epic_id: str, root: Path) -> WorkDoc:
     if not tool_guard(epic.meta.path, "read", epic_id=epic_id, root=root):
         raise EpicToolDenied(f"read denied for epic {epic_id}")
     return epic
-
-
-def _feature_backend_from_epic(epic: WorkDoc) -> tuple[str | None, dict[str, str] | None, str | None]:
-    """Copy parent epic provider/model defaults onto a new feature (explicit stamp, not resolve-time inherit)."""
-
-    provider = epic.meta.provider
-    models: dict[str, str] | None = None
-    model: str | None = None
-
-    if epic.meta.models:
-        mapped: dict[str, str] = {}
-        for epic_role, feature_role in (
-            ("epic_manager", "feature_lead"),
-            ("epic_architect", "feature_architect"),
-        ):
-            if epic_role in epic.meta.models:
-                mapped[feature_role] = epic.meta.models[epic_role]
-        for key, value in epic.meta.models.items():
-            if key in ("feature_lead", "feature_architect"):
-                mapped[key] = value
-        if mapped:
-            models = mapped
-    elif epic.meta.model:
-        model = epic.meta.model
-
-    return provider, models, model
 
 
 def _feature_body(*, title: str, epic_id: str, body_stub: str) -> str:
