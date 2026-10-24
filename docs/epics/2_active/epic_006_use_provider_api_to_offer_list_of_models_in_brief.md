@@ -19,6 +19,7 @@ provider: codex
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
+plan_approved_at: '2026-10-24T18:13:38.563291+00:00'
 ---
 # Use provider API to offer list of models in brief
 
