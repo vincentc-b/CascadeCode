@@ -2,7 +2,7 @@
 id: feat_006_002
 title: Select provider and full-stack model defaults in brief
 tier: feature
-status: active
+status: completed
 parent: epic_006
 children:
 - task_006_002_001
