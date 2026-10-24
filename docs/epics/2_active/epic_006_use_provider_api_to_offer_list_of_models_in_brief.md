@@ -114,6 +114,11 @@ No new external service, durable cache, or scheduler is a prerequisite.
   Chose Use bounded on-demand caching with expiry or explicit refresh; do not build periodic background synchronization in the initial epic..
   Rationale: It avoids repeated API calls while keeping the first delivery small; durable scheduling adds operational cost without being required to validate briefs.
   Honors: The brief's suggestion that asynchronous refresh is optional, plus the frugal smallest-shippable-slice constraint..
+
+- `dec_003` · 2026-10-24 · Epic Manager · **Configuration contract**
+  Chose Select one provider and persist model defaults for every existing epic, feature, and task role; reject arbitrary model text for new or edited selections..
+  Rationale: A shared provider matches the current brief contract while per-role models satisfy full-stack configuration and prevent invalid downstream values.
+  Honors: Success criteria requiring model choice for the full agent stack..
 ## Amendment log
 
 _(none)_
