@@ -119,6 +119,11 @@ No new external service, durable cache, or scheduler is a prerequisite.
   Chose Select one provider and persist model defaults for every existing epic, feature, and task role; reject arbitrary model text for new or edited selections..
   Rationale: A shared provider matches the current brief contract while per-role models satisfy full-stack configuration and prevent invalid downstream values.
   Honors: Success criteria requiring model choice for the full agent stack..
+
+- `dec_004` · 2026-10-24 · Epic Manager · **Compatibility**
+  Chose Keep historical briefs readable without migration, while validating new or edited selections against current discovery..
+  Rationale: Provider catalogs change; forcing migration is costly and could make prior artifacts unreadable, while validation still protects newly created downstream work.
+  Honors: Core reliability without expanding scope into historical data migration..
 ## Amendment log
 
 _(none)_
