@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 import pytest
 
@@ -15,8 +16,12 @@ from cascade.agent.planning_sandbox import (
 from cascade.agent import CursorAgentError
 from cascade.agent.planning_turn import run_epic_planning_turn
 from cascade.agent.types import RoleResult
+from cascade.comments.store import comment
+from cascade.comments.store import read_comments
+from cascade.epic.plan_readiness import compute_epic_plan_readiness
+from cascade.epic.planning_signoffs import canonical_plan_revision
 from cascade.epic.wiring import load_epic_tools
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, commit_board, make_repo
 
 
 @pytest.fixture
@@ -176,6 +181,8 @@ def test_run_role_receives_cursor_custom_tools(
     assert turn.custom_tools is not None
     assert "write_doc" in turn.custom_tools
     assert "read_doc" in turn.custom_tools
+    assert "read_comment" in turn.custom_tools
+    assert "sign_off_plan" in turn.custom_tools
 
 
 def test_run_role_receives_mcp_mapping_for_claude(
@@ -207,6 +214,73 @@ def test_run_role_receives_mcp_mapping_for_claude(
     assert isinstance(tools, dict)
     assert "cascade" in tools
     assert tools["cascade"]["command"]
+
+
+def test_epic_planning_tools_read_comment_and_sign_off_own_revision(
+    epic_board: dict,
+) -> None:
+    root = epic_board["root"]
+    commit_board(root, "planning draft")
+    comment_id = comment(
+        "epic_001", "general", "Allow reasoning overrides", author="human", root=root
+    )
+    collector = ToolEffectCollector()
+    record = dispatch_planning_tool(
+        "epic", "read_comment", {"comment_id": comment_id},
+        scope_id="epic_001", repo_root=root, collector=collector,
+        role="epic_manager",
+    )
+    assert record["body"] == "Allow reasoning overrides"
+    dispatch_planning_tool(
+        "epic", "reply_comment",
+        {"comment_id": comment_id, "body": "Reviewed", "author": "epic_manager"},
+        scope_id="epic_001", repo_root=root, collector=collector,
+        role="epic_architect",
+    )
+    assert read_comments("epic_001", root=root)[-1].author == "epic_architect"
+    revision = canonical_plan_revision("epic_001", root=root)
+    assert revision is not None
+
+    with pytest.raises(PermissionError, match="role is required"):
+        dispatch_planning_tool(
+            "epic", "sign_off_plan", {"plan_revision": revision, "role": "epic_architect"},
+            scope_id="epic_001", repo_root=root, collector=collector,
+        )
+
+    manager = dispatch_planning_tool(
+        "epic", "sign_off_plan", {"plan_revision": revision, "role": "epic_architect"},
+        scope_id="epic_001", repo_root=root, collector=collector,
+        role="epic_manager",
+    )
+    assert manager["role"] == "epic_manager"
+    assert compute_epic_plan_readiness("epic_001", root=root).can_approve_plan is False
+    architect = dispatch_planning_tool(
+        "epic", "sign_off_plan", {"plan_revision": revision},
+        scope_id="epic_001", repo_root=root, collector=collector,
+        role="epic_architect",
+    )
+    assert architect["role"] == "epic_architect"
+    assert compute_epic_plan_readiness("epic_001", root=root).can_approve_plan is True
+
+
+def test_mcp_config_binds_epic_role(monkeypatch: pytest.MonkeyPatch, epic_board: dict) -> None:
+    from cascade.agent.types import RoleTurn
+
+    async def fake_run_role(turn: RoleTurn) -> RoleResult:
+        config_path = turn.cwd / ".cascade_mcp.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        assert config["role"] == "epic_architect"
+        assert "sign_off_plan" in config["tool_names"]
+        assert "read_comment" in config["tool_names"]
+        return RoleResult(text="", status="finished")
+
+    monkeypatch.setattr("cascade.agent.planning_turn.run_role", fake_run_role)
+    asyncio.run(
+        run_epic_planning_turn(
+            "epic_architect", "composer-2.5", "plan", provider="claude",
+            epic_id="epic_001", root=epic_board["root"],
+        )
+    )
 
 
 def test_blank_model_id_before_scratch(monkeypatch: pytest.MonkeyPatch, epic_board: dict) -> None:

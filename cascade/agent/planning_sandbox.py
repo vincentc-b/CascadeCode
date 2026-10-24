@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from cascade.agent.types import RoleId
 from cascade.board.store import list_board, read_doc
 from cascade.epic.guard import tool_guard as epic_tool_guard
 from cascade.feature.guard import tool_guard as feature_tool_guard
@@ -24,6 +25,7 @@ class PlanningSandbox:
     repo_root: Path
     tier: PlanningTier
     scope_id: str | None
+    role: RoleId | None = None
 
 
 def collect_epic_readable_paths(epic_id: str, *, root: Path) -> list[Path]:

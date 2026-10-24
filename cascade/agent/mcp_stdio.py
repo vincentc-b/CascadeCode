@@ -25,6 +25,7 @@ def main() -> None:
     scope_id = config.get("scope_id")
     repo_root = Path(config["repo_root"])
     tool_names: list[str] = list(config.get("tool_names") or [])
+    role: str | None = config.get("role")
     collector = ToolEffectCollector()
 
     while True:
@@ -32,7 +33,7 @@ def main() -> None:
         if incoming is None:
             break
         message, framing = incoming
-        response = _handle_message(message, tier, scope_id, repo_root, tool_names, collector)
+        response = _handle_message(message, tier, scope_id, repo_root, tool_names, collector, role=role)
         if response is not None:
             write_message(response, framing=framing)
 
@@ -44,6 +45,8 @@ def _handle_message(
     repo_root: Path,
     tool_names: list[str],
     collector: ToolEffectCollector,
+    *,
+    role: str | None = None,
 ) -> dict[str, Any] | None:
     msg_id = message.get("id")
     method = message.get("method")
@@ -77,6 +80,7 @@ def _handle_message(
                 scope_id=scope_id,
                 repo_root=repo_root,
                 collector=collector,
+                role=role,
             )
             payload = json.dumps(result, default=str)
         except Exception as exc:  # noqa: BLE001 — surface tool failures to the agent

@@ -39,6 +39,7 @@ class RoleTurn:
     tools: list[Any] | dict[str, Any] = field(default_factory=list)
     # Cursor local agents: SDK custom_tools (stdio MCP is unreliable in the bridge).
     custom_tools: Mapping[str, Any] | None = None
+    reasoning_level: str | None = None
 
 
 @dataclass(frozen=True)

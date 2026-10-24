@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from cursor_sdk import CustomTool, CustomToolContext
 
-from cascade.agent.planning_sandbox import PlanningSandbox, PlanningTier
+from cascade.agent.planning_sandbox import PlanningSandbox
 from cascade.agent.types import ToolEffect
 from cascade.board.serde import work_doc_from_dict
 from cascade.watchdog.dispatch import dispatch_feature, dispatch_task
@@ -35,7 +35,10 @@ def _planning_tool_names(sandbox: PlanningSandbox) -> list[str]:
         from cascade.epic.wiring import load_epic_tools
 
         load_epic_tools()
-        return sorted(_epic_tool_names())
+        names = _epic_tool_names()
+        if sandbox.role in ("epic_manager", "epic_architect"):
+            names.add("sign_off_plan")
+        return sorted(names)
     if sandbox.tier == "feature":
         from cascade.feature.wiring import load_feature_tools
 
@@ -71,6 +74,7 @@ def build_planning_custom_tools(
                 scope_id=sandbox.scope_id,
                 repo_root=sandbox.repo_root,
                 collector=collector,
+                role=sandbox.role,
             )
 
         tools[name] = CustomTool(
@@ -98,6 +102,7 @@ def build_planning_mcp_servers(
                 "scope_id": sandbox.scope_id,
                 "repo_root": str(sandbox.repo_root),
                 "tool_names": tool_names,
+                "role": sandbox.role,
             }
         ),
         encoding="utf-8",
@@ -159,6 +164,7 @@ def dispatch_planning_tool(
     scope_id: str | None,
     repo_root: Path,
     collector: ToolEffectCollector,
+    role: str | None = None,
 ) -> object:
     """Invoke a guarded Cascade tool (same entrypoints graphs use)."""
 
@@ -168,7 +174,22 @@ def dispatch_planning_tool(
     tool_args = _normalize_planning_tool_args(
         tier, name, dict(args), scope_id=scope_id, repo=repo
     )
-    if tier == "epic":
+    if tier == "epic" and name == "reply_comment" and role in (
+        "epic_manager", "epic_architect"
+    ):
+        tool_args["author"] = role
+    if tier == "epic" and name == "sign_off_plan":
+        from cascade.epic.planning_signoffs import sign_off_epic_plan
+
+        if role not in ("epic_manager", "epic_architect") or not scope_id:
+            raise PermissionError("epic planning role is required to sign off")
+        revision = tool_args.get("plan_revision")
+        if not isinstance(revision, str) or not revision:
+            raise ValueError("sign_off_plan requires plan_revision")
+        result = sign_off_epic_plan(
+            scope_id, role, revision, root=repo, actor=role
+        )
+    elif tier == "epic":
         if not scope_id:
             raise ValueError("epic tier requires scope_id")
         from cascade.epic.wiring import load_epic_tools
@@ -262,6 +283,16 @@ def _feature_tool_names() -> set[str]:
 _BOSS_TOOL_NAMES = frozenset({"dispatch_feature", "dispatch_task", "get_boss_view"})
 
 _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "sign_off_plan": {
+        "type": "object",
+        "properties": {"plan_revision": {"type": "string"}},
+        "required": ["plan_revision"],
+    },
+    "read_comment": {
+        "type": "object",
+        "properties": {"comment_id": {"type": "string"}},
+        "required": ["comment_id"],
+    },
     "mint_feature": {
         "type": "object",
         "properties": {

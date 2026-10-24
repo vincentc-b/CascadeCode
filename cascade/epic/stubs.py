@@ -43,6 +43,16 @@ def reply_comment(
     )
 
 
+def read_comment(comment_id: str, *, epic_id: str, root: Path) -> dict[str, object]:
+    """Read the full text of a comment on this epic's plan."""
+
+    _require_active_epic(epic_id, root)
+    for row in comment_store.read_comments(epic_id, root=root):
+        if row.id == comment_id:
+            return row.to_dict()
+    raise CommentNotFound(comment_id)
+
+
 def _require_active_epic(epic_id: str, root: Path) -> None:
     repo = Path(root).resolve()
     try:
@@ -56,3 +66,4 @@ def _require_active_epic(epic_id: str, root: Path) -> None:
 
 
 register_epic_tool("reply_comment", reply_comment)
+register_epic_tool("read_comment", read_comment)

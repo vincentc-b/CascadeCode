@@ -16,6 +16,7 @@
   const BoardFocusApi = globalThis.BoardFocus;
   const BranchSyncUiApi = globalThis.BranchSyncUi;
   const EpicPlanReadinessUi = globalThis.EpicPlanReadinessUi;
+  const BriefDefaultsUi = globalThis.BriefDefaultsUi;
   let boardFocus = BoardFocusApi ? BoardFocusApi.defaultBoardFocus() : null;
   let lastBoardView = null;
   let branchSyncRowHelpers = null;
@@ -73,10 +74,8 @@
     briefStatus: document.getElementById("brief-status"),
     briefResult: document.getElementById("brief-result"),
     briefProvider: document.getElementById("brief-provider"),
-    briefManagerModel: document.getElementById("brief-manager-model"),
-    briefArchitectModel: document.getElementById("brief-architect-model"),
-    briefManagerSuggestion: document.getElementById("brief-manager-suggestion"),
-    briefArchitectSuggestion: document.getElementById("brief-architect-suggestion"),
+    briefRoleSelectors: document.getElementById("brief-role-selectors"),
+    btnBriefInventoryRetry: document.getElementById("btn-brief-inventory-retry"),
     btnCloseBrief: document.getElementById("btn-close-brief"),
     btnCancelBrief: document.getElementById("btn-cancel-brief"),
     btnSubmitBrief: document.getElementById("btn-submit-brief"),
@@ -140,7 +139,7 @@
     el.roomStackedPrEnabled.disabled = true;
     setRoomSettingsStatus("Saving…");
     try {
-      const data = await apiPost("/api/room-settings/" + encodeURIComponent(graphId), {
+      const { body: data } = await apiPost("/api/room-settings/" + encodeURIComponent(graphId), {
         stacked_pr_enabled: enabled,
       });
       if (graphId !== focusGraphId) return;
@@ -312,43 +311,157 @@
     return { status: resp.status, body };
   }
 
+  let briefInventory = null;
+  let briefTemplate = null;
+  let briefSelection = null;
+
+  function setBriefInventoryRetryVisible(visible) {
+    if (el.btnBriefInventoryRetry) el.btnBriefInventoryRetry.hidden = !visible;
+  }
+
+  function updateBriefDialogState() {
+    if (!BriefDefaultsUi || !briefInventory) {
+      if (el.btnSubmitBrief) el.btnSubmitBrief.disabled = true;
+      return;
+    }
+    const trackingReady = briefTemplate ? briefTemplate.tracking_ready : true;
+    const status = BriefDefaultsUi.briefStatusMessage(briefInventory, trackingReady);
+    el.briefStatus.textContent = status.text;
+    el.briefStatus.classList.toggle("error", !!status.error);
+    setBriefInventoryRetryVisible(!!status.recoverable);
+    if (!briefSelection) {
+      el.btnSubmitBrief.disabled = true;
+      return;
+    }
+    el.btnSubmitBrief.disabled = !BriefDefaultsUi.canSubmitBrief(
+      briefInventory,
+      briefSelection,
+      trackingReady
+    );
+  }
+
+  function renderBriefSelectors() {
+    if (!BriefDefaultsUi || !briefInventory || !briefSelection) return;
+    BriefDefaultsUi.renderRoleSelectors(
+      el.briefRoleSelectors,
+      briefInventory,
+      briefTemplate,
+      briefSelection,
+      {
+        onChange: function (role, kind, value) {
+          if (kind === "model") {
+            briefSelection = BriefDefaultsUi.applyRoleModelChange(
+              briefInventory,
+              briefSelection,
+              role,
+              value
+            );
+          } else {
+            briefSelection.reasoning[role] = value;
+          }
+          renderBriefSelectors();
+          updateBriefDialogState();
+        },
+      }
+    );
+  }
+
+  function populateBriefProviders() {
+    if (!el.briefProvider || !briefInventory) return;
+    el.briefProvider.replaceChildren();
+    (briefInventory.providers || []).forEach(function (provider) {
+      const option = document.createElement("option");
+      option.value = provider.id;
+      option.textContent = provider.display_name || provider.id;
+      option.selected = provider.id === briefSelection.provider;
+      el.briefProvider.appendChild(option);
+    });
+    el.briefProvider.disabled = !(briefInventory.providers || []).length;
+  }
+
+  function applyBriefLoadedState() {
+    if (!BriefDefaultsUi || !briefInventory || !briefTemplate) return;
+    briefSelection = BriefDefaultsUi.initialSelection(briefInventory, briefTemplate);
+    populateBriefProviders();
+    el.briefProvider.onchange = function () {
+      briefSelection = BriefDefaultsUi.applyProviderChange(
+        briefInventory,
+        briefTemplate,
+        briefSelection,
+        el.briefProvider.value
+      );
+      renderBriefSelectors();
+      updateBriefDialogState();
+    };
+    renderBriefSelectors();
+    updateBriefDialogState();
+  }
+
+  async function loadBriefDialogData(forceRefresh) {
+    if (!BriefDefaultsUi) {
+      throw new Error("Brief defaults UI is unavailable");
+    }
+    briefInventory = { loading: true, providers: [] };
+    briefTemplate = null;
+    briefSelection = null;
+    populateBriefProviders();
+    if (el.briefRoleSelectors) el.briefRoleSelectors.replaceChildren();
+    updateBriefDialogState();
+
+    const inventoryUrl = forceRefresh ? "/api/brief/inventory/refresh" : "/api/brief/inventory";
+    const inventoryPromise = forceRefresh
+      ? apiPost(inventoryUrl, {})
+      : apiGet(inventoryUrl);
+    const templatePromise = apiGet("/api/brief/template");
+    briefInventory = await inventoryPromise;
+    if (forceRefresh && briefInventory && briefInventory.body) {
+      briefInventory = briefInventory.body;
+    }
+    briefTemplate = await templatePromise;
+    applyBriefLoadedState();
+  }
+
   async function openBriefDialog() {
-    el.briefStatus.textContent = "Loading model suggestions…";
+    el.briefStatus.classList.remove("error");
     el.briefResult.hidden = true;
+    setBriefInventoryRetryVisible(false);
     el.briefDialog.showModal();
+    el.briefStatus.textContent = "Loading available providers and models…";
     try {
-      const template = await apiGet("/api/brief/template");
-      el.briefProvider.replaceChildren();
-      (template.providers || []).forEach(function (provider) {
-        const option = document.createElement("option");
-        option.value = provider;
-        option.textContent = provider;
-        option.selected = provider === template.provider;
-        el.briefProvider.appendChild(option);
-      });
-      el.briefManagerModel.value = template.manager_model || "";
-      el.briefArchitectModel.value = template.architect_model || "";
-      el.briefProvider.onchange = function () {
-        const defaults = (template.provider_models || {})[el.briefProvider.value] || {};
-        el.briefManagerModel.value = defaults.manager_model || "";
-        el.briefArchitectModel.value = defaults.architect_model || "";
-      };
-      el.briefManagerSuggestion.textContent = (template.suggestions || {}).epic_manager || "";
-      el.briefArchitectSuggestion.textContent = (template.suggestions || {}).epic_architect || "";
-      el.btnSubmitBrief.disabled = template.tracking_ready === false;
-      el.briefStatus.textContent = template.tracking_ready === false
-        ? "Install and authenticate gh or glab for this origin before creating a brief."
-        : "";
+      await loadBriefDialogData(false);
     } catch (err) {
+      briefInventory = { loading: false, providers: [], refresh: { failed: true } };
+      briefTemplate = briefTemplate || { tracking_ready: true };
+      briefSelection = { provider: "", models: {}, reasoning: {} };
       el.briefStatus.textContent = err.message || "Could not load brief defaults";
       el.briefStatus.classList.add("error");
+      setBriefInventoryRetryVisible(true);
+      el.btnSubmitBrief.disabled = true;
+    }
+  }
+
+  async function retryBriefInventory() {
+    el.briefStatus.classList.remove("error");
+    el.briefStatus.textContent = "Refreshing model inventory…";
+    setBriefInventoryRetryVisible(false);
+    el.btnSubmitBrief.disabled = true;
+    try {
+      await loadBriefDialogData(true);
+    } catch (err) {
+      el.briefStatus.textContent = err.message || "Could not refresh model inventory";
+      el.briefStatus.classList.add("error");
+      setBriefInventoryRetryVisible(true);
+      el.btnSubmitBrief.disabled = true;
     }
   }
 
   async function submitBrief(ev) {
     ev.preventDefault();
+    if (!BriefDefaultsUi || !briefInventory || !briefSelection) return;
     const form = new FormData(el.briefForm);
-    const payload = Object.fromEntries(form.entries());
+    const fields = Object.fromEntries(form.entries());
+    delete fields.provider;
+    const payload = BriefDefaultsUi.buildSubmitPayload(fields, briefSelection);
     el.btnSubmitBrief.disabled = true;
     el.briefStatus.classList.remove("error");
     el.briefStatus.textContent = "Creating branch and merge request…";
@@ -367,7 +480,7 @@
       el.briefStatus.textContent = (err.body && err.body.error) || err.message || "Brief creation failed";
       el.briefStatus.classList.add("error");
     } finally {
-      el.btnSubmitBrief.disabled = false;
+      updateBriefDialogState();
     }
   }
 
@@ -1985,6 +2098,15 @@
   }
 
   if (el.btnCreateBrief) el.btnCreateBrief.addEventListener("click", openBriefDialog);
+  if (el.btnBriefInventoryRetry) {
+    el.btnBriefInventoryRetry.addEventListener("click", function () {
+      retryBriefInventory().catch(function (err) {
+        el.briefStatus.textContent = err.message || "Could not refresh model inventory";
+        el.briefStatus.classList.add("error");
+        setBriefInventoryRetryVisible(true);
+      });
+    });
+  }
   if (el.btnCloseBrief) el.btnCloseBrief.addEventListener("click", function () { el.briefDialog.close(); });
   if (el.btnCancelBrief) el.btnCancelBrief.addEventListener("click", function () { el.briefDialog.close(); });
   if (el.briefForm) el.briefForm.addEventListener("submit", submitBrief);

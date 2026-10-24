@@ -116,6 +116,20 @@ def test_toggle_persists_per_room(war_room_board) -> None:
     )
 
 
+def test_feature_room_shows_inherited_epic_setting_until_overridden(war_room_board) -> None:
+    base, root = war_room_board
+    _post(f"{base}/api/room-settings/epic_001", {"stacked_pr_enabled": True})
+
+    status, body = _get(f"{base}/api/room-settings/feat_001")
+    assert status == HTTPStatus.OK
+    assert body == {"graph_id": "feat_001", "stacked_pr_enabled": True}
+    assert read_room_settings("feat_001", root=root).stacked_pr_enabled is True
+
+    _post(f"{base}/api/room-settings/feat_001", {"stacked_pr_enabled": False})
+    _, body = _get(f"{base}/api/room-settings/feat_001")
+    assert body["stacked_pr_enabled"] is False
+
+
 def test_legacy_room_record_without_field_defaults_off(war_room_board) -> None:
     _base, root = war_room_board
     path = root / ".cascade" / "room_settings.json"

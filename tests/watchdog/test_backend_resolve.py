@@ -41,6 +41,24 @@ def _task_meta(root: Path, *, provider: str | None = None) -> WorkMeta:
     )
 
 
+def test_document_reasoning_override(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _write_providers(
+        root,
+        """
+[providers]
+default = "cursor"
+
+[providers.cursor]
+task = "cursor-task"
+""",
+    )
+    meta = replace(_task_meta(root), reasoning={"swe": "high"})
+    backend = resolve_backend("swe", meta, root=root)
+    assert backend.reasoning == "high"
+    assert backend.reasoning_source == "document-role"
+
+
 def test_document_provider_override(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     _write_providers(

@@ -20,6 +20,7 @@ ModelSource = Literal[
 ]
 
 ProviderSource = Literal["document", "project-default"]
+ReasoningSource = Literal["document-role"]
 
 
 class ModelConfigError(Exception):
@@ -38,6 +39,8 @@ class ResolvedBackend:
     provider: ProviderId
     provider_source: ProviderSource
     model: ResolvedModel
+    reasoning: str | None = None
+    reasoning_source: ReasoningSource | None = None
 
 
 def _non_blank(value: str | None) -> str | None:
@@ -110,6 +113,20 @@ def resolve_model(
     raise ModelConfigError(f"no model configured for role {role!r}")
 
 
+def resolve_reasoning(
+    role: RoleId,
+    doc: WorkMeta | None,
+) -> tuple[str | None, ReasoningSource | None]:
+    """Return a persisted per-role reasoning override, or None for provider default."""
+
+    if doc is None or not doc.reasoning:
+        return None, None
+    level = _non_blank(doc.reasoning.get(role))
+    if level is None:
+        return None, None
+    return level, "document-role"
+
+
 def resolve_project_provider(
     doc: WorkMeta | None,
     *,
@@ -133,8 +150,11 @@ def resolve_backend(
 
     provider, provider_source = resolve_project_provider(doc, root=root)
     model = resolve_model(role, doc, root=root, provider=provider)
+    reasoning, reasoning_source = resolve_reasoning(role, doc)
     return ResolvedBackend(
         provider=provider,
         provider_source=provider_source,
         model=model,
+        reasoning=reasoning,
+        reasoning_source=reasoning_source,
     )

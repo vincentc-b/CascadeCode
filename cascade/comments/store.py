@@ -223,9 +223,15 @@ def sidecar_path(doc_id: str, *, root: Path) -> Path:
 def _comment_repo(doc_id: str, *, root: Path) -> Path:
     trunk = locate_trunk(resolve_root(root))
     try:
-        return resolve_doc_worktree(doc_id, root=trunk)
+        preferred = resolve_doc_worktree(doc_id, root=trunk)
     except NotFound:
         return trunk
+    # Comments posted before activation live on trunk. Keep using that sidecar
+    # after the document moves so reads, replies, and IDs stay on one thread.
+    if preferred != trunk and not _sidecar_path(preferred, doc_id).is_file():
+        if _sidecar_path(trunk, doc_id).is_file():
+            return trunk
+    return preferred
 
 
 def _owning_graph(doc_id: str, trunk: Path) -> str:

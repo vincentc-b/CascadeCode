@@ -15,6 +15,13 @@ AuthSource = Literal["env", "user-store", "cli-session", "missing"]
 
 ALL_PROVIDER_IDS: tuple[ProviderId, ...] = ("cursor", "claude", "codex")
 
+_PROVIDER_DISPLAY_NAMES: dict[ProviderId, str] = {
+    "cursor": "Cursor",
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "fake": "Fake",
+}
+
 
 @dataclass(frozen=True)
 class ProviderStatus:
@@ -22,6 +29,12 @@ class ProviderStatus:
     installed: bool
     authenticated: bool
     auth_source: AuthSource
+
+
+def provider_display_name(provider_id: ProviderId) -> str:
+    """Human-readable label owned by the provider integration registry."""
+
+    return _PROVIDER_DISPLAY_NAMES.get(provider_id, provider_id)
 
 
 def fake_provider_enabled() -> bool:
