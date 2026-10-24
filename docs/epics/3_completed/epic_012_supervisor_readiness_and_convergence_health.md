@@ -2,7 +2,7 @@
 id: epic_012
 title: Supervisor readiness and convergence health
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_012_001
@@ -16,7 +16,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-22'
-updated: '2026-10-23'
+updated: '2026-10-24'
 provider: codex
 models:
   epic_manager: gpt-5.6-sol
