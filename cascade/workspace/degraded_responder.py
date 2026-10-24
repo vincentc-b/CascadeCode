@@ -6,6 +6,7 @@ import html
 import json
 import socket
 from http import HTTPStatus
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -57,14 +58,20 @@ def _write_response(
         pass
 
 
-def _json_body(status: SupervisorStatus | None, *, error: str | None = None) -> bytes:
-    payload: dict[str, object]
-    if status is None:
-        payload = {"error": error or "degraded", "state": "degraded"}
-    else:
-        payload = dict(status)
-        if error is not None:
-            payload["error"] = error
+def _json_body(
+    workspace_root: Path,
+    status: SupervisorStatus | None,
+    *,
+    error: str | None = None,
+) -> bytes:
+    from cascade.workspace.supervisor_readiness import supervisor_health_http_payload
+
+    payload = supervisor_health_http_payload(
+        workspace_root,
+        http_serving=True,
+        status=status,
+        error=error,
+    )
     return json.dumps(payload, indent=2, sort_keys=True).encode("utf-8") + b"\n"
 
 
@@ -95,6 +102,7 @@ def _html_body(status: SupervisorStatus | None) -> bytes:
 def serve_one_degraded_request(
     conn: socket.socket,
     *,
+    workspace_root: Path,
     status: SupervisorStatus | None,
 ) -> None:
     """Answer a single HTTP request on ``conn`` with 503 diagnostics."""
@@ -105,7 +113,7 @@ def serve_one_degraded_request(
     _method, path = parsed
     path_only = path.split("?", 1)[0]
     if path_only == "/api/health":
-        body = _json_body(status)
+        body = _json_body(workspace_root, status)
         _write_response(
             conn,
             status=HTTPStatus.SERVICE_UNAVAILABLE,
@@ -114,7 +122,7 @@ def serve_one_degraded_request(
         )
         return
     if path_only.startswith("/api/"):
-        body = _json_body(status, error="degraded")
+        body = _json_body(workspace_root, status, error="degraded")
         _write_response(
             conn,
             status=HTTPStatus.SERVICE_UNAVAILABLE,

@@ -458,7 +458,9 @@ def _worktree_cleanliness(repo: Path) -> SyncBlockReason | None:
 
 
 def _managed_runtime_path(rel: str) -> bool:
-    return rel.startswith((".cascade/", "docs/_queue/", "docs/_war_room/"))
+    return rel.startswith(
+        (".cascade/", "docs/_queue/", "docs/_comments/", "docs/_war_room/")
+    )
 
 
 def _operator_trunk_ignored(rel: str) -> bool:

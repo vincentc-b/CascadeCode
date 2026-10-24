@@ -243,6 +243,36 @@ def approve_board_feature(root: Path, feature_id: str) -> None:
     approve_feature(feature_id, root=root)
 
 
+def sign_off_both_planning_roles(epic_id: str, *, root: Path) -> str:
+    """Record manager and architect sign-offs for the epic's current plan revision."""
+
+    from cascade.epic.planning_signoffs import (
+        canonical_plan_revision,
+        sign_off_epic_plan,
+    )
+
+    revision = canonical_plan_revision(epic_id, root=root)
+    assert revision is not None, f"no canonical plan revision for {epic_id}"
+    for role in ("epic_manager", "epic_architect"):
+        sign_off_epic_plan(
+            epic_id,
+            role,  # type: ignore[arg-type]
+            revision,
+            root=root,
+            actor=role,  # type: ignore[arg-type]
+        )
+    return revision
+
+
+def approve_epic_plan_when_ready(epic_id: str, *, root: Path):
+    """Sign off both planning roles, then approve the epic plan."""
+
+    from cascade.approvals import approve_epic_plan
+
+    sign_off_both_planning_roles(epic_id, root=root)
+    return approve_epic_plan(epic_id, root=root)
+
+
 def add_doc(
     root: Path,
     *,

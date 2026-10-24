@@ -495,6 +495,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/briefs": lambda h, b: h._handle_create_brief(b),
             "/api/sync/pull": lambda h, b: h._handle_sync_pull(b),
             "/api/approve_epic_plan": lambda h, b: h._handle_approve_epic_plan(b),
+            "/api/sign_off_epic_plan": lambda h, b: h._handle_sign_off_epic_plan(b),
             "/api/approve_feature": lambda h, b: h._handle_approve_feature(b),
         }
         routes.update(cls._extra_post_routes)
@@ -556,9 +557,50 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if epic_id is None:
             return
         from cascade.approvals import approve_epic_plan
+        from cascade.epic.planning_signoffs import PlanSignOffError
 
         try:
             payload = approve_epic_plan(epic_id, root=self.server.root)
+        except PlanSignOffError as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        except (ValueError, BoardError, OSError) as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._json_response(HTTPStatus.OK, payload)
+
+    def _handle_sign_off_epic_plan(self, body: dict[str, Any]) -> None:
+        from cascade.epic.planning_signoffs import (
+            InvalidPlanningRole,
+            PlanSignOffError,
+            sign_off_epic_plan,
+        )
+
+        epic_id = self._require_work_id(body)
+        if epic_id is None:
+            return
+        role = body.get("role")
+        plan_revision = body.get("plan_revision")
+        if not isinstance(role, str) or not role.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing role")
+            return
+        if not isinstance(plan_revision, str) or not plan_revision.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing plan_revision")
+            return
+        try:
+            payload = sign_off_epic_plan(
+                epic_id,
+                role.strip(),  # type: ignore[arg-type]
+                plan_revision.strip(),
+                root=self.server.root,
+                actor="human",
+            )
+        except InvalidPlanningRole as exc:
+            self._json_error(HTTPStatus.FORBIDDEN, str(exc))
+            return
+        except PlanSignOffError as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            return
         except (ValueError, BoardError, OSError) as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
@@ -931,7 +973,22 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         except NotFound:
             self._json_error(HTTPStatus.NOT_FOUND, f"not found: {work_id}")
             return
-        self._json_response(HTTPStatus.OK, work_doc_to_dict(doc))
+        payload = work_doc_to_dict(doc)
+        meta = doc.meta
+        if (
+            meta.tier == "epic"
+            and meta.plan_approved_at is None
+            and meta.path.parent.name == "2_active"
+        ):
+            from cascade.epic.plan_readiness import (
+                compute_epic_plan_readiness,
+                epic_plan_readiness_to_dict,
+            )
+
+            readiness = compute_epic_plan_readiness(meta.id, root=self.server.root)
+            if readiness is not None:
+                payload["plan_readiness"] = epic_plan_readiness_to_dict(readiness)
+        self._json_response(HTTPStatus.OK, payload)
 
     def end_headers(self) -> None:
         """Finish the response and tell the browser not to wait on this connection."""
