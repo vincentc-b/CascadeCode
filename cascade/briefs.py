@@ -9,6 +9,12 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryResult,
+    get_provider_inventory,
+)
+from cascade.agent.discovery.normalize import sanitize_provider_error
 from cascade.agent.providers import parse_provider_id
 from cascade.board.errors import GitError
 from cascade.board.gitutil import _run
@@ -31,6 +37,43 @@ class BriefRequest:
     provider: str
     manager_model: str
     architect_model: str
+
+
+def fetch_brief_provider_inventory(
+    root: Path,
+    *,
+    force_refresh: bool = False,
+) -> dict[str, object]:
+    """Return normalized provider/model inventory for brief UI consumers."""
+
+    from cascade.war_room.serialize import brief_provider_inventory_to_dict
+
+    config = read_providers_config(root)
+    try:
+        result = get_provider_inventory(force_refresh=force_refresh)
+    except Exception as exc:
+        empty = ProviderInventoryResult(
+            providers=(),
+            failures=(),
+            freshness=InventoryFreshness(
+                from_cache=False,
+                fetched_at=0.0,
+                expires_at=0.0,
+                ttl_seconds=0.0,
+            ),
+        )
+        return brief_provider_inventory_to_dict(
+            empty,
+            default_provider=config.default,
+            force_refresh=force_refresh,
+            refresh_failed=True,
+            refresh_error=sanitize_provider_error(exc),
+        )
+    return brief_provider_inventory_to_dict(
+        result,
+        default_provider=config.default,
+        force_refresh=force_refresh,
+    )
 
 
 def brief_template(root: Path) -> dict[str, object]:

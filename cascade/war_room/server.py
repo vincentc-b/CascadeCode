@@ -51,6 +51,10 @@ from cascade.war_room.amendment_routes import (
     try_handle_amendment_get,
     try_handle_amendment_post,
 )
+from cascade.war_room.brief_inventory_routes import (
+    brief_inventory_api_path_exists,
+    register_brief_inventory_routes,
+)
 from cascade.war_room.provider_routes import (
     provider_api_path_exists,
     register_provider_routes,
@@ -1096,6 +1100,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return True
         if provider_api_path_exists(path):
             return True
+        if brief_inventory_api_path_exists(path):
+            return True
         if room_settings_api_path_exists(path):
             return True
         return False
@@ -1149,6 +1155,7 @@ def main() -> None:
 
 register_sidecar_routes(WarRoomRequestHandler)
 register_amendment_routes(WarRoomRequestHandler)
+register_brief_inventory_routes(WarRoomRequestHandler)
 register_provider_routes(WarRoomRequestHandler)
 register_review_routes(WarRoomRequestHandler)
 register_room_settings_routes(WarRoomRequestHandler)
