@@ -81,6 +81,19 @@ def work_meta_to_dict(
             value["approved_at"] = meta.approved_at.isoformat()
     if meta.tier == "epic":
         value["plan_approved"] = meta.plan_approved_at is not None
+        if (
+            root is not None
+            and meta.plan_approved_at is None
+            and meta.path.parent.name == "2_active"
+        ):
+            from cascade.epic.plan_readiness import (
+                compute_epic_plan_readiness,
+                epic_plan_readiness_to_dict,
+            )
+
+            readiness = compute_epic_plan_readiness(meta.id, root=root)
+            if readiness is not None:
+                value["plan_readiness"] = epic_plan_readiness_to_dict(readiness)
     if meta.tier == "feature" and root is not None:
         if sidecars_preloaded:
             value["review"] = review

@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from cascade.approvals import approve_epic_plan, feature_approved
+from cascade.approvals import feature_approved
+from tests.support import approve_epic_plan_when_ready
 from cascade.automation import reset_automation_memory
 from cascade.board.store import move_doc, read_doc
 from cascade.war_room.server import serve
@@ -62,7 +63,7 @@ def _approve_initial_epic_plan(root: Path) -> None:
     add_doc(root, id="feat_001", title="Initial child", tier="feature", parent="epic_001")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
-    approve_epic_plan("epic_001", root=root)
+    approve_epic_plan_when_ready("epic_001", root=root)
     assert feature_approved("feat_001", root=root)
     reset_automation_memory()
 

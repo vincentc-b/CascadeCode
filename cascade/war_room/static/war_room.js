@@ -15,6 +15,7 @@
 
   const BoardFocusApi = globalThis.BoardFocus;
   const BranchSyncUiApi = globalThis.BranchSyncUi;
+  const EpicPlanReadinessUi = globalThis.EpicPlanReadinessUi;
   let boardFocus = BoardFocusApi ? BoardFocusApi.defaultBoardFocus() : null;
   let lastBoardView = null;
   let branchSyncRowHelpers = null;
@@ -678,6 +679,14 @@
         }));
       }
       if (column === "2_active") {
+        if (
+          !item.plan_approved &&
+          item.plan_readiness &&
+          EpicPlanReadinessUi &&
+          EpicPlanReadinessUi.appendPlanEntryStatusToRow
+        ) {
+          EpicPlanReadinessUi.appendPlanEntryStatusToRow(document, row, item.plan_readiness);
+        }
         if (item.plan_approved) {
           const approved = actionButton(
             "Approved",
@@ -687,9 +696,21 @@
           approved.classList.add("approval-confirmed");
           actions.appendChild(approved);
         } else {
-          actions.appendChild(actionButton("Approve plan", function () {
+          var epicApproveDisabled =
+            EpicPlanReadinessUi && EpicPlanReadinessUi.approvePlanDisabledReason
+              ? EpicPlanReadinessUi.approvePlanDisabledReason(item.plan_readiness)
+              : null;
+          var approveBtn = actionButton("Approve plan", function () {
             return dispatch("/api/approve_epic_plan", { id: item.id });
-          }));
+          }, epicApproveDisabled);
+          if (epicApproveDisabled && EpicPlanReadinessUi.decorateSemanticallyDisabledButton) {
+            EpicPlanReadinessUi.decorateSemanticallyDisabledButton(
+              approveBtn,
+              epicApproveDisabled,
+              null
+            );
+          }
+          actions.appendChild(approveBtn);
         }
         actions.appendChild(actionButton("Close epic", function () {
           return confirmEpicComplete(item.id);
