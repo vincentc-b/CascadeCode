@@ -2,7 +2,7 @@
 id: feat_015_002
 title: Planning readiness in the epic UI
 tier: feature
-status: active
+status: completed
 parent: epic_015
 children:
 - task_015_002_001
