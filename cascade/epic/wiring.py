@@ -6,7 +6,6 @@ import importlib
 from pathlib import Path
 
 from cascade.board.errors import NotFound
-from cascade.board.store import read_doc
 from cascade.epic.graph import ingest_human, seed_epic_role_models
 from cascade.watchdog.boot_model import toast_model_config_failure
 from cascade.watchdog.config import ConfigError
@@ -32,6 +31,7 @@ def load_epic_tools() -> None:
         "read_doc",
         "write_doc",
         "reply_comment",
+        "read_comment",
         "resolve_amendment",
     )
     if all(name in epic_tools() for name in expected):

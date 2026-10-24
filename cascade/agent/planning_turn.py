@@ -51,6 +51,7 @@ async def run_epic_planning_turn(
             repo_root=repo,
             tier="epic",
             scope_id=epic_id,
+            role=role,
         ),
     )
 
@@ -80,6 +81,7 @@ async def run_feature_planning_turn(
             repo_root=repo,
             tier="feature",
             scope_id=feature_id,
+            role=role,
         ),
     )
 

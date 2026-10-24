@@ -35,6 +35,7 @@ Provide one authoritative backend inventory of providers that are installed, aut
 - Add a provider capability/discovery boundary implemented by provider adapters.
 - Probe only configured or installed providers; authentication or API failures make that provider unavailable without breaking discovery for others.
 - Normalize provider and model identifiers for consumers.
+- Report supported reasoning levels and default behavior for provider/model combinations that expose configurable reasoning; indicate when no override is available.
 - Use a small bounded cache around successful discovery so opening the brief does not repeatedly call external APIs; refresh on expiry or explicit request.
 - Expose the inventory through the application boundary used by the brief UI.
 - Add high-signal adapter and boundary tests for filtering, partial failure, and cache refresh.
@@ -43,6 +44,7 @@ Provide one authoritative backend inventory of providers that are installed, aut
 
 - The inventory returns only providers that pass availability discovery.
 - Every offered model originates from that provider's API response, not a static UI list.
+- Reasoning capabilities are supplied by the provider integration and are scoped to the selected model; consumers can distinguish default-only models from those with supported overrides.
 - A failure in one provider does not suppress healthy providers.
 - The UI-facing response identifies refresh/loading failure without leaking credentials.
 - Cached data has an explicit freshness policy and can be refreshed.

@@ -314,6 +314,16 @@ def _append_planning_tool_directive(
     if scope_id:
         parts.append(_scope_line(role, scope_id))
     parts.append(_PLANNING_TOOL_DIRECTIVE)
+    if role in _EPIC_PLANNING_ROLES:
+        parts.append(
+            "For CommentPosted events, call read_comment with the comment_id to get the "
+            "full comment body; event blocks are selected plan text, not the comment body. "
+            "When the current epic plan is complete and you have reviewed its final "
+            "revision, call read_doc for the epic and then sign_off_plan with its sha. "
+            "Sign off only for your own role, after all requested changes and open "
+            "question threads have been handled. If the other role edits the plan "
+            "after your sign-off, review the new revision and sign off again."
+        )
     if (
         role in _FEATURE_PLANNING_ROLES
         and latest is not None
