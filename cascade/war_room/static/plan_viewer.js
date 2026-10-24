@@ -662,6 +662,97 @@
     });
   }
 
+  function postJson(path, payload) {
+    return fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(function (resp) {
+      return resp.text().then(function (raw) {
+        var parsed;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (_e) {
+          parsed = { error: raw };
+        }
+        if (!resp.ok) {
+          var err = new Error(parsed.error || resp.statusText);
+          err.status = resp.status;
+          err.body = parsed;
+          throw err;
+        }
+        return parsed;
+      });
+    });
+  }
+
+  function initEpicPlanReadinessChrome(workId, readiness, options) {
+    options = options || {};
+    var EpicPlanReadinessUi = options.EpicPlanReadinessUi || globalThis.EpicPlanReadinessUi;
+    var host = document.getElementById("epic-plan-readiness-host");
+    if (!host || !EpicPlanReadinessUi || !readiness) {
+      return null;
+    }
+
+    host.hidden = false;
+    host.replaceChildren();
+    var chrome = EpicPlanReadinessUi.renderPlanReadinessBar(document, readiness, workId);
+    host.appendChild(chrome.bar);
+
+    function refreshReadiness() {
+      return fetch("/api/doc/" + encodeURIComponent(workId), {
+        signal: pageLoadSignal(),
+      })
+        .then(function (resp) {
+          if (!resp.ok) {
+            throw new Error("Failed to refresh readiness (" + resp.status + ")");
+          }
+          return resp.json();
+        })
+        .then(function (doc) {
+          if (doc.plan_readiness) {
+            EpicPlanReadinessUi.applyReadinessToPlanBar(
+              chrome,
+              document,
+              doc.plan_readiness,
+              workId
+            );
+          }
+        });
+    }
+
+    chrome.approveButton.addEventListener("click", function () {
+      if (chrome.approveButton.disabled) return;
+      chrome.errorElement.hidden = true;
+      chrome.errorElement.textContent = "";
+      chrome.approveButton.disabled = true;
+      postJson("/api/approve_epic_plan", { id: workId })
+        .then(function (body) {
+          if (!body || body.ok !== true) {
+            throw new Error("Unexpected approval response");
+          }
+          chrome.approveButton.textContent = "Approved";
+          chrome.approveButton.classList.add("approval-confirmed");
+          chrome.approveButton.disabled = true;
+          chrome.approveButton.setAttribute("aria-disabled", "true");
+          if (chrome.disabledReasonNote) {
+            chrome.disabledReasonNote.hidden = true;
+          }
+        })
+        .catch(function (err) {
+          chrome.errorElement.textContent = EpicPlanReadinessUi.staleApprovalErrorMessage(err);
+          chrome.errorElement.hidden = false;
+          return refreshReadiness().catch(function () {
+            if (chrome.approveButton.textContent === "Approve plan") {
+              chrome.approveButton.disabled = false;
+            }
+          });
+        });
+    });
+
+    return { chrome: chrome, refreshReadiness: refreshReadiness };
+  }
+
   function fillHeaderElements(meta, sha, workId) {
     var title = (meta && meta.title) || workId || "Plan";
     var pageTitleEl = document.getElementById("plan-page-title");
@@ -1529,6 +1620,9 @@
           if (bodyEl) {
             bodyEl.hidden = false;
           }
+          if (meta.tier === "epic" && doc.plan_readiness) {
+            initEpicPlanReadinessChrome(workId, doc.plan_readiness);
+          }
           initPlanComments(workId, meta.tier, {
             bodyEl: bodyEl,
             docBody: doc.body,
@@ -1579,5 +1673,6 @@
     loadMermaidScript: loadMermaidScript,
     MERMAID_SCRIPT_SRC: MERMAID_SCRIPT_SRC,
     initPlanComments: initPlanComments,
+    initEpicPlanReadinessChrome: initEpicPlanReadinessChrome,
   };
 });

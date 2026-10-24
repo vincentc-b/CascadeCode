@@ -2,22 +2,25 @@
 id: feat_015_002
 title: Planning readiness in the epic UI
 tier: feature
-status: backlog
+status: active
 parent: epic_015
-children: []
+children:
+- task_015_002_001
+- task_015_002_002
 depends_on:
 - feat_015_001
 owners:
 - feature_lead
 - feature_architect
 skills: []
-parent_rev: null
+parent_rev: ff3c1af2ea431c058a4bc7327dea5790f9c10957
 created: '2026-10-23'
-updated: '2026-10-23'
+updated: '2026-10-24'
 provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-10-23T23:43:05.586569+00:00'
 ---
 # Planning readiness in the epic UI
 
@@ -70,6 +73,8 @@ flowchart TD
 ```
 
 ## Task breakdown
+- task_015_002_002
+- task_015_002_001
 
 _(empty — Feature Team mints tasks after dispatch)_
 
@@ -80,3 +85,7 @@ None.
 ## Decision log
 
 None yet.
+
+## Closeout
+
+Completed child work: `task_015_002_001` (Implement epic planning-readiness UI), `task_015_002_002` (Verify planning readiness and stale approval handling).

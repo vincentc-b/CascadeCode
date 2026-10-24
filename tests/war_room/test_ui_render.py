@@ -168,6 +168,9 @@ def test_war_room_js_renders_toast_body():
     assert "item.plan_approved" in source
     assert '"Approved"' in source
     assert 'approved.classList.add("approval-confirmed")' in source
+    assert "EpicPlanReadinessUi" in source
+    assert "appendPlanEntryStatusToRow" in source
+    assert "approvePlanDisabledReason" in source
     assert '"Awaiting review"' in source
     assert 'actionLink("Open review", item.review.url)' in source
     assert "EPIC_CLOSE_DEADLINE_MS = 60000" in source
@@ -281,6 +284,34 @@ def test_war_room_html_loads_war_room_js(ui_server):
     base, _root = ui_server
     _status, html, _headers = _get_html(f"{base}/")
     assert "/static/war_room.js" in html
+    assert "/static/epic_plan_readiness_ui.js" in html
+
+
+def test_epic_plan_readiness_ui_cases():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not on PATH")
+    cases = Path(__file__).with_name("epic_plan_readiness_ui_cases.mjs")
+    result = subprocess.run([node, str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_epic_plan_readiness_integration():
+    """Planning readiness UI: disabled reasons, ready transition, stale approval (task_015_002_002)."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not on PATH")
+    cases = Path(__file__).with_name("epic_plan_readiness_integration.mjs")
+    result = subprocess.run([node, str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_plan_page_includes_epic_readiness_host(ui_server):
+    base, _root = ui_server
+    status, html, _headers = _get_html(f"{base}/plan/epic_001")
+    assert status == HTTPStatus.OK
+    assert 'id="epic-plan-readiness-host"' in html
+    assert "/static/epic_plan_readiness_ui.js" in html
 
 
 def test_plan_page_includes_comment_compose(ui_server):
