@@ -2,7 +2,7 @@
 id: feat_015_001
 title: Authoritative epic-plan readiness and approval gate
 tier: feature
-status: active
+status: completed
 parent: epic_015
 children:
 - task_015_001_001
@@ -16,7 +16,7 @@ owners:
 skills: []
 parent_rev: ff3c1af2ea431c058a4bc7327dea5790f9c10957
 created: '2026-10-23'
-updated: '2026-10-23'
+updated: '2026-10-24'
 provider: codex
 models:
   feature_lead: gpt-5.6-sol
