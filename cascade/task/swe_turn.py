@@ -167,8 +167,16 @@ async def run_swe_turn(
             heartbeat(task_id, root=repo)
 
     lease_heartbeat = asyncio.create_task(keep_lease_alive())
+    from cascade.workspace.in_flight_turn_watchdog import swe_task_turn_context
+
     try:
-        role_result = await invoke(turn)
+        with swe_task_turn_context(
+            task_id,
+            provider=provider,
+            model_id=model_id,
+            root=repo,
+        ):
+            role_result = await invoke(turn)
     except TurnCancelledForDrain:
         raise
     except CursorAgentError as exc:

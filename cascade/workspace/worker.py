@@ -33,7 +33,8 @@ from cascade.workspace.up import (
     _SOURCE_CHECK_INTERVAL_SECONDS,
     _source_fingerprint,
     prepare_up,
-    resume_legally_active_graphs,
+    repair_registered_worktrees,
+    submit_recovered_turns,
 )
 
 # Launcher passes these when spawning ``python -m cascade.workspace.worker``.
@@ -346,9 +347,25 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     )
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
+    from cascade.workspace.supervisor_readiness import (
+        observe_http_live,
+        observe_startup_phase,
+    )
+
+    observe_http_live(live=True)
     _write_readiness(handshake.readiness_fd)
+    observe_startup_phase("recovery")
+    repair_registered_worktrees(ws.path)
+
+    def _submit_recovery() -> None:
+        submit_recovered_turns(ws.path)
+
+    threading.Thread(
+        target=_submit_recovery,
+        name="worker-recovery",
+        daemon=True,
+    ).start()
     try:
-        resume_legally_active_graphs(ws.path)
         run_watchdog(root=ws.path, stop_when=should_stop)
     except BaseException:
         abnormal_exit = True

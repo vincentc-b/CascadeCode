@@ -2,9 +2,12 @@
 id: feat_012_002
 title: Bounded convergence detection and durable diagnostics
 tier: feature
-status: backlog
+status: completed
 parent: epic_012
-children: []
+children:
+- task_012_002_001
+- task_012_002_002
+- task_012_002_003
 depends_on:
 - feat_012_001
 owners:
@@ -57,6 +60,9 @@ flowchart TD
 ```
 
 ## Task breakdown
+- task_012_002_003
+- task_012_002_002
+- task_012_002_001
 
 _(empty — Feature Team mints tasks after dispatch)_
 
@@ -67,3 +73,7 @@ None.
 ## Decision log
 
 None yet.
+
+## Closeout
+
+Completed child work: `task_012_002_001` (Implement bounded convergence-state detection), `task_012_002_002` (Emit durable deduplicated convergence diagnostics), `task_012_002_003` (Add convergence detection integration coverage).
