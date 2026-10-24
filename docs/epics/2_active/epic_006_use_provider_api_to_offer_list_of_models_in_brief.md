@@ -33,18 +33,20 @@ The initial delivery validates this at brief-creation time without introducing a
 - The provider selector contains only providers that are installed/configured and successfully report availability.
 - Offered models come from the selected provider's actual API response; the UI does not own a static model list.
 - Brief creation uses selectors, not arbitrary model text, for all configured epic, feature, and task roles.
+- For providers and models that support configurable reasoning, brief creation offers supported reasoning levels for each role, including the provider default; unsupported combinations use their default without a selector.
 - The selected provider and per-role model defaults are persisted and used by downstream work creation.
+- Selected per-role reasoning levels are persisted and used by downstream work creation; leaving a level at default preserves provider behavior.
 - One unavailable or failing provider does not prevent healthy providers from being offered.
 - When no provider is usable, submission is disabled with a clear, recoverable state.
 - A representative end-to-end test covers discovery, selection, persistence, and reload/use of saved defaults.
 
 ## Macro-architecture
 
-1. Each provider integration exposes capability discovery returning its canonical provider identifier and current models.
+1. Each provider integration exposes capability discovery returning its canonical provider identifier, current models, and supported reasoning levels or default behavior for each model when available.
 2. A provider inventory service queries only installed/configured integrations, isolates adapter failures, normalizes results, and applies a small bounded freshness cache around successful responses.
 3. The existing application boundary exposes that inventory to brief creation, including loading, empty-availability, and refresh-failure states.
-4. The brief UI selects one available provider and renders model selectors for every epic, feature, and task role represented by the brief schema. Changing provider clears or revalidates incompatible selections.
-5. The existing brief write path validates selections against the current inventory, persists provider plus per-role defaults, and supplies those defaults when downstream feature and task work is minted.
+4. The brief UI selects one available provider and renders model selectors for every epic, feature, and task role represented by the brief schema. For models with configurable reasoning, it also renders a per-role reasoning selector with a default choice. Changing provider or model clears or revalidates incompatible selections.
+5. The existing brief write path validates selections against the current inventory, persists provider plus per-role model and reasoning defaults, and supplies those defaults when downstream feature and task work is minted.
 
 Provider-specific API and authentication behavior stays inside existing integrations; the UI consumes one normalized contract.
 
@@ -55,6 +57,7 @@ Provider-specific API and authentication behavior stays inside existing integrat
 - Discovery is fault-isolated: one timeout, missing login, or absent installation makes only that provider unavailable.
 - Cache freshness must be explicit and bounded. Refresh on expiry or user request is sufficient; a scheduler or durable background job is not required.
 - The server revalidates submitted provider/model identifiers; client selectors are not a trust boundary.
+- The server also validates non-default reasoning levels against the selected provider/model capability; unsupported combinations cannot accept an override.
 - Existing saved briefs with unavailable historical values remain readable; this epic governs new or edited selections and does not require migration.
 - Reuse the existing brief schema and role naming. Expand it only where full-stack defaults cannot already be represented.
 - Concentrate tests on the provider inventory boundary and one end-to-end brief flow; redundant per-component coverage is not required.
@@ -72,6 +75,7 @@ No new external service, durable cache, or scheduler is a prerequisite.
 
 1. **feat_006_001 — Discover available providers and models**
    - Add normalized discovery across installed/configured provider integrations.
+- Expose supported reasoning levels and default behavior where a provider/model offers configurable reasoning.
    - Filter unavailable providers, isolate partial failures, and apply bounded caching/refresh.
    - Expose a safe UI-facing inventory contract.
    - Prove API-derived results, filtering, partial failure, and refresh behavior.
@@ -79,8 +83,8 @@ No new external service, durable cache, or scheduler is a prerequisite.
 2. **feat_006_002 — Select provider and full-stack model defaults in brief**  
    Depends on: feat_006_001
    - Replace free-text model fields with inventory-backed selectors.
-   - Cover all epic, feature, and task roles represented by the brief schema.
-   - Validate and persist selections, then propagate them through downstream work creation.
+   - Cover all epic, feature, and task roles represented by the brief schema, including per-role reasoning selectors when supported and a default choice.
+   - Validate and persist model and reasoning selections, then propagate them through downstream work creation.
    - Cover loading/empty/error states and one representative end-to-end flow.
 
 ## Non-goals
@@ -104,6 +108,7 @@ No new external service, durable cache, or scheduler is a prerequisite.
 - 2026-10-24 · Epic Manager · Use bounded on-demand caching; exclude periodic background synchronization from the initial scope.
 - 2026-10-24 · Epic Manager · Use one selected provider with per-role model defaults across epic, feature, and task layers; reject arbitrary new model text.
 - 2026-10-24 · Epic Manager · Preserve historical briefs without migration; validate new or edited selections against current discovery.
+- 2026-10-24 · Human · Include supported reasoning-level overrides in brief selectors; retain provider defaults when no override is chosen.
 
 - `dec_001` · 2026-10-24 · Epic Manager · **Architecture sequencing**
   Chose Establish a shared, fault-isolated provider/model inventory before replacing brief inputs..
