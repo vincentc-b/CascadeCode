@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cascade.board.context import resolve_root
+from cascade.board.lock import process_lock
 from cascade.board.store import read_doc, write_doc
+from cascade.epic.plan_readiness import require_epic_plan_ready_for_approval
 from cascade.workspace.integration_worktree import merged_board
 from cascade.watchdog.events import append_event
 from cascade.watchdog.types import Event
@@ -54,12 +56,17 @@ def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
     if not children:
         raise ValueError("epic plan has no feature plans to approve yet")
 
-    for feature_id in children:
-        _set_feature_approved(feature_id, root=repo)
-    # The epic timestamp is the durable indication that the entire current plan
-    # was approved.  Write it only after every child so a child write failure
-    # cannot leave the plan marked approved while work remains blocked.
-    epic_newly = _set_epic_plan_approved(epic_id, root=repo)
+    with process_lock:
+        board = merged_board(repo)
+        epic = board.by_id.get(epic_id)
+        if epic is not None and epic.plan_approved_at is None:
+            require_epic_plan_ready_for_approval(epic_id, root=repo, board=board)
+        for feature_id in children:
+            _set_feature_approved(feature_id, root=repo)
+        # The epic timestamp is the durable indication that the entire current plan
+        # was approved.  Write it only after every child so a child write failure
+        # cannot leave the plan marked approved while work remains blocked.
+        epic_newly = _set_epic_plan_approved(epic_id, root=repo)
 
     if epic_newly:
         for dest in (epic_id, "war_room"):
