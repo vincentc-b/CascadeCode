@@ -139,7 +139,7 @@
     el.roomStackedPrEnabled.disabled = true;
     setRoomSettingsStatus("Saving…");
     try {
-      const data = await apiPost("/api/room-settings/" + encodeURIComponent(graphId), {
+      const { body: data } = await apiPost("/api/room-settings/" + encodeURIComponent(graphId), {
         stacked_pr_enabled: enabled,
       });
       if (graphId !== focusGraphId) return;
