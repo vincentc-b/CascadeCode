@@ -237,14 +237,40 @@ def test_get_api_health_served_while_draining(war_room_server):
         reset_drain_for_tests()
 
 
-def test_get_brief_template(war_room_server):
+def test_get_brief_template(war_room_server, monkeypatch):
+    from cascade.agent.discovery.inventory import get_provider_inventory
+    from cascade.agent.discovery.types import DiscoveredModel, ProviderDiscoverySnapshot
+    from tests.agent.test_provider_inventory import _available, _fake_discover, _unavailable
+
+    mapping = {
+        "cursor": _available("cursor", "composer-2.5"),
+        "claude": _unavailable("claude", failure="not_installed"),
+        "codex": _unavailable("codex", failure="not_authenticated"),
+    }
+
+    def _get_inventory(**kwargs: object) -> object:
+        return get_provider_inventory(
+            discover=_fake_discover(mapping),
+            ttl_seconds=60.0,
+            now=10.0,
+            force_refresh=bool(kwargs.get("force_refresh")),
+        )
+
+    monkeypatch.setattr("cascade.briefs.get_provider_inventory", _get_inventory)
+
     base, _root, _server = war_room_server
     status, payload, _ = _get(f"{base}/api/brief/template")
     assert status == HTTPStatus.OK
     assert payload["provider"] == "cursor"
-    assert payload["providers"] == ["cursor", "claude", "codex"]
-    assert set(payload["provider_models"]) == {"cursor", "claude", "codex"}
-    assert set(payload["suggestions"]) == {"epic_manager", "epic_architect"}
+    assert payload["providers"] == ["cursor"]
+    assert set(payload["provider_models"]) == {"cursor"}
+    assert set(payload["suggestions"]) == {
+        "epic_manager",
+        "epic_architect",
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    }
 
 
 def test_get_index_shell(war_room_server):

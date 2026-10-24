@@ -522,7 +522,10 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         from cascade.briefs import brief_template
 
         try:
-            payload = brief_template(self.server.root)
+            payload = brief_template(
+                self.server.root,
+                request_path=self.path,
+            )
         except (ValueError, OSError) as exc:
             self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
