@@ -65,11 +65,16 @@ def _read_stacked_pr_enabled(record: dict[str, object] | None) -> bool:
 
 
 def read_room_settings(graph_id: str, *, root: Path) -> RoomSettings:
-    """Return durable room settings; missing fields default to disabled."""
+    """Return the setting used by dispatch, including epic inheritance for features."""
 
     _validate_room_graph_id(graph_id)
     trunk = locate_trunk(root)
-    record = _load(trunk).get(graph_id)
+    rooms = _load(trunk)
+    record = rooms.get(graph_id)
+    if graph_id.startswith("feat_") and (record is None or "stacked_pr_enabled" not in record):
+        feature = read_doc(graph_id, root=root)
+        if feature.meta.tier == "feature" and feature.meta.parent:
+            record = rooms.get(feature.meta.parent)
     return RoomSettings(
         graph_id=graph_id,
         stacked_pr_enabled=_read_stacked_pr_enabled(record),

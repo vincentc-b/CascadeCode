@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cascade.board.context import resolve_root
-from cascade.board.errors import NotFound
+from cascade.board.errors import GitError, NotFound
 from cascade.board.paths import column_for_status
 from cascade.board.store import move_doc, read_doc
 from cascade.board.types import WorkId
@@ -193,6 +193,13 @@ def _finish_epic_completion_result(
     except NotFound:
         return EpicCompleteResult(ok=False, reason="not_found")
     from cascade.boss.merge import promote_epic_to_trunk
+    from cascade.review import ensure_epic_review
+
+    try:
+        ensure_epic_review(epic_id, root=repo)
+    except GitError:
+        _LOG.exception("could not open epic review for %s", epic_id)
+        return EpicCompleteResult(ok=False, reason="review_failed")
 
     promote_result = promote_epic_to_trunk(epic_id, root=repo)
     if not promote_result.ok:

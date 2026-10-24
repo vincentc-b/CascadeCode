@@ -212,6 +212,54 @@ def create_merge_request(
     )
 
 
+def find_merge_request(
+    root: Path,
+    *,
+    source_branch: str,
+    target_branch: str,
+    runner: Runner = _command,
+) -> MergeRequest | None:
+    """Find an existing review for a branch so publication survives retries."""
+
+    forge = detect_forge(root)
+    if forge == "github":
+        args = [
+            "gh", "pr", "list", "--state", "all", "--head", source_branch,
+            "--json", "url,number,baseRefName,isDraft,state",
+        ]
+    elif forge == "gitlab":
+        args = ["glab", "mr", "list", "--all", "--source-branch", source_branch, "--output", "json"]
+    else:
+        raise GitError("origin is not a recognized GitHub or GitLab remote")
+    result = runner(args, root)
+    if result.returncode != 0:
+        raise GitError((result.stderr or result.stdout).strip() or "review lookup failed")
+    try:
+        rows = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise GitError("forge returned invalid review list JSON") from exc
+    if not isinstance(rows, list):
+        raise GitError("forge returned invalid review list JSON")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        base = str(row.get("baseRefName") or row.get("target_branch") or "")
+        url = str(row.get("url") or row.get("web_url") or "")
+        state = str(row.get("state") or "").lower()
+        if base != target_branch or not url or state == "closed":
+            continue
+        number = row.get("number") or row.get("iid")
+        return MergeRequest(
+            url=url,
+            number=str(number) if number is not None else None,
+            forge=forge,
+            source_branch=source_branch,
+            target_branch=base,
+            draft=bool(row.get("isDraft", row.get("draft", False))),
+        )
+    return None
+
+
 def merge_request_snapshot(
     root: Path,
     mr: MergeRequest,

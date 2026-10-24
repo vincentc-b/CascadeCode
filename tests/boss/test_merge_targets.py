@@ -391,6 +391,41 @@ def test_activated_epic_closes_through_real_git_promotion(tmp_path: Path) -> Non
     ).stdout == ""
 
 
+def test_epic_close_opens_review_and_preserves_other_epics_docs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="epic_999", title="Other epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Own feature", tier="feature", status="completed", parent="epic_001")
+    unrelated = add_doc(root, id="feat_999", title="Other feature", tier="feature", status="completed", parent="epic_999")
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+
+    import cascade.review as review_module
+    from cascade.tracking import MergeRequest
+
+    opened = []
+    monkeypatch.setattr(review_module, "review_enabled", lambda _root: True)
+    monkeypatch.setattr(review_module, "push_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(review_module, "find_merge_request", lambda *_a, **_k: None)
+
+    def create_review(_root, **kwargs):
+        opened.append(kwargs)
+        return MergeRequest(
+            url="https://github.example/pull/1", number="1", forge="github",
+            source_branch=kwargs["source_branch"], target_branch=kwargs["target_branch"], draft=False,
+        )
+
+    monkeypatch.setattr(review_module, "create_merge_request", create_review)
+    assert confirm_epic_complete("epic_001", "human", root=root)
+    assert len(opened) == 1
+    assert opened[0]["source_branch"] == "epic/epic_001"
+    assert opened[0]["target_branch"] == "main"
+    assert unrelated.meta.path.exists()
+
+
 def test_ready_epic_auto_closes_with_runtime_comment_sidecar(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     _initial_commit(root)

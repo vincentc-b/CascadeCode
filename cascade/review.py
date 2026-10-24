@@ -5,6 +5,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import subprocess
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
 from cascade.tracking import (
     MergeRequest,
     create_merge_request,
+    find_merge_request,
     fast_forward_branch,
     forge_ready,
     merge_request_snapshot,
@@ -290,6 +292,72 @@ def epic_has_pending_feature_review(epic_id: str, *, root: Path) -> bool:
         if feature_review_pending(meta.id, root=trunk):
             return True
     return False
+
+
+def ensure_epic_review(epic_id: str, *, root: Path) -> MergeRequest | None:
+    """Publish a completed epic line to the product trunk for human review."""
+
+    trunk = locate_trunk(root)
+    if not review_enabled(trunk):
+        return None
+    from cascade.workspace.trunk import resolve_product_trunk
+
+    entry = get_integration_worktree(trunk, "epic", epic_id)
+    if entry is None or not entry.path.is_dir():
+        raise GitError(f"epic worktree missing: {epic_id}")
+    doc = read_doc(epic_id, root=entry.path)
+    if doc.meta.tier != "epic":
+        raise NotFound(epic_id)
+    source = integration_branch("epic", epic_id)
+    target = resolve_product_trunk(trunk)
+    _restore_unrelated_specs_for_epic_review(entry.path, trunk, epic_id)
+    push_branch(entry.path, source)
+    existing = find_merge_request(
+        entry.path, source_branch=source, target_branch=target
+    )
+    if existing is not None:
+        return existing
+    return create_merge_request(
+        entry.path,
+        title=f"{epic_id}: {doc.meta.title}",
+        body=f"Delivers `{epic_id}` to `{target}`. Review the completed epic before merging.",
+        source_branch=source,
+        target_branch=target,
+        draft=False,
+    )
+
+
+def _restore_unrelated_specs_for_epic_review(
+    epic_root: Path, trunk: Path, epic_id: str
+) -> None:
+    """Keep activation's spec scrub from deleting other epics' docs in the PR."""
+
+    def git(args: list[str], cwd: Path) -> str:
+        result = subprocess.run(
+            ["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8"
+        )
+        if result.returncode != 0:
+            raise GitError((result.stderr or result.stdout).strip() or "git failed")
+        return result.stdout.strip()
+
+    if git(["status", "--porcelain", "--untracked-files=no"], epic_root):
+        raise GitError(f"epic worktree has uncommitted changes: {epic_id}")
+    trunk_sha = git(["rev-parse", "HEAD"], trunk)
+    base = git(["merge-base", trunk_sha, "HEAD"], epic_root)
+    deleted = git(
+        ["diff", "--name-only", "--diff-filter=D", base, "HEAD", "--", "docs/features", "docs/tasks"],
+        epic_root,
+    ).splitlines()
+    number = epic_id.removeprefix("epic_")
+    restore = [
+        path for path in deleted
+        if not Path(path).name.startswith((f"feat_{number}_", f"task_{number}_"))
+        and (trunk / path).is_file()
+    ]
+    if not restore:
+        return
+    git(["restore", f"--source={trunk_sha}", "--staged", "--worktree", "--", *restore], epic_root)
+    git(["-c", "commit.gpgsign=false", "commit", "-m", f"docs: preserve unrelated specs for {epic_id} review", "--", *restore], epic_root)
 
 
 def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None:
