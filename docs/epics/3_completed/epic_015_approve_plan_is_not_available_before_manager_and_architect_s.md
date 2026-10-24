@@ -2,7 +2,7 @@
 id: epic_015
 title: Approve plan is not available before manager and architect sign off
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_015_001
@@ -14,7 +14,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-22'
-updated: '2026-10-23'
+updated: '2026-10-24'
 provider: codex
 models:
   epic_manager: gpt-5.6-sol
