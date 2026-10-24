@@ -296,6 +296,16 @@ def test_epic_plan_readiness_ui_cases():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_epic_plan_readiness_integration():
+    """Planning readiness UI: disabled reasons, ready transition, stale approval (task_015_002_002)."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not on PATH")
+    cases = Path(__file__).with_name("epic_plan_readiness_integration.mjs")
+    result = subprocess.run([node, str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_plan_page_includes_epic_readiness_host(ui_server):
     base, _root = ui_server
     status, html, _headers = _get_html(f"{base}/plan/epic_001")
