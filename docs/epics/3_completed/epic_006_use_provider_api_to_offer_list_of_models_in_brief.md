@@ -2,7 +2,7 @@
 id: epic_006
 title: Use provider api to offer list of models in brief
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_006_001
