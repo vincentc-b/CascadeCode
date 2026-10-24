@@ -276,16 +276,14 @@ def promote_epic_to_trunk(epic_id: str, *, root: Path | None = None) -> MergeRes
                 target_branch=target_branch,
             )
 
-        merge_sha = _merge_epic_branch(trunk, source_branch, epic_id)
+        merge_sha, conflict_paths = _merge_epic_branch(trunk, source_branch, epic_id)
         if merge_sha is None:
-            from cascade.workspace.branch_synchronization import validated_unmerged_paths
-
             return MergeResult(
                 ok=False,
                 reason="branch_conflict",
                 branch=source_branch,
                 target_branch=target_branch,
-                conflict_paths=validated_unmerged_paths(trunk),
+                conflict_paths=conflict_paths,
             )
 
     return MergeResult(
@@ -391,7 +389,9 @@ def _merge_branch(repo: Path, branch: str) -> str | None:
     return sha
 
 
-def _merge_epic_branch(repo: Path, branch: str, epic_id: str) -> str | None:
+def _merge_epic_branch(
+    repo: Path, branch: str, epic_id: str
+) -> tuple[str | None, tuple[str, ...]]:
     """Merge an epic, resolving only its activation-created pointer conflict.
 
     Activation independently adds the live epic document on ``epic/{id}`` and a
@@ -412,7 +412,11 @@ def _merge_epic_branch(repo: Path, branch: str, epic_id: str) -> str | None:
         pointer_path = None
 
     if _run(["merge", branch, "--no-edit"], repo, check=False).returncode == 0:
-        return head_sha(repo)
+        return head_sha(repo), ()
+
+    from cascade.workspace.branch_synchronization import validated_unmerged_paths
+
+    conflict_paths = validated_unmerged_paths(repo)
 
     if not _is_expected_epic_pointer_conflict(
         repo,
@@ -422,21 +426,21 @@ def _merge_epic_branch(repo: Path, branch: str, epic_id: str) -> str | None:
         pointer_path=pointer_path,
     ):
         _run(["merge", "--abort"], repo, check=False)
-        return None
+        return None, conflict_paths
 
     assert pointer_path is not None
     if _run(["checkout", "--theirs", "--", pointer_path], repo, check=False).returncode != 0:
         _run(["merge", "--abort"], repo, check=False)
-        return None
+        return None, conflict_paths
     if _run(["add", "--", pointer_path], repo, check=False).returncode != 0:
         _run(["merge", "--abort"], repo, check=False)
-        return None
+        return None, conflict_paths
     if _run(
         ["-c", "commit.gpgsign=false", "commit", "--no-edit"], repo, check=False
     ).returncode != 0:
         _run(["merge", "--abort"], repo, check=False)
-        return None
-    return head_sha(repo)
+        return None, conflict_paths
+    return head_sha(repo), ()
 
 
 def _is_expected_epic_pointer_conflict(
