@@ -9,7 +9,7 @@ from typing import Any
 
 from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
-from cascade.board.types import WorkDoc, WorkMeta, WorkId
+from cascade.board.types import CancellationFeedback, WorkDoc, WorkMeta, WorkId
 
 
 def work_meta_from_dict(raw: Mapping[str, Any]) -> WorkMeta:
@@ -53,6 +53,23 @@ def work_meta_from_dict(raw: Mapping[str, Any]) -> WorkMeta:
         cancellation_error=_parse_optional_nonblank_string(
             raw.get("cancellation_error"), field="cancellation_error"
         ),
+        cancellation_feedback=[
+            CancellationFeedback(
+                child_id=str(item["child_id"]),
+                child_tier=item["child_tier"],
+                parent_id=str(item["parent_id"]),
+                reason=str(item["reason"]),
+                cancelled_at=_required_datetime(
+                    item["cancelled_at"], field="cancelled_at"
+                ),
+                available_dispositions=list(item["available_dispositions"]),
+                disposition=item.get("disposition"),
+                resolved_at=_parse_optional_datetime(
+                    item.get("resolved_at"), field="resolved_at"
+                ),
+            )
+            for item in (raw.get("cancellation_feedback") or [])
+        ],
     )
 
 
@@ -93,6 +110,13 @@ def work_doc_from_dict(
         raise ValueError("doc.meta is required when work id cannot be resolved")
     meta = work_meta_from_dict(meta_raw)
     return WorkDoc(meta=meta, body=str(body), sha=raw.get("sha"))
+
+
+def _required_datetime(value: Any, *, field: str) -> datetime:
+    parsed = _parse_optional_datetime(value, field=field)
+    if parsed is None:
+        raise ValueError(f"{field} must be an ISO datetime string")
+    return parsed
 
 
 def _parse_optional_datetime(value: Any, *, field: str = "approved_at") -> datetime | None:

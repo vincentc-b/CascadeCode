@@ -75,6 +75,9 @@ def cancel_work_item(
     with process_lock:
         doc = read_doc(work_id, root=repo)
         if doc.meta.status == "cancelled":
+            from cascade.cancellation_feedback import record_parent_cancellation_feedback
+
+            record_parent_cancellation_feedback(doc, root=repo)
             return _existing_result(doc)
         if doc.meta.status == "completed":
             raise CancellationTransitionRejected(work_id, doc.meta.status)
@@ -135,6 +138,9 @@ def cancel_work_item(
             owner_root / column_dir(doc.meta.tier, "completed") / previous_path.name
         ).resolve()
         save_doc(doc, previous_path=previous_path, root=owner_root)
+        from cascade.cancellation_feedback import record_parent_cancellation_feedback
+
+        record_parent_cancellation_feedback(doc, root=repo)
         result = CancellationResult(
             work_id=doc.meta.id,
             tier=doc.meta.tier,

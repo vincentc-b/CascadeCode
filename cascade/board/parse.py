@@ -13,7 +13,13 @@ from cascade.agent.providers import parse_provider_id
 from cascade.board.errors import SchemaError
 from cascade.board.paths import parse_work_id
 from cascade.board.work_ids import tier_of_work_id
-from cascade.board.types import WorkDoc, WorkMeta, WorkStatus, WorkTier
+from cascade.board.types import (
+    CancellationFeedback,
+    WorkDoc,
+    WorkMeta,
+    WorkStatus,
+    WorkTier,
+)
 
 _REQUIRED_KEYS = (
     "id",
@@ -103,6 +109,22 @@ def render_doc(doc: WorkDoc) -> str:
         payload["cancellation_step"] = meta.cancellation_step
     if meta.cancellation_error is not None:
         payload["cancellation_error"] = meta.cancellation_error
+    if meta.cancellation_feedback:
+        payload["cancellation_feedback"] = [
+            {
+                "child_id": item.child_id,
+                "child_tier": item.child_tier,
+                "parent_id": item.parent_id,
+                "reason": item.reason,
+                "cancelled_at": item.cancelled_at.isoformat(),
+                "available_dispositions": list(item.available_dispositions),
+                "disposition": item.disposition,
+                "resolved_at": (
+                    item.resolved_at.isoformat() if item.resolved_at is not None else None
+                ),
+            }
+            for item in meta.cancellation_feedback
+        ]
     frontmatter = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True, width=4096)
     body = doc.body
     if body and not body.endswith("\n"):
@@ -180,7 +202,77 @@ def _meta_from_mapping(loaded: dict[str, object], path: Path) -> WorkMeta:
         cancelled_at=_optional_datetime(loaded, "cancelled_at"),
         cancellation_step=_optional_nonblank_str(loaded, "cancellation_step"),
         cancellation_error=_optional_nonblank_str(loaded, "cancellation_error"),
+        cancellation_feedback=_cancellation_feedback(loaded),
     )
+
+
+
+_CANCELLATION_DISPOSITIONS = [
+    "continue_reduced_scope", "replace_replan", "cancel_parent"
+]
+
+
+def _cancellation_feedback(loaded: dict[str, object]) -> list[CancellationFeedback]:
+    raw = loaded.get("cancellation_feedback", [])
+    if not isinstance(raw, list):
+        raise SchemaError("cancellation_feedback must be a list")
+    feedback: list[CancellationFeedback] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise SchemaError("cancellation_feedback entries must be mappings")
+        child_id = item.get("child_id")
+        parent_id = item.get("parent_id")
+        reason = item.get("reason")
+        child_tier = item.get("child_tier")
+        dispositions = item.get("available_dispositions")
+        disposition = item.get("disposition")
+        if not isinstance(child_id, str) or not child_id:
+            raise SchemaError("cancellation_feedback child_id must be non-blank")
+        if not isinstance(parent_id, str) or not parent_id:
+            raise SchemaError("cancellation_feedback parent_id must be non-blank")
+        if child_tier not in ("feature", "task"):
+            raise SchemaError("cancellation_feedback child_tier must be feature or task")
+        if not isinstance(reason, str) or not reason.strip():
+            raise SchemaError("cancellation_feedback reason must be non-blank")
+        if dispositions != _CANCELLATION_DISPOSITIONS:
+            raise SchemaError("cancellation_feedback has invalid available_dispositions")
+        if disposition is not None and disposition not in _CANCELLATION_DISPOSITIONS:
+            raise SchemaError("cancellation_feedback has invalid disposition")
+        cancelled_at = _feedback_datetime(item, "cancelled_at", required=True)
+        resolved_at = _feedback_datetime(item, "resolved_at", required=False)
+        if (disposition is None) != (resolved_at is None):
+            raise SchemaError(
+                "cancellation_feedback disposition and resolved_at must be set together"
+            )
+        assert cancelled_at is not None
+        feedback.append(CancellationFeedback(
+            child_id=child_id,
+            child_tier=child_tier,
+            parent_id=parent_id,
+            reason=reason.strip(),
+            cancelled_at=cancelled_at,
+            available_dispositions=list(dispositions),
+            disposition=disposition,
+            resolved_at=resolved_at,
+        ))
+    return feedback
+
+
+def _feedback_datetime(
+    item: dict[object, object], field: str, *, required: bool
+) -> datetime | None:
+    value = item.get(field)
+    if value is None and not required:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise SchemaError(
+            f"cancellation_feedback {field} must be an ISO-8601 datetime string"
+        )
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise SchemaError(f"invalid cancellation_feedback {field}") from exc
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
 def _require_tier(value: object) -> WorkTier:
