@@ -61,9 +61,9 @@ def column_for_status(status: WorkStatus) -> Column:
 
     if status in ("backlog", "ready_to_plan"):
         return "backlog"
-    if status in ("active", "blocked"):
+    if status in ("active", "blocked", "cancelling"):
         return "active"
-    if status == "completed":
+    if status in ("completed", "cancelled"):
         return "completed"
     raise SchemaError(f"unknown status: {status!r}")
 

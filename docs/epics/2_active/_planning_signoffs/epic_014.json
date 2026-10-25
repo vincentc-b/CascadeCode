@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "sign_offs": [
+    {
+      "role": "epic_manager",
+      "plan_revision": "6e29bffa5d676fd4d0636f78e9f92ea0e069bcff",
+      "signed_at": "2026-10-25T00:25:34.966993+00:00"
+    },
+    {
+      "role": "epic_architect",
+      "plan_revision": "6e29bffa5d676fd4d0636f78e9f92ea0e069bcff",
+      "signed_at": "2026-10-25T00:25:58.615495+00:00"
+    }
+  ]
+}
