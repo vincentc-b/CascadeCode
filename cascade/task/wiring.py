@@ -113,9 +113,12 @@ def on_tests_finished(task_id: str, result: dict[str, object], *, root: Path) ->
             return
         mark_awaiting_merge(task_id, run, root=repo)
         _last_test_passed[task_id] = True
-        from cascade.task.execution import clear_validation_failures, record_running_error
+        from cascade.task.execution import (
+            clear_validation_failures,
+            mark_awaiting_merge as mark_execution_awaiting_merge,
+        )
 
-        record_running_error(task_id, None, root=repo)
+        mark_execution_awaiting_merge(task_id, root=repo)
         clear_validation_failures(task_id, root=repo)
         _infra_attempts.pop(task_id, None)
         return

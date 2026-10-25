@@ -344,7 +344,13 @@ def _auto_merge_finished_task(task_id: str, root: Path) -> None:
         if not has_deliverable_commit(run):
             fail_task(task_id, "no_task_changes", root=root)
             return
-        if run.state != "awaiting_merge":
+        from cascade.task.execution import execution_view
+
+        execution = execution_view(task_id, root=root)
+        tests_passed = run.state == "awaiting_merge" or (
+            execution is not None and execution.get("phase") == "awaiting_merge"
+        )
+        if not tests_passed:
             from cascade.task.wiring import last_test_passed
 
             reason = "tests_red" if last_test_passed(task_id) is False else "tests_not_run"

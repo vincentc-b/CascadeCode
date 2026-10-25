@@ -174,13 +174,11 @@ def dispatch_swe_tool(
         raise KeyError(f"tool not allowed: {name}")
 
     from cascade.task.graph import invoke_tool
-    from cascade.task.worktree import get_task_run
-    from cascade.task.wiring import load_task_tools, restore_active_task_runs
+    from cascade.task.worktree import attach_active_task_run
+    from cascade.task.wiring import load_task_tools
 
     repo = Path(repo_root).resolve()
     load_task_tools()
-    if get_task_run(task_id) is None:
-        restore_active_task_runs(repo)
-    if get_task_run(task_id) is None:
-        raise RuntimeError(f"could not restore active task run for {task_id}")
+    if attach_active_task_run(task_id, root=repo) is None:
+        raise RuntimeError(f"could not attach active task run for {task_id}")
     return invoke_tool(task_id, name, dict(args), root=repo)

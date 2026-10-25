@@ -799,7 +799,13 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
 
     if reason.kind in ("activate", "dispatch", "queue_event"):
         if not _checkpoint_has_models(reason.work_id, tier, root=repo, feature_id=reason.feature_id):
-            if reason.kind in ("activate", "dispatch"):
+            recover_active_task = (
+                reason.kind == "queue_event"
+                and tier == "task"
+                and doc.meta.status == "active"
+                and doc.meta.path.parent.name == "2_active"
+            )
+            if reason.kind in ("activate", "dispatch") or recover_active_task:
                 if not _ensure_role_models(
                     reason.work_id,
                     tier,
