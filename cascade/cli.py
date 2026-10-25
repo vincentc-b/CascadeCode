@@ -42,6 +42,11 @@ def main(argv: list[str] | None = None) -> None:
         "--reason", required=True, help="Why the work is being cancelled"
     )
     cancel_parser.add_argument(
+        "--discard-uncommitted",
+        action="store_true",
+        help="Confirm discard of uncommitted changes owned by this cancellation",
+    )
+    cancel_parser.add_argument(
         "--root",
         type=Path,
         default=None,
@@ -81,10 +86,18 @@ def main(argv: list[str] | None = None) -> None:
                 args.work_id,
                 args.reason,
                 root=args.root if args.root is not None else Path.cwd(),
+                discard_uncommitted=args.discard_uncommitted,
             )
         except BoardError as exc:
             print(str(exc), file=sys.stderr)
             raise SystemExit(1) from exc
+        if not result.complete:
+            print(
+                f"{result.work_id}: cancelling; cleanup failed at "
+                f"{result.cleanup_step}: {result.cleanup_error}",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
         state = "cancelled" if result.changed else "already cancelled"
         print(f"{result.work_id}: {state}")
         return

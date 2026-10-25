@@ -10,7 +10,7 @@ from typing import Literal
 from cascade.agent.providers import ProviderId
 
 WorkTier = Literal["epic", "feature", "task"]
-WorkStatus = Literal["backlog", "ready_to_plan", "active", "blocked", "completed", "cancelled"]
+WorkStatus = Literal["backlog", "ready_to_plan", "active", "blocked", "completed", "cancelling", "cancelled"]
 Column = Literal["backlog", "active", "completed"]
 WorkId = str
 
@@ -43,6 +43,8 @@ class WorkMeta:
     plan_approved_at: datetime | None = None
     cancellation_reason: str | None = None
     cancelled_at: datetime | None = None
+    cancellation_step: str | None = None
+    cancellation_error: str | None = None
 
 
 @dataclass

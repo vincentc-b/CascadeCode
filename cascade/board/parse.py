@@ -99,6 +99,10 @@ def render_doc(doc: WorkDoc) -> str:
         payload["cancellation_reason"] = meta.cancellation_reason
     if meta.cancelled_at is not None:
         payload["cancelled_at"] = meta.cancelled_at.isoformat()
+    if meta.cancellation_step is not None:
+        payload["cancellation_step"] = meta.cancellation_step
+    if meta.cancellation_error is not None:
+        payload["cancellation_error"] = meta.cancellation_error
     frontmatter = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True, width=4096)
     body = doc.body
     if body and not body.endswith("\n"):
@@ -174,6 +178,8 @@ def _meta_from_mapping(loaded: dict[str, object], path: Path) -> WorkMeta:
         plan_approved_at=_optional_datetime(loaded, "plan_approved_at"),
         cancellation_reason=_optional_nonblank_str(loaded, "cancellation_reason"),
         cancelled_at=_optional_datetime(loaded, "cancelled_at"),
+        cancellation_step=_optional_nonblank_str(loaded, "cancellation_step"),
+        cancellation_error=_optional_nonblank_str(loaded, "cancellation_error"),
     )
 
 
@@ -190,6 +196,7 @@ def _require_status(value: object) -> WorkStatus:
         or value == "active"
         or value == "blocked"
         or value == "completed"
+        or value == "cancelling"
         or value == "cancelled"
     ):
         return value

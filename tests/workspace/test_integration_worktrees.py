@@ -17,6 +17,7 @@ from cascade.watchdog import (
     read_events,
 )
 from cascade.workspace.integration_worktree import (
+    cancel_integration_worktree,
     ensure_integration_worktree,
     get_integration_worktree,
     invalidate_merged_board,
@@ -586,3 +587,51 @@ def test_active_feature_planning_ignores_stale_trunk_backlog_copy(tmp_path: Path
     write_closeout("feat_001", "Deterministic rollup closeout.", root=root)
     assert "Deterministic rollup closeout." in read_doc("feat_001", root=checkout).body
     assert read_doc("feat_001", root=root).body == feature.body
+
+
+def test_cancel_owned_worktree_removes_only_clean_registered_artifacts(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    branch = integration_branch("task", "task_001")
+    entry = ensure_integration_worktree(
+        "task", "task_001", branch=branch, base_ref="HEAD", trunk=root
+    )
+    unrelated = "task/task_999"
+    subprocess.run(
+        ["git", "branch", unrelated], cwd=root, check=True, capture_output=True
+    )
+
+    result = cancel_integration_worktree("task", "task_001", trunk=root)
+
+    assert result.complete
+    assert not entry.path.exists()
+    assert get_integration_worktree(root, "task", "task_001") is None
+    assert not _branch_exists(root, branch)
+    assert _branch_exists(root, unrelated)
+    # A matching-looking unregistered branch is not sufficient ownership proof.
+    assert cancel_integration_worktree("task", "task_999", trunk=root).complete
+    assert _branch_exists(root, unrelated)
+
+
+def test_cancel_owned_worktree_reports_dirty_refusal_without_mutation(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    branch = integration_branch("feature", "feat_001")
+    entry = ensure_integration_worktree(
+        "feature", "feat_001", branch=branch, base_ref="HEAD", trunk=root
+    )
+    (entry.path / "uncommitted.txt").write_text("preserve me\n", encoding="utf-8")
+
+    result = cancel_integration_worktree("feature", "feat_001", trunk=root)
+
+    assert not result.complete
+    assert result.step == "remove_worktree"
+    assert result.detail is not None and "uncommitted changes" in result.detail
+    assert entry.path.is_dir()
+    assert (entry.path / "uncommitted.txt").read_text(encoding="utf-8") == "preserve me\n"
+    assert get_integration_worktree(root, "feature", "feat_001") == entry
+    assert _branch_exists(root, branch)

@@ -47,6 +47,12 @@ def work_meta_from_dict(raw: Mapping[str, Any]) -> WorkMeta:
             raw.get("cancellation_reason"), field="cancellation_reason"
         ),
         cancelled_at=_parse_optional_datetime(raw.get("cancelled_at"), field="cancelled_at"),
+        cancellation_step=_parse_optional_nonblank_string(
+            raw.get("cancellation_step"), field="cancellation_step"
+        ),
+        cancellation_error=_parse_optional_nonblank_string(
+            raw.get("cancellation_error"), field="cancellation_error"
+        ),
     )
 
 
