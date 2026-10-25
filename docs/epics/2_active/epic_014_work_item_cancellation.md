@@ -141,6 +141,10 @@ _(none blocking; feature discovery may refine command names and storage fields w
 
 - 2026-10-22 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-10-25 · Epic Manager · **Lifecycle semantics**
+  Chose Use persisted cancelling as the recoverable intermediate state and cancelled only after required cleanup and parent feedback succeed..
+  Rationale: Board and Git updates cannot be atomic; explicit checkpoints prevent partial work from being presented as success and make retries safe.
+  Honors: Success criteria for cancellation, feedback, and zero Git pollution..
 ## Amendment log
 
 _(none)_
