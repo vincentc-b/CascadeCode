@@ -53,15 +53,6 @@ def _source_path(raw: dict[str, object]) -> str:
     return value.strip().replace("\\", "/")
 
 
-def _relative_path(path: Path, root: Path) -> str:
-    try:
-        return path.resolve().relative_to(root.resolve()).as_posix()
-    except ValueError as exc:
-        raise BriefEditError(
-            "brief path is outside the product checkout", code="invalid_target"
-        ) from exc
-
-
 def get_editable_brief(root: Path, request_path: str) -> dict[str, object]:
     query = parse_qs(urlparse(request_path).query)
     epic_id = (query.get("epic_id") or query.get("work_id") or [""])[0].strip()
@@ -76,11 +67,30 @@ def get_editable_brief(root: Path, request_path: str) -> dict[str, object]:
             f"{epic_id} is no longer an editable backlog brief",
             code="not_in_backlog", reload=True,
         )
-    payload = load_brief_edit(doc)
+    repo = Path(root).resolve()
+    try:
+        trunk = resolve_product_trunk(repo)
+        remote = read_automation_config(repo).remote
+        base = _fetch_remote_trunk(repo, trunk, remote=remote)
+        fetched = _fetched_brief(repo, base, epic_id)
+    except (GitError, ValueError, OSError) as exc:
+        raise BriefEditError(
+            "could not load the approved brief; retry shortly",
+            code="retryable", status=503,
+        ) from exc
+    if fetched is None:
+        raise BriefEditError(f"brief not found: {epic_id}", code="deleted", reload=True)
+    approved, source_path, source_revision = fetched
+    if approved.meta.status != "backlog" or Path(source_path).parent.name != "1_backlog":
+        raise BriefEditError(
+            f"{epic_id} is no longer an editable backlog brief",
+            code="not_in_backlog", reload=True,
+        )
+    payload = load_brief_edit(approved)
     payload.update({
         "epic_id": epic_id,
-        "source_path": _relative_path(doc.meta.path, Path(root)),
-        "source_revision": doc.sha,
+        "source_path": source_path,
+        "source_revision": source_revision,
     })
     payload.pop("source", None)
     return payload

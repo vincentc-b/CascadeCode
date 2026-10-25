@@ -23,6 +23,11 @@ _BACKLOG_PREFIX = "docs/epics/1_backlog/"
 _BACKLOG_PATH = re.compile(
     r"^docs/epics/1_backlog/(epic_\d+)_[^/]+\.md$"
 )
+_CANCELLED_PREFIX = "docs/epics/3_completed/"
+_CANCELLED_PATH = re.compile(
+    r"^docs/epics/3_completed/(epic_\d+)_[^/]+\.md$"
+)
+_CANCELLED_STATUS = re.compile(r"(?m)^status: cancelled\s*$")
 
 
 @dataclass(frozen=True)
@@ -111,7 +116,8 @@ def is_snapshot_only_epic(work_id: str, *, trunk: Path) -> bool:
     trunk = trunk.resolve()
     if work_id in list_board(trunk).by_id:
         return False
-    return work_id in snapshot_board(trunk).by_id
+    meta = snapshot_board(trunk).by_id.get(work_id)
+    return bool(meta is not None and meta.status == "backlog")
 
 
 def resolve_validated_epic_activation_sha(work_id: str, *, trunk: Path) -> str | None:
@@ -204,7 +210,7 @@ def refresh_remote_backlog_snapshot(
     diagnostics: list[str] = []
     materialized: dict[str, str] = {}
     for rel, content in sorted(blobs.items()):
-        match = _BACKLOG_PATH.match(rel)
+        match = _BACKLOG_PATH.match(rel) or _CANCELLED_PATH.match(rel)
         if match is None:
             continue
         epic_id = match.group(1)
@@ -242,12 +248,15 @@ def _load_remote_backlog_blobs(trunk: Path, sha: str) -> dict[str, str]:
     paths = [
         line
         for line in listing.stdout.splitlines()
-        if line.startswith(_BACKLOG_PREFIX) and line.endswith(".md")
+        if line.endswith(".md")
+        and (line.startswith(_BACKLOG_PREFIX) or line.startswith(_CANCELLED_PREFIX))
     ]
     by_id: dict[str, str] = {}
     blobs: dict[str, str] = {}
     for rel in paths:
         content = read_blob(trunk, sha, rel)
+        if _CANCELLED_PATH.match(rel) and not _CANCELLED_STATUS.search(content):
+            continue
         try:
             doc = parse_text(content, trunk / rel)
         except SchemaError as exc:
@@ -255,7 +264,10 @@ def _load_remote_backlog_blobs(trunk: Path, sha: str) -> dict[str, str]:
         meta = doc.meta
         if meta.tier != "epic":
             raise GitError(f"remote backlog file {rel} is not an epic brief")
-        if column_for_status(meta.status) != "backlog":
+        if _CANCELLED_PATH.match(rel):
+            if meta.status != "cancelled":
+                continue
+        elif column_for_status(meta.status) != "backlog":
             raise GitError(
                 f"remote backlog file {rel} has status {meta.status!r}, expected backlog"
             )
