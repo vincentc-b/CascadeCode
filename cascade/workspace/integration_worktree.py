@@ -778,7 +778,10 @@ def _meta_preference(meta: WorkMeta) -> tuple[int, int, int]:
     path = meta.path.as_posix()
     owner_bonus = 0
     if meta.tier == "epic" and "/worktrees/epic_" in path:
-        owner_bonus = 5
+        # A remotely accepted close can finish in the integration checkout
+        # while the operator trunk has a stale, dirty active copy.  Keep that
+        # terminal state visible until the operator checkout catches up.
+        owner_bonus = 15 if meta.status == "completed" else 5
     if meta.tier == "feature" and "/worktrees/feat_" in path:
         owner_bonus = 5
     if meta.tier == "task" and "/worktrees/feat_" in path:

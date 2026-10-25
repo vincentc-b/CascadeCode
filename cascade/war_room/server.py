@@ -709,6 +709,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         }
         if result.blocker_ids:
             payload["blocker_ids"] = list(result.blocker_ids)
+        if result.review_url:
+            payload["review_url"] = result.review_url
         if result.reason == "open_human_comments":
             payload["plan_url"] = f"/plan/{epic_id}#plan-comments"
         sync_payload = actionable_sync_failure_payload(
