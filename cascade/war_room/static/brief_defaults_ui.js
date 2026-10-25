@@ -70,9 +70,9 @@
     return models[role] || "";
   }
 
-  function resolveProviderId(inventory, template) {
+  function resolveProviderId(inventory, template, preserveSaved) {
     const saved = template && template.saved;
-    if (saved && saved.provider && providerById(inventory, saved.provider)) {
+    if (saved && saved.provider && (preserveSaved || providerById(inventory, saved.provider))) {
       return saved.provider;
     }
     if (template && template.provider && providerById(inventory, template.provider)) {
@@ -87,11 +87,11 @@
     return "";
   }
 
-  function revalidateRoleModel(inventory, providerId, role, currentModelId, fallbackModelId) {
+  function revalidateRoleModel(inventory, providerId, role, currentModelId, fallbackModelId, preserveSaved) {
     const provider = providerById(inventory, providerId);
-    if (!provider) return "";
+    if (!provider) return preserveSaved ? currentModelId : "";
     const resolvedFallback = fallbackModelId || roleFallbackFromTemplate(null, providerId, role);
-    if (currentModelId && modelById(provider, currentModelId)) return currentModelId;
+    if (currentModelId && (preserveSaved || modelById(provider, currentModelId))) return currentModelId;
     if (resolvedFallback && modelById(provider, resolvedFallback)) return resolvedFallback;
     return provider.models[0] ? provider.models[0].id : "";
   }
@@ -99,7 +99,7 @@
   function revalidateReasoningForRole(inventory, providerId, role, modelId, currentReasoning) {
     const provider = providerById(inventory, providerId);
     const model = provider ? modelById(provider, modelId) : null;
-    const choices = reasoningChoices(model);
+    let choices = reasoningChoices(model);
     if (!choices) return "";
     if (!currentReasoning) return "";
     for (let i = 0; i < choices.length; i += 1) {
@@ -108,8 +108,10 @@
     return "";
   }
 
-  function initialSelection(inventory, template) {
-    const providerId = resolveProviderId(inventory, template);
+  function initialSelection(inventory, template, options) {
+    options = options || {};
+    const preserveSaved = !!options.preserveSaved;
+    const providerId = resolveProviderId(inventory, template, preserveSaved);
     const models = {};
     const reasoning = {};
     BRIEF_STACK_ROLES.forEach(function (role) {
@@ -118,13 +120,9 @@
           ? template.saved.reasoning[role] || ""
           : "";
       const fallback = roleFallbackFromTemplate(template, providerId, role);
-      models[role] = revalidateRoleModel(inventory, providerId, role, fallback, fallback);
-      reasoning[role] = revalidateReasoningForRole(
-        inventory,
-        providerId,
-        role,
-        models[role],
-        savedReasoning
+      models[role] = revalidateRoleModel(inventory, providerId, role, fallback, fallback, preserveSaved);
+      reasoning[role] = preserveSaved && savedReasoning ? savedReasoning : revalidateReasoningForRole(
+        inventory, providerId, role, models[role], savedReasoning
       );
     });
     return { provider: providerId, models: models, reasoning: reasoning };
@@ -173,16 +171,18 @@
     return { provider: selection.provider, models: models, reasoning: reasoning };
   }
 
-  function canSubmitBrief(inventory, selection, trackingReady) {
+  function canSubmitBrief(inventory, selection, trackingReady, options) {
+    options = options || {};
     if (trackingReady === false) return false;
     if (!inventory || inventory.loading) return false;
     if (!inventory.providers || !inventory.providers.length) return false;
     const provider = providerById(inventory, selection.provider);
-    if (!provider) return false;
+    const saved = options.savedSelection || null;
+    if (!provider) return !!options.allowSavedUnavailable && saved && selection.provider === saved.provider && JSON.stringify(selection.models) === JSON.stringify(saved.models);
     for (let i = 0; i < BRIEF_STACK_ROLES.length; i += 1) {
       const role = BRIEF_STACK_ROLES[i];
       const modelId = selection.models[role];
-      if (!modelId || !modelById(provider, modelId)) return false;
+      if (!modelId || (!modelById(provider, modelId) && !(options.allowSavedUnavailable && saved && saved.models[role] === modelId))) return false;
       const reasoning = selection.reasoning[role];
       if (reasoning) {
         const choices = reasoningChoices(modelById(provider, modelId));
@@ -194,7 +194,8 @@
     return true;
   }
 
-  function buildSubmitPayload(formFields, selection) {
+  function buildSubmitPayload(formFields, selection, options) {
+    options = options || {};
     const payload = Object.assign({}, formFields, {
       provider: selection.provider,
       models: Object.assign({}, selection.models),
@@ -203,7 +204,15 @@
     BRIEF_STACK_ROLES.forEach(function (role) {
       if (selection.reasoning[role]) reasoning[role] = selection.reasoning[role];
     });
-    if (Object.keys(reasoning).length) payload.reasoning = reasoning;
+    if (Object.keys(reasoning).length || options.includeEmptyReasoning) payload.reasoning = reasoning;
+    return payload;
+  }
+
+  function buildEditSubmitPayload(formFields, selection, target) {
+    const payload = buildSubmitPayload(formFields, selection, { includeEmptyReasoning: true });
+    payload.epic_id = target.epic_id;
+    payload.source_path = target.source_path;
+    payload.source_revision = target.source_revision;
     return payload;
   }
 
@@ -242,7 +251,8 @@
     return { text: "", error: false, recoverable: false };
   }
 
-  function renderRoleSelectors(container, inventory, template, selection, handlers) {
+  function renderRoleSelectors(container, inventory, template, selection, handlers, options) {
+    options = options || {};
     if (!container) return;
     container.replaceChildren();
     const provider = providerById(inventory, selection.provider);
@@ -264,6 +274,13 @@
         option.selected = model.id === selection.models[role];
         modelSelect.appendChild(option);
       });
+      if (options.preserveUnavailable && selection.models[role] && !modelById(provider, selection.models[role])) {
+        const unavailable = document.createElement("option");
+        unavailable.value = selection.models[role];
+        unavailable.textContent = selection.models[role] + " (saved; unavailable)";
+        unavailable.selected = true;
+        modelSelect.appendChild(unavailable);
+      }
       modelLabel.appendChild(modelSelect);
 
       const suggestion = document.createElement("small");
@@ -275,7 +292,10 @@
       wrap.appendChild(suggestion);
 
       const model = provider ? modelById(provider, selection.models[role]) : null;
-      const choices = reasoningChoices(model);
+      let choices = reasoningChoices(model);
+      if (!choices && options.preserveUnavailable && selection.reasoning[role]) {
+        choices = [{ value: selection.reasoning[role], label: selection.reasoning[role] + " (saved)" }, { value: "", label: "Provider default (clear override)" }];
+      }
       if (choices) {
         const reasoningLabel = document.createElement("label");
         reasoningLabel.textContent = "Reasoning";
@@ -321,6 +341,7 @@
     applyRoleModelChange: applyRoleModelChange,
     canSubmitBrief: canSubmitBrief,
     buildSubmitPayload: buildSubmitPayload,
+    buildEditSubmitPayload: buildEditSubmitPayload,
     briefStatusMessage: briefStatusMessage,
     renderRoleSelectors: renderRoleSelectors,
   };

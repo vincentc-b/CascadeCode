@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from cascade.automation import reset_automation_memory, sync_briefs
+from cascade.brief_edit_pr import BriefEditError, submit_brief_edit
 from cascade.board.errors import GitError
 from cascade.board.store import read_doc
 from cascade.watchdog.dispatch import activate_epic
@@ -183,6 +184,70 @@ def test_atomic_replace_swaps_snapshot_contents(tmp_path: Path) -> None:
         "epic_021_first.md",
         "epic_022_second.md",
     }
+
+
+def test_failed_snapshot_swap_restores_previous_content(tmp_path: Path, monkeypatch) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_021", "First")
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+    before = read_provenance(root)
+    assert before is not None
+
+    _push_remote_brief(upstream, "epic_022", "Second")
+    from cascade.workspace import backlog_snapshot
+
+    real_replace = backlog_snapshot.os.replace
+
+    def fail_staging_swap(source, target):
+        if Path(source).name == ".backlog_snapshot.staging":
+            raise OSError("replacement failed")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(backlog_snapshot.os, "replace", fail_staging_swap)
+    with pytest.raises(OSError, match="replacement failed"):
+        refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+    assert read_provenance(root) == before
+    assert {path.name for path in (snapshot_root(root) / "docs/epics/1_backlog").glob("*.md")} == {
+        "epic_021_first.md"
+    }
+
+
+def test_edit_rejects_newer_fetched_brief_even_with_stale_local_copy(tmp_path: Path) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_024", "Original")
+    source = "docs/epics/1_backlog/epic_024_original.md"
+    original_revision = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", source],
+        cwd=upstream, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    _enable_automation(root)
+    (root / "local.txt").write_text("independent operator checkout\n", encoding="utf-8")
+    subprocess.run(["git", "add", "local.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "local trunk"], cwd=root, check=True, capture_output=True)
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+
+    path = upstream / source
+    path.write_text(path.read_text(encoding="utf-8").replace("Why this exists.", "Approved revision."), encoding="utf-8")
+    subprocess.run(["git", "add", source], cwd=upstream, check=True)
+    subprocess.run(["git", "commit", "-m", "approve newer brief"], cwd=upstream, check=True, capture_output=True)
+    subprocess.run(["git", "push", "origin", "main"], cwd=upstream, check=True, capture_output=True)
+
+    with pytest.raises(BriefEditError) as raised:
+        submit_brief_edit(root, {
+            "epic_id": "epic_024",
+            "source_path": source,
+            "source_revision": original_revision,
+        })
+    assert raised.value.code == "stale"
+    assert raised.value.reload is True
+    assert not subprocess.run(
+        ["git", "branch", "--list", "cascade/brief-edit/*"],
+        cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
 
 
 def test_local_epic_omits_conflicting_remote_brief(tmp_path: Path) -> None:
@@ -421,3 +486,23 @@ def test_sync_briefs_reports_omitted_conflicts(tmp_path: Path) -> None:
     assert payload["omitted_ids"] == ["epic_080"]
     assert any("epic_080" in item for item in payload["diagnostics"])
     assert merged_board(root).by_id["epic_080"].title == "Local wins"
+
+
+def test_refresh_replaces_stale_local_backlog_with_approved_snapshot(tmp_path: Path) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_090", "Approved edit")
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    add_doc(root, id="epic_090", title="Stale local copy", tier="epic", status="backlog")
+    commit_board(root, "stale local epic")
+
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+
+    board = merged_board(root)
+    assert board.by_id["epic_090"].title == "Approved edit"
+    assert read_doc_resolved("epic_090", root=root).meta.title == "Approved edit"
+    assert (
+        resolve_validated_epic_activation_sha("epic_090", trunk=root)
+        == read_provenance(root).sha  # type: ignore[union-attr]
+    )

@@ -736,9 +736,15 @@ def _merged_board_uncached(trunk: Path) -> BoardIndex:
         for work_id, meta in snapshot_board(trunk).by_id.items():
             if meta.tier != "epic" or meta.path.parent.name != "1_backlog":
                 continue
-            if work_id in by_id:
-                continue
-            by_id[work_id] = meta
+            current = by_id.get(work_id)
+            if current is None or (
+                current.tier == "epic"
+                and current.status == "backlog"
+                and current.path.parent.name == "1_backlog"
+            ):
+                # The approved snapshot supersedes only a stale backlog copy.
+                # Active/completed rows and integration worktrees stay live.
+                by_id[work_id] = meta
     return BoardIndex(by_id=by_id)
 
 

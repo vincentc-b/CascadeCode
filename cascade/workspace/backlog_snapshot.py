@@ -88,6 +88,12 @@ def resolve_epic_brief_base_sha(work_id: str, *, trunk: Path) -> str | None:
     """Return the git revision that contains ``work_id``'s epic brief, if any."""
 
     trunk = trunk.resolve()
+    # A merged backlog edit is represented by the managed snapshot until a
+    # human activates it. Prefer that approved revision over a stale local
+    # backlog checkout, while leaving live rows to their owning checkout.
+    snapshot_sha = _approved_snapshot_sha(work_id, trunk=trunk)
+    if snapshot_sha is not None:
+        return snapshot_sha
     head = git_run(["rev-parse", "--verify", "-q", "HEAD"], trunk, check=False)
     if head.returncode == 0:
         local_sha = head.stdout.strip()
@@ -123,6 +129,33 @@ def resolve_validated_epic_activation_sha(work_id: str, *, trunk: Path) -> str |
             return None
         return sha
     return resolve_epic_brief_base_sha(work_id, trunk=trunk)
+
+
+def _approved_snapshot_sha(work_id: str, *, trunk: Path) -> str | None:
+    """Return the current snapshot revision for an eligible backlog epic."""
+
+    provenance = read_provenance(trunk)
+    if provenance is None:
+        return None
+    snapshot_meta = snapshot_board(trunk).by_id.get(work_id)
+    if snapshot_meta is None or snapshot_meta.tier != "epic":
+        return None
+    if snapshot_meta.path.parent.name != "1_backlog":
+        return None
+    # A snapshot must not become an activation source for a live integration
+    # row. Import lazily to avoid the module cycle.
+    from cascade.workspace.integration_worktree import merged_board
+
+    current = merged_board(trunk).by_id.get(work_id)
+    if current is not None and (
+        current.status != "backlog" or current.path.parent.name != "1_backlog"
+    ):
+        return None
+    if not _object_exists(trunk, provenance.sha):
+        return None
+    if path_for_work_id(trunk, provenance.sha, work_id) is None:
+        return None
+    return provenance.sha
 
 
 def _object_exists(trunk: Path, sha: str) -> bool:
@@ -239,7 +272,7 @@ def _local_supervisor_epic_ids(trunk: Path) -> set[str]:
     roots.extend(entry.path for entry in load_registry(trunk) if entry.path.is_dir())
     for root in roots:
         for meta in list_board(root).by_id.values():
-            if meta.tier == "epic":
+            if meta.tier == "epic" and meta.status != "backlog":
                 ids.add(meta.id)
     return ids
 
@@ -273,9 +306,34 @@ def _publish_snapshot(
     }
     provenance_path = staging / "provenance.json"
     provenance_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    if base.exists():
-        shutil.rmtree(base)
-    os.replace(staging, base)
+    backup = trunk / ".cascade" / f".{_SNAPSHOT_DIR}.backup"
+    if backup.exists():
+        shutil.rmtree(backup)
+
+    had_base = base.exists()
+    moved_base = False
+    restored = False
+    completed = False
+    try:
+        if had_base:
+            os.replace(base, backup)
+            moved_base = True
+        os.replace(staging, base)
+        completed = True
+    except Exception:
+        # Restore the last valid snapshot before surfacing the replacement error.
+        if moved_base:
+            if base.exists():
+                shutil.rmtree(base)
+            if backup.exists():
+                os.replace(backup, base)
+                restored = True
+        raise
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+        if backup.exists() and (completed or not moved_base or restored):
+            shutil.rmtree(backup)
 
 
 def remove_snapshot_for_tests(trunk: Path) -> None:
