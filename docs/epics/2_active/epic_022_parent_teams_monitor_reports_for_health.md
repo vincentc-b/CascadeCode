@@ -4,7 +4,8 @@ title: Parent teams monitor reports for health
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_022_001
 depends_on: []
 owners:
 - epic_manager
@@ -87,6 +88,7 @@ Monitoring must use persisted state as the source of truth. In-memory observatio
 Before implementation, the feature lead must confirm the exact status names and transition rules already present in the repository. This is integration discovery, not permission to introduce a new taxonomy.
 
 ## Feature breakdown
+- feat_022_001
 
 1. **Supervisor health observation and bounded remediation**
    - Integrate configurable periodic direct-report inspection into the existing supervisor lifecycle.
