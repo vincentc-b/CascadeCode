@@ -70,12 +70,15 @@
     btnPullMain: document.getElementById("btn-pull-main"),
     syncStatus: document.getElementById("sync-status"),
     briefDialog: document.getElementById("brief-dialog"),
+    briefDialogTitle: document.getElementById("brief-dialog-title"),
+    briefDialogHelp: document.getElementById("brief-dialog-help"),
     briefForm: document.getElementById("brief-form"),
     briefStatus: document.getElementById("brief-status"),
     briefResult: document.getElementById("brief-result"),
     briefProvider: document.getElementById("brief-provider"),
     briefRoleSelectors: document.getElementById("brief-role-selectors"),
     btnBriefInventoryRetry: document.getElementById("btn-brief-inventory-retry"),
+    btnBriefReload: document.getElementById("btn-brief-reload"),
     btnCloseBrief: document.getElementById("btn-close-brief"),
     btnCancelBrief: document.getElementById("btn-cancel-brief"),
     btnSubmitBrief: document.getElementById("btn-submit-brief"),
@@ -314,6 +317,9 @@
   let briefInventory = null;
   let briefTemplate = null;
   let briefSelection = null;
+  let briefMode = "create";
+  let briefEditTarget = null;
+  let briefSubmitInFlight = false;
 
   function setBriefInventoryRetryVisible(visible) {
     if (el.btnBriefInventoryRetry) el.btnBriefInventoryRetry.hidden = !visible;
@@ -333,11 +339,7 @@
       el.btnSubmitBrief.disabled = true;
       return;
     }
-    el.btnSubmitBrief.disabled = !BriefDefaultsUi.canSubmitBrief(
-      briefInventory,
-      briefSelection,
-      trackingReady
-    );
+    el.btnSubmitBrief.disabled = briefSubmitInFlight || !BriefDefaultsUi.canSubmitBrief(briefInventory, briefSelection, trackingReady, briefMode === "edit" ? { allowSavedUnavailable: true, savedSelection: briefEditTarget } : undefined);
   }
 
   function renderBriefSelectors() {
@@ -362,14 +364,17 @@
           renderBriefSelectors();
           updateBriefDialogState();
         },
-      }
+      },
+      { preserveUnavailable: briefMode === "edit" }
     );
   }
 
   function populateBriefProviders() {
     if (!el.briefProvider || !briefInventory) return;
     el.briefProvider.replaceChildren();
-    (briefInventory.providers || []).forEach(function (provider) {
+    const providers = (briefInventory.providers || []).slice();
+    if (briefMode === "edit" && briefSelection && briefSelection.provider && !providers.some(function (p) { return p.id === briefSelection.provider; })) providers.unshift({ id: briefSelection.provider, display_name: briefSelection.provider + " (saved; unavailable)", models: [] });
+    providers.forEach(function (provider) {
       const option = document.createElement("option");
       option.value = provider.id;
       option.textContent = provider.display_name || provider.id;
@@ -381,7 +386,7 @@
 
   function applyBriefLoadedState() {
     if (!BriefDefaultsUi || !briefInventory || !briefTemplate) return;
-    briefSelection = BriefDefaultsUi.initialSelection(briefInventory, briefTemplate);
+    briefSelection = BriefDefaultsUi.initialSelection(briefInventory, briefTemplate, { preserveSaved: briefMode === "edit" });
     populateBriefProviders();
     el.briefProvider.onchange = function () {
       briefSelection = BriefDefaultsUi.applyProviderChange(
@@ -421,7 +426,29 @@
     applyBriefLoadedState();
   }
 
+  function resetBriefForm() {
+    el.briefForm.reset();
+    if (el.briefDialogTitle) el.briefDialogTitle.textContent = briefMode === "edit" ? "Edit backlog brief" : "Create a feature brief";
+    if (el.briefDialogHelp) el.briefDialogHelp.textContent = briefMode === "edit" ? "Submit a review request; the approved backlog brief is unchanged until merge and refresh." : "Submitting opens a merge request. Merge it to add the epic to the backlog.";
+    if (el.btnSubmitBrief) el.btnSubmitBrief.textContent = briefMode === "edit" ? "Create edit merge request" : "Create merge request";
+  }
+
+  function fillBriefForm(data) {
+    ["title", "intent", "success_criteria", "constraints", "additional_markdown"].forEach(function (name) { const field = el.briefForm.elements[name]; if (field) field.value = data[name] || ""; });
+  }
+
+  async function openBriefEdit(item) {
+    briefMode = "edit"; briefEditTarget = null; resetBriefForm(); el.briefResult.hidden = true; el.briefDialog.showModal();
+    el.briefStatus.textContent = "Loading saved brief…";
+    try {
+      const data = await apiGet("/api/brief/edit?epic_id=" + encodeURIComponent(item.id));
+      briefEditTarget = { epic_id: data.epic_id, provider: data.provider, models: Object.assign({}, data.models), reasoning: Object.assign({}, data.reasoning || {}), source_path: data.source_path, source_revision: data.source_revision };
+      fillBriefForm(data); await loadBriefDialogData(false); briefSelection.reasoning = Object.assign({}, data.reasoning || {}); renderBriefSelectors(); updateBriefDialogState();
+    } catch (err) { el.briefStatus.textContent = (err.body && err.body.error) || err.message || "Could not load brief"; el.briefStatus.classList.add("error"); }
+  }
+
   async function openBriefDialog() {
+    briefMode = "create"; briefEditTarget = null; resetBriefForm();
     el.briefStatus.classList.remove("error");
     el.briefResult.hidden = true;
     setBriefInventoryRetryVisible(false);
@@ -461,12 +488,14 @@
     const form = new FormData(el.briefForm);
     const fields = Object.fromEntries(form.entries());
     delete fields.provider;
-    const payload = BriefDefaultsUi.buildSubmitPayload(fields, briefSelection);
+    const payload = BriefDefaultsUi.buildSubmitPayload(fields, briefSelection, { includeEmptyReasoning: briefMode === "edit" });
+    if (briefMode === "edit") Object.assign(payload, briefEditTarget);
+    briefSubmitInFlight = true;
     el.btnSubmitBrief.disabled = true;
     el.briefStatus.classList.remove("error");
     el.briefStatus.textContent = "Creating branch and merge request…";
     try {
-      const response = await apiPost("/api/briefs", payload);
+      const response = await apiPost(briefMode === "edit" ? "/api/brief/edit" : "/api/briefs", payload);
       el.briefStatus.textContent = "Brief created. Review and merge it to add it to the backlog.";
       el.briefResult.replaceChildren();
       const link = document.createElement("a");
@@ -479,7 +508,9 @@
     } catch (err) {
       el.briefStatus.textContent = (err.body && err.body.error) || err.message || "Brief creation failed";
       el.briefStatus.classList.add("error");
+      if (err.body && err.body.reload) el.briefStatus.textContent += " Reload the brief and reapply your edits.";
     } finally {
+      briefSubmitInFlight = false;
       updateBriefDialogState();
     }
   }
@@ -855,6 +886,7 @@
       }
     }
     if (tier === "epics") {
+      if (column === "1_backlog") actions.appendChild(actionButton("Edit", function () { return openBriefEdit(item); }));
       actions.appendChild(actionButton("Attach", function () {
         return attach(item.id, "epic");
       }));
@@ -2098,6 +2130,7 @@
   }
 
   if (el.btnCreateBrief) el.btnCreateBrief.addEventListener("click", openBriefDialog);
+  if (el.btnBriefReload) el.btnBriefReload.addEventListener("click", function () { if (briefEditTarget && briefEditTarget.epic_id) openBriefEdit({ id: briefEditTarget.epic_id }); });
   if (el.btnBriefInventoryRetry) {
     el.btnBriefInventoryRetry.addEventListener("click", function () {
       retryBriefInventory().catch(function (err) {

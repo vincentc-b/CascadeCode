@@ -59,8 +59,8 @@
         <form id="brief-form" method="dialog">
           <div class="dialog-heading">
             <div>
-              <h2>Create a feature brief</h2>
-              <p>Submitting opens a merge request. Merge it to add the epic to the backlog.</p>
+              <h2 id="brief-dialog-title">Create a feature brief</h2>
+              <p id="brief-dialog-help">Submitting opens a merge request. Merge it to add the epic to the backlog.</p>
             </div>
             <button type="button" id="btn-close-brief" class="btn-secondary" aria-label="Close">×</button>
           </div>
@@ -68,6 +68,7 @@
           <label>Intent <textarea name="intent" rows="4" required placeholder="What problem should the team solve, and for whom?"></textarea></label>
           <label>Success criteria <textarea name="success_criteria" rows="3" required placeholder="Observable outcomes that mean this epic is done"></textarea></label>
           <label>Constraints <textarea name="constraints" rows="3" placeholder="Compatibility, architecture, delivery, or operational constraints"></textarea></label>
+          <label>Additional Markdown sections <textarea name="additional_markdown" rows="6" placeholder="Other human-authored brief sections"></textarea></label>
           <div class="brief-model-stack">
             <label>Provider
               <select id="brief-provider" required></select>
@@ -75,6 +76,7 @@
             <div id="brief-role-selectors" class="brief-role-selectors" aria-live="polite"></div>
           </div>
           <p id="brief-status" class="status-line" aria-live="polite"></p>
+          <button type="button" id="btn-brief-reload" class="btn-secondary brief-inventory-retry" hidden>Reload brief</button>
           <button type="button" id="btn-brief-inventory-retry" class="btn-secondary brief-inventory-retry" hidden>Retry model inventory</button>
           <div id="brief-result" class="brief-result" hidden></div>
           <div class="dialog-actions">

@@ -34,6 +34,7 @@ class BriefEditRequest:
     cleared_reasoning: frozenset[str]
     source: BriefEditSource
     original: WorkDoc
+    additional_markdown: str | None = None
     warnings: tuple[str, ...] = ()
 
     @property
@@ -49,6 +50,7 @@ def load_brief_edit(doc: WorkDoc) -> dict[str, object]:
         "provider": doc.meta.provider,
         "models": {role: models.get(role, "") for role in BRIEF_STACK_ROLES},
         "reasoning": dict(doc.meta.reasoning or {}),
+        "additional_markdown": _additional_markdown(doc.body, doc.meta.title),
         "source": BriefEditSource(doc.meta.id, doc.meta.path, doc.sha),
     }
 
@@ -83,6 +85,13 @@ def render_brief_edit(edit: BriefEditRequest) -> WorkDoc:
     body = _replace_section(edit.original.body, "Intent", edit.intent)
     body = _replace_section(body, "Success criteria", edit.success_criteria)
     body = _replace_section(body, "Cross-module constraints", edit.constraints)
+    original_additional = _additional_markdown(edit.original.body, edit.original.meta.title)
+    requested_additional = original_additional if edit.additional_markdown is None else edit.additional_markdown.strip()
+    if requested_additional != original_additional.strip():
+        if original_additional:
+            body = body.replace(original_additional, "", 1).rstrip()
+        if requested_additional:
+            body = body + "\n\n" + requested_additional + "\n"
     meta = replace(edit.original.meta, title=edit.title, provider=edit.provider, models=dict(edit.models), reasoning=dict(edit.reasoning) or None, updated=edit.original.meta.updated)
     return WorkDoc(meta=meta, body=body, sha=edit.original.sha)
 
@@ -107,6 +116,24 @@ def _parse_reasoning(raw: dict[str, object]) -> tuple[dict[str, str], set[str]]:
 def _section_value(body: str, heading: str) -> str:
     match = re.search(r"(?ms)^##{1,3} +"+re.escape(heading)+r" *\n(.*?)(?=^##{1,3} +|\Z)", body)
     return match.group(1).strip() if match else ""
+
+def _additional_markdown(body: str, title: str) -> str:
+    """Return human-authored sections outside the three structured fields."""
+    value = body
+    if value.startswith(f"# {title}\n"):
+        value = value[len(f"# {title}\n"):]
+    headings = {"intent", "success criteria", "cross-module constraints"}
+    matches = list(re.finditer(r"(?m)^#{2,3} +(.+?) *$", value))
+    spans: list[tuple[int, int]] = []
+    for index, match in enumerate(matches):
+        if match.group(1).strip().lower() not in headings:
+            continue
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(value)
+        spans.append((match.start(), end))
+    for start, end in reversed(spans):
+        value = value[:start] + value[end:]
+    return value.strip()
+
 
 def _replace_section(body: str, heading: str, value: str) -> str:
     pattern = re.compile(r"(?ms)(^##{1,3} +"+re.escape(heading)+r" *\n)(.*?)(?=^##{1,3} +|\Z)")
