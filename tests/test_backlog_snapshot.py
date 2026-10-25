@@ -421,3 +421,23 @@ def test_sync_briefs_reports_omitted_conflicts(tmp_path: Path) -> None:
     assert payload["omitted_ids"] == ["epic_080"]
     assert any("epic_080" in item for item in payload["diagnostics"])
     assert merged_board(root).by_id["epic_080"].title == "Local wins"
+
+
+def test_refresh_replaces_stale_local_backlog_with_approved_snapshot(tmp_path: Path) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_090", "Approved edit")
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    add_doc(root, id="epic_090", title="Stale local copy", tier="epic", status="backlog")
+    commit_board(root, "stale local epic")
+
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+
+    board = merged_board(root)
+    assert board.by_id["epic_090"].title == "Approved edit"
+    assert read_doc_resolved("epic_090", root=root).meta.title == "Approved edit"
+    assert (
+        resolve_validated_epic_activation_sha("epic_090", trunk=root)
+        == read_provenance(root).sha  # type: ignore[union-attr]
+    )
