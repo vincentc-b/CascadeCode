@@ -49,6 +49,7 @@ def compute_boss_view(*, root: Path | None = None) -> BossView:
                 _backlog_open(meta)
                 and meta.parent
                 and _deps_met(board, meta, root=repo)
+                and not _parent_cancellation_gated(board, meta)
                 and not at_cap
             ):
                 dispatchable_tasks.append(work_id)
@@ -63,6 +64,17 @@ def compute_boss_view(*, root: Path | None = None) -> BossView:
 
 def _backlog_open(meta: WorkMeta) -> bool:
     return meta.status in _OPEN and meta.path.parent.name == "1_backlog"
+
+
+def _parent_cancellation_gated(board: BoardIndex, meta: WorkMeta) -> bool:
+    if not meta.parent:
+        return False
+    parent = board.by_id.get(meta.parent)
+    if parent is None:
+        return False
+    return any(
+        item.disposition is None for item in parent.cancellation_feedback
+    )
 
 
 def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:

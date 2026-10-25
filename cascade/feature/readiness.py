@@ -19,6 +19,7 @@ class FeatureReadiness:
 
 
 _DISPATCH_BLOCKER_ORDER = (
+    "parent_cancellation_pending",
     "unmet_deps",
     "not_approved",
     "feature_awaiting_merge",
@@ -74,6 +75,10 @@ def compute_feature_readiness(
         blockers.append("sibling_blocked")
 
     parent = board.by_id.get(meta.parent)
+    if parent is not None:
+        from cascade.cancellation_feedback import cancellation_dispatch_gated
+        if cancellation_dispatch_gated(parent):
+            blockers.append("parent_cancellation_pending")
     if parent is None or parent.path.parent.name != "2_active":
         blockers.append("epic_inactive")
 
