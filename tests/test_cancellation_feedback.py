@@ -8,6 +8,7 @@ import pytest
 
 from cascade.board import move_doc, read_doc, write_doc
 from cascade.board.parse import parse_text, render_doc
+from cascade.board.types import CancellationDisposition
 from cascade.cancellation import cancel_work_item
 from cascade.cancellation_feedback import (
     CANCELLATION_DISPOSITIONS,
@@ -163,3 +164,44 @@ def test_feature_cancellation_gates_epic_feature_dispatch(tmp_path: Path) -> Non
     assert "parent_cancellation_pending" in readiness.blockers
     epic = read_doc("epic_001", root=root)
     assert epic.meta.cancellation_feedback[0].child_tier == "feature"
+
+
+@pytest.mark.parametrize("disposition", CANCELLATION_DISPOSITIONS)
+def test_feature_cancellation_replanning_workflow_records_choice_and_updates_gate(
+    tmp_path: Path, disposition: CancellationDisposition
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    move_doc("epic_001", "active", root=root)
+    add_doc(
+        root, id="feat_001", title="Cancelled", tier="feature", parent="epic_001"
+    )
+    waiting = add_doc(
+        root, id="feat_002", title="Waiting", tier="feature", parent="epic_001"
+    )
+    waiting.meta.approved_at = waiting.meta.created
+    write_doc(waiting, root=root)
+
+    cancel_work_item("feat_001", "customer need changed", root=root)
+    gated = compute_feature_readiness("feat_002", root=root)
+    assert gated is not None
+    assert "parent_cancellation_pending" in gated.blockers
+
+    chosen = choose_cancellation_disposition(
+        "epic_001", "feat_001", disposition, root=root
+    )
+
+    epic = read_doc("epic_001", root=root)
+    feedback = epic.meta.cancellation_feedback[0]
+    assert feedback.disposition == disposition
+    assert feedback.resolved_at == chosen.resolved_at
+    assert epic.body.count("Disposition for cancelled child feat_001") == 1
+    if disposition == "cancel_parent":
+        assert epic.meta.status == "cancelled"
+        assert len(epic.meta.cancellation_feedback) == 1
+        assert cancellation_dispatch_gated(epic.meta)
+    else:
+        replanned = compute_feature_readiness("feat_002", root=root)
+        assert replanned is not None
+        assert "parent_cancellation_pending" not in replanned.blockers
+        assert not cancellation_dispatch_gated(epic.meta)
