@@ -120,6 +120,26 @@ assert.equal(payload.provider, "codex");
 assert.equal(payload.models.swe, "gpt-swe");
 assert.equal(payload.reasoning.swe, "high");
 
+const savedTarget = {
+  epic_id: "epic_024",
+  source_path: "docs/epics/1_backlog/epic_024_edit_brief.md",
+  source_revision: "old-revision",
+  provider: "cursor",
+  models: { swe: "composer-2.5" },
+  reasoning: { swe: "low" },
+};
+const editPayload = require("../../cascade/war_room/static/brief_defaults_ui.js").buildEditSubmitPayload(
+  { title: "Edited", intent: "New intent", additional_markdown: "## Extra\nText" },
+  selection,
+  savedTarget
+);
+assert.equal(editPayload.epic_id, "epic_024");
+assert.equal(editPayload.source_revision, "old-revision");
+assert.equal(editPayload.provider, "codex");
+assert.equal(editPayload.models.swe, "gpt-swe");
+assert.equal(editPayload.reasoning.swe, "high");
+assert.equal(editPayload.additional_markdown, "## Extra\nText");
+
 const emptyStatus = briefStatusMessage({ loading: false, providers: [] }, true);
 assert.match(emptyStatus.text, /No usable provider/);
 assert.equal(emptyStatus.error, true);

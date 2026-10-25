@@ -40,7 +40,14 @@ def resolve_doc_worktree(work_id: WorkId, *, root: Path) -> Path:
         ):
             return trunk
         if meta.path.parent.name == "1_backlog" and not is_trunk_pointer(meta):
-            return trunk
+            from cascade.workspace.backlog_snapshot import snapshot_root
+
+            snapshot = snapshot_root(trunk).resolve()
+            try:
+                meta.path.resolve().relative_to(snapshot)
+            except ValueError:
+                return trunk
+            return snapshot
         epic_root = _registered_worktree_path(trunk, "epic", work_id)
         if epic_root is not None:
             return epic_root
