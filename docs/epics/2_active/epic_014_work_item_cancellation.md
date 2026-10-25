@@ -150,6 +150,11 @@ _(none blocking; feature discovery may refine command names and storage fields w
   Chose Gate a direct parent after child cancellation and require continue, replace/replan, or cancel-parent disposition; never cascade cancellation implicitly..
   Rationale: A cancelled child can invalidate parent scope, while automatic cascading could destroy unrelated sibling work and obscure user intent.
   Honors: The brief's requirement to give feedback to parent work items and ask what the epic team should do..
+
+- `dec_003` · 2026-10-25 · Epic Manager · **Git safety**
+  Chose Reuse exact owned-artifact teardown and require explicit confirmation before discarding dirty or unmerged work..
+  Rationale: This removes dangling branches/worktrees while protecting canonical refs, unrelated work, and unacknowledged local changes.
+  Honors: The brief's no-Git-pollution outcome and safe destructive-operation constraints..
 ## Amendment log
 
 _(none)_
