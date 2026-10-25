@@ -20,6 +20,7 @@ models:
 reasoning:
   feature_lead: high
   feature_architect: high
+approved_at: '2026-10-25T06:23:07.047097+00:00'
 ---
 # Edit backlog briefs through PRs and refresh approved content
 
