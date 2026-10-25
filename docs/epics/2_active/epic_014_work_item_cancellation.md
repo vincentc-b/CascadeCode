@@ -145,6 +145,11 @@ _(none blocking; feature discovery may refine command names and storage fields w
   Chose Use persisted cancelling as the recoverable intermediate state and cancelled only after required cleanup and parent feedback succeed..
   Rationale: Board and Git updates cannot be atomic; explicit checkpoints prevent partial work from being presented as success and make retries safe.
   Honors: Success criteria for cancellation, feedback, and zero Git pollution..
+
+- `dec_002` · 2026-10-25 · Epic Manager · **Parent handling**
+  Chose Gate a direct parent after child cancellation and require continue, replace/replan, or cancel-parent disposition; never cascade cancellation implicitly..
+  Rationale: A cancelled child can invalidate parent scope, while automatic cascading could destroy unrelated sibling work and obscure user intent.
+  Honors: The brief's requirement to give feedback to parent work items and ask what the epic team should do..
 ## Amendment log
 
 _(none)_
