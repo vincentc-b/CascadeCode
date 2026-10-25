@@ -306,9 +306,34 @@ def _publish_snapshot(
     }
     provenance_path = staging / "provenance.json"
     provenance_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    if base.exists():
-        shutil.rmtree(base)
-    os.replace(staging, base)
+    backup = trunk / ".cascade" / f".{_SNAPSHOT_DIR}.backup"
+    if backup.exists():
+        shutil.rmtree(backup)
+
+    had_base = base.exists()
+    moved_base = False
+    restored = False
+    completed = False
+    try:
+        if had_base:
+            os.replace(base, backup)
+            moved_base = True
+        os.replace(staging, base)
+        completed = True
+    except Exception:
+        # Restore the last valid snapshot before surfacing the replacement error.
+        if moved_base:
+            if base.exists():
+                shutil.rmtree(base)
+            if backup.exists():
+                os.replace(backup, base)
+                restored = True
+        raise
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+        if backup.exists() and (completed or not moved_base or restored):
+            shutil.rmtree(backup)
 
 
 def remove_snapshot_for_tests(trunk: Path) -> None:

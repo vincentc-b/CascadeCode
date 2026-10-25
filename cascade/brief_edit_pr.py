@@ -10,8 +10,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from cascade.board.errors import GitError, NotFound, SchemaError
-from cascade.board.parse import render_doc
+from cascade.board.parse import parse_text, render_doc
 from cascade.board.store import read_doc
+from cascade.board.types import WorkDoc
 from cascade.brief_edit import (
     brief_edit_unchanged,
     load_brief_edit,
@@ -91,6 +92,32 @@ def _git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _fetched_brief(repo: Path, base: str, epic_id: str) -> tuple[WorkDoc, str, str] | None:
+    """Find an epic in the fetched trunk and return its doc, path, and revision."""
+
+    listing = _git(["ls-tree", "-r", "--name-only", base, "--", "docs/epics"], repo)
+    if listing.returncode != 0:
+        raise GitError((listing.stderr or listing.stdout).strip() or "could not inspect fetched trunk")
+    for rel in listing.stdout.splitlines():
+        if not rel.endswith(".md"):
+            continue
+        shown = _git(["show", f"{base}:{rel}"], repo)
+        if shown.returncode != 0:
+            raise GitError((shown.stderr or shown.stdout).strip() or f"could not read {rel}")
+        doc = parse_text(shown.stdout, repo / rel)
+        if doc.meta.id != epic_id:
+            continue
+        revision = _git(["log", "-1", "--format=%H", base, "--", rel], repo)
+        if revision.returncode != 0 or not revision.stdout.strip():
+            raise GitError(
+                (revision.stderr or revision.stdout).strip()
+                or f"could not resolve revision for {rel}"
+            )
+        doc.sha = revision.stdout.strip()
+        return doc, rel, doc.sha
+    return None
+
+
 def submit_brief_edit(root: Path, raw: dict[str, object]) -> MergeRequest:
     repo = Path(root).resolve()
     epic_id = _request_id(raw)
@@ -111,21 +138,27 @@ def submit_brief_edit(root: Path, raw: dict[str, object]) -> MergeRequest:
 
 def _submit(repo: Path, epic_id: str, raw: dict[str, object]) -> MergeRequest:
     source_path = _source_path(raw)
-    try:
-        current = read_doc(epic_id, root=repo)
-    except NotFound as exc:
+    trunk = resolve_product_trunk(repo)
+    remote = read_automation_config(repo).remote
+    base = _fetch_remote_trunk(repo, trunk, remote=remote)
+    fetched = _fetched_brief(repo, base, epic_id)
+    if fetched is None:
         raise BriefEditError(
             f"brief {epic_id} was deleted; reload it", code="deleted", reload=True
-        ) from exc
-    actual_path = _relative_path(current.meta.path, repo)
+        )
+    current, actual_path, revision = fetched
     if actual_path != source_path:
         raise BriefEditError("brief path changed; reload the brief", code="stale", reload=True)
-    if current.meta.tier != "epic" or current.meta.status != "backlog" or current.meta.path.parent.name != "1_backlog":
+    if (
+        current.meta.tier != "epic"
+        or current.meta.status != "backlog"
+        or Path(actual_path).parent.name != "1_backlog"
+    ):
         raise BriefEditError(
             f"{epic_id} is no longer in the backlog; reload the brief",
             code="not_in_backlog", reload=True,
         )
-    if raw.get("source_revision") != current.sha:
+    if raw.get("source_revision") != revision:
         raise BriefEditError(
             "brief changed since it was loaded; reload it and reapply your edits",
             code="stale", reload=True,
@@ -142,9 +175,6 @@ def _submit(repo: Path, epic_id: str, raw: dict[str, object]) -> MergeRequest:
             code="forge_unavailable", status=503,
         )
 
-    trunk = resolve_product_trunk(repo)
-    remote = read_automation_config(repo).remote
-    base = _fetch_remote_trunk(repo, trunk, remote=remote)
     branch = f"cascade/brief-edit/{epic_id}-{uuid.uuid4().hex[:8]}"
     with tempfile.TemporaryDirectory(prefix=f"cascade-{epic_id}-") as temp:
         worktree = Path(temp) / "worktree"

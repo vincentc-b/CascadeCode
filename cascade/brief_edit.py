@@ -82,7 +82,12 @@ def validate_brief_edit(raw: dict[str, object], target: WorkDoc, *, root: Path, 
     )
 
 def render_brief_edit(edit: BriefEditRequest) -> WorkDoc:
-    body = _replace_section(edit.original.body, "Intent", edit.intent)
+    body = edit.original.body
+    if edit.title != edit.original.meta.title:
+        old_heading = f"# {edit.original.meta.title}"
+        if body.startswith(old_heading + "\n"):
+            body = f"# {edit.title}" + body[len(old_heading):]
+    body = _replace_section(body, "Intent", edit.intent)
     body = _replace_section(body, "Success criteria", edit.success_criteria)
     body = _replace_section(body, "Cross-module constraints", edit.constraints)
     original_additional = _additional_markdown(edit.original.body, edit.original.meta.title)
@@ -138,5 +143,10 @@ def _additional_markdown(body: str, title: str) -> str:
 def _replace_section(body: str, heading: str, value: str) -> str:
     pattern = re.compile(r"(?ms)(^##{1,3} +"+re.escape(heading)+r" *\n)(.*?)(?=^##{1,3} +|\Z)")
     match = pattern.search(body)
-    if not match: return body
+    if not match:
+        if not value.strip():
+            return body
+        return body.rstrip("\n") + f"\n\n## {heading}\n\n{value.strip()}\n"
+    if match.group(2).strip() == value.strip():
+        return body
     return body[:match.start(2)] + value.strip() + "\n\n" + body[match.end(2):].lstrip("\n")
