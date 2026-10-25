@@ -98,6 +98,10 @@ No unresolved product-scope questions block feature planning. The feature design
 
 - 2026-10-25 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-10-25 · Epic Manager · **Scope and delivery**
+  Chose Deliver one vertical feature, feat_024_001, for backlog brief authoring-field edits, a new PR/MR, and post-merge board/plan/activation coherence. Keep identity and lifecycle metadata system-managed; preserve the existing path and untouched content..
+  Rationale: The user outcome is incomplete if an edit PR exists but the board or subsequent activation still uses the old brief. Reusing the existing brief form, validation and Git/forge flow minimizes scope while supporting every existing authoring field and additional human-authored Markdown.
+  Honors: Edit button; all brief-authoring fields including all five role models and reasoning; new review PR; updated board; frugal engineering and stable epic identity..
 ## Amendment log
 
 _(none)_
