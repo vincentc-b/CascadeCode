@@ -2,7 +2,7 @@
 id: feat_014_002
 title: Safe cancellation cleanup
 tier: feature
-status: active
+status: completed
 parent: epic_014
 children:
 - task_014_002_001
