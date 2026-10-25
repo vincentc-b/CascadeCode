@@ -13,6 +13,29 @@ WorkTier = Literal["epic", "feature", "task"]
 WorkStatus = Literal["backlog", "ready_to_plan", "active", "blocked", "completed", "cancelling", "cancelled"]
 Column = Literal["backlog", "active", "completed"]
 WorkId = str
+CancellationDisposition = Literal[
+    "continue_reduced_scope", "replace_replan", "cancel_parent"
+]
+
+
+@dataclass
+class CancellationFeedback:
+    """Durable upward feedback created by a cancelled direct child."""
+
+    child_id: WorkId
+    child_tier: WorkTier
+    parent_id: WorkId
+    reason: str
+    cancelled_at: datetime
+    available_dispositions: list[CancellationDisposition] = field(
+        default_factory=lambda: [
+            "continue_reduced_scope",
+            "replace_replan",
+            "cancel_parent",
+        ]
+    )
+    disposition: CancellationDisposition | None = None
+    resolved_at: datetime | None = None
 
 
 @dataclass
@@ -45,6 +68,7 @@ class WorkMeta:
     cancelled_at: datetime | None = None
     cancellation_step: str | None = None
     cancellation_error: str | None = None
+    cancellation_feedback: list[CancellationFeedback] = field(default_factory=list)
 
 
 @dataclass

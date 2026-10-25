@@ -223,6 +223,12 @@ def _dispatch_task(
         return _fail("bad_state")
     if not meta.parent:
         return _fail("bad_state")
+    parent = board.by_id.get(meta.parent)
+    if parent is None:
+        return _fail("bad_state")
+    from cascade.cancellation_feedback import cancellation_dispatch_gated
+    if cancellation_dispatch_gated(parent):
+        return _fail("parent_cancellation_pending")
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
     if _active_task_count(board) >= task_parallelism(root):
