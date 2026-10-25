@@ -1,15 +1,19 @@
 """Supervisor health observation and bounded remediation."""
 
+import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Lock
 
 from cascade.board.store import read_doc, write_doc
-from cascade.task.execution import mark_terminal
+from cascade.task.execution import execution_view, mark_terminal
 from cascade.watchdog import (
     activate_epic,
     dispatch_feature,
     dispatch_task,
     supervisor_health_sweep_seconds,
 )
+from cascade.watchdog import health as health_module
 from cascade.watchdog.health import classify_child, sweep_supervisor_health
 from tests.support import add_doc, approve_board_feature, make_repo
 
@@ -51,25 +55,136 @@ def _active_feature_with_blocked_task(tmp_path: Path) -> Path:
 
 
 def test_health_sweep_retries_failed_blocked_task_once_through_dispatch(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch,
 ) -> None:
     root = _active_feature_with_blocked_task(tmp_path)
+    calls = 0
+    calls_lock = Lock()
+    real_retry = health_module.retry_task
 
-    observations = sweep_supervisor_health(root)
+    def counted_retry(*args, **kwargs):
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+        return real_retry(*args, **kwargs)
+
+    monkeypatch.setattr(health_module, "retry_task", counted_retry)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        sweeps = list(pool.map(lambda _: sweep_supervisor_health(root), range(4)))
     repeated = sweep_supervisor_health(root)
 
     assert [
         (item.child_id, item.classification)
+        for observations in sweeps
         for item in observations
         if item.child_id == "task_001"
+        and item.classification == "remediation_eligible"
     ] == [("task_001", "remediation_eligible")]
+    assert calls == 1
     assert read_doc("task_001", root=root).meta.status == "active"
+    assert execution_view("task_001", root=root)["health"] == "queued"
     repeated_task = next(item for item in repeated if item.child_id == "task_001")
     assert repeated_task.classification == "no_action"
     ledger = (root / ".cascade" / "remediation_dispositions.json").read_text(
         encoding="utf-8"
     )
     assert '"result": "accepted"' in ledger
+
+
+def test_health_sweep_is_noop_for_healthy_and_terminal_work(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Active epic",
+        tier="epic",
+        status="active",
+        children=["feat_010", "feat_011"],
+    )
+    add_doc(
+        root,
+        id="feat_010",
+        title="Active feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+        children=["task_010", "task_011"],
+    )
+    add_doc(
+        root,
+        id="feat_011",
+        title="Terminal supervisor",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+        children=["task_012"],
+    )
+    add_doc(
+        root,
+        id="task_010",
+        title="Healthy task",
+        tier="task",
+        status="active",
+        parent="feat_010",
+    )
+    add_doc(
+        root,
+        id="task_011",
+        title="Terminal task",
+        tier="task",
+        status="completed",
+        parent="feat_010",
+    )
+    add_doc(
+        root,
+        id="task_012",
+        title="Blocked child of terminal supervisor",
+        tier="task",
+        status="blocked",
+        parent="feat_011",
+    )
+
+    observations = sweep_supervisor_health(root)
+
+    by_child = {item.child_id: item for item in observations}
+    assert by_child["task_010"].classification == "no_action"
+    assert by_child["task_011"].reason == "terminal_child"
+    assert by_child["feat_011"].reason == "terminal_child"
+    assert "task_012" not in by_child
+    assert not (root / ".cascade" / "remediation_dispositions.json").exists()
+
+
+def test_recovery_failure_is_recorded_once_for_concurrent_and_repeated_sweeps(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    root = _active_feature_with_blocked_task(tmp_path)
+    calls = 0
+    calls_lock = Lock()
+
+    def fail_retry(*_args, **_kwargs):
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+        raise RuntimeError("transient dispatch failure")
+
+    monkeypatch.setattr(health_module, "retry_task", fail_retry)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(lambda _: sweep_supervisor_health(root), range(4)))
+    sweep_supervisor_health(root)
+
+    assert calls == 1
+    assert read_doc("task_001", root=root).meta.status == "blocked"
+    ledger = json.loads(
+        (root / ".cascade" / "remediation_dispositions.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    dispositions = list(ledger["dispositions"].values())
+    assert len(dispositions) == 1
+    assert dispositions[0]["result"] == "error"
+    assert dispositions[0]["reason"] == "RuntimeError: transient dispatch failure"
 
 
 def test_classifier_excludes_terminal_and_exposes_blocked_feature(
