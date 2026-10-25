@@ -2,7 +2,7 @@
 id: epic_022
 title: Parent teams monitor reports for health
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_022_001

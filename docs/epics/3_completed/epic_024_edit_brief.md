@@ -2,7 +2,7 @@
 id: epic_024
 title: Edit brief
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_024_001
