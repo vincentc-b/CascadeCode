@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,7 +13,7 @@ from cascade.board.errors import BoardError
 from cascade.board.gitutil import has_git
 from cascade.board.lock import process_lock
 from cascade.board.paths import column_dir
-from cascade.board.store import read_doc, save_doc
+from cascade.board.store import list_board, read_doc, save_doc
 from cascade.board.types import WorkDoc, WorkId
 
 
@@ -43,6 +44,9 @@ class CancellationResult:
     reason: str
     cancelled_at: datetime
     changed: bool
+    complete: bool = True
+    cleanup_step: str = "complete"
+    cleanup_error: str | None = None
 
 
 CancellationEffect = Callable[[CancellationResult, Path], None]
@@ -55,10 +59,11 @@ def cancel_work_item(
     root: Path | None = None,
     effect: CancellationEffect | None = None,
 ) -> CancellationResult:
-    """Cancel any work tier through one transition contract.
+    """Cancel one work item and tear down only its registered local artifacts.
 
-    The board transition is committed before the effect is invoked. Repeated
-    cancellation returns the original result and deliberately skips the effect.
+    Active cleanup is checkpointed as cancelling before Git side effects.
+    A refusal or partial failure remains visible and a repeated call resumes the
+    exact owned teardown. Terminal cancelled is persisted only after cleanup.
     """
 
     normalized_reason = reason.strip() if isinstance(reason, str) else ""
@@ -72,19 +77,57 @@ def cancel_work_item(
             return _existing_result(doc)
         if doc.meta.status == "completed":
             raise CancellationTransitionRejected(work_id, doc.meta.status)
-        if doc.meta.status not in {"backlog", "ready_to_plan", "active", "blocked"}:
+        if doc.meta.status not in {
+            "backlog", "ready_to_plan", "active", "blocked", "cancelling"
+        }:
             raise CancellationTransitionRejected(work_id, doc.meta.status)
 
-        previous_path = doc.meta.path.resolve()
-        if has_git(repo):
-            from cascade.workspace.integration_worktree import git_root_for_path
-
-            owner_root = git_root_for_path(previous_path)
+        retrying = doc.meta.status == "cancelling"
+        if retrying:
+            if doc.meta.cancellation_reason is None or doc.meta.cancelled_at is None:
+                raise CancellationError(
+                    "invalid_cancelling_record",
+                    f"cancelling work item {work_id} is missing cancellation metadata",
+                )
         else:
-            owner_root = repo
+            doc.meta.status = "cancelling"
+            doc.meta.cancellation_reason = normalized_reason
+            doc.meta.cancelled_at = datetime.now(timezone.utc)
+        previous_path = doc.meta.path.resolve()
+        owner_root = _doc_owner(doc, repo)
+        doc.meta.cancellation_step = "owned_artifact_teardown"
+        doc.meta.cancellation_error = None
+        if doc.meta.path.parent.name == "1_backlog":
+            doc.meta.path = (
+                owner_root / column_dir(doc.meta.tier, "active") / previous_path.name
+            ).resolve()
+        save_doc(doc, previous_path=previous_path, root=owner_root)
+        _stage_cancellation_record(doc, repo, owner_root)
+
+    teardown = _teardown_owned_artifacts(doc, repo)
+    with process_lock:
+        doc = read_doc(work_id, root=repo)
+        if not teardown.complete:
+            doc.meta.status = "cancelling"
+            doc.meta.cancellation_step = teardown.step
+            doc.meta.cancellation_error = teardown.detail or "cleanup did not complete"
+            save_doc(doc, previous_path=doc.meta.path.resolve(), root=_doc_owner(doc, repo))
+            return CancellationResult(
+                work_id=doc.meta.id,
+                tier=doc.meta.tier,
+                reason=doc.meta.cancellation_reason or normalized_reason,
+                cancelled_at=doc.meta.cancelled_at or datetime.now(timezone.utc),
+                changed=not retrying,
+                complete=False,
+                cleanup_step=teardown.step,
+                cleanup_error=doc.meta.cancellation_error,
+            )
+
+        previous_path = doc.meta.path.resolve()
+        owner_root = _doc_owner(doc, repo)
         doc.meta.status = "cancelled"
-        doc.meta.cancellation_reason = normalized_reason
-        doc.meta.cancelled_at = datetime.now(timezone.utc)
+        doc.meta.cancellation_step = "complete"
+        doc.meta.cancellation_error = None
         doc.meta.path = (
             owner_root / column_dir(doc.meta.tier, "completed") / previous_path.name
         ).resolve()
@@ -92,14 +135,64 @@ def cancel_work_item(
         result = CancellationResult(
             work_id=doc.meta.id,
             tier=doc.meta.tier,
-            reason=normalized_reason,
-            cancelled_at=doc.meta.cancelled_at,
-            changed=True,
+            reason=doc.meta.cancellation_reason or normalized_reason,
+            cancelled_at=doc.meta.cancelled_at or datetime.now(timezone.utc),
+            changed=not retrying,
         )
 
     if effect is not None:
         effect(result, repo)
     return result
+
+
+def _doc_owner(doc: WorkDoc, repo: Path) -> Path:
+    if not has_git(repo):
+        return repo
+    from cascade.workspace.integration_worktree import git_root_for_path
+
+    return git_root_for_path(doc.meta.path.resolve())
+
+
+
+def _stage_cancellation_record(doc: WorkDoc, repo: Path, owner_root: Path) -> None:
+    """Persist lifecycle state outside an integration checkout before deleting it."""
+
+    if not has_git(repo):
+        return
+    from cascade.workspace.integration_worktree import (
+        get_integration_worktree,
+        locate_trunk,
+    )
+
+    trunk = locate_trunk(repo)
+    owned = get_integration_worktree(trunk, doc.meta.tier, doc.meta.id)
+    if owned is None or owned.path.resolve() != owner_root.resolve():
+        return
+    if doc.meta.tier == "epic" or doc.meta.parent is None:
+        target = trunk
+    else:
+        parent_kind = "epic" if doc.meta.tier == "feature" else "feature"
+        parent = get_integration_worktree(trunk, parent_kind, doc.meta.parent)
+        target = parent.path if parent is not None else trunk
+
+    staged = deepcopy(doc)
+    existing = list_board(target).by_id.get(doc.meta.id)
+    previous = existing.path.resolve() if existing is not None else None
+    filename = previous.name if previous is not None else doc.meta.path.name
+    staged.meta.path = (
+        target / column_dir(doc.meta.tier, "active") / filename
+    ).resolve()
+    staged.sha = None
+    save_doc(staged, previous_path=previous, root=target)
+
+def _teardown_owned_artifacts(doc: WorkDoc, repo: Path):
+    if not has_git(repo):
+        from cascade.workspace.integration_worktree import CancellationTeardownResult
+
+        return CancellationTeardownResult(True, "complete")
+    from cascade.workspace.integration_worktree import cancel_integration_worktree
+
+    return cancel_integration_worktree(doc.meta.tier, doc.meta.id, trunk=repo)
 
 
 def _existing_result(doc: WorkDoc) -> CancellationResult:

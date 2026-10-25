@@ -85,6 +85,13 @@ def main(argv: list[str] | None = None) -> None:
         except BoardError as exc:
             print(str(exc), file=sys.stderr)
             raise SystemExit(1) from exc
+        if not result.complete:
+            print(
+                f"{result.work_id}: cancelling; cleanup failed at "
+                f"{result.cleanup_step}: {result.cleanup_error}",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
         state = "cancelled" if result.changed else "already cancelled"
         print(f"{result.work_id}: {state}")
         return

@@ -45,6 +45,15 @@ class IntegrationWorktree:
     base_sha: str
 
 
+@dataclass(frozen=True)
+class CancellationTeardownResult:
+    """Outcome of deleting one work item's exactly-owned local artifacts."""
+
+    complete: bool
+    step: str
+    detail: str | None = None
+
+
 def integration_branch(kind: IntegrationKind, work_id: str) -> str:
     prefix = _KIND_DIR[kind]
     return f"{prefix}/{work_id}"
@@ -231,6 +240,83 @@ def get_integration_worktree(
         if entry.kind == kind and entry.work_id == work_id:
             return entry
     return None
+
+
+def cancel_integration_worktree(
+    kind: IntegrationKind, work_id: str, *, trunk: Path
+) -> CancellationTeardownResult:
+    """Delete the exact registered checkout and branch owned by ``work_id``.
+
+    Cancellation may discard a clean unmerged owned branch. It never forces a
+    dirty checkout, follows an arbitrary registry path, or derives a deletion
+    target from user-controlled metadata. Completed steps are safe to retry.
+    """
+
+    trunk = locate_trunk(trunk).resolve()
+    entry = get_integration_worktree(trunk, kind, work_id)
+    expected_branch = integration_branch(kind, work_id)
+    expected_path = integration_worktree_path(kind, work_id, trunk=trunk)
+    if entry is None:
+        # A matching-looking branch without a registry row is not proven owned.
+        return CancellationTeardownResult(True, "complete")
+    if entry is not None:
+        if entry.branch != expected_branch or entry.path.resolve() != expected_path:
+            return CancellationTeardownResult(
+                False,
+                "verify_ownership",
+                f"registered artifacts do not match owned {expected_branch} at {expected_path}",
+            )
+        present, locked = _listed_worktree_state(trunk, entry.path)
+        if locked:
+            return CancellationTeardownResult(
+                False, "remove_worktree", "owned worktree is locked"
+            )
+        try:
+            Path.cwd().resolve().relative_to(entry.path.resolve())
+        except ValueError:
+            pass
+        else:
+            return CancellationTeardownResult(
+                False, "remove_worktree", "cannot remove the current working directory"
+            )
+        if entry.path.exists():
+            status = _git(
+                entry.path, "status", "--porcelain", "--untracked-files=all", check=False
+            )
+            if status.returncode != 0:
+                return CancellationTeardownResult(
+                    False, "inspect_worktree", (status.stderr or status.stdout).strip()
+                )
+            if status.stdout.strip():
+                return CancellationTeardownResult(
+                    False,
+                    "remove_worktree",
+                    f"owned worktree has uncommitted changes: {entry.path}",
+                )
+            removed = _git(trunk, "worktree", "remove", str(entry.path), check=False)
+            if removed.returncode != 0:
+                return CancellationTeardownResult(
+                    False, "remove_worktree", (removed.stderr or removed.stdout).strip()
+                )
+        elif present:
+            _git(trunk, "worktree", "prune", check=False)
+            if _listed_worktree_state(trunk, entry.path)[0]:
+                return CancellationTeardownResult(
+                    False,
+                    "remove_worktree",
+                    "stale worktree registration could not be pruned",
+                )
+    branch = _git(
+        trunk, "show-ref", "--verify", f"refs/heads/{expected_branch}", check=False
+    )
+    if branch.returncode == 0:
+        deleted = _git(trunk, "branch", "-D", expected_branch, check=False)
+        if deleted.returncode != 0:
+            return CancellationTeardownResult(
+                False, "delete_branch", (deleted.stderr or deleted.stdout).strip()
+            )
+    _remove_registry_entry(trunk, kind, work_id)
+    return CancellationTeardownResult(True, "complete")
 
 
 def retire_integration_worktree(
