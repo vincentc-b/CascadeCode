@@ -2,7 +2,7 @@
 id: feat_022_001
 title: Supervisor health observation and bounded remediation
 tier: feature
-status: active
+status: completed
 parent: epic_022
 children:
 - task_022_001_001
