@@ -1,4 +1,4 @@
-"""Cascade operator CLI (`cascade init`, `cascade up` in later tasks)."""
+"""Cascade operator CLI."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from cascade.board.errors import BoardError
+from cascade.cancellation import cancel_work_item
 from cascade.probe.cli import register_probe_parser, run_probe_command
 from cascade.workspace import WorkspaceError, init_workspace, up
 
@@ -32,8 +34,21 @@ def main(argv: list[str] | None = None) -> None:
     up_parser.add_argument("--host", default="127.0.0.1", help="Loopback bind address")
     up_parser.add_argument("--port", type=int, default=8765, help="HTTP port")
 
-    register_probe_parser(subparsers)
+    cancel_parser = subparsers.add_parser(
+        "cancel", help="Cancel an epic, feature, or task"
+    )
+    cancel_parser.add_argument("work_id", help="Epic, feature, or task id")
+    cancel_parser.add_argument(
+        "--reason", required=True, help="Why the work is being cancelled"
+    )
+    cancel_parser.add_argument(
+        "--root",
+        type=Path,
+        default=None,
+        help="Git workspace root (default: current directory)",
+    )
 
+    register_probe_parser(subparsers)
     args = parser.parse_args(argv)
 
     if args.command == "init":
@@ -58,6 +73,20 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.command == "probe":
         run_probe_command(args)
+        return
+
+    if args.command == "cancel":
+        try:
+            result = cancel_work_item(
+                args.work_id,
+                args.reason,
+                root=args.root if args.root is not None else Path.cwd(),
+            )
+        except BoardError as exc:
+            print(str(exc), file=sys.stderr)
+            raise SystemExit(1) from exc
+        state = "cancelled" if result.changed else "already cancelled"
+        print(f"{result.work_id}: {state}")
         return
 
 
