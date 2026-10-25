@@ -70,6 +70,7 @@ def validate_doc(doc: WorkDoc, board: BoardIndex) -> None:
     _check_reasoning_frontmatter(meta)
     _check_provider_frontmatter(meta)
     _check_approval_frontmatter(meta)
+    _check_monitoring_blockers(meta)
     if meta.tier in ("feature", "task") and not meta.parent:
         raise SchemaError(f"{meta.id} requires a parent")
     _check_folder(meta)
@@ -100,6 +101,15 @@ def _check_approval_frontmatter(meta: WorkMeta) -> None:
         raise SchemaError(f"{meta.id} approved_at is only valid for features")
     if meta.plan_approved_at is not None and meta.tier != "epic":
         raise SchemaError(f"{meta.id} plan_approved_at is only valid for epics")
+
+
+def _check_monitoring_blockers(meta: WorkMeta) -> None:
+    if meta.monitoring_blockers and meta.status != "blocked":
+        raise SchemaError("monitoring_blockers require blocked status")
+    if meta.monitoring_blockers and meta.tier not in {"feature", "epic"}:
+        raise SchemaError("monitoring_blockers are only valid for supervisors")
+    if sum(item.blocked_supervisor for item in meta.monitoring_blockers) > 1:
+        raise SchemaError("only one monitoring blocker may own the blocked transition")
 
 
 def _check_provider_frontmatter(meta: WorkMeta) -> None:

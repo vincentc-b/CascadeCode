@@ -15,6 +15,7 @@ from cascade.board.paths import parse_work_id
 from cascade.board.work_ids import tier_of_work_id
 from cascade.board.types import (
     CancellationFeedback,
+    MonitoringBlocker,
     WorkDoc,
     WorkMeta,
     WorkStatus,
@@ -125,6 +126,15 @@ def render_doc(doc: WorkDoc) -> str:
             }
             for item in meta.cancellation_feedback
         ]
+    if meta.monitoring_blockers:
+        payload["monitoring_blockers"] = [
+            {
+                "child_id": item.child_id,
+                "reason": item.reason,
+                "blocked_supervisor": item.blocked_supervisor,
+            }
+            for item in meta.monitoring_blockers
+        ]
     frontmatter = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True, width=4096)
     body = doc.body
     if body and not body.endswith("\n"):
@@ -203,8 +213,36 @@ def _meta_from_mapping(loaded: dict[str, object], path: Path) -> WorkMeta:
         cancellation_step=_optional_nonblank_str(loaded, "cancellation_step"),
         cancellation_error=_optional_nonblank_str(loaded, "cancellation_error"),
         cancellation_feedback=_cancellation_feedback(loaded),
+        monitoring_blockers=_monitoring_blockers(loaded),
     )
 
+
+
+def _monitoring_blockers(loaded: dict[str, object]) -> list[MonitoringBlocker]:
+    raw = loaded.get("monitoring_blockers", [])
+    if not isinstance(raw, list):
+        raise SchemaError("monitoring_blockers must be a list")
+    blockers: list[MonitoringBlocker] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            raise SchemaError("monitoring_blockers entries must be mappings")
+        child_id = item.get("child_id")
+        reason = item.get("reason")
+        blocked_supervisor = item.get("blocked_supervisor", False)
+        if not isinstance(child_id, str) or not child_id:
+            raise SchemaError("monitoring_blockers child_id must be non-blank")
+        if child_id in seen:
+            raise SchemaError("monitoring_blockers child_id must be unique")
+        if not isinstance(reason, str) or not reason.strip() or "\n" in reason:
+            raise SchemaError("monitoring_blockers reason must be a non-blank single line")
+        if len(reason) > 240:
+            raise SchemaError("monitoring_blockers reason must be at most 240 characters")
+        if not isinstance(blocked_supervisor, bool):
+            raise SchemaError("monitoring_blockers blocked_supervisor must be boolean")
+        seen.add(child_id)
+        blockers.append(MonitoringBlocker(child_id, reason.strip(), blocked_supervisor))
+    return blockers
 
 
 _CANCELLATION_DISPOSITIONS = [
