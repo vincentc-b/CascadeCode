@@ -94,6 +94,47 @@ def _patch_run_role(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     return mock
 
 
+def test_active_task_queue_recovers_missing_model_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    (root / "cascade.toml").write_text(
+        '[providers]\ndefault = "cursor"\n[providers.codex]\ntask = "gpt-5.6-sol"\n',
+        encoding="utf-8",
+    )
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", status="active", parent="epic_001")
+    task = add_doc(root, id="task_001", title="Task", tier="task", status="active", parent="feat_001")
+    task.meta.provider = "codex"
+    from cascade.board.store import write_doc
+
+    write_doc(task, root=root)
+    append_event(
+        "task_001",
+        Event(
+            type="TaskResumeRequested",
+            ts=datetime.now(timezone.utc),
+            payload={"task_id": "task_001", "feature_id": "feat_001", "instruction": "Resume."},
+            dest="task_001",
+        ),
+        root=root,
+    )
+    started: list[str] = []
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff._invoke_role_turn",
+        lambda work_id, _tier, **_kwargs: started.append(work_id),
+    )
+
+    kickoff_turn(KickoffReason(kind="queue_event", work_id="task_001", by="watchdog", root=root))
+
+    from cascade.task.checkpoint import thread_config
+    from cascade.task.graph import ensure_task_graph
+
+    state = ensure_task_graph("task_001", root=root, feature_id="feat_001").get_state(thread_config("task_001"))
+    assert state.values["model_ids"]["swe"] == "gpt-5.6-sol"
+    assert started == ["task_001"]
+
+
 @pytest.mark.parametrize(
     "action",
     [

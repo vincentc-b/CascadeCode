@@ -44,6 +44,56 @@ def get_task_run(task_id: str) -> TaskRun | None:
     return _runs.get(task_id)
 
 
+def attach_active_task_run(task_id: str, *, root: Path) -> TaskRun | None:
+    """Attach an MCP subprocess to an existing active run without taking its lease."""
+
+    existing = _runs.get(task_id)
+    if existing is not None:
+        return existing
+    from cascade.workspace.integration_worktree import (
+        get_integration_worktree,
+        integration_branch,
+        merged_board,
+    )
+
+    repo = Path(root).resolve()
+    meta = merged_board(repo).by_id.get(task_id)
+    if (
+        meta is None
+        or meta.tier != "task"
+        or meta.status != "active"
+        or meta.path.parent.name != "2_active"
+        or not meta.parent
+    ):
+        return None
+    entry = get_integration_worktree(repo, "task", task_id)
+    if entry is None or not entry.path.is_dir():
+        return None
+    branch = integration_branch("task", task_id)
+    if entry.branch != branch:
+        return None
+    current = _git(entry.path, "branch", "--show-current", check=False)
+    if current.returncode != 0 or current.stdout.strip() != branch:
+        return None
+    base = _git(
+        entry.path, "merge-base", "HEAD", integration_branch("feature", meta.parent),
+        check=False,
+    )
+    if base.returncode != 0 or not base.stdout.strip():
+        return None
+    run = TaskRun(
+        task_id=task_id,
+        branch=branch,
+        worktree=entry.path.resolve(),
+        base_sha=base.stdout.strip(),
+        parent_rev=meta.parent_rev,
+        skills=[str(path) for path in meta.skills],
+        state="coding",
+    )
+    _runs[task_id] = run
+    return run
+
+
 def clear_task_runs() -> None:
     """Reset active-run registry (tests only)."""
 
