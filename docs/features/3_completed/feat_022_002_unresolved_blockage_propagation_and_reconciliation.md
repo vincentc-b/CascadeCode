@@ -2,7 +2,7 @@
 id: feat_022_002
 title: Unresolved blockage propagation and reconciliation
 tier: feature
-status: active
+status: completed
 parent: epic_022
 children:
 - task_022_002_001
