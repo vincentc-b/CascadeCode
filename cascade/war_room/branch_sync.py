@@ -52,12 +52,27 @@ def actionable_sync_failure_payload(
     *,
     reason: str | None,
     conflict_paths: tuple[str, ...] = (),
+    product_trunk: bool = False,
 ) -> dict[str, Any]:
     """Concise JSON fields for dirty, busy, conflict, and invariant failures."""
 
     payload: dict[str, Any] = {"reason": reason}
     if reason and reason in _GUIDANCE:
         payload["guidance"] = _GUIDANCE[reason]
+    if product_trunk and reason == "dirty_index":
+        payload["guidance"] = (
+            "Unstage or commit staged changes in the product trunk checkout, then retry."
+        )
+    elif product_trunk and reason == "local_changes":
+        payload["guidance"] = (
+            "Commit, stash, or remove local changes (including untracked files) "
+            "in the product trunk checkout, then retry."
+        )
+    elif product_trunk and reason in ("branch_conflict", "merge_conflict"):
+        payload["guidance"] = (
+            "Resolve the listed conflicts between the epic branch and product trunk, "
+            "then retry."
+        )
     if reason in ("branch_conflict", "merge_conflict"):
         payload["conflict_paths"] = list(conflict_paths)
         payload["merge_aborted"] = True
