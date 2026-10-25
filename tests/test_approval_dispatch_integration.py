@@ -14,6 +14,7 @@ from cascade.board.store import move_doc, read_doc
 from cascade.boss.view import compute_boss_view
 from cascade.watchdog import activate_epic, dispatch_feature, read_events
 from cascade.war_room.serialize import board_view_from_index
+from cascade.war_room.room_settings import write_stacked_pr_enabled
 from cascade.workspace.integration_worktree import merged_board
 from tests.support import add_doc, commit_board, make_repo
 
@@ -246,6 +247,7 @@ def test_merge_gate_blocks_sibling_until_review_clears(
     add_doc(root, id="feat_002", title="Next", tier="feature", parent="epic_001")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    write_stacked_pr_enabled("epic_001", False, root=root)
     state = root / ".cascade" / "reviews.json"
     state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text(
