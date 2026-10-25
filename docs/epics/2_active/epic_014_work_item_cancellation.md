@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_014_001
+- feat_014_002
 depends_on: []
 owners:
 - epic_manager
@@ -44,6 +45,7 @@ To be refined by the Epic Team during planning.
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_014_002
 - feat_014_001
 
 The Epic Team will create and sequence feature plans here.
