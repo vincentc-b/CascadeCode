@@ -3,7 +3,10 @@
 from pathlib import Path
 
 from cascade.board.store import read_doc
-from cascade.watchdog.blockage import propagate_direct_report_blockage
+from cascade.watchdog.blockage import (
+    propagate_direct_report_blockage,
+    reconcile_direct_report_blockage,
+)
 from tests.support import add_doc, make_repo
 
 
@@ -93,3 +96,45 @@ def test_terminal_supervisor_is_not_mutated(tmp_path: Path) -> None:
 
     assert result.outcome == "terminal"
     assert read_doc("feat_001", root=root).meta.status == "active"
+
+
+def test_reconciliation_reactivates_only_monitor_owned_blockage(tmp_path: Path) -> None:
+    root, supervisor, child = _pair(tmp_path)
+    assert propagate_direct_report_blockage(
+        supervisor, child, "stuck", root=root
+    ).outcome == "applied"
+    child = read_doc("task_001", root=root)
+    child.meta.status = "active"
+    from cascade.board.store import write_doc
+
+    write_doc(child, root=root)
+
+    result = reconcile_direct_report_blockage(
+        read_doc("feat_001", root=root), read_doc("task_001", root=root), root=root
+    )
+
+    assert result.outcome == "applied"
+    persisted = read_doc("feat_001", root=root)
+    assert persisted.meta.status == "active"
+    assert persisted.meta.monitoring_blockers == []
+
+
+def test_reconciliation_preserves_preexisting_manual_blockage(tmp_path: Path) -> None:
+    root, supervisor, child = _pair(tmp_path, supervisor_status="blocked")
+    assert propagate_direct_report_blockage(
+        supervisor, child, "stuck", root=root
+    ).outcome == "applied"
+    child = read_doc("task_001", root=root)
+    child.meta.status = "active"
+    from cascade.board.store import write_doc
+
+    write_doc(child, root=root)
+
+    result = reconcile_direct_report_blockage(
+        read_doc("feat_001", root=root), read_doc("task_001", root=root), root=root
+    )
+
+    assert result.outcome == "applied"
+    persisted = read_doc("feat_001", root=root)
+    assert persisted.meta.status == "blocked"
+    assert persisted.meta.monitoring_blockers == []

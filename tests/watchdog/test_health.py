@@ -232,3 +232,51 @@ def test_supervisor_health_cadence_defaults_and_validates(tmp_path: Path) -> Non
         encoding="utf-8",
     )
     assert supervisor_health_sweep_seconds(root) == 60.0
+
+
+def test_health_sweeps_propagate_and_reconcile_task_to_epic(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Epic",
+        tier="epic",
+        status="active",
+        children=["feat_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="blocked",
+        parent="feat_001",
+    )
+
+    sweep_supervisor_health(root)
+    sweep_supervisor_health(root)
+
+    feature = read_doc("feat_001", root=root)
+    epic = read_doc("epic_001", root=root)
+    assert feature.meta.status == "blocked"
+    assert [item.child_id for item in feature.meta.monitoring_blockers] == ["task_001"]
+    assert epic.meta.status == "blocked"
+    assert [item.child_id for item in epic.meta.monitoring_blockers] == ["feat_001"]
+
+    task = read_doc("task_001", root=root)
+    task.meta.status = "active"
+    write_doc(task, root=root)
+    sweep_supervisor_health(root)
+    sweep_supervisor_health(root)
+
+    assert read_doc("feat_001", root=root).meta.status == "active"
+    assert read_doc("epic_001", root=root).meta.status == "active"

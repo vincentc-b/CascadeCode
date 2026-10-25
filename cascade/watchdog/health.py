@@ -18,6 +18,10 @@ from cascade.board.store import read_doc
 from cascade.board.types import WorkDoc
 from cascade.feature.recovery import retry_task
 from cascade.task.execution import execution_views
+from cascade.watchdog.blockage import (
+    propagate_direct_report_blockage,
+    reconcile_direct_report_blockage,
+)
 from cascade.watchdog.config import supervisor_health_sweep_seconds
 from cascade.watchdog.lock import process_lock
 from cascade.workspace.integration_worktree import merged_board
@@ -99,7 +103,7 @@ def classify_child(
 
 
 def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObservation]:
-    """Inspect active supervisors and attempt each unchanged eligible incident once."""
+    """Inspect direct reports, reconciling derived supervisor blockage."""
 
     repo = resolve_root(root)
     observations: list[ChildHealthObservation] = []
@@ -108,7 +112,11 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
         supervisors = [
             meta
             for meta in board.by_id.values()
-            if meta.tier in {"epic", "feature"} and meta.status == "active"
+            if meta.tier in {"epic", "feature"}
+            and (
+                meta.status == "active"
+                or (meta.status == "blocked" and meta.monitoring_blockers)
+            )
         ]
         task_ids = {
             child_id
@@ -123,7 +131,7 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
             except Exception as exc:
                 _log.warning("health inspection failed for %s: %s", supervisor_meta.id, exc)
                 continue
-            if supervisor.meta.status != "active":
+            if supervisor.meta.status not in {"active", "blocked"}:
                 continue
             for child_id in supervisor.meta.children:
                 try:
@@ -142,6 +150,15 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
                 observations.append(observation)
                 if observation.classification == "remediation_eligible":
                     _remediate_if_unchanged(repo, supervisor, child, observation)
+                elif observation.classification == "unresolved":
+                    propagate_direct_report_blockage(
+                        supervisor, child, observation.reason, root=repo
+                    )
+                else:
+                    reconcile_direct_report_blockage(supervisor, child, root=repo)
+                # Writes use optimistic tokens. Refresh before considering a
+                # sibling so independent causes converge after our own update.
+                supervisor = read_doc(supervisor.meta.id, root=repo)
     return observations
 
 
