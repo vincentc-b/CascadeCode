@@ -20,6 +20,7 @@ provider: codex
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
+plan_approved_at: '2026-10-25T01:22:55.984429+00:00'
 ---
 # Work item cancellation
 
