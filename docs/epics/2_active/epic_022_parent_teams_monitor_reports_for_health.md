@@ -138,6 +138,11 @@ These are implementation-discovery questions for Feature 1 and must be resolved 
   Chose Each supervisor inspects direct reports only; unresolved health propagates upward through the supervisor’s canonical persisted state..
   Rationale: This keeps every sweep local and bounded while naturally covering task → feature → epic chains without recursive graph scans.
   Honors: Success criteria requiring periodic hierarchical monitoring and parent state reflection..
+
+- `dec_002` · 2026-10-25 · Epic Manager · **Cross-module constraints**
+  Chose Automatic remediation is limited to one role-authorized attempt per unchanged child incident..
+  Rationale: Bounded, idempotent attempts prevent retry storms and preserve human/role authority while still requiring supervisors to try a viable fix.
+  Honors: Success criteria requiring an attempted fix before escalation, plus frugal scope and operational safety..
 ## Amendment log
 
 _(none)_
