@@ -251,7 +251,7 @@ def test_health_sweeps_propagate_and_reconcile_task_to_epic(tmp_path: Path) -> N
         tier="feature",
         status="active",
         parent="epic_001",
-        children=["task_001"],
+        children=["task_001", "task_002"],
     )
     add_doc(
         root,
@@ -261,22 +261,111 @@ def test_health_sweeps_propagate_and_reconcile_task_to_epic(tmp_path: Path) -> N
         status="blocked",
         parent="feat_001",
     )
+    add_doc(
+        root,
+        id="task_002",
+        title="Sibling task",
+        tier="task",
+        status="blocked",
+        parent="feat_001",
+    )
 
-    sweep_supervisor_health(root)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(lambda _: sweep_supervisor_health(root), range(2)))
     sweep_supervisor_health(root)
 
     feature = read_doc("feat_001", root=root)
     epic = read_doc("epic_001", root=root)
     assert feature.meta.status == "blocked"
-    assert [item.child_id for item in feature.meta.monitoring_blockers] == ["task_001"]
+    assert [
+        (item.child_id, item.reason, item.blocked_supervisor)
+        for item in feature.meta.monitoring_blockers
+    ] == [
+        ("task_001", "blocked_task_without_terminal_failure", True),
+        ("task_002", "blocked_task_without_terminal_failure", False),
+    ]
     assert epic.meta.status == "blocked"
-    assert [item.child_id for item in epic.meta.monitoring_blockers] == ["feat_001"]
+    assert [
+        (item.child_id, item.reason, item.blocked_supervisor)
+        for item in epic.meta.monitoring_blockers
+    ] == [("feat_001", "blocked_feature_has_no_safe_retry", True)]
 
     task = read_doc("task_001", root=root)
     task.meta.status = "active"
     write_doc(task, root=root)
     sweep_supervisor_health(root)
+
+    feature = read_doc("feat_001", root=root)
+    assert feature.meta.status == "blocked"
+    assert [
+        (item.child_id, item.blocked_supervisor)
+        for item in feature.meta.monitoring_blockers
+    ] == [("task_002", True)]
+    assert read_doc("epic_001", root=root).meta.status == "blocked"
+
+    sibling = read_doc("task_002", root=root)
+    sibling.meta.status = "active"
+    write_doc(sibling, root=root)
+    sweep_supervisor_health(root)
+    assert read_doc("feat_001", root=root).meta.status == "active"
+    assert read_doc("epic_001", root=root).meta.status == "blocked"
+
     sweep_supervisor_health(root)
 
     assert read_doc("feat_001", root=root).meta.status == "active"
     assert read_doc("epic_001", root=root).meta.status == "active"
+
+
+def test_health_sweep_preserves_manual_blockage_and_terminal_work(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Manually blocked epic",
+        tier="epic",
+        status="blocked",
+        children=["feat_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001",
+        title="Manually blocked feature",
+        tier="feature",
+        status="blocked",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Recovered task",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    add_doc(
+        root,
+        id="epic_002",
+        title="Completed epic",
+        tier="epic",
+        status="completed",
+        children=["feat_002"],
+    )
+    add_doc(
+        root,
+        id="feat_002",
+        title="Blocked child of terminal epic",
+        tier="feature",
+        status="blocked",
+        parent="epic_002",
+    )
+
+    observations = sweep_supervisor_health(root)
+
+    assert observations == []
+    assert read_doc("feat_001", root=root).meta.status == "blocked"
+    assert read_doc("epic_001", root=root).meta.status == "blocked"
+    assert read_doc("epic_002", root=root).meta.status == "completed"
+    assert read_doc("feat_002", root=root).meta.status == "blocked"
