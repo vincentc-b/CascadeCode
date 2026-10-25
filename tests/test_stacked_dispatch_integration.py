@@ -43,6 +43,7 @@ def _seed_predecessor_review(root: Path, feature_id: str, *, epic_id: str = "epi
 def test_disabled_path_retains_merge_gate(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     _activate_and_open_epic(root)
+    write_stacked_pr_enabled("epic_001", False, root=root)
     add_doc(
         root,
         id="feat_001",

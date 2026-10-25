@@ -12,7 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from cascade.war_room.room_settings import read_room_settings, stacked_pr_enabled
+from cascade.war_room.room_settings import (
+    effective_stacked_pr_enabled,
+    read_room_settings,
+    stacked_pr_enabled,
+)
 from cascade.war_room.server import serve
 from tests.support import add_doc, make_repo
 
@@ -81,12 +85,14 @@ def war_room_board(tmp_path: Path):
         thread.join(timeout=5)
 
 
-def test_default_stacked_pr_disabled_when_unset(war_room_board) -> None:
+def test_default_stacked_pr_enabled_when_unset(war_room_board) -> None:
     base, root = war_room_board
     status, body = _get(f"{base}/api/room-settings/epic_001")
     assert status == HTTPStatus.OK
-    assert body == {"graph_id": "epic_001", "stacked_pr_enabled": False}
-    assert stacked_pr_enabled("epic_001", root=root) is False
+    assert body == {"graph_id": "epic_001", "stacked_pr_enabled": True}
+    assert stacked_pr_enabled("epic_001", root=root) is True
+    assert read_room_settings("feat_001", root=root).stacked_pr_enabled is True
+    assert effective_stacked_pr_enabled("feat_001", "epic_001", root=root) is True
 
 
 def test_toggle_persists_per_room(war_room_board) -> None:
@@ -105,7 +111,7 @@ def test_toggle_persists_per_room(war_room_board) -> None:
 
     assert read_room_settings("epic_001", root=root).stacked_pr_enabled is True
     assert read_room_settings("feat_001", root=root).stacked_pr_enabled is False
-    assert read_room_settings("epic_002", root=root).stacked_pr_enabled is False
+    assert read_room_settings("epic_002", root=root).stacked_pr_enabled is True
 
     path = root / ".cascade" / "room_settings.json"
     assert path.is_file()
@@ -130,7 +136,7 @@ def test_feature_room_shows_inherited_epic_setting_until_overridden(war_room_boa
     assert body["stacked_pr_enabled"] is False
 
 
-def test_legacy_room_record_without_field_defaults_off(war_room_board) -> None:
+def test_legacy_room_record_without_field_defaults_on(war_room_board) -> None:
     _base, root = war_room_board
     path = root / ".cascade" / "room_settings.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -138,7 +144,16 @@ def test_legacy_room_record_without_field_defaults_off(war_room_board) -> None:
         json.dumps({"rooms": {"epic_001": {"other_flag": True}}}) + "\n",
         encoding="utf-8",
     )
+    assert read_room_settings("epic_001", root=root).stacked_pr_enabled is True
+
+
+def test_explicit_epic_disable_is_inherited_by_feature(war_room_board) -> None:
+    base, root = war_room_board
+    _post(f"{base}/api/room-settings/epic_001", {"stacked_pr_enabled": False})
+
     assert read_room_settings("epic_001", root=root).stacked_pr_enabled is False
+    assert read_room_settings("feat_001", root=root).stacked_pr_enabled is False
+    assert effective_stacked_pr_enabled("feat_001", "epic_001", root=root) is False
 
 
 def test_task_graph_rejected(war_room_board) -> None:

@@ -24,6 +24,7 @@ from cascade.board.store import read_doc
 from cascade.boss.epic_complete import reset_epic_close_prompt_surfaces
 from cascade.task.worktree import clear_task_runs, get_task_run
 from cascade.war_room.server import serve
+from cascade.war_room.room_settings import write_stacked_pr_enabled
 from cascade.watchdog import activate_epic, read_events
 from cascade.watchdog.hooks import clear_hooks
 from tests.support import add_doc, commit_board, make_repo
@@ -118,6 +119,7 @@ def seed_lifecycle_scenario(
     )
     commit_board(root, message="lifecycle scenario seed")
     assert activate_epic(ids.epic, "human", root=root).ok
+    write_stacked_pr_enabled(ids.epic, False, root=root)
     approve_feature(ids.feature_gate, root=root)
     approve_feature(ids.feature_follow, root=root)
     return LifecycleScenario(root=root, ids=ids)

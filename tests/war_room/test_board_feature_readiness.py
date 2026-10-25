@@ -16,6 +16,7 @@ from cascade.board.paths import column_dir, column_for_status, slugify
 from cascade.board.types import WorkDoc, WorkMeta
 from cascade.boss.view import compute_boss_view
 from cascade.war_room.server import serve
+from cascade.war_room.room_settings import write_stacked_pr_enabled
 from tests.support import FEATURE_BODY, add_doc, approve_board_feature, make_repo
 from tests.war_room.test_http_read import _free_port, _get
 
@@ -156,6 +157,7 @@ def test_board_endpoint_reuses_one_board_scan(
 
 def test_board_snapshot_preserves_pending_review_blockers(war_room_server) -> None:
     base, root, _server = war_room_server
+    write_stacked_pr_enabled("epic_001", False, root=root)
     move_doc("feat_002", "completed", root=root)
     state_path = root / ".cascade" / "reviews.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)

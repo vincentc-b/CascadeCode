@@ -58,8 +58,8 @@ def _save(trunk: Path, rooms: dict[str, dict[str, object]]) -> None:
 
 
 def _read_stacked_pr_enabled(record: dict[str, object] | None) -> bool:
-    if not record:
-        return False
+    if record is None or "stacked_pr_enabled" not in record:
+        return True
     value = record.get("stacked_pr_enabled")
     return value is True
 
@@ -101,7 +101,7 @@ def effective_stacked_pr_enabled(feature_id: str, epic_id: str, *, root: Path) -
 def write_stacked_pr_enabled(
     graph_id: str, enabled: bool, *, root: Path
 ) -> RoomSettings:
-    """Persist the stacked-PR opt-in for one room graph id."""
+    """Persist the stacked-PR choice for one room graph id."""
 
     _validate_room_graph_id(graph_id)
     if not isinstance(enabled, bool):

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from cascade.board import move_doc, pin_parent, read_doc, write_doc
+from cascade.war_room.room_settings import write_stacked_pr_enabled
 from cascade.watchdog import (
     activate_epic,
     dispatch_feature,
@@ -152,6 +153,7 @@ def test_dispatch_feature_refuses_while_sibling_awaits_merge(tmp_path: Path) -> 
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic")
     _activate_epic(root)
+    write_stacked_pr_enabled("epic_001", False, root=root)
     add_doc(
         root,
         id="feat_001",
