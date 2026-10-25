@@ -148,6 +148,11 @@ These are implementation-discovery questions for Feature 1 and must be resolved 
   Chose Monitoring-derived blockage must carry child provenance and may be cleared only when that specific cause recovers..
   Rationale: A plain status mirror could accidentally erase unrelated manual or sibling blockers; provenance enables safe reconciliation.
   Honors: Success criteria requiring unresolved child state to be reflected without corrupting independent work state..
+
+- `dec_004` · 2026-10-25 · Epic Manager · **Feature breakdown**
+  Chose Deliver the epic as two features: observation/remediation first, then propagation/reconciliation..
+  Rationale: The first slice establishes the shared monitoring and idempotency foundation; the second adds upward state mutation and multi-level behavior with a clear dependency.
+  Honors: Smallest shippable sequence with high-signal integration testing..
 ## Amendment log
 
 _(none)_
