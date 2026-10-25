@@ -134,6 +134,10 @@ These are implementation-discovery questions for Feature 1 and must be resolved 
 
 - 2026-10-23 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-10-25 · Epic Manager · **Macro-architecture**
+  Chose Each supervisor inspects direct reports only; unresolved health propagates upward through the supervisor’s canonical persisted state..
+  Rationale: This keeps every sweep local and bounded while naturally covering task → feature → epic chains without recursive graph scans.
+  Honors: Success criteria requiring periodic hierarchical monitoring and parent state reflection..
 ## Amendment log
 
 _(none)_
