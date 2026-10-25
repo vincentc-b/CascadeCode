@@ -58,6 +58,7 @@ def cancel_work_item(
     *,
     root: Path | None = None,
     effect: CancellationEffect | None = None,
+    discard_uncommitted: bool = False,
 ) -> CancellationResult:
     """Cancel one work item and tear down only its registered local artifacts.
 
@@ -104,7 +105,9 @@ def cancel_work_item(
         save_doc(doc, previous_path=previous_path, root=owner_root)
         _stage_cancellation_record(doc, repo, owner_root)
 
-    teardown = _teardown_owned_artifacts(doc, repo)
+    teardown = _teardown_owned_artifacts(
+        doc, repo, discard_uncommitted=discard_uncommitted
+    )
     with process_lock:
         doc = read_doc(work_id, root=repo)
         if not teardown.complete:
@@ -185,14 +188,21 @@ def _stage_cancellation_record(doc: WorkDoc, repo: Path, owner_root: Path) -> No
     staged.sha = None
     save_doc(staged, previous_path=previous, root=target)
 
-def _teardown_owned_artifacts(doc: WorkDoc, repo: Path):
+def _teardown_owned_artifacts(
+    doc: WorkDoc, repo: Path, *, discard_uncommitted: bool = False
+):
     if not has_git(repo):
         from cascade.workspace.integration_worktree import CancellationTeardownResult
 
         return CancellationTeardownResult(True, "complete")
     from cascade.workspace.integration_worktree import cancel_integration_worktree
 
-    return cancel_integration_worktree(doc.meta.tier, doc.meta.id, trunk=repo)
+    return cancel_integration_worktree(
+        doc.meta.tier,
+        doc.meta.id,
+        trunk=repo,
+        discard_uncommitted=discard_uncommitted,
+    )
 
 
 def _existing_result(doc: WorkDoc) -> CancellationResult:

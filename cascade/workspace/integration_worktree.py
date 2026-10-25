@@ -243,7 +243,11 @@ def get_integration_worktree(
 
 
 def cancel_integration_worktree(
-    kind: IntegrationKind, work_id: str, *, trunk: Path
+    kind: IntegrationKind,
+    work_id: str,
+    *,
+    trunk: Path,
+    discard_uncommitted: bool = False,
 ) -> CancellationTeardownResult:
     """Delete the exact registered checkout and branch owned by ``work_id``.
 
@@ -287,13 +291,18 @@ def cancel_integration_worktree(
                 return CancellationTeardownResult(
                     False, "inspect_worktree", (status.stderr or status.stdout).strip()
                 )
-            if status.stdout.strip():
+            if status.stdout.strip() and not discard_uncommitted:
                 return CancellationTeardownResult(
                     False,
                     "remove_worktree",
-                    f"owned worktree has uncommitted changes: {entry.path}",
+                    f"owned worktree has uncommitted changes: {entry.path}; retry with "
+                    "discard_uncommitted=True to confirm discard for this cancellation",
                 )
-            removed = _git(trunk, "worktree", "remove", str(entry.path), check=False)
+            remove_args = ["worktree", "remove"]
+            if discard_uncommitted:
+                remove_args.append("--force")
+            remove_args.append(str(entry.path))
+            removed = _git(trunk, *remove_args, check=False)
             if removed.returncode != 0:
                 return CancellationTeardownResult(
                     False, "remove_worktree", (removed.stderr or removed.stdout).strip()
