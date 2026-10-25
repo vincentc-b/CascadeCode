@@ -17,6 +17,7 @@ provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-10-25T03:11:43.560858+00:00'
 ---
 # Supervisor health observation and bounded remediation
 
