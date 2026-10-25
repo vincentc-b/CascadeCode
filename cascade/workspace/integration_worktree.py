@@ -734,9 +734,20 @@ def _merged_board_uncached(trunk: Path) -> BoardIndex:
 
     if read_provenance(trunk) is not None:
         for work_id, meta in snapshot_board(trunk).by_id.items():
-            if meta.tier != "epic" or meta.path.parent.name != "1_backlog":
+            if meta.tier != "epic":
                 continue
             current = by_id.get(work_id)
+            if meta.status == "cancelled" and meta.path.parent.name == "3_completed":
+                if current is None or (
+                    current.tier == "epic"
+                    and current.status == "backlog"
+                    and current.path.parent.name == "1_backlog"
+                ):
+                    # A merged cancellation supersedes a stale local backlog copy.
+                    by_id[work_id] = meta
+                continue
+            if meta.path.parent.name != "1_backlog":
+                continue
             if current is None or (
                 current.tier == "epic"
                 and current.status == "backlog"
