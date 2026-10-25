@@ -2,7 +2,7 @@
 id: feat_014_001
 title: Cancellation lifecycle and command contract
 tier: feature
-status: active
+status: completed
 parent: epic_014
 children:
 - task_014_001_001
