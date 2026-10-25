@@ -14,6 +14,7 @@ import cascade.boss.rollup as rollup_module
 from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
 from cascade.board.parse import render_doc
 from cascade.boss.epic_complete import confirm_epic_complete
+from cascade.boss.epic_complete import confirm_epic_complete_result
 from cascade.boss import merge as merge_module
 from cascade.boss.merge import merge_feature_branch, merge_task_branch, promote_epic_to_trunk
 from cascade.boss.rollup import try_complete_feature, write_closeout
@@ -28,6 +29,8 @@ from cascade.workspace.integration_worktree import (
     merged_board,
     save_registry,
 )
+from cascade.tracking import MergeRequest
+from cascade.watchdog.events import read_events
 from tests.support import add_doc, commit_board, make_repo, approve_board_feature
 
 
@@ -72,6 +75,108 @@ def _commit_in_worktree(worktree: Path, rel: str, content: str, message: str) ->
     path.write_text(content, encoding="utf-8")
     subprocess.run(["git", "add", rel], cwd=worktree, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", message], cwd=worktree, check=True, capture_output=True)
+
+
+def _reviewed_epic_with_remote(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    root = make_repo(tmp_path / "operator")
+    _initial_commit(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", status="completed", parent="epic_001")
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    subprocess.run(["git", "push", "origin", "main", "epic/epic_001"], cwd=root, check=True, capture_output=True)
+    review = MergeRequest(
+        url="https://github.example/pull/1", number="1", forge="github",
+        source_branch="epic/epic_001", target_branch="main", draft=False,
+    )
+    monkeypatch.setattr("cascade.review.ensure_epic_review", lambda *_a, **_k: review)
+    accepted_tip = subprocess.run(
+        ["git", "rev-parse", "epic/epic_001"],
+        cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    monkeypatch.setattr(
+        "cascade.review.merge_request_snapshot",
+        lambda *_a, **_k: {"state": "merged", "merge_sha": accepted_tip},
+    )
+    return root, epic_wt
+
+
+def test_merged_epic_close_preserves_dirty_operator_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, epic_wt = _reviewed_epic_with_remote(tmp_path, monkeypatch)
+    reviewer = tmp_path / "reviewer"
+    subprocess.run(["git", "clone", str(tmp_path / "remote.git"), str(reviewer)], check=True, capture_output=True)
+    subprocess.run(["git", "checkout", "-B", "main", "origin/main"], cwd=reviewer, check=True, capture_output=True)
+    merged = subprocess.run(
+        ["git", "merge", "--no-ff", "--no-edit", "origin/epic/epic_001"],
+        cwd=reviewer, capture_output=True,
+    )
+    assert merged.returncode != 0  # activation's expected pointer conflict
+    epic_path = "docs/epics/2_active/epic_001_epic.md"
+    subprocess.run(["git", "checkout", "--theirs", "--", epic_path], cwd=reviewer, check=True, capture_output=True)
+    subprocess.run(["git", "add", "--", epic_path], cwd=reviewer, check=True, capture_output=True)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "--no-edit"], cwd=reviewer, check=True, capture_output=True)
+    subprocess.run(["git", "push", "origin", "main"], cwd=reviewer, check=True, capture_output=True)
+
+    tracked = root / "README.md"
+    tracked.write_text("operator edit\n", encoding="utf-8")
+    # The operator may also have a stale full active spec instead of a stub.
+    # Closing must still prefer the completed integration copy without writing
+    # over this tracked local file.
+    local_epic = read_doc_in_worktree("epic_001", root)
+    live_epic = read_doc_in_worktree("epic_001", epic_wt)
+    local_epic.body = live_epic.body
+    local_epic.meta.integration_branch = None
+    local_epic.meta.integration_worktree = None
+    local_epic.meta.path.write_text(render_doc(local_epic), encoding="utf-8")
+    local_epic_bytes = local_epic.meta.path.read_bytes()
+    untracked = root / "untracked.txt"
+    untracked.write_text("keep me\n", encoding="utf-8")
+    head_before = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    status_before = subprocess.run(["git", "status", "--porcelain"], cwd=root, check=True, capture_output=True, text=True).stdout
+
+    monkeypatch.setattr("cascade.boss.epic_close_review.find_merge_request", lambda *_a, **_k: None)
+    close_review = MergeRequest(
+        url="https://github.example/pull/2", number="2", forge="github",
+        source_branch="cascade/epic-close/epic_001", target_branch="main", draft=False,
+    )
+    monkeypatch.setattr("cascade.boss.epic_close_review.create_merge_request", lambda *_a, **_k: close_review)
+    pending = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert not pending.ok and pending.reason == "pending_close_review"
+    assert pending.review_url == close_review.url
+    assert read_doc("epic_001", root=root).meta.status == "active"
+    assert not [event for event in read_events("war_room", 0, root=root)[0] if event.type == "EpicCompleted"]
+    subprocess.run(["git", "fetch", "origin"], cwd=reviewer, check=True, capture_output=True)
+    subprocess.run(["git", "merge", "--no-ff", "--no-edit", "origin/cascade/epic-close/epic_001"], cwd=reviewer, check=True, capture_output=True)
+    subprocess.run(["git", "push", "origin", "main"], cwd=reviewer, check=True, capture_output=True)
+
+    assert confirm_epic_complete_result("epic_001", "human", root=root).ok
+    assert confirm_epic_complete_result("epic_001", "human", root=root).ok
+    assert merged_board(root).by_id["epic_001"].status == "completed"
+    assert read_doc_in_worktree("epic_001", root).meta.status == "active"
+    assert epic_wt.is_dir()
+    assert tracked.read_text(encoding="utf-8") == "operator edit\n"
+    assert local_epic.meta.path.read_bytes() == local_epic_bytes
+    assert untracked.read_text(encoding="utf-8") == "keep me\n"
+    assert subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip() == head_before
+    assert subprocess.run(["git", "status", "--porcelain"], cwd=root, check=True, capture_output=True, text=True).stdout == status_before
+    events, _ = read_events("war_room", 0, root=root)
+    assert len([event for event in events if event.type == "EpicCompleted"]) == 1
+
+
+def test_merged_review_state_without_landed_tip_does_not_bypass_dirty_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _ = _reviewed_epic_with_remote(tmp_path, monkeypatch)
+    (root / "README.md").write_text("operator edit\n", encoding="utf-8")
+    result = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert not result.ok and result.reason == "local_changes"
+    assert read_doc("epic_001", root=root).meta.status == "active"
 
 
 def _stacked_board(root: Path) -> None:

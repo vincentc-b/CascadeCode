@@ -540,6 +540,26 @@ def test_confirm_epic_complete_names_dirty_product_trunk(dispatch_board):
     )
 
 
+def test_confirm_epic_complete_returns_closeout_review(dispatch_board):
+    base, root = dispatch_board
+    review_url = "https://github.example/pull/42"
+    with patch(
+        "cascade.war_room.server.confirm_epic_complete_result",
+        return_value=EpicCompleteResult(
+            ok=False, reason="pending_close_review", review_url=review_url
+        ),
+    ):
+        code, body = _post(f"{base}/api/confirm_epic_complete", {"id": "epic_001"})
+
+    assert code == HTTPStatus.OK
+    assert body == {
+        "ok": False,
+        "reason": "pending_close_review",
+        "epic_id": "epic_001",
+        "review_url": review_url,
+    }
+
+
 def test_boss_drain_appends_without_dispatch(dispatch_board):
     base, root = dispatch_board
     with patch("cascade.boss.orders.dispatch_task") as mock_task:

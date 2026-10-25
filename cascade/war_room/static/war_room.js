@@ -1154,6 +1154,8 @@
           setStatus("Epic close refused: this epic has no child features.", true);
         } else if (body.reason === "pending_feature_review") {
           setStatus("Epic close refused: a child feature review is still pending.", true);
+        } else if (body.reason === "pending_close_review") {
+          setStatus("Epic closeout review is ready: " + (body.review_url || "open the review and retry after merge"), false);
         } else {
           const syncMsg = epicCloseFailureMessage(body);
           setStatus(

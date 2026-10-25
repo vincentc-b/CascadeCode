@@ -271,7 +271,7 @@ def merge_request_snapshot(
     if mr.forge == "github":
         args = [
             "gh", "pr", "view", mr.url, "--json",
-            "state,isDraft,comments,reviews,url,baseRefName",
+            "state,isDraft,comments,reviews,url,baseRefName,mergeCommit",
         ]
     else:
         args = ["glab", "mr", "view", mr.url, "--output", "json"]
@@ -313,6 +313,10 @@ def merge_request_snapshot(
             raw.get("target_branch") or raw.get("targetBranch") or ""
         ).strip()
     out: dict[str, object] = {"state": state, "comments": comments, "url": mr.url}
+    merge_commit = raw.get("mergeCommit") if mr.forge == "github" else raw.get("merge_commit_sha")
+    merge_sha = merge_commit.get("oid") if isinstance(merge_commit, dict) else merge_commit
+    if isinstance(merge_sha, str) and merge_sha:
+        out["merge_sha"] = merge_sha
     if target_branch:
         out["target_branch"] = target_branch
     return out
