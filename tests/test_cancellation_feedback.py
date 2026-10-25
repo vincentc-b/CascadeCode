@@ -63,8 +63,10 @@ def test_task_cancellation_persists_structured_feedback_and_gates_parent(
     assert refused.reason == "parent_cancellation_pending"
 
 
-@pytest.mark.parametrize("disposition", CANCELLATION_DISPOSITIONS)
-def test_disposition_is_durable_idempotent_and_releases_gate(
+@pytest.mark.parametrize(
+    "disposition", ["continue_reduced_scope", "replace_replan"]
+)
+def test_continuing_disposition_is_durable_and_releases_gate(
     tmp_path: Path, disposition: str
 ) -> None:
     root = _task_board(tmp_path)
@@ -82,7 +84,35 @@ def test_disposition_is_durable_idempotent_and_releases_gate(
     assert chosen.disposition == disposition
     assert chosen.resolved_at is not None
     assert again.resolved_at == chosen.resolved_at
+    assert parent.body.count("Disposition for cancelled child task_001") == 1
+    assert "· Human ·" in parent.body
     assert dispatch_task("task_002", "human", root=root).ok
+
+
+def test_cancel_parent_applies_cancellation_and_keeps_child_dispatch_closed(
+    tmp_path: Path,
+) -> None:
+    root = _task_board(tmp_path)
+    cancel_work_item("task_001", "superseded", root=root)
+
+    chosen = choose_cancellation_disposition(
+        "feat_001", "task_001", "cancel_parent", root=root
+    )
+    again = choose_cancellation_disposition(
+        "feat_001", "task_001", "cancel_parent", root=root
+    )
+
+    parent = read_doc("feat_001", root=root)
+    epic = read_doc("epic_001", root=root)
+    assert chosen.disposition == "cancel_parent"
+    assert again.resolved_at == chosen.resolved_at
+    assert parent.meta.status == "cancelled"
+    assert cancellation_dispatch_gated(parent.meta)
+    assert parent.body.count("Disposition for cancelled child task_001") == 1
+    assert epic.meta.cancellation_feedback[0].child_id == "feat_001"
+    refused = dispatch_task("task_002", "human", root=root)
+    assert not refused.ok
+    assert refused.reason == "parent_cancellation_pending"
 
 
 def test_feedback_is_emitted_once_and_cannot_be_redecided(tmp_path: Path) -> None:

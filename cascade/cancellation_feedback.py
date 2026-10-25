@@ -39,7 +39,10 @@ def pending_cancellation_feedback(meta: WorkMeta) -> list[CancellationFeedback]:
 def cancellation_dispatch_gated(meta: WorkMeta) -> bool:
     """Whether this parent must pause before dispatching another child."""
 
-    return bool(pending_cancellation_feedback(meta))
+    return any(
+        item.disposition is None or item.disposition == "cancel_parent"
+        for item in meta.cancellation_feedback
+    )
 
 
 def record_parent_cancellation_feedback(
@@ -89,7 +92,12 @@ def choose_cancellation_disposition(
     *,
     root: Path | None = None,
 ) -> CancellationFeedback:
-    """Resolve one parent gate by durably recording the user's disposition."""
+    """Record and apply the user's disposition for one cancelled child.
+
+    Reduced-scope continuation and replacement/replanning release the dispatch
+    gate. Parent cancellation leaves it closed while the shared cancellation
+    service tears down the parent and escalates when applicable.
+    """
 
     if disposition not in CANCELLATION_DISPOSITIONS:
         raise CancellationFeedbackError(f"invalid cancellation disposition: {disposition}")
@@ -110,11 +118,72 @@ def choose_cancellation_disposition(
                 raise CancellationFeedbackError(
                     f"cancellation feedback for {child_id} is already resolved"
                 )
-            return feedback
-        feedback.disposition = disposition
-        feedback.resolved_at = datetime.now(timezone.utc)
-        save_doc(parent, previous_path=parent.meta.path.resolve(), root=_owner(parent, repo))
-        return feedback
+            selected = feedback
+        else:
+            feedback.disposition = disposition
+            feedback.resolved_at = datetime.now(timezone.utc)
+            parent.body = _record_disposition_decision(
+                parent,
+                child_id=child_id,
+                disposition=disposition,
+            )
+            save_doc(
+                parent,
+                previous_path=parent.meta.path.resolve(),
+                root=_owner(parent, repo),
+            )
+            selected = feedback
+
+    if disposition == "cancel_parent":
+        from cascade.cancellation import cancel_work_item
+
+        cancel_work_item(
+            parent_id,
+            f"user chose cancel parent after cancellation of {child_id}",
+            root=repo,
+        )
+    return selected
+
+
+def _record_disposition_decision(
+    parent: WorkDoc,
+    *,
+    child_id: str,
+    disposition: CancellationDisposition,
+) -> str:
+    """Append a replay-safe human decision to the owning plan."""
+
+    from cascade.board.decision_log import (
+        append_to_decision_log,
+        find_matching_decision_id,
+    )
+
+    labels = {
+        "continue_reduced_scope": "continue with reduced scope",
+        "replace_replan": "replace the cancelled child and replan",
+        "cancel_parent": "cancel the parent",
+    }
+    section = f"Disposition for cancelled child {child_id}"
+    choice = labels[disposition]
+    if find_matching_decision_id(parent.body, section=section, choice=choice) is not None:
+        return parent.body
+    _, body = append_to_decision_log(
+        parent.body,
+        section=section,
+        choice=choice,
+        rationale=(
+            "User disposition recorded after reviewing the child's "
+            "cancellation feedback."
+        ),
+        honors=(
+            "Parent dispatch remains gated until a user choice permits "
+            "continuation"
+        ),
+        author="human",
+        author_labels={"human": "Human"},
+        missing_section_message=f"{parent.meta.tier} body missing ## Decision log section",
+    )
+    return body
 
 
 def _owner(doc: WorkDoc, root: Path) -> Path:
