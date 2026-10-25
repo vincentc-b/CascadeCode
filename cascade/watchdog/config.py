@@ -12,6 +12,7 @@ _log = logging.getLogger(__name__)
 _DEFAULT_WORKER_DRAIN_SECONDS = 120.0
 _DEFAULT_CONVERGENCE_STALL_THRESHOLD_SECONDS = 600.0
 _DEFAULT_TURN_PROGRESS_NO_PROGRESS_DEADLINE_SECONDS = 600.0
+_DEFAULT_SUPERVISOR_HEALTH_SWEEP_SECONDS = 60.0
 
 from cascade.agent.errors import ProviderConfigError
 from cascade.agent.providers import (
@@ -139,6 +140,21 @@ def convergence_stall_threshold_seconds(root: Path) -> float:
         if seconds > 0:
             return seconds
     return _DEFAULT_CONVERGENCE_STALL_THRESHOLD_SECONDS
+
+
+def supervisor_health_sweep_seconds(root: Path) -> float:
+    """Seconds between direct-report health sweeps; invalid values use 60s."""
+
+    data = _load_cascade_toml(root)
+    health = data.get("supervisor_health")
+    if not isinstance(health, dict):
+        return _DEFAULT_SUPERVISOR_HEALTH_SWEEP_SECONDS
+    value = health.get("sweep_seconds", _DEFAULT_SUPERVISOR_HEALTH_SWEEP_SECONDS)
+    if isinstance(value, bool):
+        return _DEFAULT_SUPERVISOR_HEALTH_SWEEP_SECONDS
+    if isinstance(value, (int, float)) and float(value) > 0:
+        return float(value)
+    return _DEFAULT_SUPERVISOR_HEALTH_SWEEP_SECONDS
 
 
 def task_parallelism(root: Path) -> int:
