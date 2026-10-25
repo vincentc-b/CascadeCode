@@ -19,6 +19,7 @@ provider: codex
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
+plan_approved_at: '2026-10-25T03:11:49.500207+00:00'
 ---
 # Parent teams monitor reports for health
 
