@@ -517,10 +517,27 @@ def test_confirm_epic_complete_surfaces_single_attempt_failure(
         "conflict_paths": [],
         "merge_aborted": True,
         "guidance": (
-            "Resolve the listed file conflicts in the integration worktree, then retry."
+            "Resolve the listed conflicts between the epic branch and product trunk, "
+            "then retry."
         ),
     }
     complete.assert_called_once_with("epic_001", "human", root=root)
+
+
+def test_confirm_epic_complete_names_dirty_product_trunk(dispatch_board):
+    base, root = dispatch_board
+    with patch(
+        "cascade.war_room.server.confirm_epic_complete_result",
+        return_value=EpicCompleteResult(ok=False, reason="local_changes"),
+    ):
+        code, body = _post(f"{base}/api/confirm_epic_complete", {"id": "epic_001"})
+
+    assert code == HTTPStatus.OK
+    assert body["reason"] == "local_changes"
+    assert body["guidance"] == (
+        "Commit, stash, or remove local changes (including untracked files) "
+        "in the product trunk checkout, then retry."
+    )
 
 
 def test_boss_drain_appends_without_dispatch(dispatch_board):

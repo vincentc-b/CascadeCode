@@ -713,6 +713,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         sync_payload = actionable_sync_failure_payload(
             reason=result.reason,
             conflict_paths=result.conflict_paths,
+            product_trunk=True,
         )
         for key in ("guidance", "conflict_paths", "merge_aborted"):
             if key in sync_payload:
