@@ -6,7 +6,7 @@ from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 from tests.support import add_doc, make_repo, approve_board_feature
 
 
-def test_out_of_process_tool_restores_active_task_run(tmp_path: Path) -> None:
+def test_out_of_process_tool_attaches_without_reclaiming_live_lease(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
@@ -16,6 +16,9 @@ def test_out_of_process_tool_restores_active_task_run(tmp_path: Path) -> None:
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
 
+    from cascade.task.execution import execution_view, mark_running
+
+    mark_running("task_001", root=root)
     clear_task_runs()
     dispatch_swe_tool(
         "swe_write",
@@ -28,6 +31,7 @@ def test_out_of_process_tool_restores_active_task_run(tmp_path: Path) -> None:
     run = get_task_run("task_001")
     assert run is not None
     assert (run.worktree / "delivery.txt").read_text(encoding="utf-8") == "implemented\n"
+    assert execution_view("task_001", root=root)["phase"] == "running"
 
 
 def test_cursor_custom_tool_writes_through_guarded_dispatch(tmp_path: Path) -> None:

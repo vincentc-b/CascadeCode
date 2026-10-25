@@ -38,6 +38,17 @@ class CancellationFeedback:
     resolved_at: datetime | None = None
 
 
+@dataclass(frozen=True)
+class MonitoringBlocker:
+    """A blockage reported by monitoring one immediate child."""
+
+    child_id: WorkId
+    reason: str
+    # True only when adding this cause performed the active -> blocked edge.
+    # Reconciliation must not reopen work that was already blocked manually.
+    blocked_supervisor: bool = False
+
+
 @dataclass
 class WorkMeta:
     """Frontmatter plus the on-disk path. Path is not stored in the file."""
@@ -69,6 +80,7 @@ class WorkMeta:
     cancellation_step: str | None = None
     cancellation_error: str | None = None
     cancellation_feedback: list[CancellationFeedback] = field(default_factory=list)
+    monitoring_blockers: list[MonitoringBlocker] = field(default_factory=list)
 
 
 @dataclass

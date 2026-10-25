@@ -228,6 +228,8 @@ def record_running_error(
             records = _read(repo)
         if record.get("phase") == "terminal":
             return
+        if error == "tests_red":
+            record["phase"] = "running"
         record["heartbeat_at"] = _iso(current)
         record["last_error"] = error
         records[task_id] = record

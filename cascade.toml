@@ -14,8 +14,14 @@ enabled = true
 poll_seconds = 15
 remote = "origin"
 
-# Cursor model ids (cursor-sdk). Boss is omitted and uses the epic tier.
-[models]
+# Provider-specific model defaults. Boss uses the epic tier when omitted.
+[providers]
+default = "cursor"
+
+[providers.cursor]
 epic = "claude-opus-5-5"       # epic_manager, epic_architect
 feature = "claude-sonnet-5-5"  # feature_lead, feature_architect
 task = "composer-2.5"          # swe
+
+[providers.codex]
+task = "gpt-5.6-sol"            # swe for Codex-backed work

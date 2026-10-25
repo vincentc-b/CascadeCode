@@ -238,6 +238,12 @@ def test_red_then_green_tests_allow_finished_provider_to_queue_merge(
 
     on_tests_finished(task_id, {"exit_code": 0}, root=root)
 
+    # An MCP subprocess records the test result durably; the supervisor's
+    # process-local TaskRun has not seen its state change.
+    run = get_task_run(task_id)
+    assert run is not None
+    run.state = "coding"
+
     queued: list[str] = []
     monkeypatch.setattr("cascade.task_rollup.queue_task_merge", lambda value, **_kw: queued.append(value))
     monkeypatch.setattr("cascade.task_rollup.retry_pending_task_merges", lambda _root: [])

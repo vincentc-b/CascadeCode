@@ -43,12 +43,14 @@ def clear_watchdog_memory() -> None:
     from cascade.workspace.turn_progress import clear_turn_progress_memory
     from cascade.workspace.flight import clear_flight_memory
     from cascade.workspace.queue_observability import clear_queue_observability_memory
+    from cascade.watchdog.health import clear_health_memory
 
     with process_lock:
         _stuck.clear()
         _orphan_toast_signatures.clear()
         _work_queue_signatures.clear()
         clear_flight_memory()
+        clear_health_memory()
     clear_queue_observability_memory()
     clear_convergence_diagnostic_memory()
     clear_turn_progress_memory()
@@ -91,6 +93,9 @@ def watchdog_tick(root: Path | None = None) -> None:
     from cascade.workspace.in_flight_turn_watchdog import maintain_in_flight_turn_progress
 
     maintain_in_flight_turn_progress(repo)
+    from cascade.watchdog.health import maybe_sweep_supervisor_health
+
+    maybe_sweep_supervisor_health(repo)
 
 
 def _event_tick(root: Path) -> None:
