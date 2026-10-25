@@ -2,7 +2,7 @@
 id: feat_014_003
 title: Parent feedback and replanning gate
 tier: feature
-status: active
+status: completed
 parent: epic_014
 children:
 - task_014_003_001
