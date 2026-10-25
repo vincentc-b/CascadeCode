@@ -325,6 +325,10 @@
     if (el.btnBriefInventoryRetry) el.btnBriefInventoryRetry.hidden = !visible;
   }
 
+  function setBriefReloadVisible(visible) {
+    if (el.btnBriefReload) el.btnBriefReload.hidden = !visible;
+  }
+
   function updateBriefDialogState() {
     if (!BriefDefaultsUi || !briefInventory) {
       if (el.btnSubmitBrief) el.btnSubmitBrief.disabled = true;
@@ -387,6 +391,11 @@
   function applyBriefLoadedState() {
     if (!BriefDefaultsUi || !briefInventory || !briefTemplate) return;
     briefSelection = BriefDefaultsUi.initialSelection(briefInventory, briefTemplate, { preserveSaved: briefMode === "edit" });
+    if (briefMode === "edit" && briefEditTarget) {
+      briefSelection.provider = briefEditTarget.provider;
+      briefSelection.models = Object.assign({}, briefEditTarget.models);
+      briefSelection.reasoning = Object.assign({}, briefEditTarget.reasoning || {});
+    }
     populateBriefProviders();
     el.briefProvider.onchange = function () {
       briefSelection = BriefDefaultsUi.applyProviderChange(
@@ -428,6 +437,7 @@
 
   function resetBriefForm() {
     el.briefForm.reset();
+    setBriefReloadVisible(false);
     if (el.briefDialogTitle) el.briefDialogTitle.textContent = briefMode === "edit" ? "Edit backlog brief" : "Create a feature brief";
     if (el.briefDialogHelp) el.briefDialogHelp.textContent = briefMode === "edit" ? "Submit a review request; the approved backlog brief is unchanged until merge and refresh." : "Submitting opens a merge request. Merge it to add the epic to the backlog.";
     if (el.btnSubmitBrief) el.btnSubmitBrief.textContent = briefMode === "edit" ? "Create edit merge request" : "Create merge request";
@@ -488,8 +498,9 @@
     const form = new FormData(el.briefForm);
     const fields = Object.fromEntries(form.entries());
     delete fields.provider;
-    const payload = BriefDefaultsUi.buildSubmitPayload(fields, briefSelection, { includeEmptyReasoning: briefMode === "edit" });
-    if (briefMode === "edit") Object.assign(payload, briefEditTarget);
+    const payload = briefMode === "edit"
+      ? BriefDefaultsUi.buildEditSubmitPayload(fields, briefSelection, briefEditTarget)
+      : BriefDefaultsUi.buildSubmitPayload(fields, briefSelection);
     briefSubmitInFlight = true;
     el.btnSubmitBrief.disabled = true;
     el.briefStatus.classList.remove("error");
@@ -508,7 +519,10 @@
     } catch (err) {
       el.briefStatus.textContent = (err.body && err.body.error) || err.message || "Brief creation failed";
       el.briefStatus.classList.add("error");
-      if (err.body && err.body.reload) el.briefStatus.textContent += " Reload the brief and reapply your edits.";
+      if (err.body && err.body.reload) {
+        el.briefStatus.textContent += " Reload the brief to compare, then reapply your edits.";
+        setBriefReloadVisible(true);
+      }
     } finally {
       briefSubmitInFlight = false;
       updateBriefDialogState();

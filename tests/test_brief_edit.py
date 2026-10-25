@@ -1,5 +1,6 @@
 """The brief editor preserves the identity and untouched content of a brief."""
 
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -88,3 +89,9 @@ def test_edit_preserves_identity_metadata_and_unrelated_sections() -> None:
         original=original,
     )
     assert brief_edit_unchanged(same) is True
+
+    revised_notes = render_brief_edit(
+        replace(edit, additional_markdown="## Custom notes\n\nRevised note.")
+    )
+    assert "## Custom notes\n\nRevised note." in revised_notes.body
+    assert "Keep this exact note." not in revised_notes.body

@@ -208,6 +208,14 @@
     return payload;
   }
 
+  function buildEditSubmitPayload(formFields, selection, target) {
+    const payload = buildSubmitPayload(formFields, selection, { includeEmptyReasoning: true });
+    payload.epic_id = target.epic_id;
+    payload.source_path = target.source_path;
+    payload.source_revision = target.source_revision;
+    return payload;
+  }
+
   function briefStatusMessage(inventory, trackingReady) {
     if (!inventory || inventory.loading) {
       return {
@@ -333,6 +341,7 @@
     applyRoleModelChange: applyRoleModelChange,
     canSubmitBrief: canSubmitBrief,
     buildSubmitPayload: buildSubmitPayload,
+    buildEditSubmitPayload: buildEditSubmitPayload,
     briefStatusMessage: briefStatusMessage,
     renderRoleSelectors: renderRoleSelectors,
   };

@@ -2,7 +2,7 @@
 id: feat_024_001
 title: Edit backlog briefs through PRs and refresh approved content
 tier: feature
-status: active
+status: completed
 parent: epic_024
 children:
 - task_024_001_001
@@ -10,6 +10,7 @@ children:
 - task_024_001_003
 - task_024_001_004
 - task_024_001_005
+- task_024_001_006
 depends_on: []
 owners:
 - feature_lead
@@ -80,6 +81,7 @@ flowchart TD
 ```
 
 ## Task breakdown
+- task_024_001_006
 - task_024_001_005
 - task_024_001_004
 - task_024_001_003
