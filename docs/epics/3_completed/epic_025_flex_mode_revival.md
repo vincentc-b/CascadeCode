@@ -2,7 +2,7 @@
 id: epic_025
 title: Flex mode revival
 tier: epic
-status: backlog
+status: cancelled
 parent: null
 children: []
 depends_on: []
@@ -26,6 +26,9 @@ reasoning:
   feature_lead: medium
   feature_architect: medium
   swe: high
+cancellation_reason: duplicate
+cancelled_at: '2026-10-25T23:15:33.004649+00:00'
+cancellation_step: complete
 ---
 # Flex mode revival
 
