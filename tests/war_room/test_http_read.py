@@ -88,6 +88,17 @@ def test_server_binds_loopback(war_room_server):
     assert host == "127.0.0.1"
 
 
+def test_war_room_scripts_are_not_cached_after_restart(war_room_server):
+    base, _root, _server = war_room_server
+    status, html, _ = _get(base + "/")
+    assert status == HTTPStatus.OK
+    assert "/static/war_room.js?v=20261025" in html
+    status, script, headers = _get(base + "/static/war_room.js?v=20261025")
+    assert status == HTTPStatus.OK
+    assert headers["Cache-Control"] == "no-store"
+    assert 'actionButton("Cancel"' in script
+
+
 def test_http_listener_starts_without_completion_reconciliation(
     tmp_path, monkeypatch
 ):
