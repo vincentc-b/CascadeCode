@@ -95,6 +95,10 @@ def render_doc(doc: WorkDoc) -> str:
         payload["approved_at"] = meta.approved_at.isoformat()
     if meta.plan_approved_at is not None:
         payload["plan_approved_at"] = meta.plan_approved_at.isoformat()
+    if meta.cancellation_reason is not None:
+        payload["cancellation_reason"] = meta.cancellation_reason
+    if meta.cancelled_at is not None:
+        payload["cancelled_at"] = meta.cancelled_at.isoformat()
     frontmatter = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True, width=4096)
     body = doc.body
     if body and not body.endswith("\n"):
@@ -168,6 +172,8 @@ def _meta_from_mapping(loaded: dict[str, object], path: Path) -> WorkMeta:
         cites=_optional_cites(loaded),
         approved_at=_optional_datetime(loaded, "approved_at"),
         plan_approved_at=_optional_datetime(loaded, "plan_approved_at"),
+        cancellation_reason=_optional_nonblank_str(loaded, "cancellation_reason"),
+        cancelled_at=_optional_datetime(loaded, "cancelled_at"),
     )
 
 
@@ -184,6 +190,7 @@ def _require_status(value: object) -> WorkStatus:
         or value == "active"
         or value == "blocked"
         or value == "completed"
+        or value == "cancelled"
     ):
         return value
     raise SchemaError(f"invalid status: {value!r}")
@@ -217,6 +224,15 @@ def _optional_cites(loaded: dict[str, object]) -> list[str]:
     if "cites" not in loaded:
         return []
     return _str_list(loaded["cites"], "cites")
+
+
+def _optional_nonblank_str(loaded: dict[str, object], field: str) -> str | None:
+    if field not in loaded or loaded[field] is None:
+        return None
+    value = loaded[field]
+    if not isinstance(value, str) or not value.strip():
+        raise SchemaError(f"{field} must be a non-blank string")
+    return value.strip()
 
 
 def _optional_integration_str(loaded: dict[str, object], field: str) -> str | None:

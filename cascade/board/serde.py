@@ -43,6 +43,10 @@ def work_meta_from_dict(raw: Mapping[str, Any]) -> WorkMeta:
         integration_worktree=raw.get("integration_worktree"),
         approved_at=_parse_optional_datetime(raw.get("approved_at")),
         plan_approved_at=_parse_optional_datetime(raw.get("plan_approved_at")),
+        cancellation_reason=_parse_optional_nonblank_string(
+            raw.get("cancellation_reason"), field="cancellation_reason"
+        ),
+        cancelled_at=_parse_optional_datetime(raw.get("cancelled_at"), field="cancelled_at"),
     )
 
 
@@ -85,7 +89,7 @@ def work_doc_from_dict(
     return WorkDoc(meta=meta, body=str(body), sha=raw.get("sha"))
 
 
-def _parse_optional_datetime(value: Any) -> datetime | None:
+def _parse_optional_datetime(value: Any, *, field: str = "approved_at") -> datetime | None:
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -93,7 +97,15 @@ def _parse_optional_datetime(value: Any) -> datetime | None:
     if isinstance(value, str) and value.strip():
         text = value.strip().replace("Z", "+00:00")
         return datetime.fromisoformat(text)
-    raise ValueError("approved_at must be an ISO datetime string or null")
+    raise ValueError(f"{field} must be an ISO datetime string or null")
+
+
+def _parse_optional_nonblank_string(value: Any, *, field: str) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    raise ValueError(f"{field} must be a non-blank string or null")
 
 
 def _parse_date(value: Any, *, field: str) -> date:
