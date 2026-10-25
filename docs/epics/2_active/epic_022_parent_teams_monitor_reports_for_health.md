@@ -143,6 +143,11 @@ These are implementation-discovery questions for Feature 1 and must be resolved 
   Chose Automatic remediation is limited to one role-authorized attempt per unchanged child incident..
   Rationale: Bounded, idempotent attempts prevent retry storms and preserve human/role authority while still requiring supervisors to try a viable fix.
   Honors: Success criteria requiring an attempted fix before escalation, plus frugal scope and operational safety..
+
+- `dec_003` · 2026-10-25 · Epic Manager · **Cross-module constraints**
+  Chose Monitoring-derived blockage must carry child provenance and may be cleared only when that specific cause recovers..
+  Rationale: A plain status mirror could accidentally erase unrelated manual or sibling blockers; provenance enables safe reconciliation.
+  Honors: Success criteria requiring unresolved child state to be reflected without corrupting independent work state..
 ## Amendment log
 
 _(none)_
