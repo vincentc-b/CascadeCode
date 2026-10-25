@@ -28,6 +28,12 @@ from cascade.watchdog.role_skills import (
     resolve_effective_skills,
 )
 from cascade.watchdog.dispatch import activate_epic, dispatch_feature, dispatch_task
+from cascade.watchdog.blockage import (
+    BlockagePropagationResult,
+    BlockageReconciliationResult,
+    propagate_direct_report_blockage,
+    reconcile_direct_report_blockage,
+)
 from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.hooks import register_boot_hook, register_teardown_hook
 from cascade.watchdog.loop import run_watchdog, watchdog_tick
@@ -55,9 +61,13 @@ __all__ = [
     "Event",
     "Principal",
     "activate_epic",
+    "BlockagePropagationResult",
+    "BlockageReconciliationResult",
     "append_event",
     "dispatch_feature",
     "dispatch_task",
+    "propagate_direct_report_blockage",
+    "reconcile_direct_report_blockage",
     "read_events",
     "read_automation_config",
     "read_models_table",
