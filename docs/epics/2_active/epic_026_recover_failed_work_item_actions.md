@@ -67,10 +67,10 @@ For trunk operations, use a clean temporary worktree based on the verified remot
 - War Room action routes, status model, and recovery controls.
 
 ## Feature breakdown
-- feat_026_004
-- feat_026_003
-- feat_026_002
 - feat_026_001
+- feat_026_002
+- feat_026_003
+- feat_026_004
 
 1. **Durable action recovery state**
    - Add a stable action identity and persisted recovery state around lifecycle actions.
@@ -83,19 +83,19 @@ For trunk operations, use a clean temporary worktree based on the verified remot
    - Route semantic task/code conflicts to the Feature Team and cross-feature or epic-contract conflicts to the Epic Team, including action context and a resume token/reference.
    - Acceptance: interrupted Task and feature merge-conflict scenarios either resume to completion or enter the correct owned decision state without widening worker permissions.
 
-3. **Dirty-trunk-safe epic close**
-   - Run trunk-dependent closeout work in an isolated checkout based on verified remote product trunk.
-   - Reuse or open the normal closeout review, verify the implementation review is merged and terminal closeout review is satisfied, then resume the original close action.
-   - Acceptance: an epic closes while the operator trunk contains unrelated tracked and untracked files; those files and the operator checkout remain byte-for-byte and index-state unchanged.
-
-4. **War Room recovery feedback and retry**
+3. **War Room recovery feedback and retry**
    - Show recovery phase, typed reason, attempt count, owning actor, affected checkout or branch, and next safe step on the original action.
    - Provide a single retry control only for retryable terminal blockers; keep approval and review gates distinct.
    - Acceptance: transient forge failure, permission refusal, and concurrent retry scenarios display the correct state and produce at most one resumed execution.
 
+4. **Dirty-trunk-safe epic close**
+   - Run trunk-dependent closeout work in an isolated checkout based on verified remote product trunk.
+   - Reuse or open the normal closeout review, verify the implementation review is merged and terminal closeout review is satisfied, then resume the original close action.
+   - Acceptance: an epic closes while the operator trunk contains unrelated tracked and untracked files; those files and the operator checkout remain byte-for-byte and index-state unchanged.
+
 ## Delivery order
 
-Deliver features 1 and 2 first because all recovery paths depend on durable identity and ownership. Feature 3 then applies the boundary to the initiating dirty-trunk defect. Feature 4 exposes the established state model without creating a second orchestration path.
+Deliver features 1 and 2 first because all recovery paths depend on durable identity and ownership. Features 3 and 4 may then proceed in parallel: Feature 3 exposes the established state model without creating a second orchestration path, while Feature 4 applies the boundary to the initiating dirty-trunk defect.
 
 ## Open questions
 
@@ -124,4 +124,4 @@ _(none)_
   Honors: The smallest shippable slice for reliable action recovery..
 ## Amendment log
 
-_(none)_
+- 2026-10-26 · Epic Architect · Corrected the Feature 3/4 numbering to match the minted IDs: feat_026_003 is War Room recovery feedback and retry; feat_026_004 is dirty-trunk-safe epic close. No scope or architecture changed.
