@@ -78,6 +78,7 @@ def mint_feature(
                 models=models,
                 provider=provider,
                 reasoning=reasoning,
+                flex_mode=epic_doc.meta.flex_mode,
             ),
             body=_feature_body(title=title, epic_id=epic_id, body_stub=body_stub),
             sha=None,

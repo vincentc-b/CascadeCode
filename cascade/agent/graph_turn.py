@@ -125,6 +125,13 @@ def reasoning_for_role(
     return text, source  # type: ignore[return-value]
 
 
+def flex_mode_for_role(state: dict, role: RoleId) -> bool | None:
+    """Return the validated optional flex selection for one role."""
+
+    value = (state.get("flex_modes") or {}).get(role)
+    return value if isinstance(value, bool) else None
+
+
 def format_role_skill_paths(playbooks: list[dict]) -> str:
     paths = [str(entry.get("path", "")) for entry in playbooks]
     return "Role skill paths: " + ", ".join(paths)
@@ -255,6 +262,7 @@ async def run_planning_role_turn(
         return missing_provider_message(role)
 
     reasoning_level, reasoning_source = reasoning_for_role(state, role)
+    flex_mode = flex_mode_for_role(state, role)
 
     from cascade.watchdog.role_skills import load_role_skills_context
     from cascade.watchdog.skills import SkillPathError
@@ -289,6 +297,7 @@ async def run_planning_role_turn(
             provider=provider_id,
             root=repo,
             reasoning_level=reasoning_level,
+            flex_mode=flex_mode,
             **turn_kwargs,
         )
     except TurnCancelledForDrain:

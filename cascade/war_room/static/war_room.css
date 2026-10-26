@@ -93,6 +93,7 @@ body {
   border-radius: 6px; padding: 0.55rem; font: inherit;
 }
 .brief-model-stack { display: flex; flex-direction: column; gap: 0.75rem; }
+.brief-dialog label.brief-flex-mode { flex-direction: row; align-items: center; }
 .brief-role-selectors { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 .brief-role-row { display: flex; flex-direction: column; gap: 0.35rem; }
 .brief-role-suggestion { color: var(--muted); font-size: 0.8rem; }

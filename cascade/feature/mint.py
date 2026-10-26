@@ -92,6 +92,11 @@ def mint_task(
                 provider=provider,  # type: ignore[arg-type]
                 models=models,
                 reasoning=reasoning,
+                flex_mode=(
+                    feature.meta.flex_mode
+                    if feature.meta.flex_mode is not None
+                    else epic_doc.meta.flex_mode if epic_doc is not None else None
+                ),
             ),
             body=_task_body(
                 title=title,

@@ -253,6 +253,19 @@ def test_build_codex_argv_sets_approval_policy_via_exec_config() -> None:
     assert argv[argv.index("--config") + 1] == 'approval_policy="never"'
 
 
+def test_build_codex_argv_enables_flex_service_tier_only_when_selected() -> None:
+    enabled = build_codex_argv(
+        _turn(provider="codex", flex_mode=True), exec_help=_CODEX_EXEC_HELP
+    )
+    disabled = build_codex_argv(
+        _turn(provider="codex", flex_mode=False), exec_help=_CODEX_EXEC_HELP
+    )
+    legacy = build_codex_argv(_turn(provider="codex"), exec_help=_CODEX_EXEC_HELP)
+
+    assert 'service_tier="flex"' in enabled
+    assert 'service_tier="flex"' not in disabled
+    assert 'service_tier="flex"' not in legacy
+
 def test_build_codex_argv_applies_selected_reasoning_effort() -> None:
     turn = _turn(provider="codex", model_id="gpt-5.6-sol", reasoning_level="high")
     argv = build_codex_argv(turn, exec_help=_CODEX_EXEC_HELP)

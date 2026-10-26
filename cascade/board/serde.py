@@ -39,6 +39,9 @@ def work_meta_from_dict(raw: Mapping[str, Any]) -> WorkMeta:
         model=raw.get("model"),
         models=dict(raw["models"]) if raw.get("models") else None,
         provider=raw.get("provider"),  # type: ignore[arg-type]
+        flex_mode=(
+            raw.get("flex_mode") if isinstance(raw.get("flex_mode"), bool) else None
+        ),
         integration_branch=raw.get("integration_branch"),
         integration_worktree=raw.get("integration_worktree"),
         approved_at=_parse_optional_datetime(raw.get("approved_at")),

@@ -54,6 +54,10 @@ def seed_epic_role_models(
             "epic_manager": manager.provider_source,
             "epic_architect": architect.provider_source,
         },
+        "flex_modes": {
+            "epic_manager": manager.flex_mode,
+            "epic_architect": architect.flex_mode,
+        },
     }
     if manager.reasoning:
         update.setdefault("reasoning_ids", {})["epic_manager"] = manager.reasoning

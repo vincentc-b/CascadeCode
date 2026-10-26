@@ -52,7 +52,12 @@ def _clear_inventory_cache() -> None:
     clear_provider_inventory_cache()
 
 
-def _patch_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+def _patch_inventory(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    provider_id: str = "codex",
+    supports_flex_mode: bool = False,
+) -> None:
     reasoning = ReasoningCapability(default_level="medium", override_levels=("low", "high"))
     models = (
         DiscoveredModel(id="gpt-manager", display_name="Manager"),
@@ -64,12 +69,14 @@ def _patch_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
     mapping = {
         "cursor": _unavailable("cursor", failure="not_installed"),
         "claude": _unavailable("claude", failure="not_authenticated"),
-        "codex": ProviderDiscoverySnapshot(
-            provider_id="codex",
-            available=True,
-            models=models,
-        ),
+        "codex": _unavailable("codex", failure="not_installed"),
     }
+    mapping[provider_id] = ProviderDiscoverySnapshot(
+        provider_id=provider_id,  # type: ignore[arg-type]
+        available=True,
+        models=models,
+        supports_flex_mode=supports_flex_mode,
+    )
 
     def _get_inventory(**kwargs: object) -> object:
         return get_provider_inventory(

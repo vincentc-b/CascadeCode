@@ -340,6 +340,7 @@ def provider_inventory_item_to_dict(item: ProviderInventoryItem) -> dict[str, An
         "id": item.provider_id,
         "display_name": item.display_name,
         "models": [provider_inventory_model_to_dict(model) for model in item.models],
+        "supports_flex_mode": item.supports_flex_mode,
     }
 
 

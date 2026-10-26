@@ -17,3 +17,4 @@ class EpicGraphState(TypedDict):
     provider_sources: NotRequired[dict[str, str]]
     reasoning_ids: NotRequired[dict[str, str]]
     reasoning_sources: NotRequired[dict[str, str]]
+    flex_modes: NotRequired[dict[str, bool | None]]

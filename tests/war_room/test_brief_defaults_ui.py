@@ -46,4 +46,7 @@ def test_brief_dialog_uses_inventory_backed_module() -> None:
     assert "BriefDefaultsUi" in war_room_source
     assert "/api/brief/inventory" in war_room_source
     assert "buildSubmitPayload" in war_room_source
+    assert "briefSelection.flex_mode" in war_room_source
+    template_source = (static.parent / "templates" / "war_room.html").read_text(encoding="utf-8")
+    assert 'id="brief-flex-mode"' in template_source
     assert 'name="manager_model"' not in war_room_source

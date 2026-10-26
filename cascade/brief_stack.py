@@ -147,6 +147,7 @@ def brief_selection_from_meta(meta: WorkMeta) -> dict[str, object]:
         "provider": meta.provider,
         "models": {role: models.get(role, "") for role in BRIEF_STACK_ROLES},
         "reasoning": dict(meta.reasoning or {}),
+        "flex_mode": meta.flex_mode,
         "manager_model": models.get("epic_manager", ""),
         "architect_model": models.get("epic_architect", ""),
     }

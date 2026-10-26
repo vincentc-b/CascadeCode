@@ -54,6 +54,10 @@ def seed_feature_role_models(
             "feature_lead": lead.provider_source,
             "feature_architect": architect.provider_source,
         },
+        "flex_modes": {
+            "feature_lead": lead.flex_mode,
+            "feature_architect": architect.flex_mode,
+        },
     }
     if lead.reasoning:
         update.setdefault("reasoning_ids", {})["feature_lead"] = lead.reasoning

@@ -76,6 +76,8 @@
     briefStatus: document.getElementById("brief-status"),
     briefResult: document.getElementById("brief-result"),
     briefProvider: document.getElementById("brief-provider"),
+    briefFlexMode: document.getElementById("brief-flex-mode"),
+    briefFlexModeWrap: document.getElementById("brief-flex-mode-wrap"),
     briefRoleSelectors: document.getElementById("brief-role-selectors"),
     btnBriefInventoryRetry: document.getElementById("btn-brief-inventory-retry"),
     btnBriefReload: document.getElementById("btn-brief-reload"),
@@ -374,6 +376,12 @@
 
   function renderBriefSelectors() {
     if (!BriefDefaultsUi || !briefInventory || !briefSelection) return;
+    BriefDefaultsUi.renderFlexModeControl(
+      el.briefFlexModeWrap,
+      el.briefFlexMode,
+      briefInventory,
+      briefSelection
+    );
     BriefDefaultsUi.renderRoleSelectors(
       el.briefRoleSelectors,
       briefInventory,
@@ -421,6 +429,12 @@
       briefSelection.provider = briefEditTarget.provider;
       briefSelection.models = Object.assign({}, briefEditTarget.models);
       briefSelection.reasoning = Object.assign({}, briefEditTarget.reasoning || {});
+      briefSelection.flex_mode = BriefDefaultsUi.normalizeFlexMode(
+        briefInventory,
+        briefSelection.provider,
+        briefEditTarget.flex_mode,
+        false
+      );
     }
     populateBriefProviders();
     el.briefProvider.onchange = function () {
@@ -478,7 +492,7 @@
     el.briefStatus.textContent = "Loading saved brief…";
     try {
       const data = await apiGet("/api/brief/edit?epic_id=" + encodeURIComponent(item.id));
-      briefEditTarget = { epic_id: data.epic_id, provider: data.provider, models: Object.assign({}, data.models), reasoning: Object.assign({}, data.reasoning || {}), source_path: data.source_path, source_revision: data.source_revision };
+      briefEditTarget = { epic_id: data.epic_id, provider: data.provider, models: Object.assign({}, data.models), reasoning: Object.assign({}, data.reasoning || {}), flex_mode: data.flex_mode, source_path: data.source_path, source_revision: data.source_revision };
       fillBriefForm(data); await loadBriefDialogData(false); briefSelection.reasoning = Object.assign({}, data.reasoning || {}); renderBriefSelectors(); updateBriefDialogState();
     } catch (err) { el.briefStatus.textContent = (err.body && err.body.error) || err.message || "Could not load brief"; el.briefStatus.classList.add("error"); }
   }

@@ -343,6 +343,7 @@ def install_fake_planning_turns(monkeypatch) -> None:
         epic_id: str,
         root: object,
         reasoning_level: str | None = None,
+        flex_mode: bool | None = None,
     ) -> RoleResult:
         assert model_id == TEST_MODEL_ID
         return RoleResult(text=f"{role}:{prompt}", status="finished")
@@ -356,6 +357,7 @@ def install_fake_planning_turns(monkeypatch) -> None:
         feature_id: str,
         root: object,
         reasoning_level: str | None = None,
+        flex_mode: bool | None = None,
     ) -> RoleResult:
         assert model_id == TEST_MODEL_ID
         return RoleResult(text=f"{role}:{prompt}", status="finished")

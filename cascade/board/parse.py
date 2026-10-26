@@ -88,6 +88,8 @@ def render_doc(doc: WorkDoc) -> str:
         payload["model"] = meta.model
     if meta.provider is not None:
         payload["provider"] = meta.provider
+    if meta.flex_mode is not None:
+        payload["flex_mode"] = meta.flex_mode
     if meta.models:
         payload["models"] = dict(meta.models)
     if meta.reasoning:
@@ -201,6 +203,7 @@ def _meta_from_mapping(loaded: dict[str, object], path: Path) -> WorkMeta:
         path=path.resolve(),
         model=_optional_model(loaded),
         provider=_optional_provider(loaded),
+        flex_mode=_optional_bool(loaded, "flex_mode"),
         models=_optional_models(loaded),
         reasoning=_optional_models(loaded, field="reasoning"),
         integration_branch=_optional_integration_str(loaded, "integration_branch"),
@@ -400,6 +403,15 @@ def _optional_provider(loaded: dict[str, object]) -> str | None:
         return parse_provider_id(value)
     except ProviderConfigError:
         raise
+
+
+def _optional_bool(loaded: dict[str, object], field: str) -> bool | None:
+    value = loaded.get(field)
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise SchemaError(f"{field} must be a boolean")
+    return value
 
 
 def _optional_models(
