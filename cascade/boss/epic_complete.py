@@ -82,6 +82,23 @@ def _epic_close_blocker(
     incomplete = _incomplete_child_feature_ids(epic_id, board)
     if incomplete is None:
         return EpicCompleteResult(ok=False, reason="no_child_features")
+    if not incomplete:
+        from cascade.board.store import list_board
+        from cascade.workspace.integration_worktree import get_integration_worktree
+
+        epic_entry = get_integration_worktree(repo, "epic", epic_id)
+        if epic_entry is not None and epic_entry.path.is_dir():
+            # A completed source worktree can hide an open copy on the epic
+            # branch. Check any child docs the epic review would publish.
+            epic_board = list_board(epic_entry.path)
+            for feature_id in _child_feature_ids(epic_id, board):
+                meta = epic_board.by_id.get(feature_id)
+                if (
+                    meta is not None
+                    and meta.tier == "feature"
+                    and (meta.status != "completed" or meta.path.parent.name != "3_completed")
+                ):
+                    incomplete.add(feature_id)
     if incomplete:
         return EpicCompleteResult(
             ok=False,

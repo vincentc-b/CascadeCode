@@ -9,7 +9,7 @@ import pytest
 
 import cascade.boss.epic_complete as epic_complete_module
 
-from cascade.board.store import move_doc, read_doc
+from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
 from cascade.boss.epic_complete import (
     confirm_epic_complete,
     confirm_epic_complete_result,
@@ -19,8 +19,10 @@ from cascade.boss.epic_complete import (
     surface_epic_close_prompt,
 )
 from cascade.comments.store import comment
+from cascade.review import reconcile_feature_review_completions
 from cascade.watchdog.events import read_events
-from tests.support import add_doc, make_repo
+from cascade.workspace.integration_worktree import ensure_integration_worktree, merged_board
+from tests.support import add_doc, commit_board, make_repo
 
 
 def _epic_board(tmp_path: Path, *, feat_two_completed: bool = True) -> Path:
@@ -78,6 +80,49 @@ def test_epic_not_ready_when_child_feature_still_active(tmp_path: Path) -> None:
     result = confirm_epic_complete_result("epic_001", "human", root=root)
     assert result.reason == "child_features_incomplete"
     assert result.blocker_ids == ("feat_002",)
+
+
+def test_epic_close_waits_for_completed_feature_on_its_review_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active", children=["feat_001"])
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    commit_board(root)
+    epic = ensure_integration_worktree(
+        "epic", "epic_001", branch="epic/epic_001", base_ref="HEAD", trunk=root
+    )
+    feature = ensure_integration_worktree(
+        "feature", "feat_001", branch="feat/feat_001", base_ref="HEAD", trunk=root
+    )
+    move_doc("feat_001", "completed", root=feature.path)
+    assert merged_board(root).by_id["feat_001"].status == "completed"
+    assert read_doc_in_worktree("feat_001", epic.path).meta.status == "backlog"
+
+    assert epic_ready_to_close("epic_001", root=root) is False
+    result = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert result.reason == "child_features_incomplete"
+    assert result.blocker_ids == ("feat_001",)
+
+    state = root / ".cascade" / "reviews.json"
+    state.write_text(
+        json.dumps({"feat_001": {
+            "url": "https://github.example/pull/1",
+            "number": "1",
+            "forge": "github",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "closed": True,
+        }}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("cascade.review._sync_merged_target", lambda *_args: "")
+    monkeypatch.setattr("cascade.review.push_branch", lambda *_args: None)
+
+    reconcile_feature_review_completions(root)
+
+    assert read_doc_in_worktree("feat_001", epic.path).meta.status == "completed"
+    assert epic_ready_to_close("epic_001", root=root) is True
 
 
 def test_epic_without_minted_features_is_not_ready(tmp_path: Path) -> None:

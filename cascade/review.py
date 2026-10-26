@@ -469,17 +469,14 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
     finalized: list[str] = []
     from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
 
-    board = merged_board(trunk) if any(record.get("closed") for record in state.values()) else None
-
     for feature_id, record in list(state.items()):
         if record.get("closed"):
             epic_id = _review_target_epic(record)
-            if board is not None and _closed_review_has_active_target(
-                feature_id, record, board=board, trunk=trunk
-            ):
+            if _closed_review_has_incomplete_target(feature_id, record, trunk=trunk):
                 # Older supervisors could record closure before completing the
-                # accepted feature copy on its epic branch. Repair that state
-                # even when the completion event was already emitted.
+                # accepted feature copy on its epic branch. A completed source
+                # worktree can hide that copy in merged_board, so inspect the
+                # target checkout directly even if an event was already emitted.
                 try:
                     mr = _record_to_mr(record)
                 except (GitError, ValueError, KeyError):
@@ -519,19 +516,21 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
     return finalized
 
 
-def _closed_review_has_active_target(
-    feature_id: str, record: dict[str, object], *, board, trunk: Path
+def _closed_review_has_incomplete_target(
+    feature_id: str, record: dict[str, object], *, trunk: Path
 ) -> bool:
     epic_id = _review_target_epic(record)
     entry = get_integration_worktree(trunk, "epic", epic_id) if epic_id else None
-    meta = board.by_id.get(feature_id)
-    return bool(
-        entry is not None
-        and meta is not None
-        and meta.tier == "feature"
-        and meta.status == "active"
-        and meta.path.parent.name == "2_active"
-        and meta.path.is_relative_to(entry.path)
+    if entry is None or not entry.path.is_dir():
+        return False
+    try:
+        meta = read_doc_in_worktree(feature_id, entry.path).meta
+    except NotFound:
+        return False
+    return (
+        meta.tier == "feature"
+        and meta.parent == epic_id
+        and meta.path.parent.name in ("1_backlog", "2_active")
     )
 
 
@@ -583,8 +582,11 @@ def _close_merged_feature_on_target(
         raise GitError(f"merged feature target mismatch: {feature_id}")
     if doc.meta.status == "completed" and doc.meta.path.parent.name == "3_completed":
         return entry.path
-    if doc.meta.status != "active" or doc.meta.path.parent.name != "2_active":
-        raise GitError(f"merged feature is not active on epic branch: {feature_id}")
+    if (
+        (doc.meta.status, doc.meta.path.parent.name)
+        not in (("backlog", "1_backlog"), ("active", "2_active"))
+    ):
+        raise GitError(f"merged feature is not open on epic branch: {feature_id}")
     move_doc(feature_id, "completed", root=entry.path)
     return entry.path
 
