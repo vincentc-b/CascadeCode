@@ -74,14 +74,26 @@ def _read(root: Path) -> dict[str, dict[str, Any]]:
 
 
 def _write(root: Path, records: dict[str, dict[str, Any]]) -> None:
+    """Atomically update executions without discarding additive lifecycle records."""
+
     path = _path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        existing = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        existing = {}
+    payload = dict(existing) if isinstance(existing, dict) else {}
+    payload["version"] = max(int(payload.get("version") or 1), 2)
+    payload["executions"] = records
     temp = path.with_suffix(".tmp")
-    temp.write_text(
-        json.dumps({"version": 1, "executions": records}, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    temp.replace(path)
+    try:
+        with temp.open("w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        temp.replace(path)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def mark_queued(task_id: str, *, root: Path, now: datetime | None = None) -> dict[str, Any]:
