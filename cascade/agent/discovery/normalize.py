@@ -83,8 +83,9 @@ def reasoning_from_codex_record(record: Mapping[str, Any]) -> ReasoningCapabilit
     if default is None:
         return None
 
-    supports_updates = record.get("supports_reasoning_effort_updates")
-    if supports_updates is False or len(efforts) <= 1:
+    # This flag describes changing effort within a running conversation, not
+    # selecting the effort when starting a Codex turn.
+    if len(efforts) <= 1:
         return ReasoningCapability(default_level=default, override_levels=())
     return ReasoningCapability(default_level=default, override_levels=tuple(efforts))
 

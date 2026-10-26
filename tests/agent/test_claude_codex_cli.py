@@ -253,6 +253,17 @@ def test_build_codex_argv_sets_approval_policy_via_exec_config() -> None:
     assert argv[argv.index("--config") + 1] == 'approval_policy="never"'
 
 
+def test_build_codex_argv_applies_selected_reasoning_effort() -> None:
+    turn = _turn(provider="codex", model_id="gpt-5.6-sol", reasoning_level="high")
+    argv = build_codex_argv(turn, exec_help=_CODEX_EXEC_HELP)
+    assert 'model_reasoning_effort="high"' in argv
+
+    default_argv = build_codex_argv(
+        _turn(provider="codex", model_id="gpt-5.6-sol"), exec_help=_CODEX_EXEC_HELP
+    )
+    assert not any("model_reasoning_effort=" in value for value in default_argv)
+
+
 def test_build_codex_argv_allows_planning_scratch_directory() -> None:
     argv = build_codex_argv(_turn(provider="codex"), exec_help=_CODEX_EXEC_HELP)
     assert "--skip-git-repo-check" in argv

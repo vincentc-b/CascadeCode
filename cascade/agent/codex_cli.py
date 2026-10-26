@@ -54,6 +54,8 @@ def build_codex_argv(
     ]
     if turn.model_id.strip():
         argv.extend(["--model", turn.model_id])
+    if turn.reasoning_level:
+        argv.extend(["--config", f'model_reasoning_effort="{turn.reasoning_level}"'])
     servers = mcp_servers_from_turn_tools(turn.tools)
     if servers:
         if "--ignore-user-config" in exec_help:
