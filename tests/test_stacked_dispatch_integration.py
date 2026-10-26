@@ -233,6 +233,42 @@ def test_fan_in_fails_closed(tmp_path: Path) -> None:
     assert result.reason == "unsupported_topology"
 
 
+def test_fan_in_with_merged_predecessors_uses_epic_base(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _activate_and_open_epic(root)
+    write_stacked_pr_enabled("epic_001", True, root=root)
+    for fid in ("feat_001", "feat_002"):
+        add_doc(
+            root,
+            id=fid,
+            title=fid,
+            tier="feature",
+            status="completed",
+            parent="epic_001",
+        )
+        _seed_predecessor_review(root, fid)
+    path = root / ".cascade" / "reviews.json"
+    reviews = json.loads(path.read_text(encoding="utf-8"))
+    for fid in ("feat_001", "feat_002"):
+        reviews[fid]["closed"] = True
+    path.write_text(json.dumps(reviews), encoding="utf-8")
+    add_doc(
+        root,
+        id="feat_003",
+        title="Join",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001", "feat_002"],
+    )
+    approve_board_feature(root, "feat_003")
+
+    assert dispatch_feature("feat_003", "human", root=root).ok
+    selection = read_feature_dispatch_selection("feat_003", root=root)
+    assert selection is not None
+    assert selection.predecessor_id is None
+    assert selection.base_branch == integration_branch("epic", "epic_001")
+
+
 def test_missing_predecessor_identity_fails_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
