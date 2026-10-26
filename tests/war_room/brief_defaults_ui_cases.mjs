@@ -8,6 +8,8 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const {
   initialSelection,
   applyProviderChange,
+  providerSupportsFlexMode,
+  normalizeFlexMode,
   applyRoleModelChange,
   canSubmitBrief,
   buildSubmitPayload,
@@ -23,6 +25,7 @@ const inventory = {
     {
       id: "codex",
       display_name: "Codex",
+      supports_flex_mode: true,
       models: [
         { id: "gpt-manager", display_name: "Manager" },
         { id: "gpt-architect", display_name: "Architect" },
@@ -42,6 +45,7 @@ const inventory = {
     {
       id: "cursor",
       display_name: "Cursor",
+      supports_flex_mode: false,
       models: [{ id: "composer-2.5", display_name: "Composer 2.5" }],
     },
   ],
@@ -78,18 +82,26 @@ const template = {
   tracking_ready: true,
 };
 
+assert.equal(providerSupportsFlexMode(inventory, "codex"), true);
+assert.equal(providerSupportsFlexMode(inventory, "cursor"), false);
+assert.equal(normalizeFlexMode(inventory, "cursor", true, false), false);
+
 let selection = initialSelection(inventory, template);
 assert.equal(selection.provider, "codex");
 assert.equal(selection.models.epic_manager, "gpt-manager");
 assert.equal(selection.models.swe, "gpt-swe");
+assert.equal(selection.flex_mode, true);
+assert.equal(buildSubmitPayload({}, selection).flex_mode, true);
 
 selection = applyProviderChange(inventory, template, selection, "cursor");
 assert.equal(selection.provider, "cursor");
 assert.equal(selection.models.epic_manager, "composer-2.5");
 assert.equal(selection.reasoning.swe, "");
+assert.equal(selection.flex_mode, false);
 
 selection = applyProviderChange(inventory, template, selection, "codex");
 assert.equal(selection.models.swe, "gpt-swe");
+assert.equal(selection.flex_mode, false);
 selection.reasoning.swe = "high";
 assert.equal(selection.reasoning.swe, "high");
 selection.reasoning.swe = "turbo";
@@ -119,6 +131,18 @@ const payload = buildSubmitPayload(
 assert.equal(payload.provider, "codex");
 assert.equal(payload.models.swe, "gpt-swe");
 assert.equal(payload.reasoning.swe, "high");
+assert.equal(payload.flex_mode, false);
+
+const optedOutTemplate = Object.assign({}, template, {
+  saved: {
+    provider: "codex",
+    models: Object.assign({}, template.models),
+    reasoning: {},
+    flex_mode: false,
+  },
+});
+const optedOut = initialSelection(inventory, optedOutTemplate, { preserveSaved: true });
+assert.equal(optedOut.flex_mode, false);
 
 const savedTarget = {
   epic_id: "epic_024",
@@ -127,6 +151,7 @@ const savedTarget = {
   provider: "cursor",
   models: { swe: "composer-2.5" },
   reasoning: { swe: "low" },
+  flex_mode: false,
 };
 const editPayload = require("../../cascade/war_room/static/brief_defaults_ui.js").buildEditSubmitPayload(
   { title: "Edited", intent: "New intent", additional_markdown: "## Extra\nText" },
@@ -138,6 +163,7 @@ assert.equal(editPayload.source_revision, "old-revision");
 assert.equal(editPayload.provider, "codex");
 assert.equal(editPayload.models.swe, "gpt-swe");
 assert.equal(editPayload.reasoning.swe, "high");
+assert.equal(editPayload.flex_mode, false);
 assert.equal(editPayload.additional_markdown, "## Extra\nText");
 
 const emptyStatus = briefStatusMessage({ loading: false, providers: [] }, true);

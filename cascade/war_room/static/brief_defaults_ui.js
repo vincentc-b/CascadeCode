@@ -29,6 +29,36 @@
     return null;
   }
 
+  function providerSupportsFlexMode(inventory, providerId) {
+    const provider = providerById(inventory, providerId);
+    return !!(provider && provider.supports_flex_mode);
+  }
+
+  function normalizeFlexMode(inventory, providerId, value, defaultEnabled) {
+    if (!providerSupportsFlexMode(inventory, providerId)) return false;
+    return typeof value === "boolean" ? value : !!defaultEnabled;
+  }
+
+  function renderFlexModeControl(wrap, checkbox, inventory, selection) {
+    if (!selection) return;
+    const supported = providerSupportsFlexMode(inventory, selection.provider);
+    selection.flex_mode = normalizeFlexMode(
+      inventory,
+      selection.provider,
+      selection.flex_mode,
+      false
+    );
+    if (wrap) wrap.hidden = !supported;
+    if (!checkbox) return;
+    checkbox.disabled = !supported;
+    checkbox.checked = selection.flex_mode;
+    checkbox.onchange = supported
+      ? function () {
+          selection.flex_mode = checkbox.checked;
+        }
+      : null;
+  }
+
   function modelById(provider, modelId) {
     if (!provider || !provider.models || !modelId) return null;
     for (let i = 0; i < provider.models.length; i += 1) {
@@ -125,7 +155,14 @@
         inventory, providerId, role, models[role], savedReasoning
       );
     });
-    return { provider: providerId, models: models, reasoning: reasoning };
+    const saved = template && template.saved;
+    const flexMode = normalizeFlexMode(
+      inventory,
+      providerId,
+      saved ? saved.flex_mode : undefined,
+      true
+    );
+    return { provider: providerId, models: models, reasoning: reasoning, flex_mode: flexMode };
   }
 
   function applyProviderChange(inventory, template, selection, nextProviderId) {
@@ -148,7 +185,12 @@
         selection.reasoning[role]
       );
     });
-    return { provider: nextProviderId, models: models, reasoning: reasoning };
+    return {
+      provider: nextProviderId,
+      models: models,
+      reasoning: reasoning,
+      flex_mode: normalizeFlexMode(inventory, nextProviderId, selection.flex_mode, false),
+    };
   }
 
   function applyRoleModelChange(inventory, selection, role, nextModelId) {
@@ -168,7 +210,12 @@
       models[role],
       selection.reasoning[role]
     );
-    return { provider: selection.provider, models: models, reasoning: reasoning };
+    return {
+      provider: selection.provider,
+      models: models,
+      reasoning: reasoning,
+      flex_mode: selection.flex_mode,
+    };
   }
 
   function canSubmitBrief(inventory, selection, trackingReady, options) {
@@ -199,6 +246,7 @@
     const payload = Object.assign({}, formFields, {
       provider: selection.provider,
       models: Object.assign({}, selection.models),
+      flex_mode: !!selection.flex_mode,
     });
     const reasoning = {};
     BRIEF_STACK_ROLES.forEach(function (role) {
@@ -333,6 +381,9 @@
     BRIEF_STACK_ROLES: BRIEF_STACK_ROLES,
     ROLE_LABELS: ROLE_LABELS,
     providerById: providerById,
+    providerSupportsFlexMode: providerSupportsFlexMode,
+    normalizeFlexMode: normalizeFlexMode,
+    renderFlexModeControl: renderFlexModeControl,
     modelById: modelById,
     reasoningChoices: reasoningChoices,
     resolveProviderId: resolveProviderId,
