@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,7 +11,14 @@ from cascade.board.context import resolve_root
 from cascade.board.errors import NotFound
 from cascade.board.gitutil import _run
 from cascade.board.store import read_doc
-from cascade.task.action_recovery import ActionResult, create_or_load_action, resume_action
+from cascade.task.action_recovery import (
+    ActionRecoveryError,
+    ActionResult,
+    create_or_load_action,
+    record_owner_decision,
+    record_owner_resolution,
+    resume_action,
+)
 from cascade.task.execution import mark_merge_blocked
 from cascade.watchdog.events import append_event
 from cascade.watchdog.lock import process_lock
@@ -21,6 +29,11 @@ _QUEUED_MERGE_KIND = "queued_task_merge"
 # The legacy queue retried indefinitely.  Keep recovery durable without making a
 # short-lived transient refusal terminal during normal supervisor operation.
 _QUEUED_MERGE_ATTEMPT_BOUND = 100
+_SEMANTIC_CONFLICT_OWNERS = {
+    "task_code": "feature_team",
+    "cross_feature": "epic_team",
+    "epic_contract": "epic_team",
+}
 
 
 def _path(root: Path) -> Path:
@@ -143,8 +156,12 @@ def _resume_queued_merge(task_id: str, root: Path) -> ActionResult:
     reason = result.reason or "merge_refused"
     if reason == "branch_conflict":
         _record_merge_refusal(task_id, result, root)
-        # Task 004 assigns the owner and records resolution.  Preserve evidence
-        # and deliberately leave this action in its semantic decision state.
+        handoff_semantic_conflict(
+            _queued_merge_action_id(task_id),
+            root=root,
+            scope="task_code",
+            evidence=metadata,
+        )
         return ActionResult("failed", "owner_decision", metadata)
     if reason in {
         "busy", "checkout_missing", "merge_target_missing", "wrong_branch", "post_merge_failed",
@@ -156,6 +173,83 @@ def _resume_queued_merge(task_id: str, root: Path) -> ActionResult:
     if reason not in {"task_not_found", "wrong_column", "not_mergeable"}:
         _record_merge_refusal(task_id, result, root)
     return ActionResult("failed", "terminal_blocker", metadata)
+
+
+
+def handoff_semantic_conflict(
+    action_id: str,
+    *,
+    root: Path,
+    scope: str | None,
+    evidence: dict | None,
+) -> dict:
+    """Record a scope-classified semantic handoff for an existing action.
+
+    The caller must classify scope explicitly. Conflict paths are evidence, not
+    authority to promote a task/code conflict to Epic Team.
+    """
+
+    owner = _SEMANTIC_CONFLICT_OWNERS.get(scope or "")
+    if owner is None:
+        raise ActionRecoveryError("semantic conflict scope is missing or ambiguous")
+    if not isinstance(evidence, dict):
+        raise ActionRecoveryError("semantic conflict evidence must be a mapping")
+    required = ("source_sha", "target_sha", "reason", "conflict_paths")
+    if any(key not in evidence for key in required):
+        raise ActionRecoveryError("semantic conflict evidence is incomplete")
+    if evidence["reason"] != "branch_conflict":
+        raise ActionRecoveryError("semantic handoff requires a branch conflict")
+    if not isinstance(evidence["conflict_paths"], list):
+        raise ActionRecoveryError("semantic conflict paths must be a list")
+
+    identity_evidence = {
+        "source_sha": evidence["source_sha"],
+        "target_sha": evidence["target_sha"],
+        "reason": evidence["reason"],
+        "conflict_paths": sorted(str(path) for path in evidence["conflict_paths"]),
+    }
+    encoded = json.dumps(
+        {"action_id": action_id, "scope": scope, "evidence": identity_evidence},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    decision_id = f"semantic-conflict:{sha256(encoded).hexdigest()}"
+    return record_owner_decision(
+        action_id,
+        decision_id,
+        root=root,
+        owner=owner,
+        metadata={"scope": scope, "evidence": identity_evidence},
+    )
+
+
+def handoff_queued_merge_semantic_conflict(
+    task_id: str,
+    *,
+    root: Path,
+    scope: str | None,
+    evidence: dict | None,
+) -> dict:
+    """Supervisor convenience wrapper for the stable queued-merge action."""
+
+    return handoff_semantic_conflict(
+        _queued_merge_action_id(task_id), root=root, scope=scope, evidence=evidence
+    )
+
+
+def resolve_semantic_conflict(
+    action_id: str,
+    decision_id: str,
+    resolution_id: str,
+    *,
+    root: Path,
+    metadata: dict | None = None,
+) -> dict:
+    """Authorize retry of exactly the action and decision named by a resolution."""
+
+    return record_owner_resolution(
+        action_id, decision_id, resolution_id, root=root, metadata=metadata
+    )
 
 
 def _merge_outcome_metadata(task_id: str, result, root: Path) -> dict:

@@ -1,11 +1,18 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from cascade.board.store import read_doc, write_doc
 from cascade.boss.merge import MergeResult
-from cascade.task.action_recovery import load_action
+from cascade.task.action_recovery import ActionRecoveryError, load_action
 from cascade.task.execution import execution_view, mark_queued
-from cascade.task_rollup import queue_task_merge, retry_pending_task_merges
+from cascade.task_rollup import (
+    handoff_queued_merge_semantic_conflict,
+    queue_task_merge,
+    resolve_semantic_conflict,
+    retry_pending_task_merges,
+)
 from cascade.watchdog.events import read_events
 from cascade.war_room.toasts import events_to_toasts
 from tests.support import add_doc, make_repo
@@ -60,6 +67,14 @@ def test_conflict_is_persisted_as_semantic_block_without_repeat_merge(
     assert action is not None
     assert action["recovery_state"] == "awaiting_owner_decision"
     assert action["failure_classification"] == "owner_decision"
+    decision = action["owner_decisions"][0]
+    assert decision["owner"] == "feature_team"
+    assert decision["metadata"]["evidence"] == {
+        "source_sha": "source1",
+        "target_sha": "target1",
+        "reason": "branch_conflict",
+        "conflict_paths": ["cascade/workspace/worker.py"],
+    }
     evidence = action["attempts"][-1]["completion_metadata"]
     assert evidence["source_sha"] == "source1"
     assert evidence["target_sha"] == "target1"
@@ -120,3 +135,86 @@ def test_repaired_mechanical_merge_reuses_action_and_completes_once(
     assert retry_pending_task_merges(root) == []
     assert merges == ["task_001", "task_001"]
     assert rollups == ["task_001"]
+
+
+
+def test_semantic_handoff_scope_and_resolution_resume_original_queue(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", status="active", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", status="active", parent="feat_001")
+    merges: list[str] = []
+
+    def merge(task_id: str, *, root: Path):
+        merges.append(task_id)
+        if len(merges) == 1:
+            return MergeResult(
+                ok=False,
+                reason="branch_conflict",
+                conflict_paths=("conflict.py",),
+            )
+        return MergeResult(ok=True, merge_sha="merged")
+
+    monkeypatch.setattr("cascade.boss.merge.merge_task_branch", merge)
+    monkeypatch.setattr("cascade.boss.rollup.on_task_merged", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("cascade.task_rollup._merge_head_pair", lambda *_args: ("source", "target"))
+    queue_task_merge("task_001", root=root)
+
+    assert retry_pending_task_merges(root) == []
+    action = load_action("task_001:queued_merge", root=root)
+    assert action is not None
+    decision = action["owner_decisions"][0]
+    decision_id = decision["decision_id"]
+    assert decision["owner"] == "feature_team"
+    assert retry_pending_task_merges(root) == []
+    assert merges == ["task_001"]
+
+    # Broader scope is accepted only when explicitly supplied by a supervisor.
+    other = handoff_queued_merge_semantic_conflict(
+        "task_001",
+        root=root,
+        scope="cross_feature",
+        evidence={
+            "source_sha": "source-2",
+            "target_sha": "target-2",
+            "reason": "branch_conflict",
+            "conflict_paths": ["contract.py"],
+        },
+    )
+    assert other["owner_decisions"][-1]["owner"] == "epic_team"
+    with pytest.raises(ActionRecoveryError, match="missing or ambiguous"):
+        handoff_queued_merge_semantic_conflict(
+            "task_001",
+            root=root,
+            scope=None,
+            evidence={
+                "source_sha": "source-3",
+                "target_sha": "target-3",
+                "reason": "branch_conflict",
+                "conflict_paths": [],
+            },
+        )
+
+    # Resolve both decisions; replay is a no-op and the original queue resumes.
+    resolve_semantic_conflict(
+        "task_001:queued_merge", decision_id, "resolution:1", root=root, metadata={"ok": True}
+    )
+    epic_decision = load_action("task_001:queued_merge", root=root)["owner_decisions"][-1]
+    resolved = resolve_semantic_conflict(
+        "task_001:queued_merge", epic_decision["decision_id"], "resolution:2",
+        root=root, metadata={"ok": True},
+    )
+    assert resolved["recovery_state"] == "retryable"
+    assert resolve_semantic_conflict(
+        "task_001:queued_merge", epic_decision["decision_id"], "resolution:2",
+        root=root, metadata={"ok": True},
+    ) == resolved
+    with pytest.raises(ActionRecoveryError):
+        resolve_semantic_conflict(
+            "task_001:queued_merge", epic_decision["decision_id"], "resolution:2",
+            root=root, metadata={"ok": False},
+        )
+    assert retry_pending_task_merges(root) == ["task_001"]
+    assert merges == ["task_001", "task_001"]
