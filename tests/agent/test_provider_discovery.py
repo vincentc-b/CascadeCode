@@ -89,7 +89,7 @@ def test_reasoning_from_codex_record_with_overrides() -> None:
                 {"effort": "medium"},
                 {"effort": "high"},
             ],
-            "supports_reasoning_effort_updates": True,
+            "supports_reasoning_effort_updates": False,
         }
     )
     assert cap == ReasoningCapability(

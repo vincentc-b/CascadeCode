@@ -98,11 +98,11 @@ def test_validate_brief_rejects_unsupported_reasoning_override(
         validate_brief(raw, root=tmp_path)
 
 
-def test_validate_brief_keeps_default_reasoning_implicit(
+def test_validate_brief_persists_explicit_catalog_default_reasoning(
     tmp_path: Path, patch_codex_inventory: None
 ) -> None:
     request = validate_brief(_request(reasoning={"swe": "medium"}), root=tmp_path)
-    assert request.reasoning == {}
+    assert request.reasoning == {"swe": "medium"}
 
 
 def test_validate_brief_persists_non_default_reasoning(

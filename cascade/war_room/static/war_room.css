@@ -281,6 +281,21 @@ body {
   border-color: #f59e0b;
 }
 
+.board-row-cancelling {
+  border-color: #f59e0b;
+}
+
+.epic-cancellation-status {
+  display: inline-block;
+  margin: 0 0 0.35rem;
+  padding: 0.12rem 0.4rem;
+  border: 1px solid #f59e0b;
+  border-radius: 999px;
+  color: #fbbf24;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 .feature-review-status {
   display: inline-block;
   margin: 0 0 0.35rem;

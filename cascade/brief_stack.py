@@ -97,7 +97,7 @@ def normalize_reasoning_overrides(
     *,
     provider_item: ProviderInventoryItem,
 ) -> dict[str, str]:
-    """Validate overrides and drop levels that match provider defaults."""
+    """Validate explicit effort choices; an omitted choice keeps provider behavior."""
 
     model_by_id = {model.id: model for model in provider_item.models}
     persisted: dict[str, str] = {}
@@ -110,8 +110,6 @@ def normalize_reasoning_overrides(
             raise ValueError(f"{role} model is not offered by {provider_item.provider_id}")
         capability = model.reasoning
         _validate_reasoning_override(role, override, capability, model.id)
-        if capability is not None and override == capability.default_level:
-            continue
         persisted[role] = override
     return persisted
 
