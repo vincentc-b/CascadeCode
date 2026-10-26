@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 
 from cascade.agent.discovery.inventory import (
     InventoryFreshness,
+    ProviderInventoryItem,
     ProviderInventoryResult,
     get_provider_inventory,
 )
@@ -47,6 +48,7 @@ class BriefRequest:
     provider: str
     models: dict[str, str]
     reasoning: dict[str, str]
+    flex_mode: bool
 
     @property
     def manager_model(self) -> str:
@@ -170,6 +172,7 @@ def validate_brief(raw: dict[str, object], *, root: Path) -> BriefRequest:
     reasoning_input = parse_brief_reasoning(raw)
     inventory = get_provider_inventory()
     provider_item = validate_models_against_inventory(provider, models, inventory)
+    flex_mode = normalize_flex_mode(raw.get("flex_mode"), provider_item)
     reasoning = normalize_reasoning_overrides(
         models,
         reasoning_input,
@@ -183,7 +186,18 @@ def validate_brief(raw: dict[str, object], *, root: Path) -> BriefRequest:
         provider=provider,
         models=models,
         reasoning=reasoning,
+        flex_mode=flex_mode,
     )
+
+
+def normalize_flex_mode(raw: object, provider_item: ProviderInventoryItem) -> bool:
+    """Default from capability and prevent unsupported providers enabling flex."""
+
+    if raw is None:
+        return provider_item.supports_flex_mode
+    if not isinstance(raw, bool):
+        raise ValueError("flex_mode must be a boolean")
+    return raw and provider_item.supports_flex_mode
 
 
 def _next_epic_id(root: Path) -> str:
@@ -264,6 +278,7 @@ _(none)_
         provider=request.provider,  # type: ignore[arg-type]
         models=dict(request.models),
         reasoning=dict(request.reasoning) if request.reasoning else None,
+        flex_mode=request.flex_mode,
     )
     return WorkDoc(meta=meta, body=body)
 

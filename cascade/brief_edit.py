@@ -13,7 +13,7 @@ from cascade.brief_stack import (
     BRIEF_STACK_ROLES, normalize_reasoning_overrides, parse_brief_models,
     validate_models_against_inventory,
 )
-from cascade.briefs import _clean
+from cascade.briefs import _clean, normalize_flex_mode
 from cascade.watchdog.config import read_providers_config
 
 
@@ -36,6 +36,7 @@ class BriefEditRequest:
     cleared_reasoning: frozenset[str]
     source: BriefEditSource
     original: WorkDoc
+    flex_mode: bool | None = None
     additional_markdown: str | None = None
     warnings: tuple[str, ...] = ()
 
@@ -53,6 +54,7 @@ def load_brief_edit(doc: WorkDoc) -> dict[str, object]:
         "provider": doc.meta.provider,
         "models": {role: models.get(role, "") for role in BRIEF_STACK_ROLES},
         "reasoning": dict(doc.meta.reasoning or {}),
+        "flex_mode": doc.meta.flex_mode,
         "additional_markdown": _additional_markdown(doc.body, doc.meta.title),
         "source": BriefEditSource(doc.meta.id, doc.meta.path, doc.sha),
     }
@@ -92,6 +94,12 @@ def validate_brief_edit(
         )
     )
     reasoning = {role: value for role, value in reasoning.items() if role not in cleared}
+    if "flex_mode" not in raw and provider == target.meta.provider:
+        flex_mode = target.meta.flex_mode
+    elif item is None:
+        flex_mode = target.meta.flex_mode
+    else:
+        flex_mode = normalize_flex_mode(raw.get("flex_mode"), item)
     additional = raw.get("additional_markdown")
     if additional is not None and not isinstance(additional, str):
         raise ValueError("additional markdown must be text")
@@ -106,6 +114,7 @@ def validate_brief_edit(
         cleared_reasoning=frozenset(cleared),
         source=BriefEditSource(target.meta.id, target.meta.path, target.sha),
         original=target,
+        flex_mode=flex_mode,
         additional_markdown=additional,
         warnings=tuple(warnings),
     )
@@ -137,6 +146,7 @@ def render_brief_edit(edit: BriefEditRequest) -> WorkDoc:
         provider=edit.provider,
         models=dict(edit.models),
         reasoning=dict(edit.reasoning) or None,
+        flex_mode=edit.flex_mode,
         updated=edit.original.meta.updated,
     )
     return WorkDoc(meta=meta, body=body, sha=edit.original.sha)
@@ -153,6 +163,7 @@ def brief_edit_unchanged(edit: BriefEditRequest) -> bool:
         and before.meta.provider == after.meta.provider
         and dict(before.meta.models or {}) == dict(after.meta.models or {})
         and dict(before.meta.reasoning or {}) == dict(after.meta.reasoning or {})
+        and before.meta.flex_mode == after.meta.flex_mode
         and before.body == after.body
     )
 

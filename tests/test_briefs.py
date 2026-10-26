@@ -8,6 +8,7 @@ import pytest
 
 from cascade.agent.discovery.inventory import clear_provider_inventory_cache, get_provider_inventory
 from cascade.agent.discovery.types import DiscoveredModel, ProviderDiscoverySnapshot
+from cascade.board.parse import parse_text, render_doc
 from cascade.briefs import build_brief_doc, create_brief, validate_brief
 from tests.agent.test_provider_inventory import _fake_discover, _unavailable
 from cascade.approvals import epic_plan_approved
@@ -64,6 +65,7 @@ def _brief_inventory(monkeypatch) -> None:
             provider_id="codex",
             available=True,
             models=models,
+            supports_flex_mode=True,
         ),
     }
 
@@ -87,8 +89,44 @@ def test_brief_doc_carries_role_models_and_template_sections(tmp_path: Path) -> 
 
     assert doc.meta.provider == "codex"
     assert doc.meta.models == _request()["models"]
+    assert doc.meta.flex_mode is True
     assert "## Intent" in doc.body
+    rendered = render_doc(doc)
+    assert "flex_mode: true" in rendered
+    assert parse_text(rendered, path).meta.flex_mode is True
     assert "## Feature breakdown" in doc.body
+
+
+def test_legacy_brief_without_flex_mode_remains_unset(tmp_path: Path) -> None:
+    request = validate_brief(_request(), root=tmp_path)
+    path = tmp_path / "docs/epics/1_backlog/epic_004_search_experience.md"
+    rendered = render_doc(build_brief_doc(request, "epic_004", path))
+    legacy = rendered.replace("flex_mode: true\n", "")
+
+    assert parse_text(legacy, path).meta.flex_mode is None
+
+
+def test_brief_flex_mode_can_be_disabled_and_requires_boolean(tmp_path: Path) -> None:
+    raw = _request()
+    raw["flex_mode"] = False
+    assert validate_brief(raw, root=tmp_path).flex_mode is False
+
+    raw["flex_mode"] = "true"
+    with pytest.raises(ValueError, match="flex_mode must be a boolean"):
+        validate_brief(raw, root=tmp_path)
+
+
+def test_unsupported_provider_cannot_enable_flex() -> None:
+    from cascade.agent.discovery.inventory import ProviderInventoryItem
+    from cascade.briefs import normalize_flex_mode
+
+    provider = ProviderInventoryItem(
+        provider_id="cursor",
+        display_name="Cursor",
+        models=(),
+    )
+    assert normalize_flex_mode(True, provider) is False
+    assert normalize_flex_mode(None, provider) is False
 
 
 def test_validate_brief_requires_both_team_models(tmp_path: Path) -> None:
