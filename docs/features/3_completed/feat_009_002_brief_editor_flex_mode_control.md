@@ -2,7 +2,7 @@
 id: feat_009_002
 title: Brief editor flex-mode control
 tier: feature
-status: active
+status: completed
 parent: epic_009
 children:
 - task_009_002_001
