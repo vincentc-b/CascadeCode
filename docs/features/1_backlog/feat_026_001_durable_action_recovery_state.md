@@ -17,6 +17,7 @@ provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-10-26T05:46:54.089888+00:00'
 ---
 # Durable action recovery state
 
