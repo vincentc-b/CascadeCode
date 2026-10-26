@@ -103,6 +103,11 @@ _(none)_
   Chose Keep Task worker permissions unchanged; deterministic recovery runs inside the supervisor's existing privileged execution boundary..
   Rationale: Routine checkout, lease, and merge-queue repair does not require product judgment and must not broaden worker authority.
   Honors: Success criteria requiring scoped supervisor repair without broader permissions..
+
+- `dec_002` · 2026-10-26 · Epic Manager · **Macro-architecture**
+  Chose Route semantic task/code conflicts to the Feature Team and cross-feature or epic-contract conflicts to the Epic Team, then resume the same persisted action after resolution..
+  Rationale: The owning planning level should decide semantics while the supervisor retains scheduling, locking, and execution.
+  Honors: The ownership model and action-identity requirements in the epic intent..
 ## Amendment log
 
 _(none)_
