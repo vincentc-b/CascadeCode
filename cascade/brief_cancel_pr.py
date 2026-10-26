@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import fcntl
+import json
+import re
 import subprocess
 import tempfile
 import threading
@@ -13,7 +16,7 @@ from cascade.board.errors import GitError
 from cascade.board.parse import render_doc
 from cascade.brief_edit_pr import BriefEditError, _fetched_brief, _request_id, _source_path
 from cascade.briefs import _fetch_remote_trunk
-from cascade.tracking import MergeRequest, create_merge_request, forge_ready, push_branch
+from cascade.tracking import MergeRequest, create_merge_request, detect_forge, forge_ready, push_branch
 from cascade.watchdog.config import read_automation_config
 from cascade.workspace.trunk import resolve_product_trunk
 
@@ -27,11 +30,75 @@ def _git(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _forge(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(args, cwd=root, capture_output=True, text=True, encoding="utf-8")
+
+
+def open_brief_cancellations(root: Path) -> dict[str, MergeRequest]:
+    """Find open cancellation reviews, including ones created before this worker started."""
+
+    repo = Path(root).resolve()
+    forge = detect_forge(repo, remote=read_automation_config(repo).remote)
+    if forge == "github":
+        args = [
+            "gh", "pr", "list", "--state", "open", "--limit", "1000",
+            "--json", "url,number,headRefName,baseRefName,isDraft,createdAt",
+        ]
+    elif forge == "gitlab":
+        args = ["glab", "mr", "list", "--state", "opened", "--output", "json"]
+    else:
+        raise GitError("review forge is not configured")
+    result = _forge(args, repo)
+    if result.returncode != 0:
+        raise GitError((result.stderr or result.stdout).strip() or "cancellation review lookup failed")
+    try:
+        rows = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise GitError("forge returned invalid cancellation review JSON") from exc
+    if not isinstance(rows, list):
+        raise GitError("forge returned invalid cancellation review JSON")
+    trunk = resolve_product_trunk(repo)
+    prefix = "cascade/brief-cancel/"
+    reviews: dict[str, MergeRequest] = {}
+    ordered = sorted(
+        (row for row in rows if isinstance(row, dict)),
+        key=lambda row: str(row.get("createdAt") or row.get("created_at") or ""),
+    )
+    for row in ordered:
+        branch = str(row.get("headRefName") or row.get("source_branch") or "")
+        base = str(row.get("baseRefName") or row.get("target_branch") or "")
+        state = str(row.get("state") or "open").lower()
+        if not branch.startswith(prefix) or base != trunk or state not in {"open", "opened"}:
+            continue
+        suffix = branch.removeprefix(prefix)
+        epic_id, separator, nonce = suffix.rpartition("-")
+        if not separator or not nonce or re.fullmatch(r"epic_\d+", epic_id) is None:
+            continue
+        url = str(row.get("url") or row.get("web_url") or "")
+        if not url:
+            continue
+        number = row.get("number") or row.get("iid")
+        reviews.setdefault(
+            epic_id,
+            MergeRequest(
+                url=url,
+                number=str(number) if number is not None else None,
+                forge=forge,
+                source_branch=branch,
+                target_branch=base,
+                draft=bool(row.get("isDraft", row.get("draft", False))),
+            ),
+        )
+    return reviews
+
+
 def submit_brief_cancel(root: Path, raw: dict[str, object]) -> MergeRequest:
     """Open a PR that cancels one still-approved backlog epic."""
 
     repo = Path(root).resolve()
     epic_id = _request_id(raw)
+    if re.fullmatch(r"epic_\d+", epic_id) is None:
+        raise BriefEditError("invalid epic_id", code="invalid_request", status=400)
     reason = raw.get("reason")
     reason = reason.strip() if isinstance(reason, str) else ""
     if not reason:
@@ -43,7 +110,14 @@ def submit_brief_cancel(root: Path, raw: dict[str, object]) -> MergeRequest:
             raise BriefEditError("cancellation is already being submitted", code="duplicate")
         _in_flight.add(key)
     try:
-        return _submit(repo, epic_id, source_path, raw.get("source_revision"), reason)
+        lock_path = repo / ".cascade" / "brief-cancel" / f"{epic_id}.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+") as lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+            try:
+                return _submit(repo, epic_id, source_path, raw.get("source_revision"), reason)
+            finally:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
     finally:
         with _lock:
             _in_flight.discard(key)
@@ -67,6 +141,12 @@ def _submit(
         raise BriefEditError("cancel child work items first", code="live_children")
     if not forge_ready(repo):
         raise BriefEditError("review forge is not ready", code="forge_unavailable", status=503)
+    existing = open_brief_cancellations(repo).get(epic_id)
+    if existing is not None:
+        raise BriefEditError(
+            f"cancellation review already awaits approval: {existing.url}",
+            code="pending_cancel", review_url=existing.url,
+        )
 
     branch = f"cascade/brief-cancel/{epic_id}-{uuid.uuid4().hex[:8]}"
     target_path = str(Path("docs/epics/3_completed") / Path(actual_path).name)

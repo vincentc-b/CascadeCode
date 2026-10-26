@@ -28,11 +28,15 @@ from cascade.workspace.trunk import resolve_product_trunk
 class BriefEditError(Exception):
     """An operator-actionable brief edit failure."""
 
-    def __init__(self, message: str, *, code: str, status: int = 409, reload: bool = False):
+    def __init__(
+        self, message: str, *, code: str, status: int = 409,
+        reload: bool = False, review_url: str | None = None,
+    ):
         super().__init__(message)
         self.code = code
         self.status = status
         self.reload = reload
+        self.review_url = review_url
 
 
 _in_flight: set[tuple[Path, str]] = set()

@@ -54,6 +54,7 @@ def test_cancel_creates_review_commit_without_changing_operator_checkout(
     ).stdout.strip()
     monkeypatch.setattr("cascade.brief_cancel_pr.forge_ready", lambda _root: True)
     monkeypatch.setattr("cascade.brief_cancel_pr.push_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("cascade.brief_cancel_pr.open_brief_cancellations", lambda _root: {})
 
     def fake_review(_worktree, *, source_branch, target_branch, **_kwargs):
         return MergeRequest(

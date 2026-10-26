@@ -320,6 +320,32 @@
   let briefMode = "create";
   let briefEditTarget = null;
   let briefSubmitInFlight = false;
+  let pendingBriefCancels = Object.create(null);
+  let pendingBriefCancelLookupOk = false;
+  let pendingBriefCancelRefreshAt = 0;
+  let pendingBriefCancelRefreshInFlight = null;
+  let pendingBriefCancelVersion = 0;
+  const submittingBriefCancels = new Set();
+
+  function refreshPendingBriefCancels(force) {
+    if (pendingBriefCancelRefreshInFlight) return pendingBriefCancelRefreshInFlight;
+    if (!force && Date.now() < pendingBriefCancelRefreshAt) return Promise.resolve();
+    const version = pendingBriefCancelVersion;
+    pendingBriefCancelRefreshInFlight = apiGet("/api/brief/cancellations")
+      .then(function (body) {
+        if (version === pendingBriefCancelVersion) {
+          pendingBriefCancels = body.reviews || Object.create(null);
+        }
+        pendingBriefCancelLookupOk = true;
+        pendingBriefCancelRefreshAt = version === pendingBriefCancelVersion ? Date.now() + 15000 : 0;
+      })
+      .catch(function () {
+        pendingBriefCancelLookupOk = false;
+        pendingBriefCancelRefreshAt = Date.now() + 15000;
+      })
+      .finally(function () { pendingBriefCancelRefreshInFlight = null; });
+    return pendingBriefCancelRefreshInFlight;
+  }
 
   function setBriefInventoryRetryVisible(visible) {
     if (el.btnBriefInventoryRetry) el.btnBriefInventoryRetry.hidden = !visible;
@@ -458,6 +484,7 @@
   }
 
   async function cancelBacklogEpic(item) {
+    if (pendingBriefCancels[item.id] || submittingBriefCancels.has(item.id) || !pendingBriefCancelLookupOk) return;
     const answer = window.prompt("Reason for cancelling " + item.id + "? A review request will be created.");
     if (answer === null) return;
     const reason = answer.trim();
@@ -465,6 +492,8 @@
       setStatus("Enter a cancellation reason for " + item.id + ".", true);
       return;
     }
+    submittingBriefCancels.add(item.id);
+    if (lastBoardView) renderBoard(lastBoardView);
     setStatus("Preparing cancellation review for " + item.id + "…", false);
     try {
       const current = await apiGet("/api/brief/edit?epic_id=" + encodeURIComponent(item.id));
@@ -474,12 +503,25 @@
         source_revision: current.source_revision,
         reason: reason,
       });
+      pendingBriefCancelVersion += 1;
+      pendingBriefCancelRefreshAt = 0;
+      pendingBriefCancels[item.id] = { url: response.body.merge_request_url };
+      if (lastBoardView) renderBoard(lastBoardView);
       setStatus("Cancellation review created for " + item.id + ". Merge it to cancel the epic.", false);
-      el.chatStatus.appendChild(document.createTextNode(" "));
-      el.chatStatus.appendChild(actionLink("Open review", response.body.merge_request_url));
     } catch (err) {
+      if (err.body && err.body.code === "pending_cancel" && err.body.review_url) {
+        pendingBriefCancelVersion += 1;
+        pendingBriefCancelRefreshAt = 0;
+        pendingBriefCancels[item.id] = { url: err.body.review_url };
+        if (lastBoardView) renderBoard(lastBoardView);
+        setStatus("Cancellation review already awaits approval for " + item.id + ".", false);
+        return;
+      }
       setStatus((err.body && err.body.error) || err.message || "Could not prepare cancellation review", true);
       if (err.body && err.body.reload) await refreshBoard();
+    } finally {
+      submittingBriefCancels.delete(item.id);
+      if (lastBoardView) renderBoard(lastBoardView);
     }
   }
 
@@ -830,6 +872,17 @@
       row.appendChild(reviewStatus);
     }
 
+    const cancellationReview = tier === "epics" && column === "1_backlog"
+      ? pendingBriefCancels[item.id] : null;
+    if (cancellationReview) {
+      row.classList.add("board-row-cancelling");
+      const status = document.createElement("span");
+      status.className = "epic-cancellation-status";
+      status.textContent = "Cancelling · awaiting approval";
+      status.setAttribute("aria-label", "Epic cancellation status: awaiting approval");
+      row.appendChild(status);
+    }
+
     if (tier === "tasks") {
       const execution = taskExecutionStatus(item);
       const status = document.createElement("span");
@@ -928,7 +981,14 @@
     if (tier === "epics") {
       if (column === "1_backlog") {
         actions.appendChild(actionButton("Edit", function () { return openBriefEdit(item); }));
-        actions.appendChild(actionButton("Cancel", function () { return cancelBacklogEpic(item); }));
+        if (cancellationReview) {
+          actions.appendChild(actionLink("Open cancellation review", cancellationReview.url));
+        } else {
+          const cancelDisabled = submittingBriefCancels.has(item.id)
+            ? "Preparing cancellation review"
+            : !pendingBriefCancelLookupOk ? "Checking cancellation reviews; retry shortly" : null;
+          actions.appendChild(actionButton("Cancel", function () { return cancelBacklogEpic(item); }, cancelDisabled));
+        }
       }
       actions.appendChild(actionButton("Attach", function () {
         return attach(item.id, "epic");
@@ -1421,15 +1481,17 @@
     if (boardRefreshInFlight) {
       if (forceFresh) {
         return boardRefreshInFlight.catch(function () {}).then(function () {
-          return loadBoardView();
+          return loadBoardView(true);
         });
       }
       return boardRefreshInFlight;
     }
     boardRefreshInFlight = apiGet("/api/board?_=" + Date.now())
       .then(function (view) {
-        renderBoard(view);
-        return view;
+        return refreshPendingBriefCancels(!!forceFresh).then(function () {
+          renderBoard(view);
+          return view;
+        });
       })
       .finally(function () {
         boardRefreshInFlight = null;

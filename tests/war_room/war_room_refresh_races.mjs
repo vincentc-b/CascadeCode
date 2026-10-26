@@ -83,6 +83,7 @@ async function testActionRefreshFetchesAfterPendingPoll() {
       return request.promise;
     },
     renderBoard(view) { rendered.push(view.version); },
+    refreshPendingBriefCancels() { return Promise.resolve(); },
     refreshFlightReport() { return Promise.resolve(); },
     refreshBossView() { return Promise.resolve(); },
     reportBoardLoadFailure(error) { throw error; },
