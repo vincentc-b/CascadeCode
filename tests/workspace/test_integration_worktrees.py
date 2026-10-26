@@ -249,6 +249,43 @@ def test_repair_restores_worktree_without_new_dispatch(tmp_path: Path) -> None:
     assert repaired is not None
     assert feat_wt.is_dir()
 
+    # Repair has restored the persisted branch/checkout identity; repeating the
+    # supervisor evaluation has no lifecycle side effect.
+    resume_legally_active_graphs(root)
+    assert feat_wt.is_dir()
+    repeated_events, _ = read_events("task_001", 0, root=root)
+    assert [event.type for event in repeated_events] == [
+        event.type for event in task_events_before
+    ]
+
+
+def test_startup_resumes_interrupted_task_once_without_new_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    _chain(root)
+    assert dispatch_task("task_001", "human", root=root).ok
+
+    from cascade.task.worktree import clear_task_runs, get_task_run
+
+    clear_task_runs()
+    resumed: list[str] = []
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.kickoff_graph_queue_event",
+        lambda task_id, **_kwargs: resumed.append(task_id) or True,
+    )
+
+    resume_legally_active_graphs(root)
+    assert get_task_run("task_001") is not None
+    resume_legally_active_graphs(root)
+    assert resumed == ["task_001"]
+
+    events, _ = read_events("task_001", 0, root=root)
+    assert [event.type for event in events] == ["TaskDispatched", "TaskResumeRequested"]
+
 
 def test_registry_persists_entries(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
