@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_026_001
 - feat_026_002
+- feat_026_003
 depends_on: []
 owners:
 - epic_manager
@@ -64,6 +65,7 @@ For trunk operations, use a clean temporary worktree based on the verified remot
 - War Room action routes, status model, and recovery controls.
 
 ## Feature breakdown
+- feat_026_003
 - feat_026_002
 - feat_026_001
 
