@@ -108,6 +108,11 @@ _(none)_
   Chose Route semantic task/code conflicts to the Feature Team and cross-feature or epic-contract conflicts to the Epic Team, then resume the same persisted action after resolution..
   Rationale: The owning planning level should decide semantics while the supervisor retains scheduling, locking, and execution.
   Honors: The ownership model and action-identity requirements in the epic intent..
+
+- `dec_003` · 2026-10-26 · Epic Manager · **Cross-module constraints**
+  Chose Exclude a generic workflow engine, arbitrary rollback, and automatic semantic conflict resolution..
+  Rationale: These additions are not necessary to recover the known lifecycle failures and would materially expand cost and risk.
+  Honors: The smallest shippable slice for reliable action recovery..
 ## Amendment log
 
 _(none)_
