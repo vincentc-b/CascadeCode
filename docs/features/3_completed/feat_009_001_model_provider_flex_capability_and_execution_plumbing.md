@@ -2,7 +2,7 @@
 id: feat_009_001
 title: Model provider flex capability and execution plumbing
 tier: feature
-status: active
+status: completed
 parent: epic_009
 children:
 - task_009_001_001
