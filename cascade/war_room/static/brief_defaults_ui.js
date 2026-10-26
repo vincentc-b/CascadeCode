@@ -39,6 +39,26 @@
     return typeof value === "boolean" ? value : !!defaultEnabled;
   }
 
+  function renderFlexModeControl(wrap, checkbox, inventory, selection) {
+    if (!selection) return;
+    const supported = providerSupportsFlexMode(inventory, selection.provider);
+    selection.flex_mode = normalizeFlexMode(
+      inventory,
+      selection.provider,
+      selection.flex_mode,
+      false
+    );
+    if (wrap) wrap.hidden = !supported;
+    if (!checkbox) return;
+    checkbox.disabled = !supported;
+    checkbox.checked = selection.flex_mode;
+    checkbox.onchange = supported
+      ? function () {
+          selection.flex_mode = checkbox.checked;
+        }
+      : null;
+  }
+
   function modelById(provider, modelId) {
     if (!provider || !provider.models || !modelId) return null;
     for (let i = 0; i < provider.models.length; i += 1) {
@@ -363,6 +383,7 @@
     providerById: providerById,
     providerSupportsFlexMode: providerSupportsFlexMode,
     normalizeFlexMode: normalizeFlexMode,
+    renderFlexModeControl: renderFlexModeControl,
     modelById: modelById,
     reasoningChoices: reasoningChoices,
     resolveProviderId: resolveProviderId,

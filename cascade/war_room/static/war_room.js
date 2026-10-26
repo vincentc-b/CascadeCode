@@ -350,17 +350,12 @@
 
   function renderBriefSelectors() {
     if (!BriefDefaultsUi || !briefInventory || !briefSelection) return;
-    const supportsFlexMode = BriefDefaultsUi.providerSupportsFlexMode(
+    BriefDefaultsUi.renderFlexModeControl(
+      el.briefFlexModeWrap,
+      el.briefFlexMode,
       briefInventory,
-      briefSelection.provider
+      briefSelection
     );
-    if (el.briefFlexModeWrap) el.briefFlexModeWrap.hidden = !supportsFlexMode;
-    if (el.briefFlexMode) {
-      el.briefFlexMode.checked = supportsFlexMode && !!briefSelection.flex_mode;
-      el.briefFlexMode.onchange = function () {
-        briefSelection.flex_mode = supportsFlexMode && el.briefFlexMode.checked;
-      };
-    }
     BriefDefaultsUi.renderRoleSelectors(
       el.briefRoleSelectors,
       briefInventory,
