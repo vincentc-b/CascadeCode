@@ -19,6 +19,7 @@ provider: codex
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
+plan_approved_at: '2026-10-26T02:25:00.553986+00:00'
 ---
 # Support OpenAI flex mode for cost optimization
 
