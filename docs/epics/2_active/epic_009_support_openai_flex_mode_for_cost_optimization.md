@@ -95,6 +95,11 @@ Ship feat_009_001 before feat_009_002. The first feature establishes the persist
   Chose Ship Codex/OpenAI flex mode first behind a provider-neutral capability contract..
   Rationale: This satisfies the approved user outcome without committing the epic to unspecified implementations for other providers.
   Honors: Intent and success criteria; extensibility requirement..
+
+- `dec_002` · 2026-10-26 · Epic Manager · **Compatibility and defaults**
+  Chose Default flex on only for newly created briefs with a capable provider; an absent value on existing briefs preserves legacy behavior..
+  Rationale: The requested default should not silently change execution semantics for previously saved briefs.
+  Honors: Default-on requirement and backward compatibility..
 ## Amendment log
 
 _(none)_
