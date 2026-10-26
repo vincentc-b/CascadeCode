@@ -5,7 +5,7 @@ import pytest
 
 from cascade.board.store import read_doc, write_doc
 from cascade.boss.merge import MergeResult
-from cascade.task.action_recovery import ActionRecoveryError, load_action
+from cascade.task.action_recovery import ActionNotFound, ActionRecoveryError, load_action
 from cascade.task.execution import execution_view, mark_queued
 from cascade.task_rollup import (
     handoff_queued_merge_semantic_conflict,
@@ -257,7 +257,7 @@ def test_supervisor_handoff_rejects_unlinked_resolution_without_replaying_merge(
     # leaves the durable action blocked and emits no additional merge.
     with pytest.raises(ActionRecoveryError, match="owner decision not found"):
         resolve_semantic_conflict(action_id, "semantic-conflict:missing", "resolution:stale", root=root)
-    with pytest.raises(ActionRecoveryError, match="owner decision not found"):
+    with pytest.raises(ActionNotFound, match="task_999:queued_merge"):
         resolve_semantic_conflict("task_999:queued_merge", decision_id, "resolution:mismatched", root=root)
     assert retry_pending_task_merges(root) == []
     assert load_action(action_id, root=root) == blocked
