@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 from cascade.board.context import resolve_root
@@ -31,8 +32,51 @@ def repair_registered_worktrees(root: Path) -> None:
     repair_all_registered(repo)
 
 
+def resume_interrupted_task_runs(root: Path) -> list[tuple[str, str]]:
+    """Reclaim interrupted Task turns through their existing queue action.
+
+    The active-run restore derives eligibility from the durable execution lease
+    and returns nothing once the TaskRun is attached again. The resume event is
+    therefore emitted once per interrupted execution, never as a new dispatch
+    or replacement action.
+    """
+
+    from cascade.task.wiring import restore_active_task_runs
+    from cascade.watchdog.events import append_event
+    from cascade.watchdog.types import Event
+    from cascade.workspace.kickoff import deferred_kickoffs, kickoff_graph_queue_event
+
+    repo = Path(root).resolve()
+    restored = restore_active_task_runs(repo)
+    if not restored:
+        return []
+
+    with deferred_kickoffs():
+        for task_id, feature_id in restored:
+            append_event(
+                task_id,
+                Event(
+                    type="TaskResumeRequested",
+                    ts=datetime.now(timezone.utc),
+                    payload={
+                        "task_id": task_id,
+                        "feature_id": feature_id,
+                        "instruction": (
+                            "Resume the Task by reading its plan and pinned Feature plan, "
+                            "then implement, test, and commit the deliverable. Do not report "
+                            "completion without a non-lifecycle commit."
+                        ),
+                    },
+                    dest=task_id,
+                ),
+                root=repo,
+            )
+            kickoff_graph_queue_event(task_id, root=repo, by="watchdog")
+    return restored
+
+
 def submit_recovered_turns(root: Path) -> None:
-    """Queue interrupted graph turns through per-graph background workers."""
+    """Queue interrupted graph and Task turns through existing workers."""
 
     from cascade.workspace.kickoff import deferred_kickoffs, resume_inflight_graphs
     from cascade.workspace.supervisor_readiness import observe_startup_phase
@@ -44,6 +88,7 @@ def submit_recovered_turns(root: Path) -> None:
     # recovered graph; structural worktree repair remains ordered before this call.
     with deferred_kickoffs():
         resume_inflight_graphs(repo)
+    resume_interrupted_task_runs(repo)
     observe_startup_phase("watchdog")
 
 
