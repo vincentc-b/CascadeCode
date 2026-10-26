@@ -54,6 +54,8 @@ def build_codex_argv(
     ]
     if turn.model_id.strip():
         argv.extend(["--model", turn.model_id])
+    if turn.flex_mode is True:
+        argv.extend(["--config", 'service_tier="flex"'])
     servers = mcp_servers_from_turn_tools(turn.tools)
     if servers:
         if "--ignore-user-config" in exec_help:

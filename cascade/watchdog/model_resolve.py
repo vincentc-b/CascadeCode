@@ -41,6 +41,7 @@ class ResolvedBackend:
     model: ResolvedModel
     reasoning: str | None = None
     reasoning_source: ReasoningSource | None = None
+    flex_mode: bool | None = None
 
 
 def _non_blank(value: str | None) -> str | None:
@@ -157,4 +158,5 @@ def resolve_backend(
         model=model,
         reasoning=reasoning,
         reasoning_source=reasoning_source,
+        flex_mode=doc.flex_mode if doc is not None else None,
     )

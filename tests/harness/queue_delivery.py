@@ -56,6 +56,8 @@ class CountingBlockedTurnRunner:
             provider: str,
             epic_id: str,
             root: object,
+            reasoning_level: str | None = None,
+            flex_mode: bool | None = None,
         ) -> RoleResult:
             runner._enter_turn()
             return RoleResult(text=f"{role}:{prompt}", status="finished")
@@ -68,6 +70,8 @@ class CountingBlockedTurnRunner:
             provider: str,
             feature_id: str,
             root: object,
+            reasoning_level: str | None = None,
+            flex_mode: bool | None = None,
         ) -> RoleResult:
             runner._enter_turn()
             return RoleResult(text=f"{role}:{prompt}", status="finished")
