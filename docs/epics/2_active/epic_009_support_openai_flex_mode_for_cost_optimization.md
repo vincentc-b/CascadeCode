@@ -91,6 +91,10 @@ Ship feat_009_001 before feat_009_002. The first feature establishes the persist
 - 2026-10-26 · Epic Manager · Default flex mode on only for newly created briefs with a capable provider; preserve legacy behavior for existing briefs with no stored value.
 - 2026-10-26 · Epic Manager · Split delivery into provider/execution plumbing followed by the dependent brief-editor control.
 
+- `dec_001` · 2026-10-26 · Epic Manager · **Scope**
+  Chose Ship Codex/OpenAI flex mode first behind a provider-neutral capability contract..
+  Rationale: This satisfies the approved user outcome without committing the epic to unspecified implementations for other providers.
+  Honors: Intent and success criteria; extensibility requirement..
 ## Amendment log
 
 _(none)_
