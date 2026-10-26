@@ -70,6 +70,7 @@ class WorkMeta:
     models: dict[str, str] | None = None
     reasoning: dict[str, str] | None = None
     provider: ProviderId | None = None
+    flex_mode: bool | None = None
     integration_branch: str | None = None
     integration_worktree: str | None = None
     cites: list[str] = field(default_factory=list)

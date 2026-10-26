@@ -104,4 +104,6 @@ def discover_codex_models() -> ProviderDiscoverySnapshot:
         provider_id=provider_id,
         available=True,
         models=sort_models(models),
+        # This integration can pass OpenAI service-tier config to Codex CLI.
+        supports_flex_mode=True,
     )

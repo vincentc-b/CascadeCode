@@ -253,6 +253,20 @@ def test_build_codex_argv_sets_approval_policy_via_exec_config() -> None:
     assert argv[argv.index("--config") + 1] == 'approval_policy="never"'
 
 
+def test_build_codex_argv_enables_flex_service_tier_only_when_selected() -> None:
+    enabled = build_codex_argv(
+        _turn(provider="codex", flex_mode=True), exec_help=_CODEX_EXEC_HELP
+    )
+    disabled = build_codex_argv(
+        _turn(provider="codex", flex_mode=False), exec_help=_CODEX_EXEC_HELP
+    )
+    legacy = build_codex_argv(_turn(provider="codex"), exec_help=_CODEX_EXEC_HELP)
+
+    assert 'service_tier="flex"' in enabled
+    assert 'service_tier="flex"' not in disabled
+    assert 'service_tier="flex"' not in legacy
+
+
 def test_build_codex_argv_allows_planning_scratch_directory() -> None:
     argv = build_codex_argv(_turn(provider="codex"), exec_help=_CODEX_EXEC_HELP)
     assert "--skip-git-repo-check" in argv

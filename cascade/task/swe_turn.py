@@ -98,6 +98,7 @@ def build_swe_role_turn(
     prompt: str,
     root: Path,
     reasoning_level: str | None = None,
+    flex_mode: bool | None = None,
 ) -> RoleTurn:
     """Assemble a ``RoleTurn`` with cwd set to the task worktree."""
 
@@ -112,6 +113,7 @@ def build_swe_role_turn(
         tools=[] if is_cursor else build_swe_mcp_servers(task_id, root=root),
         custom_tools=(build_swe_custom_tools(task_id, root=root) if is_cursor else None),
         reasoning_level=reasoning_level,
+        flex_mode=flex_mode,
     )
 
 
@@ -142,6 +144,7 @@ async def run_swe_turn(
     prompt: str,
     root: Path,
     reasoning_level: str | None = None,
+    flex_mode: bool | None = None,
     commit_message: str | None = None,
     run_role_fn: RunRoleFn | None = None,
 ) -> SweTurnResult:
@@ -160,6 +163,7 @@ async def run_swe_turn(
         prompt=full_prompt,
         root=repo,
         reasoning_level=reasoning_level,
+        flex_mode=flex_mode,
     )
     invoke = run_role_fn or run_role
 

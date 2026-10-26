@@ -200,6 +200,7 @@ def test_codex_adapter_filters_hidden(monkeypatch: pytest.MonkeyPatch) -> None:
     snap = discover_codex_models()
     assert snap.available is True
     assert [m.id for m in snap.models] == ["visible-model"]
+    assert snap.supports_flex_mode is True
 
 
 def test_codex_adapter_api_error(monkeypatch: pytest.MonkeyPatch) -> None:

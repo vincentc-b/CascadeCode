@@ -112,7 +112,7 @@ def test_full_stack_brief_defaults_discovery_create_reload_and_downstream(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     base, root, _server = brief_defaults_e2e_server
-    _patch_inventory(monkeypatch)
+    _patch_inventory(monkeypatch, supports_flex_mode=True)
     write_default_models(root)
     monkeypatch.setattr("cascade.briefs.create_brief", _create_brief_on_board)
 
@@ -121,6 +121,7 @@ def test_full_stack_brief_defaults_discovery_create_reload_and_downstream(
     assert inventory["loading"] is False
     assert {item["id"] for item in inventory["providers"]} == {"codex"}
     codex = inventory["providers"][0]
+    assert codex["supports_flex_mode"] is True
     swe_model = next(item for item in codex["models"] if item["id"] == "gpt-swe")
     assert swe_model["reasoning"]["override_levels"] == ["low", "high"]
 
@@ -146,11 +147,13 @@ def test_full_stack_brief_defaults_discovery_create_reload_and_downstream(
     assert saved["provider"] == "codex"
     assert saved["models"] == _stack_models()
     assert saved["reasoning"] == {"swe": "high"}
+    assert saved["flex_mode"] is True
 
     epic = read_doc(epic_id, root=root)
     assert epic.meta.provider == "codex"
     assert epic.meta.models == _stack_models()
     assert epic.meta.reasoning == {"swe": "high"}
+    assert epic.meta.flex_mode is True
 
     feature_id = mint_feature("Downstream feature", epic_id=epic_id, root=root)
     feature = read_doc(feature_id, root=root)
@@ -159,12 +162,14 @@ def test_full_stack_brief_defaults_discovery_create_reload_and_downstream(
         "feature_lead": "gpt-feature-lead",
         "feature_architect": "gpt-feature-architect",
     }
+    assert feature.meta.flex_mode is True
 
     task_id = mint_task("Downstream task", feature_id=feature_id, root=root)
     task = read_doc(task_id, root=root)
     assert task.meta.provider == "codex"
     assert task.meta.models == {"swe": "gpt-swe"}
     assert task.meta.reasoning == {"swe": "high"}
+    assert task.meta.flex_mode is True
 
     backend = resolve_backend("swe", task.meta, root=root)
     assert backend.provider == "codex"
@@ -172,3 +177,49 @@ def test_full_stack_brief_defaults_discovery_create_reload_and_downstream(
     assert backend.model.source == "document-role"
     assert backend.reasoning == "high"
     assert backend.reasoning_source == "document-role"
+    assert backend.flex_mode is True
+
+
+@pytest.mark.parametrize(
+    ("provider", "requested_flex", "expected_flex"),
+    [("codex", False, False), ("cursor", True, False)],
+    ids=["supported-explicitly-disabled", "unsupported-normalized"],
+)
+def test_brief_flex_selection_survives_or_normalizes_through_http_persistence(
+    brief_defaults_e2e_server,
+    monkeypatch: pytest.MonkeyPatch,
+    provider: str,
+    requested_flex: bool,
+    expected_flex: bool,
+) -> None:
+    base, root, _server = brief_defaults_e2e_server
+    _patch_inventory(
+        monkeypatch,
+        provider_id=provider,
+        supports_flex_mode=provider == "codex",
+    )
+    monkeypatch.setattr("cascade.briefs.create_brief", _create_brief_on_board)
+
+    status, created = _post(
+        f"{base}/api/briefs",
+        _brief_payload(provider=provider, flex_mode=requested_flex),
+    )
+
+    assert status == HTTPStatus.CREATED
+    assert read_doc(created["epic_id"], root=root).meta.flex_mode is expected_flex
+
+
+def test_legacy_brief_without_flex_stays_unset_through_downstream_resolution(
+    brief_defaults_e2e_server,
+) -> None:
+    _base, root, _server = brief_defaults_e2e_server
+    write_default_models(root)
+    epic = read_doc("epic_001", root=root)
+    assert epic.meta.flex_mode is None
+
+    feature_id = mint_feature("Legacy child", epic_id="epic_001", root=root)
+    task_id = mint_task("Legacy task", feature_id=feature_id, root=root)
+    task = read_doc(task_id, root=root)
+
+    assert task.meta.flex_mode is None
+    assert resolve_backend("swe", task.meta, root=root).flex_mode is None

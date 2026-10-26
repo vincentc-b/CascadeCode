@@ -48,6 +48,7 @@ class ProviderDiscoverySnapshot:
     models: tuple[DiscoveredModel, ...] = ()
     failure: DiscoveryFailureReason | None = None
     message: str | None = None
+    supports_flex_mode: bool = False
 
 
 class ProviderDiscoveryAdapter(Protocol):

@@ -34,6 +34,7 @@ class ProviderInventoryItem:
     provider_id: ProviderId
     display_name: str
     models: tuple[DiscoveredModel, ...]
+    supports_flex_mode: bool = False
 
 
 @dataclass(frozen=True)
@@ -119,6 +120,7 @@ def _aggregate_snapshots(
                     provider_id=snap.provider_id,
                     display_name=provider_display_name(snap.provider_id),
                     models=snap.models,
+                    supports_flex_mode=snap.supports_flex_mode,
                 )
             )
             continue

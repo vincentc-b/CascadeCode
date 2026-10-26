@@ -107,8 +107,10 @@ def test_build_swe_role_turn_uses_stdio_mcp_for_cli_provider(tmp_path: Path) -> 
         model_id="gpt-5.3-codex",
         prompt="implement",
         root=root,
+        flex_mode=True,
     )
     assert turn.cwd == run.worktree.resolve()
+    assert turn.flex_mode is True
     assert turn.custom_tools is None
     mcp = turn.tools[MCP_SERVER_NAME]
     assert mcp["command"] == sys.executable
