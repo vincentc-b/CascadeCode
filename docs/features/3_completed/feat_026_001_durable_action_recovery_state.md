@@ -2,7 +2,7 @@
 id: feat_026_001
 title: Durable action recovery state
 tier: feature
-status: active
+status: completed
 parent: epic_026
 children:
 - task_026_001_001
