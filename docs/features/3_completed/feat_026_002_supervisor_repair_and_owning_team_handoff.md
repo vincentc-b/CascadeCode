@@ -2,7 +2,7 @@
 id: feat_026_002
 title: Supervisor repair and owning-team handoff
 tier: feature
-status: active
+status: completed
 parent: epic_026
 children:
 - task_026_002_001
