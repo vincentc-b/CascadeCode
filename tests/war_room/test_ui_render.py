@@ -249,6 +249,15 @@ def test_war_room_refresh_races():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_backlog_cancellation_row_behavior():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not on PATH")
+    cases = Path(__file__).with_name("brief_cancel_ui_cases.mjs")
+    result = subprocess.run([node, str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_task_execution_status_styles_include_healthy_and_blocked_states():
     css_path = (
         Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.css"

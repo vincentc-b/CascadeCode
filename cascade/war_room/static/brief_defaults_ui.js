@@ -43,19 +43,13 @@
     if (capability.default_only) return null;
     const levels = [capability.default_level].concat(capability.override_levels || []);
     const seen = {};
-    const choices = [];
+    const choices = [{ value: "", label: "Provider default" }];
     levels.forEach(function (level) {
       if (!level || seen[level]) return;
       seen[level] = true;
-      choices.push({
-        value: level === capability.default_level ? "" : level,
-        label:
-          level === capability.default_level
-            ? "Provider default (" + level + ")"
-            : level,
-      });
+      choices.push({ value: level, label: level });
     });
-    return choices.length ? choices : null;
+    return choices;
   }
 
   function roleFallbackFromTemplate(template, providerId, role) {

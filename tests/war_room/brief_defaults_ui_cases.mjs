@@ -102,7 +102,7 @@ assert.ok(choices);
 assert.equal(choices[0].value, "");
 assert.deepEqual(
   choices.map((item) => item.value),
-  ["", "low", "high"]
+  ["", "medium", "low", "high"]
 );
 
 assert.equal(canSubmitBrief(inventory, selection, true), true);
