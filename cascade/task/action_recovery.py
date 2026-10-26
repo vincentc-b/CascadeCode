@@ -28,10 +28,14 @@ RecoveryState = Literal[
     "awaiting_human_gate", "blocked", "completed",
 ]
 AttemptOutcome = Literal["succeeded", "failed", "cancelled"]
+PreconditionState = Literal["pending", "repaired", "unrepairable"]
+DecisionOwner = Literal["feature_team", "epic_team"]
 
 _CLASSIFICATIONS = frozenset(FailureClassification.__args__)
 _STATES = frozenset(RecoveryState.__args__)
 _OUTCOMES = frozenset(AttemptOutcome.__args__)
+_PRECONDITION_STATES = frozenset(PreconditionState.__args__)
+_DECISION_OWNERS = frozenset(DecisionOwner.__args__)
 
 
 class ActionRecoveryError(ValueError):
@@ -127,6 +131,11 @@ def _validate_identity(identity: str) -> None:
         raise ActionRecoveryError("action identity must be a nonempty stable string")
 
 
+def _validate_choice(value: str, choices: frozenset[str], *, field: str) -> None:
+    if value not in choices:
+        raise ActionRecoveryError(f"unknown {field}: {value}")
+
+
 def _validate_metadata(metadata: Mapping[str, Any] | None, *, field: str) -> dict[str, Any]:
     if metadata is None:
         return {}
@@ -208,6 +217,181 @@ def load_action(action_id: str, *, root: Path) -> dict[str, Any] | None:
     with process_lock:
         action = _actions(_read_payload(repo)).get(action_id)
     return _copy(action) if action is not None else None
+
+
+def record_repair_precondition(
+    action_id: str,
+    precondition_id: str,
+    *,
+    root: Path,
+    state: PreconditionState = "pending",
+    metadata: Mapping[str, Any] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Persist one mechanical prerequisite without creating another action."""
+
+    _validate_identity(action_id)
+    _validate_identity(precondition_id)
+    _validate_choice(state, _PRECONDITION_STATES, field="precondition state")
+    details = _validate_metadata(metadata, field="precondition metadata")
+    repo = resolve_root(root)
+    with process_lock:
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        preconditions = {
+            str(item["precondition_id"]): dict(item)
+            for item in action.get("repair_preconditions", [])
+            if isinstance(item, dict) and isinstance(item.get("precondition_id"), str)
+        }
+        current = preconditions.get(precondition_id)
+        desired = {
+            "precondition_id": precondition_id,
+            "state": state,
+            "metadata": details,
+        }
+        if current is not None and {key: current.get(key) for key in desired} == desired:
+            return _copy(action)
+        stamped = _iso(now)
+        preconditions[precondition_id] = {**desired, "updated_at": stamped}
+        action.update(
+            repair_preconditions=list(preconditions.values()),
+            updated_at=stamped,
+        )
+        actions[action_id] = action
+        payload["version"] = max(int(payload.get("version") or 1), 2)
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action)
+
+
+def record_owner_decision(
+    action_id: str,
+    decision_id: str,
+    *,
+    root: Path,
+    owner: DecisionOwner,
+    metadata: Mapping[str, Any] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Hand a semantic issue to its owning team without creating a new action."""
+
+    _validate_identity(action_id)
+    _validate_identity(decision_id)
+    _validate_choice(owner, _DECISION_OWNERS, field="decision owner")
+    details = _validate_metadata(metadata, field="decision metadata")
+    repo = resolve_root(root)
+    with process_lock:
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        if action.get("recovery_state") in {"completed", "blocked"}:
+            raise ActionRecoveryError("terminal action cannot await an owner decision")
+        decisions = {
+            str(item["decision_id"]): dict(item)
+            for item in action.get("owner_decisions", [])
+            if isinstance(item, dict) and isinstance(item.get("decision_id"), str)
+        }
+        current = decisions.get(decision_id)
+        if current is not None:
+            if current.get("owner") != owner or current.get("metadata") != details:
+                raise ActionRecoveryError(
+                    f"decision identity {decision_id!r} already has different details"
+                )
+            return _copy(action)
+        stamped = _iso(now)
+        decisions[decision_id] = {
+            "decision_id": decision_id,
+            "action_id": action_id,
+            "owner": owner,
+            "state": "awaiting_resolution",
+            "metadata": details,
+            "created_at": stamped,
+            "resolved_at": None,
+            "resolution": None,
+        }
+        action.update(
+            owner_decisions=list(decisions.values()),
+            failure_classification="owner_decision",
+            recovery_state="awaiting_owner_decision",
+            updated_at=stamped,
+        )
+        actions[action_id] = action
+        payload["version"] = max(int(payload.get("version") or 1), 2)
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action)
+
+
+def record_owner_resolution(
+    action_id: str,
+    decision_id: str,
+    resolution_id: str,
+    *,
+    root: Path,
+    metadata: Mapping[str, Any] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Resolve a decision and return the original persisted action to retryable."""
+
+    _validate_identity(action_id)
+    _validate_identity(decision_id)
+    _validate_identity(resolution_id)
+    details = _validate_metadata(metadata, field="resolution metadata")
+    repo = resolve_root(root)
+    with process_lock:
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        decisions = [
+            dict(item) for item in action.get("owner_decisions", []) if isinstance(item, dict)
+        ]
+        index = next(
+            (i for i, item in enumerate(decisions) if item.get("decision_id") == decision_id),
+            None,
+        )
+        if index is None:
+            raise ActionRecoveryError(f"owner decision not found: {decision_id}")
+        decision = decisions[index]
+        if decision.get("action_id") != action_id:
+            raise ActionRecoveryError("owner decision belongs to a different action")
+        resolution = {
+            "resolution_id": resolution_id,
+            "action_id": action_id,
+            "decision_id": decision_id,
+            "metadata": details,
+        }
+        if decision.get("state") == "resolved":
+            if decision.get("resolution") != resolution:
+                raise ActionRecoveryError("owner decision already has a different resolution")
+            return _copy(action)
+        if decision.get("state") != "awaiting_resolution":
+            raise ActionRecoveryError("unknown decision state")
+        stamped = _iso(now)
+        decisions[index] = {
+            **decision,
+            "state": "resolved",
+            "resolution": resolution,
+            "resolved_at": stamped,
+        }
+        unresolved = any(item.get("state") != "resolved" for item in decisions)
+        action.update(
+            owner_decisions=decisions,
+            failure_classification="owner_decision" if unresolved else None,
+            recovery_state="awaiting_owner_decision" if unresolved else "retryable",
+            updated_at=stamped,
+        )
+        actions[action_id] = action
+        payload["version"] = max(int(payload.get("version") or 1), 2)
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action)
 
 
 def start_attempt(

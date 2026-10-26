@@ -12,6 +12,9 @@ from cascade.task.action_recovery import (
     finalize_attempt,
     load_action,
     resume_action,
+    record_owner_decision,
+    record_owner_resolution,
+    record_repair_precondition,
     start_attempt,
 )
 from cascade.task.execution import mark_queued
@@ -276,3 +279,78 @@ def test_restart_and_concurrent_retry_preserve_one_logical_lifecycle_effect(
         execute=lambda _context: pytest.fail("completed action must not execute"),
     ) == completed
     assert load_action(action_id, root=root) == completed
+
+
+
+def test_supervisor_preconditions_and_owner_resolution_resume_same_action(
+    tmp_path: Path,
+) -> None:
+    """Mechanical repair and semantic handoff share one durable action identity."""
+
+    root = make_repo(tmp_path, git=False)
+    action_id = "task_001:queued_merge"
+    create_or_load_action(action_id, "queued_merge", root=root, attempt_bound=2)
+
+    pending = record_repair_precondition(
+        action_id,
+        "integration_checkout",
+        root=root,
+        metadata={"feature_id": "feat_001", "branch": "epic/epic_001"},
+    )
+    assert pending["repair_preconditions"][0]["state"] == "pending"
+    assert record_repair_precondition(
+        action_id,
+        "integration_checkout",
+        root=root,
+        metadata={"feature_id": "feat_001", "branch": "epic/epic_001"},
+    ) == pending
+
+    repaired = record_repair_precondition(
+        action_id,
+        "integration_checkout",
+        root=root,
+        state="repaired",
+        metadata={"feature_id": "feat_001", "branch": "epic/epic_001"},
+    )
+    assert repaired["repair_preconditions"][0]["state"] == "repaired"
+
+    handed_off = record_owner_decision(
+        action_id,
+        "merge-conflict:source-target",
+        root=root,
+        owner="feature_team",
+        metadata={"conflict_paths": ["cascade/task/action_recovery.py"]},
+    )
+    assert handed_off["recovery_state"] == "awaiting_owner_decision"
+    assert resume_action(
+        action_id, root=root, execute=lambda _context: pytest.fail("must await owner")
+    ) == handed_off
+
+    resolved = record_owner_resolution(
+        action_id,
+        "merge-conflict:source-target",
+        "resolution:feat_001:42",
+        root=root,
+        metadata={"strategy": "feature-approved"},
+    )
+    decision = resolved["owner_decisions"][0]
+    # A fresh supervisor process reads the same durable record before resuming it.
+    resolved = load_action(action_id, root=root)
+    assert resolved is not None
+    assert resolved["action_id"] == action_id
+    assert resolved["recovery_state"] == "retryable"
+    assert decision["resolution"]["action_id"] == action_id
+    assert decision["resolution"]["decision_id"] == decision["decision_id"]
+    assert record_owner_resolution(
+        action_id,
+        "merge-conflict:source-target",
+        "resolution:feat_001:42",
+        root=root,
+        metadata={"strategy": "feature-approved"},
+    ) == resolved
+
+    resumed = resume_action(action_id, root=root, execute=lambda context: {
+        "metadata": {"resumed_action": context.action_id}
+    })
+    assert resumed["recovery_state"] == "completed"
+    assert resumed["attempts"][-1]["completion_metadata"] == {"resumed_action": action_id}
