@@ -2,7 +2,7 @@
 id: epic_009
 title: Support openai flex mode for cost optimization
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_009_001
