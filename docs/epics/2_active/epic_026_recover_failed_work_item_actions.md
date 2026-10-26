@@ -99,6 +99,10 @@ _(none)_
 - 2026-10-26 · Epic Manager · Route semantic task/code conflicts to the Feature Team and cross-feature or epic-contract conflicts to the Epic Team; resume the original persisted action after resolution.
 - 2026-10-26 · Epic Manager · Limit the epic to current lifecycle recovery paths; exclude a generic workflow engine, arbitrary rollback, and automatic semantic conflict resolution.
 
+- `dec_001` · 2026-10-26 · Epic Manager · **Cross-module constraints**
+  Chose Keep Task worker permissions unchanged; deterministic recovery runs inside the supervisor's existing privileged execution boundary..
+  Rationale: Routine checkout, lease, and merge-queue repair does not require product judgment and must not broaden worker authority.
+  Honors: Success criteria requiring scoped supervisor repair without broader permissions..
 ## Amendment log
 
 _(none)_
