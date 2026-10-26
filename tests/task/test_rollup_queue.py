@@ -218,3 +218,60 @@ def test_semantic_handoff_scope_and_resolution_resume_original_queue(
         )
     assert retry_pending_task_merges(root) == ["task_001"]
     assert merges == ["task_001", "task_001"]
+
+
+def test_supervisor_handoff_rejects_unlinked_resolution_without_replaying_merge(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A fresh supervisor only resumes the exact action after its linked decision resolves."""
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", status="active", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", status="active", parent="feat_001")
+    merge_calls: list[str] = []
+
+    def merge(task_id: str, *, root: Path):
+        merge_calls.append(task_id)
+        if len(merge_calls) == 1:
+            return MergeResult(
+                ok=False,
+                reason="branch_conflict",
+                conflict_paths=("contract.py",),
+            )
+        return MergeResult(ok=True, merge_sha="merged")
+
+    monkeypatch.setattr("cascade.boss.merge.merge_task_branch", merge)
+    monkeypatch.setattr("cascade.boss.rollup.on_task_merged", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("cascade.task_rollup._merge_head_pair", lambda *_args: ("source", "target"))
+    queue_task_merge("task_001", root=root)
+
+    assert retry_pending_task_merges(root) == []
+    action_id = "task_001:queued_merge"
+    blocked = load_action(action_id, root=root)
+    assert blocked is not None
+    decision_id = blocked["owner_decisions"][0]["decision_id"]
+    assert blocked["recovery_state"] == "awaiting_owner_decision"
+
+    # Missing and mismatched decision references fail closed; repeated supervision
+    # leaves the durable action blocked and emits no additional merge.
+    with pytest.raises(ActionRecoveryError, match="owner decision not found"):
+        resolve_semantic_conflict(action_id, "semantic-conflict:missing", "resolution:stale", root=root)
+    with pytest.raises(ActionRecoveryError, match="owner decision not found"):
+        resolve_semantic_conflict("task_999:queued_merge", decision_id, "resolution:mismatched", root=root)
+    assert retry_pending_task_merges(root) == []
+    assert load_action(action_id, root=root) == blocked
+    assert merge_calls == ["task_001"]
+
+    # An explicit resolution linked to that decision survives supervisor restart
+    # and authorizes exactly one retry of the original action identity.
+    resolved = resolve_semantic_conflict(
+        action_id, decision_id, "resolution:linked", root=root, metadata={"approved": True}
+    )
+    assert resolved["owner_decisions"][0]["resolution"]["action_id"] == action_id
+    restarted = load_action(action_id, root=root)
+    assert restarted is not None
+    assert restarted["action_id"] == action_id
+    assert retry_pending_task_merges(root) == ["task_001"]
+    assert retry_pending_task_merges(root) == []
+    assert merge_calls == ["task_001", "task_001"]
