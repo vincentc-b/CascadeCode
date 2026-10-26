@@ -1,14 +1,17 @@
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Event, Thread
 
 import pytest
 
 from cascade.task.action_recovery import (
     ActionRecoveryError,
     AttemptAlreadyFinalized,
+    ActionFailure,
     create_or_load_action,
     finalize_attempt,
     load_action,
+    resume_action,
     start_attempt,
 )
 from cascade.task.execution import mark_queued
@@ -125,3 +128,76 @@ def test_execution_updates_preserve_action_records(tmp_path: Path) -> None:
     action = load_action("action", root=root)
     assert action is not None
     assert action["action_kind"] == "task_recovery"
+
+
+def test_resume_serializes_concurrent_calls_and_supplies_stable_idempotency_key(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    create_or_load_action("action", "task_turn", root=root, attempt_bound=2)
+    started = Event()
+    release = Event()
+    effect_keys: list[str] = []
+
+    def execute(context) -> None:
+        effect_keys.append(context.idempotency_key)
+        started.set()
+        assert release.wait(timeout=2)
+
+    worker = Thread(target=lambda: resume_action("action", root=root, execute=execute))
+    worker.start()
+    assert started.wait(timeout=2)
+
+    # This call sees the persisted running claim rather than emitting another turn.
+    concurrent = resume_action(
+        "action", root=root, execute=lambda _context: pytest.fail("duplicate effect")
+    )
+    assert concurrent["recovery_state"] == "running"
+    release.set()
+    worker.join(timeout=2)
+
+    completed = load_action("action", root=root)
+    assert completed is not None
+    assert completed["recovery_state"] == "completed"
+    assert completed["attempt_count"] == 1
+    assert effect_keys == ["action"]
+
+
+def test_resume_routes_failures_and_stops_when_attempt_budget_is_exhausted(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    create_or_load_action("action", "task_turn", root=root, attempt_bound=1)
+
+    retryable = resume_action(
+        "action",
+        root=root,
+        execute=lambda _context: (_ for _ in ()).throw(
+            ActionFailure("transient_retry", metadata={"reason": "network"})
+        ),
+    )
+    assert retryable["recovery_state"] == "retryable"
+    assert retryable["attempts"][-1]["completion_metadata"] == {"reason": "network"}
+
+    bounded = resume_action("action", root=root, execute=lambda _context: None)
+    assert bounded["recovery_state"] == "blocked"
+    assert bounded["failure_classification"] == "terminal_blocker"
+    assert bounded["attempt_count"] == 1
+
+
+
+def test_resume_can_reclaim_an_unfinished_attempt_after_restart(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    create_or_load_action("action", "task_turn", root=root, attempt_bound=2)
+    start_attempt("action", root=root)
+
+    resumed = resume_action(
+        "action",
+        root=root,
+        reclaim_running=True,
+        execute=lambda context: {"metadata": {"key": context.idempotency_key}},
+    )
+
+    assert resumed["recovery_state"] == "completed"
+    assert resumed["attempt_count"] == 2
+    assert resumed["attempts"][0]["outcome"] == "cancelled"
+    assert resumed["attempts"][0]["classification"] == "transient_retry"
+    assert resumed["attempts"][1]["completion_metadata"] == {"key": "action"}

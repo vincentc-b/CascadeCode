@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Mapping
@@ -41,6 +44,39 @@ class ActionNotFound(ActionRecoveryError):
 
 class AttemptAlreadyFinalized(ActionRecoveryError):
     """An attempt outcome is immutable once it has been finalized."""
+
+
+class ActionFailure(ActionRecoveryError):
+    """An executor-reported failure with a durable recovery classification."""
+
+    def __init__(
+        self,
+        classification: FailureClassification,
+        message: str = "action failed",
+        *,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.classification = classification
+        self.metadata = _validate_metadata(metadata, field="failure metadata")
+
+
+@dataclass(frozen=True)
+class ActionContext:
+    """Stable information for an executor's idempotent downstream effect."""
+
+    action_id: str
+    attempt_number: int
+    idempotency_key: str
+
+
+@dataclass(frozen=True)
+class ActionResult:
+    """An explicit outcome returned by an action executor."""
+
+    outcome: AttemptOutcome = "succeeded"
+    classification: FailureClassification | None = None
+    metadata: Mapping[str, Any] | None = None
 
 
 def _path(root: Path) -> Path:
@@ -151,6 +187,8 @@ def create_or_load_action(
             "attempt_count": 0,
             "attempt_bound": attempt_bound,
             "metadata": initial_metadata,
+            "idempotency_key": action_id,
+            "execution_claim": None,
             "created_at": created,
             "updated_at": created,
             "attempts": [],
@@ -272,8 +310,172 @@ def finalize_attempt(
         action["recovery_state"] = recovery_state
         action["updated_at"] = finished
         action["attempts"] = attempts
+        action.pop("execution_claim", None)
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
         _write_payload(repo, payload)
         return _copy(action)
+
+
+_RESUMABLE_STATES = frozenset(("pending", "retryable", "repaired"))
+_FAILURE_STATES: dict[FailureClassification, RecoveryState] = {
+    "deterministic_repair": "repaired",
+    "transient_retry": "retryable",
+    "owner_decision": "awaiting_owner_decision",
+    "human_gate": "awaiting_human_gate",
+    "terminal_blocker": "blocked",
+}
+
+
+def _claim_resume_attempt(
+    action_id: str,
+    *,
+    root: Path,
+    reclaim_running: bool = False,
+    now: datetime | None = None,
+) -> tuple[dict[str, Any], ActionContext] | None:
+    """Atomically claim one eligible action and append its running attempt."""
+
+    _validate_identity(action_id)
+    repo = resolve_root(root)
+    with process_lock:
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        state = action.get("recovery_state")
+        attempts = list(action.get("attempts") or [])
+        if state == "running":
+            if not reclaim_running:
+                return None
+            if not attempts or attempts[-1].get("outcome") is not None:
+                raise ActionRecoveryError("running action has no open attempt")
+            reclaimed_at = _iso(now)
+            attempts[-1] = {
+                **attempts[-1],
+                "outcome": "cancelled",
+                "classification": "transient_retry",
+                "completed_at": reclaimed_at,
+                "completion_metadata": {"reason": "reclaimed_after_restart"},
+            }
+            action["failure_classification"] = "transient_retry"
+            action["recovery_state"] = "retryable"
+        elif state not in _RESUMABLE_STATES:
+            return None
+        attempt_number = int(action.get("attempt_count") or 0) + 1
+        if attempt_number > int(action.get("attempt_bound") or 0):
+            action["failure_classification"] = "terminal_blocker"
+            action["recovery_state"] = "blocked"
+            action["updated_at"] = _iso(now)
+            actions[action_id] = action
+            payload["version"] = max(int(payload.get("version") or 1), 2)
+            payload["actions"] = actions
+            _write_payload(repo, payload)
+            return None
+
+        claimed_at = _iso(now)
+        claim_id = uuid.uuid4().hex
+        attempts.append(
+            {
+                "attempt_number": attempt_number,
+                "started_at": claimed_at,
+                "start_metadata": {"claim_id": claim_id},
+                "outcome": None,
+                "classification": None,
+                "completed_at": None,
+                "completion_metadata": None,
+            }
+        )
+        action.update(
+            attempt_count=attempt_number,
+            recovery_state="running",
+            updated_at=claimed_at,
+            attempts=attempts,
+            execution_claim={"claim_id": claim_id, "claimed_at": claimed_at},
+        )
+        actions[action_id] = action
+        payload["version"] = max(int(payload.get("version") or 1), 2)
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action), ActionContext(
+            action_id=action_id, attempt_number=attempt_number,
+            idempotency_key=str(action.get("idempotency_key") or action_id),
+        )
+
+
+def _result_parts(result: ActionResult | Mapping[str, Any] | None) -> tuple[
+    AttemptOutcome, FailureClassification | None, dict[str, Any]
+]:
+    if result is None:
+        return "succeeded", None, {}
+    if isinstance(result, ActionResult):
+        return (
+            result.outcome,
+            result.classification,
+            _validate_metadata(result.metadata, field="result metadata"),
+        )
+    if isinstance(result, Mapping):
+        outcome = result.get("outcome", "succeeded")
+        classification = result.get("classification")
+        if outcome not in _OUTCOMES:
+            raise ActionRecoveryError(f"unknown attempt outcome: {outcome}")
+        if classification is not None and classification not in _CLASSIFICATIONS:
+            raise ActionRecoveryError(f"unknown failure classification: {classification}")
+        return (
+            outcome,
+            classification,
+            _validate_metadata(result.get("metadata"), field="result metadata"),
+        )
+    raise ActionRecoveryError("action executor must return ActionResult, a mapping, or None")
+
+
+def resume_action(
+    action_id: str,
+    *,
+    root: Path,
+    execute: Callable[[ActionContext], ActionResult | Mapping[str, Any] | None],
+    reclaim_running: bool = False,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Claim and run one eligible action, returning its durable state.
+
+    Claiming and attempt creation share one locked write, so concurrent calls
+    observe the running action and never invoke a second downstream effect.
+    A restarted supervisor may explicitly reclaim its unfinished running attempt;
+    it receives the same idempotency key for the replacement effect.
+    """
+
+    claimed = _claim_resume_attempt(
+        action_id, root=root, reclaim_running=reclaim_running, now=now
+    )
+    if claimed is None:
+        action = load_action(action_id, root=root)
+        if action is None:
+            raise ActionNotFound(action_id)
+        return action
+    _, context = claimed
+    try:
+        outcome, classification, metadata = _result_parts(execute(context))
+        if outcome == "succeeded":
+            classification, state = None, "completed"
+        else:
+            classification = classification or "terminal_blocker"
+            state = _FAILURE_STATES[classification]
+    except ActionFailure as exc:
+        outcome, classification, metadata = "failed", exc.classification, exc.metadata
+        state = _FAILURE_STATES[classification]
+    except BaseException as exc:
+        outcome, classification, state = "failed", "terminal_blocker", "blocked"
+        metadata = {"error_type": type(exc).__name__, "message": str(exc)}
+    return finalize_attempt(
+        action_id,
+        context.attempt_number,
+        root=root,
+        outcome=outcome,
+        classification=classification,
+        recovery_state=state,
+        completion_metadata=metadata,
+        now=now,
+    )
