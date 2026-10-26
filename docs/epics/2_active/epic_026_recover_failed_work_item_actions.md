@@ -4,7 +4,8 @@ title: Recover failed work item actions
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_026_001
 depends_on: []
 owners:
 - epic_manager
@@ -62,6 +63,7 @@ For trunk operations, use a clean temporary worktree based on the verified remot
 - War Room action routes, status model, and recovery controls.
 
 ## Feature breakdown
+- feat_026_001
 
 1. **Durable action recovery state**
    - Add a stable action identity and persisted recovery state around lifecycle actions.
