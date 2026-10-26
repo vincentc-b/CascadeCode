@@ -100,6 +100,11 @@ Ship feat_009_001 before feat_009_002. The first feature establishes the persist
   Chose Default flex on only for newly created briefs with a capable provider; an absent value on existing briefs preserves legacy behavior..
   Rationale: The requested default should not silently change execution semantics for previously saved briefs.
   Honors: Default-on requirement and backward compatibility..
+
+- `dec_003` · 2026-10-26 · Epic Manager · **Delivery**
+  Chose Sequence provider capability/execution plumbing before the dependent brief-editor control..
+  Rationale: The UI must consume an established capability and persistence contract, keeping non-UI creation safe and avoiding provider-name conditionals.
+  Honors: Smallest shippable slices and provider-boundary integrity..
 ## Amendment log
 
 _(none)_
