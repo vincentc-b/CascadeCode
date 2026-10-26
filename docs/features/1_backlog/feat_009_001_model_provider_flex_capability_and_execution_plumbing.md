@@ -17,6 +17,7 @@ provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-10-26T02:24:55.256535+00:00'
 ---
 # Model provider flex capability and execution plumbing
 
