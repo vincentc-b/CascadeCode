@@ -78,7 +78,15 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
     phase = "queued" if task.meta.status == "active" and recorded_phase == "terminal" else recorded_phase
     typed_reason = _typed_reason(execution.get("last_error"), blocked=task.meta.status == "blocked")
     terminal = task.meta.status == "blocked"
-    retryable = terminal and typed_reason in {"transient_forge_failure", "blocked_execution"}
+    # A terminal run gets one operator-initiated retry.  Once that retry has
+    # been queued, another terminal outcome must be revised or resolved rather
+    # than becoming a second orchestration path through the same control.
+    attempt_count = int(execution.get("attempt") or 0)
+    retryable = (
+        terminal
+        and attempt_count <= 1
+        and typed_reason in {"transient_forge_failure", "blocked_execution"}
+    )
     checkout = get_integration_worktree(trunk, "task", task_id)
     affected: dict[str, object] = {"branch": integration_branch("task", task_id)}
     if checkout is not None:
@@ -100,7 +108,7 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
     return {
         "phase": phase,
         "reason": typed_reason,
-        "attempt_count": int(execution.get("attempt") or 0),
+        "attempt_count": attempt_count,
         "owner": execution.get("owner_pid"),
         "affected": affected,
         "next_safe_step": next_safe_step,

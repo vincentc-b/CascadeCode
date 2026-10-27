@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import socket
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 import subprocess
 import threading
@@ -134,6 +135,15 @@ def test_dispatch_task_success_and_skills_unchanged_when_null(dispatch_board):
     assert after.meta.skills == before.meta.skills
 
 
+def _board_task(board: dict, task_id: str) -> dict:
+    return next(
+        item
+        for column in board["tasks"].values()
+        for item in column
+        if item["id"] == task_id
+    )
+
+
 def test_retry_task_resumes_only_retryable_terminal_blockers(dispatch_board):
     base, root = dispatch_board
     assert activate_epic("epic_001", "human", root=root).ok
@@ -142,11 +152,30 @@ def test_retry_task_resumes_only_retryable_terminal_blockers(dispatch_board):
     assert dispatch_task("task_001", "human", root=root).ok
     mark_terminal("task_001", "failed", root=root, error="forge connection timeout")
 
+    _status, board = _get(f"{base}/api/board")
+    recovery = _board_task(board, "task_001")["recovery"]
+    assert recovery["phase"] == "terminal"
+    assert recovery["reason"] == "transient_forge_failure"
+    assert recovery["attempt_count"] >= 1
+    assert recovery["owner"] is None
+    assert recovery["affected"]["branch"] == "task/task_001"
+    assert recovery["next_safe_step"].startswith("Retry the original Task execution")
+    assert recovery["terminal_blocker"] == {"retryable": True}
+    assert recovery["action"] == "retry"
+
     status, body = _post(f"{base}/api/retry_task", {"id": "task_001"})
 
     assert status == HTTPStatus.OK
     assert body["ok"] is True
     assert body["task_id"] == "task_001"
+    _status, board = _get(f"{base}/api/board")
+    resumed = _board_task(board, "task_001")
+    # A fast background turn can finish before the board read. The durable
+    # dispatch and attempt count prove the original execution was resumed.
+    events, _ = read_events("task_001", 0, root=root)
+    assert sum(event.type == "TaskDispatched" for event in events) == 2
+    assert resumed["recovery"]["attempt_count"] >= 2
+    assert resumed["recovery"]["action"] == "none"
 
 
 def test_retry_task_does_not_bypass_permission_blockers(dispatch_board):
@@ -157,6 +186,14 @@ def test_retry_task_does_not_bypass_permission_blockers(dispatch_board):
     assert dispatch_task("task_001", "human", root=root).ok
     mark_terminal("task_001", "failed", root=root, error="permission denied by forge")
 
+    _status, board = _get(f"{base}/api/board")
+    recovery = _board_task(board, "task_001")["recovery"]
+    assert recovery["phase"] == "terminal"
+    assert recovery["reason"] == "permission_refused"
+    assert recovery["terminal_blocker"] == {"retryable": False}
+    assert recovery["action"] == "permission"
+    assert "retry cannot bypass" in recovery["next_safe_step"]
+
     status, body = _post(f"{base}/api/retry_task", {"id": "task_001"})
 
     assert status == HTTPStatus.OK
@@ -164,6 +201,36 @@ def test_retry_task_does_not_bypass_permission_blockers(dispatch_board):
     assert body["reason"] == "not_retryable"
     assert body["recovery"]["next_safe_step"].startswith("Resolve the required permission")
     assert read_doc("task_001", root=root).meta.status == "blocked"
+
+
+def test_concurrent_retry_requests_resume_once_and_board_converges(dispatch_board):
+    base, root = dispatch_board
+    assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
+    assert dispatch_feature("feat_001", "human", root=root).ok
+    assert dispatch_task("task_001", "human", root=root).ok
+    mark_terminal("task_001", "failed", root=root, error="forge unavailable")
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        responses = list(
+            pool.map(
+                lambda _unused: _post(f"{base}/api/retry_task", {"id": "task_001"}),
+                range(4),
+            )
+        )
+
+    assert all(status == HTTPStatus.OK for status, _body in responses)
+    assert sum(body["ok"] is True for _status, body in responses) == 1
+    assert all(
+        body["ok"] or body["reason"] == "not_retryable"
+        for _status, body in responses
+    )
+    _status, board = _get(f"{base}/api/board")
+    task = _board_task(board, "task_001")
+    events, _ = read_events("task_001", 0, root=root)
+    assert sum(event.type == "TaskDispatched" for event in events) == 2
+    assert task["recovery"]["attempt_count"] >= 2
+    assert task["recovery"]["action"] == "none"
 
 
 def test_dispatch_refusal_unmet_deps_still_200(dispatch_board):
