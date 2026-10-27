@@ -413,6 +413,25 @@ body {
   overflow-wrap: anywhere;
 }
 
+.task-recovery-feedback,
+.task-recovery-next-step {
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.task-recovery-feedback {
+  color: var(--muted);
+}
+
+.task-recovery-next-step {
+  color: #bfdbfe;
+  margin-top: 0.15rem;
+}
+
+.board-row-actions button.task-retry-action {
+  border-color: #60a5fa;
+}
+
 button {
   background: #2d333b;
   color: var(--text);

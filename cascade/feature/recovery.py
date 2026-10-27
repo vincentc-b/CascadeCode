@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cascade.board.errors import NotFound
+from cascade.board.errors import GitError, NotFound
 from cascade.board.lock import process_lock
 from cascade.board.store import read_doc, write_doc
 from cascade.feature.registry import register_feature_tool
@@ -52,7 +52,13 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
     """
 
     trunk = locate_trunk(Path(root).resolve())
-    feature_root = doc_filesystem_root(feature_id, trunk=trunk)
+    # Board reads can run against a lightweight, non-Git fixture.  The trunk
+    # still owns the task document in that case, so preserve the recovery
+    # contract instead of making the entire board unavailable.
+    try:
+        feature_root = doc_filesystem_root(feature_id, trunk=trunk)
+    except GitError:
+        feature_root = trunk
     try:
         task = read_doc(task_id, root=feature_root)
     except NotFound:
@@ -64,9 +70,14 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
     from cascade.workspace.integration_worktree import get_integration_worktree, integration_branch
 
     execution = execution_view(task_id, root=trunk) or {}
-    phase = str(execution.get("phase") or ("terminal" if task.meta.status == "blocked" else "unknown"))
+    recorded_phase = str(
+        execution.get("phase") or ("terminal" if task.meta.status == "blocked" else "unknown")
+    )
+    # Dispatch changes the task document before the worker records its next
+    # execution phase. Do not re-offer a retry from that stale terminal record.
+    phase = "queued" if task.meta.status == "active" and recorded_phase == "terminal" else recorded_phase
     typed_reason = _typed_reason(execution.get("last_error"), blocked=task.meta.status == "blocked")
-    terminal = task.meta.status == "blocked" or phase == "terminal"
+    terminal = task.meta.status == "blocked"
     retryable = terminal and typed_reason in {"transient_forge_failure", "blocked_execution"}
     checkout = get_integration_worktree(trunk, "task", task_id)
     affected: dict[str, object] = {"branch": integration_branch("task", task_id)}

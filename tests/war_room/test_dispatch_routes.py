@@ -22,6 +22,7 @@ from cascade.boss.epic_complete import reset_epic_close_prompt_surfaces
 from cascade.boss.epic_complete import EpicCompleteResult
 from cascade.boss.rollup import write_closeout
 from cascade.task.worktree import clear_task_runs, create_task_worktree, get_task_run
+from cascade.task.execution import mark_terminal
 from cascade.war_room.server import serve
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task, read_events
 from cascade.watchdog.hooks import clear_hooks
@@ -131,6 +132,38 @@ def test_dispatch_task_success_and_skills_unchanged_when_null(dispatch_board):
     after = read_doc("task_001", root=root)
     assert after.meta.path.parent.name == "2_active"
     assert after.meta.skills == before.meta.skills
+
+
+def test_retry_task_resumes_only_retryable_terminal_blockers(dispatch_board):
+    base, root = dispatch_board
+    assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
+    assert dispatch_feature("feat_001", "human", root=root).ok
+    assert dispatch_task("task_001", "human", root=root).ok
+    mark_terminal("task_001", "failed", root=root, error="forge connection timeout")
+
+    status, body = _post(f"{base}/api/retry_task", {"id": "task_001"})
+
+    assert status == HTTPStatus.OK
+    assert body["ok"] is True
+    assert body["task_id"] == "task_001"
+
+
+def test_retry_task_does_not_bypass_permission_blockers(dispatch_board):
+    base, root = dispatch_board
+    assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
+    assert dispatch_feature("feat_001", "human", root=root).ok
+    assert dispatch_task("task_001", "human", root=root).ok
+    mark_terminal("task_001", "failed", root=root, error="permission denied by forge")
+
+    status, body = _post(f"{base}/api/retry_task", {"id": "task_001"})
+
+    assert status == HTTPStatus.OK
+    assert body["ok"] is False
+    assert body["reason"] == "not_retryable"
+    assert body["recovery"]["next_safe_step"].startswith("Resolve the required permission")
+    assert read_doc("task_001", root=root).meta.status == "blocked"
 
 
 def test_dispatch_refusal_unmet_deps_still_200(dispatch_board):
