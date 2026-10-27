@@ -2,7 +2,7 @@
 id: feat_026_003
 title: War Room recovery feedback and retry
 tier: feature
-status: active
+status: completed
 parent: epic_026
 children:
 - task_026_003_001
