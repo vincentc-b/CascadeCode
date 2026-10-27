@@ -913,6 +913,8 @@
         row.appendChild(detail);
       }
 
+      appendRecoveryFeedback(row, item.recovery);
+
       const branch = document.createElement("div");
       branch.className = "task-branch";
       branch.textContent = "task/" + item.id;
@@ -980,16 +982,20 @@
       }
     }
     if (tier === "tasks") {
-      const retryable = column === "2_active" && item.status === "blocked";
+      const recovery = item.recovery || {};
+      const retryable = recovery.action === "retry" &&
+        recovery.terminal_blocker && recovery.terminal_blocker.retryable === true;
       if (column === "2_active") {
         actions.appendChild(actionButton("Merge task", function () {
           return mergeTask(item.id, row);
         }));
-        actions.appendChild(actionButton(
-          "Retry",
-          function () { return askBoss("task", item.id); },
-          retryable ? null : "Retry is available only when execution is blocked."
-        ));
+        if (retryable) {
+          const retry = actionButton("Retry execution", function () {
+            return retryTask(item.id);
+          });
+          retry.classList.add("task-retry-action");
+          actions.appendChild(retry);
+        }
       }
     }
     if (tier === "epics") {
@@ -1107,6 +1113,29 @@
     return { kind: "idle", label: item.status || "Unknown", title: "No active execution." };
   }
 
+  function appendRecoveryFeedback(row, recovery) {
+    if (!recovery || typeof recovery !== "object") return;
+    const details = document.createElement("div");
+    details.className = "task-recovery-feedback";
+    const affected = recovery.affected || {};
+    const owner = recovery.owner === null || recovery.owner === undefined || recovery.owner === ""
+      ? "unassigned" : String(recovery.owner);
+    const target = affected.checkout || affected.branch || "not recorded";
+    details.textContent = "Recovery: " + (recovery.phase || "unknown") +
+      " · reason: " + (recovery.reason || "unknown") +
+      " · attempt " + String(recovery.attempt_count || 0) +
+      " · owner: " + owner +
+      " · affected: " + target;
+    row.appendChild(details);
+
+    if (recovery.next_safe_step) {
+      const next = document.createElement("div");
+      next.className = "task-recovery-next-step";
+      next.textContent = "Next safe step: " + recovery.next_safe_step;
+      row.appendChild(next);
+    }
+  }
+
   function actionButton(label, handler, disabledReason) {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -1205,6 +1234,26 @@
     const { status, body } = await apiPost("/api/ask_boss_dispatch", { kind: kind, id: id });
     if (status === 202 && body.ok) {
       setStatus("Ask Boss request queued.");
+    }
+  }
+
+  async function retryTask(id) {
+    setStatus("Retrying " + id + " through its original execution path…", false);
+    try {
+      const { body } = await apiPost("/api/retry_task", { id: id });
+      if (body.ok) {
+        setStatus("Retry started for " + id + ".", false);
+      } else {
+        const step = body.recovery && body.recovery.next_safe_step;
+        setStatus("Retry was not started: " + (step || body.reason || "not retryable"), true);
+      }
+      return body;
+    } catch (err) {
+      const step = err.body && err.body.recovery && err.body.recovery.next_safe_step;
+      setStatus("Retry failed: " + (step || err.message || String(err)), true);
+      throw err;
+    } finally {
+      await refreshBoard();
     }
   }
 

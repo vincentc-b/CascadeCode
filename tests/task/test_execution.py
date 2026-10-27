@@ -45,6 +45,16 @@ def test_execution_health_is_persisted_and_exposed_on_task_board(tmp_path: Path)
     assert item["execution"]["phase"] == "running"
     assert item["execution"]["health"] == "stale"  # the fixture timestamp is intentionally old
 
+    recovery = item["recovery"]
+    assert recovery["phase"] == "running"
+    assert recovery["reason"] == "in_progress"
+    assert recovery["attempt_count"] == 1
+    assert isinstance(recovery["owner"], int)
+    assert recovery["affected"] == {"branch": "task/task_001"}
+    assert recovery["next_safe_step"] == "Wait for the original execution path to report progress."
+    assert recovery["terminal_blocker"] == {"retryable": False}
+    assert recovery["action"] == "none"
+
     mark_terminal("task_001", "failed", root=root, error="tests_red", now=started)
     failed = execution_view("task_001", root=root, now=started)
     assert failed["phase"] == "terminal"

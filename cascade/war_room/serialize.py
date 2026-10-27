@@ -82,6 +82,14 @@ def work_meta_to_dict(
             from cascade.task.execution import execution_view
 
             value["execution"] = execution_view(meta.id, root=root)
+        # Recovery stays attached to the original action; its contract, rather
+        # than broad board state, authorizes any safe retry control.
+        if meta.parent:
+            from cascade.feature.recovery import recovery_status
+
+            value["recovery"] = recovery_status(
+                meta.id, feature_id=meta.parent, root=root
+            )
     if meta.tier == "feature":
         value["approved"] = meta.approved_at is not None
         if meta.approved_at is not None:
