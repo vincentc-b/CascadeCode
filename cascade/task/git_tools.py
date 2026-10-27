@@ -12,6 +12,13 @@ from cascade.task.worktree import TaskRun, get_task_run
 
 _DEFAULT_TEST_CMD = ("python3", "-m", "pytest", "-q")
 _OUTPUT_SUMMARY_LIMIT = 32_000
+_NON_DELIVERABLE_PREFIXES = ("docs/tasks/", "docs/_queue/", "docs/_war_room/")
+
+
+def is_deliverable_path(path: str) -> bool:
+    """Board lifecycle writes do not count as Task implementation."""
+
+    return bool(path.strip()) and not path.startswith(_NON_DELIVERABLE_PREFIXES)
 
 
 def swe_run_tests(
@@ -55,11 +62,17 @@ def swe_commit(
     wt = task_run.worktree.resolve()
     _assert_task_branch(task_id, wt)
     _assert_commit_paths_allowed(task_id, wt, board_root=repo)
-    count = _deliverable_commit_count(task_run)
+    deliverable_commits = _deliverable_commits(task_run)
+    count = len(deliverable_commits)
     if count > 1:
         raise GitError(
             f"task/{task_id} already has {count} deliverable commits; "
             "refusing to add more"
+        )
+    if count == 1 and deliverable_commits[0] != _git(wt, "rev-parse", "HEAD").stdout.strip():
+        raise GitError(
+            f"task/{task_id} has a lifecycle commit after its deliverable; "
+            "refusing to amend the wrong commit"
         )
     _git(wt, "add", "-A")
     trailer = f"Cascade-Task: {task_id}"
@@ -75,17 +88,17 @@ def swe_commit(
     return sha
 
 
-def _deliverable_commit_count(task_run: TaskRun) -> int:
-    result = _git(
-        task_run.worktree.resolve(),
-        "rev-list",
-        "--count",
-        f"{task_run.base_sha}..HEAD",
-    )
-    try:
-        return int(result.stdout.strip())
-    except ValueError as exc:
-        raise GitError("could not count task deliverable commits") from exc
+def _deliverable_commits(task_run: TaskRun) -> list[str]:
+    """Find commits that changed implementation, ignoring board lifecycle commits."""
+
+    wt = task_run.worktree.resolve()
+    revs = _git(wt, "rev-list", "--reverse", f"{task_run.base_sha}..HEAD")
+    commits: list[str] = []
+    for sha in revs.stdout.splitlines():
+        paths = _git(wt, "diff-tree", "--no-commit-id", "--name-only", "-r", sha)
+        if any(is_deliverable_path(path) for path in paths.stdout.splitlines()):
+            commits.append(sha)
+    return commits
 
 
 def _with_task_trailer(message: str, trailer: str) -> str:

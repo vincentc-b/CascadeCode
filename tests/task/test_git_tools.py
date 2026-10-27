@@ -210,6 +210,56 @@ def test_swe_commit_refuses_preexisting_multi_commit_task_history(board) -> None
         swe_commit("retry", task_id="task_034", task_run=run, root=root)
 
 
+def test_swe_commit_ignores_prior_task_lifecycle_commits(board) -> None:
+    root = board["root"]
+    run = board["run"]
+    wt = run.worktree
+    note = wt / "docs" / "tasks" / "2_active" / "task_034_notes.md"
+    note.parent.mkdir(parents=True, exist_ok=True)
+    for index in range(4):
+        note.write_text(f"attempt {index}\n", encoding="utf-8")
+        subprocess.run(["git", "add", str(note)], cwd=wt, check=True)
+        subprocess.run(["git", "commit", "-m", "docs: task lifecycle"], cwd=wt, check=True)
+    patch = wt / "cascade" / "patch.py"
+    patch.parent.mkdir(parents=True, exist_ok=True)
+    patch.write_text("value = 1\n", encoding="utf-8")
+
+    sha = swe_commit("task work", task_id="task_034", task_run=run, root=root)
+
+    assert sha == subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    assert patch.read_text(encoding="utf-8") == "value = 1\n"
+    assert subprocess.run(
+        ["git", "rev-list", "--count", f"{run.base_sha}..HEAD"],
+        cwd=wt, check=True, capture_output=True, text=True,
+    ).stdout.strip() == "5"
+
+
+def test_swe_commit_does_not_amend_lifecycle_commit_after_deliverable(board) -> None:
+    root = board["root"]
+    run = board["run"]
+    wt = run.worktree
+    patch = wt / "cascade" / "patch.py"
+    patch.parent.mkdir(parents=True, exist_ok=True)
+    patch.write_text("value = 1\n", encoding="utf-8")
+    swe_commit("task work", task_id="task_034", task_run=run, root=root)
+    note = wt / "docs" / "tasks" / "2_active" / "task_034_notes.md"
+    note.parent.mkdir(parents=True, exist_ok=True)
+    note.write_text("attempt 2\n", encoding="utf-8")
+    subprocess.run(["git", "add", str(note)], cwd=wt, check=True)
+    subprocess.run(["git", "commit", "-m", "docs: task lifecycle"], cwd=wt, check=True)
+    patch.write_text("value = 2\n", encoding="utf-8")
+
+    with pytest.raises(GitError, match="lifecycle commit after its deliverable"):
+        swe_commit("retry", task_id="task_034", task_run=run, root=root)
+
+    assert patch.read_text(encoding="utf-8") == "value = 2\n"
+    assert subprocess.run(
+        ["git", "status", "--porcelain"], cwd=wt, check=True, capture_output=True, text=True
+    ).stdout.strip() == "M cascade/patch.py"
+
+
 def test_swe_commit_refused_wrong_branch(board) -> None:
     root = board["root"]
     run = board["run"]
