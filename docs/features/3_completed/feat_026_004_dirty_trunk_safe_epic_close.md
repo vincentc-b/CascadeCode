@@ -2,7 +2,7 @@
 id: feat_026_004
 title: Dirty-trunk-safe epic close
 tier: feature
-status: active
+status: completed
 parent: epic_026
 children:
 - task_026_004_001
