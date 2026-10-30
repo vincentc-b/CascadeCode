@@ -27,17 +27,9 @@ def load_feature_tools() -> None:
     from cascade.feature.registry import feature_tools, register_feature_tool
 
     expected = (
-        "mint_task",
-        "list_children",
-        "record_decision",
-        "read_doc",
-        "write_doc",
-        "reply_comment",
-        "propose_epic_amendment",
-        "ack_amendment",
-        "reply_merge_request_comment",
-        "revise_task",
-        "retry_task",
+        "mint_task", "list_children", "record_decision", "read_doc", "write_doc",
+        "reply_comment", "propose_epic_amendment", "ack_amendment",
+        "reply_merge_request_comment", "revise_task", "retry_task", "recovery_status",
     )
     if all(name in feature_tools() for name in expected):
         return
@@ -52,6 +44,7 @@ def load_feature_tools() -> None:
     register_feature_tool("reply_merge_request_comment", reply_feature_review)
     register_feature_tool("revise_task", recovery_mod.revise_task)
     register_feature_tool("retry_task", recovery_mod.retry_task)
+    register_feature_tool("recovery_status", recovery_mod.recovery_status)
 
 
 def accept_human_chat(
@@ -82,21 +75,11 @@ def accept_human_chat(
         except (ModelConfigError, ProviderConfigError, ConfigError) as exc:
             toast_model_config_failure(graph_id, str(exc), root=repo)
             raise
-        seed_feature_role_models(
-            graph_id,
-            lead=lead,
-            architect=architect,
-            root=repo,
-        )
+        seed_feature_role_models(graph_id, lead=lead, architect=architect, root=repo)
         model_id = None
     ingest_human(
         graph_id,
-        {
-            "role": "human",
-            "content": message["body"],
-            "id": message.get("id"),
-            "ts": message.get("ts"),
-        },
+        {"role": "human", "content": message["body"], "id": message.get("id"), "ts": message.get("ts")},
         root=repo,
         model_id=model_id,
     )

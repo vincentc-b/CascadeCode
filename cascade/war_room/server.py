@@ -488,6 +488,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/activate_epic": lambda h, b: h._handle_activate_epic(b),
             "/api/dispatch_feature": lambda h, b: h._handle_dispatch_feature(b),
             "/api/dispatch_task": lambda h, b: h._handle_dispatch_task(b),
+            "/api/retry_task": lambda h, b: h._handle_retry_task(b),
             "/api/merge_task_branch": lambda h, b: h._handle_merge_task_branch(b),
             "/api/update_integration_branch": lambda h, b: h._handle_update_integration_branch(
                 b
@@ -643,6 +644,26 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
         result = dispatch_task(work_id, "human", skills=skills, root=self.server.root)
         self._json_response(HTTPStatus.OK, dispatch_result_to_dict(result))
+
+    def _handle_retry_task(self, body: dict[str, Any]) -> None:
+        """Resume only the retryable terminal action named by the task row."""
+
+        task_id = self._require_work_id(body)
+        if task_id is None:
+            return
+        try:
+            task = read_doc_resolved(task_id, root=self.server.root)
+        except NotFound:
+            self._json_error(HTTPStatus.NOT_FOUND, f"not found: {task_id}")
+            return
+        if task.meta.tier != "task" or not task.meta.parent:
+            self._json_error(HTTPStatus.BAD_REQUEST, "retry is supported only for child tasks")
+            return
+
+        from cascade.feature.recovery import retry_task
+
+        result = retry_task(task_id, feature_id=task.meta.parent, root=self.server.root)
+        self._json_response(HTTPStatus.OK, result)
 
     def _handle_update_integration_branch(self, body: dict[str, Any]) -> None:
         from cascade.war_room.branch_sync import (

@@ -330,7 +330,9 @@ def ensure_epic_review(epic_id: str, *, root: Path) -> MergeRequest | None:
 def _restore_unrelated_specs_for_epic_review(
     epic_root: Path, trunk: Path, epic_id: str
 ) -> None:
-    """Keep activation's spec scrub from deleting other epics' docs in the PR."""
+    """Keep activation's spec scrub from deleting remote trunk's other specs."""
+
+    from cascade.workspace.closeout import create_verified_trunk_workspace
 
     def git(args: list[str], cwd: Path) -> str:
         result = subprocess.run(
@@ -342,22 +344,21 @@ def _restore_unrelated_specs_for_epic_review(
 
     if git(["status", "--porcelain", "--untracked-files=no"], epic_root):
         raise GitError(f"epic worktree has uncommitted changes: {epic_id}")
-    trunk_sha = git(["rev-parse", "HEAD"], trunk)
-    base = git(["merge-base", trunk_sha, "HEAD"], epic_root)
-    deleted = git(
-        ["diff", "--name-only", "--diff-filter=D", base, "HEAD", "--", "docs/features", "docs/tasks"],
-        epic_root,
-    ).splitlines()
-    number = epic_id.removeprefix("epic_")
-    restore = [
-        path for path in deleted
-        if not Path(path).name.startswith((f"feat_{number}_", f"task_{number}_"))
-        and (trunk / path).is_file()
-    ]
-    if not restore:
-        return
-    git(["restore", f"--source={trunk_sha}", "--staged", "--worktree", "--", *restore], epic_root)
-    git(["-c", "commit.gpgsign=false", "commit", "-m", f"docs: preserve unrelated specs for {epic_id} review", "--", *restore], epic_root)
+    with create_verified_trunk_workspace(trunk) as workspace:
+        changed = git(
+            ["diff", "--name-only", workspace.revision, "HEAD", "--", "docs/features", "docs/tasks"],
+            epic_root,
+        ).splitlines()
+        number = epic_id.removeprefix("epic_")
+        restore = [
+            path for path in changed
+            if not Path(path).name.startswith((f"feat_{number}_", f"task_{number}_"))
+            and (workspace.path / path).is_file()
+        ]
+        if not restore:
+            return
+        git(["restore", f"--source={workspace.revision}", "--staged", "--worktree", "--", *restore], epic_root)
+        git(["-c", "commit.gpgsign=false", "commit", "-m", f"docs: preserve unrelated specs for {epic_id} review", "--", *restore], epic_root)
 
 
 def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None:

@@ -208,10 +208,18 @@ def _finish_epic_completion_result(
     # would overwrite unrelated work.  Persist the terminal document in its
     # owning integration worktree and keep that worktree until the operator
     # checkout itself contains the completed document.
-    if review is not None and _merged_epic_review_landed(epic_id, review, repo):
+    if review is not None:
+        remote_doc = _merged_epic_review_landed(epic_id, review, repo)
+        if remote_doc is None:
+            return EpicCompleteResult(
+                ok=False, reason="pending_epic_review", review_url=review.url
+            )
         trunk = locate_trunk(repo)
-        remote_doc = _remote_epic_doc(epic_id, trunk=trunk, target=review.target_branch)
-        if remote_doc is not None and remote_doc.meta.status == "completed":
+        if remote_doc.meta.status == "completed":
+            if not _terminal_close_review_landed(
+                epic_id, trunk=trunk, target=review.target_branch
+            ):
+                return EpicCompleteResult(ok=False, reason="pending_close_review")
             from cascade.workspace.integration_worktree import get_integration_worktree
 
             entry = get_integration_worktree(trunk, "epic", epic_id)
@@ -253,95 +261,112 @@ def _finish_epic_completion_result(
     return EpicCompleteResult(ok=True)
 
 
-def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path) -> bool:
-    """Require both forge merge state and the reviewed tip on remote trunk."""
+def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
+    """Return the reviewed remote doc only after forge and trunk verification."""
 
     import subprocess
 
     from cascade.board.store import read_doc_in_worktree
     from cascade.review import merge_request_snapshot
+    from cascade.workspace.closeout import create_verified_trunk_workspace
     from cascade.workspace.integration_worktree import get_integration_worktree, locate_trunk
     from cascade.workspace.trunk import resolve_product_trunk
 
     trunk = locate_trunk(repo)
     target = resolve_product_trunk(trunk)
     if review.source_branch != f"epic/{epic_id}" or review.target_branch != target:
-        return False
+        return None
     try:
-        snapshot = merge_request_snapshot(trunk, review)
-        if snapshot.get("state") != "merged":
-            return False
+        workspace = create_verified_trunk_workspace(trunk, target=target)
+    except GitError:
+        return None
+    with workspace:
+        checkout = workspace.path
+        try:
+            snapshot = merge_request_snapshot(checkout, review)
+            if snapshot.get("state") != "merged":
+                return None
+        except GitError:
+            return None
+        merge_sha = snapshot.get("merge_sha")
+        if not isinstance(merge_sha, str) or len(merge_sha) != 40:
+            return None
+        landed = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", merge_sha, workspace.revision],
+            cwd=checkout, capture_output=True, text=True,
+        )
+        if landed.returncode != 0:
+            return None
+        entry = get_integration_worktree(trunk, "epic", epic_id)
+        if entry is None or not entry.path.is_dir():
+            return None
+        try:
+            source_doc = read_doc_in_worktree(epic_id, entry.path)
+            source_path = source_doc.meta.path.relative_to(entry.path).as_posix()
+            remote_doc = read_doc_in_worktree(epic_id, checkout)
+        except (NotFound, ValueError):
+            return None
+        if remote_doc.meta.status == "completed":
+            accepted = (
+                remote_doc.meta.path.parent.name == "3_completed"
+                and remote_doc.meta.title == source_doc.meta.title
+                and remote_doc.meta.children == source_doc.meta.children
+                and remote_doc.body == source_doc.body
+            )
+            return remote_doc if accepted else None
+        if remote_doc.meta.status != "active" or remote_doc.meta.path.parent.name != "2_active":
+            return None
+        # An ancestry relation alone is insufficient: a merge can resolve the
+        # activation pointer by keeping the trunk stub instead of the live spec.
+        source_blob = subprocess.run(
+            ["git", "rev-parse", f"{review.source_branch}:{source_path}"],
+            cwd=checkout, capture_output=True, text=True,
+        )
+        target_blob = subprocess.run(
+            ["git", "rev-parse", f"{workspace.revision}:{source_path}"],
+            cwd=checkout, capture_output=True, text=True,
+        )
+        accepted = (
+            source_blob.returncode == 0
+            and target_blob.returncode == 0
+            and source_blob.stdout.strip() == target_blob.stdout.strip()
+        )
+        return remote_doc if accepted else None
+
+
+def _terminal_close_review_landed(epic_id: WorkId, *, trunk: Path, target: str) -> bool:
+    """Require the closeout review's merge commit on verified product trunk."""
+
+    import subprocess
+
+    from cascade.boss import epic_close_review
+    from cascade.review import merge_request_snapshot
+    from cascade.workspace.closeout import create_verified_trunk_workspace
+
+    try:
+        workspace = create_verified_trunk_workspace(trunk, target=target)
     except GitError:
         return False
-    merge_sha = snapshot.get("merge_sha")
-    if not isinstance(merge_sha, str) or len(merge_sha) != 40:
-        return False
-    remote_ref = f"refs/remotes/origin/{target}"
-    fetched = subprocess.run(
-        ["git", "fetch", "--no-tags", "origin", f"refs/heads/{target}:{remote_ref}"],
-        cwd=trunk, capture_output=True, text=True,
-    )
-    if fetched.returncode != 0:
-        return False
-    landed = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", merge_sha, remote_ref],
-        cwd=trunk, capture_output=True, text=True,
-    )
-    if landed.returncode != 0:
-        return False
-    entry = get_integration_worktree(trunk, "epic", epic_id)
-    if entry is None or not entry.path.is_dir():
-        return False
-    try:
-        source_doc = read_doc_in_worktree(epic_id, entry.path)
-        source_path = source_doc.meta.path.relative_to(entry.path).as_posix()
-    except (NotFound, ValueError):
-        return False
-    remote_doc = _remote_epic_doc(epic_id, trunk=trunk, target=target)
-    if remote_doc is None:
-        return False
-    if remote_doc.meta.status == "completed":
-        return (
-            remote_doc.meta.path.parent.name == "3_completed"
-            and remote_doc.meta.title == source_doc.meta.title
-            and remote_doc.meta.children == source_doc.meta.children
-            and remote_doc.body == source_doc.body
+    with workspace:
+        review = epic_close_review.find_merge_request(
+            workspace.path,
+            source_branch=f"cascade/epic-close/{epic_id}",
+            target_branch=target,
         )
-    if remote_doc.meta.status != "active" or remote_doc.meta.path.parent.name != "2_active":
-        return False
-    # An ancestry relation alone is insufficient: a merge can resolve the
-    # activation pointer by keeping the trunk stub instead of the live spec.
-    source_blob = subprocess.run(
-        ["git", "rev-parse", f"{review.source_branch}:{source_path}"],
-        cwd=trunk, capture_output=True, text=True,
-    )
-    target_blob = subprocess.run(
-        ["git", "rev-parse", f"{remote_ref}:{source_path}"],
-        cwd=trunk, capture_output=True, text=True,
-    )
-    return (
-        source_blob.returncode == 0
-        and target_blob.returncode == 0
-        and source_blob.stdout.strip() == target_blob.stdout.strip()
-    )
-
-
-def _remote_epic_doc(epic_id: WorkId, *, trunk: Path, target: str):
-    """Read the approved epic doc from the fetched remote trunk tree."""
-
-    from cascade.board.errors import SchemaError
-    from cascade.board.gitutil import path_for_work_id, read_blob
-    from cascade.board.parse import parse_text
-
-    remote_ref = f"refs/remotes/origin/{target}"
-    try:
-        rel = path_for_work_id(trunk, remote_ref, epic_id)
-        if rel is None:
-            return None
-        doc = parse_text(read_blob(trunk, remote_ref, rel), trunk / rel)
-    except (GitError, SchemaError):
-        return None
-    return doc if doc.meta.tier == "epic" and doc.meta.id == epic_id else None
+        if review is None:
+            return False
+        try:
+            snapshot = merge_request_snapshot(workspace.path, review)
+        except GitError:
+            return False
+        merge_sha = snapshot.get("merge_sha")
+        if snapshot.get("state") != "merged" or not isinstance(merge_sha, str) or len(merge_sha) != 40:
+            return False
+        landed = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", merge_sha, workspace.revision],
+            cwd=workspace.path, capture_output=True, text=True,
+        )
+        return landed.returncode == 0
 
 
 def _completed_on_operator_trunk(epic_id: WorkId, repo: Path) -> bool:

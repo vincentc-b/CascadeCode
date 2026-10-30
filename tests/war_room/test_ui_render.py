@@ -212,7 +212,9 @@ def test_task_execution_controls_and_board_polling_are_load_safe():
     assert 'label: "Blocked"' in source
     assert 'execution.health || execution.phase' in source
     assert 'label: "No signal"' in source
-    assert '"Retry is available only when execution is blocked."' in source
+    assert 'recovery.action === "retry"' in source
+    assert '"/api/retry_task"' in source
+    assert 'appendRecoveryFeedback(row, item.recovery)' in source
     assert 'boardRefreshInFlight = apiGet("/api/board?_=" + Date.now())' in source
     assert source.count('apiGet("/api/board') == 1
     assert "return refreshBoard({ refreshRelated: false, forceFresh: false })" in source
