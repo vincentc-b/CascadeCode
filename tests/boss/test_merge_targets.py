@@ -125,6 +125,7 @@ def test_merged_epic_close_preserves_dirty_operator_checkout(
 
     tracked = root / "README.md"
     tracked.write_text("operator edit\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=root, check=True, capture_output=True)
     # The operator may also have a stale full active spec instead of a stub.
     # Closing must still prefer the completed integration copy without writing
     # over this tracked local file.
@@ -134,11 +135,59 @@ def test_merged_epic_close_preserves_dirty_operator_checkout(
     local_epic.meta.integration_branch = None
     local_epic.meta.integration_worktree = None
     local_epic.meta.path.write_text(render_doc(local_epic), encoding="utf-8")
-    local_epic_bytes = local_epic.meta.path.read_bytes()
     untracked = root / "untracked.txt"
     untracked.write_text("keep me\n", encoding="utf-8")
-    head_before = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
-    status_before = subprocess.run(["git", "status", "--porcelain"], cwd=root, check=True, capture_output=True, text=True).stdout
+    from cascade.workspace.closeout import create_verified_trunk_workspace
+
+    closeout_resources: list[Path] = []
+
+    def capture_closeout_workspace(*args, **kwargs):
+        workspace = create_verified_trunk_workspace(*args, **kwargs)
+        closeout_resources.extend((workspace.path, workspace._temporary_root))
+        return workspace
+
+    monkeypatch.setattr(
+        "cascade.workspace.closeout.create_verified_trunk_workspace",
+        capture_closeout_workspace,
+    )
+    monkeypatch.setattr(
+        "cascade.boss.epic_close_review.create_verified_trunk_workspace",
+        capture_closeout_workspace,
+    )
+    operator_snapshot = {
+        "tracked": {
+            "README.md": tracked.read_bytes(),
+            epic_path: local_epic.meta.path.read_bytes(),
+        },
+        "untracked": {untracked.name: untracked.read_bytes()},
+        "head": subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip(),
+        "branch": subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip(),
+        "index": subprocess.run(
+            ["git", "ls-files", "--stage", "-z"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        ).stdout,
+        "status": subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout,
+    }
 
     monkeypatch.setattr("cascade.boss.epic_close_review.find_merge_request", lambda *_a, **_k: None)
     close_review = MergeRequest(
@@ -184,11 +233,23 @@ def test_merged_epic_close_preserves_dirty_operator_checkout(
     assert merged_board(root).by_id["epic_001"].status == "completed"
     assert read_doc_in_worktree("epic_001", root).meta.status == "active"
     assert epic_wt.is_dir()
-    assert tracked.read_text(encoding="utf-8") == "operator edit\n"
-    assert local_epic.meta.path.read_bytes() == local_epic_bytes
-    assert untracked.read_text(encoding="utf-8") == "keep me\n"
-    assert subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip() == head_before
-    assert subprocess.run(["git", "status", "--porcelain"], cwd=root, check=True, capture_output=True, text=True).stdout == status_before
+    assert tracked.read_bytes() == operator_snapshot["tracked"]["README.md"]
+    assert local_epic.meta.path.read_bytes() == operator_snapshot["tracked"][epic_path]
+    assert untracked.read_bytes() == operator_snapshot["untracked"][untracked.name]
+    assert subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip() == operator_snapshot["head"]
+    assert subprocess.run(
+        ["git", "branch", "--show-current"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip() == operator_snapshot["branch"]
+    assert subprocess.run(
+        ["git", "ls-files", "--stage", "-z"], cwd=root, check=True, capture_output=True
+    ).stdout == operator_snapshot["index"]
+    assert closeout_resources
+    assert all(not resource.exists() for resource in closeout_resources)
+    assert subprocess.run(
+        ["git", "status", "--porcelain"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout == operator_snapshot["status"]
     events, _ = read_events("war_room", 0, root=root)
     assert len([event for event in events if event.type == "EpicCompleted"]) == 1
 
