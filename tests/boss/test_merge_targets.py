@@ -599,6 +599,20 @@ def test_epic_close_opens_review_and_preserves_other_epics_docs(
     unrelated = add_doc(root, id="feat_999", title="Other feature", tier="feature", status="completed", parent="epic_999")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    subprocess.run(["git", "push", "origin", "main", "epic/epic_001"], cwd=root, check=True, capture_output=True)
+    reviewer = tmp_path / "reviewer"
+    subprocess.run(["git", "clone", str(remote), str(reviewer)], check=True, capture_output=True)
+    subprocess.run(["git", "checkout", "-B", "main", "origin/main"], cwd=reviewer, check=True, capture_output=True)
+    remote_only = add_doc(
+        reviewer, id="feat_999_001", title="Remote only feature", tier="feature",
+        status="completed", parent="epic_999",
+    )
+    commit_board(reviewer)
+    subprocess.run(["git", "push", "origin", "main"], cwd=reviewer, check=True, capture_output=True)
+    assert not (root / remote_only.meta.path.relative_to(reviewer)).exists()
 
     import cascade.review as review_module
     from cascade.tracking import MergeRequest
@@ -623,6 +637,8 @@ def test_epic_close_opens_review_and_preserves_other_epics_docs(
     assert opened[0]["source_branch"] == "epic/epic_001"
     assert opened[0]["target_branch"] == "main"
     assert unrelated.meta.path.exists()
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+    assert (epic_wt / remote_only.meta.path.relative_to(reviewer)).exists()
 
 
 def test_ready_epic_auto_closes_with_runtime_comment_sidecar(tmp_path: Path) -> None:
