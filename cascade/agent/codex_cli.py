@@ -52,6 +52,10 @@ def build_codex_argv(
         "--config",
         'approval_policy="never"',
     ]
+    # Codex exec defaults to a restricted sandbox. SWE turns edit only their
+    # Task worktree; planning turns continue to use guarded MCP tools.
+    if turn.role == "swe":
+        argv.extend(["--config", 'sandbox_mode="workspace-write"'])
     if turn.model_id.strip():
         argv.extend(["--model", turn.model_id])
     if turn.flex_mode is True:
