@@ -231,7 +231,13 @@ def plan_feature_dispatch(
 
     stacked = effective_stacked_pr_enabled(feature_id, epic_id, root=root)
     preds = direct_feature_predecessors(meta, board)
-    if stacked and len(preds) > 1:
+    # A fan-in cannot stack on two open review heads. Once every predecessor
+    # review has closed, their accepted changes are on the epic branch and the
+    # epic is the unambiguous base for the next feature.
+    if stacked and len(preds) > 1 and any(
+        _stacked_predecessor_base(pred_id, board, root=root) is not None
+        for pred_id in preds
+    ):
         return FeatureDispatchPlan(ok=False, reason="unsupported_topology")
 
     if not feature_dependency_ready(meta, board, root=root):
@@ -277,6 +283,20 @@ def ensure_feature_dispatch_selection(
 def review_target_branch(feature_id: str, epic_id: str, *, root: Path) -> str:
     selection = read_feature_dispatch_selection(feature_id, root=root)
     if selection is not None:
+        # Dispatch can precede the upstream merge by hours. If that merge lands
+        # before this feature opens its review, GitHub has no open PR to retarget.
+        # Refresh only the unpublished choice; an existing PR keeps its own
+        # durable target and is handled by native-retarget reconciliation.
+        if (
+            selection.predecessor_id
+            and _predecessor_review_merged(selection.predecessor_id, root=root)
+            and not feature_pull_request_linked(feature_id, root=root)
+        ):
+            base = integration_branch("epic", epic_id)
+            persist_feature_dispatch_selection(
+                FeatureDispatchSelection(feature_id, base, None), root=root
+            )
+            return base
         return selection.base_branch
     return integration_branch("epic", epic_id)
 

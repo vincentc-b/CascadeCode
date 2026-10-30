@@ -17,7 +17,7 @@ from cascade.agent.cli_common import (
     run_subprocess_turn,
 )
 from cascade.agent.errors import ProviderCliError, ProviderToolHostError
-from cascade.agent.types import RoleResult, RoleTurn
+from cascade.agent.types import RoleTurn
 
 _CLAUDE_HELP = """
 Usage: claude [options]
@@ -251,6 +251,16 @@ def test_build_codex_argv_sets_approval_policy_via_exec_config() -> None:
     argv = build_codex_argv(_turn(provider="codex"), exec_help=_CODEX_EXEC_HELP)
     assert "--ask-for-approval" not in argv
     assert argv[argv.index("--config") + 1] == 'approval_policy="never"'
+
+
+def test_build_codex_argv_grants_task_worktree_write_only_to_swe() -> None:
+    swe = build_codex_argv(_turn(provider="codex", role="swe"), exec_help=_CODEX_EXEC_HELP)
+    planning = build_codex_argv(
+        _turn(provider="codex", role="feature_architect"), exec_help=_CODEX_EXEC_HELP
+    )
+
+    assert 'sandbox_mode="workspace-write"' in swe
+    assert not any(value.startswith("sandbox_mode=") for value in planning)
 
 
 def test_build_codex_argv_enables_flex_service_tier_only_when_selected() -> None:

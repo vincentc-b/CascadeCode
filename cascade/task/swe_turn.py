@@ -13,6 +13,7 @@ from cascade.task.swe_mcp import build_swe_custom_tools, build_swe_mcp_servers
 from cascade.task.git_tools import (
     _assert_commit_paths_allowed,
     _changed_paths,
+    is_deliverable_path,
     swe_commit,
 )
 from cascade.task.guard import TaskToolDenied
@@ -249,11 +250,7 @@ def has_deliverable_commit(run: TaskRun) -> bool:
     )
     if result.returncode != 0:
         return False
-    ignored = ("docs/tasks/", "docs/_queue/", "docs/_war_room/")
-    return any(
-        path.strip() and not path.strip().startswith(ignored)
-        for path in result.stdout.splitlines()
-    )
+    return any(is_deliverable_path(path) for path in result.stdout.splitlines())
 
 
 def run_swe_turn_sync(

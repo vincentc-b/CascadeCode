@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 from cascade.board.store import move_doc, read_doc
-from cascade.stacked_dispatch import read_feature_dispatch_selection
+from cascade.stacked_dispatch import (
+    FeatureDispatchSelection,
+    persist_feature_dispatch_selection,
+    read_feature_dispatch_selection,
+    review_target_branch,
+)
 from cascade.war_room.room_settings import write_stacked_pr_enabled
 from cascade.watchdog.dispatch import dispatch_feature
 from cascade.workspace.integration_worktree import integration_branch
@@ -106,6 +111,51 @@ def test_first_feature_uses_epic_base(tmp_path: Path) -> None:
     assert selection.base_branch == integration_branch("epic", "epic_001")
 
 
+def test_unpublished_stack_targets_epic_if_predecessor_merges_before_review(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _activate_and_open_epic(root)
+    add_doc(root, id="feat_001", title="First", tier="feature", status="completed", parent="epic_001")
+    add_doc(root, id="feat_002", title="Second", tier="feature", status="active", parent="epic_001")
+    _seed_predecessor_review(root, "feat_001")
+    persist_feature_dispatch_selection(
+        FeatureDispatchSelection("feat_002", "feat/feat_001", "feat_001"), root=root
+    )
+    reviews_path = root / ".cascade" / "reviews.json"
+    reviews = json.loads(reviews_path.read_text(encoding="utf-8"))
+    reviews["feat_001"]["closed"] = True
+    reviews_path.write_text(json.dumps(reviews) + "\n", encoding="utf-8")
+
+    assert review_target_branch("feat_002", "epic_001", root=root) == "epic/epic_001"
+    assert read_feature_dispatch_selection("feat_002", root=root) == FeatureDispatchSelection(
+        "feat_002", "epic/epic_001", None
+    )
+
+
+def test_published_stack_keeps_review_target_after_predecessor_merges(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _activate_and_open_epic(root)
+    add_doc(root, id="feat_001", title="First", tier="feature", status="completed", parent="epic_001")
+    add_doc(root, id="feat_002", title="Second", tier="feature", status="active", parent="epic_001")
+    _seed_predecessor_review(root, "feat_001")
+    _seed_predecessor_review(root, "feat_002")
+    persist_feature_dispatch_selection(
+        FeatureDispatchSelection("feat_002", "feat/feat_001", "feat_001"), root=root
+    )
+    reviews_path = root / ".cascade" / "reviews.json"
+    reviews = json.loads(reviews_path.read_text(encoding="utf-8"))
+    reviews["feat_001"]["closed"] = True
+    reviews_path.write_text(json.dumps(reviews) + "\n", encoding="utf-8")
+
+    assert review_target_branch("feat_002", "epic_001", root=root) == "feat/feat_001"
+    assert read_feature_dispatch_selection("feat_002", root=root) == FeatureDispatchSelection(
+        "feat_002", "feat/feat_001", "feat_001"
+    )
+
+
 def test_merged_predecessor_falls_back_to_epic_base(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     _activate_and_open_epic(root)
@@ -181,6 +231,42 @@ def test_fan_in_fails_closed(tmp_path: Path) -> None:
     result = dispatch_feature("feat_003", "human", root=root)
     assert result.ok is False
     assert result.reason == "unsupported_topology"
+
+
+def test_fan_in_with_merged_predecessors_uses_epic_base(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _activate_and_open_epic(root)
+    write_stacked_pr_enabled("epic_001", True, root=root)
+    for fid in ("feat_001", "feat_002"):
+        add_doc(
+            root,
+            id=fid,
+            title=fid,
+            tier="feature",
+            status="completed",
+            parent="epic_001",
+        )
+        _seed_predecessor_review(root, fid)
+    path = root / ".cascade" / "reviews.json"
+    reviews = json.loads(path.read_text(encoding="utf-8"))
+    for fid in ("feat_001", "feat_002"):
+        reviews[fid]["closed"] = True
+    path.write_text(json.dumps(reviews), encoding="utf-8")
+    add_doc(
+        root,
+        id="feat_003",
+        title="Join",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001", "feat_002"],
+    )
+    approve_board_feature(root, "feat_003")
+
+    assert dispatch_feature("feat_003", "human", root=root).ok
+    selection = read_feature_dispatch_selection("feat_003", root=root)
+    assert selection is not None
+    assert selection.predecessor_id is None
+    assert selection.base_branch == integration_branch("epic", "epic_001")
 
 
 def test_missing_predecessor_identity_fails_closed(

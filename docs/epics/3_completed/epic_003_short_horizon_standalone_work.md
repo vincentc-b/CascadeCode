@@ -2,7 +2,7 @@
 id: epic_003
 title: Short-horizon and standalone work
 tier: epic
-status: backlog
+status: cancelled
 parent: null
 children: []
 depends_on: []
@@ -12,7 +12,10 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-18'
-updated: '2026-10-21'
+updated: '2026-10-27'
+cancellation_reason: No longer needed.
+cancelled_at: '2026-10-27T04:16:30.683200+00:00'
+cancellation_step: complete
 ---
 
 # Short-horizon and standalone work
