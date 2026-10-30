@@ -15,13 +15,13 @@ def ensure_epic_close_review(epic_id: str, *, trunk: Path, target: str) -> Merge
     """Open one PR that moves an already merged epic to completed on trunk."""
 
     branch = f"cascade/epic-close/{epic_id}"
-    existing = find_merge_request(trunk, source_branch=branch, target_branch=target)
-    if existing is not None:
-        return existing
     workspace = create_verified_trunk_workspace(trunk, target=target)
     checkout = workspace.path
     created_branch = False
     try:
+        existing = find_merge_request(checkout, source_branch=branch, target_branch=target)
+        if existing is not None:
+            return existing
         created = _git(checkout, "switch", "-c", branch)
         if created.returncode != 0:
             raise GitError(created.stderr.strip() or "cannot create epic closeout branch")

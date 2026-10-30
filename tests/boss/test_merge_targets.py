@@ -151,10 +151,34 @@ def test_merged_epic_close_preserves_dirty_operator_checkout(
     assert pending.review_url == close_review.url
     assert read_doc("epic_001", root=root).meta.status == "active"
     assert not [event for event in read_events("war_room", 0, root=root)[0] if event.type == "EpicCompleted"]
+    monkeypatch.setattr(
+        "cascade.boss.epic_close_review.find_merge_request", lambda *_a, **_k: close_review
+    )
+    monkeypatch.setattr(
+        "cascade.boss.epic_close_review.create_merge_request",
+        lambda *_a, **_k: pytest.fail("existing closeout review must be reused"),
+    )
+    repeated = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert repeated.reason == "pending_close_review"
+    assert repeated.review_url == close_review.url
     subprocess.run(["git", "fetch", "origin"], cwd=reviewer, check=True, capture_output=True)
     subprocess.run(["git", "merge", "--no-ff", "--no-edit", "origin/cascade/epic-close/epic_001"], cwd=reviewer, check=True, capture_output=True)
     subprocess.run(["git", "push", "origin", "main"], cwd=reviewer, check=True, capture_output=True)
 
+    import cascade.review as review_module
+
+    merged_snapshot = review_module.merge_request_snapshot
+    monkeypatch.setattr(
+        review_module,
+        "merge_request_snapshot",
+        lambda repo, review: (
+            {"state": "open"}
+            if review.source_branch.startswith("cascade/epic-close/")
+            else merged_snapshot(repo, review)
+        ),
+    )
+    assert confirm_epic_complete_result("epic_001", "human", root=root).reason == "pending_close_review"
+    monkeypatch.setattr(review_module, "merge_request_snapshot", merged_snapshot)
     assert confirm_epic_complete_result("epic_001", "human", root=root).ok
     assert confirm_epic_complete_result("epic_001", "human", root=root).ok
     assert merged_board(root).by_id["epic_001"].status == "completed"
@@ -169,14 +193,21 @@ def test_merged_epic_close_preserves_dirty_operator_checkout(
     assert len([event for event in events if event.type == "EpicCompleted"]) == 1
 
 
-def test_merged_review_state_without_landed_tip_does_not_bypass_dirty_gate(
+def test_merged_review_state_without_landed_tip_waits_without_touching_operator(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, _ = _reviewed_epic_with_remote(tmp_path, monkeypatch)
     (root / "README.md").write_text("operator edit\n", encoding="utf-8")
+    before = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout
     result = confirm_epic_complete_result("epic_001", "human", root=root)
-    assert not result.ok and result.reason == "local_changes"
+    assert not result.ok and result.reason == "pending_epic_review"
+    assert result.review_url == "https://github.example/pull/1"
     assert read_doc("epic_001", root=root).meta.status == "active"
+    assert subprocess.run(
+        ["git", "status", "--porcelain"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout == before
 
 
 def _stacked_board(root: Path) -> None:
@@ -524,7 +555,9 @@ def test_epic_close_opens_review_and_preserves_other_epics_docs(
         )
 
     monkeypatch.setattr(review_module, "create_merge_request", create_review)
-    assert confirm_epic_complete("epic_001", "human", root=root)
+    result = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert result.reason == "pending_epic_review"
+    assert result.review_url == "https://github.example/pull/1"
     assert len(opened) == 1
     assert opened[0]["source_branch"] == "epic/epic_001"
     assert opened[0]["target_branch"] == "main"
