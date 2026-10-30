@@ -2,7 +2,7 @@
 id: epic_026
 title: Recover failed work item actions
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_026_001
@@ -16,7 +16,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-26'
-updated: '2026-10-26'
+updated: '2026-10-30'
 provider: codex
 models:
   epic_manager: gpt-5.6-sol
