@@ -2,7 +2,7 @@
 id: feat_027_003
 title: Expose scoped Task recovery and recovery state
 tier: feature
-status: active
+status: completed
 parent: epic_027
 children:
 - task_027_003_001
