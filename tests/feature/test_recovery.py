@@ -13,8 +13,13 @@ from cascade.feature.recovery import (
 )
 from cascade.task.supervisor_recovery import RecoveryResult
 from cascade.watchdog.blockage import propagate_direct_report_blockage
-from cascade.task.execution import mark_terminal
-from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
+from cascade.task.execution import mark_awaiting_merge, mark_merge_blocked, mark_terminal
+from cascade.watchdog import (
+    activate_epic,
+    dispatch_feature,
+    dispatch_task,
+)
+from cascade.watchdog.health import sweep_supervisor_health
 from tests.support import add_doc, make_repo, approve_board_feature
 
 
@@ -160,10 +165,48 @@ def test_feature_recover_task_rejects_foreign_task_before_supervisor_call(
         recover_task("task_002", feature_id="feat_001", root=root)
 
 
-def test_recovery_blocker_is_incident_scoped_and_preserves_other_causes(
+def test_tool_and_health_sweep_share_one_scoped_recovery_incident(
+    tmp_path: Path,
+) -> None:
+    """A direct Feature request and a sweep coalesce at the shared ledger."""
+
+    root = _board(tmp_path)
+    mark_awaiting_merge("task_001", root=root)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        tool_result, _sweep = list(
+            pool.map(
+                lambda request: (
+                    recover_task("task_001", feature_id="feat_001", root=root)
+                    if request == "tool"
+                    else sweep_supervisor_health(root)
+                ),
+                ("tool", "sweep"),
+            )
+        )
+
+    assert tool_result["outcome"] == "blocker"
+    blockers = read_doc("feat_001", root=root).meta.monitoring_blockers
+    assert [(item.child_id, item.incident_id) for item in blockers] == [
+        ("task_001", "task_001:delivery:1")
+    ]
+    assert recovery_status("task_001", feature_id="feat_001", root=root)[
+        "incident"
+    ] == tool_result["recovery"]
+
+
+def test_semantic_conflict_blocker_clears_only_its_matching_incident(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _board(tmp_path)
+    mark_merge_blocked(
+        "task_001",
+        root=root,
+        reason="branch_conflict",
+        conflict_paths=("cascade/feature/recovery.py", "tests/feature/test_recovery.py"),
+        source_sha="task-sha",
+        target_sha="feature-sha",
+    )
     feature = read_doc("feat_001", root=root)
     task = read_doc("task_001", root=root)
     assert propagate_direct_report_blockage(
@@ -183,10 +226,14 @@ def test_recovery_blocker_is_incident_scoped_and_preserves_other_causes(
     result = recover_task("task_001", feature_id="feat_001", root=root)
 
     assert result["outcome"] == "blocker"
+    assert result["blocker"] == "task_checkpoint_missing"
     blockers = read_doc("feat_001", root=root).meta.monitoring_blockers
     assert {(item.incident_id, item.reason) for item in blockers} == {
         ("task_001:delivery:other", "another recovery"),
-        ("task_001:delivery:1", "task_checkpoint_missing"),
+        (
+            "task_001:delivery:1",
+            "semantic merge conflict (cascade/feature/recovery.py, tests/feature/test_recovery.py)",
+        ),
     }
 
     monkeypatch.setattr(
