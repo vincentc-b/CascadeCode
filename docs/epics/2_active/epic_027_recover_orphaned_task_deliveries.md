@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_027_001
 - feat_027_002
+- feat_027_003
 depends_on: []
 owners:
 - epic_manager
@@ -73,6 +74,7 @@ Make the commit-to-validation-to-queue transition restart-safe. On a later sweep
 - Existing parent blockage provenance and War Room status model.
 
 ## Feature breakdown
+- feat_027_003
 - feat_027_002
 - feat_027_001
 
