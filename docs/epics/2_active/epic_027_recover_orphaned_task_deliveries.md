@@ -23,6 +23,7 @@ models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
   swe: gpt-5.6-terra
+plan_approved_at: '2026-10-31T22:38:22.502353+00:00'
 ---
 # Recover orphaned Task deliveries
 
