@@ -103,6 +103,10 @@ _(none)_
 
 - 2026-10-26 · Human · Brief proposed after Task `task_026_002_004` required a manual merge requeue.
 
+- `dec_001` · 2026-10-31 · Epic Manager · **Delivery contract**
+  Chose Require commit-first final validation keyed by Task ID, deliverable commit SHA, and Feature-base SHA before durable merge queue insertion, awaiting_merge, or the ready notification..
+  Rationale: A drained dirty worktree has no reliably durable identity. Validating the actual deliverable commit makes restart checks exact and forces revalidation whenever the deliverable or base changes.
+  Honors: Success criteria requiring a matching validated commit and durable merge request; smallest restart-safe design without a new artifact system..
 ## Amendment log
 
 _(none)_
