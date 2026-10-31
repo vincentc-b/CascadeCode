@@ -74,6 +74,15 @@ def work_meta_to_dict(
         "created": _date_iso(meta.created),
         "updated": _date_iso(meta.updated),
         "path": _path_str(meta.path),
+        "monitoring_blockers": [
+            {
+                "child_id": item.child_id,
+                "reason": item.reason,
+                "incident_id": item.incident_id,
+                "blocked_supervisor": item.blocked_supervisor,
+            }
+            for item in meta.monitoring_blockers
+        ],
     }
     if meta.tier == "task" and root is not None:
         if sidecars_preloaded:
@@ -268,7 +277,9 @@ def amendment_summary_to_dict(record: Amendment) -> dict[str, Any]:
     }
 
 
-def integration_worktree_to_dict(entry: IntegrationWorktree, *, root: Path) -> dict[str, str]:
+def integration_worktree_to_dict(
+    entry: IntegrationWorktree, *, root: Path
+) -> dict[str, str]:
     rel_path = entry.path
     try:
         rel_path = entry.path.resolve().relative_to(root.resolve())
@@ -293,9 +304,13 @@ def flight_overlap_to_dict(record: FlightOverlap) -> dict[str, list[str]]:
 def flight_report_to_dict(report: FlightReport, *, root: Path) -> dict[str, Any]:
     return {
         "epics": [integration_worktree_to_dict(e, root=root) for e in report.epics],
-        "features": [integration_worktree_to_dict(e, root=root) for e in report.features],
+        "features": [
+            integration_worktree_to_dict(e, root=root) for e in report.features
+        ],
         "tasks": [integration_worktree_to_dict(e, root=root) for e in report.tasks],
-        "changed_paths": {wid: list(paths) for wid, paths in sorted(report.changed_paths.items())},
+        "changed_paths": {
+            wid: list(paths) for wid, paths in sorted(report.changed_paths.items())
+        },
         "overlaps": [flight_overlap_to_dict(o) for o in report.overlaps],
     }
 
@@ -318,7 +333,9 @@ def providers_view_to_dict(
     }
 
 
-def reasoning_capability_to_dict(capability: ReasoningCapability | None) -> dict[str, Any] | None:
+def reasoning_capability_to_dict(
+    capability: ReasoningCapability | None,
+) -> dict[str, Any] | None:
     if capability is None:
         return None
     return {
@@ -354,7 +371,9 @@ def provider_inventory_item_to_dict(item: ProviderInventoryItem) -> dict[str, An
     }
 
 
-def provider_inventory_failure_to_dict(failure: ProviderInventoryFailure) -> dict[str, Any]:
+def provider_inventory_failure_to_dict(
+    failure: ProviderInventoryFailure,
+) -> dict[str, Any]:
     return {
         "id": failure.provider_id,
         "reason": failure.reason,
@@ -389,8 +408,12 @@ def brief_provider_inventory_to_dict(
         "availability": _brief_inventory_availability(result),
         "loading": False,
         "default_provider": selected_default,
-        "providers": [provider_inventory_item_to_dict(item) for item in result.providers],
-        "failures": [provider_inventory_failure_to_dict(item) for item in result.failures],
+        "providers": [
+            provider_inventory_item_to_dict(item) for item in result.providers
+        ],
+        "failures": [
+            provider_inventory_failure_to_dict(item) for item in result.failures
+        ],
         "freshness": inventory_freshness_to_dict(result.freshness),
         "refresh": {
             "forced": force_refresh,
