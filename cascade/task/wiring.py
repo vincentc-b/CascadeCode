@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cascade.board.errors import GitError
-from cascade.board.gitutil import head_sha
+from cascade.board.gitutil import _run, head_sha
 from cascade.board.store import read_doc
 from cascade.task.boot import install_task_boot_hook, last_fail_closed_boot
 from cascade.task.checkpoint import checkpoint_path
@@ -111,6 +111,10 @@ def on_tests_finished(task_id: str, result: dict[str, object], *, root: Path) ->
         run = get_task_run(task_id)
         if run is None:
             return
+        # The queue action is the durable delivery boundary.  It must exist,
+        # with the exact commits that were validated, before either local
+        # state or the War Room says this Task is ready.
+        _enqueue_validated_delivery(task_id, run, root=repo)
         mark_awaiting_merge(task_id, run, root=repo)
         _last_test_passed[task_id] = True
         from cascade.task.execution import (
@@ -129,6 +133,39 @@ def on_tests_finished(task_id: str, result: dict[str, object], *, root: Path) ->
     from cascade.task.execution import record_running_error
 
     record_running_error(task_id, "tests_red", root=repo)
+
+
+def enqueue_validated_delivery(task_id: str, *, root: Path) -> None:
+    """Ensure a restarted finalizer creates the same durable delivery queue."""
+
+    run = get_task_run(task_id)
+    if run is None:
+        return
+    _enqueue_validated_delivery(task_id, run, root=Path(root).resolve())
+
+
+def _enqueue_validated_delivery(task_id: str, run, *, root: Path) -> dict[str, str]:
+    """Persist final-validation identity and queue its matching merge.
+
+    ``base_sha`` is captured when the task worktree is cut from its Feature
+    branch.  Recording it alongside the task branch HEAD makes the
+    validation result auditable even if the Feature advances before merge.
+    """
+
+    deliverable_sha = _run(["rev-parse", "--verify", f"{run.branch}^{{commit}}"], root).stdout.strip()
+    if not deliverable_sha:
+        raise RuntimeError(f"cannot resolve deliverable commit for {task_id}")
+    if not run.base_sha:
+        raise RuntimeError(f"cannot resolve feature base commit for {task_id}")
+    evidence = {
+        "task_id": task_id,
+        "deliverable_sha": deliverable_sha,
+        "feature_base_sha": run.base_sha,
+    }
+    from cascade.task_rollup import queue_task_merge
+
+    queue_task_merge(task_id, root=root, delivery_evidence=evidence)
+    return evidence
 
 
 def on_tool_error(task_id: str, exc: BaseException, *, root: Path) -> None:

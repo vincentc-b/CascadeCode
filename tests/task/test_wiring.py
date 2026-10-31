@@ -19,6 +19,8 @@ from cascade.task.wiring import (
     load_task_tools,
 )
 from cascade.task.worktree import clear_task_runs, get_task_run, worktree_path
+from cascade.task.action_recovery import load_action
+from cascade.task_rollup import pending_task_merges
 from cascade.watchdog.events import read_events
 from cascade.watchdog.hooks import clear_hooks, invoke_boot
 from cascade.watchdog.hooks import _boot
@@ -209,6 +211,71 @@ def test_invoke_tool_green_tests_awaiting_merge(tmp_path: Path) -> None:
     assert get_task_run(task_id).state == "awaiting_merge"
     toasts, _ = read_events("war_room", 0, root=root)
     assert any(e.payload.get("kind") == "task_ready" for e in toasts)
+
+
+def test_green_tests_persist_evidence_and_queue_before_ready(tmp_path: Path) -> None:
+    root, task_id = _task_board(tmp_path)
+    install_task_boot_hook(root)
+    install_task_wiring(root)
+    invoke_boot("task", task_id)
+
+    wt = worktree_path(task_id, root=root)
+    (wt / "test_ok.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+
+    from cascade.task import invoke_tool
+
+    invoke_tool(
+        task_id,
+        "swe_run_tests",
+        {"cmd": ["python3", "-m", "pytest", "-q", "test_ok.py"]},
+        root=root,
+        feature_id="feat_001",
+    )
+
+    action = load_action(f"{task_id}:queued_merge", root=root)
+    assert action is not None
+    evidence = action["metadata"]["final_validation"]
+    run = get_task_run(task_id)
+    assert run is not None
+    deliverable = subprocess.run(
+        ["git", "rev-parse", run.branch], cwd=root, text=True, capture_output=True, check=True
+    ).stdout.strip()
+    assert evidence == {
+        "task_id": task_id,
+        "deliverable_sha": deliverable,
+        "feature_base_sha": run.base_sha,
+    }
+    assert task_id in pending_task_merges(root)
+    assert run.state == "awaiting_merge"
+
+
+def test_queue_failure_does_not_publish_ready_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root, task_id = _task_board(tmp_path)
+    install_task_boot_hook(root)
+    install_task_wiring(root)
+    invoke_boot("task", task_id)
+    wt = worktree_path(task_id, root=root)
+    (wt / "test_ok.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "cascade.task_rollup.queue_task_merge",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("queue unavailable")),
+    )
+
+    from cascade.task import invoke_tool
+
+    with pytest.raises(OSError, match="queue unavailable"):
+        invoke_tool(
+            task_id,
+            "swe_run_tests",
+            {"cmd": ["python3", "-m", "pytest", "-q", "test_ok.py"]},
+            root=root,
+            feature_id="feat_001",
+        )
+    run = get_task_run(task_id)
+    assert run is not None
+    assert run.state == "testing"
+    events, _ = read_events("war_room", 0, root=root)
+    assert not any(event.payload.get("kind") == "task_ready" for event in events)
 
 
 def test_invoke_tool_failing_pytest_fails_without_retry(tmp_path: Path) -> None:

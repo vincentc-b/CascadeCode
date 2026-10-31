@@ -17,6 +17,7 @@ from cascade.task.action_recovery import (
     create_or_load_action,
     record_owner_decision,
     record_owner_resolution,
+    replace_action_metadata,
     resume_action,
 )
 from cascade.task.execution import mark_merge_blocked
@@ -65,21 +66,51 @@ def _queued_merge_action_id(task_id: str) -> str:
     return f"{task_id}:queued_merge"
 
 
-def _queued_merge_action(task_id: str, root: Path) -> dict:
-    return create_or_load_action(
+def _queued_merge_action(
+    task_id: str, root: Path, *, delivery_evidence: dict[str, str] | None = None
+) -> dict:
+    """Create the durable queue record for a validated delivery.
+
+    The recovery action is the authoritative queue entry.  Keep the legacy
+    list below as a cheap scheduling index, but put the validation identity on
+    the durable action so a task id alone can never be mistaken for a
+    different deliverable.
+    """
+
+    metadata: dict[str, object] = {"task_id": task_id}
+    if delivery_evidence is not None:
+        metadata["final_validation"] = dict(delivery_evidence)
+    action = create_or_load_action(
         _queued_merge_action_id(task_id),
         _QUEUED_MERGE_KIND,
         root=root,
         attempt_bound=_QUEUED_MERGE_ATTEMPT_BOUND,
-        metadata={"task_id": task_id},
+        metadata=metadata,
     )
+    # A repaired task may validate a newly amended deliverable or a rebased
+    # Feature base.  Keep one queue identity (and therefore one scheduled
+    # merge) but make its persisted validation evidence describe the latest
+    # green validation.
+    if delivery_evidence is not None and action.get("metadata") != metadata:
+        action = replace_action_metadata(
+            _queued_merge_action_id(task_id), metadata, root=root
+        )
+    return action
 
 
-def queue_task_merge(task_id: str, *, root: Path) -> None:
+def queue_task_merge(
+    task_id: str,
+    *,
+    root: Path,
+    delivery_evidence: dict[str, str] | None = None,
+) -> None:
     repo = resolve_root(root)
-    # Queue creation establishes the action identity.  Existing queue files
-    # remain a plain list for compatibility with current callers.
-    _queued_merge_action(task_id, repo)
+    # Persist the evidence-bearing recovery action before publishing the
+    # scheduling index.  Callers do not expose a ready state until this
+    # function returns, so an interruption can leave an unadvertised action
+    # but can never leave an advertised delivery without its queue record.
+    # Existing queue files remain a plain list for compatibility.
+    _queued_merge_action(task_id, repo, delivery_evidence=delivery_evidence)
     with process_lock:
         pending = _read(repo)
         if task_id not in pending:
