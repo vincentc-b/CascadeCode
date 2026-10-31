@@ -2,7 +2,7 @@
 id: feat_027_001
 title: Enforce the durable Task delivery boundary
 tier: feature
-status: active
+status: completed
 parent: epic_027
 children:
 - task_027_001_001
