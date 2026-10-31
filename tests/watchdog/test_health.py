@@ -4,6 +4,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Lock
+from types import SimpleNamespace
 
 from cascade.board.store import read_doc, write_doc
 from cascade.task.execution import execution_view, mark_terminal
@@ -153,6 +154,115 @@ def test_health_sweep_is_noop_for_healthy_and_terminal_work(tmp_path: Path) -> N
     assert by_child["feat_011"].reason == "terminal_child"
     assert "task_012" not in by_child
     assert not (root / ".cascade" / "remediation_dispositions.json").exists()
+
+
+def test_health_sweep_recovers_abandoned_awaiting_merge_delivery(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Epic",
+        tier="epic",
+        status="active",
+        children=["feat_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    monkeypatch.setattr(
+        health_module,
+        "execution_views",
+        lambda *_args, **_kwargs: {
+            "task_001": {
+                "attempt": 7,
+                "phase": "awaiting_merge",
+                "outcome": None,
+                "health": "awaiting_merge",
+            }
+        },
+    )
+    calls: list[tuple[str, Path, str]] = []
+    monkeypatch.setattr(
+        health_module,
+        "supervisor_recover_task_delivery",
+        lambda task_id, *, root, observed_incident: (
+            calls.append((task_id, root, observed_incident))
+            or SimpleNamespace(decision="requeue_commit", reason="validated")
+        ),
+    )
+
+    sweep_supervisor_health(root)
+
+    assert calls == [("task_001", root, "task_001:delivery:7")]
+
+
+def test_health_sweep_does_not_nominate_live_task_owner(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Epic",
+        tier="epic",
+        status="active",
+        children=["feat_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    monkeypatch.setattr(
+        health_module,
+        "execution_views",
+        lambda *_args, **_kwargs: {
+            "task_001": {
+                "attempt": 7,
+                "phase": "running",
+                "outcome": None,
+                "health": "healthy",
+            }
+        },
+    )
+    calls: list[object] = []
+    monkeypatch.setattr(
+        health_module,
+        "supervisor_recover_task_delivery",
+        lambda *_args, **_kwargs: calls.append("unexpected recovery"),
+    )
+
+    sweep_supervisor_health(root)
+
+    assert calls == []
 
 
 def test_recovery_failure_is_recorded_once_for_concurrent_and_repeated_sweeps(
