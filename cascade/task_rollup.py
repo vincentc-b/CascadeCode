@@ -15,6 +15,7 @@ from cascade.task.action_recovery import (
     ActionRecoveryError,
     ActionResult,
     create_or_load_action,
+    load_action,
     record_owner_decision,
     record_owner_resolution,
     replace_action_metadata,
@@ -118,6 +119,47 @@ def queue_task_merge(
             _write(repo, pending)
 
 
+def queued_delivery_evidence(task_id: str, *, root: Path) -> dict[str, str] | None:
+    """Return the exact green validation attached to a queued delivery."""
+
+    action = load_action(_queued_merge_action_id(task_id), root=resolve_root(root))
+    metadata = action.get("metadata") if action is not None else None
+    evidence = metadata.get("final_validation") if isinstance(metadata, dict) else None
+    if not isinstance(evidence, dict) or set(evidence) != {
+        "task_id", "deliverable_sha", "feature_base_sha"
+    }:
+        return None
+    if not all(isinstance(value, str) and value for value in evidence.values()):
+        return None
+    return dict(evidence)
+
+
+def delivery_evidence_is_current(
+    task_id: str, evidence: dict[str, str], *, root: Path
+) -> bool:
+    """Whether evidence still names the current task and Feature branch tips."""
+
+    heads = _merge_head_pair(task_id, resolve_root(root))
+    return heads is not None and evidence == {
+        "task_id": task_id,
+        "deliverable_sha": heads[0],
+        "feature_base_sha": heads[1],
+    }
+
+
+def invalidate_task_merge(task_id: str, *, root: Path) -> None:
+    """Remove a stale delivery from scheduling while retaining its action history."""
+
+    repo = resolve_root(root)
+    action = load_action(_queued_merge_action_id(task_id), root=repo)
+    if action is not None and action.get("metadata") != {"task_id": task_id}:
+        replace_action_metadata(_queued_merge_action_id(task_id), {"task_id": task_id}, root=repo)
+    with process_lock:
+        pending = _read(repo)
+        if task_id in pending:
+            _write(repo, [entry for entry in pending if entry != task_id])
+
+
 def pending_task_merges(root: Path) -> set[str]:
     repo = resolve_root(root)
     with process_lock:
@@ -134,6 +176,17 @@ def retry_pending_task_merges(root: Path) -> list[str]:
         pending = _read(repo)
     for task_id in pending:
         action = _queued_merge_action(task_id, repo)
+        evidence = queued_delivery_evidence(task_id, root=repo)
+        if (
+            evidence is not None
+            and _merge_head_pair(task_id, repo) is not None
+            and not delivery_evidence_is_current(task_id, evidence, root=repo)
+        ):
+            # A branch moved after validation.  Do not execute an old merge;
+            # the next final validation will publish a replacement handoff.
+            invalidate_task_merge(task_id, root=repo)
+            removable.append(task_id)
+            continue
         state = action.get("recovery_state")
         # A supervisor can be interrupted after recording success but before it
         # prunes the legacy queue.  Removing that entry must not replay merge

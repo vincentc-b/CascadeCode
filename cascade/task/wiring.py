@@ -111,10 +111,23 @@ def on_tests_finished(task_id: str, result: dict[str, object], *, root: Path) ->
         run = get_task_run(task_id)
         if run is None:
             return
+        # Final validation is meaningful only for an immutable deliverable.
+        # A green run against a dirty tree (or before the task has committed a
+        # deliverable) is useful feedback, but it cannot make delivery ready.
+        evidence = result.get("final_validation")
+        if not isinstance(evidence, dict) or not all(
+            isinstance(evidence.get(key), str)
+            for key in ("task_id", "deliverable_sha", "feature_base_sha")
+        ):
+            _last_test_passed[task_id] = False
+            from cascade.task.execution import record_running_error
+
+            record_running_error(task_id, "final_validation_required", root=repo)
+            return
         # The queue action is the durable delivery boundary.  It must exist,
         # with the exact commits that were validated, before either local
         # state or the War Room says this Task is ready.
-        _enqueue_validated_delivery(task_id, run, root=repo)
+        _enqueue_validated_delivery(task_id, run, root=repo, evidence=evidence)
         mark_awaiting_merge(task_id, run, root=repo)
         _last_test_passed[task_id] = True
         from cascade.task.execution import (
@@ -130,42 +143,82 @@ def on_tests_finished(task_id: str, result: dict[str, object], *, root: Path) ->
     # the issue and run the gate again; terminalize only when the turn ends
     # with this as the latest result.
     _last_test_passed[task_id] = False
+    invalidate_validated_delivery(task_id, root=repo)
     from cascade.task.execution import record_running_error
 
     record_running_error(task_id, "tests_red", root=repo)
 
 
-def enqueue_validated_delivery(task_id: str, *, root: Path) -> None:
-    """Ensure a restarted finalizer creates the same durable delivery queue."""
+def enqueue_validated_delivery(task_id: str, *, root: Path) -> bool:
+    """Replay a durable green validation only when its identity is still current."""
 
     run = get_task_run(task_id)
     if run is None:
-        return
-    _enqueue_validated_delivery(task_id, run, root=Path(root).resolve())
+        return False
+    repo = Path(root).resolve()
+    from cascade.task_rollup import delivery_evidence_is_current, queued_delivery_evidence
+
+    evidence = queued_delivery_evidence(task_id, root=repo)
+    if evidence is None or not delivery_evidence_is_current(task_id, evidence, root=repo):
+        invalidate_validated_delivery(task_id, root=repo)
+        return False
+    _enqueue_validated_delivery(task_id, run, root=repo, evidence=evidence)
+    return True
 
 
-def _enqueue_validated_delivery(task_id: str, run, *, root: Path) -> dict[str, str]:
+def invalidate_validated_delivery(task_id: str, *, root: Path) -> None:
+    """Withdraw a green handoff made stale by a red result or changed ref."""
+
+    from cascade.task_rollup import invalidate_task_merge
+
+    invalidate_task_merge(task_id, root=Path(root).resolve())
+    run = get_task_run(task_id)
+    if run is not None and run.state == "awaiting_merge":
+        run.state = "coding"
+
+
+def _enqueue_validated_delivery(
+    task_id: str, run, *, root: Path, evidence: dict[str, str] | None = None
+) -> dict[str, str]:
     """Persist final-validation identity and queue its matching merge.
 
-    ``base_sha`` is captured when the task worktree is cut from its Feature
-    branch.  Recording it alongside the task branch HEAD makes the
-    validation result auditable even if the Feature advances before merge.
+    The Feature ref is read at final validation time, rather than reusing the
+    worktree cut-point.  A later Feature advance therefore cannot silently
+    reuse stale evidence.
     """
 
     deliverable_sha = _run(["rev-parse", "--verify", f"{run.branch}^{{commit}}"], root).stdout.strip()
     if not deliverable_sha:
         raise RuntimeError(f"cannot resolve deliverable commit for {task_id}")
-    if not run.base_sha:
+    feature_base_sha = _current_feature_base(task_id, root=root)
+    if not feature_base_sha:
         raise RuntimeError(f"cannot resolve feature base commit for {task_id}")
-    evidence = {
+    current = {
         "task_id": task_id,
         "deliverable_sha": deliverable_sha,
-        "feature_base_sha": run.base_sha,
+        "feature_base_sha": feature_base_sha,
     }
+    if evidence is not None:
+        if evidence != current:
+            raise RuntimeError(f"stale final validation evidence for {task_id}")
+        current = evidence
     from cascade.task_rollup import queue_task_merge
 
-    queue_task_merge(task_id, root=root, delivery_evidence=evidence)
-    return evidence
+    queue_task_merge(task_id, root=root, delivery_evidence=current)
+    return current
+
+
+def _current_feature_base(task_id: str, *, root: Path) -> str | None:
+    task = read_doc(task_id, root=root)
+    if not task.meta.parent:
+        return None
+    from cascade.workspace.integration_worktree import integration_branch
+
+    ref = integration_branch("feature", task.meta.parent)
+    result = _run(["rev-parse", "--verify", f"{ref}^{{commit}}"], root, check=False)
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
 
 
 def on_tool_error(task_id: str, exc: BaseException, *, root: Path) -> None:

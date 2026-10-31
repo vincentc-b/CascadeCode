@@ -15,6 +15,7 @@ from cascade.task.failure import fail_task
 from cascade.task.registry import clear_task_tools, task_tools
 from cascade.task.wiring import (
     clear_task_wiring_state,
+    enqueue_validated_delivery,
     install_task_wiring,
     load_task_tools,
 )
@@ -76,6 +77,7 @@ def _task_board(tmp_path: Path) -> tuple[Path, str]:
         parent="feat_001",
     )
     pin_parent("task_037", "feat_001", root=root)
+    subprocess.run(["git", "branch", "feat/feat_001"], cwd=root, check=True)
     return root, "task_037"
 
 
@@ -136,6 +138,7 @@ def test_boot_wiring_integration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     wt = worktree_path(task_id, root=root)
     (wt / "test_ok.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    invoke_tool(task_id, "swe_commit", {"message": "add validation test"}, root=root, feature_id="feat_001")
 
     result = invoke_tool(
         task_id,
@@ -201,6 +204,8 @@ def test_invoke_tool_green_tests_awaiting_merge(tmp_path: Path) -> None:
 
     from cascade.task import invoke_tool
 
+    invoke_tool(task_id, "swe_commit", {"message": "add validation test"}, root=root, feature_id="feat_001")
+
     invoke_tool(
         task_id,
         "swe_run_tests",
@@ -224,6 +229,8 @@ def test_green_tests_persist_evidence_and_queue_before_ready(tmp_path: Path) -> 
 
     from cascade.task import invoke_tool
 
+    invoke_tool(task_id, "swe_commit", {"message": "add validation test"}, root=root, feature_id="feat_001")
+
     invoke_tool(
         task_id,
         "swe_run_tests",
@@ -243,7 +250,10 @@ def test_green_tests_persist_evidence_and_queue_before_ready(tmp_path: Path) -> 
     assert evidence == {
         "task_id": task_id,
         "deliverable_sha": deliverable,
-        "feature_base_sha": run.base_sha,
+        "feature_base_sha": subprocess.run(
+            ["git", "rev-parse", "feat/feat_001"], cwd=root, text=True,
+            capture_output=True, check=True,
+        ).stdout.strip(),
     }
     assert task_id in pending_task_merges(root)
     assert run.state == "awaiting_merge"
@@ -263,6 +273,8 @@ def test_queue_failure_does_not_publish_ready_state(tmp_path: Path, monkeypatch:
 
     from cascade.task import invoke_tool
 
+    invoke_tool(task_id, "swe_commit", {"message": "add validation test"}, root=root, feature_id="feat_001")
+
     with pytest.raises(OSError, match="queue unavailable"):
         invoke_tool(
             task_id,
@@ -276,6 +288,59 @@ def test_queue_failure_does_not_publish_ready_state(tmp_path: Path, monkeypatch:
     assert run.state == "testing"
     events, _ = read_events("war_room", 0, root=root)
     assert not any(event.payload.get("kind") == "task_ready" for event in events)
+
+
+def test_changed_feature_base_invalidates_ready_delivery_before_replay(tmp_path: Path) -> None:
+    root, task_id = _task_board(tmp_path)
+    install_task_boot_hook(root)
+    install_task_wiring(root)
+    invoke_boot("task", task_id)
+    wt = worktree_path(task_id, root=root)
+    (wt / "test_ok.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+
+    from cascade.task import invoke_tool
+
+    invoke_tool(task_id, "swe_commit", {"message": "add validation test"}, root=root, feature_id="feat_001")
+    invoke_tool(
+        task_id, "swe_run_tests", {"cmd": ["python3", "-m", "pytest", "-q", "test_ok.py"]},
+        root=root, feature_id="feat_001",
+    )
+    assert task_id in pending_task_merges(root)
+
+    (root / "feature_change.txt").write_text("new base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "feature_change.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "advance feature base"], cwd=root, check=True)
+    subprocess.run(["git", "branch", "-f", "feat/feat_001", "HEAD"], cwd=root, check=True)
+
+    assert not enqueue_validated_delivery(task_id, root=root)
+    assert pending_task_merges(root) == set()
+    assert get_task_run(task_id).state == "coding"
+
+
+def test_red_validation_removes_prior_green_delivery(tmp_path: Path) -> None:
+    root, task_id = _task_board(tmp_path)
+    install_task_boot_hook(root)
+    install_task_wiring(root)
+    invoke_boot("task", task_id)
+    wt = worktree_path(task_id, root=root)
+    (wt / "test_ok.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+
+    from cascade.task import invoke_tool
+
+    invoke_tool(task_id, "swe_commit", {"message": "add validation test"}, root=root, feature_id="feat_001")
+    invoke_tool(
+        task_id, "swe_run_tests", {"cmd": ["python3", "-m", "pytest", "-q", "test_ok.py"]},
+        root=root, feature_id="feat_001",
+    )
+    (wt / "test_bad.py").write_text("def test_bad():\n    assert False\n", encoding="utf-8")
+    result = invoke_tool(
+        task_id, "swe_run_tests", {"cmd": ["python3", "-m", "pytest", "-q", "test_bad.py"]},
+        root=root, feature_id="feat_001",
+    )
+
+    assert result["exit_code"] != 0
+    assert pending_task_merges(root) == set()
+    assert get_task_run(task_id).state == "testing"
 
 
 def test_invoke_tool_failing_pytest_fails_without_retry(tmp_path: Path) -> None:

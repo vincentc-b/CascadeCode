@@ -369,7 +369,11 @@ def _auto_merge_finished_task(task_id: str, root: Path) -> None:
         # A test invocation normally creates this handoff.  Repeat it here
         # after a process restart or a direct finalizer call; queueing is
         # idempotent and remains ordered before awaiting_merge.
-        enqueue_validated_delivery(task_id, root=root)
+        if not enqueue_validated_delivery(task_id, root=root):
+            if _schedule_validation_retry(task_id, "final_validation_required", root=root):
+                return
+            fail_task(task_id, "final_validation_required", root=root)
+            return
         mark_awaiting_merge(task_id, root=root)
         retry_pending_task_merges(root)
     except Exception:
