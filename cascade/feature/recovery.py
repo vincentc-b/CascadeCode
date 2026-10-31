@@ -8,7 +8,15 @@ from cascade.board.errors import GitError, NotFound
 from cascade.board.lock import process_lock
 from cascade.board.store import read_doc, write_doc
 from cascade.feature.registry import register_feature_tool
-from cascade.task.supervisor_recovery import supervisor_recover_task_delivery
+from cascade.task.supervisor_recovery import (
+    RecoveryResult,
+    recovery_incident,
+    supervisor_recover_task_delivery,
+)
+from cascade.watchdog.blockage import (
+    propagate_direct_report_blockage,
+    reconcile_direct_report_blockage,
+)
 from cascade.watchdog.dispatch import dispatch_task
 from cascade.workspace.integration_worktree import doc_filesystem_root, locate_trunk
 
@@ -46,11 +54,29 @@ def _typed_reason(error: object, *, blocked: bool) -> str:
     """Turn legacy execution errors into a small, operator-facing vocabulary."""
 
     value = str(error or "").strip().lower()
-    if any(token in value for token in ("permission", "unauthorized", "forbidden", "credential")):
+    if any(
+        token in value
+        for token in ("permission", "unauthorized", "forbidden", "credential")
+    ):
         return "permission_refused"
-    if any(token in value for token in ("forge", "infra", "timeout", "connection", "network", "worker failed")):
+    if any(
+        token in value
+        for token in (
+            "forge",
+            "infra",
+            "timeout",
+            "connection",
+            "network",
+            "worker failed",
+        )
+    ):
         return "transient_forge_failure"
-    if value in {"tests_red", "spec_error", "no_task_changes", "forbidden_commit_paths"}:
+    if value in {
+        "tests_red",
+        "spec_error",
+        "no_task_changes",
+        "forbidden_commit_paths",
+    }:
         return "execution_failure"
     return "blocked_execution" if blocked else "in_progress"
 
@@ -69,16 +95,26 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
     task = _owned_task(task_id, feature_id=feature_id, root=trunk)
 
     from cascade.task.execution import execution_view
-    from cascade.workspace.integration_worktree import get_integration_worktree, integration_branch
+    from cascade.workspace.integration_worktree import (
+        get_integration_worktree,
+        integration_branch,
+    )
 
     execution = execution_view(task_id, root=trunk) or {}
     recorded_phase = str(
-        execution.get("phase") or ("terminal" if task.meta.status == "blocked" else "unknown")
+        execution.get("phase")
+        or ("terminal" if task.meta.status == "blocked" else "unknown")
     )
     # Dispatch changes the task document before the worker records its next
     # execution phase. Do not re-offer a retry from that stale terminal record.
-    phase = "queued" if task.meta.status == "active" and recorded_phase == "terminal" else recorded_phase
-    typed_reason = _typed_reason(execution.get("last_error"), blocked=task.meta.status == "blocked")
+    phase = (
+        "queued"
+        if task.meta.status == "active" and recorded_phase == "terminal"
+        else recorded_phase
+    )
+    typed_reason = _typed_reason(
+        execution.get("last_error"), blocked=task.meta.status == "blocked"
+    )
     terminal = task.meta.status == "blocked"
     # A terminal run gets one operator-initiated retry.  Once that retry has
     # been queued, another terminal outcome must be revised or resolved rather
@@ -95,18 +131,25 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
         affected["checkout"] = checkout.path.as_posix()
 
     if typed_reason == "permission_refused":
-        next_safe_step = "Resolve the required permission or credential; retry cannot bypass it."
+        next_safe_step = (
+            "Resolve the required permission or credential; retry cannot bypass it."
+        )
         action = "permission"
     elif retryable:
-        next_safe_step = "Retry the original Task execution through its existing dispatch path."
+        next_safe_step = (
+            "Retry the original Task execution through its existing dispatch path."
+        )
         action = "retry"
     elif terminal:
-        next_safe_step = "Revise the Task or resolve its terminal blocker before another dispatch."
+        next_safe_step = (
+            "Revise the Task or resolve its terminal blocker before another dispatch."
+        )
         action = "none"
     else:
         next_safe_step = "Wait for the original execution path to report progress."
         action = "none"
 
+    incident = recovery_incident(task_id, root=trunk)
     return {
         "phase": phase,
         "reason": typed_reason,
@@ -116,6 +159,7 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
         "next_safe_step": next_safe_step,
         "terminal_blocker": {"retryable": retryable},
         "action": action,
+        "incident": incident.as_dict() if incident is not None else None,
     }
 
 
@@ -156,16 +200,72 @@ def recover_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, obje
     task = _owned_task(task_id, feature_id=feature_id, root=trunk)
     result = supervisor_recover_task_delivery(task_id, root=trunk)
     outcome = _recovery_outcome(result.decision, result.reason, task.meta.status)
+    _project_recovery_incident(
+        task_id,
+        feature_id=feature_id,
+        root=trunk,
+        result=result,
+        blocked=outcome == "blocker",
+    )
     response: dict[str, object] = {
         "ok": outcome != "blocker",
         "task_id": task_id,
         "outcome": outcome,
+        "decision": result.decision,
         "reason": result.reason,
         "recovery": result.as_dict(),
     }
     if outcome == "blocker":
         response["blocker"] = result.reason
     return response
+
+
+def _project_recovery_incident(
+    task_id: str,
+    *,
+    feature_id: str,
+    root: Path,
+    result: RecoveryResult,
+    blocked: bool,
+) -> None:
+    """Project one durable recovery incident onto its direct parent only."""
+
+    parent = _owned_task(task_id, feature_id=feature_id, root=root)
+    feature = read_doc(feature_id, root=root)
+    if blocked:
+        propagate_direct_report_blockage(
+            feature,
+            parent,
+            _incident_blocker_reason(task_id, root=root, result=result),
+            root=root,
+            incident_id=result.incident_id,
+        )
+    else:
+        reconcile_direct_report_blockage(
+            feature,
+            parent,
+            root=root,
+            incident_id=result.incident_id,
+        )
+
+
+def _incident_blocker_reason(
+    task_id: str, *, root: Path, result: RecoveryResult
+) -> str:
+    """Keep semantic merge conflicts actionable in parent provenance."""
+
+    from cascade.task.execution import execution_view
+
+    execution = execution_view(task_id, root=root) or {}
+    merge = execution.get("merge_blocker")
+    if isinstance(merge, dict) and merge.get("reason") == "branch_conflict":
+        paths = merge.get("conflict_paths")
+        rendered_paths = (
+            ", ".join(str(path) for path in paths) if isinstance(paths, list) else ""
+        )
+        suffix = f" ({rendered_paths})" if rendered_paths else ""
+        return f"semantic merge conflict{suffix}"
+    return result.reason
 
 
 def _recovery_outcome(decision: str, reason: str, task_status: str) -> str:
@@ -177,7 +277,10 @@ def _recovery_outcome(decision: str, reason: str, task_status: str) -> str:
         return "restart_requested"
     if decision == "no_op_live_owner":
         return "already_running"
-    if decision == "already_delivered" and reason == "validated_delivery_already_queued":
+    if (
+        decision == "already_delivered"
+        and reason == "validated_delivery_already_queued"
+    ):
         return "merge_queued"
     if decision == "already_delivered" and task_status == "completed":
         return "already_complete"

@@ -120,6 +120,44 @@ def supervisor_recover_task_delivery(
     )
 
 
+def recovery_incident(task_id: str, *, root: Path) -> RecoveryResult | None:
+    """Return the durable result for the Task's current recovery attempt.
+
+    This is intentionally read-only so the War Room can show the same
+    incident that the supervisor and Feature Team share without offering a
+    second recovery path.
+    """
+
+    repo = resolve_root(root)
+    ledger = _read_ledger(repo)
+    current = _result_from_row(
+        ledger.get(_incident_id(task_id, _execution_attempt(task_id, repo)))
+    )
+    if current is not None:
+        return current
+    # A resumed execution advances its attempt after recording the incident
+    # that triggered it.  Keep that incident visible until a later attempt
+    # records its own decision.
+    prefix = f"{task_id}:delivery:"
+    candidates = [
+        result
+        for incident_id, row in ledger.items()
+        if incident_id.startswith(prefix)
+        and (result := _result_from_row(row)) is not None
+    ]
+    return max(candidates, key=_incident_sort_key, default=None)
+
+
+def _incident_sort_key(result: RecoveryResult) -> tuple[int, str]:
+    """Order numeric attempts naturally while retaining legacy unknown ids."""
+
+    suffix = result.incident_id.rsplit(":", 1)[-1]
+    try:
+        return int(suffix), result.incident_id
+    except ValueError:
+        return -1, result.incident_id
+
+
 def _apply_incident(
     incident: OrphanDeliveryIncident,
     incident_id: str,
@@ -333,5 +371,6 @@ __all__ = [
     "RecoveryDecision",
     "RecoveryResult",
     "recover_orphan_delivery",
+    "recovery_incident",
     "supervisor_recover_task_delivery",
 ]
