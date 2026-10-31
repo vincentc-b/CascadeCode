@@ -18,6 +18,7 @@ provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-10-31T22:38:17.447745+00:00'
 ---
 # Detect and recover orphaned Task delivery
 
