@@ -2,7 +2,7 @@
 id: feat_027_002
 title: Detect and recover orphaned Task delivery
 tier: feature
-status: active
+status: completed
 parent: epic_027
 children:
 - task_027_002_001
