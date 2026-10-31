@@ -107,6 +107,11 @@ _(none)_
   Chose Require commit-first final validation keyed by Task ID, deliverable commit SHA, and Feature-base SHA before durable merge queue insertion, awaiting_merge, or the ready notification..
   Rationale: A drained dirty worktree has no reliably durable identity. Validating the actual deliverable commit makes restart checks exact and forces revalidation whenever the deliverable or base changes.
   Honors: Success criteria requiring a matching validated commit and durable merge request; smallest restart-safe design without a new artifact system..
+
+- `dec_002` · 2026-10-31 · Epic Manager · **Feature breakdown**
+  Chose Sequence three features: durable delivery boundary; orphan detection and recovery; scoped parent control and recovery visibility..
+  Rationale: The recovery engine depends on trustworthy durable evidence, while the parent tool and presentation should reuse the proven engine rather than create a parallel path.
+  Honors: Ruthless prioritization, shared recovery semantics, and integration ownership with minimal cross-feature coupling..
 ## Amendment log
 
 _(none)_
