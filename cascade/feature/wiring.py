@@ -30,6 +30,7 @@ def load_feature_tools() -> None:
         "mint_task", "list_children", "record_decision", "read_doc", "write_doc",
         "reply_comment", "propose_epic_amendment", "ack_amendment",
         "reply_merge_request_comment", "revise_task", "retry_task", "recovery_status",
+        "recover_task",
     )
     if all(name in feature_tools() for name in expected):
         return
@@ -45,6 +46,7 @@ def load_feature_tools() -> None:
     register_feature_tool("revise_task", recovery_mod.revise_task)
     register_feature_tool("retry_task", recovery_mod.retry_task)
     register_feature_tool("recovery_status", recovery_mod.recovery_status)
+    register_feature_tool("recover_task", recovery_mod.recover_task)
 
 
 def accept_human_chat(

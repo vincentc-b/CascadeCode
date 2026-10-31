@@ -5,7 +5,8 @@ import pytest
 
 from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
-from cascade.feature.recovery import recovery_status, revise_task, retry_task
+from cascade.feature.recovery import recover_task, recovery_status, revise_task, retry_task
+from cascade.task.supervisor_recovery import RecoveryResult
 from cascade.task.execution import mark_terminal
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 from tests.support import add_doc, make_repo, approve_board_feature
@@ -90,3 +91,56 @@ def test_concurrent_retry_requests_resume_at_most_one_execution(tmp_path: Path) 
 
     assert sum(result["ok"] is True for result in results) == 1
     assert read_doc("task_001", root=root).meta.status == "active"
+
+
+@pytest.mark.parametrize(
+    ("decision", "reason", "outcome"),
+    [
+        ("requeue_commit", "validated_delivery_matches_git", "merge_queued"),
+        ("resume_workspace", "orphaned_execution_resumable", "restart_requested"),
+        ("no_op_live_owner", "execution_lease_live", "already_running"),
+        ("already_delivered", "validated_delivery_already_queued", "merge_queued"),
+        ("unsafe", "task_checkpoint_missing", "blocker"),
+    ],
+)
+def test_feature_recover_task_translates_shared_recovery_outcomes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    decision: str,
+    reason: str,
+    outcome: str,
+) -> None:
+    root = _board(tmp_path)
+
+    monkeypatch.setattr(
+        "cascade.feature.recovery.supervisor_recover_task_delivery",
+        lambda *_args, **_kwargs: RecoveryResult(
+            "task_001:delivery:1",
+            decision,
+            reason,
+            decision in {"requeue_commit", "resume_workspace"},
+        ),
+    )
+
+    result = recover_task("task_001", feature_id="feat_001", root=root)
+
+    assert result["outcome"] == outcome
+    assert result["ok"] is (outcome != "blocker")
+    assert result["reason"] == reason
+    if outcome == "blocker":
+        assert result["blocker"] == reason
+
+
+def test_feature_recover_task_rejects_foreign_task_before_supervisor_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _board(tmp_path)
+    add_doc(root, id="feat_002", title="Other", tier="feature", parent="epic_001")
+    add_doc(root, id="task_002", title="Other task", tier="task", parent="feat_002")
+    monkeypatch.setattr(
+        "cascade.feature.recovery.supervisor_recover_task_delivery",
+        lambda *_args, **_kwargs: pytest.fail("foreign task reached supervisor"),
+    )
+
+    with pytest.raises(ValueError, match="not a child"):
+        recover_task("task_002", feature_id="feat_001", root=root)

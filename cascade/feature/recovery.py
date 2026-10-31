@@ -1,4 +1,4 @@
-"""Feature Team recovery tools for its own failed Task children."""
+"""Feature Team recovery tools for its own Task children."""
 
 from __future__ import annotations
 
@@ -8,27 +8,38 @@ from cascade.board.errors import GitError, NotFound
 from cascade.board.lock import process_lock
 from cascade.board.store import read_doc, write_doc
 from cascade.feature.registry import register_feature_tool
+from cascade.task.supervisor_recovery import supervisor_recover_task_delivery
 from cascade.watchdog.dispatch import dispatch_task
 from cascade.workspace.integration_worktree import doc_filesystem_root, locate_trunk
 
 
-def revise_task(task_id: str, body: str, *, feature_id: str, root: Path) -> str | None:
-    """Replace an owned blocked/backlog Task body before a supervised retry."""
+def _owned_task(task_id: str, *, feature_id: str, root: Path):
+    """Read a direct child Task, rejecting every other scope."""
 
-    trunk = locate_trunk(Path(root).resolve())
-    feature_root = doc_filesystem_root(feature_id, trunk=trunk)
+    try:
+        feature_root = doc_filesystem_root(feature_id, trunk=root)
+    except GitError:
+        feature_root = root
     try:
         task = read_doc(task_id, root=feature_root)
     except NotFound:
         raise ValueError(f"unknown task {task_id}") from None
     if task.meta.tier != "task" or task.meta.parent != feature_id:
         raise ValueError(f"{task_id} is not a child of {feature_id}")
+    return task
+
+
+def revise_task(task_id: str, body: str, *, feature_id: str, root: Path) -> str | None:
+    """Replace an owned blocked/backlog Task body before a supervised retry."""
+
+    trunk = locate_trunk(Path(root).resolve())
+    task = _owned_task(task_id, feature_id=feature_id, root=trunk)
     if task.meta.status not in ("backlog", "ready_to_plan", "blocked"):
         raise ValueError(f"{task_id} cannot be revised while {task.meta.status}")
     if not isinstance(body, str) or not body.strip():
         raise ValueError("task body must not be empty")
     task.body = body.strip() + "\n"
-    return write_doc(task, root=feature_root)
+    return write_doc(task, root=task.meta.path.parents[3])
 
 
 def _typed_reason(error: object, *, blocked: bool) -> str:
@@ -55,16 +66,7 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
     # Board reads can run against a lightweight, non-Git fixture.  The trunk
     # still owns the task document in that case, so preserve the recovery
     # contract instead of making the entire board unavailable.
-    try:
-        feature_root = doc_filesystem_root(feature_id, trunk=trunk)
-    except GitError:
-        feature_root = trunk
-    try:
-        task = read_doc(task_id, root=feature_root)
-    except NotFound:
-        raise ValueError(f"unknown task {task_id}") from None
-    if task.meta.tier != "task" or task.meta.parent != feature_id:
-        raise ValueError(f"{task_id} is not a child of {feature_id}")
+    task = _owned_task(task_id, feature_id=feature_id, root=trunk)
 
     from cascade.task.execution import execution_view
     from cascade.workspace.integration_worktree import get_integration_worktree, integration_branch
@@ -141,6 +143,48 @@ def retry_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object
     }
 
 
+def recover_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object]:
+    """Request supervised recovery for one direct child Task.
+
+    Feature Teams can request recovery but cannot manipulate a Task worktree,
+    lease, or merge queue themselves.  The shared supervisor operation owns
+    those mutations and durably coalesces simultaneous health-sweep and tool
+    requests by incident id.
+    """
+
+    trunk = locate_trunk(Path(root).resolve())
+    task = _owned_task(task_id, feature_id=feature_id, root=trunk)
+    result = supervisor_recover_task_delivery(task_id, root=trunk)
+    outcome = _recovery_outcome(result.decision, result.reason, task.meta.status)
+    response: dict[str, object] = {
+        "ok": outcome != "blocker",
+        "task_id": task_id,
+        "outcome": outcome,
+        "reason": result.reason,
+        "recovery": result.as_dict(),
+    }
+    if outcome == "blocker":
+        response["blocker"] = result.reason
+    return response
+
+
+def _recovery_outcome(decision: str, reason: str, task_status: str) -> str:
+    """Translate supervisor decisions into the small Feature Team contract."""
+
+    if decision == "requeue_commit":
+        return "merge_queued"
+    if decision == "resume_workspace":
+        return "restart_requested"
+    if decision == "no_op_live_owner":
+        return "already_running"
+    if decision == "already_delivered" and reason == "validated_delivery_already_queued":
+        return "merge_queued"
+    if decision == "already_delivered" and task_status == "completed":
+        return "already_complete"
+    return "blocker"
+
+
 register_feature_tool("revise_task", revise_task)
 register_feature_tool("retry_task", retry_task)
 register_feature_tool("recovery_status", recovery_status)
+register_feature_tool("recover_task", recover_task)
