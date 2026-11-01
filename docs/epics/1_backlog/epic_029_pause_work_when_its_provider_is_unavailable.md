@@ -14,7 +14,7 @@ parent_rev: null
 created: '2026-10-31'
 updated: '2026-10-31'
 provider: codex
-flex_mode: true
+flex_mode: false
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
