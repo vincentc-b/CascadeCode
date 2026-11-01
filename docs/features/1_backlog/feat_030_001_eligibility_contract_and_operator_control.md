@@ -18,6 +18,7 @@ flex_mode: false
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-11-01T21:46:06.798283+00:00'
 ---
 # Eligibility contract and operator control
 
