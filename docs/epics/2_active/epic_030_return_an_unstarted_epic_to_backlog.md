@@ -191,6 +191,10 @@ None blocking. Feature planning should bind the contracts above to existing modu
 - 2026-11-01 · Epic Manager · Use a durable replay-safe transition journal plus lifecycle lock and quiescence; retries converge on one result and one audit event.
 - 2026-11-01 · Epic Manager · Preserve the former active run as evidence, restore the approved source brief, and require a new activation identity so stale provider pins cannot resume.
 
+- `dec_001` · 2026-11-01 · Epic Manager · **Lifecycle scope**
+  Chose Treat Return to backlog as a narrow, human-only lifecycle correction with a shared fail-closed eligibility contract..
+  Rationale: The core need is to repair an activation that produced no substantive work; broader rollback semantics would risk reviewed work and expand scope.
+  Honors: Success criteria 1; human-only control; refusal explanations; no cancellation or in-place provider edits..
 ## Amendment log
 
 _(none)_
