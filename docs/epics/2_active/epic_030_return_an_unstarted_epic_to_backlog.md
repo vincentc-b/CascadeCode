@@ -200,6 +200,11 @@ None blocking. Feature planning should bind the contracts above to existing modu
   Chose Use quiescence, a per-Epic lifecycle lock, and a durable replay-safe transition journal with deduplicated audit emission..
   Rationale: A multi-step filesystem and board transition must survive concurrency, retries, and process restarts without duplicate state or data loss.
   Honors: Success criteria 2; restart safety; idempotency; one audit event; operator trunk protection..
+
+- `dec_003` · 2026-11-01 · Epic Manager · **Reactivation boundary**
+  Chose Preserve the former active run as evidence, restore the approved source brief, and require a fresh activation identity and role pins..
+  Rationale: The reviewed backlog flow must remain authoritative, while stale checkpoints must not reselect the failed provider.
+  Honors: Success criteria 3 and 4; preserved history; MR-backed edits; fresh Codex reactivation..
 ## Amendment log
 
 _(none)_
