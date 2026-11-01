@@ -2,7 +2,7 @@
 id: epic_027
 title: Recover orphaned Task deliveries
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_027_001
@@ -15,7 +15,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-26'
-updated: '2026-10-31'
+updated: '2026-11-01'
 provider: codex
 models:
   epic_manager: gpt-5.6-sol
