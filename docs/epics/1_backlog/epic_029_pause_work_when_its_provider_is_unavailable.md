@@ -14,7 +14,7 @@ parent_rev: null
 created: '2026-10-31'
 updated: '2026-10-31'
 provider: codex
-flex_mode: true
+flex_mode: false
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
@@ -31,6 +31,7 @@ Epic `epic_028` was activated with Cursor pinned for both planning roles. Cursor
 ### Success criteria
 
 - Before activating an Epic or dispatching a Feature or Task, check the effective pinned provider and role models against installed/authenticated provider capability. On a deterministic setup failure, leave the item in its prior column, create no new worktree or checkpoint, and return a structured reason and next step to the War Room. Recheck at the execution boundary because provider availability can change after preflight.
+- Include the selected service tier, including flex mode, in that capability check. If the provider rejects the tier only when a turn starts, record an actionable unsupported-tier blocker and stop repeating the same failed turn. Offer a human choice to disable flex or select another supported provider and model; never silently switch to a tier with different cost or latency.
 - If credentials or provider availability disappear after work has started, pause further starts for that work item and persist one provider-blocked incident with the work ID, affected roles, provider, safe reason, last attempt, and recommended remedy. Show it on the board and in the room after refresh and restart; never expose credential values or raw provider payloads.
 - Show a human-only `Change provider` action on provider-blocked Epic, Feature, and Task rows, including items already in `2_active`. The War Room shows the current provider and per-role models, offers installed/authenticated replacement providers and their supported models, and validates every affected role before submission. Keep a saved unavailable selection visible; do not require the old provider to be authenticated to replace it. For a backlog Epic, this action may open the existing reviewed brief editor; an active item must have a direct recovery path without first returning to backlog.
 - Apply an active-item provider change through one serialized, durable recovery operation. Stop or wait for any in-flight turn, recheck ownership and lifecycle gates, record the human's provider/model selection and audit provenance, and reconcile document/runtime settings with checkpoint-pinned provider, model, reasoning, and flex choices before any turn resumes. A restart or partial failure must leave either the old blocked selection or a fully applied new selection, never a checkpoint that silently invokes the old provider. Preserve the reviewed plan, approval state, branch, worktree, transcript, and dirty files. Existing child items retain their own selections; clearly show which future role defaults on the selected item will change.
