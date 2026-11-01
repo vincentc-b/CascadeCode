@@ -2,7 +2,7 @@
 id: feat_030_001
 title: Eligibility contract and operator control
 tier: feature
-status: active
+status: completed
 parent: epic_030
 children:
 - task_030_001_001
