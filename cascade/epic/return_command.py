@@ -18,8 +18,11 @@ from cascade.board.store import list_board
 from cascade.epic.return_eligibility import (
     ReturnEligibility,
     ReturnEligibilityInput,
+    ReturnEligibilityReasonCode,
+    ReturnEligibilityRefusal,
     evaluate_return_eligibility,
 )
+from cascade.epic.lifecycle_gate import LifecycleGate, lifecycle_gate
 
 Actor = Literal["human", "agent", "system"]
 SnapshotLoader = Callable[[str], ReturnEligibilityInput]
@@ -62,6 +65,8 @@ def return_epic_to_backlog(
     actor: Actor = "system",
     snapshot_loader: SnapshotLoader | None = None,
     transition: TransitionCapability | None = None,
+    gate: LifecycleGate | None = None,
+    quiesce_timeout: float = 0.0,
     root: Path | None = None,
 ) -> ReturnEpicCommandResult:
     """Authorize and evaluate one return request without simulating a transition.
@@ -82,7 +87,8 @@ def return_epic_to_backlog(
         lambda item_id: load_return_eligibility_snapshot(item_id, root=root)
     )
     try:
-        eligibility = evaluate_return_eligibility(loader(epic_id))
+        snapshot = loader(epic_id)
+        eligibility = evaluate_return_eligibility(snapshot)
     except (BoardError, OSError, ValueError, KeyError):
         # Required state that cannot be read must fail closed, and must not
         # leak filesystem or provider details to the operator.
@@ -97,8 +103,25 @@ def return_epic_to_backlog(
             "The durable return transition is not available yet; no changes were made.",
             eligibility=eligibility,
         )
-    transition(epic_id, request_id)
-    return ReturnEpicCommandResult(True, epic_id, request_id, eligibility=eligibility)
+    member_ids = tuple(member.id for member in snapshot.graph or () if member.id)
+    with (gate or lifecycle_gate()).transition(
+        epic_id, member_ids, timeout=quiesce_timeout
+    ) as quiesced:
+        # Read again only after admission is closed and while the per-Epic
+        # lifecycle lock is held.  A stale UI/pre-lock observation can never
+        # authorize a mutation.
+        eligibility = _load_eligibility(loader, epic_id)
+        if not quiesced:
+            return ReturnEpicCommandResult(
+                False,
+                epic_id,
+                request_id,
+                eligibility=_quiescence_refusal(eligibility),
+            )
+        if not eligibility.eligible:
+            return ReturnEpicCommandResult(False, epic_id, request_id, eligibility=eligibility)
+        transition(epic_id, request_id)
+        return ReturnEpicCommandResult(True, epic_id, request_id, eligibility=eligibility)
 
 
 def load_return_eligibility_snapshot(
@@ -140,6 +163,23 @@ def _unreadable_snapshot(epic_id: str) -> ReturnEligibilityInput:
         lock_order=None,
         conflicting_lifecycle_operation=None,
     )
+
+
+def _load_eligibility(loader: SnapshotLoader, epic_id: str) -> ReturnEligibility:
+    try:
+        return evaluate_return_eligibility(loader(epic_id))
+    except (BoardError, OSError, ValueError, KeyError):
+        return evaluate_return_eligibility(_unreadable_snapshot(epic_id))
+
+
+def _quiescence_refusal(eligibility: ReturnEligibility) -> ReturnEligibility:
+    if ReturnEligibilityReasonCode.TURN_NOT_QUIESCED.value in eligibility.reason_codes:
+        return eligibility
+    refusal = ReturnEligibilityRefusal(
+        code=ReturnEligibilityReasonCode.TURN_NOT_QUIESCED,
+        message="One or more graph members still have an unquiesced or unknown turn.",
+    )
+    return ReturnEligibility(eligible=False, refusals=(*eligibility.refusals, refusal))
 
 
 def _error(
