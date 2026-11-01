@@ -112,11 +112,26 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("not_found")
     if meta.tier != "epic" or meta.status not in _OPEN:
         return _fail("bad_state")
+    # A reviewed retry is a new planning run.  It must not attach to children
+    # that belong to the archived run (or to a partially restored board).
+    if any(
+        candidate.parent == work_id and candidate.status != "backlog"
+        for candidate in board.by_id.values()
+    ):
+        return _fail("existing_child_work")
+    if get_integration_worktree(root, "epic", work_id) is not None:
+        return _fail("existing_activation_run")
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
     if not has_git(root):
         move_doc(work_id, "active", root=root)
-        event = _emit(root, work_id, "EpicActivated", {"epic_id": work_id, "by": by})
+        run_id = _begin_epic_activation_run(work_id, root)
+        event = _emit(
+            root,
+            work_id,
+            "EpicActivated",
+            {"epic_id": work_id, "by": by, "run_id": run_id},
+        )
         return DispatchResult(ok=True, reason=None, event=event)
     base_sha = resolve_validated_epic_activation_sha(work_id, trunk=root)
     if base_sha is None:
@@ -132,8 +147,21 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
         trunk=root,
     )
     activate_epic_on_worktree(work_id, trunk=root, epic_wt=epic_wt)
-    event = _emit(root, work_id, "EpicActivated", {"epic_id": work_id, "by": by})
+    run_id = _begin_epic_activation_run(work_id, root)
+    event = _emit(
+        root, work_id, "EpicActivated", {"epic_id": work_id, "by": by, "run_id": run_id}
+    )
     return DispatchResult(ok=True, reason=None, event=event)
+
+
+def _begin_epic_activation_run(work_id: str, root: Path) -> str:
+    """Archive the prior graph state before the new activation boot resolves pins."""
+
+    from cascade.epic.checkpoint import begin_activation_run
+    from cascade.epic.graph import clear_epic_graph_session
+
+    clear_epic_graph_session(work_id, root=root)
+    return begin_activation_run(work_id, root=root)
 
 
 def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:

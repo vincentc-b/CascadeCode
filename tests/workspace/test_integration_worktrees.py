@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from cascade.board.store import read_doc
+from cascade.board.store import read_doc, write_doc
 from cascade.watchdog import (
     activate_epic,
     dispatch_feature,
@@ -34,7 +34,7 @@ from cascade.workspace.integration_worktree import (
 )
 from cascade.workspace.integration_worktree import IntegrationWorktree
 from cascade.workspace.up import resume_legally_active_graphs
-from tests.support import add_doc, make_repo, approve_board_feature
+from tests.support import add_doc, make_repo, approve_board_feature, commit_board
 
 
 def _branch_exists(root: Path, branch: str) -> bool:
@@ -87,6 +87,80 @@ def test_activate_epic_creates_branch_and_worktree(tmp_path: Path) -> None:
     text = pointer_file.read_text(encoding="utf-8")
     assert "integration_branch:" in text
     assert branch in text
+
+
+def test_activation_archives_a_previous_checkpoint_and_resolves_reviewed_role_pins(
+    tmp_path: Path,
+) -> None:
+    """A backlog reactivation starts a graph run, rather than reviving its old one."""
+
+    root = make_repo(tmp_path, models=True)
+    (root / "cascade.toml").write_text(
+        '[providers]\ndefault = "codex"\n[providers.codex]\nepic = "reviewed-default"\n',
+        encoding="utf-8",
+    )
+    doc = add_doc(
+        root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan"
+    )
+    doc.meta.provider = "codex"
+    doc.meta.models = {
+        "epic_manager": "reviewed-manager",
+        "epic_architect": "reviewed-architect",
+    }
+    write_doc(doc, root=root)
+    commit_board(root)
+
+    from cascade.epic.checkpoint import checkpoint_path
+    from cascade.epic.graph import ensure_epic_graph, seed_epic_role_models
+    from cascade.epic.boot import install_epic_boot_hook
+    from cascade.watchdog.model_resolve import ResolvedBackend, ResolvedModel
+
+    archived = ResolvedBackend(
+        provider="cursor",
+        provider_source="project-default",
+        model=ResolvedModel("epic_manager", "archived-manager", "document-role"),
+    )
+    seed_epic_role_models("epic_001", manager=archived, architect=archived, root=root)
+    assert checkpoint_path("epic_001", root=root).exists()
+
+    install_epic_boot_hook(root)
+    result = activate_epic("epic_001", "human", root=root)
+
+    assert result.ok
+    assert result.event is not None and result.event.payload["run_id"]
+    archive = root / ".cascade" / "checkpoints" / "archive" / "epic_001"
+    assert len(list(archive.glob("*.sqlite"))) == 1
+    state = (
+        ensure_epic_graph("epic_001", root=root)
+        .get_state({"configurable": {"thread_id": "epic_001"}})
+        .values
+    )
+    assert state is not None
+    assert state["model_ids"] == {
+        "epic_manager": "reviewed-manager",
+        "epic_architect": "reviewed-architect",
+    }
+    assert state["provider_ids"] == {
+        "epic_manager": "codex",
+        "epic_architect": "codex",
+    }
+
+
+def test_activation_refuses_reactivation_when_child_work_is_present(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Child",
+        tier="feature",
+        parent="epic_001",
+        status="active",
+    )
+
+    assert activate_epic("epic_001", "human", root=root).reason == "existing_child_work"
 
 
 def test_activate_refuses_without_brief_commit(tmp_path: Path) -> None:
