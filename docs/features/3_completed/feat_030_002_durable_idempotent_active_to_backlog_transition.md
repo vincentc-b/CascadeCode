@@ -2,7 +2,7 @@
 id: feat_030_002
 title: Durable idempotent active-to-backlog transition
 tier: feature
-status: active
+status: completed
 parent: epic_030
 children:
 - task_030_002_001
