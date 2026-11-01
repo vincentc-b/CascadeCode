@@ -4,7 +4,8 @@ title: Return an unstarted Epic to backlog
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_030_001
 depends_on: []
 owners:
 - epic_manager
@@ -141,6 +142,7 @@ A later activation reads the newly approved backlog revision, creates a new acti
 - Board/War Room API, authorization, audit event/outbox, and recovery runner.
 
 ## Feature breakdown
+- feat_030_001
 
 ### Feature 1 — Eligibility contract and operator control
 
