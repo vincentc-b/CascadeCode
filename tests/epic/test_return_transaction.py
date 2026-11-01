@@ -77,7 +77,7 @@ def test_an_incomplete_prior_intent_is_resumed_not_competed(tmp_path) -> None:
 
     assert first.load() is not None
     assert first.load().complete
-    assert calls == ["safe", "preserve", "safe", "restore", "pointer", "invalidate"]
+    assert calls == ["safe", "preserve", "restore", "pointer", "invalidate"]
 
 
 def test_file_transaction_refuses_operator_trunk_without_lifecycle_mutation(tmp_path) -> None:

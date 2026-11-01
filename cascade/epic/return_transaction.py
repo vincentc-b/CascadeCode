@@ -119,10 +119,15 @@ class ActiveToBacklogTransaction:
         if journal is not None and journal.complete:
             return journal
 
-        # Git safety must be established before writing even the intent marker:
-        # an unsafe refusal is guaranteed to leave no lifecycle mutation.
-        assert_safe()
         if journal is None:
+            # Git safety is an admission check, not a replay precondition.
+            # After intent has reached disk the transaction owns durable
+            # recovery state (and possibly uncommitted preserved artifacts),
+            # so rerunning the clean-check would make every interrupted
+            # transition permanently unrecoverable.
+            # An unsafe refusal here is guaranteed to leave no lifecycle
+            # mutation.
+            assert_safe()
             journal = TransitionJournal(
                 epic_id=self.epic_id,
                 transition_id=_transition_id(self.epic_id, self.request_id),
