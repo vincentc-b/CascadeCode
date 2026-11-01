@@ -179,6 +179,19 @@ def test_war_room_js_renders_toast_body():
     assert '"Epic close timed out after 60s"' in source
 
 
+def test_war_room_js_renders_and_submits_epic_return_control():
+    source = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    ).read_text(encoding="utf-8")
+
+    assert "appendEpicReturnFeedback(row, item.return_to_backlog)" in source
+    assert 'actionButton("Return to backlog"' in source
+    assert 'apiPost("/api/return_epic_to_backlog"' in source
+    assert "epic_id: item.id" in source
+    assert "request_id: returnRequestId()" in source
+    assert "returnRefusalMessages(body.eligibility)" in source
+
+
 def test_war_room_js_explains_epic_close_comment_blockers():
     source = (
         Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
