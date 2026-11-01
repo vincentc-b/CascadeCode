@@ -209,6 +209,11 @@ None blocking. Feature planning should bind the contracts above to existing modu
   Chose Preserve the former active run as evidence, restore the approved source brief, and require a fresh activation identity and role pins..
   Rationale: The reviewed backlog flow must remain authoritative, while stale checkpoints must not reselect the failed provider.
   Honors: Success criteria 3 and 4; preserved history; MR-backed edits; fresh Codex reactivation..
+
+- `dec_004` · 2026-11-01 · Epic Manager · **Lifecycle scope**
+  Chose Cascade Return to backlog across the active Epic's complete descendant graph, then restore that graph on reactivation with fresh run identities and mandatory agent-team freshness review..
+  Rationale: In reply to: cmt_001. Existing children and reviewed work should be preserved rather than treated as a permanent lifecycle barrier. Atomic graph transition plus review-gated reactivation supports the fringe recovery case without deleting history or silently resuming stale execution.
+  Honors: Human request cmt_001; graph preservation; same IDs and relationships; atomic transition; fresh provider pins; explicit staleness review before work resumes..
 ## Amendment log
 
 _(none)_
