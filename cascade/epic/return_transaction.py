@@ -16,7 +16,7 @@ import tempfile
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 
 class TransitionStep(str, Enum):
@@ -52,6 +52,29 @@ class TransitionJournal:
 
     def has(self, step: TransitionStep) -> bool:
         return step in self.completed_steps
+
+
+AuditOutcome = Literal["succeeded", "recovery_refused"]
+
+
+@dataclass(frozen=True, slots=True)
+class TransitionAudit:
+    """One durable, deduplicated logical outcome for a transition."""
+
+    transition_id: str
+    epic_id: str
+    outcome: AuditOutcome
+    detail: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TransitionRecoveryResult:
+    """A recovery result that is safe to present to an operator."""
+
+    recovered: bool
+    state: Literal["completed", "nothing_to_recover", "manual_intervention_required"]
+    journal: TransitionJournal | None = None
+    message: str | None = None
 
 
 Mutation = Callable[[], None]
@@ -263,13 +286,145 @@ def execute_file_transaction(
     def invalidate() -> None:
         _durable_write(stale_marker, b"invalidated\n")
 
-    return ActiveToBacklogTransaction(root=repo, epic_id=epic_id, request_id=request_id).execute(
+    journal = ActiveToBacklogTransaction(root=repo, epic_id=epic_id, request_id=request_id).execute(
         assert_safe=lambda: _assert_safe_integration_checkout(repo),
         preserve_artifacts=preserve,
         restore_source_brief=restore,
         remove_active_pointer=remove_pointer,
         invalidate_stale_run=invalidate,
     )
+    emit_transition_audit(repo, journal, outcome="succeeded")
+    return journal
+
+
+def recover_file_transaction(
+    *, root: Path, epic_id: str, request_id: str, files: ActiveToBacklogFiles
+) -> TransitionRecoveryResult:
+    """Resume a journaled file transition or return a safe actionable refusal.
+
+    Recovery only starts when a durable intent already exists.  It therefore
+    cannot resurrect a stale run merely because an operator retries a request
+    after the active state has changed.
+    """
+
+    repo = Path(root).resolve()
+    transaction = ActiveToBacklogTransaction(root=repo, epic_id=epic_id, request_id=request_id)
+    try:
+        journal = transaction.load()
+    except TransitionUnsafe as exc:
+        return TransitionRecoveryResult(
+            False, "manual_intervention_required", message=_safe_failure_message(exc)
+        )
+    if journal is None:
+        return TransitionRecoveryResult(False, "nothing_to_recover")
+    if journal.complete:
+        try:
+            emit_transition_audit(repo, journal, outcome="succeeded")
+        except TransitionUnsafe as exc:
+            return TransitionRecoveryResult(
+                False, "manual_intervention_required", journal, _safe_failure_message(exc)
+            )
+        return TransitionRecoveryResult(True, "completed", journal)
+    try:
+        completed = execute_file_transaction(
+            root=repo, epic_id=epic_id, request_id=request_id, files=files
+        )
+    except TransitionUnsafe as exc:
+        # A failure audit shares the transition identity, so retries and
+        # restarts report one logical refusal rather than a growing stream.
+        try:
+            emit_transition_audit(repo, journal, outcome="recovery_refused", detail=str(exc))
+        except TransitionUnsafe:
+            pass
+        return TransitionRecoveryResult(
+            False, "manual_intervention_required", journal, _safe_failure_message(exc)
+        )
+    return TransitionRecoveryResult(True, "completed", completed)
+
+
+def transition_audit_path(root: Path, transition_id: str) -> Path:
+    """Return the owned audit path for a stable transition identity."""
+
+    key = hashlib.sha256(transition_id.encode("utf-8")).hexdigest()
+    return Path(root).resolve() / ".cascade" / "epic-transition-audits" / f"{key}.json"
+
+
+def emit_transition_audit(
+    root: Path, journal: TransitionJournal, *, outcome: AuditOutcome, detail: str | None = None
+) -> TransitionAudit:
+    """Persist exactly one logical audit record, even across concurrent retries.
+
+    The record is an outbox: external audit consumers can safely deduplicate
+    on ``transition_id``.  Creating it with a hard-link claim makes competing
+    processes converge without replacing each other's audit outcome.
+    """
+
+    if outcome not in ("succeeded", "recovery_refused"):
+        raise ValueError("unknown transition audit outcome")
+    record = TransitionAudit(journal.transition_id, journal.epic_id, outcome, detail)
+    path = transition_audit_path(root, journal.transition_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = _load_audit(path)
+    if existing is not None:
+        return _same_audit(existing, record)
+
+    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(asdict(record), handle, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            existing = _load_audit(path)
+            if existing is None:
+                raise TransitionUnsafe("transition audit is unreadable")
+            return _same_audit(existing, record)
+        _fsync_directory(path.parent)
+        return record
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def _load_audit(path: Path) -> TransitionAudit | None:
+    if not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        audit = TransitionAudit(
+            transition_id=str(raw["transition_id"]),
+            epic_id=str(raw["epic_id"]),
+            outcome=raw["outcome"],
+            detail=raw.get("detail"),
+        )
+        if audit.outcome not in ("succeeded", "recovery_refused"):
+            raise ValueError("unknown audit outcome")
+        return audit
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise TransitionUnsafe("transition audit is unreadable") from exc
+
+
+def _same_audit(existing: TransitionAudit, requested: TransitionAudit) -> TransitionAudit:
+    if existing != requested:
+        raise TransitionUnsafe("transition audit conflicts with prior outcome")
+    return existing
+
+
+def _safe_failure_message(exc: TransitionUnsafe) -> str:
+    """Avoid presenting implementation or filesystem details to operators."""
+
+    return f"Automatic recovery stopped safely: {exc}. Review the transition journal before retrying."
+
+
+def _fsync_directory(path: Path) -> None:
+    directory_fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def _owned_path(root: Path, path: object) -> Path:
