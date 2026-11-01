@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import subprocess
 from pathlib import Path
 
@@ -305,6 +306,153 @@ def test_refresh_replaces_restored_backlog_copy_with_reviewed_provider_pins(
     assert visible.path.is_relative_to(snapshot_root(root))
     assert visible.provider == "codex"
     assert visible.models == {"swe": "gpt-new"}
+
+
+def test_cursor_failure_to_reviewed_codex_reactivation_journey(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed Cursor run can only resume from the reviewed Codex brief."""
+
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_028", "Credential recovery")
+    cursor_brief = read_doc("epic_028", root=upstream)
+    cursor_brief.meta.provider = "cursor"
+    cursor_brief.meta.models = {
+        "epic_manager": "cursor-manager",
+        "epic_architect": "cursor-architect",
+    }
+    write_doc(cursor_brief, root=upstream)
+    source_path = cursor_brief.meta.path.relative_to(upstream).as_posix()
+    cursor_revision = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", source_path],
+        cwd=upstream,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "push", "origin", "main"], cwd=upstream, check=True, capture_output=True)
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    (root / "cascade.toml").write_text(
+        '[automation]\nenabled = true\npoll_seconds = 1\nremote = "origin"\n\n'
+        '[providers]\ndefault = "codex"\n[providers.codex]\nepic = "codex-fallback"\n',
+        encoding="utf-8",
+    )
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+
+    from cascade.agent import CursorAgentError
+    from cascade.agent.planning_turn import run_epic_planning_turn
+
+    attempted = []
+
+    async def reject_cursor_credentials(turn):
+        attempted.append(turn)
+        raise CursorAgentError("Cursor credential rejected", retryable=False)
+
+    monkeypatch.setattr("cascade.agent.planning_turn.run_role", reject_cursor_credentials)
+    with pytest.raises(CursorAgentError, match="credential rejected"):
+        asyncio.run(
+            run_epic_planning_turn(
+                "epic_manager",
+                "cursor-manager",
+                "plan the recovery",
+                provider="cursor",
+                epic_id="epic_028",
+                root=root,
+            )
+        )
+    assert attempted[0].provider == "cursor"
+    assert attempted[0].model_id == "cursor-manager"
+
+    # The restored local copy is lifecycle evidence, not an alternate source
+    # for a subsequently merged brief edit.
+    restored = read_doc("epic_028", root=root)
+    restored.meta.provider = "cursor"
+    restored.meta.models = {"epic_manager": "cursor-manager"}
+    restored.meta.path = root / "docs/epics/1_backlog" / restored.meta.path.name
+    write_doc(restored, root=root)
+
+    reviewed = read_doc("epic_028", root=upstream)
+    reviewed.meta.provider = "codex"
+    reviewed.meta.models = {
+        "epic_manager": "codex-manager",
+        "epic_architect": "codex-architect",
+    }
+    write_doc(reviewed, root=upstream)
+    subprocess.run(["git", "push", "origin", "main"], cwd=upstream, check=True, capture_output=True)
+
+    # The normal MR editor refuses an already-reviewed (stale) draft.
+    with pytest.raises(BriefEditError) as stale:
+        submit_brief_edit(root, {
+            "epic_id": "epic_028",
+            "source_path": source_path,
+            "source_revision": cursor_revision,
+        })
+    assert stale.value.code == "stale"
+    assert stale.value.reload is True
+
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+    visible = merged_board(root).by_id["epic_028"]
+    assert visible.provider == "codex"
+    assert visible.models == reviewed.meta.models
+
+    from cascade.epic.boot import install_epic_boot_hook
+    from cascade.epic.checkpoint import checkpoint_path
+    from cascade.epic.graph import ensure_epic_graph, seed_epic_role_models
+    from cascade.watchdog.model_resolve import ResolvedBackend, ResolvedModel
+
+    archived = ResolvedBackend(
+        provider="cursor",
+        provider_source="document",
+        model=ResolvedModel("epic_manager", "cursor-manager", "document-role"),
+    )
+    seed_epic_role_models("epic_028", manager=archived, architect=archived, root=root)
+    assert checkpoint_path("epic_028", root=root).is_file()
+
+    install_epic_boot_hook(root)
+    activated = activate_epic("epic_028", "human", root=root)
+
+    assert activated.ok
+    assert activated.event is not None
+    run_id = activated.event.payload["run_id"]
+    assert isinstance(run_id, str) and run_id
+    assert (
+        root / ".cascade" / "checkpoints" / "archive" / "epic_028" / f"{run_id}.sqlite"
+    ).is_file()
+    from cascade.epic import boot as epic_boot
+    assert epic_boot.last_epic_boot_model_failure() is None
+    state = ensure_epic_graph("epic_028", root=root).get_state(
+        {"configurable": {"thread_id": "epic_028"}}
+    ).values
+    assert state["provider_ids"] == {
+        "epic_manager": "codex",
+        "epic_architect": "codex",
+    }
+    assert state["model_ids"] == {
+        "epic_manager": "codex-manager",
+        "epic_architect": "codex-architect",
+    }
+    assert state["model_sources"] == {
+        "epic_manager": "document-role",
+        "epic_architect": "document-role",
+    }
+
+    # A restored graph with live child work cannot silently start a new run.
+    child_root = make_repo(tmp_path / "child-work")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=child_root, check=True)
+    refresh_remote_backlog_snapshot(child_root, remote="origin", trunk_branch="main")
+    add_doc(
+        child_root,
+        id="feat_028_001",
+        title="Existing child work",
+        tier="feature",
+        parent="epic_028",
+        status="active",
+    )
+    refusal = activate_epic("epic_028", "human", root=child_root)
+    assert refusal.ok is False
+    assert refusal.reason == "existing_child_work"
 
 
 def test_sync_briefs_reports_new_remote_epic_without_ff(tmp_path: Path) -> None:

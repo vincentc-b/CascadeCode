@@ -2,16 +2,19 @@
 id: feat_030_003
 title: Reviewed edit and clean reactivation journey
 tier: feature
-status: backlog
+status: active
 parent: epic_030
-children: []
+children:
+- task_030_003_001
+- task_030_003_002
+- task_030_003_003
 depends_on:
 - feat_030_002
 owners:
 - feature_lead
 - feature_architect
 skills: []
-parent_rev: null
+parent_rev: 848793551caef19a7cd9bcc2aee14c3771934c56
 created: '2026-11-01'
 updated: '2026-11-01'
 provider: codex
@@ -19,6 +22,7 @@ flex_mode: false
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-11-01T21:46:12.398755+00:00'
 ---
 # Reviewed edit and clean reactivation journey
 
@@ -46,6 +50,9 @@ flowchart TD
 ```
 
 ## Task breakdown
+- task_030_003_003
+- task_030_003_002
+- task_030_003_001
 
 _(empty — Feature Team mints tasks after dispatch)_
 
@@ -56,3 +63,7 @@ None.
 ## Decision log
 
 None yet.
+
+## Closeout
+
+Completed child work: `task_030_003_001` (Connect restored epics to the reviewed backlog edit and refresh path), `task_030_003_002` (Create a clean activation run with freshly resolved role pins), `task_030_003_003` (Prove the Cursor-failure to Codex-reactivation journey end to end).
