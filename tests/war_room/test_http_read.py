@@ -130,6 +130,26 @@ def test_get_board_shape(war_room_server):
     assert "path" in tasks_active[0]
 
 
+def test_board_schema_error_returns_json_and_server_stays_available(war_room_server):
+    base, root, _server = war_room_server
+    from cascade.workspace.integration_worktree import invalidate_merged_board
+
+    source = next((root / "docs/epics/1_backlog").glob("epic_001*.md"))
+    duplicate = root / "docs/epics/2_active" / source.name
+    duplicate.write_bytes(source.read_bytes())
+    invalidate_merged_board(root)
+
+    status, body = _get_expect_error(f"{base}/api/board")
+    assert status == HTTPStatus.SERVICE_UNAVAILABLE
+    assert "duplicate id epic_001" in body["error"]
+
+    duplicate.unlink()
+    invalidate_merged_board(root)
+    status, payload, _headers = _get(f"{base}/api/board")
+    assert status == HTTPStatus.OK
+    assert payload["epics"]["1_backlog"][0]["id"] == "epic_001"
+
+
 def test_get_board_marks_approved_epic(war_room_server):
     base, root, _server = war_room_server
     from cascade.board.store import read_doc, write_doc

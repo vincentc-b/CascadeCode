@@ -994,9 +994,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         return paths
 
     def _handle_board(self) -> None:
-        board = merged_board(self.server.root)
-        with merged_board_snapshot(self.server.root, board):
-            payload = board_view_from_index(board, root=self.server.root)
+        try:
+            board = merged_board(self.server.root)
+            with merged_board_snapshot(self.server.root, board):
+                payload = board_view_from_index(board, root=self.server.root)
+        except BoardError as exc:
+            self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, f"Board unavailable: {exc}")
+            return
         self._json_response(HTTPStatus.OK, payload)
 
     def _handle_doc(self, work_id: str) -> None:
