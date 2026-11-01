@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_030_001
 - feat_030_002
+- feat_030_003
 depends_on: []
 owners:
 - epic_manager
@@ -143,6 +144,7 @@ A later activation reads the newly approved backlog revision, creates a new acti
 - Board/War Room API, authorization, audit event/outbox, and recovery runner.
 
 ## Feature breakdown
+- feat_030_003
 - feat_030_002
 - feat_030_001
 
