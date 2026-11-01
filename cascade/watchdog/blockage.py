@@ -45,6 +45,7 @@ def propagate_direct_report_blockage(
     reason: str,
     *,
     root: Path,
+    incident_id: str | None = None,
 ) -> BlockagePropagationResult:
     """Persist one child's unresolved condition on its immediate supervisor.
 
@@ -59,7 +60,10 @@ def propagate_direct_report_blockage(
         or child.meta.status in TERMINAL_STATUSES
     ):
         return BlockagePropagationResult("terminal", supervisor.meta.id, child.meta.id)
-    if _matching_blocker(supervisor, child.meta.id, concise_reason) is not None:
+    if (
+        _matching_blocker(supervisor, child.meta.id, concise_reason, incident_id)
+        is not None
+    ):
         return BlockagePropagationResult(
             "already_applied", supervisor.meta.id, child.meta.id
         )
@@ -81,18 +85,20 @@ def propagate_direct_report_blockage(
         (
             index
             for index, item in enumerate(updated.meta.monitoring_blockers)
-            if item.child_id == child.meta.id
+            if item.child_id == child.meta.id and item.incident_id == incident_id
         ),
         None,
     )
     if existing_index is None:
         updated.meta.monitoring_blockers.append(
-            MonitoringBlocker(child.meta.id, concise_reason, owns_transition)
+            MonitoringBlocker(
+                child.meta.id, concise_reason, owns_transition, incident_id
+            )
         )
     else:
         previous = updated.meta.monitoring_blockers[existing_index]
         updated.meta.monitoring_blockers[existing_index] = MonitoringBlocker(
-            child.meta.id, concise_reason, previous.blocked_supervisor
+            child.meta.id, concise_reason, previous.blocked_supervisor, incident_id
         )
     owner_root = git_root_for_path(updated.meta.path.resolve())
     try:
@@ -105,7 +111,10 @@ def propagate_direct_report_blockage(
             return BlockagePropagationResult(
                 "terminal", supervisor.meta.id, child.meta.id
             )
-        if _matching_blocker(current, child.meta.id, concise_reason) is not None:
+        if (
+            _matching_blocker(current, child.meta.id, concise_reason, incident_id)
+            is not None
+        ):
             return BlockagePropagationResult(
                 "already_applied", supervisor.meta.id, child.meta.id
             )
@@ -113,12 +122,12 @@ def propagate_direct_report_blockage(
     return BlockagePropagationResult("applied", supervisor.meta.id, child.meta.id)
 
 
-
 def reconcile_direct_report_blockage(
     supervisor: WorkDoc,
     child: WorkDoc,
     *,
     root: Path,
+    incident_id: str | None = None,
 ) -> BlockageReconciliationResult:
     """Remove this child's derived cause after its condition has cleared.
 
@@ -136,7 +145,7 @@ def reconcile_direct_report_blockage(
         (
             index
             for index, item in enumerate(supervisor.meta.monitoring_blockers)
-            if item.child_id == child.meta.id
+            if item.child_id == child.meta.id and item.incident_id == incident_id
         ),
         None,
     )
@@ -165,7 +174,7 @@ def reconcile_direct_report_blockage(
         if updated.meta.monitoring_blockers:
             successor = updated.meta.monitoring_blockers[0]
             updated.meta.monitoring_blockers[0] = MonitoringBlocker(
-                successor.child_id, successor.reason, True
+                successor.child_id, successor.reason, True, successor.incident_id
             )
         else:
             updated.meta.status = "active"
@@ -181,7 +190,7 @@ def reconcile_direct_report_blockage(
                 "terminal", supervisor.meta.id, child.meta.id
             )
         if not any(
-            item.child_id == child.meta.id
+            item.child_id == child.meta.id and item.incident_id == incident_id
             for item in current.meta.monitoring_blockers
         ):
             return BlockageReconciliationResult(
@@ -198,9 +207,13 @@ def _validate_pair(supervisor: WorkDoc, child: WorkDoc) -> None:
         supervisor.meta.tier
     )
     if expected_child_tier is None or child.meta.tier != expected_child_tier:
-        raise ValueError("blockage propagation requires an epic/feature direct-report pair")
+        raise ValueError(
+            "blockage propagation requires an epic/feature direct-report pair"
+        )
     if child.meta.parent != supervisor.meta.id:
-        raise ValueError(f"{child.meta.id} is not a direct report of {supervisor.meta.id}")
+        raise ValueError(
+            f"{child.meta.id} is not a direct report of {supervisor.meta.id}"
+        )
 
 
 def _concise_reason(reason: str) -> str:
@@ -213,13 +226,15 @@ def _concise_reason(reason: str) -> str:
 
 
 def _matching_blocker(
-    supervisor: WorkDoc, child_id: str, reason: str
+    supervisor: WorkDoc, child_id: str, reason: str, incident_id: str | None = None
 ) -> MonitoringBlocker | None:
     return next(
         (
             item
             for item in supervisor.meta.monitoring_blockers
-            if item.child_id == child_id and item.reason == reason
+            if item.child_id == child_id
+            and item.reason == reason
+            and item.incident_id == incident_id
         ),
         None,
     )
