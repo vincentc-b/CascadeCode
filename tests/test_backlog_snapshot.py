@@ -8,7 +8,7 @@ import pytest
 from cascade.automation import reset_automation_memory, sync_briefs
 from cascade.brief_edit_pr import BriefEditError, submit_brief_edit
 from cascade.board.errors import GitError
-from cascade.board.store import read_doc
+from cascade.board.store import read_doc, write_doc
 from cascade.watchdog.dispatch import activate_epic
 from cascade.workspace.doc_root import read_doc_resolved
 from cascade.workspace.backlog_snapshot import (
@@ -261,6 +261,50 @@ def test_local_epic_omits_conflicting_remote_brief(tmp_path: Path) -> None:
     assert "epic_030" in result.omitted_ids
     assert "epic_030" in merged_board(root).by_id
     assert not list((snapshot_root(root) / "docs/epics/1_backlog").glob("epic_030*.md"))
+
+
+def test_refresh_replaces_restored_backlog_copy_with_reviewed_provider_pins(
+    tmp_path: Path,
+) -> None:
+    """A restored Epic stays on the normal approved-brief refresh path.
+
+    The local copy represents preserved lifecycle history (including child
+    work); it must not hide the provider/model changes approved on trunk.
+    """
+
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_028", "Credential recovery")
+    source = read_doc("epic_028", root=upstream)
+    source.meta.provider = "cursor"
+    source.meta.models = {"swe": "cursor-old"}
+    write_doc(source, root=upstream)
+    subprocess.run(["git", "push", "origin", "main"], cwd=upstream, check=True, capture_output=True)
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+
+    # Model the durable return's preserved backlog brief.  Its child history
+    # remains local evidence and must not become an alternate editor source.
+    restored = read_doc("epic_028", root=root)
+    restored.meta.children = ["feat_028_001"]
+    restored.meta.provider = "cursor"
+    restored.meta.models = {"swe": "cursor-old"}
+    restored.meta.path = root / "docs/epics/1_backlog" / restored.meta.path.name
+    write_doc(restored, root=root)
+
+    reviewed = read_doc("epic_028", root=upstream)
+    reviewed.meta.provider = "codex"
+    reviewed.meta.models = {"swe": "gpt-new"}
+    write_doc(reviewed, root=upstream)
+    subprocess.run(["git", "push", "origin", "main"], cwd=upstream, check=True, capture_output=True)
+
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+
+    visible = merged_board(root).by_id["epic_028"]
+    assert visible.path.is_relative_to(snapshot_root(root))
+    assert visible.provider == "codex"
+    assert visible.models == {"swe": "gpt-new"}
 
 
 def test_sync_briefs_reports_new_remote_epic_without_ff(tmp_path: Path) -> None:
