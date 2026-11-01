@@ -195,6 +195,11 @@ None blocking. Feature planning should bind the contracts above to existing modu
   Chose Treat Return to backlog as a narrow, human-only lifecycle correction with a shared fail-closed eligibility contract..
   Rationale: The core need is to repair an activation that produced no substantive work; broader rollback semantics would risk reviewed work and expand scope.
   Honors: Success criteria 1; human-only control; refusal explanations; no cancellation or in-place provider edits..
+
+- `dec_002` · 2026-11-01 · Epic Manager · **Transition semantics**
+  Chose Use quiescence, a per-Epic lifecycle lock, and a durable replay-safe transition journal with deduplicated audit emission..
+  Rationale: A multi-step filesystem and board transition must survive concurrency, retries, and process restarts without duplicate state or data loss.
+  Honors: Success criteria 2; restart safety; idempotency; one audit event; operator trunk protection..
 ## Amendment log
 
 _(none)_
