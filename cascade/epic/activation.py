@@ -8,7 +8,7 @@ from cascade.board.gitutil import commit_paths, has_git
 from cascade.board.paths import column_dir
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import WorkDoc
-from cascade.workspace.integration_worktree import IntegrationWorktree
+from cascade.workspace.integration_worktree import IntegrationWorktree, merged_board
 
 _POINTER_BODY = """\
 # {title}
@@ -55,9 +55,16 @@ def activate_epic_on_worktree(
 ) -> None:
     """Move the live epic doc into the epic worktree; leave a trunk pointer."""
 
-    from cascade.workspace.backlog_snapshot import is_snapshot_only_epic
+    from cascade.workspace.backlog_snapshot import is_snapshot_only_epic, snapshot_root
 
-    if is_snapshot_only_epic(work_id, trunk=trunk):
+    # A returned Epic can leave a local backlog copy behind as lifecycle
+    # evidence.  Once an edit is approved, the merged snapshot supersedes
+    # that copy; materialize the reviewed snapshot without deleting it.
+    visible = merged_board(trunk).by_id.get(work_id)
+    reviewed_snapshot = visible is not None and visible.path.resolve().is_relative_to(
+        snapshot_root(trunk).resolve()
+    )
+    if is_snapshot_only_epic(work_id, trunk=trunk) or reviewed_snapshot:
         _activate_snapshot_epic_on_worktree(work_id, trunk=trunk, epic_wt=epic_wt)
         return
 
@@ -106,8 +113,13 @@ def _activate_snapshot_epic_on_worktree(
 ) -> None:
     """Materialize a remote backlog epic on its integration worktree without trunk commits."""
 
+    from cascade.workspace.backlog_snapshot import snapshot_root
+
     live_root = epic_wt.path
-    doc = read_doc(work_id, root=trunk)
+    # This path is selected only when the reviewed snapshot is authoritative;
+    # read it directly so a preserved local backlog copy cannot reintroduce
+    # its old provider or model pins.
+    doc = read_doc(work_id, root=snapshot_root(trunk))
     old_name = doc.meta.path.name
 
     live = WorkDoc(meta=doc.meta, body=doc.body, sha=None)

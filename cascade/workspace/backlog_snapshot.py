@@ -279,6 +279,14 @@ def _load_remote_backlog_blobs(trunk: Path, sha: str) -> dict[str, str]:
 
 
 def _local_supervisor_epic_ids(trunk: Path) -> set[str]:
+    """Return live local Epics that must not be shadowed by a remote snapshot.
+
+    A backlog copy can be the preserved result of returning an Epic.  It is
+    intentionally absent here: once an edit MR is approved, the refreshed
+    snapshot must replace that copy with the reviewed brief.  Only live
+    lifecycle states retain precedence over the review-backed backlog.
+    """
+
     ids: set[str] = set()
     roots = [trunk.resolve()]
     roots.extend(entry.path for entry in load_registry(trunk) if entry.path.is_dir())
