@@ -2,7 +2,7 @@
 id: epic_029
 title: Pause work when its provider is unavailable
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_029_001
