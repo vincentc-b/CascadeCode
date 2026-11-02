@@ -4,7 +4,8 @@ title: Pause work when its provider is unavailable
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_029_001
 depends_on: []
 owners:
 - epic_manager
@@ -56,6 +57,7 @@ Reuse provider probes, credential resolution, role/model selection, checkpoint r
 - Existing backlog brief editor for reviewed edits before activation; Return to backlog remains a separate action for unstarted Epics.
 
 ## Feature breakdown
+- feat_029_001
 
 1. **Provider preflight and durable blocker state.** Add the shared capability check at Epic activation and Feature/Task dispatch, execution-boundary recheck, deterministic-versus-transient failure handling, and one restart-safe provider-blocked incident per work item.
 2. **Atomic active-item provider recovery.** Add one human-authorized command for Epic, Feature, and Task that serializes against lifecycle activity, validates all affected role selections and tier settings, commits selection plus checkpoint reconciliation atomically, preserves provider-neutral work, and chooses compatible resume or fresh-turn reconstruction.
