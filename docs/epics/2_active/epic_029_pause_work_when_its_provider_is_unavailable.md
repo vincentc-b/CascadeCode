@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_029_001
+- feat_029_002
 depends_on: []
 owners:
 - epic_manager
@@ -57,6 +58,7 @@ Reuse provider probes, credential resolution, role/model selection, checkpoint r
 - Existing backlog brief editor for reviewed edits before activation; Return to backlog remains a separate action for unstarted Epics.
 
 ## Feature breakdown
+- feat_029_002
 - feat_029_001
 
 1. **Provider preflight and durable blocker state.** Add the shared capability check at Epic activation and Feature/Task dispatch, execution-boundary recheck, deterministic-versus-transient failure handling, and one restart-safe provider-blocked incident per work item.
