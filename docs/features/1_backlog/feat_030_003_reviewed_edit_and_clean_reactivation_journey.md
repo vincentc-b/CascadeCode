@@ -13,7 +13,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-01'
-updated: '2026-11-01'
+updated: '2026-11-02'
 provider: codex
 flex_mode: false
 models:
