@@ -8,6 +8,7 @@ from cascade.agent.discovery.inventory import InventoryFreshness, ProviderInvent
 from cascade.agent.discovery.types import DiscoveredModel
 from cascade.board.store import read_doc
 from cascade.provider_recovery import ProviderRecoveryRequest, recover_active_item_provider
+from cascade.provider_recovery_command import recover_active_item_provider_command
 from cascade.task.graph import clear_task_graph_sessions, seed_task_role_models
 from cascade.watchdog.model_resolve import resolve_backend
 from tests.support import add_doc, make_repo
@@ -65,6 +66,50 @@ def test_checkpoint_failure_restores_document_selection(tmp_path: Path, monkeypa
     assert result.disposition == "rolled_back"
     assert after.meta.provider == before.meta.provider
     assert after.meta.models == before.meta.models
+
+
+def test_human_command_reconstructs_once_then_is_idempotent(tmp_path: Path) -> None:
+    root, task_id = _active_task(tmp_path)
+    handoffs = []
+    request = ProviderRecoveryRequest("codex", {"swe": "offered"})
+
+    first = recover_active_item_provider_command(
+        task_id,
+        request,
+        actor="human",
+        root=root,
+        inventory=_inventory("offered"),
+        kickoff=handoffs.append,
+    )
+    second = recover_active_item_provider_command(
+        task_id,
+        request,
+        actor="human",
+        root=root,
+        inventory=_inventory("offered"),
+        kickoff=handoffs.append,
+    )
+
+    assert first.ok
+    assert first.disposition == "fresh_role_turn"
+    assert len(handoffs) == 1
+    assert handoffs[0].kind == "resume_inflight"
+    assert second.ok and second.idempotent
+    assert len(handoffs) == 1
+
+
+def test_command_requires_human_authorization(tmp_path: Path) -> None:
+    root, task_id = _active_task(tmp_path)
+
+    result = recover_active_item_provider_command(
+        task_id,
+        ProviderRecoveryRequest("codex", {"swe": "offered"}),
+        root=root,
+        inventory=_inventory("offered"),
+    )
+
+    assert not result.ok
+    assert result.error_code == "unauthorized"
 
 
 def teardown_function() -> None:
