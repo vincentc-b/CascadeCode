@@ -20,6 +20,7 @@ flex_mode: false
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-11-02T04:46:26.612196+00:00'
 ---
 # War Room provider recovery controls and lifecycle proof
 
