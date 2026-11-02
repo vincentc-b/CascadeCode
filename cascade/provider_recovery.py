@@ -14,16 +14,17 @@ from pathlib import Path
 from typing import Literal, Mapping
 
 from cascade.agent.discovery.inventory import ProviderInventoryResult, refresh_provider_inventory
-from cascade.agent.execution_preflight import ProviderSelection
 from cascade.agent.preflight import (
-    ProviderCapabilityPreflight,
     RoleCapabilityPreflight,
     batch_provider_capability_preflight,
     preflight_provider_capability,
 )
 from cascade.board.context import resolve_root
-from cascade.board.store import read_doc, write_doc
+from cascade.board.gitutil import has_git
+from cascade.board.store import write_doc
 from cascade.watchdog.lock import process_lock
+from cascade.workspace.doc_root import read_doc_resolved
+from cascade.workspace.integration_worktree import git_root_for_path
 
 RecoveryDisposition = Literal["resume_compatible", "fresh_role_turn", "validation_failed", "rolled_back"]
 
@@ -78,7 +79,8 @@ def recover_active_item_provider(
 
     repo = resolve_root(root)
     with process_lock:
-        doc = read_doc(work_id, root=repo)
+        doc = read_doc_resolved(work_id, root=repo)
+        doc_root = git_root_for_path(doc.meta.path) if has_git(repo) else repo
         roles = _ROLES[doc.meta.tier]
         checks = _validate_request(doc.meta.tier, roles, request, inventory)
         batch = batch_provider_capability_preflight(checks)
@@ -94,11 +96,11 @@ def recover_active_item_provider(
         try:
             # ``write_doc`` is itself atomic at the file boundary.  The
             # compensating write only runs if checkpoint persistence failed.
-            write_doc(doc, root=repo)
+            write_doc(doc, root=doc_root)
             _write_pins(work_id, doc.meta.tier, doc.meta.parent, repo, roles, request)
         except Exception:
             try:
-                _restore_document(before_doc, repo)
+                _restore_document(before_doc, doc_root)
                 _restore_pins(work_id, doc.meta.tier, doc.meta.parent, repo, before_pins)
             except Exception:
                 # The original exception is more useful to lifecycle callers;

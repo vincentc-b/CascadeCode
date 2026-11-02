@@ -10,7 +10,7 @@ from cascade.agent.execution_preflight import clear_provider_blocker, provider_b
 from cascade.agent.errors import ProviderConfigError
 from cascade.agent.providers import parse_provider_id, probe_providers
 from cascade.board.errors import BoardError, NotFound
-from cascade.board.store import read_doc
+from cascade.workspace.doc_root import read_doc_resolved
 from cascade.provider_recovery import ProviderRecoveryRequest
 from cascade.provider_recovery_command import recover_active_item_provider_command
 from cascade.watchdog.config import read_providers_config
@@ -77,7 +77,7 @@ def _handle_recovery_post(
         return True
     work_id, action = parts
     try:
-        doc = read_doc(work_id, root=handler.server.root)
+        doc = read_doc_resolved(work_id, root=handler.server.root)
         blocker = provider_blocker(work_id, root=handler.server.root)
     except (BoardError, NotFound, OSError, ValueError):
         handler._json_error(HTTPStatus.NOT_FOUND, "work item not found")
