@@ -190,11 +190,29 @@ def event_to_dict(event: Event) -> dict:
 
 
 def dispatch_result_to_dict(result: DispatchResult) -> dict:
-    return {
+    payload = {
         "ok": result.ok,
         "reason": result.reason,
         "event": event_to_dict(result.event) if result.event is not None else None,
     }
+    if result.preflight is not None:
+        payload["preflight"] = {
+            "outcome": result.preflight.outcome,
+            "checks": [
+                {
+                    "role": check.role,
+                    "outcome": check.result.outcome,
+                    "reason": check.result.reason,
+                    "provider": check.result.provider,
+                    "model_id": check.result.model_id,
+                    "tier": check.result.tier,
+                    "message": check.result.message,
+                    "retryable": check.result.retryable,
+                }
+                for check in result.preflight.checks
+            ],
+        }
+    return payload
 
 
 def room_settings_to_dict(settings: RoomSettings) -> dict[str, object]:
