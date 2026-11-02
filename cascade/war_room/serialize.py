@@ -500,6 +500,16 @@ def board_view_from_index(board, *, root: Path) -> dict:
             )
             if readiness is not None:
                 item["readiness"] = feature_readiness_to_dict(readiness)
+        if meta.tier == "epic" and folder == "2_active":
+            # The row consumes the exact evaluator serialization used by the
+            # command boundary.  Keep this read-only: command execution always
+            # re-evaluates before handing off to the durable transition.
+            from cascade.epic.return_command import load_return_eligibility_snapshot
+            from cascade.epic.return_eligibility import evaluate_return_eligibility
+
+            item["return_to_backlog"] = evaluate_return_eligibility(
+                load_return_eligibility_snapshot(meta.id, root=root)
+            ).to_dict()
         review = item.get("review")
         if (
             meta.tier == "feature"
