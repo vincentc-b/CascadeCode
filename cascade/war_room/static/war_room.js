@@ -842,6 +842,47 @@
     return btn;
   }
 
+  function returnRefusalMessages(eligibility) {
+    if (!eligibility || eligibility.eligible || !Array.isArray(eligibility.refusals)) return [];
+    return eligibility.refusals
+      .map(function (refusal) { return refusal && refusal.message; })
+      .filter(function (message) { return typeof message === "string" && message; });
+  }
+
+  function appendEpicReturnFeedback(row, eligibility) {
+    const messages = returnRefusalMessages(eligibility);
+    if (!messages.length) return;
+    const feedback = document.createElement("div");
+    feedback.className = "epic-return-refusals";
+    feedback.textContent = messages.join(" · ");
+    feedback.setAttribute("aria-label", "Return to backlog unavailable: " + messages.join("; "));
+    row.appendChild(feedback);
+  }
+
+  function returnRequestId() {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+      return globalThis.crypto.randomUUID();
+    }
+    return "return-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+  }
+
+  async function returnEpicToBacklog(item) {
+    const response = await apiPost("/api/return_epic_to_backlog", {
+      epic_id: item.id,
+      request_id: returnRequestId(),
+    });
+    const body = response.body;
+    if (body.eligibility) item.return_to_backlog = body.eligibility;
+    if (!body.ok) {
+      const messages = returnRefusalMessages(body.eligibility);
+      setStatus(messages.length ? messages.join(" · ") : (body.message || "Return to backlog was refused."), true);
+    } else {
+      setStatus("Return to backlog accepted for " + item.id + ".", false);
+    }
+    await refreshBoard();
+    return body;
+  }
+
   function buildRow(item, tier, column) {
     const row = document.createElement("div");
     row.className = "board-row";
@@ -921,6 +962,10 @@
       row.appendChild(branch);
     }
 
+    if (tier === "epics" && column === "2_active") {
+      appendEpicReturnFeedback(row, item.return_to_backlog);
+    }
+
     const actions = document.createElement("div");
     actions.className = "board-row-actions";
 
@@ -968,6 +1013,13 @@
         actions.appendChild(actionButton("Close epic", function () {
           return confirmEpicComplete(item.id);
         }));
+        const returnEligibility = item.return_to_backlog;
+        if (returnEligibility) {
+          const refusalMessages = returnRefusalMessages(returnEligibility);
+          actions.appendChild(actionButton("Return to backlog", function () {
+            return returnEpicToBacklog(item);
+          }, returnEligibility.eligible ? null : refusalMessages.join("; ") || "Return to backlog is unavailable."));
+        }
       }
     }
     if (tier === "features") {
