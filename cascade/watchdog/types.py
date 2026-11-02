@@ -4,11 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from cascade.agent.preflight import ProviderCapabilityBatchPreflight
 
 Principal = Literal["human", "boss"]
 DispatchKind = Literal["epic", "feature", "task"]
-DispatchReason = Literal["unauthorized", "unmet_deps", "cap", "not_found", "bad_state"]
+DispatchReason = Literal[
+    "unauthorized",
+    "unmet_deps",
+    "cap",
+    "not_found",
+    "bad_state",
+    "provider_preflight_blocked",
+    "provider_preflight_unavailable",
+]
 
 
 @dataclass(frozen=True)
@@ -33,3 +44,4 @@ class DispatchResult:
     ok: bool
     reason: str | None
     event: Event | None
+    preflight: ProviderCapabilityBatchPreflight | None = None

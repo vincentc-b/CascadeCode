@@ -388,6 +388,12 @@ body {
   font-weight: 700;
 }
 
+.provider-recovery-feedback {
+  margin-top: 0.35rem;
+  color: var(--warning-text, #8a5400);
+  font-size: 0.9rem;
+}
+
 .task-execution-status-running,
 .task-execution-status-healthy {
   color: #d1fae5;

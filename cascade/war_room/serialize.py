@@ -137,6 +137,38 @@ def work_meta_to_dict(
     return value
 
 
+def _provider_recovery_view(
+    meta: WorkMeta,
+    *,
+    root: Path,
+    return_to_backlog: dict[str, object] | None = None,
+) -> dict[str, object] | None:
+    """Attach the safe, server-computed provider recovery projection to a row."""
+
+    from cascade.agent.execution_preflight import provider_blocker
+    from cascade.epic.lifecycle_gate import lifecycle_gate
+    from cascade.provider_recovery_state import provider_recovery_state
+
+    recovery = provider_recovery_state(
+        provider_blocker(meta.id, root=root),
+        tier=meta.tier,
+        status=meta.status,
+        turn_stoppable=lifecycle_gate().turn_stoppable(meta.id),
+        return_to_backlog=return_to_backlog,
+    )
+    if recovery is None:
+        return None
+    # These are the same persisted selection controls used by the command
+    # boundary.  They deliberately exclude credentials and provider errors.
+    recovery["selection"] = {
+        "provider": meta.provider,
+        "models": dict(meta.models or {}),
+        "reasoning": dict(meta.reasoning or {}),
+        "flex_mode": meta.flex_mode,
+    }
+    return recovery
+
+
 def work_doc_to_dict(doc: WorkDoc) -> dict:
     return {
         "meta": work_meta_to_dict(doc.meta),
@@ -190,11 +222,29 @@ def event_to_dict(event: Event) -> dict:
 
 
 def dispatch_result_to_dict(result: DispatchResult) -> dict:
-    return {
+    payload = {
         "ok": result.ok,
         "reason": result.reason,
         "event": event_to_dict(result.event) if result.event is not None else None,
     }
+    if result.preflight is not None:
+        payload["preflight"] = {
+            "outcome": result.preflight.outcome,
+            "checks": [
+                {
+                    "role": check.role,
+                    "outcome": check.result.outcome,
+                    "reason": check.result.reason,
+                    "provider": check.result.provider,
+                    "model_id": check.result.model_id,
+                    "tier": check.result.tier,
+                    "message": check.result.message,
+                    "retryable": check.result.retryable,
+                }
+                for check in result.preflight.checks
+            ],
+        }
+    return payload
 
 
 def room_settings_to_dict(settings: RoomSettings) -> dict[str, object]:
@@ -510,6 +560,9 @@ def board_view_from_index(board, *, root: Path) -> dict:
             item["return_to_backlog"] = evaluate_return_eligibility(
                 load_return_eligibility_snapshot(meta.id, root=root)
             ).to_dict()
+        item["provider_recovery"] = _provider_recovery_view(
+            meta, root=root, return_to_backlog=item.get("return_to_backlog")
+        )
         review = item.get("review")
         if (
             meta.tier == "feature"
