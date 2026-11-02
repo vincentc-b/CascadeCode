@@ -2,7 +2,7 @@
 id: feat_029_003
 title: War Room provider recovery controls and lifecycle proof
 tier: feature
-status: active
+status: completed
 parent: epic_029
 children:
 - task_029_003_001
