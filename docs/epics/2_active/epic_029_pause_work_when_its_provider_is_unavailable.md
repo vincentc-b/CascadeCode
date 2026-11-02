@@ -24,6 +24,7 @@ models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
   swe: gpt-5.6-terra
+plan_approved_at: '2026-11-02T04:46:29.491802+00:00'
 ---
 # Pause work when its provider is unavailable
 
