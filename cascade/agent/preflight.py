@@ -25,6 +25,7 @@ PreflightReason = Literal[
     "flex_mode_not_supported",
     "provider_unavailable",
 ]
+BatchPreflightOutcome = Literal["supported", "blocked", "transient"]
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,46 @@ class ProviderCapabilityPreflight:
     @property
     def supported(self) -> bool:
         return self.outcome == "supported"
+
+
+@dataclass(frozen=True)
+class RoleCapabilityPreflight:
+    """One role's safe capability result at a lifecycle boundary."""
+
+    role: str
+    result: ProviderCapabilityPreflight
+
+
+@dataclass(frozen=True)
+class ProviderCapabilityBatchPreflight:
+    """Combined result for every role that a work item will start.
+
+    The batch preserves the individual safe results for operators while giving
+    lifecycle callers one outcome to gate on.  A deterministic rejection wins
+    over a transient discovery failure because retrying cannot repair that
+    selected configuration.
+    """
+
+    outcome: BatchPreflightOutcome
+    checks: tuple[RoleCapabilityPreflight, ...]
+
+    @property
+    def supported(self) -> bool:
+        return self.outcome == "supported"
+
+
+def batch_provider_capability_preflight(
+    checks: tuple[RoleCapabilityPreflight, ...],
+) -> ProviderCapabilityBatchPreflight:
+    """Classify role checks without changing provider or board state."""
+
+    if any(item.result.outcome == "unsupported" for item in checks):
+        outcome: BatchPreflightOutcome = "blocked"
+    elif any(item.result.outcome == "unavailable" for item in checks):
+        outcome = "transient"
+    else:
+        outcome = "supported"
+    return ProviderCapabilityBatchPreflight(outcome=outcome, checks=checks)
 
 
 def preflight_provider_capability(
