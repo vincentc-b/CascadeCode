@@ -2,7 +2,7 @@
 id: feat_029_002
 title: Atomic active-item provider recovery
 tier: feature
-status: active
+status: completed
 parent: epic_029
 children:
 - task_029_002_001
