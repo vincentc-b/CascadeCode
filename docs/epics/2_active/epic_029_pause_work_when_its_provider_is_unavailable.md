@@ -71,6 +71,10 @@ _(none)_
 
 - 2026-10-31 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-02 · Epic Manager · **Checkpoint recovery contract**
+  Chose Preserve provider-neutral progress, but do not rewrite or resume opaque provider-specific turn state under a different provider; when compatibility is not provable, atomically commit the new selection and reconstruct a fresh role turn from the preserved plan, progress, and worktree..
+  Rationale: This makes the smallest safe recovery behavior explicit, prevents stale checkpoints from invoking the abandoned provider, and preserves user work without requiring provider-specific migration support.
+  Honors: Human-approved provider pinning, atomic recovery, dirty-work preservation, and no silent fallback..
 ## Amendment log
 
 _(none)_
