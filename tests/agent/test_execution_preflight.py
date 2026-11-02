@@ -57,6 +57,7 @@ def test_execution_preflight_upserts_safe_deterministic_blocker_and_clears_it(
     assert blocker is not None
     assert blocker["affected_roles"] == ["swe"]
     assert blocker["reason_code"] == "model_not_offered"
+    assert blocker["reason"] == "The selected model is not offered by the provider. Choose a supported provider or model."
     assert blocker["recommended_remedy"] == "choose_provider_or_model"
     assert "message" not in blocker
 
@@ -111,6 +112,7 @@ def test_execution_preflight_persists_one_retryable_blocker_across_restart(
     assert list(persisted["blockers"]) == ["task_001"]
     assert restarted["work_id"] == "task_001"
     assert restarted["classification"] == "transient"
+    assert restarted["reason"] == "The selected provider is unavailable. Check provider setup or credentials, then retry."
     assert restarted["recommended_remedy"] == "retry_provider_setup"
     assert restarted["affected_roles"] == ["swe"]
     assert "message" not in restarted
