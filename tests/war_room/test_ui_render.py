@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from cascade.board.store import move_doc
+from cascade.board.store import list_board, move_doc
+from cascade.war_room.serialize import board_view_from_index
 from cascade.war_room.server import serve
 from tests.support import add_doc, make_repo
 
@@ -190,6 +191,78 @@ def test_war_room_js_renders_and_submits_epic_return_control():
     assert "epic_id: item.id" in source
     assert "request_id: returnRequestId()" in source
     assert "returnRefusalMessages(body.eligibility)" in source
+
+
+def test_board_projects_safe_provider_recovery_for_active_work(tmp_path, monkeypatch):
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    (root / ".cascade").mkdir(exist_ok=True)
+    (root / ".cascade" / "provider_blockers.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "blockers": {
+                    "task_001": {
+                        "work_id": "task_001",
+                        "active": True,
+                        "classification": "transient",
+                        "reason_code": "provider_unavailable",
+                        "message": "credential=do-not-expose",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "cascade.feature.recovery.recovery_status", lambda *_args, **_kwargs: None
+    )
+
+    task = board_view_from_index(list_board(root), root=root)["tasks"]["2_active"][0]
+    recovery = task["provider_recovery"]
+
+    assert recovery["reason"] == (
+        "The selected provider is unavailable. Check provider setup or credentials, then retry."
+    )
+    assert "do-not-expose" not in repr(recovery)
+    assert recovery["actions"]["change_provider"] == {"eligible": True}
+    assert recovery["actions"]["retry"] == {"eligible": True}
+    assert recovery["actions"]["provider_setup"] == {"eligible": True}
+    assert recovery["actions"]["return_to_backlog"]["reason_code"] == "not_epic"
+
+
+def test_war_room_js_renders_only_eligible_provider_recovery_controls():
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "cascade"
+        / "war_room"
+        / "static"
+        / "war_room.js"
+    ).read_text(encoding="utf-8")
+
+    assert "appendProviderRecoveryFeedback(row, item.provider_recovery)" in source
+    assert 'providerRecoveryAction(providerRecovery, "change_provider")' in source
+    assert 'providerRecoveryAction(providerRecovery, "retry")' in source
+    assert 'providerRecoveryAction(providerRecovery, "provider_setup")' in source
+    assert '"/api/provider-recovery/" + encodeURIComponent(item.id) + "/change"' in source
+    assert '"/api/provider-recovery/" + encodeURIComponent(item.id) + "/retry"' in source
+    assert "await refreshBoard();" in source
 
 
 def test_war_room_js_explains_epic_close_comment_blockers():

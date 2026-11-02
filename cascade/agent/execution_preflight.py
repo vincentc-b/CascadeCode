@@ -17,6 +17,7 @@ from typing import Literal
 from cascade.agent.discovery.inventory import refresh_provider_inventory
 from cascade.agent.preflight import ProviderCapabilityPreflight, preflight_provider_capability
 from cascade.board.context import resolve_root
+from cascade.provider_recovery_state import safe_provider_reason
 from cascade.watchdog.lock import process_lock
 
 BlockerClassification = Literal["deterministic", "transient"]
@@ -123,6 +124,9 @@ def upsert_provider_blocker(
         "affected_roles": sorted(selection.role for selection, _ in failed),
         "provider": first_selection.provider,
         "reason_code": first_check.reason,
+        # Never retain provider-provided exception text.  This stable message
+        # is safe to render after restart and shared by board/War Room.
+        "reason": safe_provider_reason(first_check.reason),
         "classification": classification,
         "recommended_remedy": _recommended_remedy(first_check),
         "last_attempt": now,
