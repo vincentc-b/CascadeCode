@@ -155,6 +155,33 @@ async def run_swe_turn(
 
     repo = Path(root).resolve()
     run = resolve_swe_task_run(task_id)
+    # An injected runner is a local test seam, not a provider process.  Keep
+    # unit tests deterministic; all production turns use ``run_role`` and
+    # therefore pass through the fresh check immediately before invocation.
+    if run_role_fn is None:
+        from cascade.agent.execution_preflight import ProviderSelection, recheck_provider_capability
+
+        preflight = recheck_provider_capability(
+            task_id,
+            tier="task",
+            selections=(
+                ProviderSelection(
+                    role="swe",
+                    provider=provider,
+                    model_id=model_id,
+                    reasoning_level=reasoning_level,
+                    flex_mode=flex_mode,
+                ),
+            ),
+            root=repo,
+        )
+        if not preflight.supported:
+            reason = next((check.reason for check in preflight.checks if not check.supported), "provider_unavailable")
+            return SweTurnResult(
+                failed_closed=preflight.classification == "deterministic",
+                may_retry=preflight.classification == "transient",
+                failure_reason=f"provider_blocked:{reason}",
+            )
     full_prompt = augment_swe_prompt_with_work_context(task_id, prompt, root=repo)
     full_prompt = augment_swe_prompt_with_skill_paths(task_id, full_prompt, root=repo)
     turn = build_swe_role_turn(

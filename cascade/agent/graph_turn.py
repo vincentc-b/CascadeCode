@@ -261,6 +261,24 @@ async def run_planning_role_turn(
     if provider_id is None:
         return missing_provider_message(role)
 
+    scope_id = turn_kwargs.get("feature_id") or turn_kwargs.get("epic_id")
+    if isinstance(scope_id, str) and scope_id:
+        from cascade.agent.execution_preflight import ProviderSelection, recheck_provider_capability
+
+        tier = "feature" if turn_kwargs.get("feature_id") else "epic"
+        selections = _provider_selections(state)
+        # Check every pinned role on this work item, not just the role whose
+        # process happens to start first.
+        preflight = recheck_provider_capability(
+            scope_id,
+            tier=tier,
+            selections=selections or (ProviderSelection(role, provider_id, model_id),),
+            root=Path(root).resolve(),
+        )
+        if not preflight.supported:
+            reason = next((check.reason for check in preflight.checks if not check.supported), "provider_unavailable")
+            return f"{role}: provider blocked — {reason} ({preflight.classification})"
+
     reasoning_level, reasoning_source = reasoning_for_role(state, role)
     flex_mode = flex_mode_for_role(state, role)
 
@@ -314,6 +332,32 @@ async def run_planning_role_turn(
     if result.status == "error":
         return run_error_message(role, result)
     return result.text
+
+
+def _provider_selections(state: dict):
+    """Build the complete pinned role selection without reading credentials."""
+
+    from cascade.agent.execution_preflight import ProviderSelection
+
+    providers = state.get("provider_ids") or {}
+    models = state.get("model_ids") or {}
+    reasoning = state.get("reasoning_ids") or {}
+    flex = state.get("flex_modes") or {}
+    selections: list[ProviderSelection] = []
+    for role in sorted(set(providers) & set(models)):
+        provider = str(providers[role]).strip()
+        model_id = str(models[role]).strip()
+        if provider and model_id:
+            selections.append(
+                ProviderSelection(
+                    role=role,
+                    provider=provider,
+                    model_id=model_id,
+                    reasoning_level=str(reasoning[role]).strip() if reasoning.get(role) else None,
+                    flex_mode=flex.get(role) if isinstance(flex.get(role), bool) else None,
+                )
+            )
+    return tuple(selections)
 
 
 _PLANNING_TOOL_DIRECTIVE = (
