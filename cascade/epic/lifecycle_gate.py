@@ -54,6 +54,20 @@ class LifecycleGate:
                     self._active_by_member.pop(member_id, None)
                 self._condition.notify_all()
 
+    def turn_stoppable(self, member_id: str) -> bool:
+        """Whether a recovery request can safely begin for this member now.
+
+        This is only a read-side hint for controls.  The recovery command still
+        closes admission and rechecks quiescence under the transition lock, so
+        a click racing a new turn fails closed at the authoritative boundary.
+        """
+
+        with self._condition:
+            return (
+                member_id not in self._blocked_by_member
+                and self._active_by_member.get(member_id, 0) == 0
+            )
+
     @contextmanager
     def transition(
         self, epic_id: str, member_ids: tuple[str, ...], *, timeout: float = 0.0
