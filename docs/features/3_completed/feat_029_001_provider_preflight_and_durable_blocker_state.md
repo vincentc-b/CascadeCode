@@ -2,7 +2,7 @@
 id: feat_029_001
 title: Provider preflight and durable blocker state
 tier: feature
-status: active
+status: completed
 parent: epic_029
 children:
 - task_029_001_001
