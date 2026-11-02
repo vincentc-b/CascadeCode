@@ -2,7 +2,7 @@
 id: feat_030_003
 title: Reviewed edit and clean reactivation journey
 tier: feature
-status: active
+status: completed
 parent: epic_030
 children:
 - task_030_003_001
@@ -16,7 +16,7 @@ owners:
 skills: []
 parent_rev: 848793551caef19a7cd9bcc2aee14c3771934c56
 created: '2026-11-01'
-updated: '2026-11-01'
+updated: '2026-11-02'
 provider: codex
 flex_mode: false
 models:
