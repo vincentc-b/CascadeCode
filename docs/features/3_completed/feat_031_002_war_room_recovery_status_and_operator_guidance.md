@@ -2,7 +2,7 @@
 id: feat_031_002
 title: War Room recovery status and operator guidance
 tier: feature
-status: active
+status: completed
 parent: epic_031
 children:
 - task_031_002_001
