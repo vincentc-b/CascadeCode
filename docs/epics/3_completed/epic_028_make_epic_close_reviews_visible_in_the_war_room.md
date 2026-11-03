@@ -2,7 +2,7 @@
 id: epic_028
 title: Make epic close reviews visible in the War Room
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_028_001
