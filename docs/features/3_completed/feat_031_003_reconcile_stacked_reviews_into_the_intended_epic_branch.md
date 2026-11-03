@@ -2,7 +2,7 @@
 id: feat_031_003
 title: Reconcile stacked reviews into the intended Epic branch
 tier: feature
-status: active
+status: completed
 parent: epic_031
 children:
 - task_031_003_001
