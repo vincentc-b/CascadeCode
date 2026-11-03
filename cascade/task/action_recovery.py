@@ -21,11 +21,21 @@ from cascade.board.context import resolve_root
 from cascade.watchdog.lock import process_lock
 
 FailureClassification = Literal[
-    "deterministic_repair", "transient_retry", "owner_decision", "human_gate", "terminal_blocker"
+    "deterministic_repair",
+    "transient_retry",
+    "owner_decision",
+    "human_gate",
+    "terminal_blocker",
 ]
 RecoveryState = Literal[
-    "pending", "running", "retryable", "repaired", "awaiting_owner_decision",
-    "awaiting_human_gate", "blocked", "completed",
+    "pending",
+    "running",
+    "retryable",
+    "repaired",
+    "awaiting_owner_decision",
+    "awaiting_human_gate",
+    "blocked",
+    "completed",
 ]
 AttemptOutcome = Literal["succeeded", "failed", "cancelled"]
 PreconditionState = Literal["pending", "repaired", "unrepairable"]
@@ -123,7 +133,11 @@ def _actions(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     actions = payload.get("actions")
     if not isinstance(actions, dict):
         return {}
-    return {str(identity): dict(action) for identity, action in actions.items() if isinstance(action, dict)}
+    return {
+        str(identity): dict(action)
+        for identity, action in actions.items()
+        if isinstance(action, dict)
+    }
 
 
 def _validate_identity(identity: str) -> None:
@@ -136,7 +150,9 @@ def _validate_choice(value: str, choices: frozenset[str], *, field: str) -> None
         raise ActionRecoveryError(f"unknown {field}: {value}")
 
 
-def _validate_metadata(metadata: Mapping[str, Any] | None, *, field: str) -> dict[str, Any]:
+def _validate_metadata(
+    metadata: Mapping[str, Any] | None, *, field: str
+) -> dict[str, Any]:
     if metadata is None:
         return {}
     if not isinstance(metadata, Mapping):
@@ -152,6 +168,77 @@ def _copy(action: dict[str, Any]) -> dict[str, Any]:
     return json.loads(json.dumps(action))
 
 
+def _validate_lifecycle_state(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value or value.strip() != value:
+        raise ActionRecoveryError("lifecycle state must be a nonempty string")
+    return value
+
+
+def _validate_owning_team(value: Mapping[str, Any] | None) -> dict[str, str] | None:
+    """Validate the durable owner without coupling recovery to board documents."""
+
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise ActionRecoveryError("owning team must be a mapping")
+    kind = value.get("kind")
+    work_id = value.get("work_id")
+    _validate_choice(kind, _DECISION_OWNERS, field="owning team kind")
+    if not isinstance(work_id, str) or not work_id or work_id.strip() != work_id:
+        raise ActionRecoveryError("owning team work_id must be a nonempty string")
+    return {"kind": kind, "work_id": work_id}
+
+
+def _validate_human_blocker(value: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Keep a human gate actionable after the process that observed it exits."""
+
+    if value is None:
+        return None
+    details = _validate_metadata(value, field="human blocker")
+    required = ("code", "message", "required_action")
+    if any(
+        not isinstance(details.get(key), str) or not details[key].strip()
+        for key in required
+    ):
+        raise ActionRecoveryError(
+            "human blocker needs nonempty code, message, and required_action"
+        )
+    return details
+
+
+def _recovery_record(
+    action_id: str,
+    action_kind: str,
+    *,
+    lifecycle_state: str | None = None,
+    owning_team: Mapping[str, Any] | None = None,
+    evidence: Mapping[str, Any] | None = None,
+    provenance: Mapping[str, Any] | None = None,
+    retry_marker: Mapping[str, Any] | None = None,
+    routing_marker: Mapping[str, Any] | None = None,
+    human_blocker: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return the additive durable context shared by lifecycle actions.
+
+    ``metadata`` remains deliberately application-defined for compatibility.
+    This separately named record holds the facts needed to resume a branch or
+    lifecycle request without reconstructing them from transient process state.
+    """
+
+    return {
+        "original_action": {"action_id": action_id, "action_kind": action_kind},
+        "lifecycle_state": _validate_lifecycle_state(lifecycle_state),
+        "owning_team": _validate_owning_team(owning_team),
+        "evidence": _validate_metadata(evidence, field="evidence"),
+        "provenance": _validate_metadata(provenance, field="provenance"),
+        "retry_marker": _validate_metadata(retry_marker, field="retry marker"),
+        "routing_marker": _validate_metadata(routing_marker, field="routing marker"),
+        "human_blocker": _validate_human_blocker(human_blocker),
+    }
+
+
 def create_or_load_action(
     action_id: str,
     action_kind: str,
@@ -161,6 +248,13 @@ def create_or_load_action(
     recovery_state: RecoveryState = "pending",
     failure_classification: FailureClassification | None = None,
     metadata: Mapping[str, Any] | None = None,
+    lifecycle_state: str | None = None,
+    owning_team: Mapping[str, Any] | None = None,
+    evidence: Mapping[str, Any] | None = None,
+    provenance: Mapping[str, Any] | None = None,
+    retry_marker: Mapping[str, Any] | None = None,
+    routing_marker: Mapping[str, Any] | None = None,
+    human_blocker: Mapping[str, Any] | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Create one action by stable identity, or return its original durable record."""
@@ -172,9 +266,25 @@ def create_or_load_action(
         raise ActionRecoveryError("attempt bound must be positive")
     if recovery_state not in _STATES:
         raise ActionRecoveryError(f"unknown recovery state: {recovery_state}")
-    if failure_classification is not None and failure_classification not in _CLASSIFICATIONS:
-        raise ActionRecoveryError(f"unknown failure classification: {failure_classification}")
+    if (
+        failure_classification is not None
+        and failure_classification not in _CLASSIFICATIONS
+    ):
+        raise ActionRecoveryError(
+            f"unknown failure classification: {failure_classification}"
+        )
     initial_metadata = _validate_metadata(metadata, field="metadata")
+    recovery = _recovery_record(
+        action_id,
+        action_kind,
+        lifecycle_state=lifecycle_state,
+        owning_team=owning_team,
+        evidence=evidence,
+        provenance=provenance,
+        retry_marker=retry_marker,
+        routing_marker=routing_marker,
+        human_blocker=human_blocker,
+    )
     repo = resolve_root(root)
     with process_lock:
         payload = _read_payload(repo)
@@ -196,6 +306,7 @@ def create_or_load_action(
             "attempt_count": 0,
             "attempt_bound": attempt_bound,
             "metadata": initial_metadata,
+            "recovery": recovery,
             "idempotency_key": action_id,
             "execution_claim": None,
             "created_at": created,
@@ -204,6 +315,85 @@ def create_or_load_action(
         }
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action)
+
+
+def update_recovery_record(
+    action_id: str,
+    *,
+    root: Path,
+    lifecycle_state: str | None = None,
+    owning_team: Mapping[str, Any] | None = None,
+    evidence: Mapping[str, Any] | None = None,
+    provenance: Mapping[str, Any] | None = None,
+    retry_marker: Mapping[str, Any] | None = None,
+    routing_marker: Mapping[str, Any] | None = None,
+    human_blocker: Mapping[str, Any] | None = None,
+    clear_human_blocker: bool = False,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Persist new lifecycle evidence without replacing the original request.
+
+    Each supplied mapping replaces only its corresponding context field.  This
+    makes retries and owner handoffs additive at the action boundary while
+    preserving historical user files, approvals, and application ``metadata``.
+    ``clear_human_blocker`` is explicit so an empty update cannot accidentally
+    erase an unresolved human gate.
+    """
+
+    _validate_identity(action_id)
+    if clear_human_blocker and human_blocker is not None:
+        raise ActionRecoveryError("cannot set and clear a human blocker together")
+    validated = {
+        "lifecycle_state": _validate_lifecycle_state(lifecycle_state),
+        "owning_team": _validate_owning_team(owning_team),
+        "evidence": _validate_metadata(evidence, field="evidence")
+        if evidence is not None
+        else None,
+        "provenance": _validate_metadata(provenance, field="provenance")
+        if provenance is not None
+        else None,
+        "retry_marker": _validate_metadata(retry_marker, field="retry marker")
+        if retry_marker is not None
+        else None,
+        "routing_marker": _validate_metadata(routing_marker, field="routing marker")
+        if routing_marker is not None
+        else None,
+        "human_blocker": _validate_human_blocker(human_blocker),
+    }
+    repo = resolve_root(root)
+    with process_lock:
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        action_kind = action.get("action_kind")
+        if not isinstance(action_kind, str):
+            raise ActionRecoveryError("action has no valid action kind")
+        # Records written before this extension are valid.  Materialize the
+        # additive context on their first update, retaining every old field.
+        recovery = _recovery_record(action_id, action_kind)
+        if isinstance(action.get("recovery"), Mapping):
+            recovery.update(
+                _validate_metadata(action["recovery"], field="recovery record")
+            )
+        original = recovery.get("original_action")
+        if original != {"action_id": action_id, "action_kind": action_kind}:
+            raise ActionRecoveryError(
+                "recovery record cannot change original action identity"
+            )
+        for field, value in validated.items():
+            if value is not None:
+                recovery[field] = value
+        if clear_human_blocker:
+            recovery["human_blocker"] = None
+        stamped = _iso(now)
+        action.update(recovery=recovery, updated_at=stamped)
+        actions[action_id] = action
+        payload["version"] = max(int(payload.get("version") or 1), 3)
         payload["actions"] = actions
         _write_payload(repo, payload)
         return _copy(action)
@@ -279,7 +469,10 @@ def record_repair_precondition(
             "state": state,
             "metadata": details,
         }
-        if current is not None and {key: current.get(key) for key in desired} == desired:
+        if (
+            current is not None
+            and {key: current.get(key) for key in desired} == desired
+        ):
             return _copy(action)
         stamped = _iso(now)
         preconditions[precondition_id] = {**desired, "updated_at": stamped}
@@ -377,10 +570,16 @@ def record_owner_resolution(
         if action is None:
             raise ActionNotFound(action_id)
         decisions = [
-            dict(item) for item in action.get("owner_decisions", []) if isinstance(item, dict)
+            dict(item)
+            for item in action.get("owner_decisions", [])
+            if isinstance(item, dict)
         ]
         index = next(
-            (i for i, item in enumerate(decisions) if item.get("decision_id") == decision_id),
+            (
+                i
+                for i, item in enumerate(decisions)
+                if item.get("decision_id") == decision_id
+            ),
             None,
         )
         if index is None:
@@ -396,7 +595,9 @@ def record_owner_resolution(
         }
         if decision.get("state") == "resolved":
             if decision.get("resolution") != resolution:
-                raise ActionRecoveryError("owner decision already has a different resolution")
+                raise ActionRecoveryError(
+                    "owner decision already has a different resolution"
+                )
             return _copy(action)
         if decision.get("state") != "awaiting_resolution":
             raise ActionRecoveryError("unknown decision state")
@@ -504,7 +705,10 @@ def finalize_attempt(
         if action is None:
             raise ActionNotFound(action_id)
         attempts = list(action.get("attempts") or [])
-        if not attempts or int(attempts[-1].get("attempt_number") or 0) != attempt_number:
+        if (
+            not attempts
+            or int(attempts[-1].get("attempt_number") or 0) != attempt_number
+        ):
             raise ActionRecoveryError("only the latest attempt may be finalized")
         attempt = dict(attempts[-1])
         if attempt.get("outcome") is not None:
@@ -611,14 +815,15 @@ def _claim_resume_attempt(
         payload["actions"] = actions
         _write_payload(repo, payload)
         return _copy(action), ActionContext(
-            action_id=action_id, attempt_number=attempt_number,
+            action_id=action_id,
+            attempt_number=attempt_number,
             idempotency_key=str(action.get("idempotency_key") or action_id),
         )
 
 
-def _result_parts(result: ActionResult | Mapping[str, Any] | None) -> tuple[
-    AttemptOutcome, FailureClassification | None, dict[str, Any]
-]:
+def _result_parts(
+    result: ActionResult | Mapping[str, Any] | None,
+) -> tuple[AttemptOutcome, FailureClassification | None, dict[str, Any]]:
     if result is None:
         return "succeeded", None, {}
     if isinstance(result, ActionResult):
@@ -633,13 +838,17 @@ def _result_parts(result: ActionResult | Mapping[str, Any] | None) -> tuple[
         if outcome not in _OUTCOMES:
             raise ActionRecoveryError(f"unknown attempt outcome: {outcome}")
         if classification is not None and classification not in _CLASSIFICATIONS:
-            raise ActionRecoveryError(f"unknown failure classification: {classification}")
+            raise ActionRecoveryError(
+                f"unknown failure classification: {classification}"
+            )
         return (
             outcome,
             classification,
             _validate_metadata(result.get("metadata"), field="result metadata"),
         )
-    raise ActionRecoveryError("action executor must return ActionResult, a mapping, or None")
+    raise ActionRecoveryError(
+        "action executor must return ActionResult, a mapping, or None"
+    )
 
 
 def resume_action(

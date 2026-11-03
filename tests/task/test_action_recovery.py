@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event, Thread
@@ -16,6 +17,7 @@ from cascade.task.action_recovery import (
     record_owner_resolution,
     record_repair_precondition,
     start_attempt,
+    update_recovery_record,
 )
 from cascade.task.execution import mark_queued
 from tests.support import make_repo
@@ -33,12 +35,18 @@ def test_action_identity_attempt_history_and_restart_durability(tmp_path: Path) 
         now=started,
     )
     assert action["attempt_count"] == 0
-    assert create_or_load_action(
-        "task_001:swe_turn", "swe_turn", root=root, attempt_bound=9
-    ) == action
+    assert (
+        create_or_load_action(
+            "task_001:swe_turn", "swe_turn", root=root, attempt_bound=9
+        )
+        == action
+    )
 
     started_action = start_attempt(
-        "task_001:swe_turn", root=root, start_metadata={"provider": "codex"}, now=started
+        "task_001:swe_turn",
+        root=root,
+        start_metadata={"provider": "codex"},
+        now=started,
     )
     finalized = finalize_attempt(
         "task_001:swe_turn",
@@ -71,7 +79,9 @@ def test_action_identity_attempt_history_and_restart_durability(tmp_path: Path) 
     assert reloaded == finalized
 
 
-def test_action_transitions_are_atomic_and_history_is_append_only(tmp_path: Path, monkeypatch) -> None:
+def test_action_transitions_are_atomic_and_history_is_append_only(
+    tmp_path: Path, monkeypatch
+) -> None:
     root = make_repo(tmp_path, git=False)
     create_or_load_action("action", "task_recovery", root=root, attempt_bound=2)
     start_attempt("action", root=root, start_metadata={"turn": 1})
@@ -133,6 +143,99 @@ def test_execution_updates_preserve_action_records(tmp_path: Path) -> None:
     assert action["action_kind"] == "task_recovery"
 
 
+def test_recovery_record_preserves_branch_action_identity_and_context(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    action = create_or_load_action(
+        "feat_001:merge_to_epic",
+        "feature_merge",
+        root=root,
+        attempt_bound=2,
+        lifecycle_state="ready_for_merge",
+        owning_team={"kind": "feature_team", "work_id": "feat_001"},
+        evidence={"source_sha": "source", "target_sha": "target"},
+        provenance={"requested_by": "operator", "approval_id": "approval-7"},
+        retry_marker={"attempt": 0},
+        routing_marker={"queue": "feature-lifecycle"},
+        human_blocker={
+            "code": "review_required",
+            "message": "The implementation review is still pending.",
+            "required_action": "Approve review approval-7.",
+        },
+    )
+
+    assert action["recovery"] == {
+        "original_action": {
+            "action_id": "feat_001:merge_to_epic",
+            "action_kind": "feature_merge",
+        },
+        "lifecycle_state": "ready_for_merge",
+        "owning_team": {"kind": "feature_team", "work_id": "feat_001"},
+        "evidence": {"source_sha": "source", "target_sha": "target"},
+        "provenance": {"requested_by": "operator", "approval_id": "approval-7"},
+        "retry_marker": {"attempt": 0},
+        "routing_marker": {"queue": "feature-lifecycle"},
+        "human_blocker": {
+            "code": "review_required",
+            "message": "The implementation review is still pending.",
+            "required_action": "Approve review approval-7.",
+        },
+    }
+    # Restart reads the same context without reconstructing the original action.
+    assert load_action("feat_001:merge_to_epic", root=root) == action
+
+
+def test_recovery_record_updates_do_not_replace_user_metadata_or_legacy_records(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    create_or_load_action(
+        "epic_001:close",
+        "epic_close",
+        root=root,
+        attempt_bound=2,
+        metadata={"user_file": "keep", "approval": "approved"},
+    )
+    # Simulate an epic_026 record written before the additive recovery field.
+    path = root / ".cascade" / "executions.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["actions"]["epic_001:close"].pop("recovery")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    updated = update_recovery_record(
+        "epic_001:close",
+        root=root,
+        lifecycle_state="awaiting_closeout",
+        owning_team={"kind": "epic_team", "work_id": "epic_001"},
+        routing_marker={"investigation_id": "epic_001:close"},
+        human_blocker={
+            "code": "dirty_operator_checkout",
+            "message": "Operator checkout has unrelated changes.",
+            "required_action": "Use the isolated closeout review.",
+        },
+    )
+    assert updated["metadata"] == {"user_file": "keep", "approval": "approved"}
+    assert updated["recovery"]["original_action"] == {
+        "action_id": "epic_001:close",
+        "action_kind": "epic_close",
+    }
+    assert updated["recovery"]["routing_marker"] == {
+        "investigation_id": "epic_001:close"
+    }
+
+    cleared = update_recovery_record(
+        "epic_001:close",
+        root=root,
+        retry_marker={"resume_token": "same-action"},
+        clear_human_blocker=True,
+    )
+    assert cleared["recovery"]["human_blocker"] is None
+    assert cleared["recovery"]["routing_marker"] == {
+        "investigation_id": "epic_001:close"
+    }
+    assert cleared["recovery"]["retry_marker"] == {"resume_token": "same-action"}
+
+
 def test_resume_serializes_concurrent_calls_and_supplies_stable_idempotency_key(
     tmp_path: Path,
 ) -> None:
@@ -166,7 +269,9 @@ def test_resume_serializes_concurrent_calls_and_supplies_stable_idempotency_key(
     assert effect_keys == ["action"]
 
 
-def test_resume_routes_failures_and_stops_when_attempt_budget_is_exhausted(tmp_path: Path) -> None:
+def test_resume_routes_failures_and_stops_when_attempt_budget_is_exhausted(
+    tmp_path: Path,
+) -> None:
     root = make_repo(tmp_path, git=False)
     create_or_load_action("action", "task_turn", root=root, attempt_bound=1)
 
@@ -184,7 +289,6 @@ def test_resume_routes_failures_and_stops_when_attempt_budget_is_exhausted(tmp_p
     assert bounded["recovery_state"] == "blocked"
     assert bounded["failure_classification"] == "terminal_blocker"
     assert bounded["attempt_count"] == 1
-
 
 
 def test_resume_can_reclaim_an_unfinished_attempt_after_restart(tmp_path: Path) -> None:
@@ -233,7 +337,9 @@ def test_restart_and_concurrent_retry_preserve_one_logical_lifecycle_effect(
 
     started = Event()
     release = Event()
-    downstream_effects = {name: [] for name in ("team_turn", "review", "merge", "completion")}
+    downstream_effects = {
+        name: [] for name in ("team_turn", "review", "merge", "completion")
+    }
     worker_result: list[dict] = []
 
     def publish(context) -> dict:
@@ -265,7 +371,10 @@ def test_restart_and_concurrent_retry_preserve_one_logical_lifecycle_effect(
     completed = worker_result[0]
     assert completed["recovery_state"] == "completed"
     assert completed["attempt_count"] == completed["attempt_bound"] == 2
-    assert [attempt["outcome"] for attempt in completed["attempts"]] == ["failed", "succeeded"]
+    assert [attempt["outcome"] for attempt in completed["attempts"]] == [
+        "failed",
+        "succeeded",
+    ]
     assert [attempt["classification"] for attempt in completed["attempts"]] == [
         "transient_retry",
         None,
@@ -273,13 +382,15 @@ def test_restart_and_concurrent_retry_preserve_one_logical_lifecycle_effect(
     assert all(effects == [action_id] for effects in downstream_effects.values())
 
     # Repeated retry requests after completion are idempotent and add no history or effects.
-    assert resume_action(
-        action_id,
-        root=root,
-        execute=lambda _context: pytest.fail("completed action must not execute"),
-    ) == completed
+    assert (
+        resume_action(
+            action_id,
+            root=root,
+            execute=lambda _context: pytest.fail("completed action must not execute"),
+        )
+        == completed
+    )
     assert load_action(action_id, root=root) == completed
-
 
 
 def test_supervisor_preconditions_and_owner_resolution_resume_same_action(
@@ -298,12 +409,15 @@ def test_supervisor_preconditions_and_owner_resolution_resume_same_action(
         metadata={"feature_id": "feat_001", "branch": "epic/epic_001"},
     )
     assert pending["repair_preconditions"][0]["state"] == "pending"
-    assert record_repair_precondition(
-        action_id,
-        "integration_checkout",
-        root=root,
-        metadata={"feature_id": "feat_001", "branch": "epic/epic_001"},
-    ) == pending
+    assert (
+        record_repair_precondition(
+            action_id,
+            "integration_checkout",
+            root=root,
+            metadata={"feature_id": "feat_001", "branch": "epic/epic_001"},
+        )
+        == pending
+    )
 
     repaired = record_repair_precondition(
         action_id,
@@ -322,9 +436,14 @@ def test_supervisor_preconditions_and_owner_resolution_resume_same_action(
         metadata={"conflict_paths": ["cascade/task/action_recovery.py"]},
     )
     assert handed_off["recovery_state"] == "awaiting_owner_decision"
-    assert resume_action(
-        action_id, root=root, execute=lambda _context: pytest.fail("must await owner")
-    ) == handed_off
+    assert (
+        resume_action(
+            action_id,
+            root=root,
+            execute=lambda _context: pytest.fail("must await owner"),
+        )
+        == handed_off
+    )
 
     resolved = record_owner_resolution(
         action_id,
@@ -341,16 +460,23 @@ def test_supervisor_preconditions_and_owner_resolution_resume_same_action(
     assert resolved["recovery_state"] == "retryable"
     assert decision["resolution"]["action_id"] == action_id
     assert decision["resolution"]["decision_id"] == decision["decision_id"]
-    assert record_owner_resolution(
-        action_id,
-        "merge-conflict:source-target",
-        "resolution:feat_001:42",
-        root=root,
-        metadata={"strategy": "feature-approved"},
-    ) == resolved
+    assert (
+        record_owner_resolution(
+            action_id,
+            "merge-conflict:source-target",
+            "resolution:feat_001:42",
+            root=root,
+            metadata={"strategy": "feature-approved"},
+        )
+        == resolved
+    )
 
-    resumed = resume_action(action_id, root=root, execute=lambda context: {
-        "metadata": {"resumed_action": context.action_id}
-    })
+    resumed = resume_action(
+        action_id,
+        root=root,
+        execute=lambda context: {"metadata": {"resumed_action": context.action_id}},
+    )
     assert resumed["recovery_state"] == "completed"
-    assert resumed["attempts"][-1]["completion_metadata"] == {"resumed_action": action_id}
+    assert resumed["attempts"][-1]["completion_metadata"] == {
+        "resumed_action": action_id
+    }
