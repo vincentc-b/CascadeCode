@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from cascade.agent.mcp_wrappers import ToolEffectCollector, dispatch_planning_tool
 from cascade.agent.planning_sandbox import collect_epic_readable_paths, materialize_scratch, teardown_scratch
 from cascade.board.store import move_doc, read_doc, write_doc
 from cascade.epic.mint import list_children, mint_feature
@@ -36,6 +37,14 @@ def test_epic_team_reads_and_mints_from_live_worktree_with_stale_trunk_copy(tmp_
         assert "Live planning revision." in (scratch / "plan.md").read_text()
     finally:
         teardown_scratch(scratch)
+
+    dispatch_planning_tool(
+        "epic", "write_doc",
+        {"doc": {"meta": {"id": "epic_028"}, "body": active.body + "\nTool edit.\n", "sha": active.sha}},
+        scope_id="epic_028", repo_root=root, collector=ToolEffectCollector(),
+    )
+    assert "Tool edit." in read_doc("epic_028", root=worktree).body
+    assert "Tool edit." not in read_doc("epic_028", root=root).body
 
     feature_id = mint_feature("New child", epic_id="epic_028", root=root)
     child = read_doc(feature_id, root=root)
