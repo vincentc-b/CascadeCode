@@ -98,6 +98,10 @@ _(none)_
 
 - 2026-11-03 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-03 · Epic Manager · **Scope and delivery**
+  Chose Deliver one vertical feature, feat_032_001, that replaces the prompt/JSON recovery flow with an inventory-backed modal for active Epic, Feature, and Task rows; leave provider discovery and the recovery engine unchanged..
+  Rationale: The operator outcome is incomplete without the full dialog-to-recovery handoff. Existing inventory and recovery boundaries already solve discovery and safe mutation, so extending them would add cost without serving the brief.
+  Honors: The approved request for brief-like provider/model dropdowns, frugal engineering, and the existing provider recovery safety contract..
 ## Amendment log
 
 _(none)_
