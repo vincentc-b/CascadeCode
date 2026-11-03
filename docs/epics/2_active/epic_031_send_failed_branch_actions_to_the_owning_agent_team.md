@@ -113,6 +113,11 @@ None blocking. Feature planning must confirm the existing `epic_026` schema and 
   Chose Use one durable recovery episode for command failure, owning-team handoff, supervisor retry, and War Room status..
   Rationale: A shared record preserves action identity and idempotency across all consumers while extending epic_026 instead of adding a parallel incident system.
   Honors: Required behaviors 1–5; implementation boundary to extend existing recovery paths..
+
+- `dec_002` · 2026-11-03 · Epic Manager · **Ownership routing**
+  Chose Route by intended integration ownership: Feature Team for Task/Feature-local work, Epic Team for Epic targets and cross-feature integration; persist ambiguous routing as blocked..
+  Rationale: The intended target identifies who can resolve the failure, and an explicit blocker prevents silent loss when metadata is incomplete.
+  Honors: Required behavior 3 and the operator-visible blocker acceptance scenario..
 ## Amendment log
 
 _(No amendments.)_
