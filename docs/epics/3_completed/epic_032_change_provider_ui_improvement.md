@@ -2,7 +2,7 @@
 id: epic_032
 title: change provider ui improvement
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_032_001
