@@ -2,7 +2,7 @@
 id: feat_028_002
 title: Persist and expose epic implementation-review state
 tier: feature
-status: active
+status: completed
 parent: epic_028
 children:
 - task_028_002_001
