@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_031_001
+- feat_031_002
 depends_on: []
 owners:
 - epic_manager
@@ -66,6 +67,7 @@ _(To be developed during Epic planning.)_
 _(To be developed during Epic planning.)_
 
 ## Feature breakdown
+- feat_031_002
 - feat_031_001
 
 _(To be developed during Epic planning.)_
