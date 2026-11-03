@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import cascade.review as review
+from cascade.epic.recovery import reconcile_stacked_review_gap
 from cascade.stacked_review_recovery import (
     classify_stacked_review_integration_gap,
     persist_stacked_review_integration_gap,
 )
 from cascade.task.action_recovery import load_action
+from cascade.tracking import MergeRequest
 from cascade.workspace.integration_worktree import integration_branch
 from tests.support import add_doc, make_repo
 
@@ -98,3 +101,57 @@ def test_merged_stale_review_is_not_closed_or_completed(tmp_path: Path, monkeypa
     records = json.loads((root / ".cascade" / "reviews.json").read_text(encoding="utf-8"))
     assert records["feat_002"].get("closed") is not True
     assert load_action("feat_002:stacked_review_integration_gap", root=root) is not None
+
+
+def test_epic_recovery_creates_one_epic_review_and_preserves_provenance(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _stacked_board(root)
+    record = review.review_record_for_feature("feat_002", root=root)
+    assert record is not None
+    gap = classify_stacked_review_integration_gap("feat_002", record, root=root, accepted=True)
+    assert gap is not None
+    persist_stacked_review_integration_gap(gap, root=root)
+
+    created: list[tuple[str, str]] = []
+    follow_up = MergeRequest(
+        url="https://github.example/o/r/pull/999",
+        number="999",
+        forge="github",
+        source_branch="feat/feat_002",
+        target_branch="epic/epic_001",
+        draft=False,
+    )
+    monkeypatch.setattr(
+        "cascade.epic.recovery.get_integration_worktree",
+        lambda *_args: SimpleNamespace(path=root),
+    )
+    monkeypatch.setattr("cascade.epic.recovery.find_merge_request", lambda *_args, **_kwargs: None)
+
+    def create(_root: Path, **kwargs) -> MergeRequest:
+        created.append((kwargs["source_branch"], kwargs["target_branch"]))
+        return follow_up
+
+    monkeypatch.setattr("cascade.epic.recovery.create_merge_request", create)
+
+    first = reconcile_stacked_review_gap(
+        "feat_002:stacked_review_integration_gap", epic_id="epic_001", root=root
+    )
+    second = reconcile_stacked_review_gap(
+        "feat_002:stacked_review_integration_gap", epic_id="epic_001", root=root
+    )
+
+    assert first["review_url"] == follow_up.url
+    assert second == first
+    assert created == [("feat/feat_002", "epic/epic_001")]
+    action = load_action("feat_002:stacked_review_integration_gap", root=root)
+    assert action is not None
+    assert action["recovery_state"] == "retryable"
+    assert action["metadata"]["reconciliation_review"]["url"] == follow_up.url
+    assert action["owner_decisions"][0]["state"] == "resolved"
+    updated = review.review_record_for_feature("feat_002", root=root)
+    assert updated is not None
+    assert updated["target_branch"] == "epic/epic_001"
+    assert updated["closed"] is False
+    assert updated["stacked_reconciliation"]["originating_review"] == gap.accepted_review

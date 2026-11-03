@@ -1017,3 +1017,52 @@ def persist_review_target_branch(
 
     trunk = locate_trunk(root)
     _update_record(trunk, feature_id, {"target_branch": target_branch})
+
+
+def persist_stacked_reconciliation_review(
+    feature_id: str,
+    mr: MergeRequest,
+    *,
+    action_id: str,
+    originating_review: dict[str, object],
+    root: Path,
+) -> dict[str, object]:
+    """Replace a stranded stacked-review record with its Epic-targeted review.
+
+    A review registry has one current review per Feature.  Keep the accepted
+    predecessor-targeted review as explicit provenance while making the new
+    Epic-targeted review the one that the normal poller can reconcile.
+    """
+
+    trunk = locate_trunk(root)
+    provenance = dict(originating_review)
+    reconciliation = {
+        "action_id": action_id,
+        "originating_review": provenance,
+    }
+    current = review_record_for_feature(feature_id, root=trunk)
+    if current is not None:
+        prior = current.get("stacked_reconciliation")
+        if isinstance(prior, dict) and prior.get("action_id") not in (None, action_id):
+            raise GitError(f"{feature_id} already has a different stacked reconciliation")
+        if current.get("url") == mr.url and current.get("target_branch") == mr.target_branch:
+            return current
+    record = _update_record(
+        trunk,
+        feature_id,
+        {
+            "url": mr.url,
+            "number": mr.number,
+            "forge": mr.forge,
+            "source_branch": mr.source_branch,
+            "target_branch": mr.target_branch,
+            "draft": mr.draft,
+            "closed": False,
+            "seen_comments": [],
+            "toast_notified": False,
+            "stacked_reconciliation": reconciliation,
+        },
+        create=True,
+    )
+    assert record is not None
+    return record
