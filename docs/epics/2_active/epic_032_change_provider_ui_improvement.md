@@ -14,19 +14,13 @@ parent_rev: null
 created: '2026-11-03'
 updated: '2026-11-03'
 provider: codex
-flex_mode: true
+flex_mode: false
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
-  feature_lead: gpt-5.6-sol
-  feature_architect: gpt-5.6-sol
-  swe: gpt-5.6-sol
 reasoning:
   epic_manager: high
   epic_architect: high
-  feature_lead: medium
-  feature_architect: medium
-  swe: medium
 ---
 # change provider ui improvement
 
