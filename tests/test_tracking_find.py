@@ -54,3 +54,16 @@ def test_merged_review_snapshot_exposes_immutable_merge_commit(tmp_path: Path) -
     snapshot = tracking.merge_request_snapshot(tmp_path, mr, runner=runner)
     assert snapshot["state"] == "merged"
     assert snapshot["merge_sha"] == sha
+
+
+def test_review_snapshot_distinguishes_missing_review(tmp_path: Path) -> None:
+    mr = tracking.MergeRequest(
+        url="https://github.com/example/project/pull/404", number="404", forge="github",
+        source_branch="epic/epic_001", target_branch="main", draft=False,
+    )
+
+    def runner(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 1, "", "HTTP 404: Not Found")
+
+    with pytest.raises(tracking.ReviewNotFound):
+        tracking.merge_request_snapshot(tmp_path, mr, runner=runner)

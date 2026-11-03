@@ -7,10 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from cascade.board.errors import GitError
 from cascade.board.store import read_doc_in_worktree
 from cascade.boss.epic_complete import confirm_epic_complete_result
 from cascade.review import ensure_epic_review
-from cascade.tracking import MergeRequest
+from cascade.tracking import MergeRequest, ReviewNotFound
+from cascade.war_room.serialize import board_view_from_index
+from cascade.war_room.server import _epic_complete_review_state
 from cascade.watchdog import activate_epic
 from cascade.watchdog.events import read_events
 from cascade.workspace.integration_worktree import integration_worktree_path, merged_board
@@ -20,6 +23,15 @@ from tests.support import add_doc, commit_board, make_repo
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", *args], cwd=repo, check=check, capture_output=True, text=True
+    )
+
+
+def _epic_row(board: dict, epic_id: str) -> dict:
+    return next(
+        row
+        for column in board["epics"].values()
+        for row in column
+        if row["id"] == epic_id
     )
 
 
@@ -67,18 +79,12 @@ def test_epic_closes_through_one_idempotent_implementation_review(
 
     monkeypatch.setattr("cascade.review.find_merge_request", find_review)
     monkeypatch.setattr("cascade.review.create_merge_request", create_review)
+    monkeypatch.setattr("cascade.review.detect_forge", lambda _root: "github")
     monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
     monkeypatch.setattr(
         "cascade.boss.epic_close_review.ensure_epic_close_review",
         lambda *_args, **_kwargs: pytest.fail("must not open a terminal-only review"),
     )
-
-    operator_before = {
-        "head": _git(root, "rev-parse", "HEAD").stdout,
-        "branch": _git(root, "branch", "--show-current").stdout,
-        "index": _git(root, "ls-files", "--stage", "-z").stdout,
-        "status": _git(root, "status", "--porcelain").stdout,
-    }
 
     # Preparation is convergent: completion is staged before review creation,
     # and a retry finds the same implementation review.
@@ -88,6 +94,12 @@ def test_epic_closes_through_one_idempotent_implementation_review(
     assert prepared.meta.status == "completed"
     assert prepared.meta.path.parent.name == "3_completed"
     assert created_reviews == [review]
+    operator_before = {
+        "head": _git(root, "rev-parse", "HEAD").stdout,
+        "branch": _git(root, "branch", "--show-current").stdout,
+        "index": _git(root, "ls-files", "--stage", "-z").stdout,
+        "status": _git(root, "status", "--porcelain").stdout,
+    }
 
     snapshot = {"state": "open", "merge_sha": None}
     monkeypatch.setattr(
@@ -146,3 +158,101 @@ def test_epic_closes_through_one_idempotent_implementation_review(
         "status": _git(root, "status", "--porcelain").stdout,
     }
     assert operator_after == operator_before
+
+
+def test_close_api_reconstructs_and_blocks_without_replacing_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = make_repo(tmp_path / "operator")
+    (root / "README.md").write_text("board\n", encoding="utf-8")
+    _git(root, "add", "README.md")
+    _git(root, "commit", "-m", "init")
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+
+    remote = tmp_path / "remote.git"
+    _git(tmp_path, "init", "--bare", str(remote))
+    _git(root, "remote", "add", "origin", str(remote))
+    _git(root, "push", "origin", "main", "epic/epic_001")
+
+    review = MergeRequest(
+        url="https://github.example/pull/7",
+        number="7",
+        forge="github",
+        source_branch="epic/epic_001",
+        target_branch="main",
+        draft=False,
+    )
+    created_reviews: list[MergeRequest] = []
+    lookup: dict[str, object] = {"result": {"state": "open", "merge_sha": None}}
+
+    monkeypatch.setattr("cascade.review.find_merge_request", lambda *_args, **_kwargs: None)
+
+    def create_review(*_args, **_kwargs) -> MergeRequest:
+        created_reviews.append(review)
+        return review
+
+    def review_snapshot(*_args, **_kwargs) -> dict[str, object]:
+        result = lookup["result"]
+        if isinstance(result, Exception):
+            raise result
+        assert isinstance(result, dict)
+        return result
+
+    monkeypatch.setattr("cascade.review.create_merge_request", create_review)
+    monkeypatch.setattr("cascade.review.merge_request_snapshot", review_snapshot)
+    monkeypatch.setattr("cascade.review.detect_forge", lambda _root: "github")
+    monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+
+    expected_pending = {
+        "close_stage": "implementation_review_pending",
+        "review_url": review.url,
+        "source_branch": review.source_branch,
+        "target_branch": review.target_branch,
+        "forge_state": "open",
+        "blocker": None,
+    }
+    first_result = confirm_epic_complete_result("epic_001", "human", root=root)
+    first = _epic_complete_review_state(first_result)
+    assert first == expected_pending
+    board = board_view_from_index(merged_board(root), root=root)
+    assert _epic_row(board, "epic_001")["implementation_review"] == first
+
+    # A later process has no in-memory Close result. It reconstructs the
+    # durable review via forge lookup and still never enters the create path.
+    repeated_result = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert _epic_complete_review_state(repeated_result) == first
+
+    lookup["result"] = ReviewNotFound("review was removed")
+    missing_result = confirm_epic_complete_result("epic_001", "human", root=root)
+    missing = _epic_complete_review_state(missing_result)
+    assert missing is not None and missing["close_stage"] == "blocked"
+    assert missing["blocker"] == {
+        "code": "review_missing",
+        "message": "Restore access to the existing forge review or verify that it still exists.",
+        "retryable": False,
+    }
+    assert missing["review_url"] == review.url
+
+    lookup["result"] = GitError("forge unavailable")
+    failed_result = confirm_epic_complete_result("epic_001", "human", root=root)
+    failed = _epic_complete_review_state(failed_result)
+    assert failed is not None and failed["close_stage"] == "blocked"
+    assert failed["blocker"] == {
+        "code": "review_lookup_failed",
+        "message": "Retry after restoring forge connectivity and credentials.",
+        "retryable": True,
+    }
+    board = board_view_from_index(merged_board(root), root=root)
+    assert _epic_row(board, "epic_001")["implementation_review"] == failed
+
+    assert created_reviews == [review]
