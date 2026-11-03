@@ -308,6 +308,10 @@ def ensure_epic_review(epic_id: str, *, root: Path) -> MergeRequest | None:
     doc = read_doc(epic_id, root=entry.path)
     if doc.meta.tier != "epic":
         raise NotFound(epic_id)
+    if doc.meta.status == "active" and doc.meta.path.parent.name == "2_active":
+        move_doc(epic_id, "completed", root=entry.path)
+    elif doc.meta.status != "completed" or doc.meta.path.parent.name != "3_completed":
+        raise GitError(f"{epic_id} must be active or completed before review")
     source = integration_branch("epic", epic_id)
     target = resolve_product_trunk(trunk)
     _restore_unrelated_specs_for_epic_review(entry.path, trunk, epic_id)
