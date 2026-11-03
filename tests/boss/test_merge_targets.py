@@ -588,7 +588,7 @@ def test_activated_epic_closes_through_real_git_promotion(tmp_path: Path) -> Non
     ).stdout == ""
 
 
-def test_epic_close_opens_review_and_preserves_other_epics_docs(
+def test_epic_review_preparation_is_idempotent_and_preserves_other_epics_docs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = make_repo(tmp_path)
@@ -620,25 +620,45 @@ def test_epic_close_opens_review_and_preserves_other_epics_docs(
     opened = []
     monkeypatch.setattr(review_module, "review_enabled", lambda _root: True)
     monkeypatch.setattr(review_module, "push_branch", lambda *_a, **_k: None)
-    monkeypatch.setattr(review_module, "find_merge_request", lambda *_a, **_k: None)
+
+    def find_review(*_args, **_kwargs):
+        return opened[0] if opened else None
+
+    monkeypatch.setattr(review_module, "find_merge_request", find_review)
 
     def create_review(_root, **kwargs):
-        opened.append(kwargs)
-        return MergeRequest(
+        review = MergeRequest(
             url="https://github.example/pull/1", number="1", forge="github",
             source_branch=kwargs["source_branch"], target_branch=kwargs["target_branch"], draft=False,
         )
+        opened.append(review)
+        return review
 
     monkeypatch.setattr(review_module, "create_merge_request", create_review)
     result = confirm_epic_complete_result("epic_001", "human", root=root)
     assert result.reason == "pending_epic_review"
     assert result.review_url == "https://github.example/pull/1"
     assert len(opened) == 1
-    assert opened[0]["source_branch"] == "epic/epic_001"
-    assert opened[0]["target_branch"] == "main"
+    assert opened[0].source_branch == "epic/epic_001"
+    assert opened[0].target_branch == "main"
     assert unrelated.meta.path.exists()
     epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
     assert (epic_wt / remote_only.meta.path.relative_to(reviewer)).exists()
+    assert read_doc_in_worktree("epic_001", epic_wt).meta.status == "completed"
+    assert read_doc_in_worktree("epic_001", root).meta.status == "active"
+
+    prepared_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=epic_wt, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    repeated = review_module.ensure_epic_review("epic_001", root=root)
+
+    assert repeated is not None and repeated.url == opened[0].url
+    assert len(opened) == 1
+    assert subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=epic_wt, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip() == prepared_head
 
 
 def test_ready_epic_auto_closes_with_runtime_comment_sidecar(tmp_path: Path) -> None:
