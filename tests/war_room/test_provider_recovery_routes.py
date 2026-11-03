@@ -19,13 +19,14 @@ from cascade.agent.execution_preflight import (
     provider_blocker,
     recheck_provider_capability,
 )
-from cascade.board.store import list_board, read_doc, write_doc
+from cascade.board.store import list_board, move_doc, read_doc, write_doc
 from cascade.epic.lifecycle_gate import LifecycleGate
 from cascade.task.checkpoint import thread_config
 from cascade.task.graph import ensure_task_graph
 from cascade.provider_recovery_command import ProviderRecoveryCommandResult
 from cascade.war_room.provider_routes import try_handle_provider_post
 from cascade.war_room.serialize import board_view_from_index
+from cascade.workspace.integration_worktree import ensure_integration_worktree
 from tests.support import add_doc, make_repo
 
 
@@ -143,6 +144,35 @@ def test_change_is_human_authorized_and_clears_only_recovered_blocker(
     )["blockers"]
     assert blockers[work_id]["active"] is False
     assert blockers["task_002"]["active"] is True
+
+
+def test_change_route_uses_active_integration_copy_over_trunk_backlog(tmp_path, monkeypatch):
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_028", title="Epic", tier="epic")
+    worktree = ensure_integration_worktree(
+        "epic", "epic_028", branch="epic/epic_028", base_ref="main", trunk=root
+    ).path
+    move_doc("epic_028", "active", root=worktree)
+    (root / ".cascade" / "provider_blockers.json").write_text(
+        json.dumps({"version": 1, "blockers": {
+            "epic_028": {"active": True, "classification": "transient"}
+        }}), encoding="utf-8"
+    )
+    observed = []
+    monkeypatch.setattr(
+        "cascade.war_room.provider_routes.recover_active_item_provider_command",
+        lambda item, request, **kwargs: (
+            observed.append((item, request, kwargs))
+            or ProviderRecoveryCommandResult(True, item, "fresh_role_turn", "checkpoint_pins_replaced")
+        ),
+    )
+    handler = _Handler(root, "/api/provider-recovery/epic_028/change")
+
+    assert try_handle_provider_post(handler, {
+        "provider": "codex", "models": {"epic_manager": "offered", "epic_architect": "offered"}
+    })
+    assert handler.responses[0][0] == 200
+    assert observed[0][0] == "epic_028"
 
 
 def test_retry_reuses_persisted_selection_after_credentials_are_restored(

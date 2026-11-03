@@ -14,7 +14,7 @@ from typing import Callable, Literal
 
 from cascade.board.context import resolve_root
 from cascade.board.errors import BoardError
-from cascade.board.store import list_board
+from cascade.workspace.integration_worktree import merged_board
 from cascade.epic.return_eligibility import (
     ReturnEligibility,
     ReturnEligibilityInput,
@@ -134,7 +134,7 @@ def load_return_eligibility_snapshot(
     will replace those unknown fields with authoritative facts.
     """
 
-    board = list_board(resolve_root(root))
+    board = merged_board(resolve_root(root))
     meta = board.by_id.get(epic_id)
     if meta is None:
         return _unreadable_snapshot(epic_id)

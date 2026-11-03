@@ -8,6 +8,7 @@ from cascade.board.store import list_board, move_doc
 from cascade.epic.return_command import return_epic_to_backlog
 from cascade.epic.return_eligibility import ReturnEligibilityInput, ReturnGraphMember
 from cascade.war_room.serialize import board_view_from_index
+from cascade.workspace.integration_worktree import ensure_integration_worktree, merged_board
 from tests.support import add_doc, make_repo
 
 
@@ -29,6 +30,21 @@ def test_active_epic_row_and_command_share_return_eligibility(tmp_path):
         "source_brief_missing",
         "graph_unavailable",
     ]
+
+
+def test_return_eligibility_reads_active_integration_copy_over_stale_trunk_backlog(tmp_path):
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_028", title="Returnable", tier="epic")
+    worktree = ensure_integration_worktree(
+        "epic", "epic_028", branch="epic/epic_028", base_ref="main", trunk=root
+    ).path
+    move_doc("epic_028", "active", root=worktree)
+
+    row = board_view_from_index(merged_board(root), root=root)["epics"]["2_active"][0]
+    result = return_epic_to_backlog("epic_028", "request-1", actor="human", root=root)
+
+    assert row["return_to_backlog"] == result.eligibility.to_dict()
+    assert "epic_not_active" not in result.eligibility.reason_codes
 
 
 def test_failed_provider_startup_without_mutation_remains_eligible_in_row_and_command(

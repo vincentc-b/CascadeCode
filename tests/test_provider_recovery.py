@@ -9,11 +9,12 @@ import pytest
 
 from cascade.agent.discovery.inventory import InventoryFreshness, ProviderInventoryItem, ProviderInventoryResult
 from cascade.agent.discovery.types import DiscoveredModel, ReasoningCapability
-from cascade.board.store import read_doc, write_doc
+from cascade.board.store import move_doc, read_doc, read_doc_in_worktree, write_doc
 from cascade.provider_recovery import ProviderRecoveryRequest, recover_active_item_provider
 from cascade.provider_recovery_command import recover_active_item_provider_command
 from cascade.task.graph import clear_task_graph_sessions, seed_task_role_models
 from cascade.watchdog.model_resolve import resolve_backend
+from cascade.workspace.integration_worktree import ensure_integration_worktree
 from tests.support import add_doc, make_repo
 
 
@@ -109,6 +110,34 @@ def test_human_command_reconstructs_once_then_is_idempotent(tmp_path: Path) -> N
     assert handoffs[0].kind == "resume_inflight"
     assert second.ok and second.idempotent
     assert len(handoffs) == 1
+
+
+def test_recovery_updates_active_epic_in_integration_worktree_when_trunk_has_backlog_copy(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, models=True)
+    add_doc(root, id="epic_028", title="Epic", tier="epic", status="backlog")
+    worktree = ensure_integration_worktree(
+        "epic", "epic_028", branch="epic/epic_028", base_ref="main", trunk=root
+    ).path
+    move_doc("epic_028", "active", root=worktree)
+    assert read_doc("epic_028", root=root).meta.status == "backlog"
+
+    handoffs = []
+    request = ProviderRecoveryRequest(
+        "codex", {"epic_manager": "offered", "epic_architect": "offered"}
+    )
+    result = recover_active_item_provider_command(
+        "epic_028", request, actor="human", root=root,
+        inventory=_inventory("offered"), kickoff=handoffs.append,
+    )
+
+    assert result.ok and result.disposition == "fresh_role_turn"
+    assert len(handoffs) == 1
+    assert read_doc("epic_028", root=root).meta.status == "backlog"
+    live = read_doc_in_worktree("epic_028", worktree)
+    assert live.meta.status == "active"
+    assert live.meta.models == {"epic_manager": "offered", "epic_architect": "offered"}
 
 
 def test_command_requires_human_authorization(tmp_path: Path) -> None:

@@ -20,7 +20,7 @@ from typing import Callable, Literal
 from cascade.agent.discovery.inventory import ProviderInventoryResult
 from cascade.board.context import resolve_root
 from cascade.board.errors import BoardError, NotFound
-from cascade.board.store import read_doc
+from cascade.workspace.doc_root import read_doc_resolved
 from cascade.epic.lifecycle_gate import LifecycleGate, lifecycle_gate
 from cascade.provider_recovery import (
     ProviderRecoveryRequest,
@@ -79,7 +79,7 @@ def recover_active_item_provider_command(
     repo = resolve_root(root)
     try:
         with process_lock:
-            doc = read_doc(work_id, root=repo)
+            doc = read_doc_resolved(work_id, root=repo)
             if doc.meta.tier not in ("epic", "feature", "task") or not _is_active(doc):
                 return _error(work_id, "not_active", "Provider recovery is only available for active work.")
             epic_id = _owning_epic(doc.meta.id, doc.meta.tier, doc.meta.parent, repo)
@@ -107,7 +107,7 @@ def recover_active_item_provider_command(
         try:
             with process_lock:
                 # Re-read identity and active state after closing admission.
-                doc = read_doc(work_id, root=repo)
+                doc = read_doc_resolved(work_id, root=repo)
                 if doc.meta.tier not in ("epic", "feature", "task") or not _is_active(doc):
                     return _error(work_id, "not_active", "Provider recovery is only available for active work.")
                 if _owning_epic(doc.meta.id, doc.meta.tier, doc.meta.parent, repo) != epic_id:
@@ -165,12 +165,12 @@ def _owning_epic(work_id: str, tier: str, parent: str | None, root: Path) -> str
         return work_id
     if not parent:
         raise ValueError("non-epic work has no parent")
-    parent_doc = read_doc(parent, root=root)
+    parent_doc = read_doc_resolved(parent, root=root)
     if parent_doc.meta.tier == "epic":
         return parent_doc.meta.id
     if parent_doc.meta.tier != "feature" or not parent_doc.meta.parent:
         raise ValueError("work hierarchy is invalid")
-    epic = read_doc(parent_doc.meta.parent, root=root)
+    epic = read_doc_resolved(parent_doc.meta.parent, root=root)
     if epic.meta.tier != "epic":
         raise ValueError("work hierarchy has no epic")
     return epic.meta.id
