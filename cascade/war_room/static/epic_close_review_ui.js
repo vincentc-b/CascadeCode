@@ -17,7 +17,7 @@
     status.setAttribute("aria-label", "Epic close status: " + status.textContent);
     row.appendChild(status);
 
-    if (review.review_url) {
+    if (stage !== "completed" && review.review_url) {
       actions.appendChild(helpers.actionLink(
         "Open implementation review",
         review.review_url
