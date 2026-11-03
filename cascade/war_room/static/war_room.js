@@ -965,9 +965,12 @@
           }
           actions.appendChild(approveBtn);
         }
-        actions.appendChild(actionButton("Close epic", function () {
-          return confirmEpicComplete(item.id);
-        }));
+        const closeReview = item.implementation_review;
+        if (!closeReview || closeReview.close_stage !== "completed") {
+          actions.appendChild(actionButton("Close epic", function () {
+            return confirmEpicComplete(item.id);
+          }));
+        }
       }
     }
     if (tier === "features") {
@@ -999,6 +1002,13 @@
       }
     }
     if (tier === "epics") {
+      if (globalThis.EpicCloseReviewUi && globalThis.EpicCloseReviewUi.append) {
+        globalThis.EpicCloseReviewUi.append(document, row, actions, item.implementation_review, {
+          actionLink: actionLink,
+          actionButton: actionButton,
+          finishClose: function () { return confirmEpicComplete(item.id); },
+        });
+      }
       if (column === "1_backlog") {
         actions.appendChild(actionButton("Edit", function () { return openBriefEdit(item); }));
         if (cancellationReview) {
@@ -1191,7 +1201,7 @@
     link.className = "board-action-link";
     link.href = href;
     link.target = "_blank";
-    link.rel = "noreferrer";
+    link.rel = "noopener noreferrer";
     link.textContent = label;
     link.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -1291,7 +1301,6 @@
       if (body.ok) {
         dispatchBanner = "";
         setStatus("Epic " + epicId + " closed.", false);
-        await refreshBoard();
       } else {
         const blockers = (body.blocker_ids || []).join(", ");
         if (body.reason === "open_human_comments") {
@@ -1318,6 +1327,9 @@
           );
         }
       }
+      // The response may have persisted a pending or blocked close stage even
+      // when completion was refused. Always redraw from canonical server state.
+      await refreshBoard();
     } catch (err) {
       const timedOut = err && (err.name === "TimeoutError" || err.name === "AbortError");
       setStatus(timedOut ? "Epic close timed out after 60s" : err.message || "Epic close failed", true);
