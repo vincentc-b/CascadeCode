@@ -18,6 +18,7 @@ provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-11-03T01:17:25.327918+00:00'
 ---
 # Show durable epic close-review controls in the War Room
 
