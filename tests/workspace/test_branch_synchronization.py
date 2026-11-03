@@ -11,8 +11,10 @@ import pytest
 from cascade.stacked_dispatch import read_feature_dispatch_selection
 from cascade.board.parse import render_doc
 from cascade.board.store import list_board, read_doc
+from cascade.task.action_recovery import load_action
 from cascade.task.worktree import clear_task_runs
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
+from cascade.watchdog.events import read_events
 from cascade.war_room.room_settings import write_stacked_pr_enabled
 from cascade.workspace.branch_synchronization import (
     inspect_branch_synchronization,
@@ -221,6 +223,18 @@ def test_dirty_index_blocks_update(tmp_path: Path) -> None:
     assert inspection.update_blocked_reason == "dirty_index"
     result = update_integration_branch("feat_001", root=root)
     assert not result.ok and result.reason == "dirty_index"
+    action = load_action("feat_001:integration_branch_update", root=root)
+    assert action is not None
+    assert action["recovery"]["owning_team"] == {
+        "kind": "epic_team",
+        "work_id": "epic_001",
+    }
+    events, _ = read_events("epic_001", 0, root=root)
+    assert [event.type for event in events].count("BranchActionRecoveryRequested") == 1
+
+    assert not update_integration_branch("feat_001", root=root).ok
+    events, _ = read_events("epic_001", 0, root=root)
+    assert [event.type for event in events].count("BranchActionRecoveryRequested") == 1
 
 
 def test_untracked_reports_local_changes(tmp_path: Path) -> None:

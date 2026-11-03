@@ -10,6 +10,7 @@ import pytest
 from cascade.board.paths import column_dir
 from cascade.board.store import read_doc
 from cascade.boss.merge import merge_task_branch
+from cascade.task.action_recovery import load_action
 from cascade.task.worktree import clear_task_runs, create_task_worktree
 from cascade.workspace.integration_worktree import (
     ensure_integration_worktree,
@@ -145,6 +146,24 @@ def test_missing_branch_returns_error(tmp_path: Path) -> None:
     assert task.meta.path.parent.name == "2_active"
     feature_events, _ = read_events("feat_001", 0, root=root)
     assert not any(event.type == "TaskMerged" for event in feature_events)
+    recovery = load_action(f"{task_id}:merge_to_feature", root=root)
+    assert recovery is not None
+    assert recovery["recovery"]["owning_team"] == {
+        "kind": "feature_team",
+        "work_id": "feat_001",
+    }
+    investigations = [
+        event
+        for event in feature_events
+        if event.type == "BranchActionRecoveryRequested"
+    ]
+    assert len(investigations) == 1
+
+    assert not merge_task_branch(task_id, root=root).ok
+    feature_events, _ = read_events("feat_001", 0, root=root)
+    assert len(
+        [event for event in feature_events if event.type == "BranchActionRecoveryRequested"]
+    ) == 1
 
 
 def test_merge_conflict_leaves_task_active(tmp_path: Path) -> None:

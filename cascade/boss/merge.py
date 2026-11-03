@@ -48,7 +48,7 @@ def _merge_result_from_sync(
     )
 
 
-def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
+def _merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
     """Merge ``task/{task_id}`` into ``feat/{feature_id}`` and complete the task."""
 
     trunk = resolve_root(root)
@@ -185,7 +185,7 @@ def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
     )
 
 
-def merge_feature_branch(feature_id: str, *, root: Path | None = None) -> MergeResult:
+def _merge_feature_branch(feature_id: str, *, root: Path | None = None) -> MergeResult:
     """Merge ``feat/{feature_id}`` into ``epic/{epic_id}`` when branches exist."""
 
     trunk = resolve_root(root)
@@ -242,7 +242,7 @@ def merge_feature_branch(feature_id: str, *, root: Path | None = None) -> MergeR
     )
 
 
-def promote_epic_to_trunk(epic_id: str, *, root: Path | None = None) -> MergeResult:
+def _promote_epic_to_trunk(epic_id: str, *, root: Path | None = None) -> MergeResult:
     """Merge ``epic/{epic_id}`` into the product trunk checkout (human promote)."""
 
     trunk = resolve_root(root)
@@ -292,6 +292,120 @@ def promote_epic_to_trunk(epic_id: str, *, root: Path | None = None) -> MergeRes
         branch=source_branch,
         target_branch=target_branch,
     )
+
+
+def _route_lifecycle_failure(
+    result: MergeResult,
+    *,
+    action_id: str,
+    action_kind: str,
+    affected_work_id: str,
+    intended_target_ref: str | None,
+    root: Path | None,
+) -> MergeResult:
+    """Record one durable owning-team handoff without changing merge results."""
+
+    if result.ok:
+        return result
+    try:
+        from cascade.task.action_recovery import capture_and_route_action_failure
+
+        capture_and_route_action_failure(
+            action_id,
+            action_kind,
+            affected_work_id=affected_work_id,
+            intended_target_ref=intended_target_ref,
+            root=resolve_root(root),
+            failure_code=result.reason or "lifecycle_merge_failed",
+            safe_summary=f"{action_kind.replace('_', ' ')} for {affected_work_id} was unsuccessful.",
+            conflicting_paths=list(result.conflict_paths),
+        )
+    except Exception:
+        # The original typed merge refusal remains authoritative.  Retrying the
+        # same action retries durable capture using its stable action identity.
+        pass
+    return result
+
+
+def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
+    """Merge a task and route its first unsuccessful action to its Feature Team."""
+
+    trunk = resolve_root(root)
+    try:
+        result = _merge_task_branch(task_id, root=trunk)
+    except Exception as exc:
+        _route_lifecycle_exception(
+            exc, action_id=f"{task_id}:merge_to_feature", action_kind="task_merge",
+            affected_work_id=task_id, intended_target_ref=None, root=trunk,
+        )
+        raise
+    return _route_lifecycle_failure(
+        result, action_id=f"{task_id}:merge_to_feature", action_kind="task_merge",
+        affected_work_id=task_id, intended_target_ref=result.target_branch, root=trunk,
+    )
+
+
+def merge_feature_branch(feature_id: str, *, root: Path | None = None) -> MergeResult:
+    """Merge a Feature and route its first unsuccessful action to its Epic Team."""
+
+    trunk = resolve_root(root)
+    try:
+        result = _merge_feature_branch(feature_id, root=trunk)
+    except Exception as exc:
+        _route_lifecycle_exception(
+            exc, action_id=f"{feature_id}:merge_to_epic", action_kind="feature_merge",
+            affected_work_id=feature_id, intended_target_ref=None, root=trunk,
+        )
+        raise
+    return _route_lifecycle_failure(
+        result, action_id=f"{feature_id}:merge_to_epic", action_kind="feature_merge",
+        affected_work_id=feature_id, intended_target_ref=result.target_branch, root=trunk,
+    )
+
+
+def promote_epic_to_trunk(epic_id: str, *, root: Path | None = None) -> MergeResult:
+    """Promote an Epic and route its first unsuccessful action to its Epic Team."""
+
+    trunk = resolve_root(root)
+    try:
+        result = _promote_epic_to_trunk(epic_id, root=trunk)
+    except Exception as exc:
+        _route_lifecycle_exception(
+            exc, action_id=f"{epic_id}:promote_to_trunk", action_kind="epic_promotion",
+            affected_work_id=epic_id, intended_target_ref="trunk", root=trunk,
+        )
+        raise
+    return _route_lifecycle_failure(
+        result, action_id=f"{epic_id}:promote_to_trunk", action_kind="epic_promotion",
+        affected_work_id=epic_id, intended_target_ref=result.target_branch or "trunk", root=trunk,
+    )
+
+
+def _route_lifecycle_exception(
+    error: Exception,
+    *,
+    action_id: str,
+    action_kind: str,
+    affected_work_id: str,
+    intended_target_ref: str | None,
+    root: Path,
+) -> None:
+    """Capture thrown lifecycle failures while preserving the original exception."""
+
+    try:
+        from cascade.task.action_recovery import capture_and_route_action_failure
+
+        capture_and_route_action_failure(
+            action_id,
+            action_kind,
+            affected_work_id=affected_work_id,
+            intended_target_ref=intended_target_ref,
+            root=root,
+            failure_code=type(error).__name__.lower(),
+            safe_summary=f"{action_kind.replace('_', ' ')} for {affected_work_id} raised an error.",
+        )
+    except Exception:
+        pass
 
 
 def _mainline_branch(repo: Path) -> str | None:

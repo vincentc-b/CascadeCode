@@ -9,6 +9,7 @@ from cascade.task.action_recovery import (
     ActionRecoveryError,
     AttemptAlreadyFinalized,
     ActionFailure,
+    capture_and_route_action_failure,
     create_or_load_action,
     finalize_attempt,
     load_action,
@@ -20,6 +21,7 @@ from cascade.task.action_recovery import (
     update_recovery_record,
 )
 from cascade.task.execution import mark_queued
+from cascade.watchdog.events import read_events
 from tests.support import make_repo
 
 
@@ -234,6 +236,86 @@ def test_recovery_record_updates_do_not_replace_user_metadata_or_legacy_records(
         "investigation_id": "epic_001:close"
     }
     assert cleared["recovery"]["retry_marker"] == {"resume_token": "same-action"}
+
+
+def test_first_branch_action_failure_routes_once_to_feature_team_and_survives_restart(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    captured = capture_and_route_action_failure(
+        "task_001:merge_to_feature",
+        "task_merge",
+        affected_work_id="task_001",
+        intended_target_ref="refs/heads/feat/feat_001",
+        root=root,
+        failure_code="branch_conflict",
+        safe_summary="Task branch conflicts with its Feature target.",
+        conflicting_paths=["cascade/task/action_recovery.py"],
+        evidence={"source_sha": "a", "target_sha": "b"},
+    )
+
+    marker = captured["recovery"]["routing_marker"]
+    assert captured["recovery_state"] == "awaiting_owner_decision"
+    assert captured["recovery"]["owning_team"] == {
+        "kind": "feature_team",
+        "work_id": "feat_001",
+    }
+    assert marker["status"] == "enqueued"
+    events, _ = read_events("feat_001", 0, root=root)
+    assert [event.payload["investigation_id"] for event in events] == [
+        marker["investigation_id"]
+    ]
+
+    # Repeated clicks and a fresh process use the episode marker rather than
+    # producing another normal-team queue item.
+    assert (
+        capture_and_route_action_failure(
+            "task_001:merge_to_feature",
+            "task_merge",
+            affected_work_id="task_001",
+            intended_target_ref="feat/feat_001",
+            root=root,
+            failure_code="branch_conflict",
+            safe_summary="Task branch conflicts with its Feature target.",
+        )
+        == captured
+    )
+    events, _ = read_events("feat_001", 0, root=root)
+    assert len(events) == 1
+    assert load_action("task_001:merge_to_feature", root=root) == captured
+
+
+def test_branch_action_failure_uses_epic_target_or_blocks_ambiguous_owner(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    epic = capture_and_route_action_failure(
+        "feat_001:merge_to_epic",
+        "feature_merge",
+        affected_work_id="feat_001",
+        intended_target_ref="epic/epic_001",
+        root=root,
+        failure_code="permission_denied",
+        safe_summary="The Epic integration checkout rejected the merge.",
+    )
+    assert epic["recovery"]["owning_team"] == {
+        "kind": "epic_team",
+        "work_id": "epic_001",
+    }
+    events, _ = read_events("epic_001", 0, root=root)
+    assert len(events) == 1
+
+    blocked = capture_and_route_action_failure(
+        "unknown:update",
+        "branch_update",
+        affected_work_id="unknown",
+        intended_target_ref=None,
+        root=root,
+        failure_code="checkout_missing",
+        safe_summary="The integration checkout is unavailable.",
+    )
+    assert blocked["recovery_state"] == "blocked"
+    assert blocked["recovery"]["routing_marker"]["reason"] == "ambiguous_owner"
 
 
 def test_resume_serializes_concurrent_calls_and_supplies_stable_idempotency_key(

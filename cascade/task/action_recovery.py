@@ -28,6 +28,9 @@ FailureClassification = Literal[
     "terminal_blocker",
 ]
 RecoveryState = Literal[
+    "failed",
+    "routing",
+    "investigating",
     "pending",
     "running",
     "retryable",
@@ -434,6 +437,197 @@ def load_action(action_id: str, *, root: Path) -> dict[str, Any] | None:
     with process_lock:
         action = _actions(_read_payload(repo)).get(action_id)
     return _copy(action) if action is not None else None
+
+
+def derive_recovery_owner(
+    *,
+    affected_work_id: str,
+    intended_target_ref: str | None,
+    root: Path,
+    cross_feature: bool = False,
+) -> dict[str, str] | None:
+    """Derive the team which owns a failed integration boundary.
+
+    The target is authoritative: a Feature target belongs to that Feature
+    Team, while an Epic/trunk target belongs to the Epic Team.  Returning
+    ``None`` deliberately fails closed when the durable board cannot prove an
+    owner; callers persist that condition as a routing blocker.
+    """
+
+    target = (intended_target_ref or "").removeprefix("refs/heads/")
+    if target.startswith("feat/") and not cross_feature:
+        feature_id = target.removeprefix("feat/")
+        return {"kind": "feature_team", "work_id": feature_id} if feature_id else None
+    if target.startswith("epic/"):
+        epic_id = target.removeprefix("epic/")
+        return {"kind": "epic_team", "work_id": epic_id} if epic_id else None
+
+    # A trunk promotion belongs to the Epic that is being promoted.  For
+    # non-targeted actions, recover the parent from the board only when it is
+    # unambiguous; this keeps malformed or stale work ids from being routed.
+    try:
+        from cascade.board.store import read_doc
+
+        doc = read_doc(affected_work_id, root=resolve_root(root))
+    except Exception:
+        return None
+    if doc.meta.tier == "epic":
+        return {"kind": "epic_team", "work_id": doc.meta.id}
+    if doc.meta.tier == "feature" and doc.meta.parent:
+        return {"kind": "epic_team", "work_id": doc.meta.parent}
+    if doc.meta.tier == "task" and doc.meta.parent and not cross_feature:
+        return {"kind": "feature_team", "work_id": doc.meta.parent}
+    return None
+
+
+def capture_and_route_action_failure(
+    action_id: str,
+    action_kind: str,
+    *,
+    affected_work_id: str,
+    intended_target_ref: str | None,
+    root: Path,
+    failure_code: str,
+    safe_summary: str,
+    evidence: Mapping[str, Any] | None = None,
+    provenance: Mapping[str, Any] | None = None,
+    conflicting_paths: list[str] | tuple[str, ...] = (),
+    attempt_bound: int = 100,
+    cross_feature: bool = False,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Durably capture a first failure and enqueue one owning-team inquiry.
+
+    The queue has no separate idempotency API, so the event carries a stable
+    investigation id and is checked while holding the same process lock as its
+    recovery marker.  A crash after the append but before the marker is written
+    is repaired by that check on the next call; a marker is never written before
+    the event exists.  Subsequent retries return the original episode unchanged.
+    """
+
+    _validate_identity(action_id)
+    _validate_identity(affected_work_id)
+    if not isinstance(failure_code, str) or not failure_code.strip():
+        raise ActionRecoveryError("failure code must be a nonempty string")
+    if not isinstance(safe_summary, str) or not safe_summary.strip():
+        raise ActionRecoveryError("safe summary must be a nonempty string")
+    if any(not isinstance(path, str) or not path for path in conflicting_paths):
+        raise ActionRecoveryError("conflicting paths must be nonempty strings")
+
+    repo = resolve_root(root)
+    create_or_load_action(
+        action_id,
+        action_kind,
+        root=repo,
+        attempt_bound=attempt_bound,
+        lifecycle_state="failed",
+        evidence=evidence,
+        provenance=provenance,
+        now=now,
+    )
+    owner = derive_recovery_owner(
+        affected_work_id=affected_work_id,
+        intended_target_ref=intended_target_ref,
+        root=repo,
+        cross_feature=cross_feature,
+    )
+    investigation_id = f"recovery:{action_id}"
+    failure_evidence = _validate_metadata(evidence, field="evidence")
+    failure_evidence = {
+        **failure_evidence,
+        "failure_code": failure_code,
+        "safe_summary": safe_summary,
+        "conflicting_paths": list(conflicting_paths),
+        "affected_work_id": affected_work_id,
+        "intended_target_ref": intended_target_ref,
+    }
+
+    with process_lock:
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:  # Defensive: create_or_load above is durable.
+            raise ActionNotFound(action_id)
+        action_recovery = dict(action.get("recovery") or {})
+        marker = action_recovery.get("routing_marker")
+        if isinstance(marker, Mapping) and marker.get("investigation_id") == investigation_id:
+            return _copy(action)
+
+        stamped = _iso(now)
+        if owner is None:
+            blocker = {
+                "code": "ambiguous_recovery_owner",
+                "message": "The failed action has no unambiguous owning team.",
+                "required_action": "Assign the owning Feature or Epic Team before resuming.",
+            }
+            action_recovery.update(
+                evidence=failure_evidence,
+                routing_marker={
+                    "investigation_id": investigation_id,
+                    "status": "blocked",
+                    "reason": "ambiguous_owner",
+                },
+                human_blocker=blocker,
+            )
+            action.update(
+                recovery=action_recovery,
+                failure_classification="terminal_blocker",
+                recovery_state="blocked",
+                updated_at=stamped,
+            )
+        else:
+            # Import here to keep the storage module free of queue imports.
+            from cascade.watchdog.events import append_event, read_events
+            from cascade.watchdog.types import Event
+
+            events, _ = read_events(owner["work_id"], 0, root=repo)
+            already_enqueued = any(
+                event.type == "BranchActionRecoveryRequested"
+                and event.payload.get("investigation_id") == investigation_id
+                for event in events
+            )
+            if not already_enqueued:
+                append_event(
+                    owner["work_id"],
+                    Event(
+                        type="BranchActionRecoveryRequested",
+                        ts=datetime.now(timezone.utc) if now is None else now,
+                        payload={
+                            "investigation_id": investigation_id,
+                            "action_id": action_id,
+                            "action_kind": action_kind,
+                            "affected_work_id": affected_work_id,
+                            "failure_code": failure_code,
+                            "safe_summary": safe_summary,
+                            "conflicting_paths": list(conflicting_paths),
+                            "intended_target_ref": intended_target_ref,
+                        },
+                        dest=owner["work_id"],
+                    ),
+                    root=repo,
+                )
+            action_recovery.update(
+                owning_team=owner,
+                evidence=failure_evidence,
+                routing_marker={
+                    "investigation_id": investigation_id,
+                    "idempotency_key": investigation_id,
+                    "status": "enqueued",
+                    "queue_item_id": investigation_id,
+                    "first_enqueued_at": stamped,
+                },
+            )
+            action.update(
+                recovery=action_recovery,
+                failure_classification="owner_decision",
+                recovery_state="awaiting_owner_decision",
+                updated_at=stamped,
+            )
+        actions[action_id] = action
+        payload["version"] = max(int(payload.get("version") or 1), 3)
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action)
 
 
 def record_repair_precondition(
