@@ -551,6 +551,7 @@ def capture_and_route_action_failure(
         "affected_work_id": affected_work_id,
         "intended_target_ref": intended_target_ref,
     }
+    failure_provenance = _validate_metadata(provenance, field="provenance")
 
     with process_lock:
         payload = _read_payload(repo)
@@ -572,6 +573,15 @@ def capture_and_route_action_failure(
             }
             action_recovery.update(
                 evidence=failure_evidence,
+                provenance={
+                    **failure_provenance,
+                    **_validate_metadata(
+                        action_recovery.get("provenance")
+                        if isinstance(action_recovery.get("provenance"), Mapping)
+                        else None,
+                        field="provenance",
+                    ),
+                },
                 routing_marker={
                     "investigation_id": investigation_id,
                     "status": "blocked",
@@ -619,6 +629,15 @@ def capture_and_route_action_failure(
             action_recovery.update(
                 owning_team=owner,
                 evidence=failure_evidence,
+                provenance={
+                    **failure_provenance,
+                    **_validate_metadata(
+                        action_recovery.get("provenance")
+                        if isinstance(action_recovery.get("provenance"), Mapping)
+                        else None,
+                        field="provenance",
+                    ),
+                },
                 routing_marker={
                     "investigation_id": investigation_id,
                     "idempotency_key": investigation_id,

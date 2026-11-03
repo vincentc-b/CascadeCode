@@ -319,6 +319,124 @@ def test_branch_action_failure_uses_epic_target_or_blocks_ambiguous_owner(
     assert blocked["recovery"]["routing_marker"]["reason"] == "ambiguous_owner"
 
 
+@pytest.mark.parametrize(
+    ("action_id", "action_kind", "affected_work_id", "target_ref", "owner"),
+    (
+        (
+            "task_001:operator_branch_update",
+            "operator_branch_update",
+            "task_001",
+            "feat/feat_001",
+            {"kind": "feature_team", "work_id": "feat_001"},
+        ),
+        (
+            "task_001:supervisor_branch_update",
+            "supervisor_branch_update",
+            "task_001",
+            "feat/feat_001",
+            {"kind": "feature_team", "work_id": "feat_001"},
+        ),
+        (
+            "task_001:merge_to_feature",
+            "task_merge",
+            "task_001",
+            "feat/feat_001",
+            {"kind": "feature_team", "work_id": "feat_001"},
+        ),
+        (
+            "feat_001:merge_to_epic",
+            "feature_merge",
+            "feat_001",
+            "epic/epic_001",
+            {"kind": "epic_team", "work_id": "epic_001"},
+        ),
+        (
+            "epic_001:promote",
+            "epic_promotion",
+            "epic_001",
+            "epic/epic_001",
+            {"kind": "epic_team", "work_id": "epic_001"},
+        ),
+        (
+            "epic_001:close",
+            "epic_close",
+            "epic_001",
+            "epic/epic_001",
+            {"kind": "epic_team", "work_id": "epic_001"},
+        ),
+    ),
+)
+def test_supported_failure_boundaries_preserve_context_and_enqueue_once(
+    tmp_path: Path,
+    action_id: str,
+    action_kind: str,
+    affected_work_id: str,
+    target_ref: str,
+    owner: dict[str, str],
+) -> None:
+    """All supported first-failure callers share the durable route-once boundary."""
+
+    root = make_repo(tmp_path, git=False)
+    create_or_load_action(
+        action_id,
+        action_kind,
+        root=root,
+        attempt_bound=2,
+        metadata={"user_file": "leave-me-alone", "approval": "review-42"},
+    )
+    captured = capture_and_route_action_failure(
+        action_id,
+        action_kind,
+        affected_work_id=affected_work_id,
+        intended_target_ref=target_ref,
+        root=root,
+        failure_code="branch_conflict",
+        safe_summary="The recorded integration boundary rejected the action.",
+        evidence={"source_revision": "abc", "target_revision": "def"},
+        provenance={"authorization": "auth-42", "review": "review-42"},
+        conflicting_paths=("user/edited-file.txt",),
+    )
+
+    assert captured["metadata"] == {
+        "user_file": "leave-me-alone",
+        "approval": "review-42",
+    }
+    assert captured["recovery"]["original_action"] == {
+        "action_id": action_id,
+        "action_kind": action_kind,
+    }
+    assert captured["recovery"]["provenance"] == {
+        "authorization": "auth-42",
+        "review": "review-42",
+    }
+    assert captured["recovery"]["owning_team"] == owner
+    assert captured["recovery"]["evidence"]["conflicting_paths"] == [
+        "user/edited-file.txt"
+    ]
+
+    events, _ = read_events(owner["work_id"], 0, root=root)
+    assert len(events) == 1
+    assert events[0].payload["investigation_id"] == f"recovery:{action_id}"
+
+    # A retry after a process reload preserves the original identity and never
+    # overwrites approvals/provenance or sends another investigation.
+    assert (
+        capture_and_route_action_failure(
+            action_id,
+            action_kind,
+            affected_work_id=affected_work_id,
+            intended_target_ref=target_ref,
+            root=root,
+            failure_code="branch_conflict",
+            safe_summary="The recorded integration boundary rejected the action.",
+        )
+        == captured
+    )
+    events, _ = read_events(owner["work_id"], 0, root=root)
+    assert len(events) == 1
+    assert load_action(action_id, root=root) == captured
+
+
 def test_resume_serializes_concurrent_calls_and_supplies_stable_idempotency_key(
     tmp_path: Path,
 ) -> None:
