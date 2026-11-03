@@ -2,7 +2,7 @@
 id: feat_028_001
 title: Prepare and reconcile epic closure through one implementation review
 tier: feature
-status: active
+status: completed
 parent: epic_028
 children:
 - task_028_001_001
