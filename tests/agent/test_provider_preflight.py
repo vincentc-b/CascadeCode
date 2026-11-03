@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from cascade.agent.discovery.inventory import (
     InventoryFreshness,
     ProviderInventoryFailure,
@@ -77,6 +79,17 @@ def test_preflight_validates_reasoning_and_flex_capabilities() -> None:
     assert reasoning.reason == "reasoning_not_supported"
     assert flex.reason == "flex_mode_not_supported"
     assert not reasoning.retryable and not flex.retryable
+
+
+def test_preflight_rejects_model_without_flex_even_when_provider_offers_it() -> None:
+    inventory = _inventory()
+    provider = inventory.providers[0]
+    model = replace(provider.models[0], supports_flex_mode=False)
+    inventory = replace(inventory, providers=(replace(provider, models=(model,)),))
+    result = preflight_provider_capability(
+        provider="codex", model_id="gpt-5", tier="epic", inventory=inventory, flex_mode=True
+    )
+    assert result.reason == "flex_mode_not_supported"
 
 
 def test_preflight_marks_provider_discovery_failure_as_retryable() -> None:

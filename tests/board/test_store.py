@@ -263,3 +263,35 @@ def test_list_board_sees_new_files(tmp_path: Path) -> None:
     assert list_board(root).by_id == {}
     add_doc(root, id="epic_001", title="Epic", tier="epic")
     assert "epic_001" in list_board(root).by_id
+
+
+def test_list_board_reuses_unchanged_frontmatter_but_sees_edits_and_deletes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.board import store
+
+    root = make_repo(tmp_path, git=False)
+    path = add_doc(root, id="epic_001", title="Original", tier="epic").meta.path
+    store._scan_meta_cache.pop(path, None)
+    original_parse = store.parse_doc
+    parsed: list[Path] = []
+
+    def counted_parse(candidate: Path):
+        parsed.append(candidate)
+        return original_parse(candidate)
+
+    monkeypatch.setattr(store, "parse_doc", counted_parse)
+    first = list_board(root)
+    first.by_id["epic_001"].title = "Caller mutation"
+    assert list_board(root).by_id["epic_001"].title == "Original"
+    assert parsed == [path]
+
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("Original", "Modified"),
+        encoding="utf-8",
+    )
+    assert list_board(root).by_id["epic_001"].title == "Modified"
+    assert parsed == [path, path]
+
+    path.unlink()
+    assert "epic_001" not in list_board(root).by_id
