@@ -123,6 +123,11 @@ None blocking. Feature planning must confirm the existing `epic_026` schema and 
   Chose Treat forge merge state as evidence only; complete a Feature only after its accepted revision reaches the intended Epic branch..
   Rationale: This directly closes the stacked-review race without bypassing the normal reviewed integration path or losing provenance.
   Honors: Required behavior 6 and the feat_029_002 acceptance scenario..
+
+- `dec_004` · 2026-11-03 · Epic Manager · **Automated repair boundary**
+  Chose Limit supervisor repair to bounded, deterministic, reversible mechanics under the lifecycle lock..
+  Rationale: Mechanical recovery can be automated safely, while semantic conflicts, dirty unrelated files, authorization, and review gates need an owning-team or human decision.
+  Honors: Required behavior 4 and the safety acceptance scenarios..
 ## Amendment log
 
 _(No amendments.)_
