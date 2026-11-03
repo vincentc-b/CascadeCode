@@ -18,6 +18,7 @@ provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-11-03T01:17:21.266704+00:00'
 ---
 # Persist and expose epic implementation-review state
 
