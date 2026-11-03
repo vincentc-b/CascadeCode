@@ -341,6 +341,7 @@
   let providerRecoverySelection = null;
   let providerRecoverySubmitInFlight = false;
   let providerRecoveryError = "";
+  let providerRecoveryLoadToken = 0;
   let pendingBriefCancels = Object.create(null);
   let pendingBriefCancelLookupOk = false;
   let pendingBriefCancelRefreshAt = 0;
@@ -1001,7 +1002,18 @@
     el.providerRecoveryStatus.textContent = statusText;
     el.providerRecoveryStatus.classList.toggle("error", !!providerRecoveryError || !!status.error || (!status.text && !valid));
     el.btnProviderRecoveryInventoryRetry.hidden = !status.recoverable;
+    el.btnProviderRecoveryInventoryRetry.disabled = providerRecoverySubmitInFlight;
     el.btnSubmitProviderRecovery.disabled = providerRecoverySubmitInFlight || !valid;
+    el.btnSubmitProviderRecovery.textContent = providerRecoverySubmitInFlight
+      ? "Changing provider…"
+      : "Change provider";
+    el.btnCloseProviderRecovery.disabled = providerRecoverySubmitInFlight;
+    el.btnCancelProviderRecovery.disabled = providerRecoverySubmitInFlight;
+    el.providerRecoveryProvider.disabled = providerRecoverySubmitInFlight || !(providerRecoveryInventory.providers || []).length;
+    el.providerRecoveryFlexMode.disabled = providerRecoverySubmitInFlight || el.providerRecoveryFlexMode.disabled;
+    el.providerRecoveryRoleSelectors.querySelectorAll("select").forEach(function (select) {
+      select.disabled = providerRecoverySubmitInFlight || select.disabled;
+    });
   }
 
   function renderProviderRecoverySelectors() {
@@ -1048,18 +1060,21 @@
     };
   }
 
-  async function loadProviderRecoveryInventory(forceRefresh) {
+  async function loadProviderRecoveryInventory(forceRefresh, loadToken) {
     const path = forceRefresh ? "/api/brief/inventory/refresh" : "/api/brief/inventory";
     const inventory = forceRefresh ? (await apiPost(path, {})).body : await apiGet(path);
+    if (loadToken !== providerRecoveryLoadToken) return false;
     providerRecoveryInventory = inventory;
     renderProviderRecoverySelectors();
     updateProviderRecoveryDialogState();
+    return true;
   }
 
   async function changeProviderRecovery(item) {
     if (!ProviderRecoveryDialogUi || !BriefDefaultsUi || !el.providerRecoveryDialog) {
       throw new Error("Provider selection controls are unavailable in this browser.");
     }
+    const loadToken = ++providerRecoveryLoadToken;
     providerRecoveryTarget = item;
     providerRecoveryInventory = { loading: true, providers: [] };
     providerRecoverySelection = ProviderRecoveryDialogUi.initialSelection(
@@ -1074,8 +1089,9 @@
     updateProviderRecoveryDialogState();
     el.providerRecoveryDialog.showModal();
     try {
-      await loadProviderRecoveryInventory(false);
+      await loadProviderRecoveryInventory(false, loadToken);
     } catch (_err) {
+      if (loadToken !== providerRecoveryLoadToken) return;
       providerRecoveryInventory = { loading: false, providers: [], refresh: { failed: true } };
       renderProviderRecoverySelectors();
       updateProviderRecoveryDialogState();
@@ -1084,14 +1100,16 @@
 
   async function retryProviderRecoveryInventory() {
     if (!providerRecoveryTarget || providerRecoverySubmitInFlight) return;
+    const loadToken = ++providerRecoveryLoadToken;
     el.providerRecoveryStatus.textContent = "Refreshing model inventory…";
     providerRecoveryError = "";
     el.providerRecoveryStatus.classList.remove("error");
     el.btnProviderRecoveryInventoryRetry.hidden = true;
     el.btnSubmitProviderRecovery.disabled = true;
     try {
-      await loadProviderRecoveryInventory(true);
+      await loadProviderRecoveryInventory(true, loadToken);
     } catch (_err) {
+      if (loadToken !== providerRecoveryLoadToken) return;
       providerRecoveryInventory = { loading: false, providers: [], refresh: { failed: true } };
       renderProviderRecoverySelectors();
       updateProviderRecoveryDialogState();
@@ -1126,8 +1144,15 @@
       return null;
     } finally {
       providerRecoverySubmitInFlight = false;
+      renderProviderRecoverySelectors();
       updateProviderRecoveryDialogState();
     }
+  }
+
+  function closeProviderRecoveryDialog() {
+    if (providerRecoverySubmitInFlight) return;
+    providerRecoveryLoadToken += 1;
+    el.providerRecoveryDialog.close();
   }
 
   function buildRow(item, tier, column) {
@@ -2645,8 +2670,15 @@
   if (el.btnCloseBrief) el.btnCloseBrief.addEventListener("click", function () { el.briefDialog.close(); });
   if (el.btnCancelBrief) el.btnCancelBrief.addEventListener("click", function () { el.briefDialog.close(); });
   if (el.briefForm) el.briefForm.addEventListener("submit", submitBrief);
-  if (el.btnCloseProviderRecovery) el.btnCloseProviderRecovery.addEventListener("click", function () { el.providerRecoveryDialog.close(); });
-  if (el.btnCancelProviderRecovery) el.btnCancelProviderRecovery.addEventListener("click", function () { el.providerRecoveryDialog.close(); });
+  if (el.btnCloseProviderRecovery) el.btnCloseProviderRecovery.addEventListener("click", closeProviderRecoveryDialog);
+  if (el.btnCancelProviderRecovery) el.btnCancelProviderRecovery.addEventListener("click", closeProviderRecoveryDialog);
+  if (el.providerRecoveryDialog) el.providerRecoveryDialog.addEventListener("cancel", function (ev) {
+    if (providerRecoverySubmitInFlight) {
+      ev.preventDefault();
+      return;
+    }
+    providerRecoveryLoadToken += 1;
+  });
   if (el.btnProviderRecoveryInventoryRetry) el.btnProviderRecoveryInventoryRetry.addEventListener("click", retryProviderRecoveryInventory);
   if (el.providerRecoveryForm) el.providerRecoveryForm.addEventListener("submit", submitProviderRecovery);
   if (el.btnPullMain) el.btnPullMain.addEventListener("click", pullMain);
