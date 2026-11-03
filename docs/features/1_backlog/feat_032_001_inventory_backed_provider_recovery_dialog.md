@@ -21,6 +21,7 @@ models:
 reasoning:
   feature_lead: high
   feature_architect: high
+approved_at: '2026-11-03T04:30:11.981640+00:00'
 ---
 # Inventory-backed provider recovery dialog
 
