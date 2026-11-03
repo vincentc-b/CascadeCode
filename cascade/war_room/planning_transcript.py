@@ -12,11 +12,33 @@ from cascade.watchdog.lock import process_lock
 _log = logging.getLogger(__name__)
 
 _SKIP_BODY_PREFIXES = (
-    "turn failed",
     "no input",
-    "provider startup failed",
     "model_id is required",
 )
+
+_FAILURE_MARKERS = (
+    "turn failed",
+    "provider startup failed",
+    "provider blocked",
+    "agent startup failed",
+)
+
+
+def _presentable_message(role: str, body: str) -> tuple[str, str] | None:
+    if role not in AGENT_AUTHORS or not body:
+        return None
+    lowered = body.lower()
+    if any(marker in lowered for marker in _FAILURE_MARKERS):
+        # CLI failure output often contains the entire prompt and provider
+        # diagnostics.  Show a useful, bounded message without publishing it.
+        if "unsupported service_tier: flex" in lowered:
+            detail = "The selected model rejected Flex service tier. Disable Flex or choose a compatible model, then retry."
+        else:
+            detail = "The agent turn failed. Check provider settings and retry."
+        return "system", f"{role.replace('_', ' ').title()}: {detail}"
+    if any(lowered.startswith(prefix) for prefix in _SKIP_BODY_PREFIXES):
+        return None
+    return role, body
 
 
 def append_planning_turn_to_chat(
@@ -29,24 +51,17 @@ def append_planning_turn_to_chat(
 
     for msg in new_messages:
         role = str(msg.get("role") or "")
-        if role not in AGENT_AUTHORS:
-            continue
         body = str(msg.get("content") or "").strip()
-        if not body or _should_skip(body):
+        presentable = _presentable_message(role, body)
+        if presentable is None:
             continue
+        author, text = presentable
         append_transcript_message(
             graph_id,
-            author=role,
-            body=body,
+            author=author,
+            body=text,
             root=root,
         )
-
-
-def _should_skip(body: str) -> bool:
-    lowered = body.lower()
-    if "turn failed" in lowered:
-        return True
-    return any(lowered.startswith(prefix) for prefix in _SKIP_BODY_PREFIXES)
 
 
 def sync_planning_transcript_to_chat(graph_id: str, *, root: Path) -> None:
@@ -68,12 +83,14 @@ def sync_planning_transcript_to_chat(graph_id: str, *, root: Path) -> None:
         for msg in graph_messages:
             role = str(msg.get("role") or "")
             body = str(msg.get("content") or "").strip()
-            if role not in AGENT_AUTHORS or not body or _should_skip(body):
+            presentable = _presentable_message(role, body)
+            if presentable is None:
                 continue
-            if (role, body) in seen:
+            author, text = presentable
+            if (author, text) in seen:
                 continue
-            append_transcript_message(graph_id, author=role, body=body, root=root)
-            seen.add((role, body))
+            append_transcript_message(graph_id, author=author, body=text, root=root)
+            seen.add((author, text))
 
 
 def _tier_for_graph_id(graph_id: str) -> str | None:

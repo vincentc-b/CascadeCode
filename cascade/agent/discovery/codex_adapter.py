@@ -62,6 +62,13 @@ def _include_codex_model(record: Mapping[str, Any]) -> bool:
     return normalize_model_id(record.get("slug")) is not None
 
 
+def _supports_flex_mode(record: Mapping[str, Any]) -> bool:
+    tiers = record.get("service_tiers")
+    return isinstance(tiers, list) and any(
+        isinstance(tier, Mapping) and tier.get("id") == "flex" for tier in tiers
+    )
+
+
 def discover_codex_models() -> ProviderDiscoverySnapshot:
     provider_id: ProviderId = "codex"
     blocked = require_probe(provider_id)
@@ -90,6 +97,7 @@ def discover_codex_models() -> ProviderDiscoverySnapshot:
                     model_id, record.get("display_name")
                 ),
                 reasoning=reasoning_from_codex_record(record),
+                supports_flex_mode=_supports_flex_mode(record),
             )
         )
 
@@ -104,6 +112,5 @@ def discover_codex_models() -> ProviderDiscoverySnapshot:
         provider_id=provider_id,
         available=True,
         models=sort_models(models),
-        # This integration can pass OpenAI service-tier config to Codex CLI.
-        supports_flex_mode=True,
+        supports_flex_mode=any(model.supports_flex_mode is True for model in models),
     )

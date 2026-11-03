@@ -416,6 +416,7 @@ def provider_inventory_model_to_dict(model: DiscoveredModel) -> dict[str, Any]:
         "id": model.id,
         "display_name": model.display_name,
         "reasoning": reasoning_capability_to_dict(model.reasoning),
+        "supports_flex_mode": model.supports_flex_mode,
     }
 
 

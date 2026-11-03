@@ -37,6 +37,8 @@ class DiscoveredModel:
     id: str
     display_name: str
     reasoning: ReasoningCapability | None = None
+    # None means the provider did not supply per-model service-tier metadata.
+    supports_flex_mode: bool | None = None
 
 
 @dataclass(frozen=True)

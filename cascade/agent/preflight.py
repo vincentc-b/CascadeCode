@@ -151,13 +151,13 @@ def preflight_provider_capability(
                 tier,
                 f"reasoning level {reasoning_level!r} is not supported by model {clean_model!r}",
             )
-    if flex_mode and not item.supports_flex_mode:
+    if flex_mode and (not item.supports_flex_mode or model.supports_flex_mode is False):
         return _unsupported(
             "flex_mode_not_supported",
             provider,
             clean_model,
             tier,
-            f"provider {provider!r} does not support flex mode",
+            f"model {clean_model!r} does not support flex mode",
         )
     return ProviderCapabilityPreflight(
         outcome="supported",

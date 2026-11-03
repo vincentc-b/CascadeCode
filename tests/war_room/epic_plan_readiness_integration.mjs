@@ -97,7 +97,7 @@ function assertDisabledApprove(chrome, reasonSubstring) {
   const statusWrap = chrome.bar.querySelector(".epic-plan-readiness-status-planning");
   assert.ok(statusWrap, "expected planning status in bar");
   assert.equal(statusWrap.getAttribute("role"), "status");
-  assert.match(statusWrap.getAttribute("aria-label"), /Planning in progress/);
+  assert.match(statusWrap.getAttribute("aria-label"), /Plan not ready/);
 }
 
 function assertReadyApprove(chrome) {
@@ -128,7 +128,7 @@ assertDisabledApprove(chrome, "Epic Architect");
 EpicPlanReadinessUi.applyReadinessToPlanBar(chrome, doc, readyBoth, "epic_001");
 assertReadyApprove(chrome);
 
-// --- Reduced motion: nonessential animation class omitted when user prefers reduce ---
+// --- A missing sign-off is not evidence of an active turn ---
 
 const motionDoc = documentShim();
 globalThis.matchMedia = (query) => ({
@@ -139,16 +139,14 @@ const planningStatus = EpicPlanReadinessUi.createPlanEntryStatus(motionDoc, plan
 const indicator = planningStatus.children.find((c) =>
   String(c.className).includes("epic-plan-readiness-indicator")
 );
-assert.ok(indicator);
-assert.ok(indicator.classList.contains("epic-plan-readiness-indicator-static"));
+assert.equal(indicator, undefined);
 
 globalThis.matchMedia = () => ({ matches: false, media: "" });
 const animatedStatus = EpicPlanReadinessUi.createPlanEntryStatus(motionDoc, planningNone);
 const animatedIndicator = animatedStatus.children.find((c) =>
   String(c.className).includes("epic-plan-readiness-indicator")
 );
-assert.ok(animatedIndicator);
-assert.equal(animatedIndicator.classList.contains("epic-plan-readiness-indicator-static"), false);
+assert.equal(animatedIndicator, undefined);
 
 // --- Stale approval: error surfaced, plan retained, readiness refreshed ---
 

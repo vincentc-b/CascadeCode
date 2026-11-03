@@ -128,36 +128,6 @@ body {
   line-height: 1;
 }
 
-.epic-plan-readiness-indicator {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  border: 1px solid currentColor;
-  animation: epic-plan-readiness-pulse 1.4s ease-in-out infinite;
-}
-
-.epic-plan-readiness-indicator-static {
-  animation: none;
-}
-
-@keyframes epic-plan-readiness-pulse {
-  0%,
-  100% {
-    transform: scale(0.85);
-    opacity: 0.55;
-  }
-  50% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .epic-plan-readiness-indicator {
-    animation: none;
-  }
-}
-
 .epic-plan-approve-disabled-reason {
   font-size: 0.8125rem;
   color: var(--plan-muted);
