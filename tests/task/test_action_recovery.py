@@ -17,6 +17,7 @@ from cascade.task.action_recovery import (
     record_owner_decision,
     record_owner_resolution,
     record_repair_precondition,
+    repair_action,
     start_attempt,
     update_recovery_record,
 )
@@ -562,3 +563,51 @@ def test_supervisor_preconditions_and_owner_resolution_resume_same_action(
     assert resumed["attempts"][-1]["completion_metadata"] == {
         "resumed_action": action_id
     }
+
+
+def test_allowlisted_repair_is_bounded_and_resume_revalidates_same_action(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    action_id = "task_001:merge_to_feature"
+    create_or_load_action(action_id, "task_merge", root=root, attempt_bound=1)
+    called: list[str] = []
+
+    repaired = repair_action(
+        action_id,
+        "restore_abort_state",
+        root=root,
+        execute=lambda action: {"metadata": {"operation": "restore_abort_state", "id": action["action_id"]}},
+    )
+    assert repaired["recovery_state"] == "ready_to_resume"
+    assert repaired["repair_attempts"][0]["operation"] == "restore_abort_state"
+    assert repaired["attempt_count"] == 0
+
+    resumed = resume_action(
+        action_id,
+        root=root,
+        preflight=lambda context: called.append(f"checked:{context.action_id}"),
+        execute=lambda context: {"metadata": {"original": context.action_id}},
+    )
+    assert resumed["recovery_state"] == "completed"
+    assert called == [f"checked:{action_id}"]
+    assert resumed["attempts"][0]["completion_metadata"] == {"original": action_id}
+
+
+def test_repair_refuses_unknown_operation_and_stops_at_its_bound(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    create_or_load_action("action", "task_merge", root=root, attempt_bound=1)
+    with pytest.raises(ActionRecoveryError, match="repair operation"):
+        repair_action("action", "discard_unrelated_files", root=root, execute=lambda _: None)
+
+    repair_action(
+        "action", "validate_checkout", root=root,
+        execute=lambda _: (_ for _ in ()).throw(
+            ActionFailure("deterministic_repair", "still repairing")
+        ),
+    )
+    bounded = repair_action(
+        "action", "validate_checkout", root=root, execute=lambda _: pytest.fail("must not run")
+    )
+    assert bounded["recovery_state"] == "blocked"
+    assert bounded["recovery"]["human_blocker"]["code"] == "repair_attempt_bound_reached"

@@ -35,6 +35,9 @@ RecoveryState = Literal[
     "running",
     "retryable",
     "repaired",
+    "repairing",
+    "ready_to_resume",
+    "resuming",
     "awaiting_owner_decision",
     "awaiting_human_gate",
     "blocked",
@@ -43,12 +46,19 @@ RecoveryState = Literal[
 AttemptOutcome = Literal["succeeded", "failed", "cancelled"]
 PreconditionState = Literal["pending", "repaired", "unrepairable"]
 DecisionOwner = Literal["feature_team", "epic_team"]
+RepairOperation = Literal[
+    "validate_checkout",
+    "restore_abort_state",
+    "refresh_branch_heads",
+    "safe_synchronize",
+]
 
 _CLASSIFICATIONS = frozenset(FailureClassification.__args__)
 _STATES = frozenset(RecoveryState.__args__)
 _OUTCOMES = frozenset(AttemptOutcome.__args__)
 _PRECONDITION_STATES = frozenset(PreconditionState.__args__)
 _DECISION_OWNERS = frozenset(DecisionOwner.__args__)
+_REPAIR_OPERATIONS = frozenset(RepairOperation.__args__)
 
 
 class ActionRecoveryError(ValueError):
@@ -927,7 +937,129 @@ def finalize_attempt(
         return _copy(action)
 
 
-_RESUMABLE_STATES = frozenset(("pending", "retryable", "repaired"))
+def repair_action(
+    action_id: str,
+    operation: RepairOperation,
+    *,
+    root: Path,
+    execute: Callable[[dict[str, Any]], ActionResult | Mapping[str, Any] | None],
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Perform one bounded, allowlisted supervisor repair.
+
+    This deliberately has no generic shell or git operation argument.  The
+    caller selects one of the small mechanical operation names and supplies the
+    implementation for its already-owned checkout.  Both the durable state
+    transition and that implementation run under the lifecycle lock, so a
+    concurrent resume cannot act on stale checkout facts.
+    """
+
+    _validate_identity(action_id)
+    _validate_choice(operation, _REPAIR_OPERATIONS, field="repair operation")
+    repo = resolve_root(root)
+    with process_lock:
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        state = action.get("recovery_state")
+        if state in {"completed", "blocked", "running", "resuming", "repairing"}:
+            return _copy(action)
+
+        repairs = list(action.get("repair_attempts") or [])
+        bound = int(action.get("attempt_bound") or 0)
+        if len(repairs) >= bound:
+            stamped = _iso(now)
+            blocker = {
+                "code": "repair_attempt_bound_reached",
+                "message": "The supervisor repair attempt limit has been reached.",
+                "required_action": "Review the recorded recovery evidence and repair the checkout manually.",
+            }
+            recovery = dict(action.get("recovery") or {})
+            recovery["human_blocker"] = blocker
+            action.update(
+                recovery=recovery,
+                failure_classification="terminal_blocker",
+                recovery_state="blocked",
+                updated_at=stamped,
+            )
+            actions[action_id] = action
+            payload["actions"] = actions
+            _write_payload(repo, payload)
+            return _copy(action)
+
+        started = _iso(now)
+        repair_number = len(repairs) + 1
+        entry = {
+            "repair_number": repair_number,
+            "operation": operation,
+            "started_at": started,
+            "outcome": None,
+            "classification": None,
+            "completed_at": None,
+            "completion_metadata": None,
+        }
+        repairs.append(entry)
+        action.update(repair_attempts=repairs, recovery_state="repairing", updated_at=started)
+        actions[action_id] = action
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+
+        try:
+            outcome, classification, metadata = _result_parts(execute(_copy(action)))
+            if outcome == "succeeded":
+                classification, final_state = None, "ready_to_resume"
+            else:
+                classification = classification or "terminal_blocker"
+                final_state = _FAILURE_STATES[classification]
+        except ActionFailure as exc:
+            outcome, classification, metadata = "failed", exc.classification, exc.metadata
+            final_state = _FAILURE_STATES[classification]
+        except BaseException as exc:
+            outcome, classification, final_state = "failed", "terminal_blocker", "blocked"
+            metadata = {"error_type": type(exc).__name__, "message": str(exc)}
+
+        # Re-read while still holding the lock: a nested operation may have
+        # updated unrelated descriptive fields, but never owns this open repair.
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        repairs = list(action.get("repair_attempts") or [])
+        if not repairs or repairs[-1].get("repair_number") != repair_number:
+            raise ActionRecoveryError("only the latest repair attempt may be finalized")
+        completed = _iso(now)
+        repairs[-1] = {
+            **repairs[-1],
+            "outcome": outcome,
+            "classification": classification,
+            "completed_at": completed,
+            "completion_metadata": metadata,
+        }
+        action.update(
+            repair_attempts=repairs,
+            failure_classification=classification,
+            recovery_state=final_state,
+            updated_at=completed,
+        )
+        if final_state == "blocked":
+            recovery = dict(action.get("recovery") or {})
+            recovery["human_blocker"] = {
+                "code": "supervisor_repair_failed",
+                "message": "The allowlisted supervisor repair could not safely continue.",
+                "required_action": "Inspect the repair evidence and resolve the checkout or authorization blocker.",
+            }
+            action["recovery"] = recovery
+        actions[action_id] = action
+        payload["version"] = max(int(payload.get("version") or 1), 3)
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action)
+
+
+_RESUMABLE_STATES = frozenset(("pending", "retryable", "repaired", "ready_to_resume"))
 _FAILURE_STATES: dict[FailureClassification, RecoveryState] = {
     "deterministic_repair": "repaired",
     "transient_retry": "retryable",
@@ -999,6 +1131,9 @@ def _claim_resume_attempt(
         )
         action.update(
             attempt_count=attempt_number,
+            # ``running`` is retained for old supervisors that already use it
+            # as their in-flight fence; the action's lifecycle context records
+            # that this is a resume rather than a newly minted action.
             recovery_state="running",
             updated_at=claimed_at,
             attempts=attempts,
@@ -1050,6 +1185,7 @@ def resume_action(
     *,
     root: Path,
     execute: Callable[[ActionContext], ActionResult | Mapping[str, Any] | None],
+    preflight: Callable[[ActionContext], None] | None = None,
     reclaim_running: bool = False,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -1061,15 +1197,39 @@ def resume_action(
     it receives the same idempotency key for the replacement effect.
     """
 
-    claimed = _claim_resume_attempt(
-        action_id, root=root, reclaim_running=reclaim_running, now=now
-    )
-    if claimed is None:
-        action = load_action(action_id, root=root)
-        if action is None:
-            raise ActionNotFound(action_id)
-        return action
-    _, context = claimed
+    # Claim and preflight share the lifecycle critical section.  The executor
+    # runs after it is released so a slow provider or git operation cannot
+    # deadlock concurrent callers; its durable running claim remains the fence
+    # against a replacement action.  Lifecycle executors themselves acquire
+    # the same lock around their mutation.
+    repo = resolve_root(root)
+    with process_lock:
+        claimed = _claim_resume_attempt(
+            action_id, root=repo, reclaim_running=reclaim_running, now=now
+        )
+        if claimed is None:
+            action = load_action(action_id, root=repo)
+            if action is None:
+                raise ActionNotFound(action_id)
+            return action
+        _, context = claimed
+        try:
+            if preflight is not None:
+                preflight(context)
+        except ActionFailure as exc:
+            return finalize_attempt(
+                action_id, context.attempt_number, root=repo, outcome="failed",
+                classification=exc.classification,
+                recovery_state=_FAILURE_STATES[exc.classification],
+                completion_metadata=exc.metadata, now=now,
+            )
+        except BaseException as exc:
+            return finalize_attempt(
+                action_id, context.attempt_number, root=repo, outcome="failed",
+                classification="terminal_blocker", recovery_state="blocked",
+                completion_metadata={"error_type": type(exc).__name__, "message": str(exc)},
+                now=now,
+            )
     try:
         outcome, classification, metadata = _result_parts(execute(context))
         if outcome == "succeeded":
@@ -1084,12 +1244,7 @@ def resume_action(
         outcome, classification, state = "failed", "terminal_blocker", "blocked"
         metadata = {"error_type": type(exc).__name__, "message": str(exc)}
     return finalize_attempt(
-        action_id,
-        context.attempt_number,
-        root=root,
-        outcome=outcome,
-        classification=classification,
-        recovery_state=state,
-        completion_metadata=metadata,
-        now=now,
+        action_id, context.attempt_number, root=repo, outcome=outcome,
+        classification=classification, recovery_state=state,
+        completion_metadata=metadata, now=now,
     )
