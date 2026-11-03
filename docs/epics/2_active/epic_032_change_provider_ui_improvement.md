@@ -102,6 +102,11 @@ _(none)_
   Chose Deliver one vertical feature, feat_032_001, that replaces the prompt/JSON recovery flow with an inventory-backed modal for active Epic, Feature, and Task rows; leave provider discovery and the recovery engine unchanged..
   Rationale: The operator outcome is incomplete without the full dialog-to-recovery handoff. Existing inventory and recovery boundaries already solve discovery and safe mutation, so extending them would add cost without serving the brief.
   Honors: The approved request for brief-like provider/model dropdowns, frugal engineering, and the existing provider recovery safety contract..
+
+- `dec_002` · 2026-11-03 · Epic Manager · **Selection and validation contract**
+  Chose Reuse and narrowly generalize the brief selector primitives for an explicit tier-specific role list, show saved unavailable values for diagnosis, and permit submission only from current inventory while retaining authoritative server revalidation..
+  Rationale: One shared capability-driven behavior prevents UI catalog drift, keeps the active item's current blocker understandable, and does not mistake client controls for a security or correctness boundary.
+  Honors: Valid provider/model choices, parity with create-brief behavior, affected-role isolation, and no silent fallback..
 ## Amendment log
 
 _(none)_
