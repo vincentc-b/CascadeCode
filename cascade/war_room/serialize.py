@@ -31,7 +31,7 @@ from cascade.agent.discovery.inventory import (
 )
 from cascade.agent.discovery.types import DiscoveredModel, ReasoningCapability
 from cascade.agent.providers import ProviderId, ProviderStatus
-from cascade.review import OpenReview
+from cascade.review import EpicReviewSnapshot, OpenReview
 from cascade.war_room.room_settings import RoomSettings
 from cascade.workspace.types import FlightOverlap, FlightReport
 
@@ -98,6 +98,13 @@ def work_meta_to_dict(
             value["approved_at"] = meta.approved_at.isoformat()
     if meta.tier == "epic":
         value["plan_approved"] = meta.plan_approved_at is not None
+        if root is not None:
+            from cascade.review import epic_review_snapshot
+
+            snapshot = epic_review_snapshot(meta.id, root=root)
+            value["implementation_review"] = (
+                epic_review_snapshot_to_dict(snapshot) if snapshot is not None else None
+            )
         if (
             root is not None
             and meta.plan_approved_at is None
@@ -128,9 +135,9 @@ def work_meta_to_dict(
     return value
 
 
-def work_doc_to_dict(doc: WorkDoc) -> dict:
+def work_doc_to_dict(doc: WorkDoc, *, root: Path | None = None) -> dict:
     return {
-        "meta": work_meta_to_dict(doc.meta),
+        "meta": work_meta_to_dict(doc.meta, root=root),
         "body": doc.body,
         "sha": doc.sha,
     }
@@ -424,6 +431,28 @@ def open_review_to_dict(review: OpenReview) -> dict[str, Any]:
             "feature_title": ctx.feature_title,
             "epic_title": ctx.epic_title,
         },
+    }
+
+
+def epic_review_snapshot_to_dict(snapshot: EpicReviewSnapshot) -> dict[str, Any]:
+    """Serialize the canonical epic implementation-review state unchanged."""
+
+    blocker = snapshot.blocker
+    return {
+        "close_stage": snapshot.stage,
+        "review_url": snapshot.review_url,
+        "source_branch": snapshot.source_branch,
+        "target_branch": snapshot.target_branch,
+        "forge_state": snapshot.forge_state,
+        "blocker": (
+            {
+                "code": blocker.code,
+                "message": blocker.message,
+                "retryable": blocker.retryable,
+            }
+            if blocker is not None
+            else None
+        ),
     }
 
 

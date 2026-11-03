@@ -24,7 +24,7 @@ from typing import Any, Callable
 from cascade.board.errors import NotFound
 from cascade.workspace.doc_root import read_doc_resolved
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
-from cascade.boss.epic_complete import confirm_epic_complete_result
+from cascade.boss.epic_complete import EpicCompleteResult, confirm_epic_complete_result
 from cascade.boss.graph import install_boss_consumer
 from cascade.boss.merge import merge_task_branch
 from cascade.boss.orphans import detect_orphans
@@ -40,10 +40,12 @@ from cascade.war_room.attachment import AttachmentState
 from cascade.war_room.serialize import (
     board_view_from_index,
     dispatch_result_to_dict,
+    epic_review_snapshot_to_dict,
     event_to_dict,
     flight_report_to_dict,
     work_doc_to_dict,
 )
+from cascade.review import EpicReviewSnapshot
 from cascade.workspace.flight import get_cached_flight_report
 from cascade.war_room.amendment_routes import (
     amendment_get_path_exists,
@@ -110,6 +112,24 @@ def _boss_view_to_dict(view: BossView) -> dict[str, object]:
         "slots_free": view.slots_free,
         "failed_tasks": list(view.failed_tasks),
     }
+
+
+def _epic_complete_review_state(
+    result: EpicCompleteResult,
+) -> dict[str, Any] | None:
+    """Project a Close result through the same canonical serializer as reads."""
+
+    if result.close_stage is None:
+        return None
+    snapshot = EpicReviewSnapshot(
+        stage=result.close_stage,
+        review_url=result.review_url,
+        source_branch=result.source_branch,
+        target_branch=result.target_branch,
+        forge_state=result.forge_state,
+        blocker=result.blocker,
+    )
+    return epic_review_snapshot_to_dict(snapshot)
 
 
 def assert_loopback_host(host: str) -> str:
@@ -718,8 +738,12 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if epic_id is None:
             return
         result = confirm_epic_complete_result(epic_id, "human", root=self.server.root)
+        review_state = _epic_complete_review_state(result)
         if result.ok:
-            self._json_response(HTTPStatus.OK, {"ok": True, "epic_id": epic_id})
+            payload: dict[str, Any] = {"ok": True, "epic_id": epic_id}
+            if review_state is not None:
+                payload.update(review_state)
+            self._json_response(HTTPStatus.OK, payload)
             return
         from cascade.war_room.branch_sync import actionable_sync_failure_payload
 
@@ -730,7 +754,10 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         }
         if result.blocker_ids:
             payload["blocker_ids"] = list(result.blocker_ids)
-        if result.review_url:
+        if review_state is not None:
+            payload.update(review_state)
+        elif result.review_url:
+            # Compatibility for older callers/results that predate close_stage.
             payload["review_url"] = result.review_url
         if result.reason == "open_human_comments":
             payload["plan_url"] = f"/plan/{epic_id}#plan-comments"
@@ -1005,7 +1032,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         except NotFound:
             self._json_error(HTTPStatus.NOT_FOUND, f"not found: {work_id}")
             return
-        payload = work_doc_to_dict(doc)
+        payload = work_doc_to_dict(doc, root=self.server.root)
         meta = doc.meta
         if (
             meta.tier == "epic"

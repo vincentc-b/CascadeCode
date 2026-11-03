@@ -551,7 +551,16 @@ def test_confirm_epic_complete_success_and_refusal(dispatch_board, tmp_path):
             {"id": "epic_001", "by": "boss"},
         )
         assert status == HTTPStatus.OK
-        assert ok_body == {"ok": True, "epic_id": "epic_001"}
+        assert ok_body == {
+            "ok": True,
+            "epic_id": "epic_001",
+            "close_stage": "completed",
+            "review_url": None,
+            "source_branch": None,
+            "target_branch": None,
+            "forge_state": "unknown",
+            "blocker": None,
+        }
         assert read_doc("epic_001", root=ready_root).meta.status == "completed"
 
         war_events, _ = read_events("war_room", 0, root=ready_root)
@@ -657,6 +666,49 @@ def test_confirm_epic_complete_returns_closeout_review(dispatch_board):
         "reason": "pending_close_review",
         "epic_id": "epic_001",
         "review_url": review_url,
+    }
+
+
+def test_confirm_epic_complete_serializes_canonical_blocked_review(dispatch_board):
+    from cascade.review import EpicCloseBlocker
+
+    base, root = dispatch_board
+    review_url = "https://github.example/pull/42"
+    blocker = EpicCloseBlocker(
+        code="review_lookup_failed",
+        message="Retry after restoring forge connectivity.",
+        retryable=True,
+    )
+    with patch(
+        "cascade.war_room.server.confirm_epic_complete_result",
+        return_value=EpicCompleteResult(
+            ok=False,
+            reason="pending_epic_review",
+            review_url=review_url,
+            close_stage="blocked",
+            source_branch="epic/epic_001",
+            target_branch="main",
+            forge_state="unknown",
+            blocker=blocker,
+        ),
+    ):
+        code, body = _post(f"{base}/api/confirm_epic_complete", {"id": "epic_001"})
+
+    assert code == HTTPStatus.OK
+    assert body == {
+        "ok": False,
+        "reason": "pending_epic_review",
+        "epic_id": "epic_001",
+        "close_stage": "blocked",
+        "review_url": review_url,
+        "source_branch": "epic/epic_001",
+        "target_branch": "main",
+        "forge_state": "unknown",
+        "blocker": {
+            "code": "review_lookup_failed",
+            "message": "Retry after restoring forge connectivity.",
+            "retryable": True,
+        },
     }
 
 
