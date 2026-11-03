@@ -78,12 +78,11 @@ _(none)_
 ## Decision log
 
 - 2026-10-30 · Human · Promoted the draft in `docs/briefs/epic_close_review_workflow.md` to the War Room backlog.
-- 2026-11-03 · Human · Collapse epic closure into one review: the implementation PR also moves the epic plan to completed, and post-merge reconciliation verifies and finalizes closure without a terminal-only PR. In reply to: cmt_001.
-
 - `dec_001` · 2026-11-03 · Human · **Epic closure workflow**
-  Chose Use one epic closure review: stage the epic plan's completed-state move in the implementation PR, then verify the merged review and completed remote-trunk document to finalize closure without a terminal-only PR..
+  Chose Use one epic closure review: stage the epic plan's completed-state move in the implementation PR, then verify the merged review and completed remote-trunk document to finalize closure without a terminal-only PR.
   Rationale: The second review carries no independent implementation value; folding the lifecycle move into the implementation review preserves human review while removing redundant closeout ceremony.
   Honors: In reply to: cmt_001.
+
 ## Amendment log
 
 _(none)_
