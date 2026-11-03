@@ -28,9 +28,12 @@ from cascade.comments.store import read_comments
 from cascade.review import (
     EpicCloseBlocker,
     EpicCloseStage,
+    EpicReviewSnapshot,
     ForgeReviewState,
+    refresh_epic_review_snapshot,
     validate_review_url,
 )
+from cascade.tracking import MergeRequest
 from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.lock import process_lock
 from cascade.watchdog.types import Event, Principal
@@ -195,7 +198,10 @@ def confirm_epic_complete_result(
 
     if by != "human":
         return EpicCompleteResult(ok=False, reason="unauthorized")
-    return _finish_epic_completion_result(epic_id, root=root)
+    # Serialize the check/create boundary so concurrent Close requests in this
+    # process cannot both observe an absent snapshot and publish reviews.
+    with process_lock:
+        return _finish_epic_completion_result(epic_id, root=root)
 
 
 def _finish_epic_completion(epic_id: WorkId, *, root: Path | None = None) -> bool:
@@ -231,20 +237,40 @@ def _finish_epic_completion_result(
     from cascade.boss.merge import promote_epic_to_trunk
     from cascade.review import ensure_epic_review
 
-    try:
-        review = ensure_epic_review(epic_id, root=repo)
-    except GitError:
-        _LOG.exception("could not open epic review for %s", epic_id)
-        return EpicCompleteResult(
-            ok=False,
-            reason="review_failed",
-            close_stage="blocked",
-            blocker=EpicCloseBlocker(
-                code="review_publication_failed",
-                message="Retry after restoring forge access or resolving the publication error.",
-                retryable=True,
-            ),
+    persisted = refresh_epic_review_snapshot(epic_id, root=repo)
+    review = None
+    if persisted is not None:
+        if persisted.stage == "blocked" or persisted.forge_state != "merged":
+            return _epic_review_result(persisted)
+        from cascade.review import detect_forge
+
+        forge = detect_forge(repo)
+        if forge is None:
+            # refresh would already have persisted a blocker in this case.
+            return _epic_review_result(persisted)
+        review = MergeRequest(
+            url=persisted.review_url or "",
+            number=None,
+            forge=forge,
+            source_branch=persisted.source_branch or "",
+            target_branch=persisted.target_branch or "",
+            draft=False,
         )
+    else:
+        try:
+            review = ensure_epic_review(epic_id, root=repo)
+        except GitError:
+            _LOG.exception("could not open epic review for %s", epic_id)
+            return EpicCompleteResult(
+                ok=False,
+                reason="review_failed",
+                close_stage="blocked",
+                blocker=EpicCloseBlocker(
+                    code="review_publication_failed",
+                    message="Retry after restoring forge access or resolving the publication error.",
+                    retryable=True,
+                ),
+            )
 
     # A merged review already put the epic on the product trunk upstream.  The
     # operator checkout can be dirty or behind that merge; updating it here
@@ -303,6 +329,21 @@ def _finish_epic_completion_result(
     _emit_epic_completed(epic_id, repo)
     _retire_epic_worktree(epic_id, repo)
     return EpicCompleteResult(ok=True, close_stage="completed")
+
+
+def _epic_review_result(snapshot: EpicReviewSnapshot) -> EpicCompleteResult:
+    """Return the canonical persisted review state from a repeated Close."""
+
+    return EpicCompleteResult(
+        ok=False,
+        reason="pending_epic_review" if snapshot.stage != "blocked" else "review_failed",
+        review_url=snapshot.review_url,
+        close_stage=snapshot.stage,
+        source_branch=snapshot.source_branch,
+        target_branch=snapshot.target_branch,
+        forge_state=snapshot.forge_state,
+        blocker=snapshot.blocker,
+    )
 
 
 def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):

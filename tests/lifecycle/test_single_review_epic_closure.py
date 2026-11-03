@@ -67,18 +67,12 @@ def test_epic_closes_through_one_idempotent_implementation_review(
 
     monkeypatch.setattr("cascade.review.find_merge_request", find_review)
     monkeypatch.setattr("cascade.review.create_merge_request", create_review)
+    monkeypatch.setattr("cascade.review.detect_forge", lambda _root: "github")
     monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
     monkeypatch.setattr(
         "cascade.boss.epic_close_review.ensure_epic_close_review",
         lambda *_args, **_kwargs: pytest.fail("must not open a terminal-only review"),
     )
-
-    operator_before = {
-        "head": _git(root, "rev-parse", "HEAD").stdout,
-        "branch": _git(root, "branch", "--show-current").stdout,
-        "index": _git(root, "ls-files", "--stage", "-z").stdout,
-        "status": _git(root, "status", "--porcelain").stdout,
-    }
 
     # Preparation is convergent: completion is staged before review creation,
     # and a retry finds the same implementation review.
@@ -88,6 +82,12 @@ def test_epic_closes_through_one_idempotent_implementation_review(
     assert prepared.meta.status == "completed"
     assert prepared.meta.path.parent.name == "3_completed"
     assert created_reviews == [review]
+    operator_before = {
+        "head": _git(root, "rev-parse", "HEAD").stdout,
+        "branch": _git(root, "branch", "--show-current").stdout,
+        "index": _git(root, "ls-files", "--stage", "-z").stdout,
+        "status": _git(root, "status", "--porcelain").stdout,
+    }
 
     snapshot = {"state": "open", "merge_sha": None}
     monkeypatch.setattr(
