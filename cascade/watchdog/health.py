@@ -18,6 +18,7 @@ from cascade.board.store import read_doc
 from cascade.board.types import WorkDoc
 from cascade.feature.recovery import retry_task
 from cascade.task.execution import execution_views
+from cascade.task.supervisor_recovery import supervisor_recover_task_delivery
 from cascade.watchdog.blockage import (
     propagate_direct_report_blockage,
     reconcile_direct_report_blockage,
@@ -107,6 +108,7 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
 
     repo = resolve_root(root)
     observations: list[ChildHealthObservation] = []
+    orphan_delivery_candidates: list[ChildHealthObservation] = []
     with process_lock:
         board = merged_board(repo)
         supervisors = [
@@ -148,6 +150,11 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
                     )
                     continue
                 observations.append(observation)
+                if _orphan_delivery_candidate(observation):
+                    # This is deliberately only an observation.  The shared
+                    # recovery operation re-reads ownership, delivery, and
+                    # workspace state while it holds the Task lifecycle lock.
+                    orphan_delivery_candidates.append(observation)
                 if observation.classification == "remediation_eligible":
                     _remediate_if_unchanged(repo, supervisor, child, observation)
                 elif observation.classification == "unresolved":
@@ -159,7 +166,54 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
                 # Writes use optimistic tokens. Refresh before considering a
                 # sibling so independent causes converge after our own update.
                 supervisor = read_doc(supervisor.meta.id, root=repo)
+
+    # Do not hold the broad sweep lock while starting recovery.  A candidate
+    # can be stale by now; supervisor_recover_task_delivery treats its stable
+    # attempt key as an idempotency hint and validates everything again.
+    for observation in orphan_delivery_candidates:
+        _recover_orphan_delivery(repo, observation)
     return observations
+
+
+def _orphan_delivery_candidate(observation: ChildHealthObservation) -> bool:
+    """Whether a direct Task report has crossed the existing lease boundary."""
+
+    if observation.child_tier != "task" or observation.child_status != "active":
+        return False
+    # ``stale`` is only assigned after the execution heartbeat stability
+    # window.  awaiting_merge has no live execution lease; it is eligible for
+    # the shared recovery operation to prove the expected queue handoff still
+    # exists (or recover it when it does not).
+    return observation.execution_outcome is None and (
+        observation.execution_phase == "awaiting_merge"
+        or observation.execution_phase in {"queued", "running"}
+        and observation.reason == "delegated_to_task_watchdog"
+    )
+
+
+def _recover_orphan_delivery(
+    repo: Path, observation: ChildHealthObservation
+) -> None:
+    attempt = observation.execution_attempt
+    incident_id = (
+        f"{observation.child_id}:delivery:{attempt}"
+        if attempt is not None
+        else f"{observation.child_id}:delivery:unknown"
+    )
+    try:
+        result = supervisor_recover_task_delivery(
+            observation.child_id, root=repo, observed_incident=incident_id
+        )
+        _log.info(
+            "orphan delivery recovery for %s: %s (%s)",
+            observation.child_id,
+            result.decision,
+            result.reason,
+        )
+    except Exception as exc:
+        # Health reporting remains best-effort: an unsafe or transient
+        # recovery failure must not prevent inspection of other direct reports.
+        _log.warning("orphan delivery recovery failed for %s: %s", observation.child_id, exc)
 
 
 def maybe_sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObservation]:

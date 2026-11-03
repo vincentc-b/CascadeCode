@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cascade.board.context import resolve_root
+from cascade.board.errors import SchemaError
 from cascade.board.gitutil import _run, has_git, head_sha
+from cascade.board.parse import parse_doc
 from cascade.board.paths import column_for_status
 from cascade.board.types import WorkMeta, WorkTier
 from cascade.stacked_dispatch import review_target_branch
@@ -14,6 +16,7 @@ from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.integration_worktree import (
     IntegrationKind,
     integration_branch,
+    is_trunk_pointer,
     locate_trunk,
     merged_board,
     repair_missing_worktree,
@@ -139,6 +142,8 @@ def update_integration_branch(
             ["merge", state.base_branch, "--no-edit"], checkout, check=False
         )
         if merge_result.returncode == 0:
+            if not _prune_stale_completed_epic_pointers(checkout, state.base_branch):
+                return BranchSyncUpdateResult(ok=False, reason="invariant")
             post_sha = head_sha(checkout)
             no_op = post_sha == pre_sha
             return BranchSyncUpdateResult(
@@ -153,7 +158,9 @@ def update_integration_branch(
             conflict_paths=conflict_paths,
         )
         if resolved_sha is not None:
-            return BranchSyncUpdateResult(ok=True, merge_sha=resolved_sha)
+            if not _prune_stale_completed_epic_pointers(checkout, state.base_branch):
+                return BranchSyncUpdateResult(ok=False, reason="invariant")
+            return BranchSyncUpdateResult(ok=True, merge_sha=head_sha(checkout))
         _run(["merge", "--abort"], checkout, check=False)
         if not _merge_state_clean(checkout):
             return BranchSyncUpdateResult(ok=False, reason="invariant")
@@ -166,6 +173,54 @@ def update_integration_branch(
             reason="branch_conflict",
             conflict_paths=conflict_paths,
         )
+
+
+def _prune_stale_completed_epic_pointers(checkout: Path, base_branch: str) -> bool:
+    """Drop old pointers only when the merged base replaced them with completed Epics."""
+
+    epic_dir = checkout / "docs" / "epics"
+    completed: dict[str, Path] = {}
+    for path in (epic_dir / "3_completed").glob("*.md"):
+        if path.is_symlink():
+            continue
+        try:
+            doc = parse_doc(path)
+        except (SchemaError, OSError):
+            continue
+        if doc.meta.tier == "epic" and doc.meta.status == "completed":
+            completed[doc.meta.id] = path
+
+    stale: list[str] = []
+    for path in (epic_dir / "2_active").glob("*.md"):
+        if path.is_symlink():
+            continue
+        try:
+            doc = parse_doc(path)
+        except (SchemaError, OSError):
+            continue
+        if doc.meta.status != "active" or not is_trunk_pointer(doc.meta):
+            continue
+        replacement = completed.get(doc.meta.id)
+        if replacement is None:
+            continue
+        active_rel = path.relative_to(checkout).as_posix()
+        completed_rel = replacement.relative_to(checkout).as_posix()
+        if _run(["show", f"{base_branch}:{completed_rel}"], checkout, check=False).returncode != 0:
+            continue
+        if _run(["show", f"{base_branch}:{active_rel}"], checkout, check=False).returncode == 0:
+            continue
+        stale.append(active_rel)
+
+    if not stale:
+        return True
+    if _run(["rm", "--", *stale], checkout, check=False).returncode != 0:
+        return False
+    commit = _run(
+        ["-c", "commit.gpgsign=false", "commit", "-m", "docs: remove stale completed epic pointers"],
+        checkout,
+        check=False,
+    )
+    return commit.returncode == 0
 
 
 def _resolve_managed_pointer_conflict(

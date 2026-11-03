@@ -26,6 +26,14 @@ def clear_epic_graph_sessions() -> None:
     _session_roots.clear()
 
 
+def clear_epic_graph_session(epic_id: str, *, root: Path) -> None:
+    """Forget the compiled graph for one completed/archived Epic run."""
+
+    key = (str(Path(root).resolve()), epic_id)
+    _graph_cache.pop(key, None)
+    _session_roots.pop(key, None)
+
+
 def seed_epic_role_models(
     epic_id: str,
     *,

@@ -9,6 +9,7 @@ from cascade.task.action_recovery import ActionNotFound, ActionRecoveryError, lo
 from cascade.task.execution import execution_view, mark_queued
 from cascade.task_rollup import (
     handoff_queued_merge_semantic_conflict,
+    pending_task_merges,
     queue_task_merge,
     resolve_semantic_conflict,
     retry_pending_task_merges,
@@ -31,6 +32,33 @@ def test_blocked_pending_merge_is_pruned_as_terminal(tmp_path: Path) -> None:
     assert retry_pending_task_merges(root) == []
     path = root / ".cascade" / "pending-task-merges.json"
     assert json.loads(path.read_text(encoding="utf-8")) == []
+
+
+def test_revalidation_replaces_queue_evidence_without_duplicate_entry(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    first = {
+        "task_id": "task_001",
+        "deliverable_sha": "deliverable-1",
+        "feature_base_sha": "feature-base-1",
+    }
+    second = {
+        "task_id": "task_001",
+        "deliverable_sha": "deliverable-2",
+        "feature_base_sha": "feature-base-2",
+    }
+
+    queue_task_merge("task_001", root=root, delivery_evidence=first)
+    queue_task_merge("task_001", root=root, delivery_evidence=second)
+
+    action = load_action("task_001:queued_merge", root=root)
+    assert action is not None
+    assert action["metadata"]["final_validation"] == second
+    assert pending_task_merges(root) == {"task_001"}
+
+    retry_pending_task_merges(root)
+    action = load_action("task_001:queued_merge", root=root)
+    assert action is not None
+    assert action["metadata"]["final_validation"] == second
 
 
 def test_conflict_is_persisted_as_semantic_block_without_repeat_merge(

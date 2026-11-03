@@ -515,6 +515,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             ),
             "/api/ask_boss_dispatch": lambda h, b: h._handle_ask_boss_dispatch(b),
             "/api/confirm_epic_complete": lambda h, b: h._handle_confirm_epic_complete(b),
+            "/api/return_epic_to_backlog": lambda h, b: h._handle_return_epic_to_backlog(b),
             "/api/boss_drain": lambda h, b: h._handle_boss_drain(b),
             "/api/comment": lambda h, b: h._handle_comment(b),
             "/api/comment/resolve": lambda h, b: h._handle_comment_resolve(b),
@@ -774,6 +775,23 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             payload,
         )
 
+    def _handle_return_epic_to_backlog(self, body: dict[str, Any]) -> None:
+        """Human-only command boundary; it has no transition implementation yet."""
+
+        epic_id = self._require_work_id(body, key="epic_id")
+        if epic_id is None:
+            return
+        request_id = body.get("request_id")
+        if not isinstance(request_id, str) or not request_id.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing request_id")
+            return
+        from cascade.epic.return_command import return_epic_to_backlog
+
+        result = return_epic_to_backlog(
+            epic_id, request_id.strip(), actor="human", root=self.server.root
+        )
+        self._json_response(HTTPStatus.OK, result.to_dict())
+
     def _handle_boss_drain(self, body: dict[str, Any]) -> None:
         feature_id = body.get("feature_id")
         if not isinstance(feature_id, str) or not feature_id.strip():
@@ -1021,9 +1039,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         return paths
 
     def _handle_board(self) -> None:
-        board = merged_board(self.server.root)
-        with merged_board_snapshot(self.server.root, board):
-            payload = board_view_from_index(board, root=self.server.root)
+        try:
+            board = merged_board(self.server.root)
+            with merged_board_snapshot(self.server.root, board):
+                payload = board_view_from_index(board, root=self.server.root)
+        except BoardError as exc:
+            self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, f"Board unavailable: {exc}")
+            return
         self._json_response(HTTPStatus.OK, payload)
 
     def _handle_doc(self, work_id: str) -> None:

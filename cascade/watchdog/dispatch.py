@@ -11,6 +11,13 @@ from cascade.board.paths import column_dir
 from cascade.board.gitutil import commit_paths, has_git
 from cascade.board.store import move_doc, read_doc, save_doc, write_doc
 from cascade.board.types import BoardIndex, WorkMeta
+from cascade.agent.discovery.inventory import get_provider_inventory
+from cascade.agent.preflight import (
+    ProviderCapabilityBatchPreflight,
+    RoleCapabilityPreflight,
+    batch_provider_capability_preflight,
+    preflight_provider_capability,
+)
 from cascade.epic.activation import _drop_stale_copies, activate_epic_on_worktree
 from cascade.watchdog.config import task_parallelism
 from cascade.watchdog.events import append_event
@@ -112,11 +119,28 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("not_found")
     if meta.tier != "epic" or meta.status not in _OPEN:
         return _fail("bad_state")
+    # A reviewed retry is a new planning run.  It must not attach to children
+    # that belong to the archived run (or to a partially restored board).
+    if any(
+        candidate.parent == work_id and candidate.status != "backlog"
+        for candidate in board.by_id.values()
+    ):
+        return _fail("existing_child_work")
+    if get_integration_worktree(root, "epic", work_id) is not None:
+        return _fail("existing_activation_run")
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
+    if refusal := _provider_preflight_refusal(meta, root=root):
+        return refusal
     if not has_git(root):
         move_doc(work_id, "active", root=root)
-        event = _emit(root, work_id, "EpicActivated", {"epic_id": work_id, "by": by})
+        run_id = _begin_epic_activation_run(work_id, root)
+        event = _emit(
+            root,
+            work_id,
+            "EpicActivated",
+            {"epic_id": work_id, "by": by, "run_id": run_id},
+        )
         return DispatchResult(ok=True, reason=None, event=event)
     base_sha = resolve_validated_epic_activation_sha(work_id, trunk=root)
     if base_sha is None:
@@ -132,8 +156,21 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
         trunk=root,
     )
     activate_epic_on_worktree(work_id, trunk=root, epic_wt=epic_wt)
-    event = _emit(root, work_id, "EpicActivated", {"epic_id": work_id, "by": by})
+    run_id = _begin_epic_activation_run(work_id, root)
+    event = _emit(
+        root, work_id, "EpicActivated", {"epic_id": work_id, "by": by, "run_id": run_id}
+    )
     return DispatchResult(ok=True, reason=None, event=event)
+
+
+def _begin_epic_activation_run(work_id: str, root: Path) -> str:
+    """Archive the prior graph state before the new activation boot resolves pins."""
+
+    from cascade.epic.checkpoint import begin_activation_run
+    from cascade.epic.graph import clear_epic_graph_session
+
+    clear_epic_graph_session(work_id, root=root)
+    return begin_activation_run(work_id, root=root)
 
 
 def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
@@ -157,6 +194,8 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("not_found")
     if reason := dispatch_refusal_from_readiness(readiness):
         return _fail(reason)
+    if refusal := _provider_preflight_refusal(meta, root=root):
+        return refusal
 
     from cascade.stacked_dispatch import ensure_feature_dispatch_selection
 
@@ -237,6 +276,8 @@ def _dispatch_task(
 
     if blocked := refusal_if_blocked(work_id, root=root):
         return _fail(blocked)
+    if refusal := _provider_preflight_refusal(meta, root=root):
+        return refusal
 
     if not has_git(root):
         move_doc(work_id, "active", root=root)
@@ -411,8 +452,68 @@ def _emit(root: Path, dest: str, event_type: str, payload: dict[str, object]) ->
     return event
 
 
-def _fail(reason: str) -> DispatchResult:
-    return DispatchResult(ok=False, reason=reason, event=None)
+def _provider_preflight_refusal(
+    meta: WorkMeta,
+    *,
+    root: Path,
+) -> DispatchResult | None:
+    """Check every role the dispatch will start before any durable work begins.
+
+    Older boards without a complete model selection retain their existing
+    dispatch behavior; their launcher already handles the missing selection.
+    Once a selection resolves, however, capability is a hard pre-dispatch
+    gate and the returned payload remains safe to expose to operators.
+    """
+
+    from cascade.agent.errors import ProviderConfigError
+    from cascade.watchdog.config import ConfigError
+    from cascade.watchdog.model_resolve import ModelConfigError, resolve_backend
+
+    roles_by_tier = {
+        "epic": ("epic_manager", "epic_architect"),
+        "feature": ("feature_lead", "feature_architect"),
+        "task": ("swe",),
+    }
+    roles = roles_by_tier.get(meta.tier)
+    if roles is None:
+        return None
+    try:
+        backends = tuple(resolve_backend(role, meta, root=root) for role in roles)
+    except (ModelConfigError, ProviderConfigError, ConfigError):
+        return None
+
+    inventory = get_provider_inventory()
+    checks = tuple(
+        RoleCapabilityPreflight(
+            role=role,
+            result=preflight_provider_capability(
+                provider=backend.provider,
+                model_id=backend.model.model_id,
+                tier=meta.tier,
+                inventory=inventory,
+                reasoning_level=backend.reasoning,
+                flex_mode=backend.flex_mode,
+            ),
+        )
+        for role, backend in zip(roles, backends, strict=True)
+    )
+    result = batch_provider_capability_preflight(checks)
+    if result.supported:
+        return None
+    reason = (
+        "provider_preflight_blocked"
+        if result.outcome == "blocked"
+        else "provider_preflight_unavailable"
+    )
+    return _fail(reason, preflight=result)
+
+
+def _fail(
+    reason: str,
+    *,
+    preflight: ProviderCapabilityBatchPreflight | None = None,
+) -> DispatchResult:
+    return DispatchResult(ok=False, reason=reason, event=None, preflight=preflight)
 
 
 def _relocate_active(work_id: str, *, dest_root: Path, trunk: Path) -> None:

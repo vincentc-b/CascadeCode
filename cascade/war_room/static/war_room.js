@@ -842,6 +842,117 @@
     return btn;
   }
 
+  function returnRefusalMessages(eligibility) {
+    if (!eligibility || eligibility.eligible || !Array.isArray(eligibility.refusals)) return [];
+    return eligibility.refusals
+      .map(function (refusal) { return refusal && refusal.message; })
+      .filter(function (message) { return typeof message === "string" && message; });
+  }
+
+  function appendEpicReturnFeedback(row, eligibility) {
+    const messages = returnRefusalMessages(eligibility);
+    if (!messages.length) return;
+    const feedback = document.createElement("div");
+    feedback.className = "epic-return-refusals";
+    feedback.textContent = messages.join(" · ");
+    feedback.setAttribute("aria-label", "Return to backlog unavailable: " + messages.join("; "));
+    row.appendChild(feedback);
+  }
+
+  function returnRequestId() {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+      return globalThis.crypto.randomUUID();
+    }
+    return "return-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+  }
+
+  async function returnEpicToBacklog(item) {
+    const response = await apiPost("/api/return_epic_to_backlog", {
+      epic_id: item.id,
+      request_id: returnRequestId(),
+    });
+    const body = response.body;
+    if (body.eligibility) item.return_to_backlog = body.eligibility;
+    if (!body.ok) {
+      const messages = returnRefusalMessages(body.eligibility);
+      setStatus(messages.length ? messages.join(" · ") : (body.message || "Return to backlog was refused."), true);
+    } else {
+      setStatus("Return to backlog accepted for " + item.id + ".", false);
+    }
+    await refreshBoard();
+    return body;
+  }
+
+  function providerRecoveryAction(recovery, name) {
+    const actions = recovery && recovery.actions;
+    return actions && actions[name] && actions[name].eligible === true;
+  }
+
+  function appendProviderRecoveryFeedback(row, recovery) {
+    if (!recovery) return;
+    const feedback = document.createElement("div");
+    feedback.className = "provider-recovery-feedback";
+    feedback.textContent = "Provider recovery: " + (recovery.reason || "Provider recovery is required.");
+    feedback.setAttribute("aria-label", feedback.textContent);
+    row.appendChild(feedback);
+  }
+
+  function openProviderSetup() {
+    if (el.providersPane) {
+      el.providersPane.open = true;
+      el.providersPane.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setProvidersStatus("Update provider credentials or setup, then retry the affected work item.", false);
+    return Promise.resolve();
+  }
+
+  async function retryProviderRecovery(item) {
+    try {
+      const { body } = await apiPost("/api/provider-recovery/" + encodeURIComponent(item.id) + "/retry", {});
+      setStatus(body.ok ? "Provider recovery resumed for " + item.id + "." : (body.reason || "Provider recovery was refused."), !body.ok);
+      return body;
+    } catch (err) {
+      setStatus((err.body && (err.body.reason || err.body.error)) || err.message || "Provider recovery was refused.", true);
+      throw err;
+    } finally {
+      await refreshBoard();
+    }
+  }
+
+  async function changeProviderRecovery(item) {
+    const recovery = item.provider_recovery || {};
+    const selection = recovery.selection || {};
+    if (typeof globalThis.prompt !== "function") {
+      throw new Error("Provider selection controls are unavailable in this browser.");
+    }
+    const provider = globalThis.prompt("Provider ID", selection.provider || "");
+    if (provider === null) return;
+    const modelsText = globalThis.prompt("Models JSON (role to model)", JSON.stringify(selection.models || {}));
+    if (modelsText === null) return;
+    let models;
+    try {
+      models = JSON.parse(modelsText);
+    } catch (_err) {
+      throw new Error("Models must be valid JSON.");
+    }
+    const payload = {
+      provider: provider,
+      models: models,
+      reasoning: selection.reasoning || {},
+      flex_mode: selection.flex_mode,
+    };
+    try {
+      const { body } = await apiPost("/api/provider-recovery/" + encodeURIComponent(item.id) + "/change", payload);
+      setStatus(body.ok ? "Provider changed and recovery resumed for " + item.id + "." : (body.reason || "Provider change was refused."), !body.ok);
+      return body;
+    } catch (err) {
+      setStatus((err.body && (err.body.reason || err.body.error)) || err.message || "Provider change was refused.", true);
+      throw err;
+    } finally {
+      await refreshBoard();
+    }
+  }
+
   function buildRow(item, tier, column) {
     const row = document.createElement("div");
     row.className = "board-row";
@@ -871,6 +982,10 @@
     title.className = "board-row-title";
     title.textContent = item.id + " — " + item.title;
     row.appendChild(title);
+
+    if (typeof appendProviderRecoveryFeedback === "function") {
+      appendProviderRecoveryFeedback(row, item.provider_recovery);
+    }
 
     if (
       tier === "features" &&
@@ -921,8 +1036,27 @@
       row.appendChild(branch);
     }
 
+    if (tier === "epics" && column === "2_active") {
+      appendEpicReturnFeedback(row, item.return_to_backlog);
+    }
+
     const actions = document.createElement("div");
     actions.className = "board-row-actions";
+
+    const providerRecovery = item.provider_recovery;
+    if (typeof providerRecoveryAction === "function" && providerRecoveryAction(providerRecovery, "change_provider")) {
+      actions.appendChild(actionButton("Change provider", function () {
+        return changeProviderRecovery(item);
+      }));
+    }
+    if (typeof providerRecoveryAction === "function" && providerRecoveryAction(providerRecovery, "retry")) {
+      actions.appendChild(actionButton("Retry provider", function () {
+        return retryProviderRecovery(item);
+      }));
+    }
+    if (typeof providerRecoveryAction === "function" && providerRecoveryAction(providerRecovery, "provider_setup")) {
+      actions.appendChild(actionButton("Provider setup", openProviderSetup));
+    }
 
     const startable = OPEN_STATUSES[item.status] === true;
     if (tier === "epics") {
@@ -970,6 +1104,13 @@
           actions.appendChild(actionButton("Close epic", function () {
             return confirmEpicComplete(item.id);
           }));
+        }
+        const returnEligibility = item.return_to_backlog;
+        if (returnEligibility) {
+          const refusalMessages = returnRefusalMessages(returnEligibility);
+          actions.appendChild(actionButton("Return to backlog", function () {
+            return returnEpicToBacklog(item);
+          }, returnEligibility.eligible ? null : refusalMessages.join("; ") || "Return to backlog is unavailable."));
         }
       }
     }

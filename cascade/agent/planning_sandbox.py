@@ -33,7 +33,7 @@ def collect_epic_readable_paths(epic_id: str, *, root: Path) -> list[Path]:
     from cascade.workspace.integration_worktree import doc_filesystem_root
 
     board_root = doc_filesystem_root(epic_id, trunk=repo)
-    epic = read_doc(epic_id, root=repo)
+    epic = read_doc(epic_id, root=board_root)
     paths: list[Path] = [epic.meta.path.resolve()]
 
     board = list_board(board_root)

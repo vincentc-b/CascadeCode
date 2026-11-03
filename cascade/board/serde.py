@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from cascade.board.errors import NotFound
-from cascade.board.store import read_doc
 from cascade.board.types import CancellationFeedback, WorkDoc, WorkMeta, WorkId
+from cascade.workspace.doc_root import read_doc_resolved
 
 
 def work_meta_from_dict(raw: Mapping[str, Any]) -> WorkMeta:
@@ -85,7 +85,7 @@ def work_doc_from_dict(
     """Coerce agent/MCP JSON into ``WorkDoc``.
 
     When ``meta.id`` is present, reload canonical ``meta`` (path, column, sha)
-    from ``read_doc`` so commits land in the owning integration worktree.
+    from the resolved live doc so commits land in the owning integration worktree.
     """
 
     if isinstance(raw, WorkDoc):
@@ -103,7 +103,7 @@ def work_doc_from_dict(
             work_id = wid
     if work_id:
         try:
-            base = read_doc(work_id, root=root)
+            base = read_doc_resolved(work_id, root=root)
         except NotFound:
             base = None
         if base is not None:

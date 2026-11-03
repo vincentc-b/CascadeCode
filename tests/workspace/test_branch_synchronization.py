@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 
 from cascade.stacked_dispatch import read_feature_dispatch_selection
+from cascade.board.parse import render_doc
+from cascade.board.store import list_board, read_doc
 from cascade.task.worktree import clear_task_runs
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 from cascade.war_room.room_settings import write_stacked_pr_enabled
@@ -109,6 +111,48 @@ def test_epic_update_keeps_live_spec_over_managed_trunk_pointer(tmp_path: Path) 
     follow_up = inspect_branch_synchronization("epic_001", root=root)
     assert follow_up.ok and follow_up.state is not None
     assert follow_up.state.behind == 0
+
+
+def test_epic_update_drops_stale_pointer_when_base_completes_another_epic(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    add_doc(root, id="epic_001", title="First", tier="epic", status="ready_to_plan")
+    add_doc(root, id="epic_002", title="Second", tier="epic", status="ready_to_plan")
+    assert activate_epic("epic_001", "human", root=root).ok
+    assert activate_epic("epic_002", "human", root=root).ok
+    # First sync the new Epic's own managed pointer, as normal activation does.
+    assert update_integration_branch("epic_002", root=root).ok
+
+    second = integration_worktree_path("epic", "epic_002", trunk=root)
+    active_rel = "docs/epics/2_active/epic_001_first.md"
+    completed_rel = "docs/epics/3_completed/epic_001_first.md"
+    assert (second / active_rel).is_file()
+
+    first = integration_worktree_path("epic", "epic_001", trunk=root)
+    completed = read_doc("epic_001", root=first)
+    completed.meta.status = "completed"
+    completed.meta.path = root / completed_rel
+    completed.body += "\n" + ("Completed implementation detail unique to this plan.\n" * 100)
+    completed.meta.path.parent.mkdir(parents=True, exist_ok=True)
+    completed.meta.path.write_text(render_doc(completed), encoding="utf-8")
+    subprocess.run(["git", "rm", "--", active_rel], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "add", "--", completed_rel], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "complete first epic", "--", active_rel, completed_rel],
+        cwd=root, check=True, capture_output=True,
+    )
+
+    result = update_integration_branch("epic_002", root=root)
+    assert result.ok
+    assert not (second / active_rel).exists()
+    assert list_board(second).by_id["epic_001"].status == "completed"
+    assert read_doc("epic_002", root=second).meta.status == "active"
+    assert subprocess.run(
+        ["git", "status", "--porcelain"], cwd=second, check=True,
+        capture_output=True, text=True,
+    ).stdout == ""
 
 
 def _seed_predecessor_review(root: Path, feature_id: str) -> None:

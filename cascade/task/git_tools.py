@@ -35,6 +35,7 @@ def swe_run_tests(
     wt = task_run.worktree.resolve()
     argv = list(cmd) if cmd is not None else list(_DEFAULT_TEST_CMD)
     _validate_pytest_cmd(argv)
+    final_validation = _validation_target(task_id, task_run, root=Path(root).resolve())
     result = subprocess.run(
         argv,
         cwd=wt,
@@ -42,9 +43,39 @@ def swe_run_tests(
         text=True,
         encoding="utf-8",
     )
-    return {
+    outcome: dict[str, object] = {
         "exit_code": result.returncode,
         "output": _output_summary(result.stdout, result.stderr),
+    }
+    if final_validation is not None:
+        outcome["final_validation"] = final_validation
+    return outcome
+
+
+def _validation_target(task_id: str, task_run: TaskRun, *, root: Path) -> dict[str, str] | None:
+    """Capture the immutable branch pair immediately before final pytest runs."""
+
+    if _git(task_run.worktree.resolve(), "status", "--porcelain").stdout.strip():
+        return None
+    if not _deliverable_commits(task_run):
+        return None
+    from cascade.board.store import read_doc
+    from cascade.workspace.integration_worktree import integration_branch
+
+    task = read_doc(task_id, root=root)
+    if not task.meta.parent:
+        return None
+    source = _git(root, "rev-parse", "--verify", f"{task_run.branch}^{{commit}}", check=False)
+    target = _git(
+        root, "rev-parse", "--verify", f"{integration_branch('feature', task.meta.parent)}^{{commit}}",
+        check=False,
+    )
+    if source.returncode != 0 or target.returncode != 0:
+        return None
+    return {
+        "task_id": task_id,
+        "deliverable_sha": source.stdout.strip(),
+        "feature_base_sha": target.stdout.strip(),
     }
 
 
@@ -85,6 +116,12 @@ def swe_commit(
     sha = _git(wt, "rev-parse", "HEAD").stdout.strip()
     if not sha:
         raise GitError("commit succeeded but HEAD sha is empty")
+    # Amending a deliverable changes the identity that validation attests to.
+    # Do this at commit time so no old ready/queue record survives until a
+    # later replay happens to notice it.
+    from cascade.task.wiring import invalidate_validated_delivery
+
+    invalidate_validated_delivery(task_id, root=repo)
     return sha
 
 
