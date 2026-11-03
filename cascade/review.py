@@ -18,7 +18,9 @@ from cascade.board.errors import BoardError, GitError, NotFound
 from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
 from cascade.tracking import (
     MergeRequest,
+    ReviewNotFound,
     create_merge_request,
+    detect_forge,
     find_merge_request,
     fast_forward_branch,
     forge_ready,
@@ -164,6 +166,8 @@ def persist_epic_review_snapshot(
         "target_branch": snapshot.target_branch,
         "forge_state": snapshot.forge_state,
         "closed": snapshot.stage == "completed",
+        # Explicitly clear a prior lookup blocker when a later refresh works.
+        "blocker": None,
     }
     if blocker is not None:
         record["blocker"] = {
@@ -172,6 +176,134 @@ def persist_epic_review_snapshot(
             "retryable": blocker.retryable,
         }
     _update_record(locate_trunk(root), epic_id, record, create=True)
+
+
+def refresh_epic_review_snapshot(
+    epic_id: str, *, root: Path
+) -> EpicReviewSnapshot | None:
+    """Refresh a durable epic review from the forge without creating a review.
+
+    The persisted URL is the review identity.  Lookup failures deliberately
+    retain that identity and branch context so a later retry cannot fall back
+    to publication and accidentally create a replacement review.
+    """
+
+    trunk = locate_trunk(root)
+    current = epic_review_snapshot(epic_id, root=trunk)
+    if current is None:
+        return None
+    if current.review_url is None:
+        return _persist_epic_review_blocker(
+            epic_id,
+            current,
+            root=trunk,
+            code="review_identity_missing",
+            message="Restore the stored review URL before retrying epic close.",
+            retryable=False,
+        )
+    forge = detect_forge(trunk)
+    if forge is None:
+        return _persist_epic_review_blocker(
+            epic_id,
+            current,
+            root=trunk,
+            code="review_lookup_failed",
+            message="Retry after configuring a supported forge remote.",
+            retryable=True,
+        )
+    review = MergeRequest(
+        url=current.review_url,
+        number=None,
+        forge=forge,
+        source_branch=current.source_branch or "",
+        target_branch=current.target_branch or "",
+        draft=False,
+    )
+    try:
+        live = merge_request_snapshot(trunk, review)
+    except (NotFound, ReviewNotFound):
+        return _persist_epic_review_blocker(
+            epic_id,
+            current,
+            root=trunk,
+            code="review_missing",
+            message="Restore access to the existing forge review or verify that it still exists.",
+            retryable=False,
+        )
+    except (GitError, OSError, ValueError):
+        return _persist_epic_review_blocker(
+            epic_id,
+            current,
+            root=trunk,
+            code="review_lookup_failed",
+            message="Retry after restoring forge connectivity and credentials.",
+            retryable=True,
+        )
+
+    raw_state = str(live.get("state") or "").lower()
+    forge_state: ForgeReviewState = (
+        raw_state if raw_state in {"open", "merged", "closed"} else "unknown"
+    )  # type: ignore[assignment]
+    if forge_state == "open":
+        refreshed = EpicReviewSnapshot(
+            stage="implementation_review_pending",
+            review_url=current.review_url,
+            source_branch=current.source_branch,
+            target_branch=current.target_branch,
+            forge_state=forge_state,
+        )
+    elif forge_state == "merged":
+        # The forge merge is necessary but not sufficient for terminal epic
+        # completion; close reconciliation still verifies the landed document.
+        refreshed = EpicReviewSnapshot(
+            stage="implementation_review_pending",
+            review_url=current.review_url,
+            source_branch=current.source_branch,
+            target_branch=current.target_branch,
+            forge_state=forge_state,
+        )
+    else:
+        code = "review_closed" if forge_state == "closed" else "review_state_unknown"
+        message = (
+            "Reopen the existing forge review before retrying epic close."
+            if forge_state == "closed"
+            else "Retry after the forge reports a recognized review state."
+        )
+        refreshed = EpicReviewSnapshot(
+            stage="blocked",
+            review_url=current.review_url,
+            source_branch=current.source_branch,
+            target_branch=current.target_branch,
+            forge_state=forge_state,
+            blocker=EpicCloseBlocker(
+                code=code,
+                message=message,
+                retryable=forge_state == "unknown",
+            ),
+        )
+    persist_epic_review_snapshot(epic_id, refreshed, root=trunk)
+    return refreshed
+
+
+def _persist_epic_review_blocker(
+    epic_id: str,
+    current: EpicReviewSnapshot,
+    *,
+    root: Path,
+    code: str,
+    message: str,
+    retryable: bool,
+) -> EpicReviewSnapshot:
+    blocked = EpicReviewSnapshot(
+        stage="blocked",
+        review_url=current.review_url,
+        source_branch=current.source_branch,
+        target_branch=current.target_branch,
+        forge_state="unknown",
+        blocker=EpicCloseBlocker(code=code, message=message, retryable=retryable),
+    )
+    persist_epic_review_snapshot(epic_id, blocked, root=root)
+    return blocked
 
 
 def list_open_reviews(*, root: Path) -> list[OpenReview]:

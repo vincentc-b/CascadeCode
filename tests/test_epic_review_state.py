@@ -7,12 +7,15 @@ from pathlib import Path
 
 import pytest
 
+from cascade.board.errors import GitError, NotFound
 from cascade.review import (
     EpicCloseBlocker,
     EpicReviewSnapshot,
     epic_review_snapshot,
     persist_epic_review_snapshot,
+    refresh_epic_review_snapshot,
 )
+from cascade.tracking import ReviewNotFound
 from tests.support import make_repo
 
 
@@ -78,3 +81,85 @@ def test_blocked_snapshot_requires_structured_actionable_details() -> None:
         ),
     )
     assert snapshot.blocker is not None and snapshot.blocker.retryable
+
+
+def test_refresh_reconstructs_pending_review_and_persists_forge_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    original = EpicReviewSnapshot(
+        stage="blocked",
+        review_url="https://github.com/acme/project/pull/17",
+        source_branch="epic/epic_001",
+        target_branch="main",
+        blocker=EpicCloseBlocker(
+            code="review_lookup_failed", message="Retry forge lookup.", retryable=True
+        ),
+    )
+    persist_epic_review_snapshot("epic_001", original, root=root)
+    monkeypatch.setattr("cascade.review.detect_forge", lambda _root: "github")
+    monkeypatch.setattr(
+        "cascade.review.merge_request_snapshot",
+        lambda _root, review: {"state": "OPEN", "url": review.url},
+    )
+
+    refreshed = refresh_epic_review_snapshot("epic_001", root=root)
+
+    assert refreshed == EpicReviewSnapshot(
+        stage="implementation_review_pending",
+        review_url=original.review_url,
+        source_branch=original.source_branch,
+        target_branch=original.target_branch,
+        forge_state="open",
+    )
+    assert epic_review_snapshot("epic_001", root=root) == refreshed
+
+    monkeypatch.setattr(
+        "cascade.review.merge_request_snapshot",
+        lambda _root, review: {"state": "merged", "url": review.url},
+    )
+    merged = refresh_epic_review_snapshot("epic_001", root=root)
+    assert merged is not None
+    assert merged.stage == "implementation_review_pending"
+    assert merged.forge_state == "merged"
+
+
+@pytest.mark.parametrize(
+    ("error", "code", "retryable"),
+    [
+        (ReviewNotFound("gone"), "review_missing", False),
+        (NotFound("gone"), "review_missing", False),
+        (GitError("offline"), "review_lookup_failed", True),
+    ],
+)
+def test_refresh_persists_actionable_lookup_blocker_without_replacing_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    code: str,
+    retryable: bool,
+) -> None:
+    root = make_repo(tmp_path)
+    original = EpicReviewSnapshot(
+        stage="implementation_review_pending",
+        review_url="https://github.com/acme/project/pull/17",
+        source_branch="epic/epic_001",
+        target_branch="main",
+        forge_state="open",
+    )
+    persist_epic_review_snapshot("epic_001", original, root=root)
+    monkeypatch.setattr("cascade.review.detect_forge", lambda _root: "github")
+
+    def fail_lookup(_root: Path, _review: object) -> dict[str, object]:
+        raise error
+
+    monkeypatch.setattr("cascade.review.merge_request_snapshot", fail_lookup)
+
+    refreshed = refresh_epic_review_snapshot("epic_001", root=root)
+
+    assert refreshed is not None and refreshed.stage == "blocked"
+    assert refreshed.review_url == original.review_url
+    assert refreshed.source_branch == original.source_branch
+    assert refreshed.target_branch == original.target_branch
+    assert refreshed.blocker is not None
+    assert (refreshed.blocker.code, refreshed.blocker.retryable) == (code, retryable)
