@@ -200,6 +200,14 @@ def test_war_room_js_renders_canonical_recovery_incident_once_per_transition():
     assert "if (!active[key]) delete recoveryIncidentTransitions[key]" in source
 
 
+def test_recovery_incident_lifecycle_browser_cases():
+    if shutil.which("node") is None:
+        pytest.skip("node is required for browser-side UI contract tests")
+    cases = Path(__file__).with_name("recovery_incident_lifecycle_cases.mjs")
+    result = subprocess.run(["node", str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_war_room_js_renders_and_submits_epic_return_control():
     source = (
         Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"

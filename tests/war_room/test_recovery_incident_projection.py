@@ -100,3 +100,63 @@ def test_resolution_clears_active_incident_and_blocker_is_actionable(
 
     _write_action(root, state="blocked", routing="enqueued", completed=True)
     assert _board(root)["features"]["2_active"][0]["recovery_incident"] is None
+
+
+def test_recovery_incident_lifecycle_rehydrates_exactly_across_reads(tmp_path: Path) -> None:
+    """One persisted action drives the full operator lifecycle after every refresh."""
+
+    root = make_repo(tmp_path, git=False)
+    _write_action(root, state="awaiting_owner_decision", routing=None)
+    path = root / ".cascade" / "executions.json"
+
+    failed = _board(root)["features"]["2_active"][0]["recovery_incident"]
+    assert failed == {
+        "state": "failed",
+        "reason": "Merge failed because the target changed.",
+        "owner": {"kind": "epic_team", "work_id": "epic_001"},
+        "affected": {"branch": "feat/feat_001", "paths": ["cascade/merge.py"]},
+        "last_attempt": {"number": 2, "at": "2026-11-03T12:00:00+00:00"},
+        "target": {
+            "kind": "action",
+            "id": "merge:feat_001:1",
+            "href": "/api/doc/feat_001",
+        },
+        "next_step": "The failure is recorded; queue the owning team investigation before resuming.",
+    }
+    # A refresh and a new process both derive the same projection from disk.
+    assert _board(root)["features"]["2_active"][0]["recovery_incident"] == failed
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    action = payload["actions"]["merge:feat_001:1"]
+    action["recovery"]["routing_marker"] = {"status": "enqueued"}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    investigating = _board(root)["features"]["2_active"][0]["recovery_incident"]
+    assert investigating["state"] == "investigating"
+    assert investigating["next_step"] == (
+        "The owning team has been durably asked to investigate this action."
+    )
+
+    action["recovery_state"] = "blocked"
+    action["recovery"]["human_blocker"] = {
+        "message": "Approval is required.",
+        "required_action": "Approve the recovery review before retrying.",
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    blocked = _board(root)["features"]["2_active"][0]["recovery_incident"]
+    assert blocked["state"] == "blocked"
+    assert blocked["owner"] == {"kind": "epic_team", "work_id": "epic_001"}
+    assert blocked["next_step"] == "Approve the recovery review before retrying."
+
+    action["recovery_state"] = "awaiting_owner_decision"
+    action["recovery"]["human_blocker"] = None
+    action["attempt_count"] = 3
+    action["updated_at"] = "2026-11-03T12:05:00+00:00"
+    action["attempts"].append({"started_at": "2026-11-03T12:04:00+00:00"})
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    retrying = _board(root)["features"]["2_active"][0]["recovery_incident"]
+    assert retrying["state"] == "investigating"
+    assert retrying["last_attempt"] == {"number": 3, "at": "2026-11-03T12:04:00+00:00"}
+
+    action["recovery_state"] = "completed"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert _board(root)["features"]["2_active"][0]["recovery_incident"] is None
