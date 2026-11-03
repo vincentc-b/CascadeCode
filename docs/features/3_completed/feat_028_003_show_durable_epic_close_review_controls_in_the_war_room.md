@@ -2,7 +2,7 @@
 id: feat_028_003
 title: Show durable epic close-review controls in the War Room
 tier: feature
-status: active
+status: completed
 parent: epic_028
 children:
 - task_028_003_001
