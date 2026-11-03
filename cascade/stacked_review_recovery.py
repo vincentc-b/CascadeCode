@@ -7,7 +7,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 
-from cascade.task.action_recovery import create_or_load_action, record_owner_decision
+from cascade.task.action_recovery import create_or_load_action, load_action, record_owner_decision
 from cascade.workspace.integration_worktree import integration_branch, locate_trunk, merged_board
 
 
@@ -125,9 +125,27 @@ def persist_if_stacked_review_integration_gap(
     return True
 
 
+def stacked_review_completion_blocked(feature_id: str, *, root: Path) -> bool:
+    """Whether an accepted stacked review still requires Epic reconciliation.
+
+    The action remains the durable source of truth while its Epic-targeted
+    review is open.  Generic completion reconciliation must not treat the
+    predecessor-targeted acceptance as delivery to the Epic branch.
+    """
+
+    action = load_action(
+        f"{feature_id}:stacked_review_integration_gap", root=locate_trunk(root)
+    )
+    if action is None or action.get("action_kind") != _ACTION_KIND:
+        return False
+    metadata = action.get("metadata")
+    return isinstance(metadata, dict) and metadata.get("feature_id") == feature_id
+
+
 __all__ = [
     "StackedReviewIntegrationGap",
     "classify_stacked_review_integration_gap",
     "persist_if_stacked_review_integration_gap",
     "persist_stacked_review_integration_gap",
+    "stacked_review_completion_blocked",
 ]

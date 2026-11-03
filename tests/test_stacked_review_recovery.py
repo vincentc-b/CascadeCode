@@ -8,6 +8,8 @@ from types import SimpleNamespace
 
 import cascade.review as review
 from cascade.epic.recovery import reconcile_stacked_review_gap
+from cascade.completion_reconcile import reconcile_completion
+from cascade.feature.readiness import compute_feature_readiness
 from cascade.stacked_review_recovery import (
     classify_stacked_review_integration_gap,
     persist_stacked_review_integration_gap,
@@ -155,3 +157,79 @@ def test_epic_recovery_creates_one_epic_review_and_preserves_provenance(
     assert updated["target_branch"] == "epic/epic_001"
     assert updated["closed"] is False
     assert updated["stacked_reconciliation"]["originating_review"] == gap.accepted_review
+
+
+def test_reconciled_stacked_review_completes_and_releases_dependent_once(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The feat_029_002 race stays pending until its Epic review lands."""
+
+    root = make_repo(tmp_path, git=False)
+    _stacked_board(root)
+    add_doc(
+        root,
+        id="feat_003",
+        title="Dependent",
+        tier="feature",
+        status="backlog",
+        parent="epic_001",
+        depends_on=["feat_002"],
+    )
+    records_path = root / ".cascade" / "reviews.json"
+    records = json.loads(records_path.read_text(encoding="utf-8"))
+    records["feat_002"]["closed"] = True
+    records_path.write_text(json.dumps(records), encoding="utf-8")
+
+    # The accepted predecessor-targeted review is not delivery to the Epic.
+    assert "feat_002" not in reconcile_completion(root)["features"]
+    assert review.review_record_for_feature("feat_002", root=root)["closed"] is True
+    readiness = compute_feature_readiness("feat_003", root=root)
+    assert readiness is not None
+    assert "unmet_deps:feat_002" in readiness.blockers
+
+    follow_up = MergeRequest(
+        url="https://github.example/o/r/pull/999",
+        number="999",
+        forge="github",
+        source_branch="feat/feat_002",
+        target_branch="epic/epic_001",
+        draft=False,
+    )
+    monkeypatch.setattr(
+        "cascade.epic.recovery.get_integration_worktree",
+        lambda *_args: SimpleNamespace(path=root),
+    )
+    monkeypatch.setattr("cascade.epic.recovery.find_merge_request", lambda *_a, **_k: None)
+    monkeypatch.setattr("cascade.epic.recovery.create_merge_request", lambda *_a, **_k: follow_up)
+    reconcile_stacked_review_gap(
+        "feat_002:stacked_review_integration_gap", epic_id="epic_001", root=root
+    )
+
+    monkeypatch.setattr(
+        "cascade.review.get_integration_worktree", lambda *_args: SimpleNamespace(path=root)
+    )
+    monkeypatch.setattr("cascade.review._sync_merged_target", lambda *_a, **_k: None)
+    monkeypatch.setattr("cascade.review.push_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "cascade.review.merge_request_snapshot",
+        lambda *_args, **_kwargs: {"state": "merged", "comments": []},
+    )
+
+    first = reconcile_completion(root)
+    second = reconcile_completion(root)
+    assert first["features"] == ["feat_002"]
+    assert second["features"] == []
+    readiness = compute_feature_readiness("feat_003", root=root)
+    assert readiness is not None
+    assert "unmet_deps:feat_002" not in readiness.blockers
+
+    from cascade.watchdog.events import read_events
+
+    events, _ = read_events("epic_001", 0, root=root)
+    assert len(
+        [
+            event
+            for event in events
+            if event.type == "FeatureCompleted" and event.payload.get("feature_id") == "feat_002"
+        ]
+    ) == 1
