@@ -24,6 +24,8 @@ from cascade.epic.scoped_docs import epic_read_doc, epic_write_doc
 from cascade.feature.decisions import record_decision
 from cascade.watchdog import append_event
 from cascade.watchdog.types import Event
+from cascade.workspace.doc_root import read_doc_resolved
+from cascade.workspace.integration_worktree import git_root_for_path
 
 _RESOLVABLE = frozenset({"pending"})
 _TERMINAL = frozenset({"accepted", "rejected"})
@@ -254,11 +256,12 @@ def _amendment_logged(epic_body: str, amd_id: str) -> bool:
 
 
 def _epic_head_sha(epic_id: str, *, root: Path) -> str | None:
-    epic = read_doc(epic_id, root=root)
-    rel = epic.meta.path.relative_to(root).as_posix()
+    epic = read_doc_resolved(epic_id, root=root)
+    checkout = git_root_for_path(epic.meta.path)
+    rel = epic.meta.path.relative_to(checkout).as_posix()
     result = subprocess.run(
         ["git", "log", "-1", "--format=%H", "--", rel],
-        cwd=root,
+        cwd=checkout,
         capture_output=True,
         text=True,
     )
@@ -290,7 +293,7 @@ def _replace_state(record, **changes):
 
 def _require_active_epic(epic_id: str, root: Path) -> None:
     try:
-        epic = read_doc(epic_id, root=root)
+        epic = read_doc_resolved(epic_id, root=root)
     except NotFound:
         raise EpicToolDenied(f"unknown work id {epic_id}") from None
     if epic.meta.tier != "epic":
