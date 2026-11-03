@@ -2,7 +2,7 @@
 id: feat_031_001
 title: Durable branch-action recovery and owning-team handoff
 tier: feature
-status: active
+status: completed
 parent: epic_031
 children:
 - task_031_001_001
