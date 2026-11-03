@@ -25,6 +25,9 @@ models:
   feature_architect: gpt-5.6-sol
   swe: gpt-5.6-terra
 ---
+  feature_architect: gpt-5.6-sol
+  swe: gpt-5.6-terra
+---
 # Send failed branch actions to the owning agent team
 
 ## Intent
@@ -53,7 +56,9 @@ Two incidents show the gap. Updating `epic_029` returned a `branch_conflict` for
 
 ## Implementation boundaries
 
-Build on the action-recovery records introduced for `epic_026`, existing branch synchronization and merge result types, work queues, and review reconciliation. Extend those paths rather than adding a parallel notification system. The supervisor retains Git and lifecycle mutation authority; agent teams receive scoped evidence and recovery tools. Preserve operator and agent changes, review requirements, source/target provenance, and idempotent completion events. A warning reports an observed failure; it must not claim that agents are investigating until the owning-team request has been durably queued.\n\nOut of scope: autonomous semantic conflict resolution, bypassing review or authorization gates, generalized forge incident management, redesigning all War Room notifications, and failures unrelated to branch/lifecycle actions.
+Build on the action-recovery records introduced for `epic_026`, existing branch synchronization and merge result types, work queues, and review reconciliation. Extend those paths rather than adding a parallel notification system. The supervisor retains Git and lifecycle mutation authority; agent teams receive scoped evidence and recovery tools. Preserve operator and agent changes, review requirements, source/target provenance, and idempotent completion events. A warning reports an observed failure; it must not claim that agents are investigating until the owning-team request has been durably queued.
+
+Out of scope: autonomous semantic conflict resolution, bypassing review or authorization gates, generalized forge incident management, redesigning all War Room notifications, and failures unrelated to branch/lifecycle actions.
 
 ## Macro-architecture
 
@@ -102,12 +107,6 @@ Detect accepted stacked changes absent from the Epic, create the same episode, r
 None blocking. Feature planning must confirm the existing `epic_026` schema and queue idempotency fields before migration design, without replacing the shared record or relaxing this contract.
 
 ## Decision log
-
-- Use one durable recovery episode for failure, handoff, retry, and UI status.
-- Route by intended integration ownership; ambiguous cases block explicitly.
-- Forge merge state is evidence only; completion requires presence on the intended Epic branch.
-- Automated repair is limited to deterministic, reversible mechanics under the lifecycle lock.
-- Ship the recovery core first, then UI and stacked-review work against its contract.
 
 - `dec_001` · 2026-11-03 · Epic Manager · **Recovery model**
   Chose Use one durable recovery episode for command failure, owning-team handoff, supervisor retry, and War Room status..
