@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_028_001
 - feat_028_002
+- feat_028_003
 depends_on: []
 owners:
 - epic_manager
@@ -60,6 +61,7 @@ The feature review row and backlog cancellation review link are useful UI preced
 - War Room board serialization and Epic row rendering.
 
 ## Feature breakdown
+- feat_028_003
 - feat_028_002
 - feat_028_001
 
