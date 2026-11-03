@@ -118,6 +118,11 @@ None blocking. Feature planning must confirm the existing `epic_026` schema and 
   Chose Route by intended integration ownership: Feature Team for Task/Feature-local work, Epic Team for Epic targets and cross-feature integration; persist ambiguous routing as blocked..
   Rationale: The intended target identifies who can resolve the failure, and an explicit blocker prevents silent loss when metadata is incomplete.
   Honors: Required behavior 3 and the operator-visible blocker acceptance scenario..
+
+- `dec_003` · 2026-11-03 · Epic Manager · **Completion semantics**
+  Chose Treat forge merge state as evidence only; complete a Feature only after its accepted revision reaches the intended Epic branch..
+  Rationale: This directly closes the stacked-review race without bypassing the normal reviewed integration path or losing provenance.
+  Honors: Required behavior 6 and the feat_029_002 acceptance scenario..
 ## Amendment log
 
 _(No amendments.)_
