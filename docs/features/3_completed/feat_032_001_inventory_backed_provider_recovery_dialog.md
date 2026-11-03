@@ -2,7 +2,7 @@
 id: feat_032_001
 title: Inventory-backed provider recovery dialog
 tier: feature
-status: active
+status: completed
 parent: epic_032
 children:
 - task_032_001_001
