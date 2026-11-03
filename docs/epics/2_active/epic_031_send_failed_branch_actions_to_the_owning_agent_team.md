@@ -4,7 +4,8 @@ title: Send failed branch actions to the owning agent team
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_031_001
 depends_on: []
 owners:
 - epic_manager
@@ -65,6 +66,7 @@ _(To be developed during Epic planning.)_
 _(To be developed during Epic planning.)_
 
 ## Feature breakdown
+- feat_031_001
 
 _(To be developed during Epic planning.)_
 
