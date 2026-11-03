@@ -4,7 +4,8 @@ title: Make epic close reviews visible in the War Room
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_028_001
 depends_on: []
 owners:
 - epic_manager
@@ -58,6 +59,7 @@ The feature review row and backlog cancellation review link are useful UI preced
 - War Room board serialization and Epic row rendering.
 
 ## Feature breakdown
+- feat_028_001
 
 The Epic Team will sequence a smallest shippable slice covering: single-review close preparation and reconciliation; durable pending-review state and API/board exposure; and War Room Epic-row controls. API and browser coverage should exercise the pending stage, failed review lookup, link accessibility, refresh, idempotency, merged-review reconciliation, and completion without a second PR.
 
