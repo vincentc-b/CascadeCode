@@ -21,6 +21,10 @@ Forge = Literal["github", "gitlab"]
 Runner = Callable[[list[str], Path], subprocess.CompletedProcess[str]]
 
 
+class ReviewNotFound(GitError):
+    """The forge confirmed that a requested review no longer exists."""
+
+
 @dataclass(frozen=True)
 class MergeRequest:
     url: str
@@ -277,7 +281,10 @@ def merge_request_snapshot(
         args = ["glab", "mr", "view", mr.url, "--output", "json"]
     result = runner(args, root)
     if result.returncode != 0:
-        raise GitError((result.stderr or result.stdout).strip() or "MR poll failed")
+        detail = (result.stderr or result.stdout).strip()
+        if re.search(r"(?:\b404\b|not found|could not resolve.*pullrequest)", detail, re.I):
+            raise ReviewNotFound(detail or mr.url)
+        raise GitError(detail or "MR poll failed")
     try:
         raw = json.loads(result.stdout)
     except json.JSONDecodeError as exc:

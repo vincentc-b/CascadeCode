@@ -11,12 +11,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
+from urllib.parse import urlsplit
 
 from cascade.board.errors import BoardError, GitError, NotFound
 from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
 from cascade.tracking import (
     MergeRequest,
+    ReviewNotFound,
     create_merge_request,
+    detect_forge,
     find_merge_request,
     fast_forward_branch,
     forge_ready,
@@ -54,6 +58,254 @@ class OpenReview:
     context: OpenReviewContext
 
 
+EpicCloseStage = Literal["implementation_review_pending", "completed", "blocked"]
+ForgeReviewState = Literal["open", "merged", "closed", "unknown"]
+
+
+@dataclass(frozen=True)
+class EpicCloseBlocker:
+    """Operator-actionable reason an epic close cannot currently advance."""
+
+    code: str
+    message: str
+    retryable: bool
+
+    def __post_init__(self) -> None:
+        if not self.code.strip() or any(char.isspace() for char in self.code):
+            raise ValueError("epic close blocker code must be non-blank and contain no whitespace")
+        if not self.message.strip() or "\n" in self.message or "\r" in self.message:
+            raise ValueError("epic close blocker message must be a non-blank single line")
+        if not isinstance(self.retryable, bool):
+            raise ValueError("epic close blocker retryable must be boolean")
+
+
+@dataclass(frozen=True)
+class EpicReviewSnapshot:
+    """Durable state for the one implementation review that closes an epic."""
+
+    stage: EpicCloseStage
+    review_url: str | None = None
+    source_branch: str | None = None
+    target_branch: str | None = None
+    forge_state: ForgeReviewState = "unknown"
+    blocker: EpicCloseBlocker | None = None
+
+    def __post_init__(self) -> None:
+        if self.stage not in {"implementation_review_pending", "completed", "blocked"}:
+            raise ValueError(f"invalid epic close stage: {self.stage!r}")
+        if self.forge_state not in {"open", "merged", "closed", "unknown"}:
+            raise ValueError(f"invalid forge review state: {self.forge_state!r}")
+        if self.review_url is not None:
+            validate_review_url(self.review_url)
+        for label, branch in (("source", self.source_branch), ("target", self.target_branch)):
+            if branch is not None and (not branch.strip() or "\n" in branch or "\r" in branch):
+                raise ValueError(f"{label} branch must be a non-blank single line")
+        if self.stage == "implementation_review_pending":
+            if not self.review_url or not self.source_branch or not self.target_branch:
+                raise ValueError("pending epic review requires URL, source branch, and target branch")
+            if self.blocker is not None:
+                raise ValueError("pending epic review cannot also have a blocker")
+        if self.stage == "blocked" and self.blocker is None:
+            raise ValueError("blocked epic close requires actionable blocker details")
+        if self.stage != "blocked" and self.blocker is not None:
+            raise ValueError("epic close blocker is only valid for the blocked stage")
+
+
+def validate_review_url(url: str) -> None:
+    """Reject non-web, relative, or credential-bearing review links."""
+
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
+        raise ValueError("review URL must be an absolute HTTP(S) URL without credentials")
+
+
+def epic_review_snapshot(epic_id: str, *, root: Path) -> EpicReviewSnapshot | None:
+    """Load an epic snapshot, accepting records written before typed fields existed."""
+
+    record = _load(locate_trunk(root)).get(epic_id)
+    if not isinstance(record, dict):
+        return None
+    kind = record.get("kind")
+    if kind not in (None, "epic_close"):
+        return None
+    # Legacy epic records contained only MergeRequest fields. Infer the new
+    # fields rather than making a rolling upgrade destructive.
+    stage = str(record.get("stage") or "implementation_review_pending")
+    forge_state = str(record.get("forge_state") or ("merged" if record.get("closed") else "open"))
+    blocker_raw = record.get("blocker")
+    blocker = None
+    if isinstance(blocker_raw, dict):
+        blocker = EpicCloseBlocker(
+            code=str(blocker_raw.get("code") or ""),
+            message=str(blocker_raw.get("message") or ""),
+            retryable=blocker_raw.get("retryable"),  # type: ignore[arg-type]
+        )
+    return EpicReviewSnapshot(
+        stage=stage,  # type: ignore[arg-type]
+        review_url=str(record.get("review_url") or record.get("url") or "") or None,
+        source_branch=str(record.get("source_branch") or "") or None,
+        target_branch=str(record.get("target_branch") or "") or None,
+        forge_state=forge_state,  # type: ignore[arg-type]
+        blocker=blocker,
+    )
+
+
+def persist_epic_review_snapshot(
+    epic_id: str, snapshot: EpicReviewSnapshot, *, root: Path
+) -> None:
+    """Atomically persist the validated epic close snapshot in the review registry."""
+
+    blocker = snapshot.blocker
+    record: dict[str, object] = {
+        "kind": "epic_close",
+        "stage": snapshot.stage,
+        "review_url": snapshot.review_url,
+        # Keep ``url`` for existing registry consumers and rolling upgrades.
+        "url": snapshot.review_url,
+        "source_branch": snapshot.source_branch,
+        "target_branch": snapshot.target_branch,
+        "forge_state": snapshot.forge_state,
+        "closed": snapshot.stage == "completed",
+        # Explicitly clear a prior lookup blocker when a later refresh works.
+        "blocker": None,
+    }
+    if blocker is not None:
+        record["blocker"] = {
+            "code": blocker.code,
+            "message": blocker.message,
+            "retryable": blocker.retryable,
+        }
+    _update_record(locate_trunk(root), epic_id, record, create=True)
+
+
+def refresh_epic_review_snapshot(
+    epic_id: str, *, root: Path
+) -> EpicReviewSnapshot | None:
+    """Refresh a durable epic review from the forge without creating a review.
+
+    The persisted URL is the review identity.  Lookup failures deliberately
+    retain that identity and branch context so a later retry cannot fall back
+    to publication and accidentally create a replacement review.
+    """
+
+    trunk = locate_trunk(root)
+    current = epic_review_snapshot(epic_id, root=trunk)
+    if current is None:
+        return None
+    if current.review_url is None:
+        return _persist_epic_review_blocker(
+            epic_id,
+            current,
+            root=trunk,
+            code="review_identity_missing",
+            message="Restore the stored review URL before retrying epic close.",
+            retryable=False,
+        )
+    forge = detect_forge(trunk)
+    if forge is None:
+        return _persist_epic_review_blocker(
+            epic_id,
+            current,
+            root=trunk,
+            code="review_lookup_failed",
+            message="Retry after configuring a supported forge remote.",
+            retryable=True,
+        )
+    review = MergeRequest(
+        url=current.review_url,
+        number=None,
+        forge=forge,
+        source_branch=current.source_branch or "",
+        target_branch=current.target_branch or "",
+        draft=False,
+    )
+    try:
+        live = merge_request_snapshot(trunk, review)
+    except (NotFound, ReviewNotFound):
+        return _persist_epic_review_blocker(
+            epic_id,
+            current,
+            root=trunk,
+            code="review_missing",
+            message="Restore access to the existing forge review or verify that it still exists.",
+            retryable=False,
+        )
+    except (GitError, OSError, ValueError):
+        return _persist_epic_review_blocker(
+            epic_id,
+            current,
+            root=trunk,
+            code="review_lookup_failed",
+            message="Retry after restoring forge connectivity and credentials.",
+            retryable=True,
+        )
+
+    raw_state = str(live.get("state") or "").lower()
+    forge_state: ForgeReviewState = (
+        raw_state if raw_state in {"open", "merged", "closed"} else "unknown"
+    )  # type: ignore[assignment]
+    if forge_state == "open":
+        refreshed = EpicReviewSnapshot(
+            stage="implementation_review_pending",
+            review_url=current.review_url,
+            source_branch=current.source_branch,
+            target_branch=current.target_branch,
+            forge_state=forge_state,
+        )
+    elif forge_state == "merged":
+        # The forge merge is necessary but not sufficient for terminal epic
+        # completion; close reconciliation still verifies the landed document.
+        refreshed = EpicReviewSnapshot(
+            stage="implementation_review_pending",
+            review_url=current.review_url,
+            source_branch=current.source_branch,
+            target_branch=current.target_branch,
+            forge_state=forge_state,
+        )
+    else:
+        code = "review_closed" if forge_state == "closed" else "review_state_unknown"
+        message = (
+            "Reopen the existing forge review before retrying epic close."
+            if forge_state == "closed"
+            else "Retry after the forge reports a recognized review state."
+        )
+        refreshed = EpicReviewSnapshot(
+            stage="blocked",
+            review_url=current.review_url,
+            source_branch=current.source_branch,
+            target_branch=current.target_branch,
+            forge_state=forge_state,
+            blocker=EpicCloseBlocker(
+                code=code,
+                message=message,
+                retryable=forge_state == "unknown",
+            ),
+        )
+    persist_epic_review_snapshot(epic_id, refreshed, root=trunk)
+    return refreshed
+
+
+def _persist_epic_review_blocker(
+    epic_id: str,
+    current: EpicReviewSnapshot,
+    *,
+    root: Path,
+    code: str,
+    message: str,
+    retryable: bool,
+) -> EpicReviewSnapshot:
+    blocked = EpicReviewSnapshot(
+        stage="blocked",
+        review_url=current.review_url,
+        source_branch=current.source_branch,
+        target_branch=current.target_branch,
+        forge_state="unknown",
+        blocker=EpicCloseBlocker(code=code, message=message, retryable=retryable),
+    )
+    persist_epic_review_snapshot(epic_id, blocked, root=root)
+    return blocked
+
+
 def list_open_reviews(*, root: Path) -> list[OpenReview]:
     """Return open registry rows without mutating durable review state."""
 
@@ -63,7 +315,11 @@ def list_open_reviews(*, root: Path) -> list[OpenReview]:
     rows: list[OpenReview] = []
     for feature_id in sorted(state):
         record = state[feature_id]
-        if not isinstance(record, dict) or record.get("closed"):
+        if (
+            not isinstance(record, dict)
+            or record.get("closed")
+            or record.get("kind") == "epic_close"
+        ):
             continue
         url = str(record.get("url") or "").strip()
         if not url:
@@ -308,6 +564,10 @@ def ensure_epic_review(epic_id: str, *, root: Path) -> MergeRequest | None:
     doc = read_doc(epic_id, root=entry.path)
     if doc.meta.tier != "epic":
         raise NotFound(epic_id)
+    if doc.meta.status == "active" and doc.meta.path.parent.name == "2_active":
+        move_doc(epic_id, "completed", root=entry.path)
+    elif doc.meta.status != "completed" or doc.meta.path.parent.name != "3_completed":
+        raise GitError(f"{epic_id} must be active or completed before review")
     source = integration_branch("epic", epic_id)
     target = resolve_product_trunk(trunk)
     _restore_unrelated_specs_for_epic_review(entry.path, trunk, epic_id)
@@ -316,8 +576,17 @@ def ensure_epic_review(epic_id: str, *, root: Path) -> MergeRequest | None:
         entry.path, source_branch=source, target_branch=target
     )
     if existing is not None:
+        persist_epic_review_snapshot(
+            epic_id,
+            EpicReviewSnapshot(
+                stage="implementation_review_pending", review_url=existing.url,
+                source_branch=existing.source_branch, target_branch=existing.target_branch,
+                forge_state="open",
+            ),
+            root=trunk,
+        )
         return existing
-    return create_merge_request(
+    created = create_merge_request(
         entry.path,
         title=f"{epic_id}: {doc.meta.title}",
         body=f"Delivers `{epic_id}` to `{target}`. Review the completed epic before merging.",
@@ -325,6 +594,16 @@ def ensure_epic_review(epic_id: str, *, root: Path) -> MergeRequest | None:
         target_branch=target,
         draft=False,
     )
+    persist_epic_review_snapshot(
+        epic_id,
+        EpicReviewSnapshot(
+            stage="implementation_review_pending", review_url=created.url,
+            source_branch=created.source_branch, target_branch=created.target_branch,
+            forge_state="open",
+        ),
+        root=trunk,
+    )
+    return created
 
 
 def _restore_unrelated_specs_for_epic_review(

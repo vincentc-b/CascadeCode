@@ -274,6 +274,27 @@ def test_war_room_js_explains_epic_close_comment_blockers():
     assert 'body.plan_url || ("/plan/" + epicId + "#plan-comments")' in source
 
 
+def test_epic_close_review_ui_browser_cases():
+    if shutil.which("node") is None:
+        pytest.skip("node is required for browser-side UI contract tests")
+    case_file = Path(__file__).with_name("epic_close_review_ui_cases.mjs")
+    subprocess.run(["node", str(case_file)], check=True)
+
+
+def test_war_room_loads_durable_epic_close_review_ui():
+    html = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "templates" / "war_room.html"
+    ).read_text(encoding="utf-8")
+    assert html.index("/static/epic_close_review_ui.js") < html.index("/static/war_room.js")
+
+    source = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    ).read_text(encoding="utf-8")
+    assert "item.implementation_review" in source
+    assert 'actionButton("Close epic"' in source
+    assert "await refreshBoard();" in source[source.index("async function confirmEpicComplete") :]
+
+
 def test_supervisor_health_banner_polls_api_health():
     js_path = (
         Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"

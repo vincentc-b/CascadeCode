@@ -9,6 +9,7 @@ import pytest
 
 import cascade.boss.epic_complete as epic_complete_module
 
+from cascade.board.errors import GitError
 from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
 from cascade.boss.epic_complete import (
     confirm_epic_complete,
@@ -19,7 +20,11 @@ from cascade.boss.epic_complete import (
     surface_epic_close_prompt,
 )
 from cascade.comments.store import comment
-from cascade.review import reconcile_feature_review_completions
+from cascade.review import (
+    EpicReviewSnapshot,
+    persist_epic_review_snapshot,
+    reconcile_feature_review_completions,
+)
 from cascade.watchdog.events import read_events
 from cascade.workspace.integration_worktree import ensure_integration_worktree, merged_board
 from tests.support import add_doc, commit_board, make_repo
@@ -196,6 +201,49 @@ def test_human_confirm_idempotent_when_epic_already_completed(tmp_path: Path) ->
     events, _ = read_events("war_room", 0, root=root)
     completed = [event for event in events if event.type == "EpicCompleted"]
     assert len(completed) == 1
+
+
+def test_repeated_close_reuses_persisted_epic_review_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _epic_board(tmp_path)
+    original = EpicReviewSnapshot(
+        stage="implementation_review_pending",
+        review_url="https://github.com/acme/project/pull/17",
+        source_branch="epic/epic_001",
+        target_branch="main",
+        forge_state="open",
+    )
+    persist_epic_review_snapshot("epic_001", original, root=root)
+    monkeypatch.setattr("cascade.review.detect_forge", lambda _root: "github")
+    monkeypatch.setattr(
+        "cascade.review.merge_request_snapshot",
+        lambda *_args, **_kwargs: {"state": "open"},
+    )
+    monkeypatch.setattr(
+        "cascade.review.ensure_epic_review",
+        lambda *_args, **_kwargs: pytest.fail("must not create or find another review"),
+    )
+
+    result = confirm_epic_complete_result("epic_001", "human", root=root)
+
+    assert not result.ok and result.reason == "pending_epic_review"
+    assert result.review_url == original.review_url
+    assert result.source_branch == original.source_branch
+    assert result.target_branch == original.target_branch
+    assert result.forge_state == "open"
+
+    def fail_lookup(*_args, **_kwargs):
+        raise GitError("offline")
+
+    monkeypatch.setattr("cascade.review.merge_request_snapshot", fail_lookup)
+    blocked = confirm_epic_complete_result("epic_001", "human", root=root)
+
+    assert blocked.review_url == original.review_url
+    assert blocked.close_stage == "blocked"
+    assert blocked.blocker is not None
+    assert blocked.blocker.code == "review_lookup_failed"
+    assert blocked.blocker.retryable
 
 
 def test_non_human_confirm_refused_even_when_epic_already_completed(tmp_path: Path) -> None:
