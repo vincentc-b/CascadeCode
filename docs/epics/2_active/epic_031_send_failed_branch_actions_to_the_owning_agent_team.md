@@ -109,6 +109,10 @@ None blocking. Feature planning must confirm the existing `epic_026` schema and 
 - Automated repair is limited to deterministic, reversible mechanics under the lifecycle lock.
 - Ship the recovery core first, then UI and stacked-review work against its contract.
 
+- `dec_001` · 2026-11-03 · Epic Manager · **Recovery model**
+  Chose Use one durable recovery episode for command failure, owning-team handoff, supervisor retry, and War Room status..
+  Rationale: A shared record preserves action identity and idempotency across all consumers while extending epic_026 instead of adding a parallel incident system.
+  Honors: Required behaviors 1–5; implementation boundary to extend existing recovery paths..
 ## Amendment log
 
 _(No amendments.)_
