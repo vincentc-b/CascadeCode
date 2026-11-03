@@ -410,6 +410,12 @@ def test_cursor_failure_to_reviewed_codex_reactivation_journey(
     seed_epic_role_models("epic_028", manager=archived, architect=archived, root=root)
     assert checkpoint_path("epic_028", root=root).is_file()
 
+    # This journey checks reviewed provenance, not provider catalog contents.
+    # Its synthetic Codex model IDs are intentionally absent from discovery.
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch._provider_preflight_refusal",
+        lambda *_args, **_kwargs: None,
+    )
     install_epic_boot_hook(root)
     activated = activate_epic("epic_028", "human", root=root)
 
@@ -519,6 +525,34 @@ def test_activate_snapshot_only_epic_without_trunk_ff(tmp_path: Path, monkeypatc
     epic_wt = get_integration_worktree(root, "epic", "epic_050")
     assert epic_wt is not None
     assert epic_wt.base_sha == provenance.sha
+
+
+def test_activate_snapshot_brief_adds_missing_plan_sections(tmp_path: Path, monkeypatch) -> None:
+    upstream, remote = _seed_remote(tmp_path)
+    doc = add_doc(upstream, id="epic_051", title="Short brief", tier="epic", status="backlog")
+    brief = doc.meta.path
+    text = brief.read_text(encoding="utf-8")
+    text = text[: text.index("## Macro-architecture")]
+    brief.write_text(text + "## Required behavior\n\nPreserve this reviewed requirement.\n", encoding="utf-8")
+    commit_board(upstream, "brief epic_051")
+    subprocess.run(["git", "push", "origin", "main"], cwd=upstream, check=True, capture_output=True)
+
+    root = make_repo(tmp_path / "local")
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    (root / "README.md").write_text("local\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "local"], cwd=root, check=True, capture_output=True)
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+    monkeypatch.setattr("cascade.watchdog.hooks.invoke_boot", lambda *args, **kwargs: None)
+
+    result = activate_epic("epic_051", "human", root=root)
+
+    assert result.ok
+    live = read_doc("epic_051", root=root)
+    assert "## Required behavior\n\nPreserve this reviewed requirement." in live.body
+    assert "## Macro-architecture" in live.body
+    assert "## Amendment log" in live.body
+    assert "## Macro-architecture" not in brief.read_text(encoding="utf-8")
 
 
 def test_snapshot_only_epic_is_readable_from_trunk(tmp_path: Path) -> None:
