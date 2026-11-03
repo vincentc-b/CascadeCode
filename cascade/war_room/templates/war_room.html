@@ -89,6 +89,34 @@
         </form>
       </dialog>
 
+      <dialog id="provider-recovery-dialog" class="brief-dialog">
+        <form id="provider-recovery-form" method="dialog">
+          <div class="dialog-heading">
+            <div>
+              <h2 id="provider-recovery-title">Change provider</h2>
+              <p>Choose a currently available provider and model for each role owned by this work item.</p>
+            </div>
+            <button type="button" id="btn-close-provider-recovery" class="btn-secondary" aria-label="Close">×</button>
+          </div>
+          <div class="brief-model-stack">
+            <label>Provider
+              <select id="provider-recovery-provider" required></select>
+            </label>
+            <label id="provider-recovery-flex-mode-wrap" class="brief-flex-mode" hidden>
+              <input id="provider-recovery-flex-mode" type="checkbox" /> Flex mode
+              <small id="provider-recovery-flex-mode-note"></small>
+            </label>
+            <div id="provider-recovery-role-selectors" class="brief-role-selectors" aria-live="polite"></div>
+          </div>
+          <p id="provider-recovery-status" class="status-line" aria-live="polite"></p>
+          <button type="button" id="btn-provider-recovery-inventory-retry" class="btn-secondary brief-inventory-retry" hidden>Retry model inventory</button>
+          <div class="dialog-actions">
+            <button type="button" id="btn-cancel-provider-recovery" class="btn-secondary">Cancel</button>
+            <button type="submit" id="btn-submit-provider-recovery" disabled>Change provider</button>
+          </div>
+        </form>
+      </dialog>
+
       <div class="war-room-layout">
         <section id="war-room-board" class="board-panel" aria-label="Board">
           <h2>Board</h2>
@@ -340,6 +368,7 @@
     <script src="/static/epic_close_review_ui.js"></script>
     <script src="/static/epic_plan_readiness_ui.js"></script>
     <script src="/static/brief_defaults_ui.js?v=20261025"></script>
+    <script src="/static/provider_recovery_dialog_ui.js?v=20261103"></script>
     <script src="/static/war_room.js?v=20261025"></script>
   </body>
 </html>

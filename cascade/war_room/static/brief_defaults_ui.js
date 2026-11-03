@@ -135,10 +135,11 @@
   function initialSelection(inventory, template, options) {
     options = options || {};
     const preserveSaved = !!options.preserveSaved;
+    const roles = options.roles || BRIEF_STACK_ROLES;
     const providerId = resolveProviderId(inventory, template, preserveSaved);
     const models = {};
     const reasoning = {};
-    BRIEF_STACK_ROLES.forEach(function (role) {
+    roles.forEach(function (role) {
       const savedReasoning =
         template && template.saved && template.saved.reasoning
           ? template.saved.reasoning[role] || ""
@@ -159,10 +160,12 @@
     return { provider: providerId, models: models, reasoning: reasoning, flex_mode: flexMode };
   }
 
-  function applyProviderChange(inventory, template, selection, nextProviderId) {
+  function applyProviderChange(inventory, template, selection, nextProviderId, options) {
+    options = options || {};
+    const roles = options.roles || BRIEF_STACK_ROLES;
     const models = {};
     const reasoning = {};
-    BRIEF_STACK_ROLES.forEach(function (role) {
+    roles.forEach(function (role) {
       const fallback = roleFallbackFromTemplate(template, nextProviderId, role);
       models[role] = revalidateRoleModel(
         inventory,
@@ -214,14 +217,15 @@
 
   function canSubmitBrief(inventory, selection, trackingReady, options) {
     options = options || {};
+    const roles = options.roles || BRIEF_STACK_ROLES;
     if (trackingReady === false) return false;
     if (!inventory || inventory.loading) return false;
     if (!inventory.providers || !inventory.providers.length) return false;
     const provider = providerById(inventory, selection.provider);
     const saved = options.savedSelection || null;
     if (!provider) return !!options.allowSavedUnavailable && saved && selection.provider === saved.provider && JSON.stringify(selection.models) === JSON.stringify(saved.models);
-    for (let i = 0; i < BRIEF_STACK_ROLES.length; i += 1) {
-      const role = BRIEF_STACK_ROLES[i];
+    for (let i = 0; i < roles.length; i += 1) {
+      const role = roles[i];
       const modelId = selection.models[role];
       if (!modelId || (!modelById(provider, modelId) && !(options.allowSavedUnavailable && saved && saved.models[role] === modelId))) return false;
       const reasoning = selection.reasoning[role];
@@ -237,13 +241,18 @@
 
   function buildSubmitPayload(formFields, selection, options) {
     options = options || {};
+    const roles = options.roles || BRIEF_STACK_ROLES;
+    const models = {};
+    roles.forEach(function (role) {
+      if (selection.models[role]) models[role] = selection.models[role];
+    });
     const payload = Object.assign({}, formFields, {
       provider: selection.provider,
-      models: Object.assign({}, selection.models),
+      models: models,
       flex_mode: !!selection.flex_mode,
     });
     const reasoning = {};
-    BRIEF_STACK_ROLES.forEach(function (role) {
+    roles.forEach(function (role) {
       if (selection.reasoning[role]) reasoning[role] = selection.reasoning[role];
     });
     if (Object.keys(reasoning).length || options.includeEmptyReasoning) payload.reasoning = reasoning;
@@ -295,10 +304,11 @@
 
   function renderRoleSelectors(container, inventory, template, selection, handlers, options) {
     options = options || {};
+    const roles = options.roles || BRIEF_STACK_ROLES;
     if (!container) return;
     container.replaceChildren();
     const provider = providerById(inventory, selection.provider);
-    BRIEF_STACK_ROLES.forEach(function (role) {
+    roles.forEach(function (role) {
       const wrap = document.createElement("div");
       wrap.className = "brief-role-row";
 
