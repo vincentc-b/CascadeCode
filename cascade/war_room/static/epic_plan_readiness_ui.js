@@ -28,17 +28,12 @@
   function planEntryStatusLabel(readiness) {
     if (!readiness) return null;
     if (readiness.status === "ready_for_review") return "Ready for review";
-    return "Planning in progress";
+    return "Plan not ready";
   }
 
   function approvePlanDisabledReason(readiness) {
     if (!readiness || readiness.can_approve_plan) return null;
     return humanizeApproveDisabledReason(readiness.approve_disabled_reason);
-  }
-
-  function prefersReducedMotion() {
-    if (typeof matchMedia !== "function") return false;
-    return matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
   function createPlanEntryStatus(document, readiness) {
@@ -59,14 +54,6 @@
       mark.setAttribute("aria-hidden", "true");
       mark.textContent = "✓";
       wrap.appendChild(mark);
-    } else {
-      const indicator = document.createElement("span");
-      indicator.className = "epic-plan-readiness-indicator";
-      indicator.setAttribute("aria-hidden", "true");
-      if (prefersReducedMotion()) {
-        indicator.classList.add("epic-plan-readiness-indicator-static");
-      }
-      wrap.appendChild(indicator);
     }
 
     const text = document.createElement("span");
@@ -197,7 +184,6 @@
     humanizeApproveDisabledReason: humanizeApproveDisabledReason,
     planEntryStatusLabel: planEntryStatusLabel,
     approvePlanDisabledReason: approvePlanDisabledReason,
-    prefersReducedMotion: prefersReducedMotion,
     createPlanEntryStatus: createPlanEntryStatus,
     appendPlanEntryStatusToRow: appendPlanEntryStatusToRow,
     decorateSemanticallyDisabledButton: decorateSemanticallyDisabledButton,

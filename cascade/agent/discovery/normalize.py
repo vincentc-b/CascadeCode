@@ -95,11 +95,13 @@ def discovered_model(
     model_id: str,
     display_name: str,
     reasoning: ReasoningCapability | None,
+    supports_flex_mode: bool | None = None,
 ) -> DiscoveredModel:
     return DiscoveredModel(
         id=model_id,
         display_name=display_name,
         reasoning=reasoning,
+        supports_flex_mode=supports_flex_mode,
     )
 
 

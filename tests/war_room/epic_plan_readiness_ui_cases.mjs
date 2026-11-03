@@ -59,7 +59,7 @@ const planning = {
   approve_disabled_reason: "missing_epic_manager_sign_off",
 };
 
-assert.equal(EpicPlanReadinessUi.planEntryStatusLabel(planning), "Planning in progress");
+assert.equal(EpicPlanReadinessUi.planEntryStatusLabel(planning), "Plan not ready");
 assert.match(
   EpicPlanReadinessUi.approvePlanDisabledReason(planning),
   /Epic Manager must sign off/
@@ -75,8 +75,8 @@ assert.equal(EpicPlanReadinessUi.approvePlanDisabledReason(ready), null);
 
 const statusEl = EpicPlanReadinessUi.createPlanEntryStatus(document, planning);
 assert.ok(statusEl.className.includes("planning"));
-assert.equal(statusEl.attributes["aria-label"], "Epic plan readiness: Planning in progress");
-assert.ok(statusEl.children.some((c) => c.className === "epic-plan-readiness-indicator"));
+assert.equal(statusEl.attributes["aria-label"], "Epic plan readiness: Plan not ready");
+assert.ok(!statusEl.children.some((c) => c.className === "epic-plan-readiness-indicator"));
 
 const readyEl = EpicPlanReadinessUi.createPlanEntryStatus(document, ready);
 assert.ok(readyEl.className.includes("ready"));

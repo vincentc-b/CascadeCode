@@ -200,7 +200,25 @@ def test_codex_adapter_filters_hidden(monkeypatch: pytest.MonkeyPatch) -> None:
     snap = discover_codex_models()
     assert snap.available is True
     assert [m.id for m in snap.models] == ["visible-model"]
+    assert snap.supports_flex_mode is False
+    assert snap.models[0].supports_flex_mode is False
+
+
+def test_codex_adapter_reads_flex_capability_per_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    _authenticated_probe(monkeypatch)
+    monkeypatch.setattr(
+        "cascade.agent.discovery.codex_adapter._run_codex_debug_models",
+        lambda: {"models": [
+            {"slug": "standard-only", "service_tiers": [{"id": "priority"}]},
+            {"slug": "flex-enabled", "service_tiers": [{"id": "flex"}]},
+        ]},
+    )
+    snap = discover_codex_models()
     assert snap.supports_flex_mode is True
+    assert {model.id: model.supports_flex_mode for model in snap.models} == {
+        "standard-only": False,
+        "flex-enabled": True,
+    }
 
 
 def test_codex_adapter_api_error(monkeypatch: pytest.MonkeyPatch) -> None:

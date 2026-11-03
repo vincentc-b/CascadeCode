@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import os
 import tempfile
+from collections import OrderedDict
+from copy import deepcopy
 from datetime import date
 from pathlib import Path
+from threading import RLock
 
 from cascade.board.context import resolve_root
 from cascade.board.errors import GitError, NotFound, SchemaError
@@ -16,16 +19,43 @@ from cascade.board.gitutil import (
     path_for_work_id,
     read_blob,
 )
-from cascade.board.id_reservations import reset_id_reservations  # re-exported for tests/tools
+from cascade.board.id_reservations import reset_id_reservations as reset_id_reservations
 from cascade.board.lock import process_lock
 from cascade.board.parse import parse_doc, parse_text, render_doc
 from cascade.board.paths import column_dir, status_for_column
-from cascade.board.types import BoardIndex, Column, WorkDoc, WorkId, WorkTier
+from cascade.board.types import BoardIndex, Column, WorkDoc, WorkId, WorkMeta, WorkTier
 from cascade.board.validate import validate_doc
 from cascade.board.work_ids import allocate_hierarchical_id
 
 _COLUMNS = ("1_backlog", "2_active", "3_completed")
 _TIER_DIRS = (("epic", "epics"), ("feature", "features"), ("task", "tasks"))
+_SCAN_META_CACHE_LIMIT = 8192
+_scan_meta_cache: OrderedDict[Path, tuple[tuple[int, ...], WorkMeta]] = OrderedDict()
+_scan_meta_cache_lock = RLock()
+
+
+def _scan_meta(path: Path) -> WorkMeta:
+    """Reuse unchanged frontmatter without sharing mutable metadata between scans."""
+
+    stat = path.stat()
+    version = (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+    with _scan_meta_cache_lock:
+        cached = _scan_meta_cache.get(path)
+        if cached is not None and cached[0] == version:
+            _scan_meta_cache.move_to_end(path)
+            return deepcopy(cached[1])
+
+    meta = parse_doc(path).meta
+    # A concurrent writer can replace the file during parsing. Return this
+    # scan's result, but cache it only if its identity is still unchanged.
+    after = path.stat()
+    if version == (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+        with _scan_meta_cache_lock:
+            _scan_meta_cache[path] = (version, deepcopy(meta))
+            _scan_meta_cache.move_to_end(path)
+            if len(_scan_meta_cache) > _SCAN_META_CACHE_LIMIT:
+                _scan_meta_cache.popitem(last=False)
+    return meta
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
@@ -54,7 +84,7 @@ def _atomic_write_text(path: Path, text: str) -> None:
 
 
 def list_board(root: Path) -> BoardIndex:
-    """Scan `docs/{epics,features,tasks}/{column}` and index by id. No cache."""
+    """Scan board directories, reusing frontmatter from unchanged files."""
 
     repo = Path(root).resolve()
     by_id = {}
@@ -67,13 +97,13 @@ def list_board(root: Path) -> BoardIndex:
                 if path.is_symlink() or not path.is_file():
                     continue
                 try:
-                    doc = parse_doc(path)
+                    meta = _scan_meta(path)
                 except (SchemaError, OSError, UnicodeDecodeError):
                     continue
-                if doc.meta.id in by_id:
-                    other = by_id[doc.meta.id].path
-                    raise SchemaError(f"duplicate id {doc.meta.id} at {path} and {other}")
-                by_id[doc.meta.id] = doc.meta
+                if meta.id in by_id:
+                    other = by_id[meta.id].path
+                    raise SchemaError(f"duplicate id {meta.id} at {path} and {other}")
+                by_id[meta.id] = meta
     return BoardIndex(by_id=by_id)
 
 

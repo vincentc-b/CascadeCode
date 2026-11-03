@@ -135,9 +135,16 @@ class TaskTierChatError(Exception):
 def _chat_repo(graph_id: str, *, root: Path) -> Path:
     trunk = locate_trunk(resolve_root(root))
     try:
-        return resolve_doc_worktree(graph_id, root=trunk)
+        repo = resolve_doc_worktree(graph_id, root=trunk)
     except NotFound:
         return trunk
+    # The remote backlog snapshot is a read-only view. Chat sidecars belong
+    # to the local workspace so refreshes cannot overwrite operator history.
+    from cascade.workspace.backlog_snapshot import snapshot_root
+
+    if repo.resolve().is_relative_to(snapshot_root(trunk).resolve()):
+        return trunk
+    return repo
 
 
 def _chat_read_path(graph_id: str, *, root: Path) -> Path:
