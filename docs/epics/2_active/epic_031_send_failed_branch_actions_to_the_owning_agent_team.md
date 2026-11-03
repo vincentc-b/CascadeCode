@@ -128,6 +128,11 @@ None blocking. Feature planning must confirm the existing `epic_026` schema and 
   Chose Limit supervisor repair to bounded, deterministic, reversible mechanics under the lifecycle lock..
   Rationale: Mechanical recovery can be automated safely, while semantic conflicts, dirty unrelated files, authorization, and review gates need an owning-team or human decision.
   Honors: Required behavior 4 and the safety acceptance scenarios..
+
+- `dec_005` · 2026-11-03 · Epic Manager · **Delivery slices**
+  Chose Ship the durable recovery core first, then War Room projection and stacked-review reconciliation against that contract..
+  Rationale: Three focused features minimize duplicated infrastructure and allow UI and review work to proceed independently after the shared contract stabilizes.
+  Honors: Frugal smallest-shippable-slice planning and all epic acceptance scenarios..
 ## Amendment log
 
 _(No amendments.)_
