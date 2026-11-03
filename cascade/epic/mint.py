@@ -8,7 +8,7 @@ from pathlib import Path
 from cascade.board.errors import NotFound, SchemaError
 from cascade.board.id_reservations import release_work_id
 from cascade.board.paths import slugify
-from cascade.board.store import allocate_id, list_board, read_doc
+from cascade.board.store import allocate_id
 from cascade.board.types import WorkDoc, WorkMeta
 from cascade.epic.guard import EpicToolDenied, tool_guard
 from cascade.epic.registry import register_epic_tool
@@ -119,7 +119,7 @@ def list_children(*, epic_id: str, root: Path) -> list[WorkMeta]:
 
     repo = Path(root).resolve()
     epic = _require_epic(epic_id, repo)
-    board = list_board(repo)
+    board = merged_board(repo)
     result: list[WorkMeta] = []
     for child_id in epic.meta.children:
         meta = board.by_id.get(child_id)
@@ -145,13 +145,11 @@ def _existing_child_feature_id(board, *, epic_id: str, title: str) -> str | None
 
 def _require_epic(epic_id: str, root: Path) -> WorkDoc:
     try:
-        epic = read_doc(epic_id, root=root)
+        epic = epic_read_doc(epic_id, epic_id=epic_id, root=root)
     except NotFound:
         raise EpicToolDenied(f"unknown work id {epic_id}") from None
     if epic.meta.tier != "epic":
         raise EpicToolDenied(f"{epic_id} is not an epic")
-    if not tool_guard(epic.meta.path, "read", epic_id=epic_id, root=root):
-        raise EpicToolDenied(f"read denied for epic {epic_id}")
     return epic
 
 

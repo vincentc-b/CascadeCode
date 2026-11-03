@@ -2,22 +2,26 @@
 id: feat_027_003
 title: Expose scoped Task recovery and recovery state
 tier: feature
-status: backlog
+status: completed
 parent: epic_027
-children: []
+children:
+- task_027_003_001
+- task_027_003_002
+- task_027_003_003
 depends_on:
 - feat_027_002
 owners:
 - feature_lead
 - feature_architect
 skills: []
-parent_rev: null
+parent_rev: 5eae65d4cbe2e5eeb92bb5800cc851ff16802e20
 created: '2026-10-31'
 updated: '2026-10-31'
 provider: codex
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-10-31T22:38:20.070943+00:00'
 ---
 # Expose scoped Task recovery and recovery state
 
@@ -45,6 +49,9 @@ flowchart TD
 ```
 
 ## Task breakdown
+- task_027_003_003
+- task_027_003_002
+- task_027_003_001
 
 _(empty — Feature Team mints tasks after dispatch)_
 
@@ -55,3 +62,7 @@ None.
 ## Decision log
 
 None yet.
+
+## Closeout
+
+Completed child work: `task_027_003_001` (Implement scoped Feature Team recover_task command), `task_027_003_002` (Project Task recovery incidents and blocker lifecycle), `task_027_003_003` (Add end-to-end coverage for scoped recovery behavior).

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
+import uuid
 from pathlib import Path
 
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -40,6 +42,33 @@ def get_checkpointer(epic_id: str, *, root: Path) -> SqliteSaver:
         _connections[key] = conn
         _savers[key] = saver
     return _savers[key]
+
+
+def begin_activation_run(epic_id: str, *, root: Path) -> str:
+    """Start a new Epic execution run without reusing an older checkpoint.
+
+    An Epic can return to the reviewed backlog and later be activated again.
+    Its old graph state is evidence of the previous run, not input to the new
+    one, so keep it in an archive and leave the canonical checkpoint path
+    empty for the boot hook to seed again.
+    """
+
+    path = checkpoint_path(epic_id, root=root).resolve()
+    key = str(path)
+    saver = _savers.pop(key, None)
+    connection = _connections.pop(key, None)
+    if connection is not None:
+        connection.close()
+    # ``SqliteSaver`` owns no independent resource, but dropping it before
+    # moving the database prevents a cached saver from reviving old state.
+    del saver
+
+    run_id = uuid.uuid4().hex
+    if path.exists():
+        archive = path.parent / "archive" / epic_id / f"{run_id}.sqlite"
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(path, archive)
+    return run_id
 
 
 def thread_config(epic_id: str) -> dict:

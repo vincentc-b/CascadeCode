@@ -209,6 +209,33 @@ def create_or_load_action(
         return _copy(action)
 
 
+def replace_action_metadata(
+    action_id: str, metadata: Mapping[str, Any], *, root: Path
+) -> dict[str, Any]:
+    """Atomically replace an action's descriptive, non-control metadata.
+
+    Validation evidence is descriptive: it identifies the commit/base pair the
+    queued merge represents, while recovery state and completed attempts remain
+    immutable.  Replacing it lets a later green validation supersede stale
+    evidence without creating a second queue item for the same Task.
+    """
+
+    _validate_identity(action_id)
+    replacement = _validate_metadata(metadata, field="metadata")
+    repo = resolve_root(root)
+    with process_lock:
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        action["metadata"] = replacement
+        actions[action_id] = action
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action)
+
+
 def load_action(action_id: str, *, root: Path) -> dict[str, Any] | None:
     """Load a durable action and its complete append-only attempt history."""
 

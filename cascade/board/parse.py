@@ -11,7 +11,6 @@ import yaml
 from cascade.agent.errors import ProviderConfigError
 from cascade.agent.providers import parse_provider_id
 from cascade.board.errors import SchemaError
-from cascade.board.paths import parse_work_id
 from cascade.board.work_ids import tier_of_work_id
 from cascade.board.types import (
     CancellationFeedback,
@@ -123,7 +122,9 @@ def render_doc(doc: WorkDoc) -> str:
                 "available_dispositions": list(item.available_dispositions),
                 "disposition": item.disposition,
                 "resolved_at": (
-                    item.resolved_at.isoformat() if item.resolved_at is not None else None
+                    item.resolved_at.isoformat()
+                    if item.resolved_at is not None
+                    else None
                 ),
             }
             for item in meta.cancellation_feedback
@@ -134,10 +135,17 @@ def render_doc(doc: WorkDoc) -> str:
                 "child_id": item.child_id,
                 "reason": item.reason,
                 "blocked_supervisor": item.blocked_supervisor,
+                **(
+                    {"incident_id": item.incident_id}
+                    if item.incident_id is not None
+                    else {}
+                ),
             }
             for item in meta.monitoring_blockers
         ]
-    frontmatter = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True, width=4096)
+    frontmatter = yaml.safe_dump(
+        payload, sort_keys=False, allow_unicode=True, width=4096
+    )
     body = doc.body
     if body and not body.endswith("\n"):
         body += "\n"
@@ -220,36 +228,51 @@ def _meta_from_mapping(loaded: dict[str, object], path: Path) -> WorkMeta:
     )
 
 
-
 def _monitoring_blockers(loaded: dict[str, object]) -> list[MonitoringBlocker]:
     raw = loaded.get("monitoring_blockers", [])
     if not isinstance(raw, list):
         raise SchemaError("monitoring_blockers must be a list")
     blockers: list[MonitoringBlocker] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str | None]] = set()
     for item in raw:
         if not isinstance(item, dict):
             raise SchemaError("monitoring_blockers entries must be mappings")
         child_id = item.get("child_id")
         reason = item.get("reason")
+        incident_id = item.get("incident_id")
         blocked_supervisor = item.get("blocked_supervisor", False)
         if not isinstance(child_id, str) or not child_id:
             raise SchemaError("monitoring_blockers child_id must be non-blank")
-        if child_id in seen:
-            raise SchemaError("monitoring_blockers child_id must be unique")
+        if incident_id is not None and (
+            not isinstance(incident_id, str) or not incident_id.strip()
+        ):
+            raise SchemaError(
+                "monitoring_blockers incident_id must be a non-blank string"
+            )
+        identity = (child_id, incident_id)
+        if identity in seen:
+            raise SchemaError("monitoring_blockers child_id/incident_id must be unique")
         if not isinstance(reason, str) or not reason.strip() or "\n" in reason:
-            raise SchemaError("monitoring_blockers reason must be a non-blank single line")
+            raise SchemaError(
+                "monitoring_blockers reason must be a non-blank single line"
+            )
         if len(reason) > 240:
-            raise SchemaError("monitoring_blockers reason must be at most 240 characters")
+            raise SchemaError(
+                "monitoring_blockers reason must be at most 240 characters"
+            )
         if not isinstance(blocked_supervisor, bool):
             raise SchemaError("monitoring_blockers blocked_supervisor must be boolean")
-        seen.add(child_id)
-        blockers.append(MonitoringBlocker(child_id, reason.strip(), blocked_supervisor))
+        seen.add(identity)
+        blockers.append(
+            MonitoringBlocker(child_id, reason.strip(), blocked_supervisor, incident_id)
+        )
     return blockers
 
 
 _CANCELLATION_DISPOSITIONS = [
-    "continue_reduced_scope", "replace_replan", "cancel_parent"
+    "continue_reduced_scope",
+    "replace_replan",
+    "cancel_parent",
 ]
 
 
@@ -272,11 +295,15 @@ def _cancellation_feedback(loaded: dict[str, object]) -> list[CancellationFeedba
         if not isinstance(parent_id, str) or not parent_id:
             raise SchemaError("cancellation_feedback parent_id must be non-blank")
         if child_tier not in ("feature", "task"):
-            raise SchemaError("cancellation_feedback child_tier must be feature or task")
+            raise SchemaError(
+                "cancellation_feedback child_tier must be feature or task"
+            )
         if not isinstance(reason, str) or not reason.strip():
             raise SchemaError("cancellation_feedback reason must be non-blank")
         if dispositions != _CANCELLATION_DISPOSITIONS:
-            raise SchemaError("cancellation_feedback has invalid available_dispositions")
+            raise SchemaError(
+                "cancellation_feedback has invalid available_dispositions"
+            )
         if disposition is not None and disposition not in _CANCELLATION_DISPOSITIONS:
             raise SchemaError("cancellation_feedback has invalid disposition")
         cancelled_at = _feedback_datetime(item, "cancelled_at", required=True)
@@ -286,16 +313,18 @@ def _cancellation_feedback(loaded: dict[str, object]) -> list[CancellationFeedba
                 "cancellation_feedback disposition and resolved_at must be set together"
             )
         assert cancelled_at is not None
-        feedback.append(CancellationFeedback(
-            child_id=child_id,
-            child_tier=child_tier,
-            parent_id=parent_id,
-            reason=reason.strip(),
-            cancelled_at=cancelled_at,
-            available_dispositions=list(dispositions),
-            disposition=disposition,
-            resolved_at=resolved_at,
-        ))
+        feedback.append(
+            CancellationFeedback(
+                child_id=child_id,
+                child_tier=child_tier,
+                parent_id=parent_id,
+                reason=reason.strip(),
+                cancelled_at=cancelled_at,
+                available_dispositions=list(dispositions),
+                disposition=disposition,
+                resolved_at=resolved_at,
+            )
+        )
     return feedback
 
 

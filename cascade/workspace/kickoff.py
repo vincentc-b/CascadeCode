@@ -119,12 +119,20 @@ def _graph_lock(work_id: str) -> threading.RLock:
 
 
 def _run_kickoff(reason: KickoffReason, repo: Path) -> None:
-    with _graph_lock(reason.work_id):
-        token = _model_turn_authorized.set(True)
-        try:
-            _kickoff_turn(reason, repo)
-        finally:
-            _model_turn_authorized.reset(token)
+    from cascade.epic.lifecycle_gate import LifecycleTurnRejected, lifecycle_gate
+
+    # The lifecycle gate is checked before any graph turn can create or commit
+    # active work.  A return transition keeps this admission closed through its
+    # locked eligibility recheck.
+    try:
+        with lifecycle_gate().turn(reason.work_id), _graph_lock(reason.work_id):
+            token = _model_turn_authorized.set(True)
+            try:
+                _kickoff_turn(reason, repo)
+            finally:
+                _model_turn_authorized.reset(token)
+    except LifecycleTurnRejected:
+        _log.info("rejecting kickoff while lifecycle transition quiesces %s", reason.work_id)
 
 
 def _submit_background(work_id: str, job: Callable[[], None]) -> bool:

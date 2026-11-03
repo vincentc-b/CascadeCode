@@ -74,6 +74,15 @@ def work_meta_to_dict(
         "created": _date_iso(meta.created),
         "updated": _date_iso(meta.updated),
         "path": _path_str(meta.path),
+        "monitoring_blockers": [
+            {
+                "child_id": item.child_id,
+                "reason": item.reason,
+                "incident_id": item.incident_id,
+                "blocked_supervisor": item.blocked_supervisor,
+            }
+            for item in meta.monitoring_blockers
+        ],
     }
     if meta.tier == "task" and root is not None:
         if sidecars_preloaded:
@@ -135,6 +144,38 @@ def work_meta_to_dict(
     return value
 
 
+def _provider_recovery_view(
+    meta: WorkMeta,
+    *,
+    root: Path,
+    return_to_backlog: dict[str, object] | None = None,
+) -> dict[str, object] | None:
+    """Attach the safe, server-computed provider recovery projection to a row."""
+
+    from cascade.agent.execution_preflight import provider_blocker
+    from cascade.epic.lifecycle_gate import lifecycle_gate
+    from cascade.provider_recovery_state import provider_recovery_state
+
+    recovery = provider_recovery_state(
+        provider_blocker(meta.id, root=root),
+        tier=meta.tier,
+        status=meta.status,
+        turn_stoppable=lifecycle_gate().turn_stoppable(meta.id),
+        return_to_backlog=return_to_backlog,
+    )
+    if recovery is None:
+        return None
+    # These are the same persisted selection controls used by the command
+    # boundary.  They deliberately exclude credentials and provider errors.
+    recovery["selection"] = {
+        "provider": meta.provider,
+        "models": dict(meta.models or {}),
+        "reasoning": dict(meta.reasoning or {}),
+        "flex_mode": meta.flex_mode,
+    }
+    return recovery
+
+
 def work_doc_to_dict(doc: WorkDoc, *, root: Path | None = None) -> dict:
     return {
         "meta": work_meta_to_dict(doc.meta, root=root),
@@ -188,11 +229,29 @@ def event_to_dict(event: Event) -> dict:
 
 
 def dispatch_result_to_dict(result: DispatchResult) -> dict:
-    return {
+    payload = {
         "ok": result.ok,
         "reason": result.reason,
         "event": event_to_dict(result.event) if result.event is not None else None,
     }
+    if result.preflight is not None:
+        payload["preflight"] = {
+            "outcome": result.preflight.outcome,
+            "checks": [
+                {
+                    "role": check.role,
+                    "outcome": check.result.outcome,
+                    "reason": check.result.reason,
+                    "provider": check.result.provider,
+                    "model_id": check.result.model_id,
+                    "tier": check.result.tier,
+                    "message": check.result.message,
+                    "retryable": check.result.retryable,
+                }
+                for check in result.preflight.checks
+            ],
+        }
+    return payload
 
 
 def room_settings_to_dict(settings: RoomSettings) -> dict[str, object]:
@@ -275,7 +334,9 @@ def amendment_summary_to_dict(record: Amendment) -> dict[str, Any]:
     }
 
 
-def integration_worktree_to_dict(entry: IntegrationWorktree, *, root: Path) -> dict[str, str]:
+def integration_worktree_to_dict(
+    entry: IntegrationWorktree, *, root: Path
+) -> dict[str, str]:
     rel_path = entry.path
     try:
         rel_path = entry.path.resolve().relative_to(root.resolve())
@@ -300,9 +361,13 @@ def flight_overlap_to_dict(record: FlightOverlap) -> dict[str, list[str]]:
 def flight_report_to_dict(report: FlightReport, *, root: Path) -> dict[str, Any]:
     return {
         "epics": [integration_worktree_to_dict(e, root=root) for e in report.epics],
-        "features": [integration_worktree_to_dict(e, root=root) for e in report.features],
+        "features": [
+            integration_worktree_to_dict(e, root=root) for e in report.features
+        ],
         "tasks": [integration_worktree_to_dict(e, root=root) for e in report.tasks],
-        "changed_paths": {wid: list(paths) for wid, paths in sorted(report.changed_paths.items())},
+        "changed_paths": {
+            wid: list(paths) for wid, paths in sorted(report.changed_paths.items())
+        },
         "overlaps": [flight_overlap_to_dict(o) for o in report.overlaps],
     }
 
@@ -325,7 +390,9 @@ def providers_view_to_dict(
     }
 
 
-def reasoning_capability_to_dict(capability: ReasoningCapability | None) -> dict[str, Any] | None:
+def reasoning_capability_to_dict(
+    capability: ReasoningCapability | None,
+) -> dict[str, Any] | None:
     if capability is None:
         return None
     return {
@@ -361,7 +428,9 @@ def provider_inventory_item_to_dict(item: ProviderInventoryItem) -> dict[str, An
     }
 
 
-def provider_inventory_failure_to_dict(failure: ProviderInventoryFailure) -> dict[str, Any]:
+def provider_inventory_failure_to_dict(
+    failure: ProviderInventoryFailure,
+) -> dict[str, Any]:
     return {
         "id": failure.provider_id,
         "reason": failure.reason,
@@ -396,8 +465,12 @@ def brief_provider_inventory_to_dict(
         "availability": _brief_inventory_availability(result),
         "loading": False,
         "default_provider": selected_default,
-        "providers": [provider_inventory_item_to_dict(item) for item in result.providers],
-        "failures": [provider_inventory_failure_to_dict(item) for item in result.failures],
+        "providers": [
+            provider_inventory_item_to_dict(item) for item in result.providers
+        ],
+        "failures": [
+            provider_inventory_failure_to_dict(item) for item in result.failures
+        ],
         "freshness": inventory_freshness_to_dict(result.freshness),
         "refresh": {
             "forced": force_refresh,
@@ -506,6 +579,19 @@ def board_view_from_index(board, *, root: Path) -> dict:
             )
             if readiness is not None:
                 item["readiness"] = feature_readiness_to_dict(readiness)
+        if meta.tier == "epic" and folder == "2_active":
+            # The row consumes the exact evaluator serialization used by the
+            # command boundary.  Keep this read-only: command execution always
+            # re-evaluates before handing off to the durable transition.
+            from cascade.epic.return_command import load_return_eligibility_snapshot
+            from cascade.epic.return_eligibility import evaluate_return_eligibility
+
+            item["return_to_backlog"] = evaluate_return_eligibility(
+                load_return_eligibility_snapshot(meta.id, root=root)
+            ).to_dict()
+        item["provider_recovery"] = _provider_recovery_view(
+            meta, root=root, return_to_backlog=item.get("return_to_backlog")
+        )
         review = item.get("review")
         if (
             meta.tier == "feature"

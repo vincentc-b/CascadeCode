@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cascade.board.errors import NotFound
-from cascade.board.store import read_doc
+from cascade.workspace.doc_root import read_doc_resolved
 from cascade.comments import store as comment_store
 from cascade.comments.store import CommentNotFound
 from cascade.epic.guard import EpicToolDenied
@@ -56,7 +56,7 @@ def read_comment(comment_id: str, *, epic_id: str, root: Path) -> dict[str, obje
 def _require_active_epic(epic_id: str, root: Path) -> None:
     repo = Path(root).resolve()
     try:
-        epic = read_doc(epic_id, root=repo)
+        epic = read_doc_resolved(epic_id, root=repo)
     except NotFound:
         raise EpicToolDenied(f"unknown work id {epic_id}") from None
     if epic.meta.tier != "epic":

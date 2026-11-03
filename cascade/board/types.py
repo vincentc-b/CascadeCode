@@ -10,7 +10,15 @@ from typing import Literal
 from cascade.agent.providers import ProviderId
 
 WorkTier = Literal["epic", "feature", "task"]
-WorkStatus = Literal["backlog", "ready_to_plan", "active", "blocked", "completed", "cancelling", "cancelled"]
+WorkStatus = Literal[
+    "backlog",
+    "ready_to_plan",
+    "active",
+    "blocked",
+    "completed",
+    "cancelling",
+    "cancelled",
+]
 Column = Literal["backlog", "active", "completed"]
 WorkId = str
 CancellationDisposition = Literal[
@@ -47,6 +55,10 @@ class MonitoringBlocker:
     # True only when adding this cause performed the active -> blocked edge.
     # Reconciliation must not reopen work that was already blocked manually.
     blocked_supervisor: bool = False
+    # Recovery results are durable incidents, rather than a broad condition on
+    # a child.  Keeping their identity lets a later recovery clear only the
+    # blocker it actually resolved.
+    incident_id: str | None = None
 
 
 @dataclass
