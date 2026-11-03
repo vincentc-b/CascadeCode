@@ -180,6 +180,26 @@ def test_war_room_js_renders_toast_body():
     assert '"Epic close timed out after 60s"' in source
 
 
+def test_war_room_js_renders_canonical_recovery_incident_once_per_transition():
+    source = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
+    ).read_text(encoding="utf-8")
+
+    assert "appendRecoveryIncident(row, actions, item.recovery_incident)" in source
+    assert 'failed: "Recovery failed"' in source
+    assert 'investigating: "Recovery investigating"' in source
+    assert 'blocked: "Recovery blocked"' in source
+    assert 'appendRecoveryIncidentLine(warning, "Reason", incident.reason)' in source
+    assert 'appendRecoveryIncidentLine(warning, "Owner", ownerName)' in source
+    assert 'appendRecoveryIncidentLine(warning, "Affected", locations.join(" · "))' in source
+    assert 'appendRecoveryIncidentLine(warning, "Last attempt", label)' in source
+    assert 'appendRecoveryIncidentLine(warning, "Next step", incident.next_step)' in source
+    assert 'target.kind === "review" ? "Open recovery review" : "Open recovery action"' in source
+    assert "RECOVERY_TOASTS_STORAGE_KEY" in source
+    assert "recoveryIncidentTransitions[key] === incident.state" in source
+    assert "if (!active[key]) delete recoveryIncidentTransitions[key]" in source
+
+
 def test_war_room_js_renders_and_submits_epic_return_control():
     source = (
         Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
