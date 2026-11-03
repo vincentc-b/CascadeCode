@@ -12,11 +12,12 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-30'
-updated: '2026-10-30'
+updated: '2026-11-03'
 provider: cursor
 models:
   epic_manager: claude-opus-5-5
   epic_architect: claude-opus-5-5
+plan_approved_at: '2026-11-03T01:17:26.437837+00:00'
 ---
 # Make epic close reviews visible in the War Room
 
