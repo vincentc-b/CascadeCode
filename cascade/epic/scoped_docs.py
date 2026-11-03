@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cascade.board.errors import NotFound
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import WorkDoc
 
@@ -14,7 +15,11 @@ from cascade.epic.guard import EpicToolDenied, tool_guard
 def epic_read_doc(work_id: str, *, epic_id: str, root: Path) -> WorkDoc:
     """Read a work doc if the Epic team is allowed to see it."""
 
-    doc = read_doc(work_id, root=root)
+    checkout = epic_checkout_root(epic_id, trunk=Path(root).resolve())
+    try:
+        doc = read_doc(work_id, root=checkout)
+    except NotFound:
+        doc = read_doc(work_id, root=root)
     if doc.meta.tier == "task":
         raise EpicToolDenied(f"epic team cannot read task {work_id}")
     if not tool_guard(doc.meta.path, "read", epic_id=epic_id, root=root):
