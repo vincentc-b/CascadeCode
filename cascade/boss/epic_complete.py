@@ -200,10 +200,10 @@ def _finish_epic_completion_result(
     if epic_meta.tier != "epic":
         return EpicCompleteResult(ok=False, reason="wrong_tier")
     if epic_meta.status == "completed" and epic_meta.path.parent.name == "3_completed":
-        _emit_epic_completed(epic_id, repo)
         if _completed_on_operator_trunk(epic_id, repo):
+            _emit_epic_completed(epic_id, repo)
             _retire_epic_worktree(epic_id, repo)
-        return EpicCompleteResult(ok=True)
+            return EpicCompleteResult(ok=True)
     blocker = _epic_close_blocker(epic_id, repo=repo, board=board)
     if blocker is not None:
         return blocker
@@ -233,10 +233,6 @@ def _finish_epic_completion_result(
             )
         trunk = locate_trunk(repo)
         if remote_doc.meta.status == "completed":
-            if not _terminal_close_review_landed(
-                epic_id, trunk=trunk, target=review.target_branch
-            ):
-                return EpicCompleteResult(ok=False, reason="pending_close_review")
             from cascade.workspace.integration_worktree import get_integration_worktree
 
             entry = get_integration_worktree(trunk, "epic", epic_id)
@@ -245,17 +241,8 @@ def _finish_epic_completion_result(
             move_doc(epic_id, "completed", root=entry.path)
             _emit_epic_completed(epic_id, repo)
             return EpicCompleteResult(ok=True)
-        from cascade.boss.epic_close_review import ensure_epic_close_review
-
-        try:
-            close_review = ensure_epic_close_review(
-                epic_id, trunk=trunk, target=review.target_branch
-            )
-        except GitError:
-            _LOG.exception("could not open epic closeout review for %s", epic_id)
-            return EpicCompleteResult(ok=False, reason="review_failed")
         return EpicCompleteResult(
-            ok=False, reason="pending_close_review", review_url=close_review.url
+            ok=False, reason="pending_epic_review", review_url=review.url
         )
 
     promote_result = promote_epic_to_trunk(epic_id, root=repo)
@@ -349,41 +336,6 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
             and source_blob.stdout.strip() == target_blob.stdout.strip()
         )
         return remote_doc if accepted else None
-
-
-def _terminal_close_review_landed(epic_id: WorkId, *, trunk: Path, target: str) -> bool:
-    """Require the closeout review's merge commit on verified product trunk."""
-
-    import subprocess
-
-    from cascade.boss import epic_close_review
-    from cascade.review import merge_request_snapshot
-    from cascade.workspace.closeout import create_verified_trunk_workspace
-
-    try:
-        workspace = create_verified_trunk_workspace(trunk, target=target)
-    except GitError:
-        return False
-    with workspace:
-        review = epic_close_review.find_merge_request(
-            workspace.path,
-            source_branch=f"cascade/epic-close/{epic_id}",
-            target_branch=target,
-        )
-        if review is None:
-            return False
-        try:
-            snapshot = merge_request_snapshot(workspace.path, review)
-        except GitError:
-            return False
-        merge_sha = snapshot.get("merge_sha")
-        if snapshot.get("state") != "merged" or not isinstance(merge_sha, str) or len(merge_sha) != 40:
-            return False
-        landed = subprocess.run(
-            ["git", "merge-base", "--is-ancestor", merge_sha, workspace.revision],
-            cwd=workspace.path, capture_output=True, text=True,
-        )
-        return landed.returncode == 0
 
 
 def _completed_on_operator_trunk(epic_id: WorkId, repo: Path) -> bool:
