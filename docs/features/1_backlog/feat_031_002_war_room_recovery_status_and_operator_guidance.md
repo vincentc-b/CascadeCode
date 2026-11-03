@@ -18,6 +18,7 @@ flex_mode: false
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-11-03T20:14:23.521079+00:00'
 ---
 # War Room recovery status and operator guidance
 
