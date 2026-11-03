@@ -27,6 +27,7 @@ reasoning:
   feature_lead: medium
   feature_architect: medium
   swe: medium
+plan_approved_at: '2026-11-03T04:30:13.262968+00:00'
 ---
 # change provider ui improvement
 
