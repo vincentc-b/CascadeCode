@@ -17,6 +17,14 @@ def test_provider_recovery_dialog_ui_cases() -> None:
     subprocess.run([node, str(cases)], check=True)
 
 
+def test_provider_recovery_dialog_browser_flow() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is required for browser-side UI contract tests")
+    flow = Path(__file__).with_name("provider_recovery_dialog_browser_flow.mjs")
+    subprocess.run([node, str(flow)], check=True)
+
+
 def test_recovery_action_uses_modal_and_shared_inventory() -> None:
     root = Path(__file__).resolve().parents[2]
     source = (root / "cascade/war_room/static/war_room.js").read_text(encoding="utf-8")
