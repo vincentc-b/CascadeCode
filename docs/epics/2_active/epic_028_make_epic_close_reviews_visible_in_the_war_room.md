@@ -12,11 +12,11 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-30'
-updated: '2026-10-31'
-provider: cursor
+updated: '2026-11-03'
+provider: codex
 models:
-  epic_manager: claude-opus-5-5
-  epic_architect: claude-opus-5-5
+  epic_manager: gpt-5.6-sol
+  epic_architect: gpt-5.6-sol
 ---
 # Make epic close reviews visible in the War Room
 
