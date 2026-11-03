@@ -748,8 +748,13 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
     state = _load(trunk)
     finalized: list[str] = []
     from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
+    from cascade.stacked_review_recovery import persist_if_stacked_review_integration_gap
 
     for feature_id, record in list(state.items()):
+        if persist_if_stacked_review_integration_gap(
+            feature_id, record, root=trunk, accepted=bool(record.get("closed"))
+        ):
+            continue
         if record.get("closed"):
             epic_id = _review_target_epic(record)
             if _closed_review_has_incomplete_target(feature_id, record, trunk=trunk):
@@ -874,6 +879,8 @@ def _close_merged_feature_on_target(
 def poll_feature_reviews(root: Path) -> None:
     trunk = locate_trunk(root)
     state = _load(trunk)
+    from cascade.stacked_review_recovery import persist_if_stacked_review_integration_gap
+
     for feature_id, record in list(state.items()):
         if record.get("closed"):
             continue
@@ -916,6 +923,10 @@ def poll_feature_reviews(root: Path) -> None:
         # Merge with the latest record so parallel reviews cannot be reopened.
         _update_record(trunk, feature_id, {"seen_comments": sorted(seen)})
         if snapshot.get("state") == "merged":
+            if persist_if_stacked_review_integration_gap(
+                feature_id, record, root=trunk, accepted=True
+            ):
+                continue
             if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
                 _update_record(trunk, feature_id, {"closed": True})
             else:
