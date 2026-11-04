@@ -15,6 +15,16 @@ from pathlib import Path
 from typing import Mapping
 
 from cascade.resolution_actions import resolution_action
+from cascade.task.action_recovery import (
+    ActionFailure,
+    ActionReconciliation,
+    create_or_load_action,
+    load_action,
+    reconcile_action,
+    record_action_checkpoint,
+    record_owner_decision,
+    resume_action,
+)
 from cascade.workspace.integration_worktree import locate_trunk
 
 
@@ -129,6 +139,18 @@ class ReviewRebasePublication:
     def __post_init__(self) -> None:
         if self.published == (self.blocker is not None):
             raise ValueError("publication must contain exactly one success or blocker")
+
+
+@dataclass(frozen=True)
+class ReviewRebaseRecovery:
+    """The normalized result of executing or recovering one admitted rebase."""
+
+    action_id: str
+    outcome: str
+    reconciliation: ActionReconciliation | None = None
+    execution: ReviewRebaseExecution | None = None
+    publication: ReviewRebasePublication | None = None
+    blocker: ReviewRebaseBlocker | None = None
 
 
 def execute_review_rebase(
@@ -272,6 +294,285 @@ def check_and_publish_review_rebase(
         code = "force_with_lease_failed" if "stale info" in output or "rejected" in output else "publication_failed"
         return _publication_blocked("publication", code, "The lease-protected source publication failed; local rebased work was preserved.", worktree, checks=(check,), observed_remote_source_sha=source_remote_sha)
     return ReviewRebasePublication(True, execution.source_head, source_remote_sha, (check,))
+
+
+def recover_and_execute_review_rebase(
+    action_id: str,
+    *,
+    root: Path,
+    authorized_paths: tuple[str, ...] | list[str],
+    reclaim_running: bool = False,
+) -> ReviewRebaseRecovery:
+    """Run an admitted rebase once, or safely recover the same logical action.
+
+    The resolution-action identity is also the recovery identity.  Consequently
+    retries cannot manufacture a second force-push, and a supervisor restart
+    can prove a previously-published local rebased head before attempting any
+    mutation.  This is intentionally the workflow boundary; callers should not
+    compose the three lower-level stages when restart safety is required.
+    """
+
+    trunk = locate_trunk(Path(root).resolve())
+    existing = load_action(action_id, root=trunk)
+    if existing is None:
+        preflight = prepare_review_rebase_turn(action_id, root=trunk)
+        if preflight.blocker is not None:
+            return ReviewRebaseRecovery(action_id, "blocked", blocker=preflight.blocker)
+        assert preflight.turn is not None
+        turn = preflight.turn
+        create_or_load_action(
+            action_id, "review_rebase", root=trunk, attempt_bound=3,
+            metadata={"review_id": turn.review_id, "source_ref": turn.source_ref, "target_ref": turn.target_ref},
+        )
+        _record_rebase_checkpoint(
+            action_id, "admitted", turn, root=trunk, affected_paths=(),
+            command_summary="admitted review rebase; mutation has not started",
+            test_summary="not run",
+            resume_instructions="Resume the admitted rebase using the same action identity.",
+        )
+    else:
+        turn = _recovery_turn(action_id, trunk)
+        if turn is None:
+            blocker = ReviewRebaseBlocker(
+                "recovery", "recovery_metadata_unavailable",
+                "The admitted rebase metadata is unavailable; no retry was attempted.",
+            )
+            return ReviewRebaseRecovery(action_id, "blocked", blocker=blocker)
+
+        # Reclaiming a process-interrupted attempt must happen before its
+        # reconciliation.  A durable ``running`` claim intentionally blocks
+        # ordinary callers, but treating it as terminal here would make a
+        # restart unable to reach the checkpoint it needs to resume safely.
+        if not (existing.get("recovery_state") == "running" and reclaim_running):
+            recovered = _reconcile_review_rebase(action_id, turn, root=trunk)
+            if recovered.outcome == "already_completed":
+                resume_action(
+                    action_id, root=trunk, reclaim_running=reclaim_running,
+                    execute=lambda _context: {"metadata": {"result": "already_completed"}},
+                )
+                return ReviewRebaseRecovery(action_id, "completed", reconciliation=recovered)
+            if recovered.outcome == "blocker":
+                return ReviewRebaseRecovery(action_id, "blocked", reconciliation=recovered)
+
+    result: dict[str, object] = {}
+
+    def execute(_context: object) -> dict[str, object]:
+        # A rebase that was interrupted after it changed HEAD must be resumed
+        # from that checkout, not restarted from an assumed clean source.
+        recovered = _reconcile_review_rebase(action_id, turn, root=trunk)
+        if recovered.outcome == "already_completed":
+            result["reconciliation"] = recovered
+            return {"metadata": {"result": "already_completed"}}
+        if recovered.outcome == "blocker":
+            result["reconciliation"] = recovered
+            raise ActionFailure("terminal_blocker", recovered.reason, metadata=recovered.as_dict())
+        if recovered.reason == "rebase_in_progress":
+            blocker = ReviewRebaseBlocker(
+                "conflict_resolution", "semantic_conflict_requires_decision",
+                "The interrupted rebase remains in progress; resolve the recorded conflict before resuming.",
+                _conflicted_paths(turn.worktree),
+            )
+            _record_blocker(action_id, turn, blocker, blocker.affected_paths, root=trunk)
+            record_owner_decision(
+                action_id, f"semantic-conflict:{action_id}", root=trunk,
+                owner="feature_team",
+                metadata={"blocker": blocker.code, "affected_paths": list(blocker.affected_paths)},
+            )
+            result["execution"] = ReviewRebaseExecution(False, conflicted_paths=blocker.affected_paths, blocker=blocker)
+            raise ActionFailure("owner_decision", blocker.message, metadata={"blocker": blocker.code})
+        if recovered.reason == "rebased_head_present":
+            persisted = load_action(action_id, root=trunk) or {}
+            checkpoint = persisted.get("checkpoint")
+            paths = tuple(checkpoint.get("affected_paths") or ()) if isinstance(checkpoint, Mapping) else ()
+            execution = ReviewRebaseExecution(
+                True, _git(turn.worktree, "rev-parse", "--verify", "HEAD^{commit}"), paths,
+            )
+        else:
+            execution = execute_review_rebase(turn, authorized_paths=authorized_paths)
+        result["execution"] = execution
+        if not execution.rebased:
+            assert execution.blocker is not None
+            _record_blocker(action_id, turn, execution.blocker, execution.conflicted_paths, root=trunk)
+            if execution.blocker.code == "semantic_conflict_requires_decision":
+                record_owner_decision(
+                    action_id, f"semantic-conflict:{action_id}", root=trunk,
+                    owner="feature_team",
+                    metadata={"blocker": execution.blocker.code, "affected_paths": list(execution.conflicted_paths)},
+                )
+                raise ActionFailure("owner_decision", execution.blocker.message, metadata={"blocker": execution.blocker.code})
+            raise ActionFailure("terminal_blocker", execution.blocker.message, metadata={"blocker": execution.blocker.code})
+
+        _record_rebase_checkpoint(
+            action_id, "rebased", turn, root=trunk, affected_paths=execution.modified_paths,
+            command_summary="git rebase completed",
+            test_summary="not run",
+            resume_instructions="Run the repository checks and publish the rebased source with its recorded lease.",
+            rebased_head=execution.source_head,
+        )
+        publication = check_and_publish_review_rebase(turn, execution)
+        result["publication"] = publication
+        if not publication.published:
+            assert publication.blocker is not None
+            _record_blocker(action_id, turn, publication.blocker, (), root=trunk)
+            raise ActionFailure("terminal_blocker", publication.blocker.message, metadata={"blocker": publication.blocker.code})
+        _record_rebase_checkpoint(
+            action_id, "published", turn, root=trunk, affected_paths=execution.modified_paths,
+            command_summary="git push --force-with-lease completed",
+            test_summary=_checks_summary(publication.checks),
+            resume_instructions="The source publication is complete; reconcile this action before emitting any follow-up lifecycle effects.",
+            rebased_head=execution.source_head, published_head=publication.source_head,
+        )
+        return {"metadata": {"published_head": publication.source_head, "review_id": turn.review_id}}
+
+    action = resume_action(action_id, root=trunk, execute=execute, reclaim_running=reclaim_running)
+    reconciliation = result.get("reconciliation")
+    if isinstance(reconciliation, ActionReconciliation) and reconciliation.outcome == "already_completed":
+        return ReviewRebaseRecovery(action_id, "completed", reconciliation=reconciliation)
+    execution = result.get("execution")
+    publication = result.get("publication")
+    if action.get("recovery_state") == "completed":
+        return ReviewRebaseRecovery(
+            action_id, "completed", execution=execution if isinstance(execution, ReviewRebaseExecution) else None,
+            publication=publication if isinstance(publication, ReviewRebasePublication) else None,
+        )
+    blocker = None
+    if isinstance(publication, ReviewRebasePublication):
+        blocker = publication.blocker
+    elif isinstance(execution, ReviewRebaseExecution):
+        blocker = execution.blocker
+    return ReviewRebaseRecovery(action_id, "blocked", execution=execution if isinstance(execution, ReviewRebaseExecution) else None, publication=publication if isinstance(publication, ReviewRebasePublication) else None, blocker=blocker)
+
+
+def _recovery_turn(action_id: str, trunk: Path) -> ReviewRebaseTurn | None:
+    """Recreate the bounded turn from durable admission and recovery evidence."""
+
+    action = resolution_action(action_id, root=trunk)
+    if not isinstance(action, Mapping):
+        return None
+    handoff, request = action.get("handoff"), action.get("request")
+    if not isinstance(handoff, Mapping) or not isinstance(request, Mapping):
+        return None
+    parsed = _parse_handoff(action_id, handoff, request)
+    if parsed is None:
+        return None
+    review_id, worktree, source_ref, target_ref, heads = parsed
+    if not worktree.is_dir():
+        return None
+    return ReviewRebaseTurn(
+        action_id, review_id, worktree, "origin", source_ref, target_ref,
+        heads[0], heads[1],
+        WorktreeSnapshot(
+            _git(worktree, "rev-parse", "--verify", "HEAD^{commit}") or "",
+            _git(worktree, "rev-parse", "--abbrev-ref", "HEAD") or "",
+            _dirty_paths(worktree), (None, None),
+        ),
+        heads,
+    )
+
+
+def _reconcile_review_rebase(
+    action_id: str, turn: ReviewRebaseTurn, *, root: Path
+) -> ActionReconciliation:
+    """Observe both refs before delegating the durable restart choice.
+
+    ``reconcile_action`` owns the target/base comparison.  The source remote
+    is additionally required here because it is the externally-visible effect
+    of this workflow: after a crash immediately following push, it proves that
+    retrying would duplicate publication.
+    """
+
+    local_head = _git(turn.worktree, "rev-parse", "--verify", "HEAD^{commit}")
+    target_head = _remote_head(turn.worktree, turn.remote, turn.target_ref)
+    source_head = _remote_head(turn.worktree, turn.remote, turn.source_ref)
+    in_progress = _rebase_in_progress(turn.worktree)
+    dirty = _dirty_paths(turn.worktree)
+    action = load_action(action_id, root=root) or {}
+    checkpoint = action.get("checkpoint") if isinstance(action.get("checkpoint"), Mapping) else {}
+    shas = checkpoint.get("shas") if isinstance(checkpoint.get("shas"), Mapping) else {}
+    rebased = shas.get("rebased_head")
+    if (
+        isinstance(rebased, str) and rebased and local_head == rebased
+        and source_head == rebased and target_head == turn.observed_target_sha
+    ):
+        _record_rebase_checkpoint(
+            action_id, "published-reconciled", turn, root=root,
+            affected_paths=tuple(checkpoint.get("affected_paths") or ()),
+            command_summary="remote source already equals the recorded rebased head",
+            test_summary=str(checkpoint.get("test_summary") or "unknown"),
+            resume_instructions="Publication was reconciled after restart; do not push again.",
+            rebased_head=rebased, published_head=rebased,
+        )
+        # ``reconcile_action`` compares its remote argument with the target
+        # head.  Here publication is proved by the *source* remote, so return
+        # the completed result directly rather than treating the target head
+        # as a published source SHA and attempting another push.
+        persisted = load_action(action_id, root=root) or {}
+        reconciled_checkpoint = persisted.get("checkpoint")
+        reconciled_paths = (
+            tuple(reconciled_checkpoint.get("affected_paths") or ())
+            if isinstance(reconciled_checkpoint, Mapping)
+            else ()
+        )
+        return ActionReconciliation(
+            "already_completed", "published_head_on_remote", action_id,
+            reconciled_checkpoint.get("checkpoint_id")
+            if isinstance(reconciled_checkpoint, Mapping)
+            else None,
+            local_head, target_head, reconciled_paths,
+            reconciled_checkpoint.get("resume_instructions")
+            if isinstance(reconciled_checkpoint, Mapping)
+            else None,
+        )
+    return reconcile_action(
+        action_id, root=root, local_head=local_head, remote_head=target_head,
+        rebase_in_progress=in_progress, dirty_paths=dirty,
+    )
+
+
+def _record_rebase_checkpoint(
+    action_id: str, phase: str, turn: ReviewRebaseTurn, *, root: Path,
+    affected_paths: tuple[str, ...], command_summary: str, test_summary: str,
+    resume_instructions: str, rebased_head: str | None = None,
+    published_head: str | None = None,
+) -> None:
+    shas = {"source_head": turn.observed_source_sha, "target_head": turn.observed_target_sha}
+    if rebased_head:
+        shas["rebased_head"] = rebased_head
+    if published_head:
+        shas["published_head"] = published_head
+    suffix = published_head or rebased_head or "initial"
+    record_action_checkpoint(
+        action_id, f"{phase}:{suffix}", root=root,
+        refs={"source": turn.source_ref, "target": turn.target_ref}, shas=shas,
+        affected_paths=affected_paths, command_summary=command_summary,
+        test_summary=test_summary, resume_instructions=resume_instructions,
+    )
+
+
+def _record_blocker(
+    action_id: str, turn: ReviewRebaseTurn, blocker: ReviewRebaseBlocker,
+    affected_paths: tuple[str, ...], *, root: Path,
+) -> None:
+    paths = affected_paths or tuple(Path(path).name for path in blocker.affected_paths)
+    _record_rebase_checkpoint(
+        action_id, f"blocked-{blocker.code}", turn, root=root, affected_paths=paths,
+        command_summary=f"blocked at {blocker.checkpoint}: {blocker.code}",
+        test_summary="not completed", resume_instructions=blocker.message,
+    )
+
+
+def _checks_summary(checks: tuple[ReviewRebaseCheck, ...]) -> str:
+    return "; ".join(" ".join(check.command) + f" (exit {check.returncode})" for check in checks) or "not run"
+
+
+def _rebase_in_progress(worktree: Path) -> bool:
+    git_dir = _git(worktree, "rev-parse", "--git-dir")
+    if not git_dir:
+        return False
+    path = Path(git_dir)
+    if not path.is_absolute():
+        path = worktree / path
+    return (path / "rebase-merge").exists() or (path / "rebase-apply").exists()
 
 
 def prepare_review_rebase_turn(action_id: str, *, root: Path) -> ReviewRebasePreflight:

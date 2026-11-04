@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from cascade.agent.providers import ProviderId
+from cascade.agent.recovery_contract import ProviderRecoveryLaunch, ProviderRecoveryReport
 
 RoleId = Literal[
     "epic_manager",
@@ -41,6 +42,8 @@ class RoleTurn:
     custom_tools: Mapping[str, Any] | None = None
     reasoning_level: str | None = None
     flex_mode: bool | None = None
+    # Feature/Epic recovery input is identical for every provider launcher.
+    recovery: ProviderRecoveryLaunch | None = None
 
 
 @dataclass(frozen=True)
@@ -48,3 +51,5 @@ class RoleResult:
     text: str
     status: RoleResultStatus
     tool_effects: list[ToolEffect] = field(default_factory=list)
+    # Adapters attach this only for an explicitly recovery-scoped turn.
+    recovery: ProviderRecoveryReport | None = None
