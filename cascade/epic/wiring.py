@@ -20,6 +20,7 @@ def load_epic_tools() -> None:
     import cascade.epic.decisions as decisions_mod
     import cascade.epic.docs_tool as docs_tool_mod
     import cascade.epic.mint as mint_mod
+    import cascade.epic.recovery as recovery_mod
     import cascade.epic.stubs as stubs_mod
 
     from cascade.epic.registry import epic_tools
@@ -33,6 +34,7 @@ def load_epic_tools() -> None:
         "reply_comment",
         "read_comment",
         "resolve_amendment",
+        "reconcile_stacked_review_gap",
     )
     if all(name in epic_tools() for name in expected):
         return
@@ -41,6 +43,7 @@ def load_epic_tools() -> None:
     importlib.reload(docs_tool_mod)
     importlib.reload(stubs_mod)
     importlib.reload(amendments_mod)
+    importlib.reload(recovery_mod)
 
 
 def accept_human_chat(
