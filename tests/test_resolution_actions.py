@@ -182,8 +182,30 @@ def _admission_ready_root(tmp_path: Path) -> tuple[Path, dict[str, object]]:
     return root, payload
 
 
-def test_admission_persists_a_non_mutating_handoff_after_all_safety_checks(tmp_path: Path) -> None:
+def _assert_admission_commands_are_read_only(commands: list[tuple[str, ...]]) -> None:
+    """Admission may inspect Git, but must not invoke a mutation-capable command."""
+
+    assert all(
+        command[:2] in {("git", "rev-parse"), ("git", "status")}
+        for command in commands
+    )
+
+
+def test_admission_persists_a_non_mutating_handoff_after_all_safety_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     root, payload = _admission_ready_root(tmp_path)
+    commands: list[tuple[str, ...]] = []
+    run = subprocess.run
+
+    def record_command(
+        command: object, *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        if isinstance(command, list):
+            commands.append(tuple(str(part) for part in command))
+        return run(command, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("cascade.resolution_actions.subprocess.run", record_command)
 
     admission = admit_resolution_action(normalize_operator_request(payload), root=root)
 
@@ -192,6 +214,8 @@ def test_admission_persists_a_non_mutating_handoff_after_all_safety_checks(tmp_p
     assert isinstance(handoff, dict)
     assert handoff["mutation_performed"] is False
     assert handoff["authorized_refs"] == ["feat/feat_035_001", "epic/epic_035"]
+    assert commands
+    _assert_admission_commands_are_read_only(commands)
 
 
 @pytest.mark.parametrize(
@@ -203,7 +227,12 @@ def test_admission_persists_a_non_mutating_handoff_after_all_safety_checks(tmp_p
     ],
 )
 def test_admission_persists_actionable_boundary_blockers(
-    tmp_path: Path, change: str, checkpoint: str, code: str, resume_fragment: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
+    checkpoint: str,
+    code: str,
+    resume_fragment: str,
 ) -> None:
     root, payload = _admission_ready_root(tmp_path)
     if change == "stale":
@@ -214,6 +243,17 @@ def test_admission_persists_actionable_boundary_blockers(
     else:
         (root / "unrelated.txt").write_text("dirty\n", encoding="utf-8")
 
+    commands: list[tuple[str, ...]] = []
+    run = subprocess.run
+
+    def record_command(
+        command: object, *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        if isinstance(command, list):
+            commands.append(tuple(str(part) for part in command))
+        return run(command, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("cascade.resolution_actions.subprocess.run", record_command)
     admission = admit_resolution_action(normalize_operator_request(payload), root=root)
 
     assert admission.action["status"] == "blocked"
@@ -224,6 +264,7 @@ def test_admission_persists_actionable_boundary_blockers(
     assert blocker["observed_refs"] == ["feat/feat_035_001", "epic/epic_035"]
     assert blocker["observed_shas"] == [payload["observed_source_head"], payload["observed_target_head"]]
     assert resume_fragment in blocker["resume_action"]
+    _assert_admission_commands_are_read_only(commands)
 
 
 def test_context_routes_a_feature_review_to_its_feature_team(tmp_path: Path) -> None:
@@ -277,6 +318,32 @@ def test_context_routes_an_explicitly_assigned_child_review_to_its_epic_team(tmp
     assert resolution.blocker is None
     assert resolution.context is not None
     assert resolution.context.owning_scope == "feature:feat_035_001"
+    assert resolution.context.accountable_team == "epic:epic_035"
+
+
+def test_context_routes_an_epic_review_to_its_epic_team(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _review_board(root)
+    _write_review_registry(
+        root,
+        {
+            "epic_035": {
+                "url": "https://forge.example/repo/pull/147",
+                "number": "147",
+                "source_branch": "feat/feat_035_001",
+                "target_branch": "epic/epic_035",
+                "closed": False,
+            }
+        },
+    )
+    payload = _operator_payload()
+    payload["assignee"] = "epic:epic_035"
+
+    resolution = resolve_review_context(normalize_operator_request(payload), root=root)
+
+    assert resolution.blocker is None
+    assert resolution.context is not None
+    assert resolution.context.owning_scope == "epic:epic_035"
     assert resolution.context.accountable_team == "epic:epic_035"
 
 
