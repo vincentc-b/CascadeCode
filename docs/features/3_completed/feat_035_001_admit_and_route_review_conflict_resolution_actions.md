@@ -2,7 +2,7 @@
 id: feat_035_001
 title: Admit and route review-conflict resolution actions
 tier: feature
-status: active
+status: completed
 parent: epic_035
 children:
 - task_035_001_001
