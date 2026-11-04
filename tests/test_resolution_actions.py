@@ -1,0 +1,131 @@
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import pytest
+
+from cascade.resolution_actions import (
+    admit_resolution_action,
+    normalize_epic_031_recovery_request,
+    normalize_operator_request,
+    resolution_action,
+)
+from tests.support import make_repo
+
+
+def _operator_payload() -> dict[str, object]:
+    return {
+        "review_id": "147",
+        "review_url": "https://forge.example/repo/pull/147",
+        "source_ref": "feat/feat_035_001",
+        "target_ref": "epic/epic_035",
+        "observed_source_head": "source-sha",
+        "observed_target_head": "target-sha",
+        "requester": "operator:alice",
+        "assignee": "feature:feat_035_001",
+    }
+
+
+def test_operator_and_epic_031_paths_normalize_to_one_identity(tmp_path: Path) -> None:
+    operator = normalize_operator_request(_operator_payload())
+    recovery = normalize_epic_031_recovery_request(
+        {
+            "review": {
+                "id": "147",
+                "url": "https://forge.example/repo/pull/147",
+                "source_branch": "feat/feat_035_001",
+                "target_branch": "epic/epic_035",
+            },
+            "source_sha": "source-sha",
+            "target_sha": "target-sha",
+            "actor": "supervisor:epic_031",
+            "assignment": {"assigned_team": "feature:feat_035_001"},
+        }
+    )
+
+    assert operator.source == "operator"
+    assert recovery.source == "epic_031_recovery"
+    assert operator.idempotency_key == recovery.idempotency_key
+
+
+def test_duplicate_admission_reuses_original_action_across_entry_paths(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    first = admit_resolution_action(normalize_operator_request(_operator_payload()), root=root)
+    duplicate = admit_resolution_action(
+        normalize_epic_031_recovery_request(
+            {
+                "review": {
+                    "id": "147",
+                    "url": "https://forge.example/repo/pull/147",
+                    "source_branch": "feat/feat_035_001",
+                    "target_branch": "epic/epic_035",
+                },
+                "source_sha": "source-sha",
+                "target_sha": "target-sha",
+                "actor": "supervisor",
+                "assignment": {"owner": "epic:epic_035"},
+            }
+        ),
+        root=root,
+    )
+
+    assert first.reused is False
+    assert duplicate.reused is True
+    assert duplicate.action_id == first.action_id
+    assert duplicate.action["request"] == first.action["request"]
+    assert resolution_action(first.action_id, root=root) == first.action
+
+
+def test_concurrent_duplicate_admission_creates_one_action(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    request = normalize_operator_request(_operator_payload())
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        admissions = list(
+            pool.map(
+                lambda _unused: admit_resolution_action(request, root=root),
+                range(4),
+            )
+        )
+
+    assert sum(not item.reused for item in admissions) == 1
+    assert {item.action_id for item in admissions} == {request.idempotency_key}
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("review_id", "", "review_id is required"),
+        ("source_ref", "", "source_ref is required"),
+        ("observed_source_head", "", "observed_source_head is required"),
+        ("requester", "", "requester is required"),
+        ("assignee", "", "assignee is required"),
+    ],
+)
+def test_normalization_rejects_missing_required_metadata_without_persistence(
+    tmp_path: Path, field: str, value: str, message: str
+) -> None:
+    root = make_repo(tmp_path)
+    payload = _operator_payload()
+    payload[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        normalize_operator_request(payload)
+
+    assert not (root / ".cascade" / "resolution_actions.json").exists()
+
+
+def test_normalization_rejects_closed_review_and_mutation_like_ref(tmp_path: Path) -> None:
+    payload = _operator_payload()
+    payload["source_ref"] = "--force"
+    with pytest.raises(ValueError, match="authorized ref"):
+        normalize_operator_request(payload)
+
+    payload = _operator_payload()
+    payload["review_state"] = "closed"
+    with pytest.raises(ValueError, match="must be open"):
+        normalize_operator_request(payload)
+
+    payload = _operator_payload()
+    payload["review_url"] = "mailto:owner@example.test"
+    with pytest.raises(ValueError, match="absolute HTTP"):
+        normalize_operator_request(payload)
