@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_035_001
+- feat_035_002
 depends_on: []
 owners:
 - epic_manager
@@ -76,6 +77,7 @@ Every checkpoint is restart-safe. A retry first reconciles local Git state, remo
 - Test fixtures capable of modeling linked worktrees, conflicting histories, remote-head races, and interrupted/restarted actions.
 
 ## Feature breakdown
+- feat_035_002
 - feat_035_001
 
 1. **Admit and route review-conflict resolution actions** — unify explicit operator requests and epic_031 recovery requests under one durable identity; resolve review metadata and ownership; expose read-only inspection; reject unauthorized, stale, closed, dirty, or ambiguous requests with actionable War Room state.
