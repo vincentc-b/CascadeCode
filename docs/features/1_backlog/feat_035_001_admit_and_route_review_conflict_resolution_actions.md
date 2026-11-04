@@ -18,6 +18,7 @@ flex_mode: false
 models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
+approved_at: '2026-11-04T19:52:21.336747+00:00'
 ---
 # Admit and route review-conflict resolution actions
 
