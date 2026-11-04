@@ -24,6 +24,7 @@ models:
   feature_lead: gpt-5.6-sol
   feature_architect: gpt-5.6-sol
   swe: gpt-5.6-terra
+plan_approved_at: '2026-11-04T19:52:22.567433+00:00'
 ---
 # Enable agent teams to resolve Git conflicts on owned review branches
 
