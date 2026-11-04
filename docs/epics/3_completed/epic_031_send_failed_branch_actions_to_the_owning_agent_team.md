@@ -2,7 +2,7 @@
 id: epic_031
 title: Send failed branch actions to the owning agent team
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_031_001
@@ -15,7 +15,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-02'
-updated: '2026-11-03'
+updated: '2026-11-04'
 provider: codex
 flex_mode: false
 models:
