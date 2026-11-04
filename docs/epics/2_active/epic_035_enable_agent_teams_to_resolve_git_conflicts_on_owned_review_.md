@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_035_001
 - feat_035_002
+- feat_035_003
 depends_on: []
 owners:
 - epic_manager
@@ -77,6 +78,7 @@ Every checkpoint is restart-safe. A retry first reconciles local Git state, remo
 - Test fixtures capable of modeling linked worktrees, conflicting histories, remote-head races, and interrupted/restarted actions.
 
 ## Feature breakdown
+- feat_035_003
 - feat_035_002
 - feat_035_001
 
