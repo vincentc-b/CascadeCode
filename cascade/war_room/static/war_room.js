@@ -21,6 +21,8 @@
   let boardFocus = BoardFocusApi ? BoardFocusApi.defaultBoardFocus() : null;
   let lastBoardView = null;
   let branchSyncRowHelpers = null;
+  const RECOVERY_TOASTS_STORAGE_KEY = "cascade-war-room-recovery-transitions";
+  let recoveryIncidentTransitions = readRecoveryIncidentTransitions();
 
   const el = {
     board: document.getElementById("war-room-board"),
@@ -730,6 +732,7 @@
 
   function renderBoard(view) {
     lastBoardView = view;
+    reconcileRecoveryIncidentToasts(view);
     if (BoardFocusApi && boardFocus) {
       boardFocus = BoardFocusApi.reconcileFocusWithLens(view, boardFocus);
     }
@@ -1245,6 +1248,10 @@
     const actions = document.createElement("div");
     actions.className = "board-row-actions";
 
+    if (item.recovery_incident && typeof appendRecoveryIncident === "function") {
+      appendRecoveryIncident(row, actions, item.recovery_incident);
+    }
+
     const providerRecovery = item.provider_recovery;
     if (typeof providerRecoveryAction === "function" && providerRecoveryAction(providerRecovery, "change_provider")) {
       actions.appendChild(actionButton("Change provider", function () {
@@ -1487,6 +1494,136 @@
       next.textContent = "Next safe step: " + recovery.next_safe_step;
       row.appendChild(next);
     }
+  }
+
+  function appendRecoveryIncident(row, actions, incident) {
+    if (!incident || typeof incident !== "object") return;
+
+    const state = typeof incident.state === "string" ? incident.state : "failed";
+    const stateLabel = {
+      failed: "Recovery failed",
+      investigating: "Recovery investigating",
+      blocked: "Recovery blocked",
+      resolved: "Recovery resolved",
+    }[state] || "Recovery needs attention";
+    const warning = document.createElement("section");
+    warning.className = "recovery-incident recovery-incident-" + state;
+    warning.setAttribute("aria-label", stateLabel);
+    row.classList.add("board-row-recovery", "board-row-recovery-" + state);
+
+    const status = document.createElement("div");
+    status.className = "recovery-incident-status";
+    status.textContent = stateLabel;
+    warning.appendChild(status);
+
+    appendRecoveryIncidentLine(warning, "Reason", incident.reason);
+    const owner = incident.owner;
+    if (owner && typeof owner === "object") {
+      const ownerName = [owner.kind, owner.work_id].filter(function (value) {
+        return typeof value === "string" && value;
+      }).join(": ");
+      appendRecoveryIncidentLine(warning, "Owner", ownerName);
+    }
+
+    const affected = incident.affected;
+    if (affected && typeof affected === "object") {
+      const locations = [];
+      if (typeof affected.branch === "string" && affected.branch) {
+        locations.push("branch " + affected.branch);
+      }
+      if (Array.isArray(affected.paths) && affected.paths.length) {
+        locations.push("paths " + affected.paths.join(", "));
+      }
+      appendRecoveryIncidentLine(warning, "Affected", locations.join(" · "));
+    }
+
+    const attempt = incident.last_attempt;
+    if (attempt && typeof attempt === "object") {
+      const label = "#" + String(attempt.number || 0) +
+        (attempt.at ? " at " + attempt.at : "");
+      appendRecoveryIncidentLine(warning, "Last attempt", label);
+    }
+    appendRecoveryIncidentLine(warning, "Next step", incident.next_step);
+    row.appendChild(warning);
+
+    const target = incident.target;
+    if (target && typeof target.href === "string" && target.href) {
+      actions.appendChild(actionLink(
+        target.kind === "review" ? "Open recovery review" : "Open recovery action",
+        target.href
+      ));
+    }
+  }
+
+  function appendRecoveryIncidentLine(container, label, value) {
+    if (typeof value !== "string" || !value) return;
+    const line = document.createElement("div");
+    line.className = "recovery-incident-detail";
+    line.textContent = label + ": " + value;
+    container.appendChild(line);
+  }
+
+  function readRecoveryIncidentTransitions() {
+    try {
+      const value = globalThis.sessionStorage && globalThis.sessionStorage.getItem(
+        RECOVERY_TOASTS_STORAGE_KEY
+      );
+      const parsed = value ? JSON.parse(value) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_err) {
+      return {};
+    }
+  }
+
+  function saveRecoveryIncidentTransitions() {
+    try {
+      if (globalThis.sessionStorage) {
+        globalThis.sessionStorage.setItem(
+          RECOVERY_TOASTS_STORAGE_KEY,
+          JSON.stringify(recoveryIncidentTransitions)
+        );
+      }
+    } catch (_err) {
+      /* Storage is an enhancement; the row remains canonical without it. */
+    }
+  }
+
+  function recoveryIncidentKey(item, incident) {
+    const target = incident && incident.target;
+    const targetId = target && (target.id || target.href);
+    return item.id + ":" + String(targetId || "recovery");
+  }
+
+  function reconcileRecoveryIncidentToasts(view) {
+    if (!view || !el.toastList) return;
+    const active = {};
+    ["epics", "features", "tasks"].forEach(function (tier) {
+      const lanes = view[tier] || {};
+      Object.keys(lanes).forEach(function (lane) {
+        (lanes[lane] || []).forEach(function (item) {
+          const incident = item && item.recovery_incident;
+          if (!incident || typeof incident.state !== "string") return;
+          const key = recoveryIncidentKey(item, incident);
+          active[key] = true;
+          if (recoveryIncidentTransitions[key] === incident.state) return;
+          recoveryIncidentTransitions[key] = incident.state;
+          appendRecoveryIncidentToast(item, incident);
+        });
+      });
+    });
+    Object.keys(recoveryIncidentTransitions).forEach(function (key) {
+      if (!active[key]) delete recoveryIncidentTransitions[key];
+    });
+    saveRecoveryIncidentTransitions();
+  }
+
+  function appendRecoveryIncidentToast(item, incident) {
+    const li = document.createElement("li");
+    li.className = "toast-recovery";
+    const state = typeof incident.state === "string" ? incident.state : "failed";
+    li.textContent = "Recovery " + state + " (" + item.id + "): " +
+      (incident.reason || incident.next_step || "Action required.");
+    el.toastList.prepend(li);
   }
 
   function actionButton(label, handler, disabledReason) {

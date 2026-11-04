@@ -748,8 +748,13 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
     state = _load(trunk)
     finalized: list[str] = []
     from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
+    from cascade.stacked_review_recovery import persist_if_stacked_review_integration_gap
 
     for feature_id, record in list(state.items()):
+        if persist_if_stacked_review_integration_gap(
+            feature_id, record, root=trunk, accepted=bool(record.get("closed"))
+        ):
+            continue
         if record.get("closed"):
             epic_id = _review_target_epic(record)
             if _closed_review_has_incomplete_target(feature_id, record, trunk=trunk):
@@ -874,6 +879,8 @@ def _close_merged_feature_on_target(
 def poll_feature_reviews(root: Path) -> None:
     trunk = locate_trunk(root)
     state = _load(trunk)
+    from cascade.stacked_review_recovery import persist_if_stacked_review_integration_gap
+
     for feature_id, record in list(state.items()):
         if record.get("closed"):
             continue
@@ -916,6 +923,10 @@ def poll_feature_reviews(root: Path) -> None:
         # Merge with the latest record so parallel reviews cannot be reopened.
         _update_record(trunk, feature_id, {"seen_comments": sorted(seen)})
         if snapshot.get("state") == "merged":
+            if persist_if_stacked_review_integration_gap(
+                feature_id, record, root=trunk, accepted=True
+            ):
+                continue
             if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
                 _update_record(trunk, feature_id, {"closed": True})
             else:
@@ -1006,3 +1017,52 @@ def persist_review_target_branch(
 
     trunk = locate_trunk(root)
     _update_record(trunk, feature_id, {"target_branch": target_branch})
+
+
+def persist_stacked_reconciliation_review(
+    feature_id: str,
+    mr: MergeRequest,
+    *,
+    action_id: str,
+    originating_review: dict[str, object],
+    root: Path,
+) -> dict[str, object]:
+    """Replace a stranded stacked-review record with its Epic-targeted review.
+
+    A review registry has one current review per Feature.  Keep the accepted
+    predecessor-targeted review as explicit provenance while making the new
+    Epic-targeted review the one that the normal poller can reconcile.
+    """
+
+    trunk = locate_trunk(root)
+    provenance = dict(originating_review)
+    reconciliation = {
+        "action_id": action_id,
+        "originating_review": provenance,
+    }
+    current = review_record_for_feature(feature_id, root=trunk)
+    if current is not None:
+        prior = current.get("stacked_reconciliation")
+        if isinstance(prior, dict) and prior.get("action_id") not in (None, action_id):
+            raise GitError(f"{feature_id} already has a different stacked reconciliation")
+        if current.get("url") == mr.url and current.get("target_branch") == mr.target_branch:
+            return current
+    record = _update_record(
+        trunk,
+        feature_id,
+        {
+            "url": mr.url,
+            "number": mr.number,
+            "forge": mr.forge,
+            "source_branch": mr.source_branch,
+            "target_branch": mr.target_branch,
+            "draft": mr.draft,
+            "closed": False,
+            "seen_comments": [],
+            "toast_notified": False,
+            "stacked_reconciliation": reconciliation,
+        },
+        create=True,
+    )
+    assert record is not None
+    return record

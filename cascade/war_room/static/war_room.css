@@ -285,6 +285,46 @@ body {
   border-color: #f59e0b;
 }
 
+.board-row-recovery-failed,
+.board-row-recovery-blocked {
+  border-color: #ef4444;
+}
+
+.board-row-recovery-investigating {
+  border-color: #60a5fa;
+}
+
+.recovery-incident {
+  margin: 0 0 0.45rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.recovery-incident-failed,
+.recovery-incident-blocked {
+  color: #fecaca;
+  background: #2a1512;
+  border-color: #7f1d1d;
+}
+
+.recovery-incident-investigating {
+  color: #bfdbfe;
+  background: #111c30;
+  border-color: #1d4ed8;
+}
+
+.recovery-incident-status {
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
+
+.recovery-incident-detail + .recovery-incident-detail {
+  margin-top: 0.12rem;
+}
+
 .epic-cancellation-status {
   display: inline-block;
   margin: 0 0 0.35rem;

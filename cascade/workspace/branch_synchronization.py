@@ -103,7 +103,7 @@ def inspect_branch_synchronization(
     return BranchSyncInspection(ok=True, state=state, update_blocked_reason=blocked)
 
 
-def update_integration_branch(
+def _update_integration_branch(
     work_id: str, *, root: Path | None = None
 ) -> BranchSyncUpdateResult:
     """Merge the tier-aware base into the integration branch under ``process_lock``."""
@@ -173,6 +173,58 @@ def update_integration_branch(
             reason="branch_conflict",
             conflict_paths=conflict_paths,
         )
+
+
+def update_integration_branch(
+    work_id: str, *, root: Path | None = None
+) -> BranchSyncUpdateResult:
+    """Update one integration branch and durably hand off its first failure.
+
+    The underlying operation remains intentionally unaware of recovery.  This
+    thin boundary makes direct operator calls and supervisor calls share the
+    same stable action identity without changing their returned result.
+    """
+
+    result = _update_integration_branch(work_id, root=root)
+    if result.ok:
+        return result
+    try:
+        from cascade.task.action_recovery import capture_and_route_action_failure
+
+        target = _recovery_target_ref(work_id, root=root)
+        capture_and_route_action_failure(
+            f"{work_id}:integration_branch_update",
+            "integration_branch_update",
+            affected_work_id=work_id,
+            intended_target_ref=target,
+            root=resolve_root(root),
+            failure_code=result.reason or "branch_update_failed",
+            safe_summary=f"Integration branch update for {work_id} was unsuccessful.",
+            conflicting_paths=list(result.conflict_paths),
+        )
+    except Exception:
+        # Recovery must never replace the operator's original refusal.  Its
+        # next invocation will retry the durable capture with the same id.
+        pass
+    return result
+
+
+def _recovery_target_ref(work_id: str, *, root: Path | None) -> str | None:
+    """Return the intended integration boundary without guessing from refs."""
+
+    try:
+        from cascade.board.store import read_doc
+
+        doc = read_doc(work_id, root=resolve_root(root))
+    except Exception:
+        return None
+    if doc.meta.tier == "task" and doc.meta.parent:
+        return f"feat/{doc.meta.parent}"
+    if doc.meta.tier == "feature" and doc.meta.parent:
+        return f"epic/{doc.meta.parent}"
+    if doc.meta.tier == "epic":
+        return "trunk"
+    return None
 
 
 def _prune_stale_completed_epic_pointers(checkout: Path, base_branch: str) -> bool:
