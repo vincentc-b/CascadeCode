@@ -11,6 +11,7 @@ import fcntl
 import hashlib
 import json
 import os
+import subprocess
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -185,6 +186,53 @@ class ResolutionActionAdmission:
     idempotency_key: str
     action: dict[str, object]
     reused: bool
+
+
+@dataclass(frozen=True)
+class AdmissionBlocker:
+    """Durable evidence explaining why an action cannot be mutated safely."""
+
+    checkpoint: str
+    code: str
+    message: str
+    observed_refs: tuple[str, str]
+    observed_shas: tuple[str, str]
+    affected_paths: tuple[str, ...]
+    resume_action: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "checkpoint": self.checkpoint,
+            "code": self.code,
+            "message": self.message,
+            "observed_refs": list(self.observed_refs),
+            "observed_shas": list(self.observed_shas),
+            "affected_paths": list(self.affected_paths),
+            "resume_action": self.resume_action,
+        }
+
+
+@dataclass(frozen=True)
+class MutationReadyHandoff:
+    """Evidence a later mutation-only slice may consume; this slice does not mutate."""
+
+    action_id: str
+    review_id: str
+    accountable_team: str
+    worktree: str
+    authorized_refs: tuple[str, str]
+    observed_shas: tuple[str, str]
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "action_id": self.action_id,
+            "review_id": self.review_id,
+            "accountable_team": self.accountable_team,
+            "worktree": self.worktree,
+            "authorized_refs": list(self.authorized_refs),
+            "observed_shas": list(self.observed_shas),
+            "mutation_performed": False,
+        }
 
 
 @dataclass(frozen=True)
@@ -445,10 +493,185 @@ def _write_lock(path: Path):
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def _admission_blocker(
+    context: ResolvedReviewContext | None,
+    *,
+    checkpoint: str,
+    code: str,
+    message: str,
+    resume_action: str,
+    paths: tuple[Path, ...] = (),
+) -> AdmissionBlocker:
+    refs = context.authorized_refs if context is not None else ("", "")
+    shas = (
+        (context.observed_source_head, context.observed_target_head)
+        if context is not None
+        else ("", "")
+    )
+    return AdmissionBlocker(
+        checkpoint=checkpoint,
+        code=code,
+        message=message,
+        observed_refs=refs,
+        observed_shas=shas,
+        affected_paths=tuple(str(path) for path in paths),
+        resume_action=resume_action,
+    )
+
+
+def _review_record(context: ResolvedReviewContext, *, root: Path) -> dict[str, object] | None:
+    """Read only the registry already named in the resolved inspection surface."""
+
+    registry = next(
+        (path for path in context.inspection_paths if path.name == "reviews.json"), None
+    )
+    if registry is None or registry.resolve() != (root / ".cascade" / "reviews.json").resolve():
+        return None
+    return _review_records(root).get(context.review_owner_id)
+
+
+def _bool_metadata(record: Mapping[str, object], *names: str) -> bool | None:
+    """Accept the small set of explicit boolean capability markers we persist/read."""
+
+    for name in names:
+        value = record.get(name)
+        if isinstance(value, bool):
+            return value
+    return None
+
+
+def _live_sha(worktree: Path, ref: str) -> str | None:
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+        cwd=worktree,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _dirty_paths(worktree: Path) -> tuple[str, ...]:
+    result = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=worktree,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if result.returncode != 0:
+        return (str(worktree),)
+    paths: list[str] = []
+    for line in result.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].split(" -> ")[-1]
+        # Cascade's own durable sidecars are expected to be untracked in an
+        # integration checkout and are not operator edits needing recovery.
+        if not path.startswith(".cascade/"):
+            paths.append(path)
+    return tuple(paths)
+
+
+def _evaluate_admission(
+    request: ResolutionActionRequest, context: ResolvedReviewContext, *, root: Path
+) -> AdmissionBlocker | MutationReadyHandoff:
+    """Run safety checks using only paths named by context resolution.
+
+    The review registry is the scoped forge snapshot for this boundary.  Git
+    reads are limited to the resolved worktree and the two authorized refs.
+    Nothing here changes Git, the review, or a worktree.
+    """
+
+    record = _review_record(context, root=root)
+    registry = root / ".cascade" / "reviews.json"
+    if record is None:
+        return _admission_blocker(
+            context, checkpoint="metadata", code="review_metadata_missing",
+            message="The resolved review metadata is unavailable.",
+            resume_action="Restore the open review registry record, then submit the action again.",
+            paths=(registry,),
+        )
+    state = str(record.get("state") or record.get("forge_state") or "open").lower()
+    if bool(record.get("closed")) or state in {"closed", "merged"} or record.get("stage") == "completed":
+        return _admission_blocker(
+            context, checkpoint="review_open", code="review_closed",
+            message="The review is no longer open for conflict resolution.",
+            resume_action="Open a new review action only if a new open review requires resolution.",
+            paths=(registry,),
+        )
+    if tuple(context.authorized_refs) != (request.source_ref, request.target_ref):
+        return _admission_blocker(
+            context, checkpoint="authorized_refs", code="unauthorized_review_refs",
+            message="The request refs no longer match the resolved review refs.",
+            resume_action="Refresh the review context and submit its authorized ref pair.",
+            paths=(registry,),
+        )
+    credentials = _bool_metadata(record, "credentials_available", "credential_available")
+    if credentials is False:
+        return _admission_blocker(
+            context, checkpoint="credentials", code="credentials_unavailable",
+            message="Credentials required to resolve this review are unavailable.",
+            resume_action="Restore the review credentials, then retry admission.", paths=(registry,),
+        )
+    permissions = _bool_metadata(record, "resolution_permitted", "permissions_available", "can_resolve")
+    if permissions is False:
+        return _admission_blocker(
+            context, checkpoint="permissions", code="insufficient_permissions",
+            message="The accountable team lacks permission to resolve this review.",
+            resume_action="Grant review-resolution permission to the accountable team, then retry.",
+            paths=(registry,),
+        )
+    if context.worktree is None or context.worktree not in context.inspection_paths:
+        return _admission_blocker(
+            context, checkpoint="metadata", code="worktree_metadata_missing",
+            message="No scoped integration worktree is available for safe inspection.",
+            resume_action="Restore the accountable team's integration worktree, then retry admission.",
+        )
+    worktree = context.worktree
+    if not worktree.is_dir():
+        return _admission_blocker(
+            context, checkpoint="metadata", code="worktree_unavailable",
+            message="The resolved integration worktree is unavailable.",
+            resume_action="Restore the registered integration worktree, then retry admission.",
+            paths=(worktree,),
+        )
+    source_sha = _live_sha(worktree, context.authorized_refs[0])
+    target_sha = _live_sha(worktree, context.authorized_refs[1])
+    if source_sha is None or target_sha is None:
+        return _admission_blocker(
+            context, checkpoint="metadata", code="observed_head_metadata_missing",
+            message="The resolved worktree cannot read both authorized review heads.",
+            resume_action="Fetch or restore the authorized refs, then retry admission.", paths=(worktree,),
+        )
+    if (source_sha, target_sha) != (context.observed_source_head, context.observed_target_head):
+        return _admission_blocker(
+            context, checkpoint="observed_heads", code="stale_observed_heads",
+            message="The live authorized refs no longer match the observed review heads.",
+            resume_action="Refresh review heads and submit a new resolution action.", paths=(worktree,),
+        )
+    dirty = _dirty_paths(worktree)
+    if dirty:
+        return _admission_blocker(
+            context, checkpoint="worktree_clean", code="dirty_unrelated_paths",
+            message="The scoped worktree contains uncommitted paths unrelated to this action.",
+            resume_action="Commit, stash, or discard the listed paths before retrying admission.",
+            paths=tuple(worktree / path for path in dirty),
+        )
+    return MutationReadyHandoff(
+        action_id=request.idempotency_key,
+        review_id=context.review_id,
+        accountable_team=context.accountable_team,
+        worktree=str(worktree),
+        authorized_refs=context.authorized_refs,
+        observed_shas=(source_sha, target_sha),
+    )
+
+
 def admit_resolution_action(
     request: ResolutionActionRequest, *, root: Path
 ) -> ResolutionActionAdmission:
-    """Persist a validated request once, or return the existing action unchanged."""
+    """Persist one safe handoff or actionable blocker; never perform mutation."""
 
     trunk = locate_trunk(Path(root).resolve())
     path = _state_path(trunk)
@@ -458,12 +681,30 @@ def admit_resolution_action(
         existing = state.get(key)
         if isinstance(existing, dict):
             return ResolutionActionAdmission(key, key, dict(existing), reused=True)
+        resolution = resolve_review_context(request, root=trunk)
         action: dict[str, object] = {
             "action_id": key,
             "idempotency_key": key,
-            "status": "admitted",
             "request": request.as_dict(),
         }
+        if resolution.blocker is not None:
+            blocker = AdmissionBlocker(
+                checkpoint="context_resolution",
+                code=resolution.blocker.code,
+                message=resolution.blocker.message,
+                observed_refs=(request.source_ref, request.target_ref),
+                observed_shas=(request.observed_source_head, request.observed_target_head),
+                affected_paths=resolution.blocker.affected_paths,
+                resume_action="Resolve the review context shown by the affected paths, then retry admission.",
+            )
+            action.update(status="blocked", blocker=blocker.as_dict())
+        else:
+            assert resolution.context is not None
+            outcome = _evaluate_admission(request, resolution.context, root=trunk)
+            if isinstance(outcome, AdmissionBlocker):
+                action.update(status="blocked", blocker=outcome.as_dict())
+            else:
+                action.update(status="mutation_ready", handoff=outcome.as_dict())
         state[key] = action
         _save(path, state)
         return ResolutionActionAdmission(key, key, dict(action), reused=False)

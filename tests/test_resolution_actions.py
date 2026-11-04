@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from cascade.resolution_actions import (
     resolve_review_context,
     resolution_action,
 )
+from cascade.workspace.integration_worktree import IntegrationWorktree, save_registry
 from tests.support import add_doc, make_repo
 
 
@@ -148,6 +150,80 @@ def _review_board(root: Path) -> None:
         tier="feature",
         parent="epic_035",
     )
+
+
+def _admission_ready_root(tmp_path: Path) -> tuple[Path, dict[str, object]]:
+    root = make_repo(tmp_path)
+    _review_board(root)
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "seed"], cwd=root, check=True)
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "feat/feat_035_001"], cwd=root, check=True)
+    subprocess.run(["git", "branch", "epic/epic_035"], cwd=root, check=True)
+    save_registry(
+        root,
+        [IntegrationWorktree("feature", "feat_035_001", "feat/feat_035_001", root, sha)],
+    )
+    record: dict[str, object] = {
+        "url": "https://forge.example/repo/pull/147",
+        "number": "147",
+        "source_branch": "feat/feat_035_001",
+        "target_branch": "epic/epic_035",
+        "source_head": sha,
+        "target_head": sha,
+        "credentials_available": True,
+        "resolution_permitted": True,
+    }
+    _write_review_registry(root, {"feat_035_001": record})
+    payload = _operator_payload()
+    payload["observed_source_head"] = sha
+    payload["observed_target_head"] = sha
+    return root, payload
+
+
+def test_admission_persists_a_non_mutating_handoff_after_all_safety_checks(tmp_path: Path) -> None:
+    root, payload = _admission_ready_root(tmp_path)
+
+    admission = admit_resolution_action(normalize_operator_request(payload), root=root)
+
+    assert admission.action["status"] == "mutation_ready"
+    handoff = admission.action["handoff"]
+    assert isinstance(handoff, dict)
+    assert handoff["mutation_performed"] is False
+    assert handoff["authorized_refs"] == ["feat/feat_035_001", "epic/epic_035"]
+
+
+@pytest.mark.parametrize(
+    ("change", "checkpoint", "code", "resume_fragment"),
+    [
+        ("stale", "observed_heads", "stale_observed_heads", "Refresh review heads"),
+        ("credentials", "credentials", "credentials_unavailable", "Restore the review credentials"),
+        ("dirty", "worktree_clean", "dirty_unrelated_paths", "Commit, stash, or discard"),
+    ],
+)
+def test_admission_persists_actionable_boundary_blockers(
+    tmp_path: Path, change: str, checkpoint: str, code: str, resume_fragment: str
+) -> None:
+    root, payload = _admission_ready_root(tmp_path)
+    if change == "stale":
+        subprocess.run(["git", "commit", "--allow-empty", "-m", "advance"], cwd=root, check=True)
+        subprocess.run(["git", "branch", "-f", "feat/feat_035_001", "HEAD"], cwd=root, check=True)
+    elif change == "credentials":
+        _write_review_registry(root, {"feat_035_001": {**json.loads((root / ".cascade" / "reviews.json").read_text())["feat_035_001"], "credentials_available": False}})
+    else:
+        (root / "unrelated.txt").write_text("dirty\n", encoding="utf-8")
+
+    admission = admit_resolution_action(normalize_operator_request(payload), root=root)
+
+    assert admission.action["status"] == "blocked"
+    blocker = admission.action["blocker"]
+    assert isinstance(blocker, dict)
+    assert blocker["checkpoint"] == checkpoint
+    assert blocker["code"] == code
+    assert blocker["observed_refs"] == ["feat/feat_035_001", "epic/epic_035"]
+    assert blocker["observed_shas"] == [payload["observed_source_head"], payload["observed_target_head"]]
+    assert resume_fragment in blocker["resume_action"]
 
 
 def test_context_routes_a_feature_review_to_its_feature_team(tmp_path: Path) -> None:
