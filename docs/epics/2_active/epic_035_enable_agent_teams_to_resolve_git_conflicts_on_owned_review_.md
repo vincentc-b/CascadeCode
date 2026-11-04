@@ -103,6 +103,11 @@ None. Implementation-level choices may remain within feature plans, but the safe
   Chose Confine mutation to a dedicated repository-backed turn for one authorized open review; keep ordinary planning turns read-only..
   Rationale: Teams need real Git history and owned files, but widening every planning turn would expose unrelated checkouts and credentials.
   Honors: The least-privilege and unrelated-checkout constraints in the approved brief..
+
+- `dec_003` · 2026-11-04 · Epic Manager · **Safety / push policy**
+  Chose Allow history rewrite only through an explicit remote-head lease on the owned open-review source ref..
+  Rationale: Rebase requires rewriting the source branch, while an exact observed-SHA lease and pre-mutation revalidation prevent overwriting concurrent work or target branches.
+  Honors: The approved narrow exception to epic_031's no-force-push rule..
 ## Amendment log
 
 _(none)_
