@@ -94,6 +94,10 @@ None. Implementation-level choices may remain within feature plans, but the safe
 - 2026-11-04 · Epic Manager · Allow history rewrite only through an explicit remote-head lease on the owned review source ref.
 - 2026-11-04 · Epic Manager · Deliver in three sequential slices: admission/routing, owned rebase execution, then restart/provider hardening.
 
+- `dec_001` · 2026-11-04 · Epic Manager · **Architecture / request identity**
+  Chose Use one durable resolution-action contract for explicit operator requests and epic_031 recovery routing..
+  Rationale: A shared identity and state machine prevents duplicated commits, pushes, reviews, and completion events while keeping two request sources behaviorally consistent.
+  Honors: Success criteria for explicit requests, recovery actions, durable blockers, and restart idempotency..
 ## Amendment log
 
 _(none)_
