@@ -339,15 +339,20 @@ def recover_and_execute_review_rebase(
             )
             return ReviewRebaseRecovery(action_id, "blocked", blocker=blocker)
 
-        recovered = _reconcile_review_rebase(action_id, turn, root=trunk)
-        if recovered.outcome == "already_completed":
-            resume_action(
-                action_id, root=trunk, reclaim_running=reclaim_running,
-                execute=lambda _context: {"metadata": {"result": "already_completed"}},
-            )
-            return ReviewRebaseRecovery(action_id, "completed", reconciliation=recovered)
-        if recovered.outcome == "blocker":
-            return ReviewRebaseRecovery(action_id, "blocked", reconciliation=recovered)
+        # Reclaiming a process-interrupted attempt must happen before its
+        # reconciliation.  A durable ``running`` claim intentionally blocks
+        # ordinary callers, but treating it as terminal here would make a
+        # restart unable to reach the checkpoint it needs to resume safely.
+        if not (existing.get("recovery_state") == "running" and reclaim_running):
+            recovered = _reconcile_review_rebase(action_id, turn, root=trunk)
+            if recovered.outcome == "already_completed":
+                resume_action(
+                    action_id, root=trunk, reclaim_running=reclaim_running,
+                    execute=lambda _context: {"metadata": {"result": "already_completed"}},
+                )
+                return ReviewRebaseRecovery(action_id, "completed", reconciliation=recovered)
+            if recovered.outcome == "blocker":
+                return ReviewRebaseRecovery(action_id, "blocked", reconciliation=recovered)
 
     result: dict[str, object] = {}
 
@@ -496,6 +501,27 @@ def _reconcile_review_rebase(
             test_summary=str(checkpoint.get("test_summary") or "unknown"),
             resume_instructions="Publication was reconciled after restart; do not push again.",
             rebased_head=rebased, published_head=rebased,
+        )
+        # ``reconcile_action`` compares its remote argument with the target
+        # head.  Here publication is proved by the *source* remote, so return
+        # the completed result directly rather than treating the target head
+        # as a published source SHA and attempting another push.
+        persisted = load_action(action_id, root=root) or {}
+        reconciled_checkpoint = persisted.get("checkpoint")
+        reconciled_paths = (
+            tuple(reconciled_checkpoint.get("affected_paths") or ())
+            if isinstance(reconciled_checkpoint, Mapping)
+            else ()
+        )
+        return ActionReconciliation(
+            "already_completed", "published_head_on_remote", action_id,
+            reconciled_checkpoint.get("checkpoint_id")
+            if isinstance(reconciled_checkpoint, Mapping)
+            else None,
+            local_head, target_head, reconciled_paths,
+            reconciled_checkpoint.get("resume_instructions")
+            if isinstance(reconciled_checkpoint, Mapping)
+            else None,
         )
     return reconcile_action(
         action_id, root=root, local_head=local_head, remote_head=target_head,

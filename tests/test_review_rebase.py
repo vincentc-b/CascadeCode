@@ -4,6 +4,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from cascade.resolution_actions import admit_resolution_action, normalize_operator_request
 import sys
 
@@ -14,7 +16,7 @@ from cascade.review_rebase import (
     prepare_review_rebase_turn,
     recover_and_execute_review_rebase,
 )
-from cascade.task.action_recovery import load_action
+from cascade.task.action_recovery import create_or_load_action, load_action, start_attempt
 from cascade.workspace.integration_worktree import IntegrationWorktree, save_registry
 from tests.test_resolution_actions import _admission_ready_root
 
@@ -353,3 +355,124 @@ def test_recovery_workflow_persists_semantic_conflict_as_owner_blocker(tmp_path:
     assert action["recovery_state"] == "awaiting_owner_decision"
     assert action["checkpoint"]["affected_paths"] == ["shared.txt"]
     assert action["owner_decisions"][0]["owner"] == "feature_team"
+
+    restarted = recover_and_execute_review_rebase(
+        turn.action_id, root=root, authorized_paths=("shared.txt",), reclaim_running=True
+    )
+
+    assert restarted.outcome == "blocked"
+    reloaded = load_action(turn.action_id, root=root)
+    assert reloaded is not None
+    assert reloaded["recovery_state"] == "awaiting_owner_decision"
+    assert len(reloaded["owner_decisions"]) == 1
+    assert reloaded["checkpoint"]["refs"] == {
+        "source": turn.source_ref,
+        "target": turn.target_ref,
+    }
+    assert reloaded["checkpoint"]["shas"] == {
+        "source_head": turn.observed_source_sha,
+        "target_head": turn.observed_target_sha,
+    }
+    assert reloaded["checkpoint"]["resume_instructions"]
+
+
+@pytest.mark.parametrize("checkpoint", ["rebased", "published"])
+def test_recovery_resumes_interrupted_checkpoint_without_duplicate_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, checkpoint: str
+) -> None:
+    """A restarted process uses the durable checkpoint instead of repeating Git effects."""
+
+    root, turn = _execution_ready_turn(tmp_path)
+    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+    pushes: list[tuple[str, ...]] = []
+    run = subprocess.run
+
+    def record_push(command, *args, **kwargs):
+        if isinstance(command, list) and command[:2] == ["git", "push"]:
+            pushes.append(tuple(command))
+        return run(command, *args, **kwargs)
+
+    monkeypatch.setattr(review_rebase.subprocess, "run", record_push)
+    create_or_load_action(turn.action_id, "review_rebase", root=root, attempt_bound=3)
+    execution = execute_review_rebase(turn, authorized_paths=("source.txt",))
+    assert execution.rebased is True
+    review_rebase._record_rebase_checkpoint(
+        turn.action_id, "rebased", turn, root=root, affected_paths=execution.modified_paths,
+        command_summary="git rebase completed", test_summary="not run",
+        resume_instructions="Run the repository checks and publish the rebased source with its recorded lease.",
+        rebased_head=execution.source_head,
+    )
+    if checkpoint == "published":
+        publication = check_and_publish_review_rebase(turn, execution)
+        assert publication.published is True
+        review_rebase._record_rebase_checkpoint(
+            turn.action_id, "published", turn, root=root, affected_paths=execution.modified_paths,
+            command_summary="git push --force-with-lease completed", test_summary="passed",
+            resume_instructions="Reconcile publication; do not publish again.",
+            rebased_head=execution.source_head, published_head=publication.source_head,
+        )
+
+    # This is the durable state a new supervisor sees after its predecessor
+    # died between a checkpoint write and attempt finalization.
+    start_attempt(turn.action_id, root=root)
+    recovered = recover_and_execute_review_rebase(
+        turn.action_id, root=root, authorized_paths=("source.txt",), reclaim_running=True
+    )
+
+    assert recovered.outcome == "completed"
+    assert len(pushes) == 1
+    assert _git(root, "rev-parse", "HEAD") == execution.source_head
+    assert _git(root, "ls-remote", "origin", f"refs/heads/{turn.source_ref}").split()[0] == execution.source_head
+    action = load_action(turn.action_id, root=root)
+    assert action is not None
+    assert action["recovery_state"] == "completed"
+    assert [attempt["outcome"] for attempt in action["attempts"]] == ["cancelled", "succeeded"]
+
+
+def test_recovery_blocks_a_remote_target_race_without_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A changed base after durable admission is evidenced rather than retried."""
+
+    root, turn = _execution_ready_turn(tmp_path)
+    pushes: list[tuple[str, ...]] = []
+    run = subprocess.run
+
+    def record_push(command, *args, **kwargs):
+        if isinstance(command, list) and command[:2] == ["git", "push"]:
+            pushes.append(tuple(command))
+        return run(command, *args, **kwargs)
+
+    monkeypatch.setattr(review_rebase.subprocess, "run", record_push)
+    create_or_load_action(turn.action_id, "review_rebase", root=root, attempt_bound=3)
+    review_rebase._record_rebase_checkpoint(
+        turn.action_id, "admitted", turn, root=root, affected_paths=(),
+        command_summary="admitted review rebase; mutation has not started",
+        test_summary="not run", resume_instructions="Refresh the admission before retrying.",
+    )
+    remote = _git(root, "remote", "get-url", "origin")
+    updater = tmp_path / "target-race"
+    _git(tmp_path, "clone", remote, str(updater))
+    _git(updater, "config", "user.email", "test@example.com")
+    _git(updater, "config", "user.name", "Test User")
+    _git(updater, "checkout", turn.target_ref)
+    (updater / "target-race.txt").write_text("advance base\n", encoding="utf-8")
+    _git(updater, "add", "target-race.txt")
+    _git(updater, "commit", "-m", "advance target during recovery")
+    advanced_target = _git(updater, "rev-parse", "HEAD")
+    _git(updater, "push", "origin", f"HEAD:{turn.target_ref}")
+
+    recovered = recover_and_execute_review_rebase(
+        turn.action_id, root=root, authorized_paths=("source.txt",)
+    )
+
+    assert recovered.outcome == "blocked"
+    assert recovered.reconciliation is not None
+    assert (recovered.reconciliation.outcome, recovered.reconciliation.reason) == (
+        "blocker", "remote_head_changed"
+    )
+    assert recovered.reconciliation.remote_head == advanced_target
+    assert not any(command[-1] == f"HEAD:refs/heads/{turn.source_ref}" for command in pushes)
+    action = load_action(turn.action_id, root=root)
+    assert action is not None
+    assert action["last_reconciliation"] == recovered.reconciliation.as_dict()
