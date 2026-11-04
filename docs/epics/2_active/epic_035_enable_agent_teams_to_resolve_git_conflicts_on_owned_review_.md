@@ -31,36 +31,68 @@ Feature and Epic Teams need a scoped way to inspect real Git history, rebase an 
 ### Success criteria
 
 - An assigned Feature or Epic Team can inspect the actual source and target refs, affected paths, review identity, and owned worktree without an operator shell.
-- A scoped resolution turn can fetch, rebase, edit semantic conflicts, run relevant tests, and update the existing open MR branch with a remote-head lease. PR #147 resolves its action_recovery.py conflict; PR #148 completes its clean rebase.
+- A scoped resolution turn can fetch, rebase, edit semantic conflicts, run relevant tests, and update the existing open MR branch with a remote-head lease. PR #147 resolves its `action_recovery.py` conflict; PR #148 completes its clean rebase.
 - The Feature Team can update its own MR branch; the Epic Team can handle Epic-owned and explicitly assigned child Feature branches. A cross-feature decision is handed to one accountable owner.
 - Changed remote heads, dirty unrelated files, failed tests, missing Git permissions or credentials, and ambiguous semantic choices stop with durable, actionable War Room blockers. Duplicate requests and restarts do not duplicate commits, pushes, reviews, or completion events.
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+A conflict-resolution request is a durable, uniquely identified recovery action tied to one open review, its source owner, source ref, target ref, and the observed remote source SHA. Requests may originate from an epic_031 lifecycle failure or an explicit operator message; both enter the same admission and state machine.
+
+The supervisor resolves the review and ownership records before granting capability. It routes Feature-owned reviews to that Feature Team and Epic-owned or explicitly assigned child reviews to the Epic Team. Cross-feature semantic decisions are not fanned out: one accountable owner is selected and the other teams remain observers.
+
+Execution occurs in a dedicated repository-backed turn for the authorized review worktree, separate from ordinary read-only planning turns. The turn receives only the source/target refs, linked Git metadata, review context, and the minimum fetch/edit/test/push operations needed for that review. Admission rejects closed reviews, unauthorized refs, target branches as push destinations, unrelated or dirty paths, and absent credentials.
+
+The workflow is checkpointed:
+
+1. Inspect and record review identity, ownership, source/target refs, worktree status, and remote source/target SHAs.
+2. Fetch and revalidate the recorded heads and authorization immediately before mutation.
+3. Rebase the owned source onto the target; if conflicts occur, edit only conflicted/owned paths, then continue the rebase.
+4. Run the repository-defined relevant checks and capture their result.
+5. Re-read the remote source head and push the rebased source with an explicit `--force-with-lease=<ref>:<observed-sha>`.
+6. Persist the resulting head and emit at most one completion event for the action identity.
+
+Every checkpoint is restart-safe. A retry first reconciles local Git state, remote head, and durable action state; it resumes a safe incomplete step or reports a blocker rather than repeating commits, pushes, reviews, or completion messages. Blockers retain the failed checkpoint, observed SHAs, affected paths, command/test summary, and the operator action needed to resume.
 
 ## Cross-module constraints
 
 - Extend epic_031 recovery action identity, routing, and War Room state; accept operator chat requests even before a lifecycle command fails.
-- Keep ordinary planning scratch turns read-only. Provide a repository-backed, owned resolution turn or supervisor-mediated Git tools with access to linked .git/worktrees metadata.
-- Permit --force-with-lease only for the owned source of an open review, after verifying its recorded remote SHA. Never rewrite target Epic or trunk branches, bypass review/lifecycle gates, discard user files, or expose unrelated checkouts. This narrowly revises epic_031's blanket no-force-push rule.
-- Preserve the same PR and accepted-review provenance; recheck branch heads and authorization before each mutation. Cover Codex and other supported providers.
+- Keep ordinary planning scratch turns read-only. Repository and credential access exists only in the admitted resolution turn and only for the authorized review/worktree.
+- Permit `--force-with-lease` only for the owned source of an open review, after verifying its recorded remote SHA. Never rewrite target Epic or trunk branches, bypass review/lifecycle gates, discard user files, or expose unrelated checkouts. This narrowly revises epic_031's blanket no-force-push rule.
+- Preserve the same PR and accepted-review provenance; recheck branch heads and authorization before each mutation.
+- Use structured Git operations or fixed argument vectors for mutations; do not grant an unrestricted operator shell.
+- A semantic conflict that cannot be resolved from the owning plan and code is a blocker, not permission to invent product behavior.
+- Support every provider that can run Feature or Epic Teams. Provider adapters may launch the turn differently, but share the same admission, capability, state, and result contract.
+- Tests must target the high-risk boundaries: authorization/ref confinement, lease rejection, restart reconciliation, and one end-to-end conflict-resolution path. Avoid duplicative mock-heavy coverage already exercised through those workflows.
 
 ## Core dependencies
 
-To be identified during epic planning.
+- epic_031's durable recovery-action identity, routing, War Room blocker, retry, and completion-event contracts.
+- Review metadata that authoritatively maps an open review to source ref, target ref, owning Epic/Feature, remote, and observed source SHA.
+- Supervisor support for a repository-backed team turn with narrowly scoped worktree, Git metadata, edit, test, credential, and push capabilities.
+- Provider adapters for all supported team runtimes to launch the same resolution-turn contract.
+- Existing lifecycle/review gates and repository-defined test commands; this epic extends them but does not replace them.
+- Test fixtures capable of modeling linked worktrees, conflicting histories, remote-head races, and interrupted/restarted actions.
 
 ## Feature breakdown
 
-The Epic Team will create and sequence feature plans here.
+1. **Admit and route review-conflict resolution actions** — unify explicit operator requests and epic_031 recovery requests under one durable identity; resolve review metadata and ownership; expose read-only inspection; reject unauthorized, stale, closed, dirty, or ambiguous requests with actionable War Room state.
+2. **Execute and publish an owned review rebase** — provide the scoped repository-backed turn; fetch, rebase, edit owned conflicts, run relevant checks, revalidate authorization and heads, and update the same review source ref with an explicit remote-head lease.
+3. **Make resolution restart-safe across providers** — reconcile interrupted local/remote/action state, deduplicate side effects and completion events, normalize blocker/resume behavior, and validate provider parity plus the PR #147 conflict and PR #148 clean-rebase acceptance paths.
+
+Features are sequenced 1 → 2 → 3. Feature 2 depends on the admission contract; Feature 3 hardens that end-to-end path without broadening its permissions.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+None. Implementation-level choices may remain within feature plans, but the safety boundary, ownership model, sequencing, and acceptance paths are fixed here.
 
 ## Decision log
 
 - 2026-11-04 · Human · Brief approved through merge request review.
+- 2026-11-04 · Epic Manager · Use one durable resolution-action contract for both operator requests and epic_031 recovery routing.
+- 2026-11-04 · Epic Manager · Confine mutation to a dedicated repository-backed turn for one authorized open review; ordinary planning remains read-only.
+- 2026-11-04 · Epic Manager · Allow history rewrite only through an explicit remote-head lease on the owned review source ref.
+- 2026-11-04 · Epic Manager · Deliver in three sequential slices: admission/routing, owned rebase execution, then restart/provider hardening.
 
 ## Amendment log
 
