@@ -20,6 +20,7 @@ from cascade.agent.planning_sandbox import (
     teardown_scratch,
 )
 from cascade.agent.providers import ProviderId
+from cascade.agent.recovery_contract import ProviderRecoveryLaunch
 from cascade.agent.types import RoleId, RoleResult, RoleTurn
 
 _EPIC_ROLES = frozenset({"epic_manager", "epic_architect"})
@@ -36,6 +37,7 @@ async def run_epic_planning_turn(
     root: Path,
     reasoning_level: str | None = None,
     flex_mode: bool | None = None,
+    recovery: ProviderRecoveryLaunch | None = None,
 ) -> RoleResult:
     if role not in _EPIC_ROLES:
         raise ValueError(f"not an epic planning role: {role}")
@@ -50,6 +52,7 @@ async def run_epic_planning_turn(
         prompt=prompt,
         reasoning_level=reasoning_level,
         flex_mode=flex_mode,
+        recovery=recovery,
         sandbox=PlanningSandbox(
             scratch_dir=scratch,
             repo_root=repo,
@@ -70,6 +73,7 @@ async def run_feature_planning_turn(
     root: Path,
     reasoning_level: str | None = None,
     flex_mode: bool | None = None,
+    recovery: ProviderRecoveryLaunch | None = None,
 ) -> RoleResult:
     if role not in _FEATURE_ROLES:
         raise ValueError(f"not a feature planning role: {role}")
@@ -84,6 +88,7 @@ async def run_feature_planning_turn(
         prompt=prompt,
         reasoning_level=reasoning_level,
         flex_mode=flex_mode,
+        recovery=recovery,
         sandbox=PlanningSandbox(
             scratch_dir=scratch,
             repo_root=repo,
@@ -128,6 +133,7 @@ async def _run_sandbox_turn(
     sandbox: PlanningSandbox,
     reasoning_level: str | None = None,
     flex_mode: bool | None = None,
+    recovery: ProviderRecoveryLaunch | None = None,
 ) -> RoleResult:
     scratch = sandbox.scratch_dir
     effects_path = scratch / ".cascade_effects.jsonl"
@@ -137,23 +143,25 @@ async def _run_sandbox_turn(
             role=role,
             provider=provider,
             model_id=model_id,
-            prompt=prompt,
+            prompt=_recovery_prompt(prompt, recovery),
             cwd=scratch,
             tools=[],
             custom_tools=build_planning_custom_tools(sandbox, collector),
             reasoning_level=reasoning_level,
             flex_mode=flex_mode,
+            recovery=recovery,
         )
     else:
         turn = RoleTurn(
             role=role,
             provider=provider,
             model_id=model_id,
-            prompt=prompt,
+            prompt=_recovery_prompt(prompt, recovery),
             cwd=scratch,
             tools=build_planning_mcp_servers(sandbox),
             reasoning_level=reasoning_level,
             flex_mode=flex_mode,
+            recovery=recovery,
         )
     try:
         result = await run_role(turn)
@@ -165,6 +173,15 @@ async def _run_sandbox_turn(
             text=result.text,
             status=result.status,
             tool_effects=tool_effects,
+            recovery=result.recovery,
         )
     finally:
         teardown_scratch(scratch)
+
+
+def _recovery_prompt(prompt: str, recovery: ProviderRecoveryLaunch | None) -> str:
+    """Give every provider the exact same recovery identity and evidence."""
+
+    if recovery is None:
+        return prompt
+    return f"{recovery.prompt_block()}\n\n{prompt}"

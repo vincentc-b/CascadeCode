@@ -28,6 +28,7 @@ from cascade.agent.errors import (
 )
 from cascade.agent.turn_registry import register_turn
 from cascade.agent.providers import parse_provider_id, probe_provider
+from cascade.agent.recovery_contract import report_provider_recovery
 from cascade.agent.types import RoleId, RoleResult, RoleResultStatus, RoleTurn
 
 _PLANNING_ROLES: frozenset[RoleId] = frozenset(
@@ -178,6 +179,20 @@ async def run_role(turn: RoleTurn) -> RoleResult:
     validate_model_id(turn.model_id)
     reject_cloud_runtime(cloud=None)
 
+    # A reconciled terminal action is deliberately not handed to a provider:
+    # replaying it could repeat MCP-visible workflow effects.  It also must not
+    # depend on a currently installed/authenticated provider to report a
+    # completion that durable evidence has already established.
+    if turn.recovery is not None and turn.recovery.outcome in {"completed", "blocked"}:
+        report = report_provider_recovery(
+            turn.recovery, provider=provider, status="not_launched"
+        )
+        return RoleResult(
+            text="",
+            status="finished" if report.outcome == "completed" else "error",
+            recovery=report,
+        )
+
     status = probe_provider(provider)
     if not status.installed:
         raise ProviderNotInstalledError(
@@ -200,4 +215,14 @@ async def run_role(turn: RoleTurn) -> RoleResult:
             _raise_if_turn_cancelled(turn.role, live)
             raise
         _raise_if_turn_cancelled(turn.role, live)
-        return result
+        if turn.recovery is None:
+            return result
+        report = report_provider_recovery(
+            turn.recovery, provider=provider, status=result.status
+        )
+        return RoleResult(
+            text=result.text,
+            status=result.status,
+            tool_effects=result.tool_effects,
+            recovery=report,
+        )
