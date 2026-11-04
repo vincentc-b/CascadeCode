@@ -75,6 +75,82 @@ class ReviewRebasePreflight:
             raise ValueError("preflight must contain exactly one turn or blocker")
 
 
+@dataclass(frozen=True)
+class ReviewRebaseExecution:
+    """Evidence from the bounded rebase stage, before checks or publication.
+
+    A blocked execution intentionally leaves a Git rebase in progress.  The
+    caller can hand that state to the existing recovery lifecycle; this module
+    must never guess a product-level merge resolution or discard user work.
+    """
+
+    rebased: bool
+    source_head: str | None = None
+    modified_paths: tuple[str, ...] = ()
+    conflicted_paths: tuple[str, ...] = ()
+    blocker: ReviewRebaseBlocker | None = None
+
+    def __post_init__(self) -> None:
+        if self.rebased == (self.blocker is not None):
+            raise ValueError("execution must contain exactly one success or blocker")
+
+
+def execute_review_rebase(
+    turn: ReviewRebaseTurn, *, authorized_paths: tuple[str, ...] | list[str]
+) -> ReviewRebaseExecution:
+    """Rebase only the admitted source and stop safely at any conflict.
+
+    ``authorized_paths`` is deliberately required at this mutation boundary:
+    the preceding generic review admission does not infer file ownership.  A
+    conflict is never auto-resolved, even when its path is authorized, because
+    choosing either side is a semantic/product decision.  The rebase remains
+    in progress so no potentially useful work is discarded.
+    """
+
+    worktree = turn.worktree
+    authorized = _normalized_authorized_paths(authorized_paths)
+    if authorized is None:
+        return _execution_blocked(
+            "path_authorization", "authorized_paths_invalid",
+            "The owned path authorization is missing or invalid.", worktree,
+        )
+    if not worktree.is_dir():
+        return _execution_blocked("worktree", "worktree_unavailable", "The authorized worktree is unavailable.", worktree)
+    if _git(worktree, "rev-parse", "--abbrev-ref", "HEAD") != turn.source_ref:
+        return _execution_blocked("source_checkout", "source_not_checked_out", "The admitted source branch is not checked out; no rebase was attempted.", worktree)
+    if _git(worktree, "rev-parse", "--verify", "HEAD^{commit}") != turn.observed_source_sha:
+        return _execution_blocked("source_head", "source_head_changed", "The checked-out source head no longer matches the admitted source head.", worktree)
+    if _git(worktree, "rev-parse", "--verify", f"refs/remotes/{turn.remote}/{turn.target_ref}^{{commit}}") != turn.observed_target_sha:
+        return _execution_blocked("target_head", "target_head_changed", "The fetched target head no longer matches the admitted target head.", worktree)
+    if _dirty_paths(worktree):
+        return _execution_blocked("worktree_clean", "dirty_unrelated_paths", "The authorized worktree changed after preflight; it was left untouched.", worktree)
+
+    result = subprocess.run(
+        ["git", "rebase", f"refs/remotes/{turn.remote}/{turn.target_ref}"],
+        cwd=worktree, capture_output=True, text=True, encoding="utf-8",
+    )
+    if result.returncode:
+        conflicts = _conflicted_paths(worktree)
+        if conflicts:
+            unauthorized = tuple(path for path in conflicts if path not in authorized)
+            if unauthorized:
+                return _execution_blocked("conflict_paths", "conflict_path_not_authorized", "A rebase conflict touches paths outside the admitted ownership bounds; the conflict state was preserved.", *(worktree / path for path in unauthorized), conflicts=conflicts)
+            return _execution_blocked("conflict_resolution", "semantic_conflict_requires_decision", "An authorized rebase conflict requires a product or semantic decision; the conflict state was preserved.", *(worktree / path for path in conflicts), conflicts=conflicts)
+        detail = (result.stderr or result.stdout).strip()
+        message = "Git could not complete the rebase; the worktree was preserved."
+        if detail:
+            message = f"{message} Git reported: {detail}"
+        return _execution_blocked("rebase", "rebase_failed", message, worktree)
+
+    # Compare against the admitted target, not the former source: the latter
+    # would also report every target-side change newly present in ``HEAD``.
+    modified = _git_paths(worktree, "diff", "--name-only", f"{turn.observed_target_sha}..HEAD")
+    unexpected = tuple(path for path in modified if path not in authorized)
+    if unexpected:
+        return _execution_blocked("mutation_bounds", "modified_path_not_authorized", "The completed rebase modified paths outside the admitted ownership bounds; local work was preserved.", *(worktree / path for path in unexpected), modified=modified)
+    return ReviewRebaseExecution(True, _git(worktree, "rev-parse", "--verify", "HEAD^{commit}"), modified)
+
+
 def prepare_review_rebase_turn(action_id: str, *, root: Path) -> ReviewRebasePreflight:
     """Fetch and revalidate an admitted action without changing user work.
 
@@ -199,6 +275,47 @@ def _review_records(trunk: Path) -> dict[str, Mapping[str, object]]:
 def _dirty_paths(worktree: Path) -> tuple[str, ...]:
     output = _git(worktree, "status", "--porcelain", "--untracked-files=all") or ""
     return tuple(line[3:].split(" -> ")[-1] for line in output.splitlines() if len(line) >= 4 and not line[3:].startswith(".cascade/"))
+
+
+def _normalized_authorized_paths(paths: tuple[str, ...] | list[str]) -> frozenset[str] | None:
+    """Reject empty, absolute, or traversal paths before Git can mutate."""
+
+    if not paths:
+        return None
+    normalized: set[str] = set()
+    for path in paths:
+        if not isinstance(path, str) or not path:
+            return None
+        candidate = Path(path)
+        if candidate.is_absolute() or ".." in candidate.parts:
+            return None
+        normalized.add(candidate.as_posix())
+    return frozenset(normalized)
+
+
+def _conflicted_paths(worktree: Path) -> tuple[str, ...]:
+    return _git_paths(worktree, "diff", "--name-only", "--diff-filter=U")
+
+
+def _git_paths(worktree: Path, *args: str) -> tuple[str, ...]:
+    output = _git(worktree, *args)
+    return tuple(path for path in (output or "").splitlines() if path)
+
+
+def _execution_blocked(
+    checkpoint: str,
+    code: str,
+    message: str,
+    *paths: Path,
+    conflicts: tuple[str, ...] = (),
+    modified: tuple[str, ...] = (),
+) -> ReviewRebaseExecution:
+    return ReviewRebaseExecution(
+        rebased=False,
+        modified_paths=modified,
+        conflicted_paths=conflicts,
+        blocker=ReviewRebaseBlocker(checkpoint, code, message, tuple(str(path) for path in paths)),
+    )
 
 
 def _git(worktree: Path, *args: str) -> str | None:

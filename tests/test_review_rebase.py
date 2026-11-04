@@ -5,7 +5,8 @@ import subprocess
 from pathlib import Path
 
 from cascade.resolution_actions import admit_resolution_action, normalize_operator_request
-from cascade.review_rebase import prepare_review_rebase_turn
+from cascade.review_rebase import execute_review_rebase, prepare_review_rebase_turn
+from cascade.workspace.integration_worktree import IntegrationWorktree, save_registry
 from tests.test_resolution_actions import _admission_ready_root
 
 
@@ -90,3 +91,84 @@ def test_preflight_stops_when_fetched_remote_head_changes(tmp_path: Path) -> Non
     assert result.turn is None
     assert result.blocker is not None
     assert result.blocker.code == "remote_heads_changed"
+
+
+def _execution_ready_turn(tmp_path: Path, *, conflict: bool = False):
+    root, payload = _admission_ready_root(tmp_path)
+    remote = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True, text=True)
+    _git(root, "remote", "add", "origin", str(remote))
+
+    _git(root, "checkout", "epic/epic_035")
+    changed_path = "shared.txt" if conflict else "target.txt"
+    (root / changed_path).write_text("target\n", encoding="utf-8")
+    _git(root, "add", changed_path)
+    _git(root, "commit", "-m", "target change")
+    target_sha = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "feat/feat_035_001")
+    changed_path = "shared.txt" if conflict else "source.txt"
+    (root / changed_path).write_text("source\n", encoding="utf-8")
+    _git(root, "add", changed_path)
+    _git(root, "commit", "-m", "source change")
+    source_sha = _git(root, "rev-parse", "HEAD")
+    _git(root, "push", "origin", "feat/feat_035_001", "epic/epic_035")
+
+    records_path = root / ".cascade" / "reviews.json"
+    records_path.parent.mkdir(exist_ok=True)
+    records = {
+        "feat_035_001": {
+            "url": "https://forge.example/repo/pull/147",
+            "number": "147",
+            "source_branch": "feat/feat_035_001",
+            "target_branch": "epic/epic_035",
+            "source_head": source_sha,
+            "target_head": target_sha,
+            "credentials_available": True,
+            "resolution_permitted": True,
+        }
+    }
+    records_path.write_text(json.dumps(records), encoding="utf-8")
+    save_registry(
+        root,
+        [IntegrationWorktree("feature", "feat_035_001", "feat/feat_035_001", root, source_sha)],
+    )
+    payload.update(observed_source_head=source_sha, observed_target_head=target_sha)
+    admitted = admit_resolution_action(normalize_operator_request(payload), root=root)
+    preflight = prepare_review_rebase_turn(admitted.action_id, root=root)
+    assert preflight.turn is not None
+    return root, preflight.turn
+
+
+def test_execution_rebases_only_owned_changed_paths(tmp_path: Path) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+
+    result = execute_review_rebase(turn, authorized_paths=("source.txt",))
+
+    assert result.rebased is True
+    assert result.blocker is None
+    assert result.modified_paths == ("source.txt",)
+    assert _git(root, "merge-base", "--is-ancestor", turn.observed_target_sha, "HEAD") == ""
+
+
+def test_execution_preserves_unauthorized_conflict_without_a_resolution(tmp_path: Path) -> None:
+    root, turn = _execution_ready_turn(tmp_path, conflict=True)
+
+    result = execute_review_rebase(turn, authorized_paths=("other.txt",))
+
+    assert result.rebased is False
+    assert result.blocker is not None
+    assert result.blocker.code == "conflict_path_not_authorized"
+    assert result.conflicted_paths == ("shared.txt",)
+    assert (root / ".git" / "rebase-merge").is_dir() or (root / ".git" / "rebase-apply").is_dir()
+
+
+def test_execution_stops_authorized_semantic_conflict_for_human_decision(tmp_path: Path) -> None:
+    root, turn = _execution_ready_turn(tmp_path, conflict=True)
+
+    result = execute_review_rebase(turn, authorized_paths=("shared.txt",))
+
+    assert result.rebased is False
+    assert result.blocker is not None
+    assert result.blocker.code == "semantic_conflict_requires_decision"
+    assert result.conflicted_paths == ("shared.txt",)
+    assert "<<<<<<<" in (root / "shared.txt").read_text(encoding="utf-8")
