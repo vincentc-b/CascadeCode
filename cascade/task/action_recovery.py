@@ -659,6 +659,15 @@ def capture_and_route_action_failure(
         return _copy(action)
 
 
+def recovery_actions(*, root: Path) -> list[dict[str, Any]]:
+    """Return copies of durable actions for read-only board projections."""
+
+    repo = resolve_root(root)
+    with process_lock:
+        actions = _actions(_read_payload(repo))
+    return [_copy(action) for action in actions.values()]
+
+
 def record_repair_precondition(
     action_id: str,
     precondition_id: str,
