@@ -2,7 +2,7 @@
 id: feat_035_002
 title: Execute and publish an owned review rebase
 tier: feature
-status: active
+status: completed
 parent: epic_035
 children:
 - task_035_002_001
