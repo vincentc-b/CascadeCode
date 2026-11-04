@@ -12,7 +12,9 @@ from cascade.review_rebase import (
     check_and_publish_review_rebase,
     execute_review_rebase,
     prepare_review_rebase_turn,
+    recover_and_execute_review_rebase,
 )
+from cascade.task.action_recovery import load_action
 from cascade.workspace.integration_worktree import IntegrationWorktree, save_registry
 from tests.test_resolution_actions import _admission_ready_root
 
@@ -306,3 +308,48 @@ def test_end_to_end_semantic_conflict_stops_with_recoverable_owned_work(tmp_path
     assert _git(root, "ls-remote", "origin", f"refs/heads/{turn.source_ref}").split()[0] == turn.observed_source_sha
     assert _git(root, "ls-remote", "origin", f"refs/heads/{turn.target_ref}").split()[0] == turn.observed_target_sha
     assert (root / ".git" / "rebase-merge").is_dir() or (root / ".git" / "rebase-apply").is_dir()
+
+
+def test_recovery_workflow_publishes_once_and_reconciles_completed_action(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+    pushes: list[tuple[str, ...]] = []
+    run = subprocess.run
+
+    def record_push(command, *args, **kwargs):
+        if isinstance(command, list) and command[:2] == ["git", "push"]:
+            pushes.append(tuple(command))
+        return run(command, *args, **kwargs)
+
+    monkeypatch.setattr(review_rebase.subprocess, "run", record_push)
+    first = recover_and_execute_review_rebase(
+        turn.action_id, root=root, authorized_paths=("source.txt",)
+    )
+    second = recover_and_execute_review_rebase(
+        turn.action_id, root=root, authorized_paths=("source.txt",)
+    )
+
+    assert first.outcome == second.outcome == "completed"
+    assert len(pushes) == 1
+    action = load_action(turn.action_id, root=root)
+    assert action is not None and action["recovery_state"] == "completed"
+    assert action["checkpoint"]["shas"]["published_head"] == _git(root, "rev-parse", "HEAD")
+
+
+def test_recovery_workflow_persists_semantic_conflict_as_owner_blocker(tmp_path: Path) -> None:
+    root, turn = _execution_ready_turn(tmp_path, conflict=True)
+
+    result = recover_and_execute_review_rebase(
+        turn.action_id, root=root, authorized_paths=("shared.txt",)
+    )
+
+    assert result.outcome == "blocked"
+    assert result.blocker is not None
+    assert result.blocker.code == "semantic_conflict_requires_decision"
+    action = load_action(turn.action_id, root=root)
+    assert action is not None
+    assert action["recovery_state"] == "awaiting_owner_decision"
+    assert action["checkpoint"]["affected_paths"] == ["shared.txt"]
+    assert action["owner_decisions"][0]["owner"] == "feature_team"
