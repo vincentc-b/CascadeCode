@@ -121,6 +121,11 @@ None. Implementation-level choices may remain within feature plans, but the safe
   Chose Deliver three sequential slices: admission and routing, owned rebase execution, then restart and provider hardening..
   Rationale: This is the smallest sequence that establishes the authorization boundary before mutation and validates reliability without creating a standalone testing project.
   Honors: Ruthless prioritization and the requirement to support all team providers safely..
+
+- `dec_005` · 2026-11-04 · Epic Manager · **Architecture / proactive MR health**
+  Chose Use lifecycle-triggered, deduplicated MR-health checks as the default; route manual nudges through the same pipeline and invoke an agent team only when the tool pipeline cannot establish or restore mergeability..
+  Rationale: This removes operator vigilance from the critical path while keeping routine healthy checks cheap. A single pipeline and recovery identity prevents duplicate work and preserves the existing least-privilege agent boundary. In reply to: cmt_001
+  Honors: The human request for proactive team ownership of MR mergeability, lifecycle-driven verification, a manual edge-case nudge, and pipeline-failure escalation..
 ## Amendment log
 
 _(none)_
