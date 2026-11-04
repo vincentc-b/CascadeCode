@@ -15,6 +15,8 @@ from cascade.task.action_recovery import (
     record_owner_decision,
     record_owner_resolution,
     record_repair_precondition,
+    record_action_checkpoint,
+    reconcile_action,
     start_attempt,
 )
 from cascade.task.execution import mark_queued
@@ -354,3 +356,66 @@ def test_supervisor_preconditions_and_owner_resolution_resume_same_action(
     })
     assert resumed["recovery_state"] == "completed"
     assert resumed["attempts"][-1]["completion_metadata"] == {"resumed_action": action_id}
+
+
+def test_reconciliation_selects_one_restart_outcome_from_checkpointed_git_facts(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    action_id = "review:147:rebase"
+    create_or_load_action(action_id, "review_rebase", root=root, attempt_bound=2)
+    record_action_checkpoint(
+        action_id,
+        "admitted-heads",
+        root=root,
+        refs={"source": "feat/147", "target": "main"},
+        shas={"source_head": "source-1", "target_head": "target-1"},
+        affected_paths=["cascade/task/action_recovery.py"],
+        command_summary="git rebase origin/main",
+        test_summary="not run",
+        resume_instructions="Resume the admitted rebase or refresh admission.",
+    )
+
+    safe_retry = reconcile_action(
+        action_id, root=root, local_head="source-1", remote_head="target-1"
+    )
+    assert (safe_retry.outcome, safe_retry.reason) == ("safe_retry", "source_head_unchanged")
+
+    in_progress = reconcile_action(
+        action_id, root=root, local_head="partial", remote_head="target-1", rebase_in_progress=True
+    )
+    assert in_progress.outcome == "resume"
+
+    remote_race = reconcile_action(
+        action_id, root=root, local_head="source-1", remote_head="target-2"
+    )
+    assert (remote_race.outcome, remote_race.reason) == ("blocker", "remote_head_changed")
+    persisted = load_action(action_id, root=root)
+    assert persisted is not None
+    assert persisted["checkpoint"]["affected_paths"] == ["cascade/task/action_recovery.py"]
+    assert persisted["last_reconciliation"] == remote_race.as_dict()
+
+
+def test_reconciliation_detects_completed_publication_without_replaying_it(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    action_id = "review:148:rebase"
+    create_or_load_action(action_id, "review_rebase", root=root, attempt_bound=2)
+    record_action_checkpoint(
+        action_id,
+        "published",
+        root=root,
+        refs={"source": "feat/148", "target": "main"},
+        shas={
+            "source_head": "source-1", "target_head": "target-1",
+            "rebased_head": "rebased-1", "published_head": "target-1",
+        },
+        affected_paths=[],
+        command_summary="git push --force-with-lease",
+        test_summary="tests/test_review_rebase.py passed",
+        resume_instructions="Verify the review then mark the action complete.",
+    )
+
+    completed = reconcile_action(
+        action_id, root=root, local_head="rebased-1", remote_head="target-1"
+    )
+    assert (completed.outcome, completed.reason) == ("already_completed", "published_head_on_remote")
