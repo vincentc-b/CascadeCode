@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+import json
 from pathlib import Path
 
 import pytest
@@ -7,9 +8,10 @@ from cascade.resolution_actions import (
     admit_resolution_action,
     normalize_epic_031_recovery_request,
     normalize_operator_request,
+    resolve_review_context,
     resolution_action,
 )
-from tests.support import make_repo
+from tests.support import add_doc, make_repo
 
 
 def _operator_payload() -> dict[str, object]:
@@ -129,3 +131,106 @@ def test_normalization_rejects_closed_review_and_mutation_like_ref(tmp_path: Pat
     payload["review_url"] = "mailto:owner@example.test"
     with pytest.raises(ValueError, match="absolute HTTP"):
         normalize_operator_request(payload)
+
+
+def _write_review_registry(root: Path, records: dict[str, object]) -> None:
+    path = root / ".cascade" / "reviews.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(records), encoding="utf-8")
+
+
+def _review_board(root: Path) -> None:
+    add_doc(root, id="epic_035", title="Epic", tier="epic")
+    add_doc(
+        root,
+        id="feat_035_001",
+        title="Feature",
+        tier="feature",
+        parent="epic_035",
+    )
+
+
+def test_context_routes_a_feature_review_to_its_feature_team(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _review_board(root)
+    _write_review_registry(
+        root,
+        {
+            "feat_035_001": {
+                "url": "https://forge.example/repo/pull/147",
+                "number": "147",
+                "source_branch": "feat/feat_035_001",
+                "target_branch": "epic/epic_035",
+                "closed": False,
+            }
+        },
+    )
+
+    resolution = resolve_review_context(normalize_operator_request(_operator_payload()), root=root)
+
+    assert resolution.blocker is None
+    assert resolution.context is not None
+    assert resolution.context.owning_scope == "feature:feat_035_001"
+    assert resolution.context.accountable_team == "feature:feat_035_001"
+    assert resolution.context.authorized_refs == ("feat/feat_035_001", "epic/epic_035")
+    assert resolution.context.observed_source_head == "source-sha"
+    assert resolution.context.worktree is None
+    assert root / ".cascade" / "reviews.json" in resolution.context.inspection_paths
+
+
+def test_context_routes_an_explicitly_assigned_child_review_to_its_epic_team(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _review_board(root)
+    _write_review_registry(
+        root,
+        {
+            "feat_035_001": {
+                "url": "https://forge.example/repo/pull/147",
+                "number": "147",
+                "source_branch": "feat/feat_035_001",
+                "target_branch": "epic/epic_035",
+                "closed": False,
+            }
+        },
+    )
+    payload = _operator_payload()
+    payload["assignee"] = "epic:epic_035"
+
+    resolution = resolve_review_context(normalize_operator_request(payload), root=root)
+
+    assert resolution.blocker is None
+    assert resolution.context is not None
+    assert resolution.context.owning_scope == "feature:feat_035_001"
+    assert resolution.context.accountable_team == "epic:epic_035"
+
+
+def test_context_blocks_ref_and_cross_feature_assignment_ambiguity(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _review_board(root)
+    add_doc(root, id="epic_036", title="Other epic", tier="epic")
+    _write_review_registry(
+        root,
+        {
+            "feat_035_001": {
+                "url": "https://forge.example/repo/pull/147",
+                "number": "147",
+                "source_branch": "feat/feat_035_001",
+                "target_branch": "epic/epic_035",
+                "closed": False,
+            }
+        },
+    )
+
+    payload = _operator_payload()
+    payload["target_ref"] = "epic/epic_036"
+    refs = resolve_review_context(normalize_operator_request(payload), root=root)
+    assert refs.context is None
+    assert refs.blocker is not None
+    assert refs.blocker.code == "unauthorized_review_refs"
+
+    payload = _operator_payload()
+    payload["assignee"] = "epic:epic_036"
+    ambiguous = resolve_review_context(normalize_operator_request(payload), root=root)
+    assert ambiguous.context is None
+    assert ambiguous.blocker is not None
+    assert ambiguous.blocker.code == "ambiguous_cross_feature_owner"
