@@ -108,6 +108,11 @@ None. Implementation-level choices may remain within feature plans, but the safe
   Chose Allow history rewrite only through an explicit remote-head lease on the owned open-review source ref..
   Rationale: Rebase requires rewriting the source branch, while an exact observed-SHA lease and pre-mutation revalidation prevent overwriting concurrent work or target branches.
   Honors: The approved narrow exception to epic_031's no-force-push rule..
+
+- `dec_004` · 2026-11-04 · Epic Manager · **Delivery / feature sequencing**
+  Chose Deliver three sequential slices: admission and routing, owned rebase execution, then restart and provider hardening..
+  Rationale: This is the smallest sequence that establishes the authorization boundary before mutation and validates reliability without creating a standalone testing project.
+  Honors: Ruthless prioritization and the requirement to support all team providers safely..
 ## Amendment log
 
 _(none)_
