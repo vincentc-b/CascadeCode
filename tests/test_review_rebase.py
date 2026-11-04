@@ -5,7 +5,14 @@ import subprocess
 from pathlib import Path
 
 from cascade.resolution_actions import admit_resolution_action, normalize_operator_request
-from cascade.review_rebase import execute_review_rebase, prepare_review_rebase_turn
+import sys
+
+import cascade.review_rebase as review_rebase
+from cascade.review_rebase import (
+    check_and_publish_review_rebase,
+    execute_review_rebase,
+    prepare_review_rebase_turn,
+)
 from cascade.workspace.integration_worktree import IntegrationWorktree, save_registry
 from tests.test_resolution_actions import _admission_ready_root
 
@@ -172,3 +179,58 @@ def test_execution_stops_authorized_semantic_conflict_for_human_decision(tmp_pat
     assert result.blocker.code == "semantic_conflict_requires_decision"
     assert result.conflicted_paths == ("shared.txt",)
     assert "<<<<<<<" in (root / "shared.txt").read_text(encoding="utf-8")
+
+
+def test_checks_then_publishes_same_source_with_explicit_lease(tmp_path: Path, monkeypatch) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+    rebased = execute_review_rebase(turn, authorized_paths=("source.txt",))
+    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+
+    publication = check_and_publish_review_rebase(turn, rebased)
+
+    assert publication.published is True
+    assert publication.blocker is None
+    assert publication.observed_remote_source_sha == turn.observed_source_sha
+    assert publication.checks[0].returncode == 0
+    assert _git(root, "rev-parse", "origin/feat/feat_035_001") == rebased.source_head
+    assert _git(root, "rev-parse", "origin/epic/epic_035") == turn.observed_target_sha
+
+
+def test_failed_checks_preserve_rebased_work_and_skip_publication(tmp_path: Path, monkeypatch) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+    rebased = execute_review_rebase(turn, authorized_paths=("source.txt",))
+    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", "raise SystemExit(1)"))
+
+    publication = check_and_publish_review_rebase(turn, rebased)
+
+    assert publication.published is False
+    assert publication.blocker is not None
+    assert publication.blocker.code == "repository_checks_failed"
+    assert publication.checks[0].returncode == 1
+    assert _git(root, "rev-parse", "origin/feat/feat_035_001") == turn.observed_source_sha
+    assert _git(root, "rev-parse", "HEAD") == rebased.source_head
+
+
+def test_changed_remote_source_after_checks_stops_before_lease_push(tmp_path: Path, monkeypatch) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+    rebased = execute_review_rebase(turn, authorized_paths=("source.txt",))
+    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+    remote = _git(root, "remote", "get-url", "origin")
+    updater = tmp_path / "updater-after-rebase"
+    _git(tmp_path, "clone", remote, str(updater))
+    _git(updater, "config", "user.email", "test@example.com")
+    _git(updater, "config", "user.name", "Test User")
+    _git(updater, "checkout", turn.source_ref)
+    (updater / "concurrent.txt").write_text("advance\n", encoding="utf-8")
+    _git(updater, "add", "concurrent.txt")
+    _git(updater, "commit", "-m", "concurrent source advance")
+    advanced = _git(updater, "rev-parse", "HEAD")
+    _git(updater, "push", "origin", f"HEAD:{turn.source_ref}")
+
+    publication = check_and_publish_review_rebase(turn, rebased)
+
+    assert publication.published is False
+    assert publication.blocker is not None
+    assert publication.blocker.code == "source_remote_changed"
+    assert publication.observed_remote_source_sha == advanced
+    assert _git(root, "rev-parse", "HEAD") == rebased.source_head

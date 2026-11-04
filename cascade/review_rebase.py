@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -22,6 +23,16 @@ _ALLOWED_OPERATIONS = (
     "edit_conflicted_owned_paths",
     "run_repository_checks",
     "push_source_with_force_with_lease",
+)
+
+# This is intentionally a concrete repository command rather than caller input:
+# the execution turn must not turn an admitted rebase capability into arbitrary
+# shell execution.  It is also the narrowest regression suite for this boundary.
+_REPOSITORY_CHECK_COMMAND = (
+    sys.executable,
+    "-m",
+    "pytest",
+    "tests/test_review_rebase.py",
 )
 
 
@@ -95,6 +106,31 @@ class ReviewRebaseExecution:
             raise ValueError("execution must contain exactly one success or blocker")
 
 
+@dataclass(frozen=True)
+class ReviewRebaseCheck:
+    """Captured result of one repository-defined verification command."""
+
+    command: tuple[str, ...]
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+@dataclass(frozen=True)
+class ReviewRebasePublication:
+    """Evidence for the checks-and-publication stage of an owned rebase."""
+
+    published: bool
+    source_head: str | None = None
+    observed_remote_source_sha: str | None = None
+    checks: tuple[ReviewRebaseCheck, ...] = ()
+    blocker: ReviewRebaseBlocker | None = None
+
+    def __post_init__(self) -> None:
+        if self.published == (self.blocker is not None):
+            raise ValueError("publication must contain exactly one success or blocker")
+
+
 def execute_review_rebase(
     turn: ReviewRebaseTurn, *, authorized_paths: tuple[str, ...] | list[str]
 ) -> ReviewRebaseExecution:
@@ -149,6 +185,93 @@ def execute_review_rebase(
     if unexpected:
         return _execution_blocked("mutation_bounds", "modified_path_not_authorized", "The completed rebase modified paths outside the admitted ownership bounds; local work was preserved.", *(worktree / path for path in unexpected), modified=modified)
     return ReviewRebaseExecution(True, _git(worktree, "rev-parse", "--verify", "HEAD^{commit}"), modified)
+
+
+def check_and_publish_review_rebase(
+    turn: ReviewRebaseTurn, execution: ReviewRebaseExecution
+) -> ReviewRebasePublication:
+    """Run the bounded regression check and lease-protect source publication.
+
+    This function deliberately accepts only the successful result of the prior
+    rebase stage.  It revalidates the durable admission and both remote heads
+    after checks, immediately before pushing.  A failed invariant leaves the
+    rebased checkout intact for the existing recovery lifecycle.
+    """
+
+    if not execution.rebased or not execution.source_head:
+        return _publication_blocked(
+            "rebase", "rebase_not_complete",
+            "The source was not successfully rebased; checks and publication were not attempted.",
+        )
+    worktree = turn.worktree
+    if not worktree.is_dir():
+        return _publication_blocked("worktree", "worktree_unavailable", "The authorized worktree is unavailable.", worktree)
+    if _git(worktree, "rev-parse", "--abbrev-ref", "HEAD") != turn.source_ref:
+        return _publication_blocked("source_checkout", "source_not_checked_out", "The admitted source branch is no longer checked out; publication was not attempted.", worktree)
+    if _git(worktree, "rev-parse", "--verify", "HEAD^{commit}") != execution.source_head:
+        return _publication_blocked("source_head", "source_head_changed", "The rebased source head changed before checks; publication was not attempted.", worktree)
+    if _dirty_paths(worktree):
+        return _publication_blocked("worktree_clean", "dirty_unrelated_paths", "The authorized worktree has uncommitted paths; they were left untouched.", worktree)
+
+    check_result = subprocess.run(
+        _REPOSITORY_CHECK_COMMAND, cwd=worktree, capture_output=True,
+        text=True, encoding="utf-8",
+    )
+    check = ReviewRebaseCheck(
+        _REPOSITORY_CHECK_COMMAND, check_result.returncode,
+        check_result.stdout, check_result.stderr,
+    )
+    if check.returncode:
+        return _publication_blocked(
+            "checks", "repository_checks_failed",
+            "The repository-defined review-rebase checks failed; publication was not attempted.",
+            worktree, checks=(check,),
+        )
+    if _dirty_paths(worktree):
+        return _publication_blocked(
+            "worktree_clean", "dirty_paths_after_checks",
+            "Repository checks changed the authorized worktree; publication was not attempted.",
+            worktree, checks=(check,),
+        )
+
+    # A network read after checks is required: the remote-tracking ref from
+    # preflight may be stale, and the lease needs the exact remote source SHA.
+    source_remote_sha = _remote_head(worktree, turn.remote, turn.source_ref)
+    if source_remote_sha is None:
+        return _publication_blocked("remote_source", "source_remote_unavailable", "Could not re-read the remote source head before publication.", worktree, checks=(check,))
+    target_remote_sha = _remote_head(worktree, turn.remote, turn.target_ref)
+    if target_remote_sha is None:
+        return _publication_blocked("remote_target", "target_remote_unavailable", "Could not re-read the remote target head before publication.", worktree, checks=(check,))
+    if source_remote_sha != turn.observed_source_sha:
+        return _publication_blocked("remote_source", "source_remote_changed", "The remote source head changed after admission; publication was not attempted.", worktree, checks=(check,), observed_remote_source_sha=source_remote_sha)
+    if target_remote_sha != turn.observed_target_sha:
+        return _publication_blocked("remote_target", "target_remote_changed", "The remote target head changed after admission; publication was not attempted.", worktree, checks=(check,), observed_remote_source_sha=source_remote_sha)
+
+    trunk = locate_trunk(worktree.resolve())
+    expected_authorization = (worktree.resolve(), turn.source_ref, turn.target_ref, (turn.observed_source_sha, turn.observed_target_sha))
+    if _authorized_action(turn.action_id, trunk=trunk) != expected_authorization:
+        return _publication_blocked("authorization", "authorization_changed", "The durable review authorization changed before publication.", trunk / ".cascade" / "reviews.json", checks=(check,), observed_remote_source_sha=source_remote_sha)
+    current_action = resolution_action(turn.action_id, root=trunk)
+    if (
+        not turn.push_credentials_available
+        or not isinstance(current_action, Mapping)
+        or not _push_credentials_available(trunk, current_action)
+    ):
+        return _publication_blocked("credentials", "push_credentials_unavailable", "Push credentials are not explicitly available for this review.", checks=(check,), observed_remote_source_sha=source_remote_sha)
+
+    push = subprocess.run(
+        [
+            "git", "push", turn.remote,
+            f"--force-with-lease=refs/heads/{turn.source_ref}:{source_remote_sha}",
+            f"HEAD:refs/heads/{turn.source_ref}",
+        ],
+        cwd=worktree, capture_output=True, text=True, encoding="utf-8",
+    )
+    if push.returncode:
+        output = f"{push.stdout}\n{push.stderr}".lower()
+        code = "force_with_lease_failed" if "stale info" in output or "rejected" in output else "publication_failed"
+        return _publication_blocked("publication", code, "The lease-protected source publication failed; local rebased work was preserved.", worktree, checks=(check,), observed_remote_source_sha=source_remote_sha)
+    return ReviewRebasePublication(True, execution.source_head, source_remote_sha, (check,))
 
 
 def prepare_review_rebase_turn(action_id: str, *, root: Path) -> ReviewRebasePreflight:
@@ -302,6 +425,19 @@ def _git_paths(worktree: Path, *args: str) -> tuple[str, ...]:
     return tuple(path for path in (output or "").splitlines() if path)
 
 
+def _remote_head(worktree: Path, remote: str, branch: str) -> str | None:
+    """Return one advertised branch SHA without updating local refs."""
+
+    result = subprocess.run(
+        ["git", "ls-remote", "--exit-code", "--heads", remote, f"refs/heads/{branch}"],
+        cwd=worktree, capture_output=True, text=True, encoding="utf-8",
+    )
+    if result.returncode:
+        return None
+    fields = result.stdout.split()
+    return fields[0] if len(fields) >= 2 else None
+
+
 def _execution_blocked(
     checkpoint: str,
     code: str,
@@ -314,6 +450,22 @@ def _execution_blocked(
         rebased=False,
         modified_paths=modified,
         conflicted_paths=conflicts,
+        blocker=ReviewRebaseBlocker(checkpoint, code, message, tuple(str(path) for path in paths)),
+    )
+
+
+def _publication_blocked(
+    checkpoint: str,
+    code: str,
+    message: str,
+    *paths: Path,
+    checks: tuple[ReviewRebaseCheck, ...] = (),
+    observed_remote_source_sha: str | None = None,
+) -> ReviewRebasePublication:
+    return ReviewRebasePublication(
+        published=False,
+        checks=checks,
+        observed_remote_source_sha=observed_remote_source_sha,
         blocker=ReviewRebaseBlocker(checkpoint, code, message, tuple(str(path) for path in paths)),
     )
 
