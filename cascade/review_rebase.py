@@ -1,0 +1,210 @@
+"""Bounded, repository-backed preflight for an admitted review rebase.
+
+This boundary deliberately stops before rebasing, editing, testing, or pushing.
+It converts a durable ``mutation_ready`` action into a small execution contract
+only after the live remote and durable review record still agree.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Mapping
+
+from cascade.resolution_actions import resolution_action
+from cascade.workspace.integration_worktree import locate_trunk
+
+
+_ALLOWED_OPERATIONS = (
+    "rebase_owned_source",
+    "edit_conflicted_owned_paths",
+    "run_repository_checks",
+    "push_source_with_force_with_lease",
+)
+
+
+@dataclass(frozen=True)
+class WorktreeSnapshot:
+    """Read-only evidence captured before the preflight fetch."""
+
+    head: str
+    branch: str
+    dirty_paths: tuple[str, ...]
+    remote_shas: tuple[str | None, str | None]
+
+
+@dataclass(frozen=True)
+class ReviewRebaseTurn:
+    """The only capabilities supplied to the subsequent rebase turn."""
+
+    action_id: str
+    review_id: str
+    worktree: Path
+    remote: str
+    source_ref: str
+    target_ref: str
+    observed_source_sha: str
+    observed_target_sha: str
+    initial_state: WorktreeSnapshot
+    fetched_remote_shas: tuple[str, str]
+    allowed_operations: tuple[str, ...] = _ALLOWED_OPERATIONS
+    push_credentials_available: bool = True
+
+
+@dataclass(frozen=True)
+class ReviewRebaseBlocker:
+    """Fail-closed evidence; no cleanup or reset is performed for a blocker."""
+
+    checkpoint: str
+    code: str
+    message: str
+    affected_paths: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ReviewRebasePreflight:
+    """Exactly one bounded turn or blocker."""
+
+    turn: ReviewRebaseTurn | None = None
+    blocker: ReviewRebaseBlocker | None = None
+
+    def __post_init__(self) -> None:
+        if (self.turn is None) == (self.blocker is None):
+            raise ValueError("preflight must contain exactly one turn or blocker")
+
+
+def prepare_review_rebase_turn(action_id: str, *, root: Path) -> ReviewRebasePreflight:
+    """Fetch and revalidate an admitted action without changing user work.
+
+    Fetching is intentionally the sole Git state update here.  It updates only
+    the two remote-tracking refs needed to prove the review heads; no checkout,
+    reset, rebase, index update, or push is attempted on a failure path.
+    """
+
+    trunk = locate_trunk(Path(root).resolve())
+    action = resolution_action(action_id, root=trunk)
+    if not isinstance(action, dict) or action.get("status") != "mutation_ready":
+        return _blocked("admission", "action_not_mutation_ready", "The action is not a mutation-ready admission.")
+    handoff = action.get("handoff")
+    request = action.get("request")
+    if not isinstance(handoff, Mapping) or not isinstance(request, Mapping):
+        return _blocked("admission", "action_metadata_missing", "The admitted action is missing its bounded handoff metadata.")
+
+    parsed = _parse_handoff(action_id, handoff, request)
+    if parsed is None:
+        return _blocked("admission", "action_metadata_invalid", "The admitted action has invalid authorization metadata.")
+    review_id, worktree, source_ref, target_ref, expected_shas = parsed
+    if not worktree.is_dir():
+        return _blocked("worktree", "worktree_unavailable", "The authorized worktree is unavailable.", worktree)
+
+    dirty = _dirty_paths(worktree)
+    initial = WorktreeSnapshot(
+        head=_git(worktree, "rev-parse", "--verify", "HEAD^{commit}") or "",
+        branch=_git(worktree, "rev-parse", "--abbrev-ref", "HEAD") or "",
+        dirty_paths=dirty,
+        remote_shas=(None, None),
+    )
+    if dirty:
+        return _blocked("worktree_clean", "dirty_unrelated_paths", "The authorized worktree has uncommitted user paths; they were left untouched.", *(worktree / path for path in dirty))
+
+    remote = _git(worktree, "remote")
+    if not remote or "origin" not in remote.splitlines():
+        return _blocked("git_metadata", "remote_missing", "The authorized worktree has no origin remote.", worktree)
+    source_remote = f"refs/remotes/origin/{source_ref}"
+    target_remote = f"refs/remotes/origin/{target_ref}"
+    initial = WorktreeSnapshot(
+        head=initial.head,
+        branch=initial.branch,
+        dirty_paths=initial.dirty_paths,
+        remote_shas=(_git(worktree, "rev-parse", "--verify", f"{source_remote}^{{commit}}"), _git(worktree, "rev-parse", "--verify", f"{target_remote}^{{commit}}")),
+    )
+    fetched = subprocess.run(
+        ["git", "fetch", "--no-tags", "origin", f"refs/heads/{source_ref}:{source_remote}", f"refs/heads/{target_ref}:{target_remote}"],
+        cwd=worktree, capture_output=True, text=True, encoding="utf-8",
+    )
+    if fetched.returncode != 0:
+        return _blocked("fetch", "authorized_refs_unavailable", "Could not fetch both authorized review refs.", worktree)
+
+    # Re-read durable authorization after network I/O, then compare exactly the
+    # two fetched heads to the immutable admission observation.
+    authorization = _authorized_action(action_id, trunk=trunk)
+    if authorization != (worktree, source_ref, target_ref, expected_shas):
+        return _blocked("authorization", "authorization_changed", "The durable review authorization changed during preflight.", trunk / ".cascade" / "reviews.json")
+    fetched_shas = (_git(worktree, "rev-parse", "--verify", f"{source_remote}^{{commit}}"), _git(worktree, "rev-parse", "--verify", f"{target_remote}^{{commit}}"))
+    if None in fetched_shas or fetched_shas != expected_shas:
+        return _blocked("remote_heads", "remote_heads_changed", "The fetched source or target head no longer matches the admitted review heads.", worktree)
+    if not _push_credentials_available(trunk, action):
+        return _blocked("credentials", "push_credentials_unavailable", "Push credentials are not explicitly available for this review.", trunk / ".cascade" / "reviews.json")
+    return ReviewRebasePreflight(turn=ReviewRebaseTurn(action_id, review_id, worktree, "origin", source_ref, target_ref, expected_shas[0], expected_shas[1], initial, (fetched_shas[0], fetched_shas[1])))
+
+
+def _parse_handoff(action_id: str, handoff: Mapping[str, object], request: Mapping[str, object]) -> tuple[str, Path, str, str, tuple[str, str]] | None:
+    refs, shas = handoff.get("authorized_refs"), handoff.get("observed_shas")
+    if handoff.get("action_id") != action_id or not isinstance(refs, list) or not isinstance(shas, list) or len(refs) != 2 or len(shas) != 2:
+        return None
+    if not all(isinstance(item, str) and item for item in [*refs, *shas]):
+        return None
+    if request.get("source_ref") != refs[0] or request.get("target_ref") != refs[1]:
+        return None
+    if request.get("observed_source_head") != shas[0] or request.get("observed_target_head") != shas[1]:
+        return None
+    worktree = handoff.get("worktree")
+    review_id = handoff.get("review_id")
+    if not isinstance(worktree, str) or not isinstance(review_id, str):
+        return None
+    return review_id, Path(worktree).resolve(), refs[0], refs[1], (shas[0], shas[1])
+
+
+def _authorized_action(action_id: str, *, trunk: Path) -> tuple[Path, str, str, tuple[str, str]] | None:
+    action = resolution_action(action_id, root=trunk)
+    if not isinstance(action, dict) or action.get("status") != "mutation_ready":
+        return None
+    handoff, request = action.get("handoff"), action.get("request")
+    if not isinstance(handoff, Mapping) or not isinstance(request, Mapping):
+        return None
+    parsed = _parse_handoff(action_id, handoff, request)
+    if parsed is None:
+        return None
+    _review_id, worktree, source_ref, target_ref, shas = parsed
+    records = _review_records(trunk)
+    # Registry keys are owner IDs, so find by the handoff's durable review URL/number.
+    record = next((item for item in records.values() if str(item.get("url") or item.get("review_url") or "") == request.get("review_url") or str(item.get("number") or "") == str(request.get("review_id"))), None)
+    if not isinstance(record, Mapping) or bool(record.get("closed")) or str(record.get("state") or record.get("forge_state") or "open").lower() in {"closed", "merged"}:
+        return None
+    if (record.get("source_branch"), record.get("target_branch")) != (source_ref, target_ref):
+        return None
+    return worktree, source_ref, target_ref, shas
+
+
+def _push_credentials_available(trunk: Path, action: Mapping[str, object]) -> bool:
+    request = action.get("request")
+    if not isinstance(request, Mapping):
+        return False
+    for record in _review_records(trunk).values():
+        if str(record.get("url") or record.get("review_url") or "") == request.get("review_url") or str(record.get("number") or "") == str(request.get("review_id")):
+            return record.get("push_credentials_available", record.get("credentials_available")) is True
+    return False
+
+
+def _review_records(trunk: Path) -> dict[str, Mapping[str, object]]:
+    try:
+        raw = json.loads((trunk / ".cascade" / "reviews.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {str(key): value for key, value in raw.items() if isinstance(value, Mapping)} if isinstance(raw, dict) else {}
+
+
+def _dirty_paths(worktree: Path) -> tuple[str, ...]:
+    output = _git(worktree, "status", "--porcelain", "--untracked-files=all") or ""
+    return tuple(line[3:].split(" -> ")[-1] for line in output.splitlines() if len(line) >= 4 and not line[3:].startswith(".cascade/"))
+
+
+def _git(worktree: Path, *args: str) -> str | None:
+    result = subprocess.run(["git", *args], cwd=worktree, capture_output=True, text=True, encoding="utf-8")
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _blocked(checkpoint: str, code: str, message: str, *paths: Path) -> ReviewRebasePreflight:
+    return ReviewRebasePreflight(blocker=ReviewRebaseBlocker(checkpoint, code, message, tuple(str(path) for path in paths)))
