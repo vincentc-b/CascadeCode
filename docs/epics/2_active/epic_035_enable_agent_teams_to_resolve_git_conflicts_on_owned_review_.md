@@ -98,6 +98,11 @@ None. Implementation-level choices may remain within feature plans, but the safe
   Chose Use one durable resolution-action contract for explicit operator requests and epic_031 recovery routing..
   Rationale: A shared identity and state machine prevents duplicated commits, pushes, reviews, and completion events while keeping two request sources behaviorally consistent.
   Honors: Success criteria for explicit requests, recovery actions, durable blockers, and restart idempotency..
+
+- `dec_002` · 2026-11-04 · Epic Manager · **Architecture / capability boundary**
+  Chose Confine mutation to a dedicated repository-backed turn for one authorized open review; keep ordinary planning turns read-only..
+  Rationale: Teams need real Git history and owned files, but widening every planning turn would expose unrelated checkouts and credentials.
+  Honors: The least-privilege and unrelated-checkout constraints in the approved brief..
 ## Amendment log
 
 _(none)_
