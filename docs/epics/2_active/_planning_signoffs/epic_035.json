@@ -10,6 +10,11 @@
       "role": "epic_architect",
       "plan_revision": "1a8c225c13213492653b8496110d2dcd58a60605",
       "signed_at": "2026-11-04T19:26:47.998396+00:00"
+    },
+    {
+      "role": "epic_manager",
+      "plan_revision": "772beac5d07363a040280b3c7b6a0d274297dbd3",
+      "signed_at": "2026-11-04T19:28:59.980276+00:00"
     }
   ]
 }
