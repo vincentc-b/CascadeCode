@@ -106,6 +106,13 @@ def _execution_ready_turn(tmp_path: Path, *, conflict: bool = False):
     subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True, text=True)
     _git(root, "remote", "add", "origin", str(remote))
 
+    if conflict:
+        (root / "unrelated-user-work.txt").write_text("keep this work\n", encoding="utf-8")
+        _git(root, "add", "unrelated-user-work.txt")
+        _git(root, "commit", "-m", "preserve unrelated user work")
+        _git(root, "branch", "-f", "feat/feat_035_001", "HEAD")
+        _git(root, "branch", "-f", "epic/epic_035", "HEAD")
+
     _git(root, "checkout", "epic/epic_035")
     changed_path = "shared.txt" if conflict else "target.txt"
     (root / changed_path).write_text("target\n", encoding="utf-8")
@@ -234,3 +241,68 @@ def test_changed_remote_source_after_checks_stops_before_lease_push(tmp_path: Pa
     assert publication.blocker.code == "source_remote_changed"
     assert publication.observed_remote_source_sha == advanced
     assert _git(root, "rev-parse", "HEAD") == rebased.source_head
+
+
+def test_end_to_end_clean_owned_rebase_records_evidence_and_updates_only_review_source(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Exercise admission through publication against a disposable bare remote."""
+
+    root, turn = _execution_ready_turn(tmp_path)
+    commands: list[tuple[str, ...]] = []
+    authorization_calls = 0
+    run = subprocess.run
+    authorized_action = review_rebase._authorized_action
+
+    def record_command(command, *args, **kwargs):
+        if isinstance(command, list):
+            commands.append(tuple(command))
+        return run(command, *args, **kwargs)
+
+    def record_authorization(*args, **kwargs):
+        nonlocal authorization_calls
+        authorization_calls += 1
+        return authorized_action(*args, **kwargs)
+
+    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+    monkeypatch.setattr(review_rebase.subprocess, "run", record_command)
+    monkeypatch.setattr(review_rebase, "_authorized_action", record_authorization)
+
+    execution = execute_review_rebase(turn, authorized_paths=("source.txt",))
+    publication = check_and_publish_review_rebase(turn, execution)
+
+    assert execution.rebased is True
+    assert publication.published is True
+    assert turn.initial_state.remote_shas == (turn.observed_source_sha, turn.observed_target_sha)
+    assert turn.fetched_remote_shas == (turn.observed_source_sha, turn.observed_target_sha)
+    assert authorization_calls == 1  # publication revalidates the admitted authorization
+    assert publication.checks and publication.checks[0].returncode == 0
+    assert publication.observed_remote_source_sha == turn.observed_source_sha
+    assert _git(root, "ls-remote", "origin", f"refs/heads/{turn.source_ref}").split()[0] == execution.source_head
+    assert _git(root, "ls-remote", "origin", f"refs/heads/{turn.target_ref}").split()[0] == turn.observed_target_sha
+    assert (
+        "git",
+        "push",
+        "origin",
+        f"--force-with-lease=refs/heads/{turn.source_ref}:{turn.observed_source_sha}",
+        f"HEAD:refs/heads/{turn.source_ref}",
+    ) in commands
+
+
+def test_end_to_end_semantic_conflict_stops_with_recoverable_owned_work(tmp_path: Path) -> None:
+    """An owned conflict is not guessed at and neither remote review ref moves."""
+
+    root, turn = _execution_ready_turn(tmp_path, conflict=True)
+
+    execution = execute_review_rebase(turn, authorized_paths=("shared.txt",))
+
+    assert execution.rebased is False
+    assert execution.blocker is not None
+    assert execution.blocker.code == "semantic_conflict_requires_decision"
+    assert execution.conflicted_paths == ("shared.txt",)
+    assert (root / "shared.txt").read_text(encoding="utf-8").startswith("<<<<<<<")
+    assert (root / "unrelated-user-work.txt").read_text(encoding="utf-8") == "keep this work\n"
+    assert _git(root, "rev-parse", f"refs/heads/{turn.source_ref}") == turn.observed_source_sha
+    assert _git(root, "ls-remote", "origin", f"refs/heads/{turn.source_ref}").split()[0] == turn.observed_source_sha
+    assert _git(root, "ls-remote", "origin", f"refs/heads/{turn.target_ref}").split()[0] == turn.observed_target_sha
+    assert (root / ".git" / "rebase-merge").is_dir() or (root / ".git" / "rebase-apply").is_dir()
