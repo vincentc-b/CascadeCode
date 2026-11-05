@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_023_001
 - feat_023_002
+- feat_023_003
 depends_on: []
 owners:
 - epic_manager
@@ -69,6 +70,7 @@ The performance work measures navigation to first usable board, board API time, 
 - Performance review needs a repeatable local seed/fixture and browser timing plus server timing; use the same fixture before and after. Do not set a target based on network or third-party services outside this app.
 
 ## Feature breakdown
+- feat_023_003
 - feat_023_002
 - feat_023_001
 
