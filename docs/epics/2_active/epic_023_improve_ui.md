@@ -73,12 +73,11 @@ The performance work measures navigation to first usable board, board API time, 
 
 - **feat_023_001 — Centered responsive War Room layout and resizable panels.** Put context left, board center, utilities right; use the viewport; add clamped, persistent resize controls and reset; reflow at tablet/mobile widths. Acceptance: wide, medium, and narrow viewport checks; no width jump during board poll, selection, or completed-column expansion; controls remain accessible.
 - **feat_023_002 — Durable backlog feature priority.** Add canonical per-epic order and a guarded reorder API; render ordered backlog feature cards with drag/drop and keyboard move controls; keep it coherent after feature creation, dispatch, cancellation, refresh, and concurrent edits. Acceptance: ordering survives reload and another client, is limited to backlog peers in one epic, and stale/invalid writes are refused visibly. Can proceed in parallel with feat_023_001.
-- **feat_023_003 — War Room latency review and targeted fixes.** Establish a repeatable baseline, identify the dominant board load and refresh costs, fix the material causes, and record before/after timings. Acceptance: p95 navigation-to-usable-board under 2 seconds on the documented local fixture and machine class across at least 20 runs; no regression in action feedback or lifecycle freshness. Start measurement early, then finish against feat_023_001 and feat_023_002.
+- **feat_023_003 — War Room latency review and targeted fixes.** Establish a repeatable baseline, identify the dominant board load and refresh costs, fix the material causes, and record before/after timings. Acceptance: p95 navigation-to-usable-board under 2 seconds on the documented local fixture and machine class across at least 20 runs; no regression in action feedback or lifecycle freshness. Run after feat_023_001 and feat_023_002; compare against a reproducible pre-change revision of the same local fixture.
 
 ## Open questions
 
-- The exact priority persistence format and API concurrency token are for the feature architecture to choose while preserving the contract above.
-- If the baseline reveals that the 2-second target is impossible on the representative fixture without a larger data-path change, record the measurements and propose a scoped amendment before weakening the target.
+None blocking. The feature architecture will choose the priority persistence format and concurrency token within the contract above. If the measured 2-second target requires a broader data-path change, propose a scoped amendment with the baseline evidence before changing the target.
 
 ## Decision log
 
