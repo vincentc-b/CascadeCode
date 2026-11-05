@@ -68,6 +68,69 @@ def blocking_threads_for(
     return GateResult(blocked=bool(hits), threads=hits, warnings=warnings)
 
 
+def blocking_threads_for_many(
+    work_ids: list[str] | tuple[str, ...] | set[str],
+    *,
+    root: Path,
+    board: BoardIndex | None = None,
+) -> dict[str, GateResult]:
+    """Batch the same gate projection without reloading shared sidecars."""
+
+    repo = resolve_root(root)
+    trunk = locate_trunk(repo)
+    board = board if board is not None else merged_board(trunk)
+    ids = list(dict.fromkeys(work_ids))
+    warnings = _unmatched_cite_warnings(board, root=repo)
+    comments_by_doc = {
+        doc_id: read_comments(doc_id, root=repo)
+        for doc_id in dict.fromkeys(
+            doc_id
+            for work_id in ids
+            for doc_id in _comment_scan_doc_ids(work_id, board)
+        )
+    }
+    affected_by_thread: dict[tuple[str, str], set[str]] = {}
+    results: dict[str, GateResult] = {}
+    for work_id in ids:
+        seen: set[str] = set()
+        hits: list[GateThread] = []
+        for doc_id in _comment_scan_doc_ids(work_id, board):
+            for row in comments_by_doc[doc_id]:
+                if (
+                    row.parent is not None
+                    or row.state != "open"
+                    or not row.blocking
+                    or row.id in seen
+                ):
+                    continue
+                seen.add(row.id)
+                key = (row.doc_id, row.id)
+                affected = affected_by_thread.get(key)
+                if affected is None:
+                    affected = _affected_work_ids(row, board, root=repo)
+                    affected_by_thread[key] = affected
+                meta = board.by_id.get(work_id)
+                blocked = work_id in affected or bool(
+                    meta
+                    and meta.tier == "task"
+                    and meta.parent
+                    and meta.parent in affected
+                )
+                if blocked:
+                    hits.append(
+                        GateThread(
+                            id=row.id,
+                            doc_id=row.doc_id,
+                            section=row.section,
+                            blocking=row.blocking,
+                        )
+                    )
+        results[work_id] = GateResult(
+            blocked=bool(hits), threads=hits, warnings=list(warnings)
+        )
+    return results
+
+
 def gate_refusal_reason(result: GateResult) -> str:
     """Human-readable refusal listing each blocking thread and plan deep-links."""
 

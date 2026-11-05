@@ -18,6 +18,7 @@ from cascade.board.errors import GitError
 from cascade.board.gitutil import commit_paths, has_git, last_commit_touching
 from cascade.board.lock import process_lock
 from cascade.board.store import read_doc
+from cascade.board.types import WorkMeta
 from cascade.workspace.doc_root import resolve_doc_worktree
 from cascade.workspace.integration_worktree import locate_trunk, merged_board
 
@@ -93,10 +94,26 @@ def sidecar_path(epic_id: str, *, root: Path) -> Path:
     return repo / _SIDECAR_DIR / f"{epic_id}.json"
 
 
-def canonical_plan_revision(epic_id: str, *, root: Path) -> str | None:
+def canonical_plan_revision(
+    epic_id: str, *, root: Path, meta: WorkMeta | None = None
+) -> str | None:
     """Git SHA of the last commit that touched the epic plan document."""
 
     repo = _signoff_repo(epic_id, root=root)
+    if meta is not None:
+        try:
+            rel = meta.path.resolve().relative_to(repo.resolve())
+        except ValueError:
+            pass
+        else:
+            if has_git(repo):
+                return last_commit_touching(repo, rel)
+            try:
+                content = meta.path.read_bytes()
+            except OSError:
+                return None
+            return hashlib.sha1(content).hexdigest()
+
     doc = read_doc(epic_id, root=repo)
     if doc.sha:
         return doc.sha
@@ -155,10 +172,15 @@ def valid_sign_offs_for_revision(
     return hits
 
 
-def current_valid_sign_offs(epic_id: str, *, root: Path) -> dict[PlanningRole, PlanSignOff]:
+def current_valid_sign_offs(
+    epic_id: str,
+    *,
+    root: Path,
+    plan_revision: str | None = None,
+) -> dict[PlanningRole, PlanSignOff]:
     """Sign-offs that satisfy readiness for the epic's current canonical plan revision."""
 
-    revision = canonical_plan_revision(epic_id, root=root)
+    revision = plan_revision or canonical_plan_revision(epic_id, root=root)
     if revision is None:
         return {}
     return valid_sign_offs_for_revision(read_plan_sign_offs(epic_id, root=root), revision)
