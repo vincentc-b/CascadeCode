@@ -139,6 +139,54 @@ def test_board_and_doc_serialize_the_same_epic_review_state(
     }
 
 
+@pytest.mark.parametrize("stage", ["implementation_review_pending", "blocked"])
+def test_epic_with_unresolved_close_review_stays_in_active_board_column(
+    tmp_path: Path, stage: str
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Root epic", tier="epic", status="completed")
+    blocker = (
+        EpicCloseBlocker(code="review_lookup_failed", message="Retry review lookup.", retryable=True)
+        if stage == "blocked"
+        else None
+    )
+    persist_epic_review_snapshot(
+        "epic_001",
+        EpicReviewSnapshot(
+            stage=stage,
+            review_url="https://github.example/acme/project/pull/17",
+            source_branch="epic/epic_001",
+            target_branch="main",
+            forge_state="open" if blocker is None else "unknown",
+            blocker=blocker,
+        ),
+        root=root,
+    )
+
+    board = board_view_from_index(list_board(root), root=root)
+
+    assert [row["id"] for row in board["epics"]["2_active"]] == ["epic_001"]
+    assert board["epics"]["3_completed"] == []
+    assert board["epics"]["2_active"][0]["implementation_review"]["close_stage"] == stage
+
+
+def test_epic_moves_to_completed_column_after_review_close_reconciles(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Root epic", tier="epic", status="completed")
+    persist_epic_review_snapshot(
+        "epic_001",
+        EpicReviewSnapshot(stage="completed", forge_state="merged"),
+        root=root,
+    )
+
+    board = board_view_from_index(list_board(root), root=root)
+
+    assert board["epics"]["2_active"] == []
+    assert [row["id"] for row in board["epics"]["3_completed"]] == ["epic_001"]
+
+
 def test_refresh_reconstructs_pending_review_and_persists_forge_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
