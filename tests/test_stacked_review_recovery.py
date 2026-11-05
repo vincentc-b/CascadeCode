@@ -105,6 +105,61 @@ def test_merged_stale_review_is_not_closed_or_completed(tmp_path: Path, monkeypa
     assert load_action("feat_002:stacked_review_integration_gap", root=root) is not None
 
 
+def test_forge_retargeted_merged_review_closes_without_false_gap(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _stacked_board(root)
+    monkeypatch.setattr(
+        "cascade.review.merge_request_snapshot",
+        lambda *_args, **_kwargs: {
+            "state": "merged", "comments": [], "target_branch": "epic/epic_001"
+        },
+    )
+    targets: list[str] = []
+
+    def finalize(_feature_id, _record, mr, *, trunk):
+        targets.append(mr.target_branch)
+        return True
+
+    monkeypatch.setattr(review, "_finalize_merged_review_record", finalize)
+
+    review.poll_feature_reviews(root)
+
+    updated = review.review_record_for_feature("feat_002", root=root)
+    assert updated is not None
+    assert updated["target_branch"] == "epic/epic_001"
+    assert updated["closed"] is True
+    assert targets == ["epic/epic_001"]
+    assert load_action("feat_002:stacked_review_integration_gap", root=root) is None
+
+
+def test_restart_reconcile_uses_forge_retargeted_base(tmp_path: Path, monkeypatch) -> None:
+    root = make_repo(tmp_path, git=False)
+    _stacked_board(root)
+    monkeypatch.setattr(
+        "cascade.review.merge_request_snapshot",
+        lambda *_args, **_kwargs: {
+            "state": "merged", "comments": [], "target_branch": "epic/epic_001"
+        },
+    )
+    targets: list[str] = []
+
+    def finalize(_feature_id, _record, mr, *, trunk):
+        targets.append(mr.target_branch)
+        return True
+
+    monkeypatch.setattr(review, "_finalize_merged_review_record", finalize)
+
+    review.reconcile_feature_review_completions(root)
+
+    updated = review.review_record_for_feature("feat_002", root=root)
+    assert updated is not None
+    assert updated["target_branch"] == "epic/epic_001"
+    assert updated["closed"] is True
+    assert targets == ["epic/epic_001"]
+
+
 def test_epic_recovery_creates_one_epic_review_and_preserves_provenance(
     tmp_path: Path, monkeypatch
 ) -> None:
