@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping
 
 from cascade.board.types import BoardIndex, WorkMeta
 from cascade.workspace.integration_worktree import merged_board
@@ -35,6 +36,7 @@ def compute_feature_readiness(
     root: Path,
     board: BoardIndex | None = None,
     pending_review_ids: frozenset[str] | None = None,
+    review_refusals: Mapping[str, str | None] | None = None,
 ) -> FeatureReadiness | None:
     """Return approval and stable blocker codes for a backlog/open feature."""
 
@@ -86,12 +88,15 @@ def compute_feature_readiness(
     if dispatch_reason is not None:
         blockers.append(f"dispatch_base_unavailable:{dispatch_reason}")
 
-    from cascade.comments.gate import refusal_if_blocked
-
     review_refusal: str | None = None
-    if blocked := refusal_if_blocked(feature_id, root=root, board=board):
+    if review_refusals is None:
+        from cascade.comments.gate import refusal_if_blocked
+
+        review_refusal = refusal_if_blocked(feature_id, root=root, board=board)
+    else:
+        review_refusal = review_refusals.get(feature_id)
+    if review_refusal:
         blockers.append("review_threads_blocking")
-        review_refusal = blocked
 
     return FeatureReadiness(
         approved=approved,

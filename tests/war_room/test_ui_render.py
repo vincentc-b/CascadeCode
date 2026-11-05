@@ -386,6 +386,22 @@ def test_war_room_refresh_races():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_backlog_priority_browser_cases():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not on PATH")
+    cases = Path(__file__).with_name("backlog_priority_ui_cases.mjs")
+    result = subprocess.run([node, str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_war_room_loads_backlog_priority_ui_before_board_script():
+    html = (
+        Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "templates" / "war_room.html"
+    ).read_text(encoding="utf-8")
+    assert html.index("/static/backlog_priority_ui.js") < html.index("/static/war_room.js")
+
+
 def test_backlog_cancellation_row_behavior():
     node = shutil.which("node")
     if node is None:

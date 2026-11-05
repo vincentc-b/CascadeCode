@@ -37,6 +37,13 @@ from cascade.epic.wiring import load_epic_tools
 from cascade.feature.wiring import load_feature_tools
 from cascade.task.wiring import install_task_wiring
 from cascade.war_room.attachment import AttachmentState
+from cascade.war_room.backlog_priority import (
+    BacklogPriority,
+    BacklogPriorityError,
+    BacklogPriorityStorageError,
+    read_backlog_priorities,
+    reorder_backlog_features,
+)
 from cascade.war_room.serialize import (
     board_view_from_index,
     dispatch_result_to_dict,
@@ -112,6 +119,35 @@ def _boss_view_to_dict(view: BossView) -> dict[str, object]:
         "slots_free": view.slots_free,
         "failed_tasks": list(view.failed_tasks),
     }
+
+
+def _backlog_priority_to_dict(priority: BacklogPriority) -> dict[str, object]:
+    return {
+        "feature_ids": list(priority.feature_ids),
+        "token": priority.token,
+    }
+
+
+def _order_backlog_feature_rows(
+    rows: list[dict[str, object]],
+    priorities: dict[str, BacklogPriority],
+) -> None:
+    """Apply each Epic's order without disturbing inter-Epic row positions."""
+
+    positions: dict[str, list[int]] = {}
+    for index, row in enumerate(rows):
+        parent = row.get("parent")
+        if isinstance(parent, str) and parent in priorities:
+            positions.setdefault(parent, []).append(index)
+    for epic_id, indexes in positions.items():
+        by_id = {rows[index].get("id"): rows[index] for index in indexes}
+        ordered = [
+            by_id[feature_id]
+            for feature_id in priorities[epic_id].feature_ids
+            if feature_id in by_id
+        ]
+        for index, row in zip(indexes, ordered):
+            rows[index] = row
 
 
 def _epic_complete_review_state(
@@ -524,6 +560,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/approve_epic_plan": lambda h, b: h._handle_approve_epic_plan(b),
             "/api/sign_off_epic_plan": lambda h, b: h._handle_sign_off_epic_plan(b),
             "/api/approve_feature": lambda h, b: h._handle_approve_feature(b),
+            "/api/reorder_backlog_features": lambda h, b: h._handle_reorder_backlog_features(b),
         }
         routes.update(cls._extra_post_routes)
         return routes
@@ -1043,10 +1080,81 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             board = merged_board(self.server.root)
             with merged_board_snapshot(self.server.root, board):
                 payload = board_view_from_index(board, root=self.server.root)
-        except BoardError as exc:
+                priorities = read_backlog_priorities(board, root=self.server.root)
+                payload["backlog_feature_priorities"] = {
+                    epic_id: _backlog_priority_to_dict(priority)
+                    for epic_id, priority in priorities.items()
+                }
+                _order_backlog_feature_rows(
+                    payload["features"]["1_backlog"], priorities
+                )
+        except (BoardError, BacklogPriorityStorageError, OSError) as exc:
             self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, f"Board unavailable: {exc}")
             return
         self._json_response(HTTPStatus.OK, payload)
+
+    def _handle_reorder_backlog_features(self, body: dict[str, Any]) -> None:
+        epic_id = body.get("epic_id")
+        feature_ids = body.get("feature_ids")
+        expected_token = body.get("expected_token")
+        if not isinstance(epic_id, str) or not epic_id.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing epic_id")
+            return
+        if not isinstance(feature_ids, list) or any(
+            not isinstance(feature_id, str) or not feature_id.strip()
+            for feature_id in feature_ids
+        ):
+            self._json_error(HTTPStatus.BAD_REQUEST, "invalid feature_ids")
+            return
+        if not isinstance(expected_token, str) or not expected_token:
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing expected_token")
+            return
+        if not feature_ids:
+            self._json_response(
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+                {
+                    "ok": False,
+                    "code": "membership_mismatch",
+                    "error": "feature_ids must contain the current backlog peers",
+                },
+            )
+            return
+        try:
+            priority = reorder_backlog_features(
+                epic_id.strip(),
+                feature_ids,
+                expected_token=expected_token,
+                root=self.server.root,
+            )
+        except BacklogPriorityError as exc:
+            if exc.code == "stale_priority" and exc.current is not None:
+                self._json_response(
+                    HTTPStatus.CONFLICT,
+                    {
+                        "ok": False,
+                        "code": exc.code,
+                        "error": str(exc),
+                        "epic_id": exc.current.epic_id,
+                        **_backlog_priority_to_dict(exc.current),
+                    },
+                )
+                return
+            self._json_response(
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+                {"ok": False, "code": exc.code, "error": str(exc)},
+            )
+            return
+        except (BoardError, BacklogPriorityStorageError, OSError) as exc:
+            self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
+            return
+        self._json_response(
+            HTTPStatus.OK,
+            {
+                "ok": True,
+                "epic_id": priority.epic_id,
+                **_backlog_priority_to_dict(priority),
+            },
+        )
 
     def _handle_doc(self, work_id: str) -> None:
         try:

@@ -14,6 +14,7 @@
   let amendmentEpicId = defaultEpicId;
 
   const BoardFocusApi = globalThis.BoardFocus;
+  const BacklogPriorityUiApi = globalThis.BacklogPriorityUi;
   const BranchSyncUiApi = globalThis.BranchSyncUi;
   const EpicPlanReadinessUi = globalThis.EpicPlanReadinessUi;
   const BriefDefaultsUi = globalThis.BriefDefaultsUi;
@@ -21,6 +22,7 @@
   let boardFocus = BoardFocusApi ? BoardFocusApi.defaultBoardFocus() : null;
   let lastBoardView = null;
   let branchSyncRowHelpers = null;
+  let backlogPriorityUi = null;
   const RECOVERY_TOASTS_STORAGE_KEY = "cascade-war-room-recovery-transitions";
   let recoveryIncidentTransitions = readRecoveryIncidentTransitions();
 
@@ -731,7 +733,20 @@
   }
 
   function renderBoard(view) {
+    const renderStartedAt = performance.now();
     lastBoardView = view;
+    if (!backlogPriorityUi && BacklogPriorityUiApi) {
+      backlogPriorityUi = BacklogPriorityUiApi.createController({
+        document: document,
+        board: el.board,
+        apiPost: apiPost,
+        setStatus: setStatus,
+        rerender: function () {
+          if (lastBoardView) renderBoard(lastBoardView);
+        },
+      });
+    }
+    if (backlogPriorityUi) backlogPriorityUi.syncBoard(view);
     reconcileRecoveryIncidentToasts(view);
     if (BoardFocusApi && boardFocus) {
       boardFocus = BoardFocusApi.reconcileFocusWithLens(view, boardFocus);
@@ -756,7 +771,11 @@
         const colEl = tierEl.querySelector('[data-column="' + col + '"]');
         if (!colEl) return;
         colEl.innerHTML = "";
-        (visibleView[tier][col] || []).forEach(function (item) {
+        let rows = visibleView[tier][col] || [];
+        if (tier === "features" && col === "1_backlog" && backlogPriorityUi) {
+          rows = backlogPriorityUi.orderRows(rows);
+        }
+        rows.forEach(function (item) {
           colEl.appendChild(buildRow(item, tier, col));
         });
       });
@@ -764,6 +783,11 @@
       if (tier === "epics") {
         renderCompletedEpicsHistory(tierEl, view);
       }
+    });
+    if (backlogPriorityUi) backlogPriorityUi.restoreFocus();
+    performance.measure("cascade.board.render", {
+      start: renderStartedAt,
+      end: performance.now(),
     });
   }
 
@@ -1247,6 +1271,11 @@
 
     const actions = document.createElement("div");
     actions.className = "board-row-actions";
+
+    if (tier === "features" && column === "1_backlog" && backlogPriorityUi) {
+      backlogPriorityUi.appendMoveControls(actions, item);
+      backlogPriorityUi.decorateRow(row, item);
+    }
 
     if (item.recovery_incident && typeof appendRecoveryIncident === "function") {
       appendRecoveryIncident(row, actions, item.recovery_incident);
