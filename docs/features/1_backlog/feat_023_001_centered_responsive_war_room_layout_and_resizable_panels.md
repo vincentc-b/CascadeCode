@@ -21,6 +21,7 @@ models:
 reasoning:
   feature_lead: high
   feature_architect: high
+approved_at: '2026-11-05T16:32:01.019128+00:00'
 ---
 # Centered responsive War Room layout and resizable panels
 
