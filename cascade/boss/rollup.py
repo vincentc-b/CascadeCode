@@ -93,6 +93,16 @@ def try_complete_feature(
     from cascade.workspace.doc_root import read_doc_resolved
 
     doc = read_doc_resolved(feature_id, root=repo)
+    # A stale stacked review can be accepted after its predecessor has already
+    # landed on the Epic branch.  Its recovery action is the durable proof
+    # that the accepted change still needs an Epic-targeted reconciliation
+    # review.  Only that review's merged callback may bypass this gate.
+    if not review_merged:
+        from cascade.stacked_review_recovery import stacked_review_completion_blocked
+
+        if stacked_review_completion_blocked(feature_id, root=repo):
+            return False
+
     # Closeout must not depend on another model turn after the last child lands.
     # A Feature Architect may replace this paragraph with a richer summary, but
     # the deterministic fallback records exactly which completed work unlocked

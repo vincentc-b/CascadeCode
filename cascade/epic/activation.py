@@ -8,6 +8,7 @@ from cascade.board.gitutil import commit_paths, has_git
 from cascade.board.paths import column_dir
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import WorkDoc
+from cascade.board.validate import missing_required_headings
 from cascade.workspace.integration_worktree import IntegrationWorktree, merged_board
 
 _POINTER_BODY = """\
@@ -72,7 +73,7 @@ def activate_epic_on_worktree(
     doc = read_doc(work_id, root=trunk)
     old_path = doc.meta.path.resolve()
 
-    live = WorkDoc(meta=doc.meta, body=doc.body, sha=None)
+    live = WorkDoc(meta=doc.meta, body=_plan_body(doc.body), sha=None)
     live.meta.status = "active"
     live.meta.path = (live_root / column_dir("epic", "active") / old_path.name).resolve()
     # Drop the branch's backlog copy first: feature parent_rev pins the commit that
@@ -122,12 +123,22 @@ def _activate_snapshot_epic_on_worktree(
     doc = read_doc(work_id, root=snapshot_root(trunk))
     old_name = doc.meta.path.name
 
-    live = WorkDoc(meta=doc.meta, body=doc.body, sha=None)
+    live = WorkDoc(meta=doc.meta, body=_plan_body(doc.body), sha=None)
     live.meta.status = "active"
     live.meta.path = (live_root / column_dir("epic", "active") / old_name).resolve()
     _drop_stale_copies(work_id, tier="epic", keep=live.meta.path, board_root=live_root)
     write_doc(live, root=live_root)
     _scrub_child_specs(live_root)
+
+
+def _plan_body(brief_body: str) -> str:
+    """Keep the reviewed brief intact while giving the live plan its required sections."""
+
+    missing = missing_required_headings(brief_body, "epic")
+    if not missing:
+        return brief_body
+    sections = "\n\n".join(f"## {heading}\n\n_(To be developed during Epic planning.)_" for heading in missing)
+    return f"{brief_body.rstrip()}\n\n{sections}\n"
 
 
 def _drop_stale_copies(

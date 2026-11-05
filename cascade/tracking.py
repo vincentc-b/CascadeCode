@@ -149,7 +149,7 @@ def fast_forward_branch(
     *,
     remote: str = "origin",
 ) -> str:
-    """Fetch and fast-forward an integration worktree after its MR merges."""
+    """Sync an accepted review, retaining redundant local lifecycle history."""
 
     current = _git(["branch", "--show-current"], root).stdout.strip()
     if current != branch:
@@ -157,12 +157,39 @@ def fast_forward_branch(
     fetch = _git(["fetch", remote, branch], root)
     if fetch.returncode != 0:
         raise GitError((fetch.stderr or fetch.stdout).strip() or f"could not fetch {branch}")
-    merge = _git(["merge", "--ff-only", f"{remote}/{branch}"], root)
+    remote_ref = f"{remote}/{branch}"
+    merge = _git(["merge", "--ff-only", remote_ref], root)
     if merge.returncode != 0:
-        raise GitError(
-            (merge.stderr or merge.stdout).strip()
-            or f"could not fast-forward {branch}"
+        # A supervisor may have committed a temporary blocked/active lifecycle
+        # transition while the review was open. If those local commits leave
+        # the tree exactly as it was at the fork, retain their history in a
+        # merge with the accepted remote tip. Any substantive local change or
+        # dirty checkout still needs an explicit owner resolution.
+        base = _git(["merge-base", "HEAD", remote_ref], root)
+        clean = _git(["status", "--porcelain"], root)
+        redundant = (
+            base.returncode == 0
+            and bool(base.stdout.strip())
+            and clean.returncode == 0
+            and not clean.stdout.strip()
+            and _git(["diff", "--quiet", base.stdout.strip(), "HEAD"], root).returncode == 0
         )
+        if not redundant:
+            raise GitError(
+                (merge.stderr or merge.stdout).strip()
+                or f"could not fast-forward {branch}"
+            )
+        recovered = _git(
+            ["-c", "commit.gpgsign=false", "merge", "--no-edit", remote_ref], root
+        )
+        if recovered.returncode != 0:
+            _git(["merge", "--abort"], root)
+            raise GitError(
+                (recovered.stderr or recovered.stdout).strip()
+                or f"could not reconcile redundant local commits on {branch}"
+            )
+        if _git(["diff", "--quiet", "HEAD", remote_ref], root).returncode != 0:
+            raise GitError(f"reconciled {branch} differs from accepted remote tree")
     return _git(["rev-parse", "HEAD"], root).stdout.strip()
 
 

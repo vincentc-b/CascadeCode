@@ -164,12 +164,18 @@ def _check_folder(meta: WorkMeta) -> None:
         raise SchemaError(f"{meta.id} tier {meta.tier} is not in docs/{_TIER_DIR[meta.tier]}/")
 
 
-def _check_headings(doc: WorkDoc) -> None:
+def missing_required_headings(body: str, tier: WorkTier) -> tuple[str, ...]:
+    """Return headings needed when promoting a reviewed brief into a plan."""
+
     found: set[str] = set()
-    for line in doc.body.splitlines():
+    for line in body.splitlines():
         if line.startswith("## "):
             found.add(line[3:].strip())
-    missing = [name for name in _REQUIRED_HEADINGS[doc.meta.tier] if name not in found]
+    return tuple(name for name in _REQUIRED_HEADINGS[tier] if name not in found)
+
+
+def _check_headings(doc: WorkDoc) -> None:
+    missing = missing_required_headings(doc.body, doc.meta.tier)
     if missing:
         raise SchemaError(f"{doc.meta.id} missing heading(s): {', '.join(missing)}")
 
