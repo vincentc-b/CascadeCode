@@ -18,6 +18,7 @@ flex_mode: false
 models:
   feature_lead: gpt-6.1-sol
   feature_architect: gpt-6.1-sol
+approved_at: '2026-11-05T04:57:40.667617+00:00'
 ---
 # Render complete plan threads and refresh incoming replies
 
