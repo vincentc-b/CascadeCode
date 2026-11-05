@@ -85,6 +85,11 @@ The performance work measures navigation to first usable board, board API time, 
   Chose Backlog feature priority is a durable order scoped to one epic; reordering changes presentation and queue order but does not trigger or bypass dispatch..
   Rationale: The request asks users to prioritize backlog features. Shared durable order makes that priority consistent across refreshes and clients, while existing dependency and human dispatch controls retain their meaning.
   Honors: Intent and success criteria for backlog drag and drop.
+
+- `dec_002` · 2026-11-05 · Epic Manager · **Macro-architecture**
+  Chose Use a desktop context-board-utilities layout with browser-scoped resizable panel widths and responsive fallback..
+  Rationale: This directly addresses the unstable board width and varied screen sizes without adding shared layout state or changing board selection behavior.
+  Honors: Intent and success criteria for layout, resizing, and screen sizes.
 ## Amendment log
 
 _(none)_
