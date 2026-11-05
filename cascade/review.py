@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import json
+import logging
 import os
 import subprocess
 import tempfile
@@ -38,6 +39,8 @@ from cascade.workspace.integration_worktree import (
     locate_trunk,
     merged_board,
 )
+
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -786,6 +789,8 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
             continue
         if snapshot.get("state") != "merged":
             continue
+        record = _merged_review_record(feature_id, record, snapshot, trunk=trunk)
+        mr = _record_to_mr(record)
         epic_id = _review_target_epic(record)
         before = (
             feature_completed_recorded(feature_id, epic_id, root=trunk)
@@ -827,6 +832,31 @@ def _review_target_epic(record: dict[str, object]) -> str | None:
     return None
 
 
+def _merged_review_record(
+    feature_id: str,
+    record: dict[str, object],
+    snapshot: dict[str, object],
+    *,
+    trunk: Path,
+) -> dict[str, object]:
+    """Use the forge's accepted base after native retargeting of a stack."""
+
+    live_target = str(snapshot.get("target_branch") or "").strip()
+    if not live_target or live_target == record.get("target_branch"):
+        return record
+    updated = dict(record)
+    updated["target_branch"] = live_target
+    feature = merged_board(trunk).by_id.get(feature_id)
+    if (
+        feature is not None
+        and feature.tier == "feature"
+        and feature.parent is not None
+        and live_target == integration_branch("epic", feature.parent)
+    ):
+        _update_record(trunk, feature_id, {"target_branch": live_target})
+    return updated
+
+
 def _finalize_merged_review_record(
     feature_id: str,
     record: dict[str, object],
@@ -843,7 +873,8 @@ def _finalize_merged_review_record(
         # Publish its terminal lifecycle commit before acknowledging closure.
         push_branch(epic_root, mr.target_branch)
         return try_complete_feature(feature_id, root=trunk, review_merged=True)
-    except (BoardError, OSError):
+    except (BoardError, OSError) as exc:
+        _LOG.warning("could not finalize merged review for %s: %s", feature_id, exc)
         return False
 
 
@@ -923,6 +954,8 @@ def poll_feature_reviews(root: Path) -> None:
         # Merge with the latest record so parallel reviews cannot be reopened.
         _update_record(trunk, feature_id, {"seen_comments": sorted(seen)})
         if snapshot.get("state") == "merged":
+            record = _merged_review_record(feature_id, record, snapshot, trunk=trunk)
+            mr = _record_to_mr(record)
             if persist_if_stacked_review_integration_gap(
                 feature_id, record, root=trunk, accepted=True
             ):
