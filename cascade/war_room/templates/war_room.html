@@ -47,6 +47,10 @@
         <div class="war-room-primary-actions">
           <button type="button" id="btn-create-brief">Create brief</button>
           <button type="button" id="btn-pull-main" class="btn-secondary" title="Refresh remote epic briefs; app updates are handled separately">Refresh briefs</button>
+          <button type="button" id="btn-reset-panel-sizes" class="btn-secondary">
+            Reset panel sizes
+          </button>
+          <span id="panel-size-status" class="visually-hidden" aria-live="polite"></span>
           <span id="sync-status" class="status-line" aria-live="polite"></span>
         </div>
         <div id="attachment-chrome" class="attachment-chrome">
@@ -232,7 +236,16 @@
           </p>
         </section>
 
-        <section id="room-panels" class="room-panels">
+        <div
+          id="context-panel-resizer"
+          class="panel-resizer panel-resizer-context"
+          role="separator"
+          aria-label="Resize context panel"
+          aria-orientation="vertical"
+          tabindex="0"
+        ></div>
+
+        <section id="room-panels" class="room-panels" aria-label="Context">
           <div id="epic-war-room-chat" class="chat-panel" data-room="epic">
             <h2>Epic War Room chat</h2>
             <section
@@ -288,7 +301,16 @@
           </div>
         </section>
 
-        <aside class="side-panels">
+        <div
+          id="utilities-panel-resizer"
+          class="panel-resizer panel-resizer-utilities"
+          role="separator"
+          aria-label="Resize utilities panel"
+          aria-orientation="vertical"
+          tabindex="0"
+        ></div>
+
+        <aside class="side-panels" aria-label="Utilities">
           <section id="toast-stream" class="toast-panel" aria-label="Toasts">
             <h2>Toasts</h2>
             <ul id="toast-list"></ul>
@@ -363,12 +385,14 @@
       </div>
     </div>
     <script src="/static/board_focus.js"></script>
+    <script src="/static/backlog_priority_ui.js?v=20261105"></script>
     <script src="/static/open_reviews_pane.js"></script>
     <script src="/static/branch_sync_ui.js"></script>
     <script src="/static/epic_close_review_ui.js"></script>
     <script src="/static/epic_plan_readiness_ui.js"></script>
     <script src="/static/brief_defaults_ui.js?v=20261025"></script>
     <script src="/static/provider_recovery_dialog_ui.js?v=20261103"></script>
+    <script src="/static/panel_resizing.js?v=20261105"></script>
     <script src="/static/war_room.js?v=20261025"></script>
   </body>
 </html>
