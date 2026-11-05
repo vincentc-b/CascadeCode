@@ -2,7 +2,7 @@
 id: feat_035_003
 title: Make conflict resolution restart-safe across providers
 tier: feature
-status: backlog
+status: completed
 parent: epic_035
 children:
 - task_035_003_001
