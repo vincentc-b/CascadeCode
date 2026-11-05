@@ -285,3 +285,23 @@ assert.deepEqual(
 );
 
 console.log("plan_render cases ok");
+
+// Equal instants sort by ID; shuffled cycles, self-links and orphan chains stay visible once.
+{
+  const rows = [
+    { id: "b", parent: "a", created: "2026-01-01T00:00:00Z" },
+    { id: "a", parent: "b", created: "2026-01-01T01:00:00+01:00" },
+    { id: "c", parent: "b", created: "2026-01-02T00:00:00Z" },
+    { id: "self", parent: "self" },
+    { id: "orphan", parent: "missing" },
+    { id: "child", parent: "orphan" },
+    { id: "__proto__", parent: "missing" },
+  ];
+  const grouped = groupCommentThreads(rows);
+  assert.deepEqual(groupCommentThreads([...rows].reverse()), grouped);
+  const cycle = grouped.find(t => t.root.id === "a");
+  assert.deepEqual(cycle.replies.map(r => r.id), ["b", "c"]);
+  const ids = grouped.flatMap(t => [t.root.id, ...t.replies.map(r => r.id)]);
+  assert.equal(ids.length, rows.length);
+  assert.equal(new Set(ids).size, rows.length);
+}
