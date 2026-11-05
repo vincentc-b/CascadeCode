@@ -46,6 +46,7 @@ RecoveryState = Literal[
 AttemptOutcome = Literal["succeeded", "failed", "cancelled"]
 PreconditionState = Literal["pending", "repaired", "unrepairable"]
 DecisionOwner = Literal["feature_team", "epic_team"]
+ReconciliationOutcome = Literal["resume", "safe_retry", "already_completed", "blocker"]
 RepairOperation = Literal[
     "validate_checkout",
     "restore_abort_state",
@@ -104,6 +105,37 @@ class ActionResult:
     outcome: AttemptOutcome = "succeeded"
     classification: FailureClassification | None = None
     metadata: Mapping[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class ActionReconciliation:
+    """One persisted, mutually-exclusive restart decision for an action.
+
+    ``resume`` retains useful local rebase state, while ``safe_retry`` means
+    the checkpoint's pre-mutation source is still checked out.  The other two
+    outcomes deliberately prevent another side effect.
+    """
+
+    outcome: ReconciliationOutcome
+    reason: str
+    action_id: str
+    checkpoint_id: str | None
+    local_head: str | None
+    remote_head: str | None
+    affected_paths: tuple[str, ...] = ()
+    resume_instructions: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "outcome": self.outcome,
+            "reason": self.reason,
+            "action_id": self.action_id,
+            "checkpoint_id": self.checkpoint_id,
+            "local_head": self.local_head,
+            "remote_head": self.remote_head,
+            "affected_paths": list(self.affected_paths),
+            "resume_instructions": self.resume_instructions,
+        }
 
 
 def _path(root: Path) -> Path:
@@ -657,6 +689,174 @@ def capture_and_route_action_failure(
         payload["actions"] = actions
         _write_payload(repo, payload)
         return _copy(action)
+
+
+def record_action_checkpoint(
+    action_id: str,
+    checkpoint_id: str,
+    *,
+    root: Path,
+    refs: Mapping[str, str],
+    shas: Mapping[str, str],
+    affected_paths: tuple[str, ...] | list[str] = (),
+    command_summary: str = "",
+    test_summary: str = "",
+    resume_instructions: str = "",
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Persist the evidence needed to safely restart one logical action.
+
+    Checkpoints are append-only by identity.  Replaying the same checkpoint is
+    a no-op; changing evidence for an existing identity is refused so a stale
+    restart cannot silently acquire a new meaning.
+    """
+
+    _validate_identity(action_id)
+    _validate_identity(checkpoint_id)
+    normalized_refs = _string_map(refs, field="checkpoint refs")
+    normalized_shas = _string_map(shas, field="checkpoint SHAs")
+    paths = _paths(affected_paths)
+    if not isinstance(command_summary, str) or not isinstance(test_summary, str):
+        raise ActionRecoveryError("checkpoint command and test summaries must be strings")
+    if not isinstance(resume_instructions, str) or not resume_instructions:
+        raise ActionRecoveryError("checkpoint resume instructions must be a nonempty string")
+    repo = resolve_root(root)
+    with process_lock:
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        checkpoint = {
+            "checkpoint_id": checkpoint_id,
+            "refs": normalized_refs,
+            "shas": normalized_shas,
+            "affected_paths": list(paths),
+            "command_summary": command_summary,
+            "test_summary": test_summary,
+            "resume_instructions": resume_instructions,
+        }
+        checkpoints = [dict(item) for item in action.get("checkpoints", []) if isinstance(item, dict)]
+        existing = next((item for item in checkpoints if item.get("checkpoint_id") == checkpoint_id), None)
+        if existing is not None:
+            comparable = {key: existing.get(key) for key in checkpoint}
+            if comparable != checkpoint:
+                raise ActionRecoveryError(
+                    f"checkpoint identity {checkpoint_id!r} already has different evidence"
+                )
+            return _copy(action)
+        stamped = _iso(now)
+        checkpoints.append({**checkpoint, "recorded_at": stamped})
+        action.update(checkpoints=checkpoints, checkpoint=checkpoints[-1], updated_at=stamped)
+        actions[action_id] = action
+        payload["version"] = max(int(payload.get("version") or 1), 2)
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action)
+
+
+def reconcile_action(
+    action_id: str,
+    *,
+    root: Path,
+    local_head: str | None,
+    remote_head: str | None,
+    rebase_in_progress: bool = False,
+    dirty_paths: tuple[str, ...] | list[str] = (),
+) -> ActionReconciliation:
+    """Choose and persist exactly one safe restart outcome from current facts.
+
+    A checkpoint records ``source_head``/``target_head`` before mutation and
+    may record ``rebased_head`` once the local rebase succeeds.  ``remote_head``
+    is the current remote *target* head.  A changed target never retries an
+    admitted rebase: its conflict meaning may have changed and needs a fresh
+    admission.  A source publication is already complete when the action's
+    ``published_head`` equals the local remote head supplied by the caller.
+    """
+
+    _validate_identity(action_id)
+    if local_head is not None and (not isinstance(local_head, str) or not local_head):
+        raise ActionRecoveryError("local head must be a nonempty SHA or None")
+    if remote_head is not None and (not isinstance(remote_head, str) or not remote_head):
+        raise ActionRecoveryError("remote head must be a nonempty SHA or None")
+    paths = _paths(dirty_paths)
+    repo = resolve_root(root)
+    with process_lock:
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        checkpoint = action.get("checkpoint") if isinstance(action.get("checkpoint"), dict) else None
+        decision = _reconciliation_for(
+            action, checkpoint, local_head=local_head, remote_head=remote_head,
+            rebase_in_progress=rebase_in_progress, dirty_paths=paths,
+        )
+        durable = decision.as_dict()
+        # Reconciliation itself is idempotent.  Do not churn timestamps or
+        # sidecar writes when a restarted supervisor observes identical facts.
+        if action.get("last_reconciliation") != durable:
+            action["last_reconciliation"] = durable
+            action["updated_at"] = _iso(None)
+            actions[action_id] = action
+            payload["version"] = max(int(payload.get("version") or 1), 2)
+            payload["actions"] = actions
+            _write_payload(repo, payload)
+        return decision
+
+
+def _string_map(value: Mapping[str, str], *, field: str) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        raise ActionRecoveryError(f"{field} must be a mapping")
+    normalized = {str(key): item for key, item in value.items()}
+    if not normalized or any(not key or not isinstance(item, str) or not item for key, item in normalized.items()):
+        raise ActionRecoveryError(f"{field} must contain nonempty string keys and values")
+    return dict(sorted(normalized.items()))
+
+
+def _paths(value: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    if not isinstance(value, (tuple, list)) or any(not isinstance(path, str) or not path for path in value):
+        raise ActionRecoveryError("affected paths must be nonempty strings")
+    return tuple(dict.fromkeys(value))
+
+
+def _reconciliation_for(
+    action: Mapping[str, Any], checkpoint: Mapping[str, Any] | None, *,
+    local_head: str | None, remote_head: str | None, rebase_in_progress: bool,
+    dirty_paths: tuple[str, ...],
+) -> ActionReconciliation:
+    checkpoint_id = checkpoint.get("checkpoint_id") if checkpoint else None
+    affected = tuple(checkpoint.get("affected_paths") or ()) if checkpoint else ()
+    instructions = checkpoint.get("resume_instructions") if checkpoint else None
+    state = action.get("recovery_state")
+    if state == "completed":
+        return ActionReconciliation("already_completed", "action_completed", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+    if state in {"blocked", "awaiting_owner_decision", "awaiting_human_gate"}:
+        return ActionReconciliation("blocker", "action_not_resumable", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+    if checkpoint is None:
+        return ActionReconciliation("blocker", "checkpoint_missing", action["action_id"], None, local_head, remote_head)
+    shas = checkpoint.get("shas")
+    if not isinstance(shas, Mapping):
+        return ActionReconciliation("blocker", "checkpoint_invalid", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+    target = shas.get("target_head")
+    source = shas.get("source_head")
+    rebased = shas.get("rebased_head")
+    published = shas.get("published_head")
+    if not isinstance(target, str) or not isinstance(source, str):
+        return ActionReconciliation("blocker", "checkpoint_heads_missing", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+    if published and remote_head == published:
+        return ActionReconciliation("already_completed", "published_head_on_remote", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+    if remote_head != target:
+        return ActionReconciliation("blocker", "remote_head_changed", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+    if rebase_in_progress:
+        return ActionReconciliation("resume", "rebase_in_progress", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+    if dirty_paths:
+        return ActionReconciliation("blocker", "dirty_worktree", action["action_id"], checkpoint_id, local_head, remote_head, dirty_paths, instructions)
+    if isinstance(rebased, str) and local_head == rebased:
+        return ActionReconciliation("resume", "rebased_head_present", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+    if local_head == source:
+        return ActionReconciliation("safe_retry", "source_head_unchanged", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+    return ActionReconciliation("blocker", "local_head_changed", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
 
 
 def recovery_actions(*, root: Path) -> list[dict[str, Any]]:
