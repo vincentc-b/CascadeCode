@@ -23,6 +23,7 @@ models:
 reasoning:
   feature_lead: high
   feature_architect: high
+approved_at: '2026-11-05T16:32:02.375140+00:00'
 ---
 # War Room latency review and targeted fixes
 
