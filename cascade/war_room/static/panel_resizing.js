@@ -7,9 +7,10 @@
   const BOARD_MIN = 448;
   const RESIZER_SPACE = 32;
   const KEYBOARD_STEP = 16;
+  const STORED_SIZE_LIMIT = 16384;
   const LIMITS = {
-    context: { min: 224, max: 384, defaultSize: 320 },
-    utilities: { min: 280, max: 420, defaultSize: 320 },
+    context: { min: 224, defaultSize: 320 },
+    utilities: { min: 280, defaultSize: 320 },
   };
 
   function clamp(value, min, max) {
@@ -22,10 +23,10 @@
         value.version === VERSION &&
         Number.isFinite(value.context) &&
         value.context >= LIMITS.context.min &&
-        value.context <= LIMITS.context.max &&
+        value.context <= STORED_SIZE_LIMIT &&
         Number.isFinite(value.utilities) &&
         value.utilities >= LIMITS.utilities.min &&
-        value.utilities <= LIMITS.utilities.max
+        value.utilities <= STORED_SIZE_LIMIT
     );
   }
 
@@ -83,8 +84,8 @@
     }
 
     function fitToViewport(sizes) {
-      let context = clamp(sizes.context, LIMITS.context.min, LIMITS.context.max);
-      let utilities = clamp(sizes.utilities, LIMITS.utilities.min, LIMITS.utilities.max);
+      let context = clamp(sizes.context, LIMITS.context.min, STORED_SIZE_LIMIT);
+      let utilities = clamp(sizes.utilities, LIMITS.utilities.min, STORED_SIZE_LIMIT);
       let overflow = context + utilities - availableForPanels();
       if (overflow > 0) {
         const utilitiesReduction = Math.min(overflow, utilities - LIMITS.utilities.min);
@@ -99,7 +100,7 @@
       const other = side === "context" ? "utilities" : "context";
       return Math.max(
         LIMITS[side].min,
-        Math.min(LIMITS[side].max, availableForPanels() - applied[other])
+        Math.min(STORED_SIZE_LIMIT, availableForPanels() - applied[other])
       );
     }
 

@@ -108,22 +108,23 @@ assert.equal(first.layout.style.values.get("--context-panel-size"), "320px");
 assert.equal(first.layout.style.values.get("--utilities-panel-size"), "320px");
 assert.equal(invalidStorage.getItem(globalThis.PanelResizing.storageKey), null);
 
-// Keyboard operation clamps at the accessible maximum and saves both sizes.
+// Keyboard operation uses the viewport bound and saves both sizes.
 first.context.dispatch("keydown", { key: "End" });
-assert.equal(first.context.getAttribute("aria-valuenow"), "384");
-assert.equal(first.context.getAttribute("aria-valuemax"), "384");
+assert.equal(first.context.getAttribute("aria-valuenow"), "760");
+assert.equal(first.context.getAttribute("aria-valuemax"), "760");
 
-// Dragging the right boundary left grows utilities and clamps at 420px.
+// Dragging the right boundary left grows utilities to the remaining viewport bound.
+first.context.dispatch("keydown", { key: "Home" });
 first.utilities.dispatch("pointerdown", { clientX: 900 });
 first.utilities.dispatch("pointermove", { clientX: 0 });
 first.utilities.dispatch("pointerup", { clientX: 0 });
 const saved = invalidStorage.getItem(globalThis.PanelResizing.storageKey);
 assert.deepEqual(JSON.parse(saved), {
   version: 1,
-  context: 384,
-  utilities: 420,
+  context: 224,
+  utilities: 856,
 });
-assert.equal(first.layout.style.values.get("--utilities-panel-size"), "420px");
+assert.equal(first.layout.style.values.get("--utilities-panel-size"), "856px");
 
 // A new shell restores valid persisted values, then reset clears the preference.
 const restoredStorage = makeStorage(saved);
@@ -133,8 +134,8 @@ globalThis.PanelResizing.init({
   storage: restoredStorage,
   media: { matches: true },
 });
-assert.equal(restored.layout.style.values.get("--context-panel-size"), "384px");
-assert.equal(restored.layout.style.values.get("--utilities-panel-size"), "420px");
+assert.equal(restored.layout.style.values.get("--context-panel-size"), "224px");
+assert.equal(restored.layout.style.values.get("--utilities-panel-size"), "856px");
 restored.reset.dispatch("click");
 assert.equal(restored.layout.style.values.get("--context-panel-size"), "320px");
 assert.equal(restored.layout.style.values.get("--utilities-panel-size"), "320px");

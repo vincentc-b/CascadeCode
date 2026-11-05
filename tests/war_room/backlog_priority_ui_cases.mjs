@@ -31,6 +31,13 @@ function element(tag) {
     },
     setAttribute(name, value) { this[name] = value; },
     appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+    insertBefore(child, sibling) {
+      child.parentNode = this;
+      const index = this.children.indexOf(sibling);
+      this.children.splice(index < 0 ? this.children.length : index, 0, child);
+      return child;
+    },
+    get firstChild() { return this.children[0] || null; },
     addEventListener(name, handler) { (listeners[name] || (listeners[name] = [])).push(handler); },
     dispatch(name, event = {}) {
       event.target = event.target || this;
@@ -137,6 +144,7 @@ async function settle() {
 // Canonical projection orders each Epic without disturbing inter-Epic slots.
 const h = createHarness();
 assert.deepEqual(h.rendered(), ["feat_1", "feat_b1", "feat_2", "feat_b2", "feat_3"]);
+assert.match(h.row("feat_1").firstChild.textContent, /Drag to reorder/);
 
 // Focused movement is optimistic, submits the full order/token, and restores focus.
 const down = h.move("feat_1", "down");
@@ -177,10 +185,12 @@ assert.equal(h.requests.length, 1);
 
 // Drag/drop stays within an Epic; a cross-Epic target is ignored.
 source.dispatch("dragstart", { dataTransfer: { setData() {} } });
+assert.equal(h.controller.isDragging(), true);
 const crossEpic = h.row("feat_b1").dispatch("drop", { clientY: 10 });
 assert.equal(crossEpic.prevented, false);
 assert.equal(h.requests.length, 1);
 source.dispatch("dragend");
+assert.equal(h.controller.isDragging(), false);
 
 // A same-Epic drop submits a complete optimistic order.
 source.dispatch("dragstart", { dataTransfer: { setData() {} } });
@@ -206,5 +216,76 @@ assert.deepEqual(h.rendered(), ["feat_3", "feat_b1", "feat_2", "feat_b2", "feat_
 assert.equal(h.move("feat_3", "down").focused, true);
 assert.equal(h.statuses.at(-1).error, true);
 assert.match(h.statuses.at(-1).message, /changed elsewhere.*Restored/i);
+
+// The visible Epic backlog uses the same drag and keyboard controls with its own API.
+const epicBoard = element("section");
+epicBoard.querySelector = function (selector) {
+  const match = selector.match(/data-id="([^"]+)".*data-backlog-move="([^"]+)"/);
+  if (!match) return null;
+  const row = find(epicBoard, (node) => node.dataset && node.dataset.id === match[1]);
+  return row && find(row, (node) => node.dataset && node.dataset.backlogMove === match[2]);
+};
+const epicRequests = [];
+const epicItems = ["epic_1", "epic_2", "epic_3"].map((id) => ({ id }));
+let epicView = { backlog_epic_priority: {
+  epic_ids: ["epic_1", "epic_2", "epic_3"], token: "epic-token-1",
+} };
+let epicRendered = [];
+const epicController = PriorityUi.createController({
+  scope: "epic",
+  document: { createElement: element },
+  board: epicBoard,
+  apiPost(path, payload) {
+    const request = deferred();
+    epicRequests.push({ path, payload, request });
+    return request.promise;
+  },
+  setStatus() {},
+  rerender: renderEpics,
+});
+function renderEpics() {
+  epicController.syncBoard(epicView);
+  epicBoard.children = [];
+  const ordered = epicController.orderRows(epicItems);
+  epicRendered = ordered.map((item) => item.id);
+  ordered.forEach((item) => {
+    const row = element("div");
+    row.dataset.id = item.id;
+    const actions = element("div");
+    epicController.appendMoveControls(actions, item);
+    epicController.decorateRow(row, item);
+    row.appendChild(actions);
+    epicBoard.appendChild(row);
+  });
+  epicController.restoreFocus();
+}
+renderEpics();
+assert.match(find(epicBoard, (node) => node.dataset.id === "epic_1").firstChild.textContent, /Drag to reorder/);
+const epicSource = find(epicBoard, (node) => node.dataset.id === "epic_2");
+epicSource.dispatch("dragstart", { dataTransfer: { setData() {} } });
+find(epicBoard, (node) => node.dataset.id === "epic_1").dispatch("drop", { clientY: 10 });
+assert.deepEqual(epicRendered, ["epic_2", "epic_1", "epic_3"]);
+assert.equal(epicRequests[0].path, "/api/reorder_backlog_epics");
+assert.deepEqual(epicRequests[0].payload, {
+  epic_ids: ["epic_2", "epic_1", "epic_3"], expected_token: "epic-token-1",
+});
+epicRequests[0].request.resolve({ body: {
+  epic_ids: ["epic_2", "epic_1", "epic_3"], token: "epic-token-2",
+} });
+await settle();
+epicView = { backlog_epic_priority: {
+  epic_ids: ["epic_2", "epic_1", "epic_3"], token: "epic-token-2",
+} };
+renderEpics();
+const epicMove = find(
+  find(epicBoard, (node) => node.dataset.id === "epic_3"),
+  (node) => node.dataset.backlogMove === "up",
+);
+epicMove.dispatch("click");
+assert.deepEqual(epicRequests[1].payload.epic_ids, ["epic_2", "epic_3", "epic_1"]);
+epicRequests[1].request.resolve({ body: {
+  epic_ids: ["epic_2", "epic_3", "epic_1"], token: "epic-token-3",
+} });
+await settle();
 
 console.log("backlog_priority_ui_cases: ok");

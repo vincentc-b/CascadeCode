@@ -44,6 +44,13 @@ from cascade.war_room.backlog_priority import (
     read_backlog_priorities,
     reorder_backlog_features,
 )
+from cascade.war_room.backlog_epic_priority import (
+    BacklogEpicPriority,
+    BacklogEpicPriorityError,
+    BacklogEpicPriorityStorageError,
+    read_backlog_epic_priority,
+    reorder_backlog_epics,
+)
 from cascade.war_room.serialize import (
     board_view_from_index,
     dispatch_result_to_dict,
@@ -126,6 +133,10 @@ def _backlog_priority_to_dict(priority: BacklogPriority) -> dict[str, object]:
         "feature_ids": list(priority.feature_ids),
         "token": priority.token,
     }
+
+
+def _backlog_epic_priority_to_dict(priority: BacklogEpicPriority) -> dict[str, object]:
+    return {"epic_ids": list(priority.epic_ids), "token": priority.token}
 
 
 def _order_backlog_feature_rows(
@@ -561,6 +572,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/sign_off_epic_plan": lambda h, b: h._handle_sign_off_epic_plan(b),
             "/api/approve_feature": lambda h, b: h._handle_approve_feature(b),
             "/api/reorder_backlog_features": lambda h, b: h._handle_reorder_backlog_features(b),
+            "/api/reorder_backlog_epics": lambda h, b: h._handle_reorder_backlog_epics(b),
         }
         routes.update(cls._extra_post_routes)
         return routes
@@ -1088,7 +1100,15 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 _order_backlog_feature_rows(
                     payload["features"]["1_backlog"], priorities
                 )
-        except (BoardError, BacklogPriorityStorageError, OSError) as exc:
+                epic_priority = read_backlog_epic_priority(board, root=self.server.root)
+                payload["backlog_epic_priority"] = _backlog_epic_priority_to_dict(epic_priority)
+                epic_rows = payload["epics"]["1_backlog"]
+                by_id = {row["id"]: row for row in epic_rows}
+                ranked_ids = set(epic_priority.epic_ids)
+                payload["epics"]["1_backlog"] = [
+                    by_id[epic_id] for epic_id in epic_priority.epic_ids if epic_id in by_id
+                ] + [row for row in epic_rows if row["id"] not in ranked_ids]
+        except (BoardError, BacklogPriorityStorageError, BacklogEpicPriorityStorageError, OSError) as exc:
             self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, f"Board unavailable: {exc}")
             return
         self._json_response(HTTPStatus.OK, payload)
@@ -1154,6 +1174,42 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 "epic_id": priority.epic_id,
                 **_backlog_priority_to_dict(priority),
             },
+        )
+
+    def _handle_reorder_backlog_epics(self, body: dict[str, Any]) -> None:
+        epic_ids = body.get("epic_ids")
+        expected_token = body.get("expected_token")
+        if not isinstance(epic_ids, list) or any(
+            not isinstance(epic_id, str) or not epic_id.strip() for epic_id in epic_ids
+        ):
+            self._json_error(HTTPStatus.BAD_REQUEST, "invalid epic_ids")
+            return
+        if not isinstance(expected_token, str) or not expected_token:
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing expected_token")
+            return
+        try:
+            priority = reorder_backlog_epics(
+                epic_ids, expected_token=expected_token, root=self.server.root
+            )
+        except BacklogEpicPriorityError as exc:
+            if exc.code == "stale_priority" and exc.current is not None:
+                self._json_response(
+                    HTTPStatus.CONFLICT,
+                    {"ok": False, "code": exc.code, "error": str(exc),
+                     **_backlog_epic_priority_to_dict(exc.current)},
+                )
+                return
+            self._json_response(
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+                {"ok": False, "code": exc.code, "error": str(exc)},
+            )
+            return
+        except (BoardError, BacklogEpicPriorityStorageError, OSError) as exc:
+            self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
+            return
+        self._json_response(
+            HTTPStatus.OK,
+            {"ok": True, **_backlog_epic_priority_to_dict(priority)},
         )
 
     def _handle_doc(self, work_id: str) -> None:

@@ -41,6 +41,7 @@ const context = {
   lastBoardView: null,
   BranchSyncUiApi: null,
   EpicPlanReadinessUi: null,
+  backlogEpicPriorityUi: null,
   OPEN_STATUSES: { backlog: true },
   branchSyncHelpers: () => null,
   actionButton(label, _handler, disabledReason) {

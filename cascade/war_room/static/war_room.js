@@ -23,6 +23,7 @@
   let lastBoardView = null;
   let branchSyncRowHelpers = null;
   let backlogPriorityUi = null;
+  let backlogEpicPriorityUi = null;
   const RECOVERY_TOASTS_STORAGE_KEY = "cascade-war-room-recovery-transitions";
   let recoveryIncidentTransitions = readRecoveryIncidentTransitions();
 
@@ -735,6 +736,8 @@
   function renderBoard(view) {
     const renderStartedAt = performance.now();
     lastBoardView = view;
+    if ((backlogPriorityUi && backlogPriorityUi.isDragging()) ||
+        (backlogEpicPriorityUi && backlogEpicPriorityUi.isDragging())) return;
     if (!backlogPriorityUi && BacklogPriorityUiApi) {
       backlogPriorityUi = BacklogPriorityUiApi.createController({
         document: document,
@@ -746,7 +749,20 @@
         },
       });
     }
+    if (!backlogEpicPriorityUi && BacklogPriorityUiApi) {
+      backlogEpicPriorityUi = BacklogPriorityUiApi.createController({
+        scope: "epic",
+        document: document,
+        board: el.board,
+        apiPost: apiPost,
+        setStatus: setStatus,
+        rerender: function () {
+          if (lastBoardView) renderBoard(lastBoardView);
+        },
+      });
+    }
     if (backlogPriorityUi) backlogPriorityUi.syncBoard(view);
+    if (backlogEpicPriorityUi) backlogEpicPriorityUi.syncBoard(view);
     reconcileRecoveryIncidentToasts(view);
     if (BoardFocusApi && boardFocus) {
       boardFocus = BoardFocusApi.reconcileFocusWithLens(view, boardFocus);
@@ -775,6 +791,9 @@
         if (tier === "features" && col === "1_backlog" && backlogPriorityUi) {
           rows = backlogPriorityUi.orderRows(rows);
         }
+        if (tier === "epics" && col === "1_backlog" && backlogEpicPriorityUi) {
+          rows = backlogEpicPriorityUi.orderRows(rows);
+        }
         rows.forEach(function (item) {
           colEl.appendChild(buildRow(item, tier, col));
         });
@@ -785,6 +804,7 @@
       }
     });
     if (backlogPriorityUi) backlogPriorityUi.restoreFocus();
+    if (backlogEpicPriorityUi) backlogEpicPriorityUi.restoreFocus();
     performance.measure("cascade.board.render", {
       start: renderStartedAt,
       end: performance.now(),
@@ -1275,6 +1295,10 @@
     if (tier === "features" && column === "1_backlog" && backlogPriorityUi) {
       backlogPriorityUi.appendMoveControls(actions, item);
       backlogPriorityUi.decorateRow(row, item);
+    }
+    if (tier === "epics" && column === "1_backlog" && backlogEpicPriorityUi) {
+      backlogEpicPriorityUi.appendMoveControls(actions, item);
+      backlogEpicPriorityUi.decorateRow(row, item);
     }
 
     if (item.recovery_incident && typeof appendRecoveryIncident === "function") {

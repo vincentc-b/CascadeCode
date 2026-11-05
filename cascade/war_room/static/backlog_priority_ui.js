@@ -5,11 +5,12 @@
   }
   root.BacklogPriorityUi = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  function copyProjection(value) {
-    if (!value || !Array.isArray(value.feature_ids) || typeof value.token !== "string") {
+  function copyProjection(value, idField) {
+    const field = idField || "feature_ids";
+    if (!value || !Array.isArray(value[field]) || typeof value.token !== "string") {
       return null;
     }
-    return { feature_ids: value.feature_ids.slice(), token: value.token };
+    return { feature_ids: value[field].slice(), token: value.token };
   }
 
   function moveFeature(featureIds, featureId, offset) {
@@ -28,7 +29,7 @@
     const targetIndex = next.indexOf(targetId);
     if (targetIndex < 0 || next.length === featureIds.length) return null;
     next.splice(targetIndex + (afterTarget ? 1 : 0), 0, featureId);
-    return next;
+    return next.every(function (id, index) { return id === featureIds[index]; }) ? null : next;
   }
 
   function isActionTarget(target) {
@@ -39,6 +40,11 @@
   }
 
   function createController(deps) {
+    const epicScope = deps.scope === "epic";
+    const idField = epicScope ? "epic_ids" : "feature_ids";
+    const groupFor = epicScope
+      ? function () { return "backlog_epics"; }
+      : function (item) { return item.parent; };
     const document = deps.document;
     const apiPost = deps.apiPost;
     const setStatus = deps.setStatus;
@@ -50,9 +56,12 @@
     let focusRequest = null;
 
     function syncBoard(view) {
-      const projections = (view && view.backlog_feature_priorities) || {};
+      const projections = epicScope
+        ? ((view && view.backlog_epic_priority)
+          ? { backlog_epics: view.backlog_epic_priority } : {})
+        : ((view && view.backlog_feature_priorities) || {});
       Object.keys(projections).forEach(function (epicId) {
-        const projection = copyProjection(projections[epicId]);
+        const projection = copyProjection(projections[epicId], idField);
         if (
           !projection ||
           (supersededTokens[epicId] && supersededTokens[epicId].has(projection.token))
@@ -74,8 +83,9 @@
       const ordered = rows.slice();
       const positions = Object.create(null);
       ordered.forEach(function (row, index) {
-        if (row && projectionFor(row.parent)) {
-          (positions[row.parent] || (positions[row.parent] = [])).push(index);
+        const group = row && groupFor(row);
+        if (group && projectionFor(group)) {
+          (positions[group] || (positions[group] = [])).push(index);
         }
       });
       Object.keys(positions).forEach(function (epicId) {
@@ -124,12 +134,14 @@
       if (focus) requestFocus(focus.featureId, focus.control);
       rerender();
       try {
-        const response = await apiPost("/api/reorder_backlog_features", {
-          epic_id: epicId,
-          feature_ids: featureIds,
-          expected_token: current.token,
-        });
-        const accepted = copyProjection(response.body);
+        const payload = { expected_token: current.token };
+        payload[idField] = featureIds;
+        if (!epicScope) payload.epic_id = epicId;
+        const response = await apiPost(
+          epicScope ? "/api/reorder_backlog_epics" : "/api/reorder_backlog_features",
+          payload
+        );
+        const accepted = copyProjection(response.body, idField);
         if (accepted) {
           markSuperseded(epicId, current.token);
           confirmed[epicId] = accepted;
@@ -137,11 +149,11 @@
         delete pending[epicId];
         if (focus) requestFocus(focus.featureId, focus.control);
         rerender();
-        setStatus("Backlog priority updated for " + epicId + ".", false);
+        setStatus(epicScope ? "Backlog epic order updated." : "Backlog priority updated for " + epicId + ".", false);
         return true;
       } catch (err) {
         const body = err && err.body;
-        const currentProjection = copyProjection(body);
+        const currentProjection = copyProjection(body, idField);
         if (currentProjection) {
           markSuperseded(epicId, current.token);
           confirmed[epicId] = currentProjection;
@@ -160,7 +172,8 @@
     }
 
     function appendMoveControls(actions, item) {
-      const projection = projectionFor(item.parent);
+      const group = groupFor(item);
+      const projection = projectionFor(group);
       if (!projection) return;
       const index = projection.feature_ids.indexOf(item.id);
       if (index < 0) return;
@@ -179,31 +192,37 @@
         button.dataset.backlogMove = spec.direction;
         button.setAttribute(
           "aria-label",
-          spec.label + " " + item.id + " in " + item.parent + " backlog priority"
+          spec.label + " " + item.id + " in " + (epicScope ? "epic" : item.parent) + " backlog priority"
         );
         button.disabled = spec.boundary;
-        if (pending[item.parent]) {
+        if (pending[group]) {
           button.setAttribute("aria-disabled", "true");
           button.title = "Saving backlog priority";
         }
         button.addEventListener("click", function (event) {
           event.preventDefault();
           event.stopPropagation();
-          if (button.disabled || pending[item.parent]) return;
-          const latest = projectionFor(item.parent);
+          if (button.disabled || pending[group]) return;
+          const latest = projectionFor(group);
           const next = latest && moveFeature(latest.feature_ids, item.id, spec.offset);
-          if (next) submit(item.parent, next, { featureId: item.id, control: spec.direction });
+          if (next) submit(group, next, { featureId: item.id, control: spec.direction });
         });
         actions.appendChild(button);
       });
     }
 
     function decorateRow(row, item) {
-      const projection = projectionFor(item.parent);
+      const group = groupFor(item);
+      const projection = projectionFor(group);
       if (!projection || projection.feature_ids.indexOf(item.id) < 0) return;
-      row.draggable = !pending[item.parent];
-      row.dataset.backlogPriorityEpic = item.parent;
-      row.setAttribute("aria-roledescription", "Draggable backlog feature");
+      const dragHint = document.createElement("span");
+      dragHint.className = "backlog-drag-hint";
+      dragHint.textContent = pending[group] ? "Saving priority…" : "⋮⋮ Drag to reorder";
+      dragHint.title = epicScope ? "Drag this epic within the backlog" : "Drag this feature within the " + item.parent + " backlog";
+      row.insertBefore(dragHint, row.firstChild);
+      row.draggable = !pending[group];
+      row.dataset.backlogPriorityEpic = group;
+      row.setAttribute("aria-roledescription", epicScope ? "Draggable backlog epic" : "Draggable backlog feature");
       let suppressClickUntil = 0;
       row.addEventListener("click", function (event) {
         if (Date.now() > suppressClickUntil) return;
@@ -214,11 +233,11 @@
       }, true);
       row.addEventListener("dragstart", function (event) {
         suppressClickUntil = Date.now() + 500;
-        if (pending[item.parent] || isActionTarget(event.target)) {
+        if (pending[group] || isActionTarget(event.target)) {
           event.preventDefault();
           return;
         }
-        dragged = { featureId: item.id, epicId: item.parent };
+        dragged = { featureId: item.id, epicId: group };
         row.classList.add("board-row-dragging");
         if (event.dataTransfer) {
           event.dataTransfer.effectAllowed = "move";
@@ -226,25 +245,27 @@
         }
       });
       row.addEventListener("dragover", function (event) {
-        if (!dragged || dragged.epicId !== item.parent || dragged.featureId === item.id) return;
+        if (!dragged || dragged.epicId !== group || dragged.featureId === item.id) return;
         event.preventDefault();
         if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
       });
       row.addEventListener("drop", function (event) {
-        if (!dragged || dragged.epicId !== item.parent || dragged.featureId === item.id) return;
+        if (!dragged || dragged.epicId !== group || dragged.featureId === item.id) return;
         event.preventDefault();
         event.stopPropagation();
-        const latest = projectionFor(item.parent);
+        const latest = projectionFor(group);
         const rect = row.getBoundingClientRect ? row.getBoundingClientRect() : null;
         const after = !!(rect && typeof event.clientY === "number" && event.clientY > rect.top + rect.height / 2);
         const next = latest && dropFeature(latest.feature_ids, dragged.featureId, item.id, after);
         const movedId = dragged.featureId;
         dragged = null;
-        if (next) submit(item.parent, next, null);
+        if (next) submit(group, next, null);
       });
       row.addEventListener("dragend", function () {
+        const wasDragging = !!dragged;
         dragged = null;
         row.classList.remove("board-row-dragging");
+        if (wasDragging) rerender();
       });
     }
 
@@ -256,6 +277,7 @@
       restoreFocus: restoreFocus,
       submit: submit,
       projectionFor: projectionFor,
+      isDragging: function () { return !!dragged; },
     };
   }
 

@@ -134,10 +134,9 @@ body {
   grid-template-columns:
     var(--context-panel-size)
     1rem
-    minmax(28rem, 42rem)
+    minmax(28rem, 1fr)
     1rem
     var(--utilities-panel-size);
-  justify-content: center;
   align-items: start;
 }
 
@@ -233,6 +232,12 @@ body {
   font-size: 0.85rem;
   margin: 0 0 0.5rem;
   color: var(--muted);
+}
+
+.backlog-priority-help {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 0 0 0.6rem;
 }
 
 .board-columns {
@@ -341,6 +346,15 @@ body {
 
 .board-row-dragging {
   opacity: 0.55;
+}
+
+.backlog-drag-hint {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  user-select: none;
 }
 
 .board-tier-empty {

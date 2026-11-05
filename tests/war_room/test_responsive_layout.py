@@ -13,6 +13,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 _TEMPLATE = _ROOT / "cascade" / "war_room" / "templates" / "war_room.html"
 _STYLES = _ROOT / "cascade" / "war_room" / "static" / "war_room.css"
 _RESIZING = _ROOT / "cascade" / "war_room" / "static" / "panel_resizing.js"
+_PRIORITY_UI = _ROOT / "cascade" / "war_room" / "static" / "backlog_priority_ui.js"
 _RESIZING_CASES = Path(__file__).with_name("panel_resizing_cases.mjs")
 
 
@@ -42,7 +43,7 @@ def test_shell_declares_content_independent_wide_and_narrow_tracks():
         'grid-template-areas: "context context-resizer board utilities-resizer utilities"'
         in css
     )
-    assert "minmax(28rem, 42rem)" in css
+    assert "minmax(28rem, 1fr)" in css
     for region in (".room-panels", ".board-panel", ".side-panels"):
         block = css.split(region, 1)[1].split("}", 1)[0]
         assert "min-width: 0" in block
@@ -118,7 +119,7 @@ def _enable_resizing(page, stored_value: str | None = None) -> None:
     page.add_script_tag(path=str(_RESIZING))
 
 
-def test_wide_shell_is_centered_and_board_width_survives_poll_rerender(
+def test_wide_shell_fills_viewport_and_board_width_survives_poll_rerender(
     browser,
 ):
     page = browser.new_page(viewport={"width": 1600, "height": 1000})
@@ -131,7 +132,8 @@ def test_wide_shell_is_centered_and_board_width_survives_poll_rerender(
 
     assert context["x"] < board_before["x"] < utilities["x"]
     assert abs((board_before["x"] + board_before["width"] / 2) - 800) <= 1
-    assert 650 <= board_before["width"] <= 680
+    assert board_before["width"] >= 850
+    assert utilities["x"] + utilities["width"] >= 1570
 
     # renderBoard replaces each column's descendants after a poll. A long
     # unbroken title catches intrinsic-grid sizing regressions that previously
@@ -194,19 +196,23 @@ def test_resize_persist_restore_and_reset_flow_is_bounded_and_accessible(browser
         "localStorage.getItem('cascade-war-room-panel-sizes-v1')"
     ) is None
 
-    # Keyboard resizing clamps at the advertised maximum and persists.
+    # Keyboard resizing can use space beyond the old fixed panel cap.
     context_handle.focus()
     context_handle.press("End")
-    assert _box(page, "#room-panels")["width"] == pytest.approx(384, abs=0.5)
-    assert context_handle.get_attribute("aria-valuenow") == "384"
+    context_width = _box(page, "#room-panels")["width"]
+    assert context_width > 384
+    assert context_handle.get_attribute("aria-valuenow") == str(round(context_width))
 
     # Pointer resizing in the opposite direction clamps the utilities panel.
+    context_handle.press("Home")
+    context_width = _box(page, "#room-panels")["width"]
     handle_box = _box(page, "#utilities-panel-resizer")
     page.mouse.move(handle_box["x"] + handle_box["width"] / 2, handle_box["y"] + 20)
     page.mouse.down()
     page.mouse.move(0, handle_box["y"] + 20)
     page.mouse.up()
-    assert _box(page, ".side-panels")["width"] == pytest.approx(420, abs=0.5)
+    utilities_width = _box(page, ".side-panels")["width"]
+    assert utilities_width > 420
 
     saved = page.evaluate(
         "localStorage.getItem('cascade-war-room-panel-sizes-v1')"
@@ -214,16 +220,16 @@ def test_resize_persist_restore_and_reset_flow_is_bounded_and_accessible(browser
     assert saved is not None
     assert page.evaluate("value => JSON.parse(value)", saved) == {
         "version": 1,
-        "context": 384,
-        "utilities": 420,
+        "context": round(context_width),
+        "utilities": round(utilities_width),
     }
 
     # A fresh document restores the validated values before any board polling.
     restored = browser.new_page(viewport={"width": 1600, "height": 1000})
     _load_shell(restored)
     _enable_resizing(restored, saved)
-    assert _box(restored, "#room-panels")["width"] == pytest.approx(384, abs=0.5)
-    assert _box(restored, ".side-panels")["width"] == pytest.approx(420, abs=0.5)
+    assert _box(restored, "#room-panels")["width"] == pytest.approx(context_width, abs=0.5)
+    assert _box(restored, ".side-panels")["width"] == pytest.approx(utilities_width, abs=0.5)
 
     restored.locator("#btn-reset-panel-sizes").click()
     assert _box(restored, "#room-panels")["width"] == pytest.approx(320, abs=0.5)
@@ -234,3 +240,54 @@ def test_resize_persist_restore_and_reset_flow_is_bounded_and_accessible(browser
     assert restored.locator("#panel-size-status").text_content() == (
         "Panel sizes reset to defaults"
     )
+
+
+def test_backlog_feature_drag_handle_submits_reorder_in_browser(browser):
+    page = browser.new_page(viewport={"width": 1600, "height": 1000})
+    _load_shell(page)
+    page.add_script_tag(path=str(_PRIORITY_UI))
+    page.evaluate(
+        """() => {
+          const column = document.querySelector('[data-tier="features"] [data-column="1_backlog"]');
+          column.replaceChildren();
+          window.reorderRequests = [];
+          const controller = BacklogPriorityUi.createController({
+            document,
+            board: document.getElementById('war-room-board'),
+            apiPost(path, payload) {
+              window.reorderRequests.push({path, payload});
+              return Promise.resolve({body: {feature_ids: payload.feature_ids, token: 'accepted'}});
+            },
+            setStatus() {},
+            rerender() {},
+          });
+          controller.syncBoard({backlog_feature_priorities: {
+            epic_a: {feature_ids: ['feat_1', 'feat_2', 'feat_3'], token: 'initial'},
+          }});
+          for (const id of ['feat_1', 'feat_2', 'feat_3']) {
+            const row = document.createElement('div');
+            row.className = 'board-row';
+            row.dataset.id = id;
+            const title = document.createElement('div');
+            title.className = 'board-row-title';
+            title.textContent = id;
+            row.appendChild(title);
+            controller.decorateRow(row, {id, parent: 'epic_a'});
+            column.appendChild(row);
+          }
+        }"""
+    )
+    source = page.locator('[data-id="feat_1"] .backlog-drag-hint')
+    target = page.locator('[data-id="feat_3"]')
+    assert source.is_visible()
+    source.drag_to(target)
+    assert page.evaluate("window.reorderRequests") == [
+        {
+            "path": "/api/reorder_backlog_features",
+            "payload": {
+                "epic_id": "epic_a",
+                "feature_ids": ["feat_2", "feat_1", "feat_3"],
+                "expected_token": "initial",
+            },
+        }
+    ]
