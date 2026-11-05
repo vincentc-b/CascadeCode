@@ -2,7 +2,7 @@
 id: feat_023_003
 title: War Room latency review and targeted fixes
 tier: feature
-status: active
+status: completed
 parent: epic_023
 children:
 - task_023_003_001
