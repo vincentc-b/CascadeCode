@@ -49,9 +49,13 @@ def compute_epic_plan_readiness(
     if meta.path.parent.name != "2_active":
         return None
 
-    revision = canonical_plan_revision(epic_id, root=root)
+    revision = canonical_plan_revision(epic_id, root=root, meta=meta)
     open_questions = unresolved_canonical_open_questions(epic_id, root=root)
-    valid = current_valid_sign_offs(epic_id, root=root) if revision is not None else {}
+    valid = (
+        current_valid_sign_offs(epic_id, root=root, plan_revision=revision)
+        if revision is not None
+        else {}
+    )
 
     sign_offs = {role: row.to_dict() for role, row in valid.items()}
     missing_roles = _missing_roles(valid)

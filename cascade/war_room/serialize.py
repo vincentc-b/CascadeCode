@@ -558,6 +558,18 @@ def board_view_from_index(board, *, root: Path) -> dict:
         if review is not None
         and review.get("state") in {"preparing_review", "awaiting_review"}
     )
+    backlog_feature_ids = {
+        meta.id for meta in metas if _backlog_open_feature(meta)
+    }
+    from cascade.comments.gate import blocking_threads_for_many, gate_refusal_reason
+
+    gate_results = blocking_threads_for_many(
+        backlog_feature_ids, root=root, board=board
+    )
+    review_refusals = {
+        feature_id: gate_refusal_reason(result) if result.blocked else None
+        for feature_id, result in gate_results.items()
+    }
     sync_views = branch_sync_views(metas, root=root)
     incidents = recovery_incidents_by_work_id(root=root)
 
@@ -587,6 +599,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
                 root=root,
                 board=board,
                 pending_review_ids=pending_review_ids,
+                review_refusals=review_refusals,
             )
             if readiness is not None:
                 item["readiness"] = feature_readiness_to_dict(readiness)

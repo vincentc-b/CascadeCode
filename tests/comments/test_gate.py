@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from cascade.board.store import read_doc, write_doc
-from cascade.comments.gate import blocking_threads_for, is_section_thread
+from cascade.comments.gate import (
+    blocking_threads_for,
+    blocking_threads_for_many,
+    is_section_thread,
+)
 from cascade.comments.store import comment
 from tests.support import EPIC_BODY, add_doc, make_repo
 
@@ -229,3 +233,22 @@ def test_is_section_thread_heading_match(tmp_path: Path) -> None:
     assert is_section_thread("epic_002", "cross-module-constraints", root=root)
     assert not is_section_thread("epic_002", "Open questions", root=root)
     assert not is_section_thread("epic_002", "general", root=root)
+
+
+def test_batched_gate_matches_individual_projection(tmp_path: Path) -> None:
+    root = _gate_board(tmp_path)
+    comment(
+        "epic_002",
+        "cross-module-constraints",
+        "epic section hold",
+        author="human",
+        blocking=True,
+        root=root,
+    )
+    work_ids = ["feat_001", "feat_002", "task_001"]
+
+    batched = blocking_threads_for_many(work_ids, root=root)
+
+    assert batched == {
+        work_id: blocking_threads_for(work_id, root=root) for work_id in work_ids
+    }
