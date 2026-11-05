@@ -434,7 +434,7 @@ assertEpicOrFeatureInitialInline("feature");
   assert.match(css, /@media \(max-width: 36rem\)[\s\S]*\.plan-inline-threads/);
 }
 
-console.log("plan_inline_threads cases ok");
+
 
 // Initial and delayed epic_028 chains across both tiers and placements.
 // Use the existing DOM flow harness with controlled timers and API responses.
@@ -446,11 +446,26 @@ for (const tier of ["epic", "feature"]) {
     };
     const reply = (id, parent) => ({ id, parent, body: id, author: "epic_manager", created: `2026-01-01T00:00:${id.slice(-2)}Z` });
     let rows = [root, reply("cmt_006", root.id), reply("cmt_007", "cmt_006"), reply("cmt_008", root.id), reply("cmt_009", "cmt_008")];
+    // The complete stored chain must also work before polling starts.
+    const complete = [...rows, reply("cmt_010", "cmt_008")];
+    const initial = mountComments(tier, partitionDoc, [...complete].reverse());
+    const initialHost = inline ? initial.dom.bodyEl : initial.dom.threadEl;
+    assert.deepEqual(querySelectorAll(threadById(initialHost, root.id), ".plan-comment-entry")
+      .map(e => e.getAttribute("data-entry-id")), complete.map(r => r.id));
+    const styled = { ...baseInlineComments()[3], state: "resolved" };
+    rows.push(styled);
     const { dom, hooks } = mountComments(tier, partitionDoc, rows);
     const host = inline ? dom.bodyEl : dom.threadEl;
     const thread = threadById(host, root.id);
     const draft = thread.querySelector("textarea");
     draft.value = "unsent reply";
+    const composeDraft = document.getElementById("plan-comment-body");
+    composeDraft.value = "unsent whole-plan comment";
+    const resolveControl = thread.querySelector(".plan-comment-resolve");
+    const details = createElement("details");
+    details.open = true;
+    thread.appendChild(details);
+    const styledThread = threadById(dom.bodyEl, styled.id);
     const rootNode = thread.querySelector('[data-entry-id="cmt_001"]');
     assert.match(textContentDeep(thread), /cmt_007/);
     assert.match(textContentDeep(thread), /reply to cmt_006/);
@@ -499,6 +514,13 @@ for (const tier of ["epic", "feature"]) {
       assert.equal(threadById(host, root.id), thread);
       assert.equal(thread.querySelector("textarea"), draft);
       assert.equal(draft.value, "unsent reply");
+      assert.equal(composeDraft.value, "unsent whole-plan comment");
+      assert.equal(thread.querySelector(".plan-comment-resolve"), resolveControl);
+      assert.equal(thread.querySelector("details"), details);
+      assert.equal(details.open, true);
+      assert.equal(threadById(dom.bodyEl, styled.id), styledThread);
+      assert.ok(styledThread.classList.contains("resolved"));
+      assert.ok(styledThread.classList.contains("outdated"));
       assert.equal(thread.querySelector('[data-entry-id="cmt_001"]'), rootNode);
       assert.ok(focusRestored && viewportRestored);
       assert.match(textContentDeep(thread), /cmt_010/);
@@ -506,6 +528,11 @@ for (const tier of ["epic", "feature"]) {
       const entries = querySelectorAll(thread, ".plan-comment-entry");
       assert.equal(entries.length, 6);
       assert.equal(new Set(entries.map(e => e.getAttribute("data-entry-id"))).size, 6);
+      // A deeper arrival must preserve its immediate parent and appear once.
+      rows = [...rows, reply("cmt_011", "cmt_010"), reply("cmt_012", "cmt_011")];
+      await runTimer(2000);
+      assert.equal(thread.querySelector('[data-entry-id="cmt_012"]').getAttribute("data-parent-id"), "cmt_011");
+      assert.equal(querySelectorAll(thread, ".plan-comment-entry").length, 8);
       fail = true;
       await runTimer(2000);
       assert.match(textContentDeep(thread), /cmt_010/, "failure retains successful data");
@@ -549,6 +576,22 @@ for (const tier of ["epic", "feature"]) {
       assert.equal(hooks.getCommentStatus(), "", "stale failure cannot change current status");
       assert.ok([...timers.values()].some(t => t.delay === 2000), "stale failure cannot increase backoff");
 
+      // A hung fetch is aborted by the bounded request timer, then retried.
+      pending = null;
+      const normalFetch = globalThis.fetch;
+      globalThis.fetch = (_url, options) => new Promise((_resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new Error("timeout")));
+      });
+      const timedRequest = hooks.loadComments();
+      const timeout = [...timers].find(([, timer]) => timer.delay === 10000);
+      assert.ok(timeout, "request has a ten-second deadline");
+      timers.delete(timeout[0]);
+      timeout[1].fn();
+      await timedRequest.catch(() => {});
+      assert.equal(timers.size, 1, "timeout leaves only one retry timer");
+      globalThis.fetch = normalFetch;
+      await hooks.loadComments();
+
       pending = new Promise(r => { resolve = r; });
       const stoppedRequest = hooks.loadComments();
       hooks.stopRefresh();
@@ -563,3 +606,5 @@ for (const tier of ["epic", "feature"]) {
     }
   }
 }
+
+console.log("plan_inline_threads cases ok");
