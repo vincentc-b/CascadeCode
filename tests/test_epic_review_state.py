@@ -14,6 +14,7 @@ from cascade.review import (
     EpicReviewSnapshot,
     epic_review_snapshot,
     persist_epic_review_snapshot,
+    poll_feature_reviews,
     refresh_epic_review_snapshot,
 )
 from cascade.tracking import ReviewNotFound
@@ -37,6 +38,23 @@ def test_epic_review_snapshot_round_trips_all_close_fields(tmp_path: Path) -> No
     record = json.loads((root / ".cascade" / "reviews.json").read_text())["epic_001"]
     assert record["kind"] == "epic_close"
     assert record["review_url"] == snapshot.review_url
+
+
+def test_feature_review_poll_ignores_epic_close_record(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    persist_epic_review_snapshot(
+        "epic_001",
+        EpicReviewSnapshot(
+            stage="implementation_review_pending",
+            review_url="https://github.example/acme/project/pull/17",
+            source_branch="epic/epic_001",
+            target_branch="main",
+            forge_state="open",
+        ),
+        root=root,
+    )
+
+    poll_feature_reviews(root)
 
 
 def test_epic_review_snapshot_loads_legacy_merge_request_record(tmp_path: Path) -> None:
