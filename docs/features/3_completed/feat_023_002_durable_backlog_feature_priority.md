@@ -2,7 +2,7 @@
 id: feat_023_002
 title: Durable backlog feature priority
 tier: feature
-status: active
+status: completed
 parent: epic_023
 children:
 - task_023_002_001
