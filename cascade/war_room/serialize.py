@@ -612,6 +612,17 @@ def board_view_from_index(board, *, root: Path) -> dict:
             # The source plan is already in completed so the MR contains its
             # final location, but operationally the feature remains in flight.
             folder = "2_active"
+        close_review = item.get("implementation_review")
+        if (
+            meta.tier == "epic"
+            and folder == "3_completed"
+            and isinstance(close_review, dict)
+            and close_review.get("close_stage") != "completed"
+        ):
+            # The reviewed source doc is staged in completed before the forge
+            # merge. Keep the Epic visible as active until close reconciliation
+            # verifies that the review landed.
+            folder = "2_active"
         view[key][folder].append(item)
 
     from cascade.war_room.completed_epics import (
