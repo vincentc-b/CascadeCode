@@ -7,10 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from cascade.board.store import move_doc, read_doc, write_doc
+from cascade.board.store import list_board, move_doc, read_doc, write_doc
 from cascade.boss.epic_complete import try_complete_epic
 from cascade.boss.rollup import try_complete_feature, write_closeout
 from cascade.completion_reconcile import reconcile_completion
+from cascade.review import (
+    EpicReviewSnapshot,
+    epic_review_snapshot,
+    persist_epic_review_snapshot,
+)
+from cascade.war_room.serialize import board_view_from_index
 from cascade.watchdog.events import read_events
 from tests.support import add_doc, make_repo
 
@@ -120,6 +126,46 @@ def test_reconcile_completes_epic_when_all_persisted_children_done(tmp_path: Pat
     assert epic.meta.status == "completed"
     war_events, _ = read_events("war_room", 0, root=root)
     assert len([e for e in war_events if e.type == "EpicCompleted"]) == 1
+
+
+def test_reconcile_pulled_epic_only_after_its_review_merges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
+    review = EpicReviewSnapshot(
+        stage="implementation_review_pending",
+        review_url="https://github.example/acme/project/pull/17",
+        source_branch="epic/epic_001",
+        target_branch="main",
+        forge_state="open",
+    )
+    persist_epic_review_snapshot("epic_001", review, root=root)
+    forge_state = "open"
+
+    def refresh(_epic_id: str, *, root: Path) -> EpicReviewSnapshot:
+        return EpicReviewSnapshot(
+            stage="implementation_review_pending",
+            review_url=review.review_url,
+            source_branch=review.source_branch,
+            target_branch=review.target_branch,
+            forge_state=forge_state,
+        )
+
+    monkeypatch.setattr("cascade.boss.epic_complete.refresh_epic_review_snapshot", refresh)
+    assert reconcile_completion(root)["epics"] == []
+    assert epic_review_snapshot("epic_001", root=root) == review
+    board = board_view_from_index(list_board(root), root=root)
+    assert [row["id"] for row in board["epics"]["2_active"]] == ["epic_001"]
+
+    forge_state = "merged"
+    assert reconcile_completion(root)["epics"] == ["epic_001"]
+    assert epic_review_snapshot("epic_001", root=root).stage == "completed"
+    board = board_view_from_index(list_board(root), root=root)
+    assert [row["id"] for row in board["epics"]["3_completed"]] == ["epic_001"]
+    assert reconcile_completion(root)["epics"] == []
+    war_events, _ = read_events("war_room", 0, root=root)
+    assert len([event for event in war_events if event.type == "EpicCompleted"]) == 1
 
 
 def test_incomplete_persisted_follow_up_blocks_epic_completion(tmp_path: Path) -> None:
