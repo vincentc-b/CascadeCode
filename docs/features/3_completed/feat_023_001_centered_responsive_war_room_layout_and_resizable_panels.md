@@ -2,7 +2,7 @@
 id: feat_023_001
 title: Centered responsive War Room layout and resizable panels
 tier: feature
-status: active
+status: completed
 parent: epic_023
 children:
 - task_023_001_001
