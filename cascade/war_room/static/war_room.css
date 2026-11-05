@@ -30,7 +30,7 @@ body {
 }
 
 #war-room-app {
-  max-width: 1400px;
+  width: 100%;
   margin: 0 auto;
   padding: 1rem 1.25rem 2rem;
 }
@@ -116,14 +116,43 @@ body {
 
 .war-room-layout {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 280px;
+  grid-template-areas: "context board utilities";
+  grid-template-columns:
+    minmax(14rem, 1fr)
+    minmax(28rem, 42rem)
+    minmax(17.5rem, 1fr);
   gap: 1rem;
   align-items: start;
 }
 
-@media (max-width: 1100px) {
+.room-panels {
+  grid-area: context;
+  min-width: 0;
+}
+
+.board-panel {
+  grid-area: board;
+  min-width: 0;
+}
+
+.side-panels {
+  grid-area: utilities;
+  min-width: 0;
+}
+
+@media (max-width: 1240px) {
   .war-room-layout {
+    grid-template-areas:
+      "board"
+      "context"
+      "utilities";
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  #war-room-app {
+    padding-inline: 0.75rem;
   }
 }
 
@@ -233,6 +262,7 @@ body {
   padding: 0.5rem 0.6rem;
   margin-bottom: 0.35rem;
   font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 
 .board-row[data-tier="epic"],
