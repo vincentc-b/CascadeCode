@@ -330,6 +330,19 @@ body {
   box-shadow: 0 0 0 1px var(--accent, #3b82f6);
 }
 
+.board-row[data-backlog-priority-epic] {
+  cursor: grab;
+}
+
+.board-row[data-backlog-priority-epic]:active,
+.board-row-dragging {
+  cursor: grabbing;
+}
+
+.board-row-dragging {
+  opacity: 0.55;
+}
+
 .board-tier-empty {
   font-size: 0.85rem;
   color: var(--muted);
