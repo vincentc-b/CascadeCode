@@ -255,6 +255,10 @@ def _finish_epic_completion_result(
             _emit_epic_completed(epic_id, repo)
             _retire_epic_worktree(epic_id, repo)
             return EpicCompleteResult(ok=True, close_stage="completed")
+        review_state = epic_review_snapshot(epic_id, root=repo)
+        if review_state is not None and review_state.stage == "completed":
+            _emit_epic_completed(epic_id, repo)
+            return EpicCompleteResult(ok=True, close_stage="completed", forge_state="merged")
     blocker = _epic_close_blocker(epic_id, repo=repo, board=board)
     if blocker is not None:
         return blocker
@@ -325,6 +329,17 @@ def _finish_epic_completion_result(
             if entry is None:
                 return EpicCompleteResult(ok=False, reason="checkout_missing")
             move_doc(epic_id, "completed", root=entry.path)
+            persist_epic_review_snapshot(
+                epic_id,
+                EpicReviewSnapshot(
+                    stage="completed",
+                    review_url=review.url,
+                    source_branch=review.source_branch,
+                    target_branch=review.target_branch,
+                    forge_state="merged",
+                ),
+                root=repo,
+            )
             _emit_epic_completed(epic_id, repo)
             return EpicCompleteResult(
                 ok=True, close_stage="completed", forge_state="merged"

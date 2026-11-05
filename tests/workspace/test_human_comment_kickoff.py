@@ -91,6 +91,22 @@ def _patch_run_role(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     async def _wrapped(turn):  # type: ignore[no-untyped-def]
         return await mock(turn)
 
+    # These delivery tests replace provider execution; no local authentication is needed.
+    from cascade.agent.discovery.inventory import (
+        InventoryFreshness, ProviderInventoryItem, ProviderInventoryResult,
+    )
+    from cascade.agent.discovery.types import DiscoveredModel
+
+    inventory = ProviderInventoryResult(
+        providers=(ProviderInventoryItem(
+            provider_id="cursor", display_name="Test provider",
+            models=tuple(DiscoveredModel(id=f"proj-{tier}", display_name=tier)
+                         for tier in ("epic", "feature", "task")),
+        ),),
+        failures=(), freshness=InventoryFreshness(False, 0, 300, 300),
+    )
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.agent.execution_preflight.refresh_provider_inventory", lambda: inventory)
     monkeypatch.setattr("cascade.agent.adapter.run_role", _wrapped)
     monkeypatch.setattr("cascade.agent.planning_turn.run_role", _wrapped)
     return mock
@@ -186,10 +202,21 @@ def test_http_post_then_watchdog_tick_single_kickoff(
         watchdog_tick(root)
         assert wait_for_background_kickoffs()
         turns_after_post = run_role_mock.await_count
-        assert turns_after_post >= 1
+        # One owning-team kickoff executes each of the two epic roles once.
+        assert turns_after_post == 2
+        assert sorted(call.args[0].role for call in run_role_mock.await_args_list) == [
+            "epic_architect", "epic_manager",
+        ]
 
         events, _ = read_events("epic_001", 0, root=root)
         assert sum(event.type == "CommentPosted" for event in events) == 1
+        # Polling and reconnect reads use the same GET path and must be inert.
+        for _ in range(5):
+            with urllib.request.urlopen(f"{base}/api/comments/epic_001") as resp:
+                assert resp.status == HTTPStatus.OK
+                assert len(json.load(resp)["comments"]) == 1
+        after_reads, _ = read_events("epic_001", 0, root=root)
+        assert after_reads == events
         watchdog_tick(root)
         assert wait_for_background_kickoffs()
         assert run_role_mock.await_count == turns_after_post
