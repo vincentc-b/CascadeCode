@@ -2,7 +2,7 @@
 id: epic_033
 title: Show nested plan replies as they arrive
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_033_001
