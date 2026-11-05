@@ -4,7 +4,8 @@ title: Show nested plan replies as they arrive
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_033_001
 depends_on: []
 owners:
 - epic_manager
@@ -48,6 +49,7 @@ Use the existing comment sidecar, `/api/comments/{id}`, and current comment/even
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_033_001
 
 The Epic Team will create and sequence feature plans here.
 
