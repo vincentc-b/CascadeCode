@@ -75,6 +75,10 @@ Out of scope: historical comment rewrites, a second conversation store, queue re
 
 - 2026-11-03 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-05 · Epic Manager · **Scope and delivery**
+  Chose Deliver all four visibility success criteria in feat_033_001 as one vertical slice; exclude storage migration, queue redesign and notification infrastructure..
+  Rationale: Rendering and refresh must work together to solve the reported conversation visibility defect. One feature avoids coordination overhead and preserves the existing durable delivery contract.
+  Honors: Original Intent; Success criteria 1–4; Cross-module constraints; frugal-engineering and product-manager guidance.
 ## Amendment log
 
 _(none)_
