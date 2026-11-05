@@ -30,7 +30,7 @@ body {
 }
 
 #war-room-app {
-  max-width: 1400px;
+  width: 100%;
   margin: 0 auto;
   padding: 1rem 1.25rem 2rem;
 }
@@ -70,6 +70,18 @@ body {
 .brief-dialog small {
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .brief-dialog {
@@ -115,15 +127,87 @@ body {
 }
 
 .war-room-layout {
+  --context-panel-size: 20rem;
+  --utilities-panel-size: 20rem;
   display: grid;
-  grid-template-columns: 1.4fr 1fr 280px;
-  gap: 1rem;
+  grid-template-areas: "context context-resizer board utilities-resizer utilities";
+  grid-template-columns:
+    var(--context-panel-size)
+    1rem
+    minmax(28rem, 42rem)
+    1rem
+    var(--utilities-panel-size);
+  justify-content: center;
   align-items: start;
 }
 
-@media (max-width: 1100px) {
+.room-panels {
+  grid-area: context;
+  min-width: 0;
+}
+
+.board-panel {
+  grid-area: board;
+  min-width: 0;
+}
+
+.side-panels {
+  grid-area: utilities;
+  min-width: 0;
+}
+
+.panel-resizer-context {
+  grid-area: context-resizer;
+}
+
+.panel-resizer-utilities {
+  grid-area: utilities-resizer;
+}
+
+.panel-resizer {
+  align-self: stretch;
+  min-height: 8rem;
+  cursor: col-resize;
+  touch-action: none;
+  position: relative;
+}
+
+.panel-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 0 0.375rem;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.panel-resizer:hover::before,
+.panel-resizer:focus-visible::before,
+.panel-resizer.is-resizing::before {
+  background: var(--accent);
+}
+
+.panel-resizer:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@media (max-width: 1240px) {
   .war-room-layout {
+    grid-template-areas:
+      "board"
+      "context"
+      "utilities";
     grid-template-columns: 1fr;
+  }
+
+  .panel-resizer {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  #war-room-app {
+    padding-inline: 0.75rem;
   }
 }
 
@@ -233,6 +317,7 @@ body {
   padding: 0.5rem 0.6rem;
   margin-bottom: 0.35rem;
   font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 
 .board-row[data-tier="epic"],
