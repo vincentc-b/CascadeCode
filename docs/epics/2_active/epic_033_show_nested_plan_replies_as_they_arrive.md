@@ -38,7 +38,13 @@ A human continuing a conversation in a plan review thread must see the agent's r
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+One feature owns the complete visibility fix: normalize the existing comment response into complete threads, render those threads consistently in inline and tray placements, and refresh comment state while the plan is open. Preserve stored immediate-parent links and existing comment IDs; chronological presentation may flatten visual depth while retaining accessible reply-to context.
+
+Use deterministic oldest-first ordering within each thread with comment ID as a tie-breaker. Missing-parent, self-parent and cyclic relationships must terminate safely and show every valid comment exactly once. Keep fallback comments visible in the tray when an inline anchor is unavailable.
+
+Prefer a small lifecycle-owned polling loop over introducing streaming infrastructure: target new-reply visibility within 5 seconds of successful API availability while visible and connected. Allow one in-flight request, pause periodic requests while hidden, refresh on visibility/reconnect, retain last successful data on failure and use capped retry backoff. Ignore stale responses after navigation or unmount. The feature team may choose an existing event stream if it already satisfies these constraints.
+
+Merge comment data by stable identity without remounting the plan or replacing local draft/control state. Refresh is read-only; posting and owning-team dispatch remain on their existing path.
 
 ## Cross-module constraints
 
@@ -46,16 +52,24 @@ Use the existing comment sidecar, `/api/comments/{id}`, and current comment/even
 
 ## Core dependencies
 
-To be identified during epic planning.
+- Existing comment sidecar and `/api/comments/{id}` response, including stable IDs, timestamps and immediate-parent links.
+- Shared `groupCommentThreads`, plan comment renderer, inline anchors and comment tray used by Epic and Feature plans.
+- Plan-page lifecycle and comment state ownership; existing posting/event/queue integration.
+- Existing browser harness and posting/dispatch regression coverage.
+
+The implementation repository is not available in this planning workspace. Before coding, the feature team must verify API response completeness, shared renderer boundaries, stable identity fields and local state ownership. Any required storage/API contract change comes back to epic review; no separate spike or backend redesign is authorized by this plan.
 
 ## Feature breakdown
-- feat_033_001
 
-The Epic Team will create and sequence feature plans here.
+1. **feat_033_001 — Render complete plan threads and refresh incoming replies.** Delivers all four success criteria as one shippable slice. No feature dependency. Sequence within the feature: inspect existing contracts, fix complete-thread rendering, add lifecycle-safe refresh, then validate the integrated behavior.
+
+Use browser coverage for the epic_028 initial-load and delayed-reply reproduction across Epic/Feature and inline/tray placements. Include draft/focus/control/scroll preservation, missing parents and deeper chains. Add narrow grouping checks for cycles and equal timestamps where cheaper than browser coverage. Reuse existing posting/queue tests to prove one human submission creates one event and one owning-team kickoff, and refresh/reconnect creates no writes or turns. Do not add redundant coverage or a new test framework.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+No product-scope questions remain. Implementation readiness checks belong to feat_033_001: confirm the API returns all descendants, state updates preserve local UI state, malformed links cannot hide comments, and refresh cannot dispatch turns. Escalate a failed contract assumption before expanding scope.
+
+Out of scope: historical comment rewrites, a second conversation store, queue redesign, new notification infrastructure, and changing whether a resolved human ping warrants another agent answer.
 
 ## Decision log
 
