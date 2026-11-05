@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_023_001
+- feat_023_002
 depends_on: []
 owners:
 - epic_manager
@@ -68,6 +69,7 @@ The performance work measures navigation to first usable board, board API time, 
 - Performance review needs a repeatable local seed/fixture and browser timing plus server timing; use the same fixture before and after. Do not set a target based on network or third-party services outside this app.
 
 ## Feature breakdown
+- feat_023_002
 - feat_023_001
 
 1. **Centered responsive War Room layout and resizable panels.** Put context left, board center, utilities right; use the viewport; add clamped, persistent resize controls and reset; reflow at tablet/mobile widths. Acceptance: wide, medium, and narrow viewport checks; no width jump during board poll, selection, or completed-column expansion; controls remain accessible.
