@@ -435,3 +435,106 @@ assertEpicOrFeatureInitialInline("feature");
 }
 
 console.log("plan_inline_threads cases ok");
+
+// Initial and delayed epic_028 chains across both tiers and placements.
+// Use the existing DOM flow harness with controlled timers and API responses.
+for (const tier of ["epic", "feature"]) {
+  for (const inline of [false, true]) {
+    const root = {
+      ...baseInlineComments()[inline ? 0 : 2], id: "cmt_001", state: "open",
+      created: "2026-01-01T00:00:00Z",
+    };
+    const reply = (id, parent) => ({ id, parent, body: id, author: "epic_manager", created: `2026-01-01T00:00:${id.slice(-2)}Z` });
+    let rows = [root, reply("cmt_006", root.id), reply("cmt_007", "cmt_006"), reply("cmt_008", root.id), reply("cmt_009", "cmt_008")];
+    const { dom, hooks } = mountComments(tier, partitionDoc, rows);
+    const host = inline ? dom.bodyEl : dom.threadEl;
+    const thread = threadById(host, root.id);
+    const draft = thread.querySelector("textarea");
+    draft.value = "unsent reply";
+    const rootNode = thread.querySelector('[data-entry-id="cmt_001"]');
+    assert.match(textContentDeep(thread), /cmt_007/);
+    assert.match(textContentDeep(thread), /reply to cmt_006/);
+
+    const timers = new Map();
+    let timerId = 0;
+    const original = { setTimeout, clearTimeout, fetch: globalThis.fetch };
+    globalThis.setTimeout = (fn, delay) => { timers.set(++timerId, { fn, delay }); return timerId; };
+    globalThis.clearTimeout = id => timers.delete(id);
+    const events = new Map();
+    const eventTarget = target => {
+      target.addEventListener = (name, fn) => events.set(name, fn);
+      target.removeEventListener = (name, fn) => { if (events.get(name) === fn) events.delete(name); };
+    };
+    eventTarget(document);
+    eventTarget(window);
+    document.activeElement = draft;
+    draft.isConnected = true;
+    let focusRestored = false;
+    draft.focus = () => { focusRestored = true; };
+    let viewportRestored = false;
+    window.scrollY = 123;
+    window.scrollTo = (x, y) => { viewportRestored = y === 123; };
+    let reads = 0;
+    let fail = false;
+    let pending = null;
+    globalThis.fetch = (url, options) => {
+      assert.match(url, /^\/api\/comments\//);
+      assert.equal(options.method, undefined, "refresh must never post");
+      reads++;
+      if (pending) return pending;
+      return Promise.resolve({ ok: !fail, status: fail ? 503 : 200, json: async () => ({ comments: rows }) });
+    };
+    const runTimer = async delay => {
+      const next = [...timers].find(([, timer]) => timer.delay === delay);
+      assert.ok(next, `expected ${delay}ms refresh`);
+      timers.delete(next[0]);
+      next[1].fn();
+      await hooks.loadComments().catch(() => {});
+    };
+    try {
+      hooks.startRefresh();
+      await hooks.loadComments();
+      rows = [...rows, reply("cmt_010", "cmt_008"), { id: "orphan", parent: "absent", body: "orphan body" }];
+      await runTimer(2000);
+      assert.equal(threadById(host, root.id), thread);
+      assert.equal(thread.querySelector("textarea"), draft);
+      assert.equal(draft.value, "unsent reply");
+      assert.equal(thread.querySelector('[data-entry-id="cmt_001"]'), rootNode);
+      assert.ok(focusRestored && viewportRestored);
+      assert.match(textContentDeep(thread), /cmt_010/);
+      assert.match(textContentDeep(dom.threadEl), /orphan body/);
+      const entries = querySelectorAll(thread, ".plan-comment-entry");
+      assert.equal(entries.length, 6);
+      assert.equal(new Set(entries.map(e => e.getAttribute("data-entry-id"))).size, 6);
+      fail = true;
+      await runTimer(2000);
+      assert.match(textContentDeep(thread), /cmt_010/, "failure retains successful data");
+      assert.ok([...timers.values()].some(t => t.delay === 4000));
+      for (const delay of [4000, 8000, 16000, 30000]) await runTimer(delay);
+      assert.ok([...timers.values()].some(t => t.delay === 30000), "retry delay is capped");
+      document.hidden = true;
+      events.get("visibilitychange")();
+      assert.equal(timers.size, 0);
+      fail = false;
+      document.hidden = false;
+      events.get("visibilitychange")();
+      await hooks.loadComments();
+      let resolve;
+      pending = new Promise(r => { resolve = r; });
+      const before = reads;
+      const request = hooks.loadComments();
+      events.get("online")();
+      events.get("online")();
+      assert.equal(reads, before + 1, "reconnect shares in-flight read");
+      hooks.stopRefresh();
+      resolve({ ok: true, json: async () => ({ comments: [] }) });
+      await request;
+      assert.equal(threadById(host, root.id), thread, "late response after unmount is ignored");
+      assert.equal(timers.size, 0);
+      assert.equal(events.size, 0);
+    } finally {
+      hooks.stopRefresh();
+      Object.assign(globalThis, original);
+    }
+  }
+}

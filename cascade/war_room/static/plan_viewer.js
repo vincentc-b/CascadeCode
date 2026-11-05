@@ -788,22 +788,47 @@
   }
 
   function groupCommentThreads(comments) {
-    var rows = comments || [];
-    var repliesByParent = {};
+    // Sort a copy: API order must not determine roots, replies, or cycle fallback.
+    function compare(a, b) {
+      var delta = (Date.parse(a.created) || 0) - (Date.parse(b.created) || 0);
+      return delta || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    }
+    var rows = (comments || []).slice().sort(compare);
+    var byId = new Map();
+    rows.forEach(function (row) { byId.set(row.id, row); });
+    var rootById = new Map();
     rows.forEach(function (row) {
-      if (!row.parent) return;
-      if (!repliesByParent[row.parent]) {
-        repliesByParent[row.parent] = [];
+      var path = [];
+      var seen = new Map();
+      var current = row;
+      var root;
+      while (!root) {
+        if (rootById.has(current.id)) {
+          root = rootById.get(current.id);
+          break;
+        }
+        if (seen.has(current.id)) {
+          // Break the cycle at its oldest member, independent of input order.
+          root = path.slice(seen.get(current.id)).sort(compare)[0];
+          break;
+        }
+        seen.set(current.id, path.length);
+        path.push(current);
+        if (!current.parent || !byId.has(current.parent)) {
+          root = current;
+          break;
+        }
+        current = byId.get(current.parent);
       }
-      repliesByParent[row.parent].push(row);
+      path.forEach(function (member) { rootById.set(member.id, root); });
     });
-    return rows
-      .filter(function (row) {
-        return !row.parent;
-      })
-      .map(function (root) {
-        return { root: root, replies: repliesByParent[root.id] || [] };
-      });
+    var threads = new Map();
+    rows.forEach(function (row) {
+      var root = rootById.get(row.id);
+      if (!threads.has(root.id)) threads.set(root.id, { root: root, replies: [] });
+      if (row.id !== root.id) threads.get(root.id).replies.push(row);
+    });
+    return Array.from(threads.values()).sort(function (a, b) { return compare(a.root, b.root); });
   }
 
   function collectPreservedThreadExtras(container) {
@@ -1247,15 +1272,22 @@
       selectionBar.hidden = false;
     }
 
+    var commentNodes = new Map();
     function buildCommentNode(row, threadOutdated) {
+      var signature = JSON.stringify([row, !!threadOutdated]);
+      var cached = commentNodes.get(row.id);
+      if (cached && cached.signature === signature) return cached.node;
       var wrap = document.createElement("div");
       wrap.className = "plan-comment-entry";
+      wrap.setAttribute("data-entry-id", row.id);
+      if (row.parent) wrap.setAttribute("data-parent-id", row.parent);
       var meta = document.createElement("div");
       meta.className = "plan-comment-meta";
       meta.textContent =
         (row.author || "unknown") +
         " · " +
         (row.section || "") +
+        (row.parent ? " · reply to " + row.parent : "") +
         (row.blocking ? " · blocking" : "") +
         (threadOutdated ? " · outdated" : "") +
         (row.state === "resolved" ? " · resolved" : "");
@@ -1264,6 +1296,7 @@
       body.textContent = row.body || "";
       wrap.appendChild(meta);
       wrap.appendChild(body);
+      commentNodes.set(row.id, { signature: signature, node: wrap });
       return wrap;
     }
 
@@ -1352,7 +1385,19 @@
       return btn;
     }
 
+    var threadBlocks = new Map();
     function buildThreadBlock(thread, placementInfo, preserved, replyDrafts) {
+      var key = JSON.stringify([thread.root, !!placementInfo.outdated[thread.root.id]]);
+      var cached = threadBlocks.get(thread.root.id);
+      if (cached && cached.key === key) {
+        var oldReplies = cached.block.querySelector(".plan-comment-replies");
+        if (oldReplies) oldReplies.remove();
+        var replies = document.createElement("div");
+        replies.className = "plan-comment-replies";
+        thread.replies.forEach(function (reply) { replies.appendChild(buildCommentNode(reply)); });
+        cached.block.insertBefore(replies, cached.block.children[1] || null);
+        return cached.block;
+      }
       var root = thread.root;
       var block = document.createElement("div");
       block.className = "plan-comment-thread";
@@ -1390,10 +1435,14 @@
           block.appendChild(node);
         });
       }
+      threadBlocks.set(root.id, { key: key, block: block });
       return block;
     }
 
     function renderCommentThreads(comments) {
+      var focused = document.activeElement;
+      var scrollX = window.scrollX || 0;
+      var scrollY = window.scrollY || 0;
       var preserved = collectPreservedThreadExtras(threadEl);
       if (bodyEl) {
         mergePreservedThreadExtras(preserved, collectPreservedThreadExtras(bodyEl));
@@ -1407,6 +1456,10 @@
         clearManagedInlineThreadContainers(bodyEl);
       }
       var threads = groupCommentThreads(comments);
+      var liveIds = new Set(comments.map(function (row) { return row.id; }));
+      commentNodes.forEach(function (_value, id) { if (!liveIds.has(id)) commentNodes.delete(id); });
+      var rootIds = new Set(threads.map(function (thread) { return thread.root.id; }));
+      threadBlocks.forEach(function (_value, id) { if (!rootIds.has(id)) threadBlocks.delete(id); });
       var roots = threads.map(function (thread) {
         return thread.root;
       });
@@ -1453,6 +1506,10 @@
           buildThreadBlock(thread, placementInfo, preserved, replyDrafts)
         );
       });
+      if (focused && focused.isConnected && typeof focused.focus === "function") {
+        focused.focus({ preventScroll: true });
+      }
+      if (typeof window.scrollTo === "function") window.scrollTo(scrollX, scrollY);
     }
 
     function postResolveComment(commentId) {
@@ -1476,24 +1533,109 @@
       });
     }
 
+    var stopped = false;
+    var refreshGeneration = 0;
+    var refreshTimer = null;
+    var requestTimer = null;
+    var inFlight = null;
+    var requestController = null;
+    var retryDelay = 2000;
+    var refreshStarted = false;
+    var loadErrorShown = false;
+
+    function canRefresh() {
+      return !stopped && !document.hidden &&
+        (typeof navigator === "undefined" || navigator.onLine !== false);
+    }
+
+    function clearRefreshTimer() {
+      if (refreshTimer !== null) clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+
+    function scheduleRefresh() {
+      clearRefreshTimer();
+      if (refreshStarted && canRefresh()) {
+        refreshTimer = setTimeout(function () {
+          refreshTimer = null;
+          loadComments().catch(function () {});
+        }, retryDelay);
+      }
+    }
+
     function loadComments() {
-      return fetch("/api/comments/" + encodeURIComponent(workId), {
-        signal: pageLoadSignal(),
+      if (stopped) return Promise.resolve();
+      if (inFlight) return inFlight;
+      clearRefreshTimer();
+      var generation = refreshGeneration;
+      requestController = new AbortController();
+      requestTimer = setTimeout(function () { requestController.abort(); }, 10000);
+      inFlight = fetch("/api/comments/" + encodeURIComponent(workId), {
+        signal: requestController.signal,
       })
         .then(function (resp) {
-          if (!resp.ok) {
-            throw new Error("Failed to load comments (" + resp.status + ")");
-          }
+          if (!resp.ok) throw new Error("Failed to load comments (" + resp.status + ")");
           return resp.json();
         })
         .then(function (data) {
+          if (stopped || generation !== refreshGeneration) return;
           var comments = data.comments || [];
           var signature = JSON.stringify(comments);
           if (signature !== lastCommentsSignature) {
-            lastCommentsSignature = signature;
             renderCommentThreads(comments);
+            lastCommentsSignature = signature;
           }
+          retryDelay = 2000;
+          if (loadErrorShown) { setCommentStatus("", false); loadErrorShown = false; }
+        })
+        .catch(function (err) {
+          if (!stopped && lastCommentsSignature === null) {
+            setCommentStatus("Could not load comments; retrying…", true);
+            loadErrorShown = true;
+          }
+          retryDelay = Math.min(retryDelay * 2, 30000);
+          throw err;
+        })
+        .finally(function () {
+          clearTimeout(requestTimer);
+          requestTimer = null;
+          requestController = null;
+          inFlight = null;
+          scheduleRefresh();
         });
+      return inFlight;
+    }
+
+    function resumeRefresh() {
+      clearRefreshTimer();
+      if (canRefresh()) loadComments().catch(function () {});
+    }
+
+    function stopRefresh() {
+      stopped = true;
+      refreshGeneration += 1;
+      clearRefreshTimer();
+      if (requestTimer !== null) clearTimeout(requestTimer);
+      if (requestController) requestController.abort();
+      document.removeEventListener("visibilitychange", resumeRefresh);
+      window.removeEventListener("online", resumeRefresh);
+      window.removeEventListener("offline", resumeRefresh);
+      window.removeEventListener("pagehide", onPageHide);
+    }
+
+    function onPageHide(event) {
+      stopRefresh();
+      if (event.persisted) window.addEventListener("pageshow", startRefresh, { once: true });
+    }
+
+    function startRefresh() {
+      stopped = false;
+      refreshStarted = true;
+      document.addEventListener("visibilitychange", resumeRefresh);
+      window.addEventListener("online", resumeRefresh);
+      window.addEventListener("offline", resumeRefresh);
+      window.addEventListener("pagehide", onPageHide);
+      resumeRefresh();
     }
 
     function postJsonComment(payload) {
@@ -1567,6 +1709,8 @@
       return {
         renderComments: renderCommentThreads,
         loadComments: loadComments,
+        startRefresh: startRefresh,
+        stopRefresh: stopRefresh,
         getCommentStatus: function () {
           return statusEl ? statusEl.textContent : "";
         },
@@ -1574,9 +1718,7 @@
     }
 
     panel.hidden = false;
-    loadComments().catch(function (err) {
-      setCommentStatus(err && err.message ? err.message : "Could not load comments", true);
-    });
+    startRefresh();
   }
 
   function bootstrapPlanViewer() {
