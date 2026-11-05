@@ -2,7 +2,7 @@
 id: feat_033_001
 title: Render complete plan threads and refresh incoming replies
 tier: feature
-status: active
+status: completed
 parent: epic_033
 children:
 - task_033_001_001
