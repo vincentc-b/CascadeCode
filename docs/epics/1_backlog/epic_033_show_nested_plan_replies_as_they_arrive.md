@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-03'
-updated: '2026-11-03'
+updated: '2026-11-05'
 provider: codex
 flex_mode: false
 models:
@@ -21,6 +21,7 @@ models:
   feature_lead: gpt-6.1-sol
   feature_architect: gpt-6.1-sol
   swe: gpt-6.1-sol
+plan_approved_at: '2026-11-05T04:57:40.822093+00:00'
 ---
 # Show nested plan replies as they arrive
 
