@@ -2,7 +2,7 @@
 id: feat_035_003
 title: Make conflict resolution restart-safe across providers
 tier: feature
-status: active
+status: backlog
 parent: epic_035
 children:
 - task_035_003_001
@@ -17,7 +17,7 @@ owners:
 skills: []
 parent_rev: a5151501ecbfc2924022b52cdf15544df4f0cfd7
 created: '2026-11-04'
-updated: '2026-11-04'
+updated: '2026-11-05'
 provider: codex
 flex_mode: false
 models:
