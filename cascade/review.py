@@ -913,7 +913,7 @@ def poll_feature_reviews(root: Path) -> None:
     from cascade.stacked_review_recovery import persist_if_stacked_review_integration_gap
 
     for feature_id, record in list(state.items()):
-        if record.get("closed"):
+        if record.get("closed") or record.get("kind") == "epic_close":
             continue
         try:
             mr = _record_to_mr(record)
