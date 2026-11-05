@@ -434,4 +434,177 @@ assertEpicOrFeatureInitialInline("feature");
   assert.match(css, /@media \(max-width: 36rem\)[\s\S]*\.plan-inline-threads/);
 }
 
+
+
+// Initial and delayed epic_028 chains across both tiers and placements.
+// Use the existing DOM flow harness with controlled timers and API responses.
+for (const tier of ["epic", "feature"]) {
+  for (const inline of [false, true]) {
+    const root = {
+      ...baseInlineComments()[inline ? 0 : 2], id: "cmt_001", state: "open",
+      created: "2026-01-01T00:00:00Z",
+    };
+    const reply = (id, parent) => ({ id, parent, body: id, author: "epic_manager", created: `2026-01-01T00:00:${id.slice(-2)}Z` });
+    let rows = [root, reply("cmt_006", root.id), reply("cmt_007", "cmt_006"), reply("cmt_008", root.id), reply("cmt_009", "cmt_008")];
+    // The complete stored chain must also work before polling starts.
+    const complete = [...rows, reply("cmt_010", "cmt_008")];
+    const initial = mountComments(tier, partitionDoc, [...complete].reverse());
+    const initialHost = inline ? initial.dom.bodyEl : initial.dom.threadEl;
+    assert.deepEqual(querySelectorAll(threadById(initialHost, root.id), ".plan-comment-entry")
+      .map(e => e.getAttribute("data-entry-id")), complete.map(r => r.id));
+    const styled = { ...baseInlineComments()[3], state: "resolved" };
+    rows.push(styled);
+    const { dom, hooks } = mountComments(tier, partitionDoc, rows);
+    const host = inline ? dom.bodyEl : dom.threadEl;
+    const thread = threadById(host, root.id);
+    const draft = thread.querySelector("textarea");
+    draft.value = "unsent reply";
+    const composeDraft = document.getElementById("plan-comment-body");
+    composeDraft.value = "unsent whole-plan comment";
+    const resolveControl = thread.querySelector(".plan-comment-resolve");
+    const details = createElement("details");
+    details.open = true;
+    thread.appendChild(details);
+    const styledThread = threadById(dom.bodyEl, styled.id);
+    const rootNode = thread.querySelector('[data-entry-id="cmt_001"]');
+    assert.match(textContentDeep(thread), /cmt_007/);
+    assert.match(textContentDeep(thread), /reply to cmt_006/);
+
+    const timers = new Map();
+    let timerId = 0;
+    const original = { setTimeout, clearTimeout, fetch: globalThis.fetch };
+    globalThis.setTimeout = (fn, delay) => { timers.set(++timerId, { fn, delay }); return timerId; };
+    globalThis.clearTimeout = id => timers.delete(id);
+    const events = new Map();
+    const eventTarget = target => {
+      target.addEventListener = (name, fn) => events.set(name, fn);
+      target.removeEventListener = (name, fn) => { if (events.get(name) === fn) events.delete(name); };
+    };
+    eventTarget(document);
+    eventTarget(window);
+    document.activeElement = draft;
+    draft.isConnected = true;
+    let focusRestored = false;
+    draft.focus = () => { focusRestored = true; };
+    let viewportRestored = false;
+    window.scrollY = 123;
+    window.scrollTo = (x, y) => { viewportRestored = y === 123; };
+    let reads = 0;
+    let fail = false;
+    let pending = null;
+    globalThis.fetch = (url, options) => {
+      assert.match(url, /^\/api\/comments\//);
+      assert.equal(options.method, undefined, "refresh must never post");
+      reads++;
+      if (pending) return pending;
+      return Promise.resolve({ ok: !fail, status: fail ? 503 : 200, json: async () => ({ comments: rows }) });
+    };
+    const runTimer = async delay => {
+      const next = [...timers].find(([, timer]) => timer.delay === delay);
+      assert.ok(next, `expected ${delay}ms refresh`);
+      timers.delete(next[0]);
+      next[1].fn();
+      await hooks.loadComments().catch(() => {});
+    };
+    try {
+      hooks.startRefresh();
+      await hooks.loadComments();
+      rows = [...rows, reply("cmt_010", "cmt_008"), { id: "orphan", parent: "absent", body: "orphan body" }];
+      await runTimer(2000);
+      assert.equal(threadById(host, root.id), thread);
+      assert.equal(thread.querySelector("textarea"), draft);
+      assert.equal(draft.value, "unsent reply");
+      assert.equal(composeDraft.value, "unsent whole-plan comment");
+      assert.equal(thread.querySelector(".plan-comment-resolve"), resolveControl);
+      assert.equal(thread.querySelector("details"), details);
+      assert.equal(details.open, true);
+      assert.equal(threadById(dom.bodyEl, styled.id), styledThread);
+      assert.ok(styledThread.classList.contains("resolved"));
+      assert.ok(styledThread.classList.contains("outdated"));
+      assert.equal(thread.querySelector('[data-entry-id="cmt_001"]'), rootNode);
+      assert.ok(focusRestored && viewportRestored);
+      assert.match(textContentDeep(thread), /cmt_010/);
+      assert.match(textContentDeep(dom.threadEl), /orphan body/);
+      const entries = querySelectorAll(thread, ".plan-comment-entry");
+      assert.equal(entries.length, 6);
+      assert.equal(new Set(entries.map(e => e.getAttribute("data-entry-id"))).size, 6);
+      // A deeper arrival must preserve its immediate parent and appear once.
+      rows = [...rows, reply("cmt_011", "cmt_010"), reply("cmt_012", "cmt_011")];
+      await runTimer(2000);
+      assert.equal(thread.querySelector('[data-entry-id="cmt_012"]').getAttribute("data-parent-id"), "cmt_011");
+      assert.equal(querySelectorAll(thread, ".plan-comment-entry").length, 8);
+      fail = true;
+      await runTimer(2000);
+      assert.match(textContentDeep(thread), /cmt_010/, "failure retains successful data");
+      assert.ok([...timers.values()].some(t => t.delay === 4000));
+      for (const delay of [4000, 8000, 16000, 30000]) await runTimer(delay);
+      assert.ok([...timers.values()].some(t => t.delay === 30000), "retry delay is capped");
+      document.hidden = true;
+      events.get("visibilitychange")();
+      assert.equal(timers.size, 0);
+      fail = false;
+      document.hidden = false;
+      events.get("visibilitychange")();
+      await hooks.loadComments();
+      let resolve;
+      pending = new Promise(r => { resolve = r; });
+      const before = reads;
+      const request = hooks.loadComments();
+      events.get("online")();
+      events.get("online")();
+      assert.equal(reads, before + 1, "reconnect shares in-flight read");
+      pending = null;
+      resolve({ ok: true, json: async () => ({ comments: rows }) });
+      await request;
+      await hooks.loadComments();
+      assert.equal(reads, before + 2, "wake-ups coalesce into one fresh read after settling");
+      assert.equal(timers.size, 1, "only the next periodic timer remains");
+
+      // A cached page can resume before its aborted request has settled.
+      let reject;
+      pending = new Promise((_resolve, r) => { reject = r; });
+      const staleRequest = hooks.loadComments();
+      events.get("pagehide")({ persisted: true });
+      pending = null;
+      events.get("pageshow")();
+      events.delete("pageshow"); // Emulate the browser's once listener.
+      const beforeResume = reads;
+      reject(new Error("old page request aborted"));
+      await staleRequest;
+      await hooks.loadComments();
+      assert.equal(reads, beforeResume + 1, "restored page immediately replaces stale request");
+      assert.equal(hooks.getCommentStatus(), "", "stale failure cannot change current status");
+      assert.ok([...timers.values()].some(t => t.delay === 2000), "stale failure cannot increase backoff");
+
+      // A hung fetch is aborted by the bounded request timer, then retried.
+      pending = null;
+      const normalFetch = globalThis.fetch;
+      globalThis.fetch = (_url, options) => new Promise((_resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new Error("timeout")));
+      });
+      const timedRequest = hooks.loadComments();
+      const timeout = [...timers].find(([, timer]) => timer.delay === 10000);
+      assert.ok(timeout, "request has a ten-second deadline");
+      timers.delete(timeout[0]);
+      timeout[1].fn();
+      await timedRequest.catch(() => {});
+      assert.equal(timers.size, 1, "timeout leaves only one retry timer");
+      globalThis.fetch = normalFetch;
+      await hooks.loadComments();
+
+      pending = new Promise(r => { resolve = r; });
+      const stoppedRequest = hooks.loadComments();
+      hooks.stopRefresh();
+      resolve({ ok: true, json: async () => ({ comments: [] }) });
+      await stoppedRequest;
+      assert.equal(threadById(host, root.id), thread, "late response after unmount is ignored");
+      assert.equal(timers.size, 0);
+      assert.equal(events.size, 0);
+    } finally {
+      hooks.stopRefresh();
+      Object.assign(globalThis, original);
+    }
+  }
+}
+
 console.log("plan_inline_threads cases ok");
