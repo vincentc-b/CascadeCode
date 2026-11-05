@@ -30,6 +30,8 @@ from cascade.review import (
     EpicCloseStage,
     EpicReviewSnapshot,
     ForgeReviewState,
+    epic_review_snapshot,
+    persist_epic_review_snapshot,
     refresh_epic_review_snapshot,
     validate_review_url,
 )
@@ -224,6 +226,32 @@ def _finish_epic_completion_result(
         return EpicCompleteResult(ok=False, reason="wrong_tier")
     if epic_meta.status == "completed" and epic_meta.path.parent.name == "3_completed":
         if _completed_on_operator_trunk(epic_id, repo):
+            review_state = epic_review_snapshot(epic_id, root=repo)
+            if review_state is not None and review_state.stage != "completed":
+                review_state = refresh_epic_review_snapshot(epic_id, root=repo)
+                if (
+                    review_state is None
+                    or review_state.stage == "blocked"
+                    or review_state.forge_state != "merged"
+                ):
+                    return (
+                        _epic_review_result(review_state)
+                        if review_state is not None
+                        else EpicCompleteResult(ok=False, reason="review_failed")
+                    )
+                # The pulled trunk already contains the terminal document;
+                # record the accepted review before marking the Epic complete.
+                persist_epic_review_snapshot(
+                    epic_id,
+                    EpicReviewSnapshot(
+                        stage="completed",
+                        review_url=review_state.review_url,
+                        source_branch=review_state.source_branch,
+                        target_branch=review_state.target_branch,
+                        forge_state="merged",
+                    ),
+                    root=repo,
+                )
             _emit_epic_completed(epic_id, repo)
             _retire_epic_worktree(epic_id, repo)
             return EpicCompleteResult(ok=True, close_stage="completed")
