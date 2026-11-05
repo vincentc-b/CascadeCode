@@ -31,7 +31,7 @@ from cascade.agent.discovery.inventory import (
 )
 from cascade.agent.discovery.types import DiscoveredModel, ReasoningCapability
 from cascade.agent.providers import ProviderId, ProviderStatus
-from cascade.review import EpicReviewSnapshot, OpenReview
+from cascade.review import EpicReviewSnapshot, OpenReview, epic_close_document_staged
 from cascade.war_room.room_settings import RoomSettings
 from cascade.workspace.types import FlightOverlap, FlightReport
 
@@ -629,13 +629,21 @@ def board_view_from_index(board, *, root: Path) -> dict:
         if (
             meta.tier == "epic"
             and folder == "3_completed"
-            and isinstance(close_review, dict)
-            and close_review.get("close_stage") != "completed"
+            and (
+                (
+                    isinstance(close_review, dict)
+                    and close_review.get("close_stage") != "completed"
+                )
+                or (
+                    close_review is None and epic_close_document_staged(meta, root=root)
+                )
+            )
         ):
             # The reviewed source doc is staged in completed before the forge
             # merge. Keep the Epic visible as active until close reconciliation
             # verifies that the review landed.
             folder = "2_active"
+            item["status"] = "active"
         view[key][folder].append(item)
 
     from cascade.war_room.completed_epics import (
