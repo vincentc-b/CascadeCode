@@ -526,9 +526,34 @@ for (const tier of ["epic", "feature"]) {
       events.get("online")();
       events.get("online")();
       assert.equal(reads, before + 1, "reconnect shares in-flight read");
+      pending = null;
+      resolve({ ok: true, json: async () => ({ comments: rows }) });
+      await request;
+      await hooks.loadComments();
+      assert.equal(reads, before + 2, "wake-ups coalesce into one fresh read after settling");
+      assert.equal(timers.size, 1, "only the next periodic timer remains");
+
+      // A cached page can resume before its aborted request has settled.
+      let reject;
+      pending = new Promise((_resolve, r) => { reject = r; });
+      const staleRequest = hooks.loadComments();
+      events.get("pagehide")({ persisted: true });
+      pending = null;
+      events.get("pageshow")();
+      events.delete("pageshow"); // Emulate the browser's once listener.
+      const beforeResume = reads;
+      reject(new Error("old page request aborted"));
+      await staleRequest;
+      await hooks.loadComments();
+      assert.equal(reads, beforeResume + 1, "restored page immediately replaces stale request");
+      assert.equal(hooks.getCommentStatus(), "", "stale failure cannot change current status");
+      assert.ok([...timers.values()].some(t => t.delay === 2000), "stale failure cannot increase backoff");
+
+      pending = new Promise(r => { resolve = r; });
+      const stoppedRequest = hooks.loadComments();
       hooks.stopRefresh();
       resolve({ ok: true, json: async () => ({ comments: [] }) });
-      await request;
+      await stoppedRequest;
       assert.equal(threadById(host, root.id), thread, "late response after unmount is ignored");
       assert.equal(timers.size, 0);
       assert.equal(events.size, 0);

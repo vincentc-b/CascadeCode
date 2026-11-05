@@ -1541,6 +1541,7 @@
     var requestController = null;
     var retryDelay = 2000;
     var refreshStarted = false;
+    var refreshOnSettle = false;
     var loadErrorShown = false;
 
     function canRefresh() {
@@ -1589,6 +1590,7 @@
           if (loadErrorShown) { setCommentStatus("", false); loadErrorShown = false; }
         })
         .catch(function (err) {
+          if (stopped || generation !== refreshGeneration) return;
           if (!stopped && lastCommentsSignature === null) {
             setCommentStatus("Could not load comments; retrying…", true);
             loadErrorShown = true;
@@ -1601,19 +1603,33 @@
           requestTimer = null;
           requestController = null;
           inFlight = null;
-          scheduleRefresh();
+          if (refreshOnSettle && canRefresh()) {
+            refreshOnSettle = false;
+            loadComments().catch(function () {});
+          } else {
+            scheduleRefresh();
+          }
         });
       return inFlight;
     }
 
     function resumeRefresh() {
       clearRefreshTimer();
-      if (canRefresh()) loadComments().catch(function () {});
+      if (canRefresh()) {
+        // A read begun before reconnect/visibility may have an old snapshot.
+        // Coalesce wake-ups into one fresh read once that request settles.
+        if (inFlight) refreshOnSettle = true;
+        else {
+          refreshOnSettle = false;
+          loadComments().catch(function () {});
+        }
+      }
     }
 
     function stopRefresh() {
       stopped = true;
       refreshGeneration += 1;
+      refreshOnSettle = false;
       clearRefreshTimer();
       if (requestTimer !== null) clearTimeout(requestTimer);
       if (requestController) requestController.abort();
