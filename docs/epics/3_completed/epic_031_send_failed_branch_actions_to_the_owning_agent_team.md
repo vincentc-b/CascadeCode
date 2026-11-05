@@ -2,9 +2,12 @@
 id: epic_031
 title: Send failed branch actions to the owning agent team
 tier: epic
-status: backlog
+status: completed
 parent: null
-children: []
+children:
+- feat_031_001
+- feat_031_002
+- feat_031_003
 depends_on: []
 owners:
 - epic_manager
@@ -12,13 +15,16 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-02'
-updated: '2026-11-02'
+updated: '2026-11-04'
 provider: codex
 flex_mode: false
 models:
   epic_manager: gpt-5.6-sol
   epic_architect: gpt-5.6-sol
   feature_lead: gpt-5.6-sol
+  feature_architect: gpt-5.6-sol
+  swe: gpt-5.6-terra
+---
   feature_architect: gpt-5.6-sol
   swe: gpt-5.6-terra
 ---
@@ -51,3 +57,81 @@ Two incidents show the gap. Updating `epic_029` returned a `branch_conflict` for
 ## Implementation boundaries
 
 Build on the action-recovery records introduced for `epic_026`, existing branch synchronization and merge result types, work queues, and review reconciliation. Extend those paths rather than adding a parallel notification system. The supervisor retains Git and lifecycle mutation authority; agent teams receive scoped evidence and recovery tools. Preserve operator and agent changes, review requirements, source/target provenance, and idempotent completion events. A warning reports an observed failure; it must not claim that agents are investigating until the owning-team request has been durably queued.
+
+Out of scope: autonomous semantic conflict resolution, bypassing review or authorization gates, generalized forge incident management, redesigning all War Room notifications, and failures unrelated to branch/lifecycle actions.
+
+## Macro-architecture
+
+A single recovery coordinator at existing branch and lifecycle command boundaries upserts the `epic_026` durable record from the original action identity and normalized failure, assigns ownership from work tier and intended target, and enqueues one investigation with an episode idempotency key. Existing success behavior remains unchanged.
+
+Only the supervisor mutates Git. Under the lifecycle lock it may validate checkout state, confirm abort/clean state, refresh heads, synchronize safely, and retry within a bound. Teams inspect evidence and choose a scoped resolution or resume the same action; every transition updates the same record projected to API and War Room.
+
+Review reconciliation compares accepted changes with the intended Epic branch, not only forge PR state. A stacked PR that missed the Epic becomes integration-pending; a reviewed follow-up reaches the Epic before idempotent completion releases dependents.
+
+## Cross-module constraints
+
+- Recovery identity is stable across retries, polls, restarts, and resumption; one episode yields at most one warning and queue item.
+- Persist safe operator summaries separately from sensitive diagnostics.
+- Feature-local work routes to the Feature Team; Epic targets and cross-feature work route to the Epic Team; unknown ownership blocks durably.
+- Git mutation stays under the lifecycle lock and revalidates heads, cleanliness, authorization, and review gates.
+- Never discard unrelated files, force-push, synthesize approval, or complete before intended-branch integration.
+- API/UI consume persisted state; completion, dependent release, delivery, and warning resolution are idempotent.
+- Schema changes remain compatible with existing `epic_026` records and in-flight restart.
+
+## Core dependencies
+
+- Existing `epic_026` recovery persistence and transitions.
+- Branch synchronization and typed merge/update results.
+- Supervisor lifecycle lock, checkout management, and bounded retry.
+- Durable Feature Team and Epic Team queues.
+- Review reconciliation, completion events, and dependency eligibility.
+- War Room API, row projection, and toast behavior.
+- Forge source, actual target, intended target, and accepted-revision metadata.
+
+## Feature breakdown
+
+### `feat_031_001` — Durable branch-action recovery and owning-team handoff
+
+Extend the shared record and command boundaries across updates and lifecycle merges. Normalize first failures, route one investigation, provide bounded supervisor repair, and let teams resume the same action. Exit: representative merge, update, checkout, conflict, and permission failures persist and route once; recovery succeeds or names a human blocker.
+
+### `feat_031_002` — War Room recovery status and operator guidance
+
+Project the shared record through the board API and row with truthful copy, owner, safe reason, branch/paths, attempt time, link, and next step. Depends on `feat_031_001`. Exit: API/browser tests preserve exact state across refresh/restart without duplicate notices or premature investigation claims.
+
+### `feat_031_003` — Reconcile stacked reviews into the intended Epic branch
+
+Detect accepted stacked changes absent from the Epic, create the same episode, route to the Epic Team, and drive reviewed follow-up integration while retaining review identity. Depends on `feat_031_001`; may parallel `feat_031_002`. Exit: the `feat_029_002` race stays pending, integrates through review, completes once, and releases its dependent once.
+
+## Open questions
+
+None blocking. Feature planning must confirm the existing `epic_026` schema and queue idempotency fields before migration design, without replacing the shared record or relaxing this contract.
+
+## Decision log
+
+- `dec_001` · 2026-11-03 · Epic Manager · **Recovery model**
+  Chose Use one durable recovery episode for command failure, owning-team handoff, supervisor retry, and War Room status..
+  Rationale: A shared record preserves action identity and idempotency across all consumers while extending epic_026 instead of adding a parallel incident system.
+  Honors: Required behaviors 1–5; implementation boundary to extend existing recovery paths..
+
+- `dec_002` · 2026-11-03 · Epic Manager · **Ownership routing**
+  Chose Route by intended integration ownership: Feature Team for Task/Feature-local work, Epic Team for Epic targets and cross-feature integration; persist ambiguous routing as blocked..
+  Rationale: The intended target identifies who can resolve the failure, and an explicit blocker prevents silent loss when metadata is incomplete.
+  Honors: Required behavior 3 and the operator-visible blocker acceptance scenario..
+
+- `dec_003` · 2026-11-03 · Epic Manager · **Completion semantics**
+  Chose Treat forge merge state as evidence only; complete a Feature only after its accepted revision reaches the intended Epic branch..
+  Rationale: This directly closes the stacked-review race without bypassing the normal reviewed integration path or losing provenance.
+  Honors: Required behavior 6 and the feat_029_002 acceptance scenario..
+
+- `dec_004` · 2026-11-03 · Epic Manager · **Automated repair boundary**
+  Chose Limit supervisor repair to bounded, deterministic, reversible mechanics under the lifecycle lock..
+  Rationale: Mechanical recovery can be automated safely, while semantic conflicts, dirty unrelated files, authorization, and review gates need an owning-team or human decision.
+  Honors: Required behavior 4 and the safety acceptance scenarios..
+
+- `dec_005` · 2026-11-03 · Epic Manager · **Delivery slices**
+  Chose Ship the durable recovery core first, then War Room projection and stacked-review reconciliation against that contract..
+  Rationale: Three focused features minimize duplicated infrastructure and allow UI and review work to proceed independently after the shared contract stabilizes.
+  Honors: Frugal smallest-shippable-slice planning and all epic acceptance scenarios..
+## Amendment log
+
+_(No amendments.)_

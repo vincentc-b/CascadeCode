@@ -58,6 +58,7 @@ def work_meta_to_dict(
     execution: dict[str, Any] | None = None,
     review: dict[str, object] | None = None,
     branch_sync: dict[str, Any] | None = None,
+    recovery_incident: dict[str, object] | None = None,
     sidecars_preloaded: bool = False,
 ) -> dict:
     value = {
@@ -141,6 +142,7 @@ def work_meta_to_dict(
             value["stacked_dispatch"] = stacked
     if branch_sync is not None:
         value["branch_sync"] = branch_sync
+    value["recovery_incident"] = recovery_incident
     return value
 
 
@@ -177,8 +179,13 @@ def _provider_recovery_view(
 
 
 def work_doc_to_dict(doc: WorkDoc, *, root: Path | None = None) -> dict:
+    incident = None
+    if root is not None:
+        from cascade.war_room.recovery_incident import recovery_incidents_by_work_id
+
+        incident = recovery_incidents_by_work_id(root=root).get(doc.meta.id)
     return {
-        "meta": work_meta_to_dict(doc.meta, root=root),
+        "meta": work_meta_to_dict(doc.meta, root=root, recovery_incident=incident),
         "body": doc.body,
         "sha": doc.sha,
     }
@@ -536,6 +543,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
     from cascade.review import feature_review_views
     from cascade.task.execution import execution_views
     from cascade.war_room.branch_sync import branch_sync_views
+    from cascade.war_room.recovery_incident import recovery_incidents_by_work_id
 
     metas = sorted(board.by_id.values(), key=lambda meta: meta.id)
     executions = execution_views(
@@ -551,6 +559,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
         and review.get("state") in {"preparing_review", "awaiting_review"}
     )
     sync_views = branch_sync_views(metas, root=root)
+    incidents = recovery_incidents_by_work_id(root=root)
 
     columns = ("1_backlog", "2_active", "3_completed")
     view: dict[str, dict[str, list]] = {
@@ -567,6 +576,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
             execution=executions.get(meta.id),
             review=reviews.get(meta.id),
             branch_sync=sync_views.get(meta.id),
+            recovery_incident=incidents.get(meta.id),
             sidecars_preloaded=True,
         )
         if _backlog_open_feature(meta):
@@ -601,6 +611,17 @@ def board_view_from_index(board, *, root: Path) -> dict:
         ):
             # The source plan is already in completed so the MR contains its
             # final location, but operationally the feature remains in flight.
+            folder = "2_active"
+        close_review = item.get("implementation_review")
+        if (
+            meta.tier == "epic"
+            and folder == "3_completed"
+            and isinstance(close_review, dict)
+            and close_review.get("close_stage") != "completed"
+        ):
+            # The reviewed source doc is staged in completed before the forge
+            # merge. Keep the Epic visible as active until close reconciliation
+            # verifies that the review landed.
             folder = "2_active"
         view[key][folder].append(item)
 
