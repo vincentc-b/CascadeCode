@@ -8,6 +8,7 @@ same order without creating plan commits.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import tempfile
@@ -39,12 +40,29 @@ class BacklogPriority:
     feature_ids: tuple[str, ...]
     version: int
 
+    @property
+    def token(self) -> str:
+        """Return the opaque HTTP concurrency token for this exact projection."""
+
+        material = json.dumps(
+            [_SCHEMA_VERSION, self.version, self.epic_id, self.feature_ids],
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(material).hexdigest()
+
 
 class BacklogPriorityError(ValueError):
     """A guarded reorder was refused without applying the submitted order."""
 
-    def __init__(self, message: str, *, code: str) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str,
+        current: BacklogPriority | None = None,
+    ) -> None:
         self.code = code
+        self.current = current
         super().__init__(message)
 
 
@@ -70,12 +88,47 @@ def read_backlog_priority(epic_id: str, *, root: Path) -> BacklogPriority:
             return _reconcile(epic_id, board=board, state=state, trunk=trunk)
 
 
+def read_backlog_priorities(
+    board: BoardIndex,
+    *,
+    root: Path,
+) -> dict[str, BacklogPriority]:
+    """Project all current backlog priorities from an already merged board scan."""
+
+    trunk = locate_trunk(resolve_root(root))
+    epic_ids = sorted(
+        {
+            meta.parent
+            for meta in board.by_id.values()
+            if meta.parent is not None and _is_backlog_peer(meta, meta.parent)
+        }
+    )
+    with process_lock:
+        with _locked_state(trunk):
+            state = _load_state(trunk)
+            before = json.dumps(state, sort_keys=True)
+            priorities = {
+                epic_id: _reconcile(
+                    epic_id,
+                    board=board,
+                    state=state,
+                    trunk=trunk,
+                    persist=False,
+                )
+                for epic_id in epic_ids
+            }
+            if json.dumps(state, sort_keys=True) != before:
+                _save_state(trunk, state)
+            return priorities
+
+
 def reorder_backlog_features(
     epic_id: str,
     feature_ids: Sequence[str],
     *,
-    version: int,
     root: Path,
+    version: int | None = None,
+    expected_token: str | None = None,
 ) -> BacklogPriority:
     """Atomically replace one Epic's order when token and membership are current."""
 
@@ -95,11 +148,22 @@ def reorder_backlog_features(
                 persist=False,
             )
 
-            if not isinstance(version, int) or isinstance(version, bool) or version != current.version:
+            if expected_token is not None and expected_token != current.token:
+                raise BacklogPriorityError(
+                    f"stale backlog priority token for {epic_id}",
+                    code="stale_priority",
+                    current=current,
+                )
+            if expected_token is None and (
+                not isinstance(version, int)
+                or isinstance(version, bool)
+                or version != current.version
+            ):
                 raise BacklogPriorityError(
                     f"stale backlog priority version for {epic_id}: "
                     f"expected {current.version}, got {version!r}",
                     code="stale_version",
+                    current=current,
                 )
 
             submitted = _validate_submitted_order(
