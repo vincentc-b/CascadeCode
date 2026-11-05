@@ -70,13 +70,10 @@ The performance work measures navigation to first usable board, board API time, 
 - Performance review needs a repeatable local seed/fixture and browser timing plus server timing; use the same fixture before and after. Do not set a target based on network or third-party services outside this app.
 
 ## Feature breakdown
-- feat_023_003
-- feat_023_002
-- feat_023_001
 
-1. **Centered responsive War Room layout and resizable panels.** Put context left, board center, utilities right; use the viewport; add clamped, persistent resize controls and reset; reflow at tablet/mobile widths. Acceptance: wide, medium, and narrow viewport checks; no width jump during board poll, selection, or completed-column expansion; controls remain accessible.
-2. **Durable backlog feature priority.** Add canonical per-epic order and a guarded reorder API; render ordered backlog feature cards with drag/drop and keyboard move controls; keep it coherent after feature creation, dispatch, cancellation, refresh, and concurrent edits. Acceptance: ordering survives reload and another client, is limited to backlog peers in one epic, and stale/invalid writes are refused visibly. Can proceed in parallel with feature 1.
-3. **War Room latency review and targeted fixes.** Establish a repeatable baseline, identify the dominant board load and refresh costs, fix the material causes, and record before/after timings. Acceptance: p95 navigation-to-usable-board under 2 seconds on the documented local fixture and machine class across at least 20 runs; no regression in action feedback or lifecycle freshness. Start measurement early, then finish against features 1 and 2.
+- **feat_023_001 — Centered responsive War Room layout and resizable panels.** Put context left, board center, utilities right; use the viewport; add clamped, persistent resize controls and reset; reflow at tablet/mobile widths. Acceptance: wide, medium, and narrow viewport checks; no width jump during board poll, selection, or completed-column expansion; controls remain accessible.
+- **feat_023_002 — Durable backlog feature priority.** Add canonical per-epic order and a guarded reorder API; render ordered backlog feature cards with drag/drop and keyboard move controls; keep it coherent after feature creation, dispatch, cancellation, refresh, and concurrent edits. Acceptance: ordering survives reload and another client, is limited to backlog peers in one epic, and stale/invalid writes are refused visibly. Can proceed in parallel with feat_023_001.
+- **feat_023_003 — War Room latency review and targeted fixes.** Establish a repeatable baseline, identify the dominant board load and refresh costs, fix the material causes, and record before/after timings. Acceptance: p95 navigation-to-usable-board under 2 seconds on the documented local fixture and machine class across at least 20 runs; no regression in action feedback or lifecycle freshness. Start measurement early, then finish against feat_023_001 and feat_023_002.
 
 ## Open questions
 
@@ -88,17 +85,17 @@ The performance work measures navigation to first usable board, board API time, 
 - 2026-10-23 · Human · Brief approved through merge request review.
 
 - `dec_001` · 2026-11-05 · Epic Manager · **Feature breakdown**
-  Chose Backlog feature priority is a durable order scoped to one epic; reordering changes presentation and queue order but does not trigger or bypass dispatch..
+  Chose Backlog feature priority is a durable order scoped to one epic; reordering changes presentation and queue order but does not trigger or bypass dispatch.
   Rationale: The request asks users to prioritize backlog features. Shared durable order makes that priority consistent across refreshes and clients, while existing dependency and human dispatch controls retain their meaning.
   Honors: Intent and success criteria for backlog drag and drop.
 
 - `dec_002` · 2026-11-05 · Epic Manager · **Macro-architecture**
-  Chose Use a desktop context-board-utilities layout with browser-scoped resizable panel widths and responsive fallback..
+  Chose Use a desktop context-board-utilities layout with browser-scoped resizable panel widths and responsive fallback.
   Rationale: This directly addresses the unstable board width and varied screen sizes without adding shared layout state or changing board selection behavior.
   Honors: Intent and success criteria for layout, resizing, and screen sizes.
 
 - `dec_003` · 2026-11-05 · Epic Manager · **Core dependencies**
-  Chose Measure the existing War Room path before changing it and verify p95 navigation-to-usable-board below 2 seconds on a documented local fixture after the UI features land..
+  Chose Measure the existing War Room path before changing it and verify p95 navigation-to-usable-board below 2 seconds on a documented local fixture after the UI features land.
   Rationale: The brief explicitly requests a performance review and a less-than-2-second page load; a shared fixture and before/after measurements make that goal testable without speculative optimization.
   Honors: Intent and success criteria for low latency and page load.
 ## Amendment log
