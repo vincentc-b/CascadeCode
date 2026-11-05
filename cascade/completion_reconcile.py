@@ -7,7 +7,11 @@ from pathlib import Path
 from cascade.board.context import resolve_root
 from cascade.boss.epic_complete import epic_completed_recorded, try_complete_epic
 from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
-from cascade.review import epic_review_snapshot, reconcile_feature_review_completions
+from cascade.review import (
+    epic_close_document_staged,
+    epic_review_snapshot,
+    reconcile_feature_review_completions,
+)
 from cascade.workspace.integration_worktree import locate_trunk, merged_board
 
 
@@ -45,7 +49,9 @@ def reconcile_completion(root: Path | None = None) -> dict[str, list[str]]:
             continue
         if meta.path.parent.name == "3_completed":
             snapshot = epic_review_snapshot(meta.id, root=repo)
-            if snapshot is None or snapshot.stage == "completed":
+            if snapshot is not None and snapshot.stage == "completed":
+                continue
+            if snapshot is None and not epic_close_document_staged(meta, root=repo):
                 continue
         elif meta.path.parent.name != "2_active":
             continue

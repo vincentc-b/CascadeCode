@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 
 from cascade.board.errors import BoardError, GitError, NotFound
 from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
+from cascade.board.types import WorkMeta
 from cascade.tracking import (
     MergeRequest,
     ReviewNotFound,
@@ -151,6 +152,19 @@ def epic_review_snapshot(epic_id: str, *, root: Path) -> EpicReviewSnapshot | No
         forge_state=forge_state,  # type: ignore[arg-type]
         blocker=blocker,
     )
+
+
+def epic_close_document_staged(meta: WorkMeta, *, root: Path) -> bool:
+    """True when a completed epic document still belongs to its review worktree."""
+
+    if (
+        meta.tier != "epic"
+        or meta.status != "completed"
+        or meta.path.parent.name != "3_completed"
+    ):
+        return False
+    entry = get_integration_worktree(locate_trunk(root), "epic", meta.id)
+    return entry is not None and meta.path.resolve().is_relative_to(entry.path.resolve())
 
 
 def persist_epic_review_snapshot(

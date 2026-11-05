@@ -10,6 +10,7 @@ import pytest
 from cascade.board.errors import GitError
 from cascade.board.store import read_doc_in_worktree
 from cascade.boss.epic_complete import confirm_epic_complete_result
+from cascade.completion_reconcile import reconcile_completion
 from cascade.review import ensure_epic_review
 from cascade.review import epic_review_snapshot
 from cascade.tracking import MergeRequest, ReviewNotFound
@@ -88,13 +89,53 @@ def test_epic_closes_through_one_idempotent_implementation_review(
         lambda *_args, **_kwargs: pytest.fail("must not open a terminal-only review"),
     )
 
-    # Preparation is convergent: completion is staged before review creation,
-    # and a retry finds the same implementation review.
+    # A failed push leaves the reviewed document staged, but the board must
+    # remain active and automatic reconciliation must retry publication.
+    with monkeypatch.context() as failed_push:
+
+        def reject_push(*_args, **_kwargs):
+            raise GitError("temporary push failure")
+
+        failed_push.setattr("cascade.review.push_branch", reject_push)
+        failed = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert not failed.ok and failed.reason == "review_failed"
+    assert epic_review_snapshot("epic_001", root=root) is None
+    staged = read_doc_in_worktree("epic_001", epic_worktree)
+    assert staged.meta.status == "completed"
+    board_during_failure = board_view_from_index(merged_board(root), root=root)
+    assert [row["id"] for row in board_during_failure["epics"]["2_active"]] == [
+        "epic_001"
+    ]
+    assert board_during_failure["epics"]["2_active"][0]["status"] == "active"
+    assert board_during_failure["epics"]["3_completed"] == []
+
+    with monkeypatch.context() as unmerged_review:
+        unmerged_review.setattr(
+            "cascade.boss.epic_complete._merged_epic_review_landed",
+            lambda *_args, **_kwargs: None,
+        )
+        reconcile_completion(root)
+    pending_state = epic_review_snapshot("epic_001", root=root)
+    assert pending_state is not None and pending_state.stage == "implementation_review_pending"
+    board_pending_merge = board_view_from_index(merged_board(root), root=root)
+    assert board_pending_merge["epics"]["2_active"][0]["status"] == "active"
+    events_before_merge, _ = read_events("war_room", 0, root=root)
+    assert not any(event.type == "EpicCompleted" for event in events_before_merge)
+
+    # Preparation is convergent: retry finds the same implementation review.
     assert ensure_epic_review("epic_001", root=root) == review
     assert ensure_epic_review("epic_001", root=root) == review
     prepared = read_doc_in_worktree("epic_001", epic_worktree)
     assert prepared.meta.status == "completed"
     assert prepared.meta.path.parent.name == "3_completed"
+    _git(
+        tmp_path,
+        "--git-dir",
+        str(remote),
+        "cat-file",
+        "-e",
+        "refs/heads/epic/epic_001:docs/epics/3_completed/epic_001_epic.md",
+    )
     assert created_reviews == [review]
     operator_before = {
         "head": _git(root, "rev-parse", "HEAD").stdout,
