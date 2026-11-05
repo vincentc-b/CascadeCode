@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-05T19:42:18.422000+00:00",
+  "fixture": {"epics": 3, "features_per_epic": 10, "tasks_per_feature": 2},
+  "runs": 20,
+  "environment": {
+    "platform": "Linux-6.8.0-x86_64-with-glibc2.39",
+    "python": "3.12.12",
+    "browser": "Chromium 141 headless",
+    "viewport": "1440x1000"
+  },
+  "metric_boundaries": {
+    "navigation_to_usable_board_ms": "navigation start -> first visible epic row plus two animation frames",
+    "board_api_ms": "Resource Timing requestStart -> responseEnd for the initial GET /api/board",
+    "render_ms": "renderBoard entry -> synchronous DOM update completion",
+    "action_feedback_ms": "epic row click dispatch -> selected row visible after two animation frames"
+  },
+  "raw": [
+    {"navigation_to_usable_board_ms": 182.7, "board_api_ms": 151.4, "render_ms": 8.3, "action_feedback_ms": 31.8},
+    {"navigation_to_usable_board_ms": 171.2, "board_api_ms": 143.8, "render_ms": 7.7, "action_feedback_ms": 31.9},
+    {"navigation_to_usable_board_ms": 176.5, "board_api_ms": 148.1, "render_ms": 7.9, "action_feedback_ms": 32.1},
+    {"navigation_to_usable_board_ms": 168.9, "board_api_ms": 140.7, "render_ms": 7.6, "action_feedback_ms": 31.7},
+    {"navigation_to_usable_board_ms": 174.6, "board_api_ms": 146.0, "render_ms": 7.8, "action_feedback_ms": 32.0},
+    {"navigation_to_usable_board_ms": 180.1, "board_api_ms": 150.2, "render_ms": 8.1, "action_feedback_ms": 32.4},
+    {"navigation_to_usable_board_ms": 169.7, "board_api_ms": 141.9, "render_ms": 7.5, "action_feedback_ms": 31.8},
+    {"navigation_to_usable_board_ms": 173.8, "board_api_ms": 145.1, "render_ms": 7.8, "action_feedback_ms": 31.9},
+    {"navigation_to_usable_board_ms": 178.4, "board_api_ms": 149.0, "render_ms": 8.0, "action_feedback_ms": 32.2},
+    {"navigation_to_usable_board_ms": 172.9, "board_api_ms": 144.2, "render_ms": 7.7, "action_feedback_ms": 31.7},
+    {"navigation_to_usable_board_ms": 175.3, "board_api_ms": 146.8, "render_ms": 7.9, "action_feedback_ms": 32.0},
+    {"navigation_to_usable_board_ms": 170.4, "board_api_ms": 142.6, "render_ms": 7.6, "action_feedback_ms": 31.8},
+    {"navigation_to_usable_board_ms": 181.6, "board_api_ms": 151.0, "render_ms": 8.2, "action_feedback_ms": 32.3},
+    {"navigation_to_usable_board_ms": 177.2, "board_api_ms": 148.5, "render_ms": 8.0, "action_feedback_ms": 32.1},
+    {"navigation_to_usable_board_ms": 174.1, "board_api_ms": 145.5, "render_ms": 7.8, "action_feedback_ms": 31.9},
+    {"navigation_to_usable_board_ms": 183.9, "board_api_ms": 152.3, "render_ms": 8.5, "action_feedback_ms": 32.6},
+    {"navigation_to_usable_board_ms": 171.8, "board_api_ms": 143.4, "render_ms": 7.7, "action_feedback_ms": 31.8},
+    {"navigation_to_usable_board_ms": 176.0, "board_api_ms": 147.4, "render_ms": 7.9, "action_feedback_ms": 32.0},
+    {"navigation_to_usable_board_ms": 179.3, "board_api_ms": 149.7, "render_ms": 8.1, "action_feedback_ms": 32.2},
+    {"navigation_to_usable_board_ms": 173.4, "board_api_ms": 144.8, "render_ms": 7.7, "action_feedback_ms": 31.9}
+  ],
+  "summary": {
+    "navigation_to_usable_board_ms": {"median_ms": 174.95, "p95_ms": 182.7, "min_ms": 168.9, "max_ms": 183.9},
+    "board_api_ms": {"median_ms": 146.4, "p95_ms": 151.4, "min_ms": 140.7, "max_ms": 152.3},
+    "render_ms": {"median_ms": 7.85, "p95_ms": 8.3, "min_ms": 7.5, "max_ms": 8.5},
+    "action_feedback_ms": {"median_ms": 31.95, "p95_ms": 32.4, "min_ms": 31.7, "max_ms": 32.6}
+  }
+}

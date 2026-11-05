@@ -733,6 +733,7 @@
   }
 
   function renderBoard(view) {
+    const renderStartedAt = performance.now();
     lastBoardView = view;
     if (!backlogPriorityUi && BacklogPriorityUiApi) {
       backlogPriorityUi = BacklogPriorityUiApi.createController({
@@ -784,6 +785,10 @@
       }
     });
     if (backlogPriorityUi) backlogPriorityUi.restoreFocus();
+    performance.measure("cascade.board.render", {
+      start: renderStartedAt,
+      end: performance.now(),
+    });
   }
 
   function wireCompletedCollapseControls() {
