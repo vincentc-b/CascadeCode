@@ -21,6 +21,7 @@ models:
 reasoning:
   feature_lead: high
   feature_architect: high
+approved_at: '2026-11-05T16:32:01.655764+00:00'
 ---
 # Durable backlog feature priority
 
