@@ -1,0 +1,49 @@
+---
+id: task_012_001_002
+title: Instrument startup, watchdog, and reconciliation readiness state
+tier: task
+status: completed
+parent: feat_012_001
+children: []
+depends_on:
+- task_012_001_001
+owners:
+- swe
+skills: []
+parent_rev: 0cedad81a73dc6079de09dd2851d65e1d117faf2
+created: '2026-10-23'
+updated: '2026-10-23'
+---
+# Instrument startup, watchdog, and reconciliation readiness state
+
+## Parent Feature
+
+[feat_012_001](../../features/2_active/feat_012_001.md)
+
+## Depends on
+
+- task_012_001_001
+
+## Acceptance criteria
+
+TBD.
+
+## Files likely touched
+
+TBD.
+
+## Implementation notes
+
+Wire supervisor startup phases and successful watchdog-loop and lifecycle-reconciliation activity into the authoritative readiness projection, including timestamps and degraded reasons. Preserve the projection as read-only.
+
+## Skills
+
+_(none)_
+
+## Test plan
+
+TBD.
+
+## Out of scope
+
+TBD.
