@@ -81,6 +81,10 @@ The performance work measures navigation to first usable board, board API time, 
 
 - 2026-10-23 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-05 · Epic Manager · **Feature breakdown**
+  Chose Backlog feature priority is a durable order scoped to one epic; reordering changes presentation and queue order but does not trigger or bypass dispatch..
+  Rationale: The request asks users to prioritize backlog features. Shared durable order makes that priority consistent across refreshes and clients, while existing dependency and human dispatch controls retain their meaning.
+  Honors: Intent and success criteria for backlog drag and drop.
 ## Amendment log
 
 _(none)_
