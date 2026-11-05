@@ -2,7 +2,7 @@
 id: epic_023
 title: Improve UI
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_023_001
