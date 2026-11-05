@@ -90,6 +90,11 @@ The performance work measures navigation to first usable board, board API time, 
   Chose Use a desktop context-board-utilities layout with browser-scoped resizable panel widths and responsive fallback..
   Rationale: This directly addresses the unstable board width and varied screen sizes without adding shared layout state or changing board selection behavior.
   Honors: Intent and success criteria for layout, resizing, and screen sizes.
+
+- `dec_003` · 2026-11-05 · Epic Manager · **Core dependencies**
+  Chose Measure the existing War Room path before changing it and verify p95 navigation-to-usable-board below 2 seconds on a documented local fixture after the UI features land..
+  Rationale: The brief explicitly requests a performance review and a less-than-2-second page load; a shared fixture and before/after measurements make that goal testable without speculative optimization.
+  Honors: Intent and success criteria for low latency and page load.
 ## Amendment log
 
 _(none)_
