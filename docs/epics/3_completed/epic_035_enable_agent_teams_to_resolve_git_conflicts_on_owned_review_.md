@@ -2,7 +2,7 @@
 id: epic_035
 title: Enable agent teams to resolve Git conflicts on owned review branches
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_035_001
@@ -15,7 +15,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-04'
-updated: '2026-11-04'
+updated: '2026-11-05'
 provider: codex
 flex_mode: false
 models:
