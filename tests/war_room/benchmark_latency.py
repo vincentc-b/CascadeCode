@@ -152,7 +152,8 @@ def run(runs: int, output: Path, *, headed: bool) -> dict[str, Any]:
                               const row = document.querySelector('.board-row[data-id="epic_901"]');
                               const actionStarted = performance.now();
                               row.click();
-                              if (!row.classList.contains('board-row-selected')) {
+                              const selectedRow = document.querySelector('.board-row[data-id="epic_901"]');
+                              if (!selectedRow || !selectedRow.classList.contains('board-row-selected')) {
                                 throw new Error('selection feedback was not rendered');
                               }
                               return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve({

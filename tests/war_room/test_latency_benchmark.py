@@ -56,6 +56,14 @@ def test_board_render_exposes_browser_performance_measure():
     assert 'performance.measure("cascade.board.render"' in render
 
 
+def test_action_feedback_checks_the_rerendered_row():
+    source = (Path(__file__).parent / "benchmark_latency.py").read_text(
+        encoding="utf-8"
+    )
+    assert "const selectedRow = document.querySelector" in source
+    assert "selectedRow.classList.contains('board-row-selected')" in source
+
+
 def test_committed_baseline_has_twenty_complete_runs():
     baseline = json.loads(
         (Path(__file__).parent / "baselines" / "task_023_003_001.json").read_text(
@@ -72,6 +80,32 @@ def test_committed_baseline_has_twenty_complete_runs():
     }
     assert all(set(row) == required for row in baseline["raw"])
     assert baseline["summary"] == _summary(baseline["raw"])
+
+
+def test_committed_post_change_capture_is_comparable_and_meets_target():
+    captures = Path(__file__).parent / "baselines"
+    baseline = json.loads(
+        (captures / "task_023_003_001.json").read_text(encoding="utf-8")
+    )
+    result = json.loads(
+        (captures / "task_023_003_003.json").read_text(encoding="utf-8")
+    )
+    required = {
+        "navigation_to_usable_board_ms",
+        "board_api_ms",
+        "render_ms",
+        "action_feedback_ms",
+    }
+
+    assert result["runs"] >= 20
+    assert len(result["raw"]) == result["runs"]
+    assert all(set(row) == required for row in result["raw"])
+    assert result["summary"] == _summary(result["raw"])
+    assert result["fixture"] == baseline["fixture"]
+    assert result["metric_boundaries"] == baseline["metric_boundaries"]
+    assert result["environment"]["viewport"] == baseline["environment"]["viewport"]
+    assert result["environment"]["browser"].startswith("Chromium ")
+    assert result["summary"]["navigation_to_usable_board_ms"]["p95_ms"] < 2_000
 
 
 def test_benchmark_cli_help_is_runnable():

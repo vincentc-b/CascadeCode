@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-05T20:34:19.334300+00:00",
+  "revision": "63d41fe784e83966a5ff80aad6f287b9c8a8064f",
+  "revision_note": "Captured with the rerendered-row benchmark fix in the working tree.",
+  "fixture": {
+    "epics": 3,
+    "features_per_epic": 10,
+    "tasks_per_feature": 2
+  },
+  "runs": 20,
+  "environment": {
+    "platform": "Linux-6.8.0-1021-aws-x86_64-with-glibc2.35",
+    "python": "3.12.8",
+    "browser": "Chromium 156.0.8078.4",
+    "viewport": "1440x1000"
+  },
+  "metric_boundaries": {
+    "navigation_to_usable_board_ms": "navigation start -> first visible epic row plus two animation frames",
+    "board_api_ms": "Resource Timing requestStart -> responseEnd for the initial GET /api/board",
+    "render_ms": "renderBoard entry -> synchronous DOM update completion",
+    "action_feedback_ms": "epic row click dispatch -> selected row visible after two animation frames"
+  },
+  "raw": [
+    {
+      "navigation_to_usable_board_ms": 759.8,
+      "board_api_ms": 211.1,
+      "render_ms": 4.7,
+      "action_feedback_ms": 32.4
+    },
+    {
+      "navigation_to_usable_board_ms": 759.7,
+      "board_api_ms": 258.1,
+      "render_ms": 6.8,
+      "action_feedback_ms": 42.1
+    },
+    {
+      "navigation_to_usable_board_ms": 856.9,
+      "board_api_ms": 321.0,
+      "render_ms": 11.1,
+      "action_feedback_ms": 40.4
+    },
+    {
+      "navigation_to_usable_board_ms": 895.8,
+      "board_api_ms": 360.5,
+      "render_ms": 10.8,
+      "action_feedback_ms": 36.2
+    },
+    {
+      "navigation_to_usable_board_ms": 1384.7,
+      "board_api_ms": 380.8,
+      "render_ms": 13.9,
+      "action_feedback_ms": 34.2
+    },
+    {
+      "navigation_to_usable_board_ms": 1287.3,
+      "board_api_ms": 487.0,
+      "render_ms": 18.7,
+      "action_feedback_ms": 33.5
+    },
+    {
+      "navigation_to_usable_board_ms": 905.7,
+      "board_api_ms": 314.4,
+      "render_ms": 10.3,
+      "action_feedback_ms": 35.2
+    },
+    {
+      "navigation_to_usable_board_ms": 1479.9,
+      "board_api_ms": 472.2,
+      "render_ms": 15.0,
+      "action_feedback_ms": 43.2
+    },
+    {
+      "navigation_to_usable_board_ms": 856.8,
+      "board_api_ms": 333.3,
+      "render_ms": 9.2,
+      "action_feedback_ms": 39.9
+    },
+    {
+      "navigation_to_usable_board_ms": 850.6,
+      "board_api_ms": 369.8,
+      "render_ms": 12.1,
+      "action_feedback_ms": 35.3
+    },
+    {
+      "navigation_to_usable_board_ms": 917.7,
+      "board_api_ms": 350.4,
+      "render_ms": 19.5,
+      "action_feedback_ms": 30.2
+    },
+    {
+      "navigation_to_usable_board_ms": 901.5,
+      "board_api_ms": 345.1,
+      "render_ms": 9.6,
+      "action_feedback_ms": 36.8
+    },
+    {
+      "navigation_to_usable_board_ms": 1381.6,
+      "board_api_ms": 392.9,
+      "render_ms": 19.0,
+      "action_feedback_ms": 39.7
+    },
+    {
+      "navigation_to_usable_board_ms": 952.3,
+      "board_api_ms": 342.6,
+      "render_ms": 14.3,
+      "action_feedback_ms": 32.3
+    },
+    {
+      "navigation_to_usable_board_ms": 736.6,
+      "board_api_ms": 302.6,
+      "render_ms": 11.2,
+      "action_feedback_ms": 36.1
+    },
+    {
+      "navigation_to_usable_board_ms": 651.9,
+      "board_api_ms": 256.2,
+      "render_ms": 14.8,
+      "action_feedback_ms": 29.6
+    },
+    {
+      "navigation_to_usable_board_ms": 1220.3,
+      "board_api_ms": 393.5,
+      "render_ms": 10.7,
+      "action_feedback_ms": 36.9
+    },
+    {
+      "navigation_to_usable_board_ms": 1010.1,
+      "board_api_ms": 386.3,
+      "render_ms": 6.4,
+      "action_feedback_ms": 30.1
+    },
+    {
+      "navigation_to_usable_board_ms": 734.7,
+      "board_api_ms": 298.4,
+      "render_ms": 13.8,
+      "action_feedback_ms": 36.7
+    },
+    {
+      "navigation_to_usable_board_ms": 785.0,
+      "board_api_ms": 300.7,
+      "render_ms": 12.6,
+      "action_feedback_ms": 40.4
+    }
+  ],
+  "summary": {
+    "navigation_to_usable_board_ms": {
+      "median_ms": 898.65,
+      "p95_ms": 1384.7,
+      "min_ms": 651.9,
+      "max_ms": 1479.9
+    },
+    "board_api_ms": {
+      "median_ms": 343.85,
+      "p95_ms": 472.2,
+      "min_ms": 211.1,
+      "max_ms": 487.0
+    },
+    "render_ms": {
+      "median_ms": 11.65,
+      "p95_ms": 19.0,
+      "min_ms": 4.7,
+      "max_ms": 19.5
+    },
+    "action_feedback_ms": {
+      "median_ms": 36.15,
+      "p95_ms": 42.1,
+      "min_ms": 29.6,
+      "max_ms": 43.2
+    }
+  }
+}
