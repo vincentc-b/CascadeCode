@@ -11,6 +11,7 @@ from cascade.board.errors import GitError
 from cascade.board.store import read_doc_in_worktree
 from cascade.boss.epic_complete import confirm_epic_complete_result
 from cascade.review import ensure_epic_review
+from cascade.review import epic_review_snapshot
 from cascade.tracking import MergeRequest, ReviewNotFound
 from cascade.war_room.serialize import board_view_from_index
 from cascade.war_room.server import _epic_complete_review_state
@@ -43,17 +44,18 @@ def test_epic_closes_through_one_idempotent_implementation_review(
     _git(root, "add", "README.md")
     _git(root, "commit", "-m", "init")
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    epic_worktree = integration_worktree_path("epic", "epic_001", trunk=root)
     add_doc(
-        root,
+        epic_worktree,
         id="feat_001",
         title="Feature",
         tier="feature",
         status="completed",
         parent="epic_001",
     )
-    commit_board(root)
-    assert activate_epic("epic_001", "human", root=root).ok
-    epic_worktree = integration_worktree_path("epic", "epic_001", trunk=root)
+    commit_board(epic_worktree)
 
     remote = tmp_path / "remote.git"
     _git(tmp_path, "init", "--bare", str(remote))
@@ -148,6 +150,11 @@ def test_epic_closes_through_one_idempotent_implementation_review(
     assert confirm_epic_complete_result("epic_001", "human", root=root).ok
 
     assert merged_board(root).by_id["epic_001"].status == "completed"
+    close_state = epic_review_snapshot("epic_001", root=root)
+    assert close_state is not None and close_state.stage == "completed"
+    board_view = board_view_from_index(merged_board(root), root=root)
+    assert [row["id"] for row in board_view["epics"]["3_completed"]] == ["epic_001"]
+    assert board_view["epics"]["2_active"] == []
     events, _ = read_events("war_room", 0, root=root)
     assert len([event for event in events if event.type == "EpicCompleted"]) == 1
     assert created_reviews == [review]
@@ -168,16 +175,18 @@ def test_close_api_reconstructs_and_blocks_without_replacing_review(
     _git(root, "add", "README.md")
     _git(root, "commit", "-m", "init")
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    epic_worktree = integration_worktree_path("epic", "epic_001", trunk=root)
     add_doc(
-        root,
+        epic_worktree,
         id="feat_001",
         title="Feature",
         tier="feature",
         status="completed",
         parent="epic_001",
     )
-    commit_board(root)
-    assert activate_epic("epic_001", "human", root=root).ok
+    commit_board(epic_worktree)
 
     remote = tmp_path / "remote.git"
     _git(tmp_path, "init", "--bare", str(remote))
