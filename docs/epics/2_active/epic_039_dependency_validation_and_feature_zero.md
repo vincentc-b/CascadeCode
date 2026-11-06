@@ -140,6 +140,11 @@ None at epic contract level. The formerly open risk question is resolved by the 
   Chose Gate minting, sign-off, and approval on current environment-specific evidence; preserve active runs and accepted work across idempotent human ping/revalidation; invalidate only affected dependency authority..
   Rationale: A human ping is a request to verify, not proof of success. Durable attempts and revision checks prevent stale or duplicated setup from authorizing delivery.
   Honors: Success criteria 1, 2, 5, 6, 7, 9..
+
+- `dec_003` · 2026-11-06 · Epic Manager · **Feature breakdown**
+  Chose Deliver three sequential slices: manifest/evidence/gates; authorized bootstrap/resume; War Room and acceptance. Require real local/container smoke evidence, including the Structurizr scenario, during delivery..
+  Rationale: Reuse the existing stack and lifecycle surfaces. Planning availability checks need no new installs; real installation success must not be inferred from simulated tests or host-only checks.
+  Honors: All eleven success criteria, especially 10–11; frugal-engineering high-signal testing and product-manager scope discipline..
 ## Amendment log
 
 _(none)_
