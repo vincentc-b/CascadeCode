@@ -6,7 +6,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cascade.board.context import resolve_root
+from cascade.board.context import resolve_root, set_project_context
 from cascade.board.gitutil import _run, has_git
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.init import _BOARD_TIERS
@@ -152,10 +152,12 @@ def prepare_up(root: Path | None = None) -> WorkspaceRoot:
             ),
         )
 
+    set_project_context(project)
+
     return WorkspaceRoot(
         path=path,
         trunk=trunk,
-        board=path / "docs",
+        board=project.tracking.root / "docs",
         config=config,
         runtime=path / ".cascade",
         project=project,
