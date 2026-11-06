@@ -133,6 +133,11 @@ No unresolved product-scope question remains. The initial implementation-risk qu
   Chose Recheck the owning item's dependencies at sign-off, approval, and minting authorization; permit backlog children to declare unfinished valid predecessor features..
   Rationale: Fresh boundary evidence prevents stale authorization while allowing ordinary feature decomposition. Cached/request snapshots and unchanged plan revisions cannot substitute for current lifecycle evidence.
   Honors: Success criteria 5–7; preserve existing declaration validation, role sign-offs, and non-dependency action checks..
+
+- `dec_003` · 2026-11-06 · Epic Manager · **Feature breakdown**
+  Chose Deliver feat_038_001, then feat_038_002, then feat_038_003, with tests in each slice and final cross-surface regression evidence; preserve historical transcript text..
+  Rationale: Three bounded features cover the full brief without adding a new status database, graph-validation project, UI redesign, or history migration. The synthetic epic_034/epic_036 fixture validates the incident without accessing production plan content.
+  Honors: All eight success criteria; frugal engineering and product-manager scope priorities..
 ## Amendment log
 
 _(none)_
