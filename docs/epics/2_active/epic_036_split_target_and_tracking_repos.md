@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_036_001
+- feat_036_002
 depends_on: []
 owners:
 - epic_manager
@@ -105,6 +106,7 @@ No cross-repository transaction layer is introduced. Operations that involve bot
 No new credential, hosted-Git, database, or project-management dependency is required.
 
 ## Feature breakdown
+- feat_036_002
 - feat_036_001
 
 ### Feature 1 — Resolve the optional tracking repository
