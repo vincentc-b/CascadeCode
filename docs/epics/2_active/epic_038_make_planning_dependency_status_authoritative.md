@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_038_001
 - feat_038_002
+- feat_038_003
 depends_on: []
 owners:
 - epic_manager
@@ -60,6 +61,7 @@ Reuse the canonical merged-board and lifecycle predicates rather than introducin
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_038_003
 - feat_038_002
 - feat_038_001
 
