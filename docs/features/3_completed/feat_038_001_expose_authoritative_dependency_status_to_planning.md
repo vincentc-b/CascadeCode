@@ -2,7 +2,7 @@
 id: feat_038_001
 title: Expose authoritative dependency status to planning
 tier: feature
-status: active
+status: completed
 parent: epic_038
 children:
 - task_038_001_001
