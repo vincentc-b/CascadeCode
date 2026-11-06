@@ -7,6 +7,8 @@ from pathlib import Path
 
 from cascade.board import list_board, move_doc, pin_parent, read_doc, write_doc
 from cascade.epic.decisions import record_decision
+from cascade.epic.planning_signoffs import sidecar_path
+from cascade.task.worktree import create_task_worktree
 from cascade.workspace import prepare_up
 from tests.support import add_doc, make_repo
 
@@ -76,6 +78,7 @@ def test_split_repository_routes_complete_artifact_lifecycle(tmp_path: Path) -> 
     assert board.by_id["task_001"].status == "completed"
     assert read_doc("task_001", root=target).meta.title == "Updated split task"
     assert decision_id in read_doc("epic_001", root=target).body
+    assert sidecar_path("epic_001", root=target).is_relative_to(tracking)
     assert all(meta.path.is_relative_to(tracking) for meta in board.by_id.values())
     assert not list((target / "docs").rglob("*.md"))
     assert len(list((tracking / "docs").rglob("*.md"))) == 3
@@ -92,3 +95,23 @@ def test_colocated_repository_keeps_existing_storage_behavior(tmp_path: Path) ->
     assert workspace.board == root / "docs"
     assert read_doc(doc.meta.id, root=root).meta.path.is_relative_to(root)
     assert set(list_board(root).by_id) == {doc.meta.id}
+
+
+def test_split_repository_keeps_implementation_worktrees_in_target(
+    tmp_path: Path,
+) -> None:
+    target = make_repo(tmp_path / "target")
+    tracking = make_repo(tmp_path / "tracking")
+    (target / "cascade.toml").write_text(
+        f'tracking_repository = "{tracking}"\n', encoding="utf-8"
+    )
+    _commit_initial(target)
+    _commit_initial(tracking)
+    prepare_up(target)
+
+    run = create_task_worktree(
+        "task_001", root=target, parent_rev=None, skills=[]
+    )
+
+    assert run.worktree.is_relative_to(target / ".cascade" / "worktrees")
+    assert not (tracking / ".cascade" / "worktrees").exists()

@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
+from cascade.board.errors import GitSynchronizationError
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.project_config import TrackingRepositoryReference
 from cascade.workspace.types import RepositoryContext
@@ -61,7 +62,11 @@ def prepare_tracking_repository(
             )
         _validate_checkout(checkout, label=identity, managed=True)
         _validate_origin(checkout, identity)
-        return RepositoryContext(root=checkout, display_identity=identity)
+        return RepositoryContext(
+            root=checkout,
+            display_identity=identity,
+            synchronize_remote=True,
+        )
 
     checkout.parent.mkdir(parents=True, exist_ok=True)
     result = _git_clone(remote, checkout)
@@ -81,7 +86,83 @@ def prepare_tracking_repository(
     # prepared-result boundary (including for unusual helpers or filesystems).
     _validate_checkout(checkout, label=identity, managed=True)
     _validate_origin(checkout, identity)
-    return RepositoryContext(root=checkout, display_identity=identity)
+    return RepositoryContext(
+        root=checkout,
+        display_identity=identity,
+        synchronize_remote=True,
+    )
+
+
+def synchronize_tracking_repository(repository: RepositoryContext) -> str:
+    """Reconcile a remote-backed tracking checkout without hiding failures.
+
+    A failed push leaves local commits intact.  A later startup or repetition of
+    the planning mutation retries synchronization.  Divergence is deliberately
+    not merged automatically because Cascade has no cross-repository transaction
+    or conflict-resolution authority.
+    """
+
+    checkout = repository.root.resolve()
+    identity = repository.display_identity or str(checkout)
+    if not repository.synchronize_remote:
+        head = _git(checkout, "rev-parse", "--verify", "HEAD")
+        return head.stdout.strip() if head.returncode == 0 else ""
+
+    branch_result = _git(checkout, "symbolic-ref", "--quiet", "--short", "HEAD")
+    branch = branch_result.stdout.strip()
+    if branch_result.returncode != 0 or not branch:
+        raise GitSynchronizationError(
+            f"tracking repository {identity} is detached; check out its planning branch "
+            "and retry"
+        )
+
+    fetch = _git(checkout, "fetch", "--no-tags", "origin", branch)
+    if fetch.returncode != 0:
+        raise GitSynchronizationError(
+            f"failed to fetch tracking repository {identity}; verify remote access and "
+            f"retry (local state is preserved at {checkout})"
+        )
+
+    remote_ref = f"refs/remotes/origin/{branch}"
+    remote_head = _git(checkout, "rev-parse", "--verify", remote_ref)
+    local_head = _git(checkout, "rev-parse", "--verify", "HEAD")
+    if remote_head.returncode != 0 or local_head.returncode != 0:
+        raise GitSynchronizationError(
+            f"tracking branch {branch!r} is unavailable for {identity}; restore the "
+            "remote branch and retry"
+        )
+    local_sha = local_head.stdout.strip()
+    remote_sha = remote_head.stdout.strip()
+    if local_sha == remote_sha:
+        return local_sha
+
+    local_is_ancestor = _git(
+        checkout, "merge-base", "--is-ancestor", local_sha, remote_sha
+    ).returncode == 0
+    remote_is_ancestor = _git(
+        checkout, "merge-base", "--is-ancestor", remote_sha, local_sha
+    ).returncode == 0
+    if local_is_ancestor:
+        advance = _git(checkout, "merge", "--ff-only", remote_ref)
+        if advance.returncode != 0:
+            raise GitSynchronizationError(
+                f"failed to fast-forward tracking repository {identity}; keep the checkout "
+                f"at {checkout}, resolve its Git state, and retry"
+            )
+        return remote_sha
+    if not remote_is_ancestor:
+        raise GitSynchronizationError(
+            f"tracking repository {identity} has diverged from origin/{branch}; reconcile "
+            f"the preserved checkout at {checkout} and retry"
+        )
+
+    push = _git(checkout, "push", "origin", f"HEAD:refs/heads/{branch}")
+    if push.returncode != 0:
+        raise GitSynchronizationError(
+            f"failed to push tracking repository {identity}; verify remote access and retry "
+            f"(local commits are preserved at {checkout})"
+        )
+    return local_sha
 
 
 def _validate_checkout(path: Path, *, label: str, managed: bool = False) -> None:

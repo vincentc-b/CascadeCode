@@ -15,7 +15,7 @@ from cascade.board.context import (
     resolve_tracking_root,
     route_planning_path,
 )
-from cascade.board.errors import GitError, NotFound, SchemaError
+from cascade.board.errors import GitError, GitSynchronizationError, NotFound, SchemaError
 from cascade.board.gitutil import (
     commit_paths,
     has_git,
@@ -190,6 +190,11 @@ def _write_doc(doc: WorkDoc, root: Path | None) -> str | None:
             [doc.meta.path],
             f"docs: {doc.meta.id} {doc.meta.title}",
         )
+    except GitSynchronizationError:
+        # The document is already committed locally.  Preserve that exact state
+        # so startup or an idempotent retry can synchronize it later.
+        invalidate_merged_board(trunk)
+        raise
     except GitError:
         if previous_bytes is None:
             doc.meta.path.unlink(missing_ok=True)
@@ -305,6 +310,9 @@ def _save_doc(doc: WorkDoc, previous_path: Path, root: Path | None) -> str | Non
         invalidate_merged_board(locate_trunk(repo))
         paths = [new_path] if new_path == previous else [previous, new_path]
         sha = commit_paths(repo, paths, f"docs: {doc.meta.id} {doc.meta.title}")
+    except GitSynchronizationError:
+        invalidate_merged_board(locate_trunk(repo))
+        raise
     except Exception:
         if new_path != previous and new_path.exists():
             new_path.unlink()
