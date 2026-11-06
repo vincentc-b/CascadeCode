@@ -1,0 +1,196 @@
+"""Compatibility baseline for authoritative dependency status (feat_038_001)."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from cascade.board.context import resolve_tracking_root, set_project_context
+from cascade.board.store import read_doc
+from cascade.stacked_dispatch import feature_dependency_ready
+from cascade.watchdog.dispatch import activate_epic, dispatch_feature, dispatch_task
+from cascade.war_room.room_settings import write_stacked_pr_enabled
+from cascade.workspace.integration_worktree import (
+    IntegrationWorktree,
+    merged_board,
+    merged_board_snapshot,
+    save_registry,
+)
+from cascade.workspace.types import ProjectContext
+from tests.support import add_doc, approve_board_feature, make_repo
+
+
+def _open_feature_review(root: Path, feature_id: str) -> None:
+    path = root / ".cascade" / "reviews.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                feature_id: {
+                    "url": f"https://github.example/o/r/pull/{feature_id}",
+                    "source_branch": f"feat/{feature_id}",
+                    "target_branch": "epic/epic_001",
+                    "forge": "github",
+                    "closed": False,
+                }
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_planning_documents_and_dependencies_are_owned_by_tracking_root(
+    tmp_path: Path,
+) -> None:
+    target = make_repo(tmp_path / "target", git=False)
+    tracking = make_repo(tmp_path / "tracking", git=False)
+    set_project_context(ProjectContext.split(target, tracking))
+
+    add_doc(target, id="epic_001", title="Epic", tier="epic")
+    add_doc(
+        target,
+        id="feat_001",
+        title="Dependency",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    add_doc(
+        target,
+        id="feat_002",
+        title="Dependent",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001"],
+    )
+
+    canonical_root = resolve_tracking_root(target)
+    board = merged_board(canonical_root)
+    dependent = board.by_id["feat_002"]
+
+    assert canonical_root == tracking.resolve()
+    assert read_doc("feat_001", root=target).meta.path.is_relative_to(tracking)
+    assert not list((target / "docs").rglob("*.md"))
+    assert feature_dependency_ready(dependent, board, root=canonical_root)
+
+
+def test_completed_tracking_trunk_epic_precedes_stale_registered_copy(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Complete", tier="epic", status="completed")
+    stale_root = root / ".cascade" / "worktrees" / "epic_epic_001"
+    stale_root.mkdir(parents=True)
+    add_doc(stale_root, id="epic_001", title="Stale", tier="epic", status="active")
+    save_registry(
+        root,
+        [
+            IntegrationWorktree(
+                kind="epic",
+                work_id="epic_001",
+                branch="epic/epic_001",
+                path=stale_root,
+                base_sha="base",
+            )
+        ],
+    )
+
+    visible = merged_board(root).by_id["epic_001"]
+
+    assert visible.status == "completed"
+    assert visible.path.parent.name == "3_completed"
+    assert visible.path.is_relative_to(root / "docs")
+
+
+def test_request_snapshot_stays_fixed_then_observes_board_invalidation(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    initial = merged_board(root)
+
+    with merged_board_snapshot(root, initial):
+        add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+        assert merged_board(root) is initial
+        assert "feat_001" not in merged_board(root).by_id
+
+    refreshed = merged_board(root)
+    assert refreshed is not initial
+    assert "feat_001" in refreshed.by_id
+
+
+@pytest.mark.parametrize(
+    ("stacked_enabled", "expected_ok", "expected_reason"),
+    [(False, False, "feature_awaiting_merge"), (True, True, None)],
+)
+def test_completed_dependency_does_not_replace_stacked_dispatch_gate(
+    tmp_path: Path,
+    stacked_enabled: bool,
+    expected_ok: bool,
+    expected_reason: str | None,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    assert activate_epic("epic_001", "human", root=root).ok
+    write_stacked_pr_enabled("epic_001", stacked_enabled, root=root)
+    add_doc(
+        root,
+        id="feat_001",
+        title="Dependency",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    add_doc(
+        root,
+        id="feat_002",
+        title="Dependent",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001"],
+    )
+    approve_board_feature(root, "feat_002")
+    _open_feature_review(root, "feat_001")
+
+    board = merged_board(root)
+    assert feature_dependency_ready(board.by_id["feat_002"], board, root=root)
+
+    result = dispatch_feature("feat_002", "human", root=root)
+    assert result.ok is expected_ok
+    assert result.reason == expected_reason
+
+
+def test_completed_feature_dependency_does_not_replace_task_review_gate(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Parent", tier="feature", parent="epic_001")
+    add_doc(
+        root,
+        id="feat_002",
+        title="Reviewed dependency",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Dependent task",
+        tier="task",
+        parent="feat_001",
+        depends_on=["feat_002"],
+    )
+    _open_feature_review(root, "feat_002")
+
+    dependency = merged_board(root).by_id["feat_002"]
+    assert dependency.status == "completed"
+    assert dependency.path.parent.name == "3_completed"
+
+    result = dispatch_task("task_001", "human", root=root)
+    assert result.ok is False
+    assert result.reason == "unmet_deps"
