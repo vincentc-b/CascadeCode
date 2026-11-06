@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-05'
-updated: '2026-11-05'
+updated: '2026-11-06'
 provider: codex
 flex_mode: false
 models:
@@ -27,6 +27,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+plan_approved_at: '2026-11-06T04:01:41.229130+00:00'
 ---
 # Split target and tracking repos
 
