@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from cascade.board.context import set_project_context
 from cascade.board.store import reset_id_reservations
 from cascade.epic.graph import clear_epic_graph_sessions
 from cascade.feature.graph import clear_feature_graph_sessions
@@ -15,6 +16,7 @@ def _drain_background_kickoffs():
 
     reset_kickoff_test_state()
     reset_id_reservations()
+    set_project_context(None)
     yield
     wait_for_background_kickoffs()
     reset_kickoff_test_state()
@@ -22,3 +24,4 @@ def _drain_background_kickoffs():
     clear_epic_graph_sessions()
     clear_feature_graph_sessions()
     clear_task_graph_sessions()
+    set_project_context(None)

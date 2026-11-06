@@ -480,6 +480,13 @@ No integer `rev` field. Plan edits are ordinary local commits.
 
 Canonical feature spec: [`docs/features/3_completed/feat_014_workspace_contract.md`](docs/features/3_completed/feat_014_workspace_contract.md). Provider backends and credentials: [`docs/features/3_completed/feat_015_provider_backends.md`](docs/features/3_completed/feat_015_provider_backends.md). This section records the **implemented** operator contract (tasks 063–069, provider sync in task_076).
 
+Operator configuration, adoption, and recovery for optional split planning
+storage are documented in
+[`docs/tracking_repositories.md`](docs/tracking_repositories.md). When configured,
+the target remains the source/runtime repository while versioned planning
+artifacts are routed to the tracking repository; omission preserves the
+colocated behavior described below.
+
 Cascade is a Python tool pointed at a **workspace** — one git repo root. Dogfood is when the tool checkout and the workspace are the same directory; a foreign repo passes `--root` to the other checkout.
 
 | Lives in the tool | Lives in the workspace |

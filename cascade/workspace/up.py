@@ -6,14 +6,19 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cascade.board.context import resolve_root
+from cascade.board.context import resolve_root, set_project_context
+from cascade.board.errors import GitSynchronizationError
 from cascade.board.gitutil import _run, has_git
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.init import _BOARD_TIERS
 from cascade.workspace.lock import SupervisorLock
+from cascade.workspace.project_config import find_project_config, read_tracking_repository
+from cascade.workspace.repository_resolver import (
+    prepare_tracking_repository,
+    synchronize_tracking_repository,
+)
 from cascade.workspace.trunk import resolve_product_trunk
-from cascade.workspace.source_fingerprint import source_fingerprint as _source_fingerprint
-from cascade.workspace.types import WorkspaceRoot
+from cascade.workspace.types import ProjectContext, WorkspaceRoot
 
 
 _SOURCE_CHECK_INTERVAL_SECONDS = 1.0
@@ -120,8 +125,9 @@ def _current_branch(repo: Path) -> str | None:
 
 
 def prepare_up(root: Path | None = None) -> WorkspaceRoot:
-    """Validate git root, board layout, and trunk checkout; does not start processes."""
+    """Validate and resolve the project before starting any processes."""
 
+    set_project_context(None)
     path = resolve_root(root)
     if not has_git(path):
         raise WorkspaceError(f"not a git repository: {path}")
@@ -138,12 +144,32 @@ def prepare_up(root: Path | None = None) -> WorkspaceRoot:
             "do not run cascade up from epic/*, feat/*, or task/* branches"
         )
 
+    config = find_project_config(path)
+    project = ProjectContext.colocated(path)
+    tracking_reference = read_tracking_repository(config)
+    if tracking_reference is not None:
+        tracking = prepare_tracking_repository(
+            tracking_reference,
+            path / ".cascade",
+        )
+        try:
+            synchronize_tracking_repository(tracking)
+        except GitSynchronizationError as exc:
+            raise WorkspaceError(str(exc)) from exc
+        project = ProjectContext(
+            target=project.target,
+            tracking=tracking,
+        )
+
+    set_project_context(project)
+
     return WorkspaceRoot(
         path=path,
         trunk=trunk,
-        board=path / "docs",
-        config=path / "cascade.toml",
+        board=project.tracking.root / "docs",
+        config=config,
         runtime=path / ".cascade",
+        project=project,
     )
 
 
