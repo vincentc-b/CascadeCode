@@ -148,6 +148,10 @@ None at epic scope. Exact config-key naming, managed-checkout location, and sync
 
 - 2026-11-05 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-06 · Epic Manager · **Repository selection**
+  Chose Make the tracking repository optional; when omitted, alias it to the target repository and preserve the existing layout and behavior..
+  Rationale: The user asked for an option rather than a requirement, and backward compatibility lets existing projects upgrade without migration risk.
+  Honors: Optional separate repository and a safe default for current projects..
 ## Amendment log
 
 _(none)_
