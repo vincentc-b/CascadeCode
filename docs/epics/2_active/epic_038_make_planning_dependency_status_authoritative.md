@@ -124,6 +124,10 @@ No unresolved product-scope question remains. The initial implementation-risk qu
 
 - 2026-11-06 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-06 · Epic Manager · **Macro-architecture**
+  Chose Use one minimal dependency projection from canonical merged-board/lifecycle state, with satisfied, dependency_unmet, and dependency_status_unavailable outcomes; keep content_access_denied independent..
+  Rationale: A scoped plan-body denial provides no completion evidence. Absent IDs and unavailable authoritative sources remain distinguishable, fail-closed cases without expanding cross-team content access.
+  Honors: Success criteria 1–4; canonical tracking ownership and existing review/stacked-dispatch rules..
 ## Amendment log
 
 _(none)_
