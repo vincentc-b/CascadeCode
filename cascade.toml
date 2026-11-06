@@ -24,6 +24,7 @@ feature = "claude-sonnet-5-5"  # feature_lead, feature_architect
 task = "composer-2.5"          # swe
 
 [providers.cursor.launch]
+# Provider sandbox bypass does not grant lifecycle or dependency-install authority.
 permissions = "yolo"
 
 [providers.claude.launch]
