@@ -2,7 +2,7 @@
 id: feat_036_002
 title: Route planning lifecycle through the tracking repository
 tier: feature
-status: active
+status: completed
 parent: epic_036
 children:
 - task_036_002_001
