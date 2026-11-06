@@ -13,14 +13,14 @@ from cascade.dependency_evaluation import evaluate_dependencies
 from cascade.stacked_dispatch import feature_dependency_ready
 from cascade.watchdog.dispatch import activate_epic, dispatch_feature, dispatch_task
 from cascade.war_room.room_settings import write_stacked_pr_enabled
-from cascade.workspace.integration_worktree import (
-    IntegrationWorktree,
-    merged_board,
-    merged_board_snapshot,
-    save_registry,
-)
+from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from cascade.workspace.types import ProjectContext
-from tests.support import add_doc, approve_board_feature, make_repo
+from tests.support import (
+    SyntheticDependencyLifecycle,
+    add_doc,
+    approve_board_feature,
+    make_repo,
+)
 
 
 def _open_feature_review(root: Path, feature_id: str) -> None:
@@ -79,43 +79,19 @@ def test_planning_documents_and_dependencies_are_owned_by_tracking_root(
     assert evaluate_dependencies(dependent, root=target).satisfied
 
 
-def test_completed_tracking_trunk_epic_precedes_stale_registered_copy(
-    tmp_path: Path,
+def test_synthetic_canonical_completion_precedes_stale_registered_copy(
+    synthetic_dependency_lifecycle: SyntheticDependencyLifecycle,
 ) -> None:
-    root = make_repo(tmp_path, git=False)
-    add_doc(root, id="epic_001", title="Complete", tier="epic", status="completed")
-    stale_root = root / ".cascade" / "worktrees" / "epic_epic_001"
-    stale_root.mkdir(parents=True)
-    add_doc(stale_root, id="epic_001", title="Stale", tier="epic", status="active")
-    save_registry(
-        root,
-        [
-            IntegrationWorktree(
-                kind="epic",
-                work_id="epic_001",
-                branch="epic/epic_001",
-                path=stale_root,
-                base_sha="base",
-            )
-        ],
-    )
+    scenario = synthetic_dependency_lifecycle
+    root = scenario.root
 
-    visible = merged_board(root).by_id["epic_001"]
+    board = merged_board(root)
+    visible = board.by_id[scenario.dependency_id]
 
     assert visible.status == "completed"
     assert visible.path.parent.name == "3_completed"
     assert visible.path.is_relative_to(root / "docs")
-
-    add_doc(
-        root,
-        id="feat_001",
-        title="Dependent",
-        tier="feature",
-        parent="epic_001",
-        depends_on=["epic_001"],
-    )
-    dependent = merged_board(root).by_id["feat_001"]
-    assert evaluate_dependencies(dependent, root=root).satisfied
+    assert evaluate_dependencies(board.by_id[scenario.owner_id], root=root).satisfied
 
 
 def test_dependency_evaluation_distinguishes_lifecycle_and_availability(

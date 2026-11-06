@@ -8,6 +8,17 @@ from cascade.epic.graph import clear_epic_graph_sessions
 from cascade.feature.graph import clear_feature_graph_sessions
 from cascade.task.graph import clear_task_graph_sessions
 from cascade.workspace.kickoff import reset_kickoff_test_state, wait_for_background_kickoffs
+from tests.support import (
+    SyntheticDependencyLifecycle,
+    make_synthetic_dependency_lifecycle,
+)
+
+
+@pytest.fixture
+def synthetic_dependency_lifecycle(tmp_path) -> SyntheticDependencyLifecycle:
+    """Canonical epic_036 completion with an unreadable stale active copy."""
+
+    return make_synthetic_dependency_lifecycle(tmp_path)
 
 
 @pytest.fixture(autouse=True)

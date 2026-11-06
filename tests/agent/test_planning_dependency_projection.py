@@ -21,7 +21,7 @@ from cascade.epic.scoped_docs import epic_read_doc
 from cascade.feature.guard import FeatureToolDenied
 from cascade.feature.scoped_docs import feature_read_doc
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
-from tests.support import add_doc, make_repo
+from tests.support import SyntheticDependencyLifecycle, add_doc, make_repo
 
 
 def _projection_from_prompt(prompt: str) -> dict[str, object]:
@@ -29,6 +29,52 @@ def _projection_from_prompt(prompt: str) -> dict[str, object]:
     payload, boundary = prompt.split(heading, 1)[1].split("\n\n", 1)
     assert boundary == _DEPENDENCY_PROJECTION_BOUNDARY
     return json.loads(payload)
+
+
+def test_synthetic_completed_dependency_is_projected_without_content_access(
+    synthetic_dependency_lifecycle: SyntheticDependencyLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario = synthetic_dependency_lifecycle
+    captured: list[RoleTurn] = []
+
+    async def fake_run_role(turn: RoleTurn) -> RoleResult:
+        captured.append(turn)
+        assert not any(
+            scenario.dependency_id in path.name for path in turn.cwd.rglob("*.md")
+        )
+        return RoleResult(text="ok", status="finished")
+
+    monkeypatch.setattr("cascade.agent.planning_turn.run_role", fake_run_role)
+    asyncio.run(
+        run_epic_planning_turn(
+            "epic_manager",
+            "test-model",
+            "plan",
+            provider="fake",
+            epic_id=scenario.owner_id,
+            root=scenario.root,
+        )
+    )
+
+    projection = _projection_from_prompt(captured[0].prompt)
+    assert projection["outcome"] == "satisfied"
+    rows = projection["dependencies"]
+    assert isinstance(rows, list) and len(rows) == 1
+    assert rows[0]["work_id"] == scenario.dependency_id
+    assert rows[0]["status"] == "completed"
+    assert rows[0]["column"] == "3_completed"
+    assert rows[0]["outcome"] == "satisfied"
+    assert rows[0]["completion_evidence"] == (
+        "canonical_completed_in_3_completed"
+    )
+    assert "Synthetic private dependency" not in captured[0].prompt
+    with pytest.raises(EpicToolDenied):
+        epic_read_doc(
+            scenario.dependency_id,
+            epic_id=scenario.owner_id,
+            root=scenario.root,
+        )
 
 
 def test_epic_turn_projects_all_dependencies_without_content_access(
