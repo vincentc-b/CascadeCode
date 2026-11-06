@@ -302,4 +302,4 @@ def test_completed_feature_dependency_does_not_replace_task_review_gate(
 
     result = dispatch_task("task_001", "human", root=root)
     assert result.ok is False
-    assert result.reason == "unmet_deps"
+    assert result.reason == "feature_awaiting_merge"

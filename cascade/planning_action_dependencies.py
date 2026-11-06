@@ -43,10 +43,6 @@ def evaluate_action_dependencies(work_id: str, *, root: Path) -> ActionDependenc
     try:
         tracking_root = resolve_tracking_root(root)
         board = refresh_merged_board(tracking_root)
-        owner = board.by_id.get(work_id)
-        if owner is None:
-            raise LookupError(work_id)
-        evaluation = evaluate_dependencies(owner, root=tracking_root, board=board)
     except Exception:
         # Source and owner refresh failures are intentionally safe and stable.
         return ActionDependencyEvidence(
@@ -54,6 +50,15 @@ def evaluate_action_dependencies(work_id: str, *, root: Path) -> ActionDependenc
                 dependencies=(), outcome="dependency_status_unavailable"
             )
         )
+    owner = board.by_id.get(work_id)
+    if owner is None:
+        return ActionDependencyEvidence(
+            evaluation=DependencyEvaluation(
+                dependencies=(), outcome="dependency_status_unavailable"
+            ),
+            board=board,
+        )
+    evaluation = evaluate_dependencies(owner, root=tracking_root, board=board)
     return ActionDependencyEvidence(evaluation=evaluation, board=board, owner=owner)
 
 
