@@ -162,6 +162,11 @@ None at epic scope. Exact config-key naming, managed-checkout location, and sync
   Chose Use the system Git client's existing SSH configuration or credential helpers; Cascade will not collect or store repository credentials..
   Rationale: This supports normal Git access without creating a credential-management surface or leaking secrets into project state.
   Honors: No Cascade-specific credentials beyond the user's preconfigured Git access..
+
+- `dec_004` · 2026-11-06 · Epic Manager · **Delivery scope**
+  Chose Deliver two dependent features: repository resolution/configuration, then end-to-end planning lifecycle routing with system-level proof..
+  Rationale: This is the smallest sequence that establishes a reusable boundary and validates the actual user outcome without adding a migration engine or transaction layer.
+  Honors: Smallest shippable scope with economical, high-signal testing..
 ## Amendment log
 
 _(none)_
