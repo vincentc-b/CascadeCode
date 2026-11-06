@@ -2,7 +2,7 @@
 id: feat_038_002
 title: Recheck dependency status at planning action boundaries
 tier: feature
-status: active
+status: completed
 parent: epic_038
 children:
 - task_038_002_001
