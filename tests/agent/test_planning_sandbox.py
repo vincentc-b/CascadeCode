@@ -39,7 +39,7 @@ def epic_board(tmp_path: Path) -> dict[str, object]:
     return {"root": root, "epic": epic}
 
 
-def test_scratch_write_does_not_touch_repo(monkeypatch: pytest.MonkeyPatch, epic_board: dict) -> None:
+def test_team_turn_writes_in_owned_checkout(monkeypatch: pytest.MonkeyPatch, epic_board: dict) -> None:
     root = epic_board["root"]
     epic_id = "epic_001"
     captured_cwd: list[Path] = []
@@ -49,8 +49,8 @@ def test_scratch_write_does_not_touch_repo(monkeypatch: pytest.MonkeyPatch, epic
 
         assert isinstance(turn, RoleTurn)
         captured_cwd.append(turn.cwd)
-        secret = turn.cwd / "scratch_only.txt"
-        secret.write_text("ephemeral\n", encoding="utf-8")
+        secret = turn.cwd / "team_edit.txt"
+        secret.write_text("owned checkout\n", encoding="utf-8")
         assert secret.is_file()
         return RoleResult(text="ok", status="finished", tool_effects=[])
 
@@ -68,15 +68,19 @@ def test_scratch_write_does_not_touch_repo(monkeypatch: pytest.MonkeyPatch, epic
     )
     assert result.status == "finished"
     assert len(captured_cwd) == 1
-    scratch = captured_cwd[0]
-    assert not scratch.exists()
-    assert not (root / "scratch_only.txt").exists()
-    assert not any(root.rglob("scratch_only.txt"))
+    assert captured_cwd[0] == root.resolve()
+    assert (root / "team_edit.txt").read_text(encoding="utf-8") == "owned checkout\n"
 
 
 def test_scratch_removed_after_turn(monkeypatch: pytest.MonkeyPatch, epic_board: dict) -> None:
     root = epic_board["root"]
     seen: list[Path] = []
+    runtime_dirs: list[Path] = []
+
+    def spy_materialize(*args: object, **kwargs: object) -> Path:
+        runtime = materialize_scratch(*args, **kwargs)  # type: ignore[arg-type]
+        runtime_dirs.append(runtime)
+        return runtime
 
     async def fake_run_role(turn: object) -> RoleResult:
         from cascade.agent.types import RoleTurn
@@ -87,6 +91,7 @@ def test_scratch_removed_after_turn(monkeypatch: pytest.MonkeyPatch, epic_board:
         return RoleResult(text="", status="finished")
 
     monkeypatch.setattr("cascade.agent.planning_turn.run_role", fake_run_role)
+    monkeypatch.setattr("cascade.agent.planning_turn.materialize_scratch", spy_materialize)
     asyncio.run(
         run_epic_planning_turn(
             "epic_architect",
@@ -97,8 +102,9 @@ def test_scratch_removed_after_turn(monkeypatch: pytest.MonkeyPatch, epic_board:
             root=root,
         )
     )
-    assert len(seen) == 1
-    assert not seen[0].exists()
+    assert seen == [root.resolve()]
+    assert len(runtime_dirs) == 1
+    assert not runtime_dirs[0].exists()
 
 
 def test_dispatch_planning_tool_hits_guarded_mint_feature(
@@ -183,6 +189,7 @@ def test_run_role_receives_cursor_custom_tools(
     assert "read_doc" in turn.custom_tools
     assert "read_comment" in turn.custom_tools
     assert "sign_off_plan" in turn.custom_tools
+    assert "retry_integration_branch_update" in turn.custom_tools
 
 
 def test_run_role_receives_mcp_mapping_for_claude(
@@ -267,7 +274,8 @@ def test_mcp_config_binds_epic_role(monkeypatch: pytest.MonkeyPatch, epic_board:
     from cascade.agent.types import RoleTurn
 
     async def fake_run_role(turn: RoleTurn) -> RoleResult:
-        config_path = turn.cwd / ".cascade_mcp.json"
+        assert isinstance(turn.tools, dict)
+        config_path = Path(turn.tools["cascade"]["env"]["CASCADE_MCP_CONFIG"])
         config = json.loads(config_path.read_text(encoding="utf-8"))
         assert config["role"] == "epic_architect"
         assert "sign_off_plan" in config["tool_names"]
@@ -314,6 +322,12 @@ def test_scratch_removed_when_run_role_raises_cursor_error(
 ) -> None:
     root = epic_board["root"]
     seen: list[Path] = []
+    runtime_dirs: list[Path] = []
+
+    def spy_materialize(*args: object, **kwargs: object) -> Path:
+        runtime = materialize_scratch(*args, **kwargs)  # type: ignore[arg-type]
+        runtime_dirs.append(runtime)
+        return runtime
 
     async def fail_run_role(turn: object) -> RoleResult:
         from cascade.agent.types import RoleTurn
@@ -323,6 +337,7 @@ def test_scratch_removed_when_run_role_raises_cursor_error(
         raise CursorAgentError("startup fail", retryable=False)
 
     monkeypatch.setattr("cascade.agent.planning_turn.run_role", fail_run_role)
+    monkeypatch.setattr("cascade.agent.planning_turn.materialize_scratch", spy_materialize)
 
     with pytest.raises(CursorAgentError):
         asyncio.run(
@@ -336,8 +351,9 @@ def test_scratch_removed_when_run_role_raises_cursor_error(
             )
         )
 
-    assert len(seen) == 1
-    assert not seen[0].exists()
+    assert seen == [root.resolve()]
+    assert len(runtime_dirs) == 1
+    assert not runtime_dirs[0].exists()
 
 
 def test_materialize_skips_symlink_escape(epic_board: dict) -> None:

@@ -281,3 +281,12 @@ def test_planning_role_enables_local_sandbox(api_key_env: None) -> None:
     opts_no_mcp = build_agent_options(turn_no_mcp, api_key="cursor_test_key")
     assert opts_no_mcp.local.sandbox_options is not None
     assert opts_no_mcp.local.sandbox_options.enabled is True
+
+    turn_yolo = _turn(
+        role="epic_manager",
+        custom_tools={"read_doc": CustomTool(execute=lambda _a, _c: "ok")},
+        permission_mode="yolo",
+    )
+    opts_yolo = build_agent_options(turn_yolo, api_key="cursor_test_key")
+    assert opts_yolo.local.sandbox_options is not None
+    assert opts_yolo.local.sandbox_options.enabled is False

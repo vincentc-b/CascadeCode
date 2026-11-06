@@ -7,13 +7,6 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_log = logging.getLogger(__name__)
-
-_DEFAULT_WORKER_DRAIN_SECONDS = 120.0
-_DEFAULT_CONVERGENCE_STALL_THRESHOLD_SECONDS = 600.0
-_DEFAULT_TURN_PROGRESS_NO_PROGRESS_DEADLINE_SECONDS = 600.0
-_DEFAULT_SUPERVISOR_HEALTH_SWEEP_SECONDS = 60.0
-
 from cascade.agent.errors import ProviderConfigError
 from cascade.agent.providers import (
     ALL_PROVIDER_IDS,
@@ -21,6 +14,14 @@ from cascade.agent.providers import (
     fake_provider_enabled,
     parse_provider_id,
 )
+from cascade.agent.types import ProviderPermissionMode
+
+_log = logging.getLogger(__name__)
+
+_DEFAULT_WORKER_DRAIN_SECONDS = 120.0
+_DEFAULT_CONVERGENCE_STALL_THRESHOLD_SECONDS = 600.0
+_DEFAULT_TURN_PROGRESS_NO_PROGRESS_DEADLINE_SECONDS = 600.0
+_DEFAULT_SUPERVISOR_HEALTH_SWEEP_SECONDS = 60.0
 
 _TIER_KEYS = ("epic", "feature", "task", "boss")
 _DEFAULT_COMPLETED_EPIC_DISPLAY_LIMIT = 10
@@ -56,6 +57,34 @@ class AutomationConfig:
     enabled: bool = True
     poll_seconds: float = 15.0
     remote: str = "origin"
+
+
+def provider_permission_mode(root: Path, provider: ProviderId) -> ProviderPermissionMode:
+    """Return the optional provider launch permission mode.
+
+    Missing configuration deliberately means that Cascade supplies no optional
+    permission flag and leaves the provider's own default intact.
+    """
+
+    data = _load_cascade_toml(root)
+    providers = data.get("providers")
+    if not isinstance(providers, dict):
+        return "default"
+    provider_table = providers.get(provider)
+    if not isinstance(provider_table, dict):
+        return "default"
+    launch = provider_table.get("launch")
+    if launch is None:
+        return "default"
+    if not isinstance(launch, dict):
+        raise ConfigError(f"[providers.{provider}.launch] must be a table")
+    value = launch.get("permissions", "default")
+    if value not in ("default", "yolo"):
+        raise ConfigError(
+            f"providers.{provider}.launch.permissions must be 'default' or 'yolo', "
+            f"got {value!r}"
+        )
+    return value
 
 
 def worker_drain_seconds(root: Path) -> float:

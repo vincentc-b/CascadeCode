@@ -52,9 +52,11 @@ def build_codex_argv(
         "--config",
         'approval_policy="never"',
     ]
+    if turn.permission_mode == "yolo":
+        argv.append("--dangerously-bypass-approvals-and-sandbox")
     # Codex exec defaults to a restricted sandbox. SWE turns edit only their
-    # Task worktree; planning turns continue to use guarded MCP tools.
-    if turn.role == "swe":
+    # Task worktree. Project-level yolo mode supersedes that sandbox.
+    if turn.role == "swe" and turn.permission_mode != "yolo":
         argv.extend(["--config", 'sandbox_mode="workspace-write"'])
     if turn.model_id.strip():
         argv.extend(["--model", turn.model_id])
@@ -68,10 +70,8 @@ def build_codex_argv(
             argv.append("--ignore-user-config")
         for override in codex_mcp_config_overrides(servers):
             argv.extend(["--config", override])
-    # Planning turns run in a deliberately minimal scratch directory rather
-    # than a Git checkout.  Newer Codex releases reject such directories by
-    # default; older releases that do not advertise the flag did not require
-    # it, so keep this capability-gated.
+    # Boss turns may still use a minimal scratch directory rather than a Git
+    # checkout. Keep compatibility with Codex releases that require this flag.
     if "--skip-git-repo-check" in exec_help:
         argv.append("--skip-git-repo-check")
     argv.append("-")
