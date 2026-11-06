@@ -140,6 +140,11 @@ No unresolved product-scope question remains. The initial implementation-risk qu
   Chose Deliver feat_038_001, then feat_038_002, then feat_038_003, with tests in each slice and final cross-surface regression evidence; preserve historical transcript text..
   Rationale: Three bounded features cover the full brief without adding a new status database, graph-validation project, UI redesign, or history migration. The synthetic epic_034/epic_036 fixture validates the incident without accessing production plan content.
   Honors: All eight success criteria; frugal engineering and product-manager scope priorities..
+
+- `dec_004` · 2026-11-06 · Epic Architect · **Macro-architecture**
+  Chose Scope bulk epic-plan approval checks to the epic's prerequisites; preserve approval of sequenced backlog children while enforcing each child's prerequisites at activation/dispatch and direct feature sign-off/approval..
+  Rationale: cascade/approvals.py already bulk-approves every child in approve_epic_plan. Applying each successor's completion gate to that operation would prevent approval of an ordinary sequential plan. Explicit ownership preserves existing approval behavior without allowing approval records to bypass fresh execution checks.
+  Honors: Success criteria 5–7; existing approval semantics, sequential feature decomposition, and fail-closed action boundaries. Added matching epic and feat_038_002 regression obligations..
 ## Amendment log
 
 _(none)_
