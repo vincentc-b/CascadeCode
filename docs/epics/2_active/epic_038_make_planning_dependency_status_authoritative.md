@@ -128,6 +128,11 @@ No unresolved product-scope question remains. The initial implementation-risk qu
   Chose Use one minimal dependency projection from canonical merged-board/lifecycle state, with satisfied, dependency_unmet, and dependency_status_unavailable outcomes; keep content_access_denied independent..
   Rationale: A scoped plan-body denial provides no completion evidence. Absent IDs and unavailable authoritative sources remain distinguishable, fail-closed cases without expanding cross-team content access.
   Honors: Success criteria 1–4; canonical tracking ownership and existing review/stacked-dispatch rules..
+
+- `dec_002` · 2026-11-06 · Epic Manager · **Macro-architecture**
+  Chose Recheck the owning item's dependencies at sign-off, approval, and minting authorization; permit backlog children to declare unfinished valid predecessor features..
+  Rationale: Fresh boundary evidence prevents stale authorization while allowing ordinary feature decomposition. Cached/request snapshots and unchanged plan revisions cannot substitute for current lifecycle evidence.
+  Honors: Success criteria 5–7; preserve existing declaration validation, role sign-offs, and non-dependency action checks..
 ## Amendment log
 
 _(none)_
