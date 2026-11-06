@@ -11,8 +11,9 @@ from cascade.board.gitutil import _run, has_git
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.init import _BOARD_TIERS
 from cascade.workspace.lock import SupervisorLock
-from cascade.workspace.trunk import resolve_product_trunk
+from cascade.workspace.project_config import find_project_config
 from cascade.workspace.source_fingerprint import source_fingerprint as _source_fingerprint
+from cascade.workspace.trunk import resolve_product_trunk
 from cascade.workspace.types import WorkspaceRoot
 
 
@@ -142,7 +143,7 @@ def prepare_up(root: Path | None = None) -> WorkspaceRoot:
         path=path,
         trunk=trunk,
         board=path / "docs",
-        config=path / "cascade.toml",
+        config=find_project_config(path),
         runtime=path / ".cascade",
     )
 
