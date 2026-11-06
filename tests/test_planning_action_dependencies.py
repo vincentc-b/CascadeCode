@@ -21,6 +21,7 @@ from cascade.planning_action_dependencies import (
     DependencyActionRefused,
     evaluate_action_dependencies,
 )
+from cascade.watchdog import dispatch_feature
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from cascade.war_room.server import WarRoomRequestHandler
 from tests.support import add_doc, make_repo, sign_off_both_planning_roles
@@ -302,12 +303,15 @@ def test_epic_dependency_regression_refuses_before_any_bulk_approval(
     add_doc(root, id="feat_002_001", title="First", tier="feature", parent="epic_002")
     add_doc(root, id="feat_002_002", title="Second", tier="feature", parent="epic_002")
     sign_off_both_planning_roles("epic_002", root=root)
+    approve_feature("feat_002_001", root=root)
+    existing_approval = read_doc("feat_002_001", root=root).meta.approved_at
+    assert existing_approval is not None
     move_doc("epic_001", "backlog", root=root)
 
     with pytest.raises(DependencyActionRefused, match="dependency_unmet"):
         approve_epic_plan("epic_002", root=root)
 
-    assert read_doc("feat_002_001", root=root).meta.approved_at is None
+    assert read_doc("feat_002_001", root=root).meta.approved_at == existing_approval
     assert read_doc("feat_002_002", root=root).meta.approved_at is None
     assert read_doc("epic_002", root=root).meta.plan_approved_at is None
 
@@ -381,6 +385,42 @@ def test_mint_allows_incomplete_child_predecessor_when_owner_is_ready(
     )
 
     assert read_doc(minted, root=root).meta.depends_on == ["feat_001"]
+
+
+def test_sequential_mint_bulk_approval_and_dependency_gated_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    monkeypatch.setattr("cascade.watchdog.dispatch.invoke_boot", lambda *_args: None)
+    monkeypatch.setattr("cascade.watchdog.dispatch.has_git", lambda _root: False)
+    monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args: None)
+
+    first = mint_feature("First", epic_id="epic_001", root=root)
+    second = mint_feature(
+        "Second", depends_on=[first], epic_id="epic_001", root=root
+    )
+    third = mint_feature(
+        "Third", depends_on=[second], epic_id="epic_001", root=root
+    )
+    sign_off_both_planning_roles("epic_001", root=root)
+
+    approved = approve_epic_plan("epic_001", root=root)
+
+    assert approved["features"] == [first, second, third]
+    assert all(
+        read_doc(feature_id, root=root).meta.approved_at is not None
+        for feature_id in (first, second, third)
+    )
+    assert dispatch_feature(second, "boss", root=root).reason == "dependency_unmet"
+    assert dispatch_feature(first, "boss", root=root).ok
+
+    move_doc(first, "completed", root=root)
+    assert dispatch_feature(second, "boss", root=root).ok
+    assert dispatch_feature(third, "boss", root=root).reason == "dependency_unmet"
+
+    move_doc(second, "completed", root=root)
+    assert dispatch_feature(third, "boss", root=root).ok
 
 
 def test_mint_refreshes_owner_after_cached_dependency_regresses(tmp_path: Path) -> None:
