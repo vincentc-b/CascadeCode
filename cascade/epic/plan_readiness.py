@@ -42,7 +42,12 @@ def compute_epic_plan_readiness(
     """Return readiness for an active, unapproved epic; ``None`` when not applicable."""
 
     board = board or merged_board(root)
-    meta = board.by_id.get(epic_id)
+    snapshot_meta = board.by_id.get(epic_id)
+    dependency_evidence = evaluate_action_dependencies(epic_id, root=root)
+    # Prefer the owner read at the dependency boundary. Keeping the supplied
+    # snapshot only as a fallback lets an unavailable refresh be represented as
+    # a dependency blocker instead of making an otherwise visible epic vanish.
+    meta = dependency_evidence.owner or snapshot_meta
     if meta is None or meta.tier != "epic":
         return None
     if meta.plan_approved_at is not None:
@@ -61,7 +66,7 @@ def compute_epic_plan_readiness(
     sign_offs = {role: row.to_dict() for role, row in valid.items()}
     missing_roles = _missing_roles(valid)
 
-    dependency_outcome = evaluate_action_dependencies(epic_id, root=root).outcome
+    dependency_outcome = dependency_evidence.outcome
     if dependency_outcome != "satisfied":
         return EpicPlanReadiness(
             status="planning",

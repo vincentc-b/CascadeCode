@@ -71,6 +71,107 @@ def test_sign_off_refuses_unmet_dependency_without_writing_sidecar(tmp_path: Pat
     assert readiness.approve_disabled_reason == "dependency_unmet"
 
 
+def test_readiness_and_sign_off_observe_dependency_completed_during_planning(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Dependency", tier="epic")
+    add_doc(
+        root,
+        id="epic_002",
+        title="Owner",
+        tier="epic",
+        status="active",
+        depends_on=["epic_001"],
+    )
+    stale = merged_board(root)
+    revision = canonical_plan_revision("epic_002", root=root)
+    assert revision is not None
+    move_doc("epic_001", "completed", root=root)
+
+    with merged_board_snapshot(root, stale):
+        readiness = compute_epic_plan_readiness("epic_002", root=root, board=stale)
+        assert readiness is not None
+        assert readiness.approve_disabled_reason == "missing_epic_manager_sign_off"
+        result = sign_off_epic_plan(
+            "epic_002",
+            "epic_manager",
+            revision,
+            root=root,
+            actor="epic_manager",
+        )
+
+    assert result["newly_signed"] is True
+    assert len(read_plan_sign_offs("epic_002", root=root)) == 1
+
+
+def test_sign_off_writes_no_record_on_dependency_source_loss(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Owner", tier="epic", status="active")
+    revision = canonical_plan_revision("epic_001", root=root)
+    assert revision is not None
+    stale = merged_board(root)
+
+    def fail_refresh(root: Path) -> object:
+        raise OSError("source disappeared")
+
+    monkeypatch.setattr(
+        "cascade.planning_action_dependencies.refresh_merged_board", fail_refresh
+    )
+    with merged_board_snapshot(root, stale):
+        with pytest.raises(
+            DependencyActionRefused, match="dependency_status_unavailable"
+        ):
+            sign_off_epic_plan(
+                "epic_001",
+                "epic_manager",
+                revision,
+                root=root,
+                actor="epic_manager",
+            )
+
+    assert read_plan_sign_offs("epic_001", root=root) == ()
+
+
+def test_sign_off_refuses_dependency_regression_hidden_by_request_snapshot(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Dependency",
+        tier="epic",
+        status="completed",
+    )
+    add_doc(
+        root,
+        id="epic_002",
+        title="Owner",
+        tier="epic",
+        status="active",
+        depends_on=["epic_001"],
+    )
+    revision = canonical_plan_revision("epic_002", root=root)
+    assert revision is not None
+    stale = merged_board(root)
+    move_doc("epic_001", "backlog", root=root)
+
+    with merged_board_snapshot(root, stale):
+        with pytest.raises(DependencyActionRefused, match="dependency_unmet"):
+            sign_off_epic_plan(
+                "epic_002",
+                "epic_manager",
+                revision,
+                root=root,
+                actor="epic_manager",
+            )
+
+    assert read_plan_sign_offs("epic_002", root=root) == ()
+
+
 def test_feature_approval_fails_closed_after_dependency_regresses(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")

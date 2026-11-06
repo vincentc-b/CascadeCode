@@ -223,16 +223,19 @@ def sign_off_epic_plan(
 
     repo = _signoff_repo(epic_id, root=root)
     with process_lock:
-        board = merged_board(repo)
-        meta = board.by_id.get(epic_id)
-        if meta is None or meta.tier != "epic":
+        snapshot_meta = merged_board(repo).by_id.get(epic_id)
+        if snapshot_meta is None or snapshot_meta.tier != "epic":
+            raise PlanSignOffError(f"{epic_id} is not an active epic")
+        dependency_evidence = require_action_dependencies(epic_id, root=repo)
+        meta = dependency_evidence.owner
+        assert meta is not None  # satisfied evidence always identifies its owner
+        if meta.tier != "epic":
             raise PlanSignOffError(f"{epic_id} is not an active epic")
         if meta.path.parent.name != "2_active":
             raise PlanSignOffError("epic plan sign-off requires an active epic team")
         if meta.plan_approved_at is not None:
             raise PlanSignOffError(f"epic plan for {epic_id} is already approved")
 
-        require_action_dependencies(epic_id, root=repo)
         canonical = canonical_plan_revision(epic_id, root=repo)
         if canonical is None:
             raise PlanSignOffError(f"canonical plan revision unavailable for {epic_id}")
