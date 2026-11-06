@@ -78,7 +78,7 @@ def build_planning_custom_tools(
             )
 
         tools[name] = CustomTool(
-            description=f"Cascade {tier} tool {name}",
+            description=_planning_tool_description(tier, name),
             input_schema=schema,
             execute=_execute,
         )
@@ -271,11 +271,22 @@ def mcp_tool_catalog(tier: PlanningToolTier, tool_names: list[str]) -> list[dict
         tools.append(
             {
                 "name": name,
-                "description": f"Cascade {tier} tool {name}",
+                "description": _planning_tool_description(tier, name),
                 "inputSchema": schema,
             }
         )
     return tools
+
+
+def _planning_tool_description(tier: PlanningToolTier, name: str) -> str:
+    if tier == "epic" and name == "mint_feature":
+        return (
+            "Create a backlog feature. Cascade rechecks the owning epic's current "
+            "authoritative dependencies at this action boundary; dependency_unmet "
+            "and dependency_status_unavailable are distinct refusals. A "
+            "content_access_denied spec read does not establish either result."
+        )
+    return f"Cascade {tier} tool {name}"
 
 
 def _epic_tool_names() -> set[str]:

@@ -17,6 +17,10 @@ from cascade.dependency_evaluation import (
     DependencyStatus,
     evaluate_dependencies,
 )
+from cascade.dependency_explanations import (
+    dependency_outcome_explanation,
+    dependency_reason_explanation,
+)
 
 CompletionEvidence = Literal["canonical_completed_in_3_completed"]
 
@@ -31,7 +35,9 @@ class DependencyStatusRow:
     column: str | None
     outcome: DependencyOutcome
     completion_evidence: CompletionEvidence | None
+    reason: DependencyReason | None
     unavailable_reason: DependencyReason | None
+    explanation: str
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -41,7 +47,9 @@ class DependencyStatusRow:
             "column": self.column,
             "outcome": self.outcome,
             "completion_evidence": self.completion_evidence,
+            "reason": self.reason,
             "unavailable_reason": self.unavailable_reason,
+            "explanation": self.explanation,
         }
 
 
@@ -59,6 +67,7 @@ class DependencyStatusProjection:
     snapshot_fingerprint: str | None
     outcome: DependencyOutcome
     dependencies: tuple[DependencyStatusRow, ...]
+    explanation: str
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -67,6 +76,7 @@ class DependencyStatusProjection:
             "snapshot_fingerprint": self.snapshot_fingerprint,
             "outcome": self.outcome,
             "dependencies": [row.to_dict() for row in self.dependencies],
+            "explanation": self.explanation,
         }
 
 
@@ -116,6 +126,7 @@ def project_dependency_evaluation(
         ),
         outcome=evaluation.outcome,
         dependencies=rows,
+        explanation=dependency_outcome_explanation(evaluation.outcome),
     )
 
 
@@ -129,8 +140,13 @@ def _project_row(row: DependencyStatus) -> DependencyStatusRow:
         completion_evidence=(
             "canonical_completed_in_3_completed" if row.complete else None
         ),
+        reason=row.reason,
         unavailable_reason=(
             row.reason if row.outcome == "dependency_status_unavailable" else None
+        ),
+        explanation=(
+            dependency_reason_explanation(row.reason)
+            or dependency_outcome_explanation(row.outcome)
         ),
     )
 
@@ -143,7 +159,20 @@ def _snapshot_fingerprint(
     safe_snapshot = {
         "owner_work_id": owner_work_id,
         "outcome": outcome,
-        "dependencies": [row.to_dict() for row in rows],
+        # Fingerprints identify authoritative facts, not mutable presentation
+        # text or backwards-compatible aliases.
+        "dependencies": [
+            {
+                "work_id": row.work_id,
+                "tier": row.tier,
+                "status": row.status,
+                "column": row.column,
+                "outcome": row.outcome,
+                "completion_evidence": row.completion_evidence,
+                "reason": row.reason,
+            }
+            for row in rows
+        ],
     }
     encoded = json.dumps(
         safe_snapshot,

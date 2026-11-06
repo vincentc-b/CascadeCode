@@ -91,6 +91,13 @@ def test_sign_off_refuses_unmet_dependency_without_writing_sidecar(tmp_path: Pat
     readiness = compute_epic_plan_readiness("epic_002", root=root)
     assert readiness is not None
     assert readiness.approve_disabled_reason == "dependency_unmet"
+    assert readiness.approve_disabled_explanation != readiness.approve_disabled_reason
+    assert readiness.dependency_status.outcome == "dependency_unmet"
+    assert [(item.category, item.code) for item in readiness.blockers] == [
+        ("dependency", "dependency_unmet"),
+        ("plan_readiness", "missing_epic_manager_sign_off"),
+        ("plan_readiness", "missing_epic_architect_sign_off"),
+    ]
 
 
 def test_readiness_and_sign_off_observe_dependency_completed_during_planning(
@@ -115,6 +122,8 @@ def test_readiness_and_sign_off_observe_dependency_completed_during_planning(
         readiness = compute_epic_plan_readiness("epic_002", root=root, board=stale)
         assert readiness is not None
         assert readiness.approve_disabled_reason == "missing_epic_manager_sign_off"
+        assert readiness.dependency_status.outcome == "satisfied"
+        assert all(item.category != "dependency" for item in readiness.blockers)
         result = sign_off_epic_plan(
             "epic_002",
             "epic_manager",
@@ -353,7 +362,12 @@ def test_approval_routes_expose_dependency_refusal_code(tmp_path: Path) -> None:
             {
                 "ok": False,
                 "code": "dependency_unmet",
+                "reasons": ["dependency_incomplete"],
                 "error": "dependency_unmet",
+                "explanation": (
+                    "One or more declared dependencies are not complete in "
+                    "canonical lifecycle state."
+                ),
             },
         ),
         (
@@ -361,7 +375,12 @@ def test_approval_routes_expose_dependency_refusal_code(tmp_path: Path) -> None:
             {
                 "ok": False,
                 "code": "dependency_unmet",
+                "reasons": ["dependency_incomplete"],
                 "error": "dependency_unmet",
+                "explanation": (
+                    "One or more declared dependencies are not complete in "
+                    "canonical lifecycle state."
+                ),
             },
         ),
     ]
@@ -479,8 +498,12 @@ def test_mint_refresh_failure_leaves_no_child_artifact(
     )
     with pytest.raises(
         DependencyActionRefused, match="dependency_status_unavailable"
-    ):
+    ) as refused:
         mint_feature("Must not exist", epic_id="epic_001", root=root)
+
+    assert refused.value.outcome == "dependency_status_unavailable"
+    assert refused.value.reasons == ("dependency_source_unavailable",)
+    assert refused.value.explanation != refused.value.outcome
 
     assert set(list_board(root).by_id) == {"epic_001"}
     assert read_doc("epic_001", root=root).meta.children == []
