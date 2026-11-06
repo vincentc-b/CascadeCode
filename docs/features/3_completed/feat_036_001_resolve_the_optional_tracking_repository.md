@@ -2,7 +2,7 @@
 id: feat_036_001
 title: Resolve the optional tracking repository
 tier: feature
-status: active
+status: completed
 parent: epic_036
 children:
 - task_036_001_001
