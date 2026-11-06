@@ -17,11 +17,11 @@ updated: '2026-11-06'
 provider: codex
 flex_mode: true
 models:
-  epic_manager: gpt-5.6-terra
-  epic_architect: gpt-5.6-terra
-  feature_lead: gpt-5.6-terra
-  feature_architect: gpt-5.6-terra
-  swe: gpt-5.6-terra
+  epic_manager: gpt-6-astra
+  epic_architect: gpt-6-astra
+  feature_lead: gpt-6-sol
+  feature_architect: gpt-6-sol
+  swe: gpt-5.6-sol
 reasoning:
   epic_manager: high
   epic_architect: high
