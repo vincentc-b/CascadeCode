@@ -53,6 +53,7 @@ class RepositoryContext:
     """A resolved checkout used by one or more project repository roles."""
 
     root: Path
+    display_identity: str | None = None
 
 
 @dataclass(frozen=True)
