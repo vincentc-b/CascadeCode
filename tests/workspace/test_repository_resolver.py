@@ -9,12 +9,18 @@ from pathlib import Path
 
 import pytest
 
+import cascade.workspace.repository_resolver as repository_resolver
+from cascade.board.context import set_project_context
+from cascade.board.errors import GitSynchronizationError
+from cascade.board.gitutil import commit_paths
 from cascade.workspace import (
     WorkspaceError,
     parse_tracking_repository_reference,
     prepare_tracking_repository,
+    synchronize_tracking_repository,
 )
 from cascade.workspace.project_config import TrackingRepositoryReference
+from cascade.workspace.types import ProjectContext, RepositoryContext
 from tests.support import make_git_repo
 
 
@@ -174,3 +180,44 @@ def test_clone_failures_are_actionable_and_redact_all_upstream_output(
     assert "token" not in message
     assert "helper-secret" not in message
     assert "bearer-secret" not in message
+
+
+def test_failed_tracking_push_preserves_commit_for_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reference = _remote_with_rewrite(tmp_path, monkeypatch)
+    tracking = prepare_tracking_repository(reference, tmp_path / "managed")
+    _git(tracking.root, "config", "user.email", "test@example.com")
+    _git(tracking.root, "config", "user.name", "Test User")
+    target_parent = tmp_path / "target"
+    target_parent.mkdir()
+    target = make_git_repo(target_parent)
+    set_project_context(
+        ProjectContext(
+            target=RepositoryContext(root=target),
+            tracking=tracking,
+        )
+    )
+    plan = tracking.root / "plan.md"
+    plan.write_text("updated\n", encoding="utf-8")
+    original_git = repository_resolver._git
+
+    def fail_push(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        if args and args[0] == "push":
+            return subprocess.CompletedProcess(args, 1, "", "secret upstream failure")
+        return original_git(cwd, *args)
+
+    monkeypatch.setattr("cascade.workspace.repository_resolver._git", fail_push)
+    with pytest.raises(GitSynchronizationError) as raised:
+        commit_paths(tracking.root, [plan], "docs: update plan")
+
+    local_head = _git(tracking.root, "rev-parse", "HEAD").stdout.strip()
+    assert "local commits are preserved" in str(raised.value)
+    assert "secret upstream failure" not in str(raised.value)
+    assert _git(tracking.root, "show", "HEAD:plan.md").stdout == "updated\n"
+
+    monkeypatch.setattr("cascade.workspace.repository_resolver._git", original_git)
+    assert synchronize_tracking_repository(tracking) == local_head
+    assert _git(tracking.root, "status", "--porcelain").stdout == ""
+    branch = _git(tracking.root, "branch", "--show-current").stdout.strip()
+    assert local_head in _git(tracking.root, "ls-remote", "origin", branch).stdout

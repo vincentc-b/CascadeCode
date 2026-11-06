@@ -54,6 +54,7 @@ class RepositoryContext:
 
     root: Path
     display_identity: str | None = None
+    synchronize_remote: bool = False
 
 
 @dataclass(frozen=True)

@@ -27,3 +27,11 @@ class StatusMismatch(BoardError):
 
 class GitError(BoardError):
     """A git command failed after the file was written, or a revision could not be read."""
+
+
+class GitSynchronizationError(GitError):
+    """Local persistence succeeded but synchronization did not.
+
+    Callers must preserve the local commit: retrying the same operation can then
+    synchronize it without losing or duplicating the planning mutation.
+    """

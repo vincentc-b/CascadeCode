@@ -10,11 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from cascade.board.context import resolve_root
+from cascade.board.context import resolve_tracking_root
 from cascade.board.errors import NotFound
 from cascade.comments.store import read_comments
 from cascade.comments.slug import section_slug
-from cascade.board.errors import GitError
 from cascade.board.gitutil import commit_paths, has_git, last_commit_touching
 from cascade.board.lock import process_lock
 from cascade.board.store import read_doc
@@ -221,7 +220,7 @@ def sign_off_epic_plan(
                 f"{actor!r} cannot sign off for {role!r}"
             )
 
-    repo = resolve_root(root)
+    repo = _signoff_repo(epic_id, root=root)
     board = merged_board(repo)
     meta = board.by_id.get(epic_id)
     if meta is None or meta.tier != "epic":
@@ -297,7 +296,7 @@ def _commit_sidecar(
     root: Path,
     role: PlanningRole,
 ) -> None:
-    repo = resolve_root(root)
+    repo = _signoff_repo(epic_id, root=root)
     if not has_git(repo):
         return
     from cascade.workspace.integration_worktree import (
@@ -307,14 +306,11 @@ def _commit_sidecar(
     )
 
     commit_root = git_root_for_path(path)
-    try:
-        commit_paths(
-            commit_root,
-            [path],
-            f"docs: {epic_id} plan sign-off ({role})",
-        )
-    except GitError:
-        return
+    commit_paths(
+        commit_root,
+        [path],
+        f"docs: {epic_id} plan sign-off ({role})",
+    )
     invalidate_merged_board(locate_trunk(repo))
 
 
@@ -348,7 +344,7 @@ def _write_sidecar(path: Path, sign_offs: tuple[PlanSignOff, ...]) -> None:
 
 
 def _signoff_repo(epic_id: str, *, root: Path) -> Path:
-    trunk = locate_trunk(resolve_root(root))
+    trunk = locate_trunk(resolve_tracking_root(root))
     try:
         return resolve_doc_worktree(epic_id, root=trunk)
     except NotFound:

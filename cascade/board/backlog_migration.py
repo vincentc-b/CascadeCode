@@ -9,7 +9,12 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from cascade.board.errors import BoardError, GitError, SchemaError
+from cascade.board.errors import (
+    BoardError,
+    GitError,
+    GitSynchronizationError,
+    SchemaError,
+)
 from cascade.board.gitutil import commit_paths, has_git
 from cascade.board.lock import process_lock
 from cascade.board.parse import parse_doc, render_doc
@@ -163,8 +168,10 @@ def build_backlog_migration_plan(*, root: Path) -> BacklogMigrationPlan:
 def apply_backlog_migration(*, root: Path) -> str | None:
     """Apply a validated migration plan in one locked commit, rolling back on failure."""
 
+    from cascade.board.context import resolve_tracking_root
+
     with process_lock:
-        return _apply_backlog_migration(Path(root).resolve())
+        return _apply_backlog_migration(resolve_tracking_root(root))
 
 
 def _apply_backlog_migration(repo: Path) -> str | None:
@@ -260,6 +267,10 @@ def _apply_backlog_migration(repo: Path) -> str | None:
             sorted(commit_set),
             "docs: backlog epic hierarchical id migration",
         )
+    except GitSynchronizationError:
+        # The migration commit is durable locally; retain it for synchronization
+        # recovery instead of restoring files behind the committed tree.
+        raise
     except Exception as exc:
         _restore_migration_snapshot(snapshot_paths)
         from cascade.workspace.integration_worktree import invalidate_merged_board, locate_trunk
