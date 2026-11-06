@@ -21,6 +21,7 @@ models:
 reasoning:
   feature_lead: high
   feature_architect: high
+approved_at: '2026-11-06T04:01:40.619856+00:00'
 ---
 # Resolve the optional tracking repository
 
