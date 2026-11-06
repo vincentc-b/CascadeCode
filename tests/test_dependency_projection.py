@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from cascade.dependency_projection import project_dependency_status
+from cascade.dependency_evaluation import DependencyEvaluation
+from cascade.dependency_projection import (
+    project_dependency_evaluation,
+    project_dependency_status,
+)
 from cascade.workspace.integration_worktree import merged_board
 from tests.support import add_doc, make_repo
 
@@ -176,3 +180,15 @@ def test_projection_empty_dependencies_are_satisfied_and_fingerprinted(
     assert projection.outcome == "satisfied"
     assert projection.dependencies == ()
     assert projection.snapshot_fingerprint is not None
+
+
+def test_projection_without_authoritative_evidence_has_no_fingerprint() -> None:
+    projection = project_dependency_evaluation(
+        "epic_001",
+        DependencyEvaluation(
+            dependencies=(), outcome="dependency_status_unavailable"
+        ),
+    )
+
+    assert projection.outcome == "dependency_status_unavailable"
+    assert projection.snapshot_fingerprint is None

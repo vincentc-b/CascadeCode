@@ -24,7 +24,7 @@ from cascade.agent.providers import ProviderId
 from cascade.agent.recovery_contract import ProviderRecoveryLaunch
 from cascade.agent.types import RoleId, RoleResult, RoleTurn
 from cascade.board.parse import parse_doc
-from cascade.dependency_projection import project_dependency_status
+from cascade.planning_dependency_tools import refresh_planning_dependencies
 
 _EPIC_ROLES = frozenset({"epic_manager", "epic_architect"})
 _FEATURE_ROLES = frozenset({"feature_lead", "feature_architect"})
@@ -205,8 +205,8 @@ def _with_dependency_projection(prompt: str, *, owner_path: Path, root: Path) ->
     """Append lifecycle-only dependency context from the current owning spec."""
 
     owner = parse_doc(owner_path).meta
-    projection = project_dependency_status(owner, root=root)
-    payload = json.dumps(projection.to_dict(), sort_keys=True, separators=(",", ":"))
+    projection = refresh_planning_dependencies(owner.id, root=root)
+    payload = json.dumps(projection, sort_keys=True, separators=(",", ":"))
     return "\n\n".join(
         (prompt, _DEPENDENCY_PROJECTION_HEADING, payload, _DEPENDENCY_PROJECTION_BOUNDARY)
     )

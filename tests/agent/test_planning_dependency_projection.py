@@ -15,10 +15,12 @@ from cascade.agent.planning_turn import (
     run_feature_planning_turn,
 )
 from cascade.agent.types import RoleResult, RoleTurn
+from cascade.board.store import move_doc
 from cascade.epic.guard import EpicToolDenied
 from cascade.epic.scoped_docs import epic_read_doc
 from cascade.feature.guard import FeatureToolDenied
 from cascade.feature.scoped_docs import feature_read_doc
+from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from tests.support import add_doc, make_repo
 
 
@@ -204,3 +206,41 @@ def test_planning_turn_without_dependencies_projects_satisfied(
     projection = _projection_from_prompt(captured[0].prompt)
     assert projection["outcome"] == "satisfied"
     assert projection["dependencies"] == []
+
+
+def test_epic_turn_projection_ignores_request_scoped_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Dependency", tier="epic", status="completed")
+    add_doc(
+        root,
+        id="epic_002",
+        title="Owner",
+        tier="epic",
+        status="active",
+        depends_on=["epic_001"],
+    )
+    stale = merged_board(root)
+    move_doc("epic_001", "active", root=root)
+    captured: list[RoleTurn] = []
+
+    async def fake_run_role(turn: RoleTurn) -> RoleResult:
+        captured.append(turn)
+        return RoleResult(text="ok", status="finished")
+
+    monkeypatch.setattr("cascade.agent.planning_turn.run_role", fake_run_role)
+    with merged_board_snapshot(root, stale):
+        asyncio.run(
+            run_epic_planning_turn(
+                "epic_manager",
+                "test-model",
+                "plan",
+                provider="fake",
+                epic_id="epic_002",
+                root=root,
+            )
+        )
+
+    projection = _projection_from_prompt(captured[0].prompt)
+    assert projection["outcome"] == "dependency_unmet"

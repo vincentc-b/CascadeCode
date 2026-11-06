@@ -11,6 +11,7 @@ from typing import Literal
 
 from cascade.board.types import BoardIndex, WorkMeta, WorkStatus, WorkTier
 from cascade.dependency_evaluation import (
+    DependencyEvaluation,
     DependencyOutcome,
     DependencyReason,
     DependencyStatus,
@@ -84,15 +85,32 @@ def project_dependency_status(
     """
 
     evaluation = evaluate_dependencies(meta, root=root, board=board)
+    return project_dependency_evaluation(
+        meta.id,
+        evaluation,
+        observed_at=observed_at,
+    )
+
+
+def project_dependency_evaluation(
+    owner_work_id: str,
+    evaluation: DependencyEvaluation,
+    *,
+    observed_at: datetime | None = None,
+) -> DependencyStatusProjection:
+    """Project an already-refreshed evaluation without rereading board state."""
+
     rows = tuple(_project_row(row) for row in evaluation.dependencies)
-    source_available = not any(
+    source_available = not (
+        evaluation.outcome == "dependency_status_unavailable" and not rows
+    ) and not any(
         row.unavailable_reason == "dependency_source_unavailable" for row in rows
     )
     return DependencyStatusProjection(
-        owner_work_id=meta.id,
+        owner_work_id=owner_work_id,
         observed_at=(observed_at or datetime.now(timezone.utc)).astimezone(timezone.utc),
         snapshot_fingerprint=(
-            _snapshot_fingerprint(meta.id, evaluation.outcome, rows)
+            _snapshot_fingerprint(owner_work_id, evaluation.outcome, rows)
             if source_available
             else None
         ),

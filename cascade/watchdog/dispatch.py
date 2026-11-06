@@ -20,6 +20,7 @@ from cascade.agent.preflight import (
     preflight_provider_capability,
 )
 from cascade.epic.activation import _drop_stale_copies, activate_epic_on_worktree
+from cascade.planning_action_dependencies import evaluate_action_dependencies
 from cascade.watchdog.config import task_parallelism
 from cascade.watchdog.events import append_event
 from cascade.watchdog.hooks import invoke_boot
@@ -33,6 +34,7 @@ from cascade.workspace.integration_worktree import (
     get_integration_worktree,
     integration_branch,
     merged_board,
+    refresh_merged_board,
 )
 
 _OPEN = {"backlog", "ready_to_plan"}
@@ -114,7 +116,7 @@ def _boot_after(
 def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
     if by != "human":
         return _fail("unauthorized")
-    board = merged_board(root)
+    board = refresh_merged_board(root)
     meta = board.by_id.get(work_id)
     if meta is None:
         return _fail("not_found")
@@ -177,14 +179,22 @@ def _begin_epic_activation_run(work_id: str, root: Path) -> str:
 def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
     if by not in ("human", "boss"):
         return _fail("unauthorized")
-    board = merged_board(root)
-    meta = board.by_id.get(work_id)
+    dependency_evidence = evaluate_action_dependencies(work_id, root=root)
+    if dependency_evidence.owner is None:
+        if dependency_evidence.board is not None:
+            return _fail("not_found")
+        return _fail("dependency_status_unavailable")
+    assert dependency_evidence.board is not None
+    board = dependency_evidence.board
+    meta = dependency_evidence.owner
     if meta is None:
         return _fail("not_found")
     if meta.tier != "feature" or meta.status not in _OPEN:
         return _fail("bad_state")
     if not meta.parent:
         return _fail("bad_state")
+    if dependency_evidence.outcome != "satisfied":
+        return _fail(dependency_evidence.outcome)
     from cascade.feature.readiness import (
         compute_feature_readiness,
         dispatch_refusal_from_readiness,
@@ -255,8 +265,14 @@ def _dispatch_task(
         return _fail("unauthorized")
     if isinstance(skills, (str, Path)):
         raise TypeError("skills must be a list of paths or None")
-    board = merged_board(root)
-    meta = board.by_id.get(work_id)
+    dependency_evidence = evaluate_action_dependencies(work_id, root=root)
+    if dependency_evidence.owner is None:
+        if dependency_evidence.board is not None:
+            return _fail("not_found")
+        return _fail("dependency_status_unavailable")
+    assert dependency_evidence.board is not None
+    board = dependency_evidence.board
+    meta = dependency_evidence.owner
     if meta is None:
         return _fail("not_found")
     if not _task_can_start(meta):
@@ -269,8 +285,10 @@ def _dispatch_task(
     from cascade.cancellation_feedback import cancellation_dispatch_gated
     if cancellation_dispatch_gated(parent):
         return _fail("parent_cancellation_pending")
-    if not _deps_met(board, meta, root=root):
-        return _fail("unmet_deps")
+    if dependency_evidence.outcome != "satisfied":
+        return _fail(dependency_evidence.outcome)
+    if _dependency_review_pending(board, meta, root=root):
+        return _fail("feature_awaiting_merge")
     if _active_task_count(board) >= task_parallelism(root):
         return _fail("cap")
     from cascade.comments.gate import refusal_if_blocked
@@ -428,6 +446,19 @@ def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
             if feature_review_pending(dep_id, root=root):
                 return False
     return True
+
+
+def _dependency_review_pending(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
+    """Keep review delivery separate from lifecycle dependency readiness."""
+
+    for dep_id in meta.depends_on:
+        dep = board.by_id.get(dep_id)
+        if dep is not None and dep.tier == "feature":
+            from cascade.review import feature_review_pending
+
+            if feature_review_pending(dep_id, root=root):
+                return True
+    return False
 
 
 def _active_task_count(board: BoardIndex) -> int:
