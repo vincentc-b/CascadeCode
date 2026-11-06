@@ -145,6 +145,11 @@ No unresolved product-scope question remains. The initial implementation-risk qu
   Chose Scope bulk epic-plan approval checks to the epic's prerequisites; preserve approval of sequenced backlog children while enforcing each child's prerequisites at activation/dispatch and direct feature sign-off/approval..
   Rationale: cascade/approvals.py already bulk-approves every child in approve_epic_plan. Applying each successor's completion gate to that operation would prevent approval of an ordinary sequential plan. Explicit ownership preserves existing approval behavior without allowing approval records to bypass fresh execution checks.
   Honors: Success criteria 5–7; existing approval semantics, sequential feature decomposition, and fail-closed action boundaries. Added matching epic and feat_038_002 regression obligations..
+
+- `dec_005` · 2026-11-06 · Epic Manager · **Feature breakdown**
+  Chose For feat_038_001 planning, retain the approved first slice: shared authoritative evaluator, minimal allowlisted projection, planning-context injection, and owning-spec-scoped read-only refresh. Characterize tracking-root/merged-board precedence and review/stacked compatibility before extraction. Document the projection contract and relevant integrated-test evidence in the feature artifacts for feat_038_002 and feat_038_003..
+  Rationale: This handoff applies the approved epic contract without expanding scope. Feature 1 establishes reusable status evidence; feature 2 owns fresh authorization-boundary enforcement, including the bulk-approval distinction in dec_004; feature 3 owns current-versus-historical reporting and final cross-surface acceptance. Each slice includes its own tests. Any required change to the epic contract must return through the amendment protocol before adoption.
+  Honors: Epic success criteria 1–8; dec_001–dec_004; unchanged document authorization; separate lifecycle satisfaction and action eligibility; existing exclusions and feature order. Snapshot timestamps/fingerprints remain evidence rather than authorization tokens..
 ## Amendment log
 
 _(none)_
