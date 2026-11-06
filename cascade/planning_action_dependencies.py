@@ -13,14 +13,24 @@ from cascade.dependency_evaluation import (
     DependencyOutcome,
     evaluate_dependencies,
 )
+from cascade.dependency_explanations import dependency_outcome_explanation
 from cascade.workspace.integration_worktree import refresh_merged_board
 
 
 class DependencyActionRefused(BoardError):
     """A planning mutation was refused by current dependency evidence."""
 
-    def __init__(self, outcome: DependencyOutcome) -> None:
+    def __init__(
+        self,
+        outcome: DependencyOutcome,
+        *,
+        reasons: tuple[str, ...] = (),
+    ) -> None:
         self.outcome = outcome
+        self.reasons = reasons
+        self.explanation = dependency_outcome_explanation(outcome)
+        # Keep exception text as the stable code for existing machine-facing
+        # boundaries. Human guidance is deliberately a separate attribute.
         super().__init__(outcome)
 
 
@@ -67,5 +77,18 @@ def require_action_dependencies(work_id: str, *, root: Path) -> ActionDependency
 
     evidence = evaluate_action_dependencies(work_id, root=root)
     if evidence.outcome != "satisfied":
-        raise DependencyActionRefused(evidence.outcome)
+        reasons = tuple(
+            dict.fromkeys(
+                row.reason
+                for row in evidence.evaluation.dependencies
+                if row.reason is not None
+            )
+        )
+        if not reasons and evidence.outcome == "dependency_status_unavailable":
+            reasons = (
+                "dependency_source_unavailable"
+                if evidence.board is None
+                else "dependency_not_found",
+            )
+        raise DependencyActionRefused(evidence.outcome, reasons=reasons)
     return evidence

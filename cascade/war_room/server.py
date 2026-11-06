@@ -644,7 +644,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         except DependencyActionRefused as exc:
             self._json_response(
                 HTTPStatus.CONFLICT,
-                {"ok": False, "code": exc.outcome, "error": str(exc)},
+                {
+                    "ok": False,
+                    "code": exc.outcome,
+                    "reasons": list(exc.reasons),
+                    "error": str(exc),
+                    "explanation": exc.explanation,
+                },
             )
             return
         except PlanSignOffError as exc:
@@ -704,7 +710,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         except DependencyActionRefused as exc:
             self._json_response(
                 HTTPStatus.CONFLICT,
-                {"ok": False, "code": exc.outcome, "error": str(exc)},
+                {
+                    "ok": False,
+                    "code": exc.outcome,
+                    "reasons": list(exc.reasons),
+                    "error": str(exc),
+                    "explanation": exc.explanation,
+                },
             )
             return
         except (ValueError, BoardError, OSError) as exc:

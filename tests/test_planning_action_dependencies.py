@@ -24,7 +24,12 @@ from cascade.planning_action_dependencies import (
 from cascade.watchdog import dispatch_feature
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from cascade.war_room.server import WarRoomRequestHandler
-from tests.support import add_doc, make_repo, sign_off_both_planning_roles
+from tests.support import (
+    SyntheticDependencyLifecycle,
+    add_doc,
+    make_repo,
+    sign_off_both_planning_roles,
+)
 
 
 class _ApprovalHandler:
@@ -91,6 +96,13 @@ def test_sign_off_refuses_unmet_dependency_without_writing_sidecar(tmp_path: Pat
     readiness = compute_epic_plan_readiness("epic_002", root=root)
     assert readiness is not None
     assert readiness.approve_disabled_reason == "dependency_unmet"
+    assert readiness.approve_disabled_explanation != readiness.approve_disabled_reason
+    assert readiness.dependency_status.outcome == "dependency_unmet"
+    assert [(item.category, item.code) for item in readiness.blockers] == [
+        ("dependency", "dependency_unmet"),
+        ("plan_readiness", "missing_epic_manager_sign_off"),
+        ("plan_readiness", "missing_epic_architect_sign_off"),
+    ]
 
 
 def test_readiness_and_sign_off_observe_dependency_completed_during_planning(
@@ -115,6 +127,8 @@ def test_readiness_and_sign_off_observe_dependency_completed_during_planning(
         readiness = compute_epic_plan_readiness("epic_002", root=root, board=stale)
         assert readiness is not None
         assert readiness.approve_disabled_reason == "missing_epic_manager_sign_off"
+        assert readiness.dependency_status.outcome == "satisfied"
+        assert all(item.category != "dependency" for item in readiness.blockers)
         result = sign_off_epic_plan(
             "epic_002",
             "epic_manager",
@@ -157,41 +171,38 @@ def test_sign_off_writes_no_record_on_dependency_source_loss(
     assert read_plan_sign_offs("epic_001", root=root) == ()
 
 
-def test_sign_off_refuses_dependency_regression_hidden_by_request_snapshot(
-    tmp_path: Path,
+def test_synthetic_sign_off_succeeds_then_refuses_stale_success(
+    synthetic_dependency_lifecycle: SyntheticDependencyLifecycle,
 ) -> None:
-    root = make_repo(tmp_path, git=False)
-    add_doc(
-        root,
-        id="epic_001",
-        title="Dependency",
-        tier="epic",
-        status="completed",
-    )
-    add_doc(
-        root,
-        id="epic_002",
-        title="Owner",
-        tier="epic",
-        status="active",
-        depends_on=["epic_001"],
-    )
-    revision = canonical_plan_revision("epic_002", root=root)
+    scenario = synthetic_dependency_lifecycle
+    root = scenario.root
+    revision = canonical_plan_revision(scenario.owner_id, root=root)
     assert revision is not None
+    signed = sign_off_epic_plan(
+        scenario.owner_id,
+        "epic_architect",
+        revision,
+        root=root,
+        actor="epic_architect",
+    )
+    assert signed["newly_signed"] is True
+
     stale = merged_board(root)
-    move_doc("epic_001", "backlog", root=root)
+    move_doc(scenario.dependency_id, "backlog", root=root)
 
     with merged_board_snapshot(root, stale):
         with pytest.raises(DependencyActionRefused, match="dependency_unmet"):
             sign_off_epic_plan(
-                "epic_002",
+                scenario.owner_id,
                 "epic_manager",
                 revision,
                 root=root,
                 actor="epic_manager",
             )
 
-    assert read_plan_sign_offs("epic_002", root=root) == ()
+    assert [item.role for item in read_plan_sign_offs(scenario.owner_id, root=root)] == [
+        "epic_architect"
+    ]
 
 
 def test_feature_approval_fails_closed_after_dependency_regresses(tmp_path: Path) -> None:
@@ -353,7 +364,12 @@ def test_approval_routes_expose_dependency_refusal_code(tmp_path: Path) -> None:
             {
                 "ok": False,
                 "code": "dependency_unmet",
+                "reasons": ["dependency_incomplete"],
                 "error": "dependency_unmet",
+                "explanation": (
+                    "One or more declared dependencies are not complete in "
+                    "canonical lifecycle state."
+                ),
             },
         ),
         (
@@ -361,7 +377,12 @@ def test_approval_routes_expose_dependency_refusal_code(tmp_path: Path) -> None:
             {
                 "ok": False,
                 "code": "dependency_unmet",
+                "reasons": ["dependency_incomplete"],
                 "error": "dependency_unmet",
+                "explanation": (
+                    "One or more declared dependencies are not complete in "
+                    "canonical lifecycle state."
+                ),
             },
         ),
     ]
@@ -479,8 +500,12 @@ def test_mint_refresh_failure_leaves_no_child_artifact(
     )
     with pytest.raises(
         DependencyActionRefused, match="dependency_status_unavailable"
-    ):
+    ) as refused:
         mint_feature("Must not exist", epic_id="epic_001", root=root)
+
+    assert refused.value.outcome == "dependency_status_unavailable"
+    assert refused.value.reasons == ("dependency_source_unavailable",)
+    assert refused.value.explanation != refused.value.outcome
 
     assert set(list_board(root).by_id) == {"epic_001"}
     assert read_doc("epic_001", root=root).meta.children == []

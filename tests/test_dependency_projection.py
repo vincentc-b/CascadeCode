@@ -131,7 +131,13 @@ def test_projection_represents_safe_lifecycle_outcomes_in_declared_order(
         "snapshot_fingerprint",
         "outcome",
         "dependencies",
+        "explanation",
     }
+    assert payload["explanation"] != payload["outcome"]
+    rows = payload["dependencies"]
+    assert isinstance(rows, list)
+    assert rows[1]["reason"] == "dependency_incomplete"
+    assert rows[1]["explanation"] != rows[1]["reason"]
 
 
 def test_projection_source_failure_is_stable_safe_and_fail_closed(

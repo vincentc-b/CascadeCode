@@ -35,7 +35,11 @@ _DEPENDENCY_PROJECTION_HEADING = (
 )
 _DEPENDENCY_PROJECTION_BOUNDARY = (
     "A spec read denied by scoped authorization is content_access_denied "
-    "independently of this dependency outcome."
+    "independently of this dependency outcome. Treat outcome/reason fields as "
+    "machine-readable and explanation fields as guidance only. Normal planning "
+    "actions, including mint_feature, recheck authoritative dependency status: "
+    "dependency_unmet means a known prerequisite is incomplete, while "
+    "dependency_status_unavailable means status could not be established."
 )
 
 
