@@ -22,6 +22,7 @@ models:
 reasoning:
   feature_lead: high
   feature_architect: high
+approved_at: '2026-11-06T04:01:41.064090+00:00'
 ---
 # Route planning lifecycle through the tracking repository
 
