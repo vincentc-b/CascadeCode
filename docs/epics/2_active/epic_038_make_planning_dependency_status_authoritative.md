@@ -4,7 +4,8 @@ title: Make planning dependency status authoritative
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_038_001
 depends_on: []
 owners:
 - epic_manager
@@ -58,6 +59,7 @@ Reuse the canonical merged-board and lifecycle predicates rather than introducin
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_038_001
 
 The Epic Team will create and sequence feature plans here.
 
