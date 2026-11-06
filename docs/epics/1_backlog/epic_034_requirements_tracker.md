@@ -15,7 +15,7 @@ parent_rev: null
 created: '2026-11-03'
 updated: '2026-11-06'
 provider: codex
-flex_mode: true
+flex_mode: false
 models:
   epic_manager: gpt-6-astra
   epic_architect: gpt-6-astra
