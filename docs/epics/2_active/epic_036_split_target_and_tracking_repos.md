@@ -4,7 +4,8 @@ title: Split target and tracking repos
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_036_001
 depends_on: []
 owners:
 - epic_manager
@@ -104,6 +105,7 @@ No cross-repository transaction layer is introduced. Operations that involve bot
 No new credential, hosted-Git, database, or project-management dependency is required.
 
 ## Feature breakdown
+- feat_036_001
 
 ### Feature 1 — Resolve the optional tracking repository
 
