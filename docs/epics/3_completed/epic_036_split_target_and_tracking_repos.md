@@ -2,7 +2,7 @@
 id: epic_036
 title: Split target and tracking repos
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_036_001
