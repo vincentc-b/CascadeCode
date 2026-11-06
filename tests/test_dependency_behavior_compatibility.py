@@ -9,6 +9,7 @@ import pytest
 
 from cascade.board.context import resolve_tracking_root, set_project_context
 from cascade.board.store import read_doc
+from cascade.dependency_evaluation import evaluate_dependencies
 from cascade.stacked_dispatch import feature_dependency_ready
 from cascade.watchdog.dispatch import activate_epic, dispatch_feature, dispatch_task
 from cascade.war_room.room_settings import write_stacked_pr_enabled
@@ -75,6 +76,7 @@ def test_planning_documents_and_dependencies_are_owned_by_tracking_root(
     assert read_doc("feat_001", root=target).meta.path.is_relative_to(tracking)
     assert not list((target / "docs").rglob("*.md"))
     assert feature_dependency_ready(dependent, board, root=canonical_root)
+    assert evaluate_dependencies(dependent, root=target).satisfied
 
 
 def test_completed_tracking_trunk_epic_precedes_stale_registered_copy(
@@ -103,6 +105,113 @@ def test_completed_tracking_trunk_epic_precedes_stale_registered_copy(
     assert visible.status == "completed"
     assert visible.path.parent.name == "3_completed"
     assert visible.path.is_relative_to(root / "docs")
+
+    add_doc(
+        root,
+        id="feat_001",
+        title="Dependent",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["epic_001"],
+    )
+    dependent = merged_board(root).by_id["feat_001"]
+    assert evaluate_dependencies(dependent, root=root).satisfied
+
+
+def test_dependency_evaluation_distinguishes_lifecycle_and_availability(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Complete",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    add_doc(
+        root,
+        id="feat_002",
+        title="Open",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+    )
+    add_doc(
+        root,
+        id="feat_003",
+        title="Cancelled",
+        tier="feature",
+        status="cancelled",
+        parent="epic_001",
+    )
+    add_doc(
+        root,
+        id="feat_004",
+        title="Mismatch",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    add_doc(
+        root,
+        id="feat_005",
+        title="Dependent",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001", "feat_002", "feat_003", "feat_004"],
+    )
+    board = merged_board(root)
+    board.by_id["feat_005"].depends_on.append("feat_999")
+    board.by_id["feat_004"].path = (
+        root / "docs" / "features" / "2_active" / "feat_004_mismatch.md"
+    )
+
+    result = evaluate_dependencies(board.by_id["feat_005"], root=root, board=board)
+
+    assert result.outcome == "dependency_status_unavailable"
+    assert [row.work_id for row in result.dependencies] == [
+        "feat_001",
+        "feat_002",
+        "feat_003",
+        "feat_004",
+        "feat_999",
+    ]
+    assert [row.reason for row in result.dependencies] == [
+        None,
+        "dependency_incomplete",
+        "dependency_cancelled",
+        "dependency_status_column_mismatch",
+        "dependency_not_found",
+    ]
+
+
+def test_dependency_evaluation_empty_list_and_source_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    empty = add_doc(root, id="epic_001", title="Empty", tier="epic").meta
+    dependent = add_doc(
+        root,
+        id="epic_002",
+        title="Dependent",
+        tier="epic",
+        depends_on=["epic_001"],
+    ).meta
+
+    def fail_board(_root: Path):
+        raise OSError("private source detail")
+
+    monkeypatch.setattr("cascade.dependency_evaluation.merged_board", fail_board)
+
+    assert evaluate_dependencies(empty, root=root).satisfied
+    result = evaluate_dependencies(dependent, root=root)
+    assert result.outcome == "dependency_status_unavailable"
+    assert [(row.work_id, row.reason) for row in result.dependencies] == [
+        ("epic_001", "dependency_source_unavailable")
+    ]
 
 
 def test_request_snapshot_stays_fixed_then_observes_board_invalidation(
