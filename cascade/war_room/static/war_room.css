@@ -605,6 +605,37 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+.dependency-current-summary {
+  margin: 0.5rem 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #12151c;
+  font-size: 0.82rem;
+}
+
+.dependency-current-summary h3,
+.transcript-history-heading {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.dependency-current-outcome,
+.dependency-current-list {
+  margin: 0.2rem 0;
+}
+
+.dependency-observed-at,
+.chat-observed-at {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.chat-observed-at {
+  margin-top: 0.2rem;
+}
+
 .chat-message {
   margin-bottom: 0.5rem;
 }

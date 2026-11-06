@@ -17,6 +17,7 @@
   const BacklogPriorityUiApi = globalThis.BacklogPriorityUi;
   const BranchSyncUiApi = globalThis.BranchSyncUi;
   const EpicPlanReadinessUi = globalThis.EpicPlanReadinessUi;
+  const DependencyStatusUi = globalThis.DependencyStatusUi;
   const BriefDefaultsUi = globalThis.BriefDefaultsUi;
   const ProviderRecoveryDialogUi = globalThis.ProviderRecoveryDialogUi;
   let boardFocus = BoardFocusApi ? BoardFocusApi.defaultBoardFocus() : null;
@@ -32,6 +33,7 @@
     bossSummary: document.getElementById("boss-view-summary"),
     chatGraphId: document.getElementById("chat-graph-id"),
     chatMessages: document.getElementById("chat-messages"),
+    dependencyCurrentSummary: document.getElementById("dependency-current-summary"),
     chatCompose: document.getElementById("chat-compose"),
     chatBody: document.getElementById("chat-body"),
     chatSend: document.getElementById("chat-send"),
@@ -736,6 +738,7 @@
   function renderBoard(view) {
     const renderStartedAt = performance.now();
     lastBoardView = view;
+    renderCurrentDependencySummary(view);
     if ((backlogPriorityUi && backlogPriorityUi.isDragging()) ||
         (backlogEpicPriorityUi && backlogEpicPriorityUi.isDragging())) return;
     if (!backlogPriorityUi && BacklogPriorityUiApi) {
@@ -1935,9 +1938,22 @@
       body.textContent = msg.body;
       div.appendChild(author);
       div.appendChild(body);
+      if (DependencyStatusUi && DependencyStatusUi.appendHistoricalObservation) {
+        DependencyStatusUi.appendHistoricalObservation(document, div, msg);
+      }
       el.chatMessages.appendChild(div);
     });
     el.chatMessages.scrollTop = el.chatMessages.scrollHeight;
+  }
+
+  function renderCurrentDependencySummary(view) {
+    if (!DependencyStatusUi || !el.dependencyCurrentSummary) return;
+    const item = DependencyStatusUi.findRoomItem(view, focusGraphId);
+    DependencyStatusUi.renderCurrentSummary(
+      document,
+      el.dependencyCurrentSummary,
+      item && item.dependency_status
+    );
   }
 
   let inflightChatFetch = null;
@@ -2078,6 +2094,7 @@
         ? "Attached: " + attachedGraphId
         : "Epic War Room";
     el.btnDetach.hidden = !attachedGraphId;
+    renderCurrentDependencySummary(lastBoardView);
     loadRoomSettings(focusGraphId).catch(function (err) {
       setRoomSettingsStatus(err.message || "Failed to load room settings", true);
     });

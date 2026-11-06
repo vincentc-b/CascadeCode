@@ -204,6 +204,7 @@ def test_board_and_doc_read_models_match_commands(board: Path) -> None:
         row = _epic_row(board_payload)
         assert row["plan_readiness"]["status"] == "ready_for_review"
         assert row["plan_readiness"]["can_approve_plan"] is True
+        assert row["dependency_status"] == row["plan_readiness"]["dependency_status"]
 
         doc_req = urllib.request.Request(f"http://127.0.0.1:{port}/api/doc/epic_001")
         with urllib.request.urlopen(doc_req) as resp:
