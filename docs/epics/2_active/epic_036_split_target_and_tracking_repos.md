@@ -157,6 +157,11 @@ None at epic scope. Exact config-key naming, managed-checkout location, and sync
   Chose Keep source/worktree/build operations in the target repository and versioned planning lifecycle artifacts in the tracking repository..
   Rationale: An explicit role boundary delivers the requested separation while preventing a broader multi-repository source orchestration project.
   Honors: Decouple Cascade planning state from the development environment..
+
+- `dec_003` · 2026-11-06 · Epic Manager · **Authentication**
+  Chose Use the system Git client's existing SSH configuration or credential helpers; Cascade will not collect or store repository credentials..
+  Rationale: This supports normal Git access without creating a credential-management surface or leaking secrets into project state.
+  Honors: No Cascade-specific credentials beyond the user's preconfigured Git access..
 ## Amendment log
 
 _(none)_
