@@ -74,6 +74,8 @@ At sign-off, approval, and feature-mint authorization, reread the owning item's 
 
 This boundary applies to the owning item's prerequisites. Minting a backlog child may declare unfinished but valid predecessor features; requiring those predecessors to finish before their successor can even be planned would prevent normal decomposition. Preserve existing declaration validation.
 
+Epic-plan approval is owned by the epic: recheck the epic's prerequisites before recording its approval and the existing bulk approvals of its backlog children. Unfinished valid sibling predecessors do not block that bulk plan approval. Those child approval records are not proof of dependency satisfaction; each child's activation/dispatch still checks its own current prerequisites, and direct feature sign-off/approval checks the feature's prerequisites. Keep these action scopes explicit when sharing the evaluator.
+
 ### Current status and history
 
 Readiness, minting guidance, War Room live status, and generated current summaries consume the structured projection. Keep stable codes separate from explanatory text. Refresh via existing board/readiness request paths. Preserve dated transcript messages verbatim, identify snapshot-based observations as historical, and distinguish a current structured summary from old agent prose. Never parse chat to determine live readiness or retroactively rewrite history.
@@ -112,7 +114,7 @@ Deliver in that order. Each feature includes its own relevant tests; the final f
 
 Extend the existing board/tracking, planning sandbox/tools, sign-off/readiness, minting, dispatch/lifecycle, and War Room suites. Prefer integrated scenarios over redundant helper tests. Cover completed/unreadable, readable/incomplete, absent ID, source failure, tracking-repository ownership, stale active worktree versus canonical completion, no dependencies, and review/stacked compatibility.
 
-Drive both incomplete-to-completed and satisfied-to-unmet/unavailable transitions between context creation and the action. Preload a board cache/request snapshot and assert the mutation boundary uses fresh evidence; refused actions leave no new sign-off, approval, or child artifact. Assert that sequential backlog children can still be minted with unfinished predecessors.
+Drive both incomplete-to-completed and satisfied-to-unmet/unavailable transitions between context creation and the action. Preload a board cache/request snapshot and assert the mutation boundary uses fresh evidence; refused actions leave no new sign-off, approval, or child artifact. Assert that sequential backlog children can still be minted and bulk-approved with their epic while predecessors are unfinished; approved successors remain undispatchable until their own prerequisites are satisfied. An unmet/unavailable epic prerequisite must refuse bulk approval before any child approval is written.
 
 Use a synthetic epic_034 -> epic_036 fixture: epic_036's canonical completion supersedes its stale active copy; epic_034 still cannot read epic_036's body; live planning/readiness recognizes completion without restarting the dependent epic. Verify historical blockers remain history. Feature 3 provides a success-criteria-to-test mapping and results of the affected suites. No live production spec access or broad coverage target is required.
 
