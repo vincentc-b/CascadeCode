@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from cascade.board.errors import NotFound
-from cascade.board.store import read_doc
 from cascade.feature.graph import ingest_human, seed_feature_role_models
 from cascade.watchdog.boot_model import toast_model_config_failure
 from cascade.watchdog.config import ConfigError
@@ -22,6 +21,7 @@ def load_feature_tools() -> None:
     import cascade.feature.docs_tool as docs_tool_mod
     import cascade.feature.mint as mint_mod
     import cascade.feature.recovery as recovery_mod
+    import cascade.planning_dependency_tools as dependency_tools_mod
     from cascade.review import reply_feature_review
 
     from cascade.feature.registry import feature_tools, register_feature_tool
@@ -31,6 +31,7 @@ def load_feature_tools() -> None:
         "reply_comment", "propose_epic_amendment", "ack_amendment",
         "reply_merge_request_comment", "revise_task", "retry_task", "recovery_status",
         "recover_task",
+        "refresh_dependency_status",
     )
     if all(name in feature_tools() for name in expected):
         return
@@ -47,6 +48,9 @@ def load_feature_tools() -> None:
     register_feature_tool("retry_task", recovery_mod.retry_task)
     register_feature_tool("recovery_status", recovery_mod.recovery_status)
     register_feature_tool("recover_task", recovery_mod.recover_task)
+    register_feature_tool(
+        "refresh_dependency_status", dependency_tools_mod.refresh_feature_dependencies
+    )
 
 
 def accept_human_chat(

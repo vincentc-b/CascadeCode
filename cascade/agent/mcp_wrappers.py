@@ -192,21 +192,31 @@ def dispatch_planning_tool(
     elif tier == "epic":
         if not scope_id:
             raise ValueError("epic tier requires scope_id")
+        from cascade.epic.guard import EpicToolDenied
         from cascade.epic.wiring import load_epic_tools
         from cascade.epic.graph import invoke_tool
 
         load_epic_tools()
-
-        result = invoke_tool(scope_id, name, tool_args, root=repo)
+        try:
+            result = invoke_tool(scope_id, name, tool_args, root=repo)
+        except EpicToolDenied:
+            if name != "read_doc":
+                raise
+            raise PermissionError("content_access_denied") from None
     elif tier == "feature":
         if not scope_id:
             raise ValueError("feature tier requires scope_id")
+        from cascade.feature.guard import FeatureToolDenied
         from cascade.feature.wiring import load_feature_tools
         from cascade.feature.graph import invoke_tool
 
         load_feature_tools()
-
-        result = invoke_tool(scope_id, name, tool_args, root=repo)
+        try:
+            result = invoke_tool(scope_id, name, tool_args, root=repo)
+        except FeatureToolDenied:
+            if name != "read_doc":
+                raise
+            raise PermissionError("content_access_denied") from None
     else:
         result = _invoke_boss_tool(name, tool_args, root=repo)
 
@@ -283,6 +293,11 @@ def _feature_tool_names() -> set[str]:
 _BOSS_TOOL_NAMES = frozenset({"dispatch_feature", "dispatch_task", "get_boss_view"})
 
 _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "refresh_dependency_status": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
     "sign_off_plan": {
         "type": "object",
         "properties": {"plan_revision": {"type": "string"}},
@@ -350,6 +365,11 @@ _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 _FEATURE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "refresh_dependency_status": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
     "mint_task": {
         "type": "object",
         "properties": {
