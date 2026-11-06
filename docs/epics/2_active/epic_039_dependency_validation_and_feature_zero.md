@@ -135,6 +135,11 @@ None at epic contract level. The formerly open risk question is resolved by the 
   Chose Represent feature 0 as an epic-owned, human-scoped bootstrap phase, with dependency readiness separate from adapter feasibility; no new ordinary feature tier or general package manager..
   Rationale: Break the pre-mint feasibility cycle while keeping setup authority bounded by both human scope and current execution policy.
   Honors: Success criteria 3, 4, 8 and the approved cross-module constraints..
+
+- `dec_002` · 2026-11-06 · Epic Manager · **Macro-architecture**
+  Chose Gate minting, sign-off, and approval on current environment-specific evidence; preserve active runs and accepted work across idempotent human ping/revalidation; invalidate only affected dependency authority..
+  Rationale: A human ping is a request to verify, not proof of success. Durable attempts and revision checks prevent stale or duplicated setup from authorizing delivery.
+  Honors: Success criteria 1, 2, 5, 6, 7, 9..
 ## Amendment log
 
 _(none)_
