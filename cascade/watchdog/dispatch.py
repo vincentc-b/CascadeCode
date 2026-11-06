@@ -33,6 +33,7 @@ from cascade.workspace.integration_worktree import (
     get_integration_worktree,
     integration_branch,
     merged_board,
+    refresh_merged_board,
 )
 
 _OPEN = {"backlog", "ready_to_plan"}
@@ -114,7 +115,7 @@ def _boot_after(
 def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
     if by != "human":
         return _fail("unauthorized")
-    board = merged_board(root)
+    board = refresh_merged_board(root)
     meta = board.by_id.get(work_id)
     if meta is None:
         return _fail("not_found")
@@ -177,7 +178,7 @@ def _begin_epic_activation_run(work_id: str, root: Path) -> str:
 def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
     if by not in ("human", "boss"):
         return _fail("unauthorized")
-    board = merged_board(root)
+    board = refresh_merged_board(root)
     meta = board.by_id.get(work_id)
     if meta is None:
         return _fail("not_found")
@@ -255,7 +256,7 @@ def _dispatch_task(
         return _fail("unauthorized")
     if isinstance(skills, (str, Path)):
         raise TypeError("skills must be a list of paths or None")
-    board = merged_board(root)
+    board = refresh_merged_board(root)
     meta = board.by_id.get(work_id)
     if meta is None:
         return _fail("not_found")

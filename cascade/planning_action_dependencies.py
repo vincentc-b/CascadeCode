@@ -1,0 +1,66 @@
+"""Fresh dependency evidence for planning authorization boundaries."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from cascade.board.context import resolve_tracking_root
+from cascade.board.errors import BoardError
+from cascade.board.types import BoardIndex, WorkMeta
+from cascade.dependency_evaluation import (
+    DependencyEvaluation,
+    DependencyOutcome,
+    evaluate_dependencies,
+)
+from cascade.workspace.integration_worktree import refresh_merged_board
+
+
+class DependencyActionRefused(BoardError):
+    """A planning mutation was refused by current dependency evidence."""
+
+    def __init__(self, outcome: DependencyOutcome) -> None:
+        self.outcome = outcome
+        super().__init__(outcome)
+
+
+@dataclass(frozen=True)
+class ActionDependencyEvidence:
+    """Current owner declaration and lifecycle evaluation from one fresh board."""
+
+    evaluation: DependencyEvaluation
+    board: BoardIndex | None = None
+    owner: WorkMeta | None = None
+
+    @property
+    def outcome(self) -> DependencyOutcome:
+        return self.evaluation.outcome
+
+
+def evaluate_action_dependencies(work_id: str, *, root: Path) -> ActionDependencyEvidence:
+    """Re-read an owner's declaration and lifecycle evidence, bypassing snapshots."""
+
+    try:
+        tracking_root = resolve_tracking_root(root)
+        board = refresh_merged_board(tracking_root)
+        owner = board.by_id.get(work_id)
+        if owner is None:
+            raise LookupError(work_id)
+        evaluation = evaluate_dependencies(owner, root=tracking_root, board=board)
+    except Exception:
+        # Source and owner refresh failures are intentionally safe and stable.
+        return ActionDependencyEvidence(
+            evaluation=DependencyEvaluation(
+                dependencies=(), outcome="dependency_status_unavailable"
+            )
+        )
+    return ActionDependencyEvidence(evaluation=evaluation, board=board, owner=owner)
+
+
+def require_action_dependencies(work_id: str, *, root: Path) -> ActionDependencyEvidence:
+    """Return fresh evidence or refuse with its stable dependency outcome."""
+
+    evidence = evaluate_action_dependencies(work_id, root=root)
+    if evidence.outcome != "satisfied":
+        raise DependencyActionRefused(evidence.outcome)
+    return evidence

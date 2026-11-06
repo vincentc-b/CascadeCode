@@ -14,6 +14,7 @@ from cascade.epic.planning_signoffs import (
     current_valid_sign_offs,
     unresolved_canonical_open_questions,
 )
+from cascade.planning_action_dependencies import evaluate_action_dependencies
 from cascade.workspace.integration_worktree import merged_board
 
 PlanningStatus = Literal["planning", "ready_for_review"]
@@ -59,6 +60,16 @@ def compute_epic_plan_readiness(
 
     sign_offs = {role: row.to_dict() for role, row in valid.items()}
     missing_roles = _missing_roles(valid)
+
+    dependency_outcome = evaluate_action_dependencies(epic_id, root=root).outcome
+    if dependency_outcome != "satisfied":
+        return EpicPlanReadiness(
+            status="planning",
+            plan_revision=revision,
+            sign_offs=sign_offs,
+            can_approve_plan=False,
+            approve_disabled_reason=dependency_outcome,
+        )
 
     if open_questions:
         return EpicPlanReadiness(
