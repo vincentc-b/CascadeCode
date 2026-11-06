@@ -11,10 +11,11 @@ from cascade.board.gitutil import _run, has_git
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.init import _BOARD_TIERS
 from cascade.workspace.lock import SupervisorLock
-from cascade.workspace.project_config import find_project_config
-from cascade.workspace.source_fingerprint import source_fingerprint as _source_fingerprint
+from cascade.workspace.project_config import find_project_config, read_tracking_repository
+from cascade.workspace.repository_resolver import prepare_tracking_repository
 from cascade.workspace.trunk import resolve_product_trunk
-from cascade.workspace.types import WorkspaceRoot
+from cascade.workspace.source_fingerprint import source_fingerprint as _source_fingerprint
+from cascade.workspace.types import ProjectContext, WorkspaceRoot
 
 
 _SOURCE_CHECK_INTERVAL_SECONDS = 1.0
@@ -121,7 +122,7 @@ def _current_branch(repo: Path) -> str | None:
 
 
 def prepare_up(root: Path | None = None) -> WorkspaceRoot:
-    """Validate git root, board layout, and trunk checkout; does not start processes."""
+    """Validate and resolve the project before starting any processes."""
 
     path = resolve_root(root)
     if not has_git(path):
@@ -139,12 +140,25 @@ def prepare_up(root: Path | None = None) -> WorkspaceRoot:
             "do not run cascade up from epic/*, feat/*, or task/* branches"
         )
 
+    config = find_project_config(path)
+    project = ProjectContext.colocated(path)
+    tracking_reference = read_tracking_repository(config)
+    if tracking_reference is not None:
+        project = ProjectContext(
+            target=project.target,
+            tracking=prepare_tracking_repository(
+                tracking_reference,
+                path / ".cascade",
+            ),
+        )
+
     return WorkspaceRoot(
         path=path,
         trunk=trunk,
         board=path / "docs",
-        config=find_project_config(path),
+        config=config,
         runtime=path / ".cascade",
+        project=project,
     )
 
 

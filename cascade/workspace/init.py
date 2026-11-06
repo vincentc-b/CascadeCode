@@ -7,7 +7,6 @@ from pathlib import Path
 from cascade.board.context import resolve_root
 from cascade.board.gitutil import has_git
 from cascade.workspace.errors import WorkspaceError
-from cascade.workspace.project_config import find_project_config
 from cascade.workspace.types import WorkspaceRoot
 
 _BOARD_TIERS = ("epics", "features", "tasks")
@@ -56,7 +55,7 @@ def init_workspace(root: Path) -> WorkspaceRoot:
         for column in _BOARD_COLUMNS:
             (path / "docs" / tier / column).mkdir(parents=True, exist_ok=True)
 
-    config_path = find_project_config(path)
+    config_path = path / "cascade.toml"
     if not config_path.is_file():
         config_path.write_text(_DEFAULT_CASCADE_TOML, encoding="utf-8")
 

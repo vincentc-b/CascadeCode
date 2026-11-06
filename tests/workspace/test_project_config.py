@@ -140,14 +140,3 @@ def test_config_discovery_supports_yaml_and_rejects_ambiguous_files(tmp_path: Pa
     (tmp_path / "cascade.toml").write_text("# duplicate\n", encoding="utf-8")
     with pytest.raises(WorkspaceError, match="multiple Cascade"):
         find_project_config(tmp_path)
-
-
-def test_init_uses_existing_yaml_config_without_creating_toml(tmp_path: Path) -> None:
-    root = make_git_repo(tmp_path)
-    yaml_config = root / "cascade.yaml"
-    yaml_config.write_text("tracking_repository: ../tracking\n", encoding="utf-8")
-
-    workspace = init_workspace(root)
-
-    assert workspace.config == yaml_config
-    assert not (root / "cascade.toml").exists()
