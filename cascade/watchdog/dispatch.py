@@ -11,6 +11,7 @@ from cascade.board.paths import column_dir
 from cascade.board.gitutil import commit_paths, has_git
 from cascade.board.store import move_doc, read_doc, save_doc, write_doc
 from cascade.board.types import BoardIndex, WorkMeta
+from cascade.dependency_evaluation import evaluate_dependencies
 from cascade.agent.discovery.inventory import get_provider_inventory
 from cascade.agent.preflight import (
     ProviderCapabilityBatchPreflight,
@@ -417,14 +418,10 @@ def _place_task_active(
 
 
 def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
-    if meta.tier == "feature" and meta.parent:
-        from cascade.stacked_dispatch import feature_dependency_ready
-
-        return feature_dependency_ready(meta, board, root=root)
+    if not evaluate_dependencies(meta, root=root, board=board).satisfied:
+        return False
     for dep_id in meta.depends_on:
-        dep = board.by_id.get(dep_id)
-        if dep is None or dep.status != "completed" or dep.path.parent.name != "3_completed":
-            return False
+        dep = board.by_id[dep_id]
         if dep.tier == "feature":
             from cascade.review import feature_review_pending
 

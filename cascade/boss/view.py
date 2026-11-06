@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cascade.board.context import resolve_root
+from cascade.dependency_evaluation import evaluate_dependencies
 from cascade.workspace.integration_worktree import merged_board
 from cascade.board.types import BoardIndex, WorkMeta, WorkId
 from cascade.watchdog.config import task_parallelism
@@ -78,14 +79,10 @@ def _parent_cancellation_gated(board: BoardIndex, meta: WorkMeta) -> bool:
 
 
 def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
-    if meta.tier == "feature" and meta.parent:
-        from cascade.stacked_dispatch import feature_dependency_ready
-
-        return feature_dependency_ready(meta, board, root=root)
+    if not evaluate_dependencies(meta, root=root, board=board).satisfied:
+        return False
     for dep_id in meta.depends_on:
-        dep = board.by_id.get(dep_id)
-        if dep is None or dep.status != "completed" or dep.path.parent.name != "3_completed":
-            return False
+        dep = board.by_id[dep_id]
         if dep.tier == "feature":
             from cascade.review import feature_review_pending
 
