@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_039_001
+- feat_039_002
 depends_on: []
 owners:
 - epic_manager
@@ -113,6 +114,7 @@ For all existing entries: install scope is unchanged and no install is requested
 Delivery-only acceptance prerequisite: an authorized environment for local setup and a container runner with a pinned Structurizr distribution. Selection, upstream provenance, digest, bundled runtime, license/security notes, exact check, cleanup, and real evidence belong to feature B before that acceptance scenario can pass. They are not prerequisites for designing this workflow. The epic_034 description in the approved brief is the acceptance input; this turn did not inspect or change that epic.
 
 ## Feature breakdown
+- feat_039_002
 - feat_039_001
 
 Three sequential features are the smallest delivery slices; no ordinary feature is itself the bootstrap phase.
