@@ -10,8 +10,12 @@ from datetime import date
 from pathlib import Path
 from threading import RLock
 
-from cascade.board.context import resolve_root
-from cascade.board.errors import GitError, NotFound, SchemaError
+from cascade.board.context import (
+    resolve_root,
+    resolve_tracking_root,
+    route_planning_path,
+)
+from cascade.board.errors import GitError, GitSynchronizationError, NotFound, SchemaError
 from cascade.board.gitutil import (
     commit_paths,
     has_git,
@@ -86,7 +90,7 @@ def _atomic_write_text(path: Path, text: str) -> None:
 def list_board(root: Path) -> BoardIndex:
     """Scan board directories, reusing frontmatter from unchanged files."""
 
-    repo = Path(root).resolve()
+    repo = resolve_tracking_root(root)
     by_id = {}
     for _tier, dirname in _TIER_DIRS:
         for folder in _COLUMNS:
@@ -149,11 +153,13 @@ def write_doc(doc: WorkDoc, *, root: Path | None = None) -> str | None:
 
 
 def _write_doc(doc: WorkDoc, root: Path | None) -> str | None:
-    repo = resolve_root(root, doc.meta.path)
-    path = doc.meta.path
-    if not path.is_absolute():
-        path = repo / path
-    doc.meta.path = path.resolve()
+    requested_repo = resolve_root(root, doc.meta.path)
+    repo = resolve_tracking_root(root, doc.meta.path)
+    doc.meta.path = route_planning_path(
+        doc.meta.path,
+        requested_root=requested_repo,
+        tracking_root=repo,
+    )
     doc.meta.updated = date.today()
     from cascade.workspace.integration_worktree import (
         git_root_for_path,
@@ -184,6 +190,11 @@ def _write_doc(doc: WorkDoc, root: Path | None) -> str | None:
             [doc.meta.path],
             f"docs: {doc.meta.id} {doc.meta.title}",
         )
+    except GitSynchronizationError:
+        # The document is already committed locally.  Preserve that exact state
+        # so startup or an idempotent retry can synchronize it later.
+        invalidate_merged_board(trunk)
+        raise
     except GitError:
         if previous_bytes is None:
             doc.meta.path.unlink(missing_ok=True)
@@ -211,7 +222,7 @@ def move_doc(work_id: WorkId, dest_column: Column, *, root: Path | None = None) 
 def _move_doc(work_id: WorkId, dest_column: Column, root: Path | None) -> str | None:
     from cascade.workspace.integration_worktree import doc_filesystem_root, is_trunk_pointer
 
-    repo = resolve_root(root)
+    repo = resolve_tracking_root(root)
     trunk_board = list_board(repo)
     if work_id in trunk_board.by_id and is_trunk_pointer(trunk_board.by_id[work_id]):
         repo = doc_filesystem_root(work_id, trunk=repo)
@@ -266,10 +277,18 @@ def save_doc(doc: WorkDoc, *, previous_path: Path, root: Path | None = None) -> 
 
 
 def _save_doc(doc: WorkDoc, previous_path: Path, root: Path | None) -> str | None:
-    repo = resolve_root(root, doc.meta.path)
-    new_path = doc.meta.path if doc.meta.path.is_absolute() else repo / doc.meta.path
-    new_path = new_path.resolve()
-    previous = previous_path.resolve()
+    requested_repo = resolve_root(root, doc.meta.path)
+    repo = resolve_tracking_root(root, doc.meta.path)
+    new_path = route_planning_path(
+        doc.meta.path,
+        requested_root=requested_repo,
+        tracking_root=repo,
+    )
+    previous = route_planning_path(
+        previous_path,
+        requested_root=requested_repo,
+        tracking_root=repo,
+    )
     doc.meta.path = new_path
     doc.meta.updated = date.today()
     from cascade.workspace.integration_worktree import (
@@ -291,6 +310,9 @@ def _save_doc(doc: WorkDoc, previous_path: Path, root: Path | None) -> str | Non
         invalidate_merged_board(locate_trunk(repo))
         paths = [new_path] if new_path == previous else [previous, new_path]
         sha = commit_paths(repo, paths, f"docs: {doc.meta.id} {doc.meta.title}")
+    except GitSynchronizationError:
+        invalidate_merged_board(locate_trunk(repo))
+        raise
     except Exception:
         if new_path != previous and new_path.exists():
             new_path.unlink()
@@ -310,7 +332,7 @@ def read_doc_in_worktree(
 ) -> WorkDoc:
     """Read ``work_id`` from a single checkout root (no supervisor merge lookup)."""
 
-    repo = resolve_root(worktree_root)
+    repo = resolve_tracking_root(worktree_root)
     if rev is not None:
         if not has_git(repo):
             raise GitError("cannot read a revision without a git repository")
@@ -334,7 +356,7 @@ def read_doc_in_worktree(
 def read_doc(work_id: WorkId, rev: str | None = None, *, root: Path | None = None) -> WorkDoc:
     """Read the working tree, or the blob of `{id}_*.md` inside `rev`."""
 
-    repo = resolve_root(root)
+    repo = resolve_tracking_root(root)
     if rev is not None:
         if not has_git(repo):
             raise GitError("cannot read a revision without a git repository")
@@ -375,7 +397,7 @@ def pin_parent(
 ) -> str | None:
     """Set child.parent_rev to the parent's last commit SHA, or null if it has none."""
 
-    repo = resolve_root(root)
+    repo = resolve_tracking_root(root)
     board = list_board(repo)
     if child_id not in board.by_id:
         raise NotFound(child_id)

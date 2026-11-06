@@ -141,7 +141,23 @@ def commit_paths(root: Path, paths: list[Path], message: str) -> str | None:
     if not has_git(root):
         return None
     with process_lock:
-        return _commit_paths(root, paths, message)
+        sha = _commit_paths(root, paths, message)
+        _synchronize_tracking_commit(root)
+        return sha
+
+
+def _synchronize_tracking_commit(root: Path) -> None:
+    """Push remote-backed planning commits after local persistence."""
+
+    from cascade.board.context import get_project_context
+    from cascade.workspace.repository_resolver import synchronize_tracking_repository
+
+    project = get_project_context()
+    if project is None or not project.tracking.synchronize_remote:
+        return
+    if root.resolve() != project.tracking.root.resolve():
+        return
+    synchronize_tracking_repository(project.tracking)
 
 
 def _commit_paths(root: Path, paths: list[Path], message: str) -> str | None:
