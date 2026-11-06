@@ -149,47 +149,71 @@ def fast_forward_branch(
     *,
     remote: str = "origin",
 ) -> str:
-    """Sync an accepted review, retaining redundant local lifecycle history."""
+    """Sync an accepted review while preserving clean local target history.
+
+    Epic Teams may commit planning decisions after a Feature review opens.  A
+    human can then merge that review before those target-side commits have been
+    published, leaving the durable Epic checkout both ahead of and behind its
+    remote.  Preserve both sides with a normal merge when Git can do so without
+    conflicts.  Dirty worktrees and semantic conflicts remain fail-closed.
+    """
 
     current = _git(["branch", "--show-current"], root).stdout.strip()
     if current != branch:
         raise GitError(f"integration worktree must be on {branch!r}, not {current!r}")
     fetch = _git(["fetch", remote, branch], root)
     if fetch.returncode != 0:
-        raise GitError((fetch.stderr or fetch.stdout).strip() or f"could not fetch {branch}")
+        raise GitError(
+            (fetch.stderr or fetch.stdout).strip() or f"could not fetch {branch}"
+        )
     remote_ref = f"{remote}/{branch}"
+    clean = _git(["status", "--porcelain", "--untracked-files=all"], root)
+    if clean.returncode != 0 or clean.stdout.strip():
+        raise GitError(
+            f"cannot synchronize {branch}: integration worktree has local changes"
+        )
     merge = _git(["merge", "--ff-only", remote_ref], root)
     if merge.returncode != 0:
-        # A supervisor may have committed a temporary blocked/active lifecycle
-        # transition while the review was open. If those local commits leave
-        # the tree exactly as it was at the fork, retain their history in a
-        # merge with the accepted remote tip. Any substantive local change or
-        # dirty checkout still needs an explicit owner resolution.
-        base = _git(["merge-base", "HEAD", remote_ref], root)
-        clean = _git(["status", "--porcelain"], root)
-        redundant = (
-            base.returncode == 0
-            and bool(base.stdout.strip())
-            and clean.returncode == 0
-            and not clean.stdout.strip()
-            and _git(["diff", "--quiet", base.stdout.strip(), "HEAD"], root).returncode == 0
-        )
-        if not redundant:
+        local_head = _git(["rev-parse", "HEAD"], root).stdout.strip()
+        remote_head = _git(["rev-parse", remote_ref], root).stdout.strip()
+        base = _git(["merge-base", local_head, remote_head], root)
+        if (
+            not local_head
+            or not remote_head
+            or base.returncode != 0
+            or not base.stdout.strip()
+        ):
             raise GitError(
-                (merge.stderr or merge.stdout).strip()
-                or f"could not fast-forward {branch}"
+                f"could not find shared history while synchronizing {branch}"
             )
         recovered = _git(
             ["-c", "commit.gpgsign=false", "merge", "--no-edit", remote_ref], root
         )
         if recovered.returncode != 0:
-            _git(["merge", "--abort"], root)
+            detail = (recovered.stderr or recovered.stdout).strip()
+            aborted = _git(["merge", "--abort"], root)
+            restored = _git(["rev-parse", "HEAD"], root).stdout.strip()
+            if aborted.returncode != 0 or restored != local_head:
+                raise GitError(f"could not safely abort divergent merge for {branch}")
             raise GitError(
-                (recovered.stderr or recovered.stdout).strip()
-                or f"could not reconcile redundant local commits on {branch}"
+                detail or f"could not reconcile divergent local commits on {branch}"
             )
-        if _git(["diff", "--quiet", "HEAD", remote_ref], root).returncode != 0:
-            raise GitError(f"reconciled {branch} differs from accepted remote tree")
+        merged_head = _git(["rev-parse", "HEAD"], root).stdout.strip()
+        local_landed = _git(
+            ["merge-base", "--is-ancestor", local_head, merged_head], root
+        )
+        remote_landed = _git(
+            ["merge-base", "--is-ancestor", remote_head, merged_head], root
+        )
+        clean_after = _git(["status", "--porcelain", "--untracked-files=all"], root)
+        if (
+            not merged_head
+            or local_landed.returncode != 0
+            or remote_landed.returncode != 0
+            or clean_after.returncode != 0
+            or clean_after.stdout.strip()
+        ):
+            raise GitError(f"could not verify synchronized history for {branch}")
     return _git(["rev-parse", "HEAD"], root).stdout.strip()
 
 
