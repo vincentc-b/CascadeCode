@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -20,7 +22,26 @@ from cascade.planning_action_dependencies import (
     evaluate_action_dependencies,
 )
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
+from cascade.war_room.server import WarRoomRequestHandler
 from tests.support import add_doc, make_repo, sign_off_both_planning_roles
+
+
+class _ApprovalHandler:
+    def __init__(self, root: Path) -> None:
+        self.server = SimpleNamespace(root=root)
+        self.responses: list[tuple[HTTPStatus, dict[str, object]]] = []
+
+    def _require_work_id(self, body: dict[str, object]) -> str | None:
+        work_id = body.get("id")
+        return work_id if isinstance(work_id, str) else None
+
+    def _json_response(
+        self, status: HTTPStatus, payload: dict[str, object]
+    ) -> None:
+        self.responses.append((status, payload))
+
+    def _json_error(self, status: HTTPStatus, message: str) -> None:
+        self._json_response(status, {"error": message})
 
 
 def test_action_refresh_ignores_cached_and_request_scoped_board(tmp_path: Path) -> None:
@@ -288,6 +309,60 @@ def test_epic_dependency_regression_refuses_before_any_bulk_approval(
 
     assert read_doc("feat_002_001", root=root).meta.approved_at is None
     assert read_doc("feat_002_002", root=root).meta.approved_at is None
+    assert read_doc("epic_002", root=root).meta.plan_approved_at is None
+
+
+def test_approval_routes_expose_dependency_refusal_code(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Prerequisite", tier="epic")
+    add_doc(
+        root,
+        id="epic_002",
+        title="Epic",
+        tier="epic",
+        status="active",
+        depends_on=["epic_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001",
+        title="First",
+        tier="feature",
+        parent="epic_002",
+    )
+    add_doc(
+        root,
+        id="feat_002",
+        title="Second",
+        tier="feature",
+        parent="epic_002",
+        depends_on=["feat_001"],
+    )
+    handler = _ApprovalHandler(root)
+
+    WarRoomRequestHandler._handle_approve_feature(handler, {"id": "feat_002"})  # type: ignore[arg-type]
+    WarRoomRequestHandler._handle_approve_epic_plan(handler, {"id": "epic_002"})  # type: ignore[arg-type]
+
+    assert handler.responses == [
+        (
+            HTTPStatus.CONFLICT,
+            {
+                "ok": False,
+                "code": "dependency_unmet",
+                "error": "dependency_unmet",
+            },
+        ),
+        (
+            HTTPStatus.CONFLICT,
+            {
+                "ok": False,
+                "code": "dependency_unmet",
+                "error": "dependency_unmet",
+            },
+        ),
+    ]
+    assert read_doc("feat_001", root=root).meta.approved_at is None
+    assert read_doc("feat_002", root=root).meta.approved_at is None
     assert read_doc("epic_002", root=root).meta.plan_approved_at is None
 
 
