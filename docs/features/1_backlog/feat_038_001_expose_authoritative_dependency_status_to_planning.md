@@ -21,6 +21,7 @@ models:
 reasoning:
   feature_lead: high
   feature_architect: high
+approved_at: '2026-11-06T19:52:47.292077+00:00'
 ---
 # Expose authoritative dependency status to planning
 
