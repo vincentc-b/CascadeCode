@@ -16,6 +16,7 @@ from cascade.agent.mcp_wrappers import (
 )
 from cascade.agent.planning_sandbox import PlanningSandbox
 from cascade.board.store import move_doc
+from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from tests.support import add_doc, make_repo
 
 Tier = Literal["epic", "feature"]
@@ -135,6 +136,12 @@ def test_dependency_refresh_is_scope_bound_and_fresh_across_planning_transports(
     assert refreshed["outcome"] == "dependency_unmet"
     assert refreshed["dependencies"][0]["status"] == "active"  # type: ignore[index]
     assert refreshed["snapshot_fingerprint"] != initial["snapshot_fingerprint"]
+
+    stale = merged_board(root)
+    move_doc(dependency_id, "completed", root=root)
+    with merged_board_snapshot(root, stale):
+        request_refreshed = call("refresh_dependency_status", {})
+    assert request_refreshed["outcome"] == "satisfied"
 
     with pytest.raises((PermissionError, TypeError)):
         call("refresh_dependency_status", {"work_id": unrelated_id})

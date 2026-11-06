@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from cascade.approvals import approve_epic_plan, approve_feature
-from cascade.board.store import move_doc, read_doc
+from cascade.board.store import list_board, move_doc, read_doc
 from cascade.epic.mint import mint_feature
 from cascade.epic.plan_readiness import compute_epic_plan_readiness
 from cascade.epic.planning_signoffs import (
@@ -381,3 +381,66 @@ def test_mint_allows_incomplete_child_predecessor_when_owner_is_ready(
     )
 
     assert read_doc(minted, root=root).meta.depends_on == ["feat_001"]
+
+
+def test_mint_refreshes_owner_after_cached_dependency_regresses(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Prerequisite", tier="epic", status="completed")
+    add_doc(
+        root,
+        id="epic_002",
+        title="Owner",
+        tier="epic",
+        status="active",
+        depends_on=["epic_001"],
+    )
+    stale = merged_board(root)
+    move_doc("epic_001", "backlog", root=root)
+
+    with merged_board_snapshot(root, stale):
+        with pytest.raises(DependencyActionRefused, match="dependency_unmet"):
+            mint_feature("Must not exist", epic_id="epic_002", root=root)
+
+    assert set(list_board(root).by_id) == {"epic_001", "epic_002"}
+    assert read_doc("epic_002", root=root).meta.children == []
+
+
+def test_mint_refreshes_owner_after_dependency_completes(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Prerequisite", tier="epic")
+    add_doc(
+        root,
+        id="epic_002",
+        title="Owner",
+        tier="epic",
+        status="active",
+        depends_on=["epic_001"],
+    )
+    stale = merged_board(root)
+    move_doc("epic_001", "completed", root=root)
+
+    with merged_board_snapshot(root, stale):
+        minted = mint_feature("Freshly authorized", epic_id="epic_002", root=root)
+
+    assert read_doc(minted, root=root).meta.parent == "epic_002"
+
+
+def test_mint_refresh_failure_leaves_no_child_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Owner", tier="epic", status="active")
+
+    def fail_refresh(root: Path) -> object:
+        raise OSError("source unavailable")
+
+    monkeypatch.setattr(
+        "cascade.planning_action_dependencies.refresh_merged_board", fail_refresh
+    )
+    with pytest.raises(
+        DependencyActionRefused, match="dependency_status_unavailable"
+    ):
+        mint_feature("Must not exist", epic_id="epic_001", root=root)
+
+    assert set(list_board(root).by_id) == {"epic_001"}
+    assert read_doc("epic_001", root=root).meta.children == []
