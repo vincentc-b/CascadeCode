@@ -1,10 +1,17 @@
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
 from cascade.board.errors import NotFound
-from cascade.board.store import read_doc
+from cascade.board.store import read_doc, write_doc
 from cascade.feature.recovery import (
     recover_task,
     recovery_status,
@@ -19,8 +26,37 @@ from cascade.watchdog import (
     dispatch_feature,
     dispatch_task,
 )
+from cascade.watchdog.types import DispatchResult
 from cascade.watchdog.health import sweep_supervisor_health
 from tests.support import add_doc, make_repo, approve_board_feature
+
+
+@pytest.fixture(autouse=True)
+def _supported_provider_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(DiscoveredModel(id="offered", display_name="Offered"),),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, 1.0, 2.0, 1.0),
+    )
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory
+    )
+    monkeypatch.setattr(
+        "cascade.approvals.get_provider_inventory", lambda: inventory
+    )
+
+
+def _select_roles(root: Path, work_id: str, *roles: str) -> None:
+    doc = read_doc(work_id, root=root)
+    doc.meta.provider = "codex"
+    doc.meta.models = {role: "offered" for role in roles}
+    write_doc(doc, root=root)
 
 
 def _board(tmp_path: Path) -> Path:
@@ -28,14 +64,23 @@ def _board(tmp_path: Path) -> Path:
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    _select_roles(
+        root,
+        "epic_001",
+        "epic_manager",
+        "epic_architect",
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    )
+    _select_roles(root, "feat_001", "feature_lead", "feature_architect", "swe")
+    _select_roles(root, "task_001", "swe")
     assert activate_epic("epic_001", "human", root=root).ok
     approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
     assert dispatch_task("task_001", "human", root=root).ok
     task = read_doc("task_001", root=root)
     task.meta.status = "blocked"
-    from cascade.board.store import write_doc
-
     write_doc(task, root=task.meta.path.parents[3])
     return root
 
@@ -92,6 +137,32 @@ def test_permission_refusal_is_not_retryable_or_a_permission_bypass(
     assert result["ok"] is False
     assert result["reason"] == "not_retryable"
     assert read_doc("task_001", root=root).meta.status == "blocked"
+
+
+def test_retry_preserves_dispatch_preflight_response(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    preflight = SimpleNamespace(to_dict=lambda: {"reason_code": "model_not_offered"})
+    monkeypatch.setattr(
+        "cascade.feature.recovery.recovery_status",
+        lambda *_args, **_kwargs: {"action": "retry"},
+    )
+    monkeypatch.setattr(
+        "cascade.feature.recovery.dispatch_task",
+        lambda *_args, **_kwargs: DispatchResult(
+            ok=False,
+            reason="provider_preflight_blocked",
+            event=None,
+            preflight=preflight,  # type: ignore[arg-type]
+        ),
+    )
+
+    result = retry_task("task_001", feature_id="feat_001", root=root)
+
+    assert result["ok"] is False
+    assert result["reason"] == "provider_preflight_blocked"
+    assert result["preflight"] == {"reason_code": "model_not_offered"}
 
 
 def test_concurrent_retry_requests_resume_at_most_one_execution(tmp_path: Path) -> None:

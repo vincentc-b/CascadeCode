@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,7 +13,7 @@ from cascade.agent import RoleResult
 from cascade.board.store import pin_parent, read_doc
 from cascade.task.registry import clear_task_tools
 from cascade.task.skills_context import apply_skill_playbooks
-from cascade.task.swe_turn import run_swe_turn_sync
+from cascade.task.swe_turn import run_swe_turn, run_swe_turn_sync
 from cascade.task.wiring import clear_task_wiring_state, install_task_wiring
 from cascade.task.worktree import clear_task_runs, create_task_worktree
 from cascade.watchdog.hooks import clear_hooks
@@ -112,3 +114,39 @@ def test_swe_prompt_includes_playbook_text_and_paths(tmp_path: Path) -> None:
     assert "native shell do not satisfy" in prompt
     assert "--- Task plan: task_063" in prompt
     assert "--- Pinned Feature plan: feat_001" in prompt
+
+
+def test_failed_fresh_check_does_not_mark_task_running(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    admitted = []
+    monkeypatch.setattr(
+        "cascade.task.swe_turn.resolve_swe_task_run",
+        lambda _task_id: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.recheck_provider_capability",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            supported=False,
+            classification="deterministic",
+            checks=(
+                SimpleNamespace(
+                    result=SimpleNamespace(supported=False, reason="stale_selection")
+                ),
+            ),
+        ),
+    )
+
+    result = asyncio.run(
+        run_swe_turn(
+            "task_001",
+            provider="codex",
+            model_id="old-model",
+            prompt="work",
+            root=tmp_path,
+            on_admitted=lambda: admitted.append(True),
+        )
+    )
+
+    assert result.failure_reason == "provider_blocked:stale_selection"
+    assert admitted == []

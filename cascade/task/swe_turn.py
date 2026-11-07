@@ -20,6 +20,7 @@ from cascade.task.guard import TaskToolDenied
 from cascade.task.worktree import TaskRun, get_task_run
 
 RunRoleFn = Callable[[RoleTurn], Awaitable[RoleResult]]
+OnAdmitted = Callable[[], None]
 
 
 def augment_swe_prompt_with_skill_paths(
@@ -152,6 +153,7 @@ async def run_swe_turn(
     flex_mode: bool | None = None,
     commit_message: str | None = None,
     run_role_fn: RunRoleFn | None = None,
+    on_admitted: OnAdmitted | None = None,
 ) -> SweTurnResult:
     """Run one SWE Cursor turn in the task worktree; gate paths and commit when allowed."""
 
@@ -193,6 +195,8 @@ async def run_swe_turn(
                 may_retry=preflight.classification == "transient",
                 failure_reason=f"provider_blocked:{reason}",
             )
+    if on_admitted is not None:
+        on_admitted()
     full_prompt = augment_swe_prompt_with_work_context(task_id, prompt, root=repo)
     full_prompt = augment_swe_prompt_with_skill_paths(task_id, full_prompt, root=repo)
     turn = build_swe_role_turn(

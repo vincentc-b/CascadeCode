@@ -16,8 +16,8 @@ from cascade.agent.discovery.inventory import refresh_provider_inventory
 from cascade.agent.preflight import (
     ProviderCapabilityBatchPreflight,
     ProviderCapabilityPreflight,
-    RoleCapabilityPreflight,
 )
+from cascade.agent.capability_contract import role_scope
 from cascade.agent.selection_preflight import RuntimeSelection, evaluate_work_selection
 from cascade.board.context import resolve_root
 from cascade.board.store import read_doc
@@ -53,15 +53,13 @@ def recheck_provider_capability(
     ).result
     failed = tuple(check for check in result.checks if not check.result.supported)
     if not failed:
-        clear_provider_blocker(work_id, root=repo)
+        clear_provider_blocker(work_id, result=result, root=repo)
         return result
 
-    assert result.classification is not None
     upsert_provider_blocker(
         work_id,
         tier=tier,
-        failed=failed,
-        classification=result.classification,
+        result=result,
         root=repo,
     )
     return result
@@ -82,27 +80,39 @@ def upsert_provider_blocker(
     work_id: str,
     *,
     tier: str,
-    failed: tuple[RoleCapabilityPreflight, ...],
-    classification: str,
+    result: ProviderCapabilityBatchPreflight,
     root: Path,
 ) -> dict[str, object]:
-    """Refresh one safe blocker per work ID rather than appending incidents."""
+    """Refresh one complete safe blocker per work ID instead of appending."""
 
     repo = resolve_root(root)
     now = datetime.now(timezone.utc).isoformat()
-    first = failed[0]
-    first_check = first.result
+    failed = tuple(check for check in result.checks if not check.result.supported)
+    if not failed or result.classification is None:
+        raise ValueError("provider blocker requires a failed batch")
+    primary = next(
+        (check for check in failed if check.result.reason == result.reason_code),
+        failed[0],
+    )
+    primary_check = primary.result
     row: dict[str, object] = {
         "work_id": work_id,
         "tier": tier,
+        "action": result.action,
+        "selection_fingerprint": result.selection_fingerprint,
+        # Persist the complete scope, including successful sibling roles.  A
+        # later start must prove this same whole scope healthy before the
+        # incident can be resolved.
+        "checks": [check.to_dict() for check in result.checks],
+        "inventory_freshness": result.to_dict()["inventory_freshness"],
         "affected_roles": sorted(check.role for check in failed),
-        "provider": first_check.provider,
-        "reason_code": first_check.reason,
+        "provider": primary_check.provider,
+        "reason_code": primary_check.reason,
         # Never retain provider-provided exception text.  This stable message
         # is safe to render after restart and shared by board/War Room.
-        "reason": first_check.message,
-        "classification": classification,
-        "recommended_remedy": _recommended_remedy(first_check),
+        "reason": primary_check.message,
+        "classification": result.classification,
+        "recommended_remedy": _recommended_remedy(primary_check),
         "last_attempt": now,
         "active": True,
     }
@@ -120,20 +130,68 @@ def upsert_provider_blocker(
     return dict(row)
 
 
-def clear_provider_blocker(work_id: str, *, root: Path) -> None:
-    """Mark the one incident resolved while retaining its small audit record."""
+def clear_provider_blocker(
+    work_id: str,
+    *,
+    result: ProviderCapabilityBatchPreflight | None = None,
+    root: Path,
+) -> bool:
+    """Resolve only after a fresh successful check of the blocked full scope.
+
+    ``result`` is deliberately mandatory in practice.  Keeping the optional
+    default makes older recovery callers fail safe: configuration mutation or
+    cached readiness alone cannot erase an execution incident.
+    """
 
     repo = resolve_root(root)
     with process_lock:
         records = _read(repo)
         row = records.get(work_id)
         if not isinstance(row, dict) or not row.get("active"):
-            return
+            return False
+        if result is None or not _successful_fresh_scope(row, result):
+            return False
         row = dict(row)
         row["active"] = False
         row["resolved_at"] = datetime.now(timezone.utc).isoformat()
+        row["resolution_fingerprint"] = result.selection_fingerprint
+        row["resolution_inventory_freshness"] = result.to_dict()["inventory_freshness"]
         records[work_id] = row
         _write(repo, records)
+        return True
+
+
+def _successful_fresh_scope(
+    row: dict[str, object], result: ProviderCapabilityBatchPreflight
+) -> bool:
+    if (
+        not result.supported
+        or result.action != "execution"
+        or result.work_id != row.get("work_id")
+    ):
+        return False
+    freshness = result.inventory_freshness
+    if freshness is None or freshness.from_cache:
+        return False
+    previous_checks = row.get("checks")
+    previous_roles = (
+        {
+            str(check.get("role"))
+            for check in previous_checks
+            if isinstance(check, dict) and isinstance(check.get("role"), str)
+        }
+        if isinstance(previous_checks, list)
+        else set()
+    )
+    if not previous_roles:
+        tier = row.get("tier")
+        if tier not in ("epic", "feature", "task"):
+            return False
+        previous_roles = set(role_scope(tier))
+    current_roles = {check.role for check in result.checks}
+    return current_roles == previous_roles and all(
+        check.result.supported for check in result.checks
+    )
 
 
 def _recommended_remedy(check: ProviderCapabilityPreflight) -> str:
@@ -165,7 +223,7 @@ def _read(root: Path) -> dict[str, dict[str, object]]:
 def _write(root: Path, records: dict[str, dict[str, object]]) -> None:
     path = _path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"version": 1, "blockers": records}
+    payload = {"version": 2, "blockers": records}
     temp = path.with_suffix(".tmp")
     try:
         with temp.open("w", encoding="utf-8") as handle:

@@ -17,7 +17,10 @@ from cascade.agent.discovery.inventory import (
     get_provider_inventory,
 )
 from cascade.agent.discovery.normalize import sanitize_provider_error
-from cascade.agent.selection_preflight import evaluate_work_selection
+from cascade.agent.selection_admission import (
+    SelectionAdmissionError,
+    admit_work_selection,
+)
 from cascade.agent.providers import parse_provider_id
 from cascade.board.errors import GitError
 from cascade.board.gitutil import _run
@@ -192,16 +195,17 @@ def validate_brief(raw: dict[str, object], *, root: Path) -> BriefRequest:
         "epic_preview",
         Path(root) / "docs/epics/1_backlog/epic_preview.md",
     )
-    result = evaluate_work_selection(
-        preview,
-        root=root,
-        inventory=inventory,
-        action="brief_preview",
-    ).result
-    if not result.supported:
-        if result.reason_code == "reasoning_not_supported":
-            raise ValueError("reasoning override is not supported for the selected model")
-        raise ValueError(result.message or "selected configuration is not supported")
+    try:
+        admit_work_selection(
+            preview,
+            root=root,
+            inventory=inventory,
+            action="brief_preview",
+        )
+    except SelectionAdmissionError as exc:
+        if exc.result.reason_code == "reasoning_not_supported":
+            exc.args = ("reasoning override is not supported for the selected model",)
+        raise
     return request
 
 

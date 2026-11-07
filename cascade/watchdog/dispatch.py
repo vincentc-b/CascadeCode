@@ -16,7 +16,8 @@ from cascade.agent.discovery.inventory import get_provider_inventory
 from cascade.agent.preflight import (
     ProviderCapabilityBatchPreflight,
 )
-from cascade.agent.selection_preflight import evaluate_work_selection
+from cascade.agent.selection_preflight import RuntimeSelection, evaluate_work_selection
+from cascade.board.parse import parse_doc
 from cascade.epic.activation import _drop_stale_copies, activate_epic_on_worktree
 from cascade.planning_action_dependencies import evaluate_action_dependencies
 from cascade.watchdog.config import task_parallelism
@@ -492,12 +493,42 @@ def _provider_preflight_refusal(
     if meta.tier not in ("epic", "feature", "task"):
         return None
     inventory = get_provider_inventory()
-    result = evaluate_work_selection(
-        meta,
-        root=root,
-        inventory=inventory,
-        action="dispatch",
-    ).result
+    action = "epic_activation" if meta.tier == "epic" else f"{meta.tier}_dispatch"
+    try:
+        doc = parse_doc(meta.path)
+        if not _same_dispatch_selection(meta, doc.meta):
+            raise ValueError("owning document provenance changed")
+    except Exception:
+        # The merged board is only an index.  If its selected owning document
+        # disappeared or changed before admission, project every resolved role
+        # through the shared stale-selection path instead of trusting the copy.
+        base = evaluate_work_selection(
+            meta,
+            root=root,
+            inventory=inventory,
+            action=action,
+        )
+        result = evaluate_work_selection(
+            meta,
+            root=root,
+            inventory=inventory,
+            action=action,
+            runtime_selections=(
+                RuntimeSelection(
+                    role=item.role,
+                    provider="__stale__",
+                    model_id="__stale__",
+                )
+                for item in base.selections.selections
+            ),
+        ).result
+    else:
+        result = evaluate_work_selection(
+            doc,
+            root=root,
+            inventory=inventory,
+            action=action,
+        ).result
     if result.supported:
         return None
     reason = (
@@ -506,6 +537,23 @@ def _provider_preflight_refusal(
         else "provider_preflight_unavailable"
     )
     return _fail(reason, preflight=result)
+
+
+def _same_dispatch_selection(indexed: WorkMeta, owning: WorkMeta) -> bool:
+    """Confirm the board snapshot still names the reviewed owning selection."""
+
+    return (
+        owning.id == indexed.id
+        and owning.tier == indexed.tier
+        and owning.path.resolve() == indexed.path.resolve()
+        and owning.parent == indexed.parent
+        and owning.parent_rev == indexed.parent_rev
+        and owning.provider == indexed.provider
+        and owning.model == indexed.model
+        and owning.models == indexed.models
+        and owning.reasoning == indexed.reasoning
+        and owning.flex_mode == indexed.flex_mode
+    )
 
 
 def _fail(

@@ -635,12 +635,15 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         epic_id = self._require_work_id(body)
         if epic_id is None:
             return
-        from cascade.approvals import approve_epic_plan
+        from cascade.approvals import ApprovalSelectionError, approve_epic_plan
         from cascade.epic.planning_signoffs import PlanSignOffError
         from cascade.planning_action_dependencies import DependencyActionRefused
 
         try:
             payload = approve_epic_plan(epic_id, root=self.server.root)
+        except ApprovalSelectionError as exc:
+            self._json_response(HTTPStatus.CONFLICT, exc.to_dict())
+            return
         except DependencyActionRefused as exc:
             self._json_response(
                 HTTPStatus.CONFLICT,
@@ -702,11 +705,14 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         feature_id = self._require_work_id(body)
         if feature_id is None:
             return
-        from cascade.approvals import approve_feature
+        from cascade.approvals import ApprovalSelectionError, approve_feature
         from cascade.planning_action_dependencies import DependencyActionRefused
 
         try:
             payload = approve_feature(feature_id, root=self.server.root)
+        except ApprovalSelectionError as exc:
+            self._json_response(HTTPStatus.CONFLICT, exc.to_dict())
+            return
         except DependencyActionRefused as exc:
             self._json_response(
                 HTTPStatus.CONFLICT,
