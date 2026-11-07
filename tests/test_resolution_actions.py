@@ -241,6 +241,50 @@ def test_admission_accepts_clean_local_resolution_containing_both_review_heads(
     assert admission.action["status"] == "mutation_ready"
 
 
+def test_admission_accepts_clean_owned_source_ahead_before_target_resolution(
+    tmp_path: Path,
+) -> None:
+    root, payload = _admission_ready_root(tmp_path)
+    subprocess.run(["git", "checkout", "epic/epic_035"], cwd=root, check=True, capture_output=True, text=True)
+    (root / "target.txt").write_text("target\n", encoding="utf-8")
+    subprocess.run(["git", "add", "target.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "advance target"], cwd=root, check=True, capture_output=True, text=True)
+    target_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    subprocess.run(["git", "checkout", "feat/feat_035_001"], cwd=root, check=True, capture_output=True, text=True)
+    (root / "source.txt").write_text("source\n", encoding="utf-8")
+    subprocess.run(["git", "add", "source.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "advance source"], cwd=root, check=True, capture_output=True, text=True)
+    source_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    payload.update(observed_source_head=source_sha, observed_target_head=target_sha)
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "local team decision"], cwd=root, check=True, capture_output=True, text=True)
+
+    admission = admit_resolution_action(normalize_operator_request(payload), root=root)
+
+    assert admission.action["status"] == "mutation_ready"
+    assert admission.action["handoff"]["observed_shas"] == [source_sha, target_sha]
+
+
+def test_retryable_blocked_admission_is_rechecked_with_the_same_identity(
+    tmp_path: Path,
+) -> None:
+    root, payload = _admission_ready_root(tmp_path)
+    records = json.loads((root / ".cascade" / "reviews.json").read_text())
+    records["feat_035_001"]["credentials_available"] = False
+    _write_review_registry(root, records)
+    request = normalize_operator_request(payload)
+    blocked = admit_resolution_action(request, root=root)
+    assert blocked.action["status"] == "blocked"
+    records["feat_035_001"]["credentials_available"] = True
+    _write_review_registry(root, records)
+
+    retried = admit_resolution_action(request, root=root)
+
+    assert retried.reused is True
+    assert retried.action_id == blocked.action_id
+    assert retried.action["status"] == "mutation_ready"
+    assert "blocker" not in retried.action
+
+
 @pytest.mark.parametrize(
     ("change", "checkpoint", "code", "resume_fragment"),
     [
