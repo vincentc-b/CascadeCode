@@ -2,7 +2,7 @@
 id: epic_039
 title: Dependency validation and feature zero
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_039_001
