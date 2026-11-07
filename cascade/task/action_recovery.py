@@ -599,6 +599,28 @@ def capture_and_route_action_failure(
         action_recovery = dict(action.get("recovery") or {})
         marker = action_recovery.get("routing_marker")
         if isinstance(marker, Mapping) and marker.get("investigation_id") == investigation_id:
+            durable_owner = action_recovery.get("owning_team")
+            if (
+                action.get("recovery_state") == "awaiting_owner_decision"
+                and isinstance(durable_owner, Mapping)
+                and durable_owner.get("kind") in _DECISION_OWNERS
+                and isinstance(durable_owner.get("work_id"), str)
+            ):
+                durable_evidence = action_recovery.get("evidence")
+                stored = durable_evidence if isinstance(durable_evidence, Mapping) else {}
+                _enqueue_recovery_request_if_missing(
+                    str(durable_owner["work_id"]),
+                    investigation_id=investigation_id,
+                    action_id=action_id,
+                    action_kind=action_kind,
+                    affected_work_id=str(stored.get("affected_work_id") or affected_work_id),
+                    failure_code=str(stored.get("failure_code") or failure_code),
+                    safe_summary=str(stored.get("safe_summary") or safe_summary),
+                    conflicting_paths=tuple(stored.get("conflicting_paths") or conflicting_paths),
+                    intended_target_ref=stored.get("intended_target_ref", intended_target_ref),
+                    root=repo,
+                    now=now,
+                )
             return _copy(action)
 
         stamped = _iso(now)
@@ -633,36 +655,19 @@ def capture_and_route_action_failure(
                 updated_at=stamped,
             )
         else:
-            # Import here to keep the storage module free of queue imports.
-            from cascade.watchdog.events import append_event, read_events
-            from cascade.watchdog.types import Event
-
-            events, _ = read_events(owner["work_id"], 0, root=repo)
-            already_enqueued = any(
-                event.type == "BranchActionRecoveryRequested"
-                and event.payload.get("investigation_id") == investigation_id
-                for event in events
+            _enqueue_recovery_request_if_missing(
+                owner["work_id"],
+                investigation_id=investigation_id,
+                action_id=action_id,
+                action_kind=action_kind,
+                affected_work_id=affected_work_id,
+                failure_code=failure_code,
+                safe_summary=safe_summary,
+                conflicting_paths=tuple(conflicting_paths),
+                intended_target_ref=intended_target_ref,
+                root=repo,
+                now=now,
             )
-            if not already_enqueued:
-                append_event(
-                    owner["work_id"],
-                    Event(
-                        type="BranchActionRecoveryRequested",
-                        ts=datetime.now(timezone.utc) if now is None else now,
-                        payload={
-                            "investigation_id": investigation_id,
-                            "action_id": action_id,
-                            "action_kind": action_kind,
-                            "affected_work_id": affected_work_id,
-                            "failure_code": failure_code,
-                            "safe_summary": safe_summary,
-                            "conflicting_paths": list(conflicting_paths),
-                            "intended_target_ref": intended_target_ref,
-                        },
-                        dest=owner["work_id"],
-                    ),
-                    root=repo,
-                )
             action_recovery.update(
                 owning_team=owner,
                 evidence=failure_evidence,
@@ -694,6 +699,80 @@ def capture_and_route_action_failure(
         payload["actions"] = actions
         _write_payload(repo, payload)
         return _copy(action)
+
+
+def _enqueue_recovery_request_if_missing(
+    work_id: str,
+    *,
+    investigation_id: str,
+    action_id: str,
+    action_kind: str,
+    affected_work_id: str,
+    failure_code: str,
+    safe_summary: str,
+    conflicting_paths: tuple[str, ...],
+    intended_target_ref: object,
+    root: Path,
+    now: datetime | None,
+) -> None:
+    """Restore one lost routed event without duplicating a surviving event."""
+
+    # Import here to keep the storage module free of queue imports at import time.
+    from cascade.watchdog.events import append_event, read_events
+    from cascade.watchdog.types import Event
+
+    events, _ = read_events(work_id, 0, root=root)
+    if any(
+        event.type == "BranchActionRecoveryRequested"
+        and event.payload.get("investigation_id") == investigation_id
+        for event in events
+    ):
+        return
+    append_event(
+        work_id,
+        Event(
+            type="BranchActionRecoveryRequested",
+            ts=datetime.now(timezone.utc) if now is None else now,
+            payload={
+                "investigation_id": investigation_id,
+                "action_id": action_id,
+                "action_kind": action_kind,
+                "affected_work_id": affected_work_id,
+                "failure_code": failure_code,
+                "safe_summary": safe_summary,
+                "conflicting_paths": list(conflicting_paths),
+                "intended_target_ref": intended_target_ref,
+            },
+            dest=work_id,
+        ),
+        root=root,
+    )
+
+
+def pending_recovery_team_ids(*, root: Path) -> set[str]:
+    """Return teams that still own an enqueued semantic recovery decision."""
+
+    repo = resolve_root(root)
+    with process_lock:
+        actions = _actions(_read_payload(repo))
+    pending: set[str] = set()
+    for action in actions.values():
+        if action.get("recovery_state") != "awaiting_owner_decision":
+            continue
+        recovery = action.get("recovery")
+        if not isinstance(recovery, Mapping):
+            continue
+        owner = recovery.get("owning_team")
+        marker = recovery.get("routing_marker")
+        if (
+            isinstance(owner, Mapping)
+            and owner.get("kind") in _DECISION_OWNERS
+            and isinstance(owner.get("work_id"), str)
+            and isinstance(marker, Mapping)
+            and marker.get("status") == "enqueued"
+        ):
+            pending.add(str(owner["work_id"]))
+    return pending
 
 
 def record_action_checkpoint(

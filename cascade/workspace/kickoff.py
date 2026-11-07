@@ -232,10 +232,16 @@ def resume_inflight_graphs(root: Path) -> None:
     repo = Path(root).resolve()
     from cascade.workspace.integration_worktree import merged_board
 
+    from cascade.task.action_recovery import pending_recovery_team_ids
+
     board = merged_board(repo)
+    pending_recovery = pending_recovery_team_ids(root=repo)
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
-        if meta.path.parent.name != "2_active":
+        if (
+            meta.path.parent.name != "2_active"
+            and work_id not in pending_recovery
+        ):
             continue
         if meta.tier not in ("epic", "feature", "task"):
             continue
@@ -299,10 +305,16 @@ def deliver_queue_kickoffs(root: Path) -> None:
     repo = Path(root).resolve()
     from cascade.workspace.integration_worktree import merged_board
 
+    from cascade.task.action_recovery import pending_recovery_team_ids
+
     board = merged_board(repo)
+    pending_recovery = pending_recovery_team_ids(root=repo)
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
-        if meta.path.parent.name != "2_active":
+        if (
+            meta.path.parent.name != "2_active"
+            and work_id not in pending_recovery
+        ):
             continue
         if meta.tier not in ("epic", "feature", "task"):
             continue
@@ -357,7 +369,8 @@ def _queue_is_ahead(
     feature_id: str | None,
 ) -> bool:
     cursor = _queue_offset(work_id, tier, root=root, feature_id=feature_id)
-    return queue_byte_size(work_id, root=root) > cursor
+    size = queue_byte_size(work_id, root=root)
+    return size > cursor or (size > 0 and cursor > size)
 
 
 def _schedule_queue_delivery(
