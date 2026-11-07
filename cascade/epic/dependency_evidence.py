@@ -569,6 +569,7 @@ def admit_dependency_check(
     execution_policy: DependencyExecutionPolicy = DEFAULT_DEPENDENCY_EXECUTION_POLICY,
     lock_references: Sequence[str] = (),
     admitted_at: datetime | None = None,
+    attempt_id: str | None = None,
 ) -> CheckAdmission:
     """Append an admission after binding it to the current entry and recipe."""
 
@@ -600,10 +601,66 @@ def admit_dependency_check(
                 execution_policy,
                 root=root,
             )
+        stable_attempt_id = (
+            _text(attempt_id, "attempt_id")
+            if attempt_id is not None
+            else f"attempt_{uuid.uuid4().hex}"
+        )
+        events, _ = _read_store(epic_id, root=root)
+        existing = next(
+            (
+                event
+                for event in events
+                if isinstance(event, CheckAdmission)
+                and event.attempt_id == stable_attempt_id
+            ),
+            None,
+        )
+        if existing is not None:
+            expected = (
+                dependency_id,
+                manifest.revision,
+                entry_evidence_revision(entry),
+                recipe_revision(entry),
+                operation,
+                kind,
+                environment_fingerprint(entry.target_environment),
+                entry.version,
+                entry.digest,
+                tuple(_text(ref, "lock_reference") for ref in lock_references)
+                or entry.lock_references,
+                approval_reference,
+                bootstrap_revision
+                if kind is not CheckOperationKind.READ_ONLY
+                else None,
+                execution_policy.revision
+                if kind is not CheckOperationKind.READ_ONLY
+                else None,
+            )
+            actual = (
+                existing.dependency_id,
+                existing.manifest_revision,
+                existing.entry_revision,
+                existing.recipe_revision,
+                existing.exact_operation,
+                existing.operation_kind,
+                existing.target_environment_fingerprint,
+                existing.selected_version,
+                existing.integrity_reference,
+                existing.lock_references,
+                existing.approval_reference,
+                existing.bootstrap_revision,
+                existing.policy_revision,
+            )
+            if actual != expected:
+                raise DependencyEvidenceError(
+                    "stable attempt ID is already bound to different check evidence"
+                )
+            return existing
         when = admitted_at or datetime.now(timezone.utc)
         _aware(when, "admitted_at")
         admission = CheckAdmission(
-            attempt_id=f"attempt_{uuid.uuid4().hex}",
+            attempt_id=stable_attempt_id,
             dependency_id=dependency_id,
             manifest_revision=manifest.revision,
             entry_revision=entry_evidence_revision(entry),

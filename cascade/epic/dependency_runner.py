@@ -145,6 +145,7 @@ def run_dependency_operation(
     approval_reference: str | None = None,
     bootstrap_revision: int | None = None,
     execution_policy: DependencyExecutionPolicy = DEFAULT_DEPENDENCY_EXECUTION_POLICY,
+    attempt_id: str | None = None,
 ) -> DependencyRunResult:
     """Run one exact setup/check operation and append its bounded evidence."""
 
@@ -155,14 +156,17 @@ def run_dependency_operation(
         if kind is CheckOperationKind.READ_ONLY
         else scoped.setup_operation
     )
-    _require_attempt_available(
-        epic_id,
-        entry,
-        kind,
-        operation,
-        bootstrap.scope.limits,
-        root=root,
-    )
+    existing_completion = _completion_for_attempt(epic_id, attempt_id, root=root)
+    if existing_completion is None:
+        _require_attempt_available(
+            epic_id,
+            entry,
+            kind,
+            operation,
+            bootstrap.scope.limits,
+            root=root,
+            attempt_id=attempt_id,
+        )
     _require_executor(executor)
     admission = admit_dependency_check(
         epic_id,
@@ -173,7 +177,18 @@ def run_dependency_operation(
         approval_reference=approval_reference,
         bootstrap_revision=bootstrap_revision,
         execution_policy=execution_policy,
+        attempt_id=attempt_id,
     )
+    if existing_completion is not None:
+        blocker = None
+        if existing_completion.result is CheckResult.FAILED:
+            blocker = _blocker(
+                OperationFailure.COMMAND_FAILED,
+                operation,
+                existing_completion.actual_environment,
+                existing_completion.redacted_output,
+            )
+        return DependencyRunResult(admission, existing_completion, blocker)
     request = OperationRequest(
         operation=operation,
         operation_kind=kind,
@@ -289,9 +304,7 @@ def run_feasibility_proof(
         # A mismatched observation is retained as blocker history, never as a
         # current result for the authorized target environment.
         retained = tuple(
-            row
-            for row in checking.blockers
-            if row.artifact_id != artifact.artifact_id
+            row for row in checking.blockers if row.artifact_id != artifact.artifact_id
         )
         snapshot = record_bootstrap_blockers(
             epic_id,
@@ -315,9 +328,7 @@ def run_feasibility_proof(
     )
     if blocker is not None:
         retained = tuple(
-            row
-            for row in snapshot.blockers
-            if row.artifact_id != artifact.artifact_id
+            row for row in snapshot.blockers if row.artifact_id != artifact.artifact_id
         )
         snapshot = record_bootstrap_blockers(
             epic_id,
@@ -335,9 +346,7 @@ def run_feasibility_proof(
     return FeasibilityRunResult(snapshot, blocker)
 
 
-def _dependency_context(
-    epic_id: str, dependency_id: str, *, root: Path
-):
+def _dependency_context(epic_id: str, dependency_id: str, *, root: Path):
     manifest = require_dependency_manifest(epic_id, root=root)
     bootstrap = _bootstrap(epic_id, root=root)
     if bootstrap.scope.manifest_revision != manifest.revision:
@@ -360,7 +369,9 @@ def _dependency_context(
         or scoped.destination != entry.install_destination
         or scoped.cleanup != entry.cleanup_plan
     ):
-        raise DependencyRunnerError("dependency operation no longer matches reviewed scope")
+        raise DependencyRunnerError(
+            "dependency operation no longer matches reviewed scope"
+        )
     if scoped.destination not in scoped.paths:
         raise DependencyRunnerError("reviewed destination is outside allowed paths")
     for path in scoped.paths:
@@ -379,10 +390,9 @@ def _require_pinned(entry: DependencyEntry) -> None:
     integrity = entry.integrity_reference or entry.digest
     if moving.search(integrity) or ":" not in integrity:
         raise DependencyRunnerError("an immutable integrity reference is required")
-    if (
-        entry.target_environment.kind.casefold() == "container"
-        and not (entry.target_environment.container_digest or "").startswith("sha256:")
-    ):
+    if entry.target_environment.kind.casefold() == "container" and not (
+        entry.target_environment.container_digest or ""
+    ).startswith("sha256:"):
         raise DependencyRunnerError("container execution requires an immutable digest")
 
 
@@ -400,6 +410,7 @@ def _require_attempt_available(
     limits: BootstrapLimits,
     *,
     root: Path,
+    attempt_id: str | None = None,
 ) -> None:
     revision = entry_evidence_revision(entry)
     attempts = sum(
@@ -410,8 +421,28 @@ def _require_attempt_available(
         and row.exact_operation == operation
         for row in read_dependency_check_history(epic_id, root=root)
     )
-    if attempts >= limits.max_attempts:
+    existing_ids = {
+        row.attempt_id
+        for row in read_dependency_check_history(epic_id, root=root)
+        if isinstance(row, CheckAdmission)
+    }
+    if attempt_id not in existing_ids and attempts >= limits.max_attempts:
         raise DependencyRunnerError("dependency attempt limit reached")
+
+
+def _completion_for_attempt(
+    epic_id: str, attempt_id: str | None, *, root: Path
+) -> CheckCompletion | None:
+    if attempt_id is None:
+        return None
+    return next(
+        (
+            row
+            for row in read_dependency_check_history(epic_id, root=root)
+            if isinstance(row, CheckCompletion) and row.attempt_id == attempt_id
+        ),
+        None,
+    )
 
 
 def _dependency_failure(
@@ -447,9 +478,7 @@ def _generic_failure(
 
 _SECRET_PATTERNS = (
     re.compile(r"(?i)\b(bearer)\s+[A-Za-z0-9._~+/-]+=*"),
-    re.compile(
-        r"(?i)\b(token|password|passwd|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+"
-    ),
+    re.compile(r"(?i)\b(token|password|passwd|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+"),
     re.compile(r"(?i)(https?://)[^/@\s:]+:[^/@\s]+@"),
 )
 
