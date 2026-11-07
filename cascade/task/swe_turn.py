@@ -104,6 +104,9 @@ def build_swe_role_turn(
     """Assemble a ``RoleTurn`` with cwd set to the task worktree."""
 
     run = resolve_swe_task_run(task_id)
+    from cascade.watchdog.config import provider_permission_mode
+
+    permission_mode = provider_permission_mode(root, provider)  # type: ignore[arg-type]
     is_cursor = provider == "cursor"
     return RoleTurn(
         role="swe",
@@ -115,6 +118,7 @@ def build_swe_role_turn(
         custom_tools=(build_swe_custom_tools(task_id, root=root) if is_cursor else None),
         reasoning_level=reasoning_level,
         flex_mode=flex_mode,
+        permission_mode=permission_mode,
     )
 
 

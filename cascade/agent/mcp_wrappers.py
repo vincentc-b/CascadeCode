@@ -309,6 +309,11 @@ _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "properties": {},
         "additionalProperties": False,
     },
+    "retry_integration_branch_update": {
+        "type": "object",
+        "properties": {"action_id": {"type": "string"}},
+        "required": ["action_id"],
+    },
     "sign_off_plan": {
         "type": "object",
         "properties": {"plan_revision": {"type": "string"}},

@@ -15,6 +15,7 @@ from cascade.agent.planning_turn import (
     run_feature_planning_turn,
 )
 from cascade.agent.types import RoleResult, RoleTurn
+from cascade.agent.planning_sandbox import materialize_scratch
 from cascade.board.store import move_doc
 from cascade.epic.guard import EpicToolDenied
 from cascade.epic.scoped_docs import epic_read_doc
@@ -31,17 +32,33 @@ def _projection_from_prompt(prompt: str) -> dict[str, object]:
     return json.loads(payload)
 
 
+@pytest.fixture
+def planning_context(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
+    contexts: list[Path] = []
+
+    def spy_materialize(*args: object, **kwargs: object) -> Path:
+        context = materialize_scratch(*args, **kwargs)  # type: ignore[arg-type]
+        contexts.append(context)
+        return context
+
+    monkeypatch.setattr("cascade.agent.planning_turn.materialize_scratch", spy_materialize)
+    return contexts
+
+
 def test_synthetic_completed_dependency_is_projected_without_content_access(
     synthetic_dependency_lifecycle: SyntheticDependencyLifecycle,
     monkeypatch: pytest.MonkeyPatch,
+    planning_context: list[Path],
 ) -> None:
     scenario = synthetic_dependency_lifecycle
     captured: list[RoleTurn] = []
 
     async def fake_run_role(turn: RoleTurn) -> RoleResult:
         captured.append(turn)
+        assert turn.cwd == scenario.root.resolve()
         assert not any(
-            scenario.dependency_id in path.name for path in turn.cwd.rglob("*.md")
+            scenario.dependency_id in path.name
+            for path in planning_context[0].rglob("*.md")
         )
         return RoleResult(text="ok", status="finished")
 
@@ -78,7 +95,7 @@ def test_synthetic_completed_dependency_is_projected_without_content_access(
 
 
 def test_epic_turn_projects_all_dependencies_without_content_access(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, planning_context: list[Path]
 ) -> None:
     root = make_repo(tmp_path)
     add_doc(
@@ -107,7 +124,8 @@ def test_epic_turn_projects_all_dependencies_without_content_access(
 
     async def fake_run_role(turn: RoleTurn) -> RoleResult:
         captured.append(turn)
-        assert not any("epic_002" in path.name for path in turn.cwd.rglob("*.md"))
+        assert turn.cwd == root.resolve()
+        assert not any("epic_002" in path.name for path in planning_context[0].rglob("*.md"))
         return RoleResult(text="ok", status="finished")
 
     monkeypatch.setattr("cascade.agent.planning_turn.run_role", fake_run_role)
@@ -142,7 +160,7 @@ def test_epic_turn_projects_all_dependencies_without_content_access(
 
 
 def test_feature_turn_projects_all_dependencies_without_content_access(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, planning_context: list[Path]
 ) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Parent", tier="epic", status="active")
@@ -175,7 +193,8 @@ def test_feature_turn_projects_all_dependencies_without_content_access(
 
     async def fake_run_role(turn: RoleTurn) -> RoleResult:
         captured.append(turn)
-        assert not any("feat_002" in path.name for path in turn.cwd.rglob("*.md"))
+        assert turn.cwd == root.resolve()
+        assert not any("feat_002" in path.name for path in planning_context[0].rglob("*.md"))
         return RoleResult(text="ok", status="finished")
 
     monkeypatch.setattr("cascade.agent.planning_turn.run_role", fake_run_role)

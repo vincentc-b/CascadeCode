@@ -26,6 +26,7 @@ Usage: claude [options]
   --model                     model id
   --mcp-config                Load MCP servers from JSON files
   --strict-mcp-config         Only use MCP servers from --mcp-config
+  --dangerously-skip-permissions  Skip permission prompts
 """
 
 _CODEX_EXEC_HELP = """
@@ -261,6 +262,30 @@ def test_build_codex_argv_grants_task_worktree_write_only_to_swe() -> None:
 
     assert 'sandbox_mode="workspace-write"' in swe
     assert not any(value.startswith("sandbox_mode=") for value in planning)
+
+
+def test_provider_yolo_flags_are_explicit_opt_in() -> None:
+    codex_default = build_codex_argv(
+        _turn(provider="codex", role="feature_architect"), exec_help=_CODEX_EXEC_HELP
+    )
+    codex_yolo = build_codex_argv(
+        _turn(provider="codex", role="feature_architect", permission_mode="yolo"),
+        exec_help=_CODEX_EXEC_HELP,
+    )
+    claude_default = build_claude_argv(
+        _turn(role="epic_manager"), mcp_config_path=None, print_help=_CLAUDE_HELP
+    )
+    claude_yolo = build_claude_argv(
+        _turn(role="epic_manager", permission_mode="yolo"),
+        mcp_config_path=None,
+        print_help=_CLAUDE_HELP,
+    )
+
+    assert "--dangerously-bypass-approvals-and-sandbox" not in codex_default
+    assert "--dangerously-bypass-approvals-and-sandbox" in codex_yolo
+    assert 'sandbox_mode="workspace-write"' not in codex_yolo
+    assert "--dangerously-skip-permissions" not in claude_default
+    assert "--dangerously-skip-permissions" in claude_yolo
 
 
 def test_build_codex_argv_enables_flex_service_tier_only_when_selected() -> None:

@@ -17,6 +17,7 @@ def load_epic_tools() -> None:
     """Import tool modules so they register. Idempotent."""
 
     import cascade.epic.amendments as amendments_mod
+    import cascade.epic.branch_recovery as branch_recovery_mod
     import cascade.epic.decisions as decisions_mod
     import cascade.epic.docs_tool as docs_tool_mod
     import cascade.epic.mint as mint_mod
@@ -37,6 +38,7 @@ def load_epic_tools() -> None:
         "resolve_amendment",
         "reconcile_stacked_review_gap",
         "refresh_dependency_status",
+        "retry_integration_branch_update",
     )
     if all(name in epic_tools() for name in expected):
         return
@@ -49,6 +51,7 @@ def load_epic_tools() -> None:
     register_epic_tool(
         "refresh_dependency_status", dependency_tools_mod.refresh_epic_dependencies
     )
+    importlib.reload(branch_recovery_mod)
 
 
 def accept_human_chat(

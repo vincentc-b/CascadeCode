@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,29 @@ from cascade.workspace.types import ProjectContext, WorkspaceRoot
 
 
 _SOURCE_CHECK_INTERVAL_SECONDS = 1.0
+_CASCADE_SOURCE_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _source_fingerprint(root: Path = _CASCADE_SOURCE_ROOT) -> str:
+    """Return a stable fingerprint of the Python source loaded by the worker."""
+
+    digest = hashlib.sha256()
+    try:
+        paths = sorted(
+            root.rglob("*.py"), key=lambda path: path.relative_to(root).as_posix()
+        )
+        for path in paths:
+            relative = path.relative_to(root).as_posix().encode()
+            digest.update(len(relative).to_bytes(4, "big"))
+            digest.update(relative)
+            body = path.read_bytes()
+            digest.update(len(body).to_bytes(8, "big"))
+            digest.update(body)
+    except OSError as exc:
+        # A checkout can briefly replace source files. Treat the read failure
+        # as a source change so the worker never continues with mixed imports.
+        return f"unreadable:{type(exc).__name__}:{exc}"
+    return digest.hexdigest()
 
 
 def repair_registered_worktrees(root: Path) -> None:

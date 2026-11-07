@@ -2,13 +2,48 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from cascade.agent.mcp_wrappers import ToolEffectCollector, dispatch_planning_tool
 from cascade.agent.planning_sandbox import collect_epic_readable_paths, materialize_scratch, teardown_scratch
+from cascade.agent.planning_turn import run_epic_planning_turn
+from cascade.agent.types import RoleResult, RoleTurn
 from cascade.board.store import move_doc, read_doc, write_doc
 from cascade.epic.mint import list_children, mint_feature
 from cascade.epic.scoped_docs import epic_read_doc
 from cascade.workspace.integration_worktree import ensure_integration_worktree
 from tests.support import add_doc, make_repo
+
+
+def test_epic_team_turn_uses_live_integration_worktree(tmp_path, monkeypatch):
+    root = make_repo(tmp_path, models=True)
+    add_doc(root, id="epic_028", title="Epic", tier="epic", status="backlog")
+    worktree = ensure_integration_worktree(
+        "epic", "epic_028", branch="epic/epic_028", base_ref="main", trunk=root
+    ).path
+    move_doc("epic_028", "active", root=worktree)
+    seen: list[RoleTurn] = []
+
+    async def fake_run_role(turn: RoleTurn) -> RoleResult:
+        seen.append(turn)
+        (turn.cwd / "owned-team-edit.txt").write_text("editable\n", encoding="utf-8")
+        return RoleResult(text="ok", status="finished")
+
+    monkeypatch.setattr("cascade.agent.planning_turn.run_role", fake_run_role)
+    asyncio.run(
+        run_epic_planning_turn(
+            "epic_manager",
+            "composer-2.5",
+            "inspect",
+            provider="cursor",
+            epic_id="epic_028",
+            root=root,
+        )
+    )
+
+    assert seen[0].cwd == worktree.resolve()
+    assert (worktree / "owned-team-edit.txt").is_file()
+    assert not (root / "owned-team-edit.txt").exists()
 
 
 def test_epic_team_reads_and_mints_from_live_worktree_with_stale_trunk_copy(tmp_path):

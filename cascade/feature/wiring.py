@@ -16,6 +16,7 @@ def load_feature_tools() -> None:
     """Import tool modules so they register. Idempotent."""
 
     import cascade.feature.amendments as amendments_mod
+    import cascade.feature.branch_recovery as branch_recovery_mod
     import cascade.feature.comments_tool as comments_tool_mod
     import cascade.feature.decisions as decisions_mod
     import cascade.feature.docs_tool as docs_tool_mod
@@ -32,6 +33,7 @@ def load_feature_tools() -> None:
         "reply_merge_request_comment", "revise_task", "retry_task", "recovery_status",
         "recover_task",
         "refresh_dependency_status",
+        "retry_integration_branch_update",
     )
     if all(name in feature_tools() for name in expected):
         return
@@ -50,6 +52,10 @@ def load_feature_tools() -> None:
     register_feature_tool("recover_task", recovery_mod.recover_task)
     register_feature_tool(
         "refresh_dependency_status", dependency_tools_mod.refresh_feature_dependencies
+    )
+    register_feature_tool(
+        "retry_integration_branch_update",
+        branch_recovery_mod.retry_integration_branch_update,
     )
 
 
