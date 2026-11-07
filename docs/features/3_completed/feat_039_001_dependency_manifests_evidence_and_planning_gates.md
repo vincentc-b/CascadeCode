@@ -2,7 +2,7 @@
 id: feat_039_001
 title: Dependency manifests, evidence, and planning gates
 tier: feature
-status: active
+status: completed
 parent: epic_039
 children:
 - task_039_001_001
