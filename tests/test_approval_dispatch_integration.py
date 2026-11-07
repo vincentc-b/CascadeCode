@@ -217,8 +217,9 @@ def test_dependency_blocks_dispatch_until_completed(
     assert activate_epic("epic_001", "human", root=root).ok
     _quiet_dispatch(monkeypatch)
 
-    approve_feature("feat_001", root=root)
-    approve_feature("feat_002", root=root)
+    # Bulk epic-plan approval records both decisions, while dispatch still
+    # rechecks each feature's own prerequisites.
+    approve_epic_plan_when_ready("epic_001", root=root)
 
     assert read_doc("feat_001", root=root).meta.path.parent.name == "2_active"
     assert read_doc("feat_002", root=root).meta.path.parent.name == "1_backlog"

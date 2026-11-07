@@ -24,8 +24,9 @@ def load_epic_tools() -> None:
     import cascade.epic.recovery as recovery_mod
     import cascade.epic.review_recovery as review_recovery_mod
     import cascade.epic.stubs as stubs_mod
+    import cascade.planning_dependency_tools as dependency_tools_mod
 
-    from cascade.epic.registry import epic_tools
+    from cascade.epic.registry import epic_tools, register_epic_tool
 
     expected = (
         "mint_feature",
@@ -37,6 +38,7 @@ def load_epic_tools() -> None:
         "read_comment",
         "resolve_amendment",
         "reconcile_stacked_review_gap",
+        "refresh_dependency_status",
         "retry_integration_branch_update",
         "publish_review_resolution",
     )
@@ -48,6 +50,9 @@ def load_epic_tools() -> None:
     importlib.reload(stubs_mod)
     importlib.reload(amendments_mod)
     importlib.reload(recovery_mod)
+    register_epic_tool(
+        "refresh_dependency_status", dependency_tools_mod.refresh_epic_dependencies
+    )
     importlib.reload(branch_recovery_mod)
     importlib.reload(review_recovery_mod)
 

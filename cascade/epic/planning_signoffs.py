@@ -18,6 +18,7 @@ from cascade.board.gitutil import commit_paths, has_git, last_commit_touching
 from cascade.board.lock import process_lock
 from cascade.board.store import read_doc
 from cascade.board.types import WorkMeta
+from cascade.planning_action_dependencies import require_action_dependencies
 from cascade.workspace.doc_root import resolve_doc_worktree
 from cascade.workspace.integration_worktree import locate_trunk, merged_board
 
@@ -221,32 +222,37 @@ def sign_off_epic_plan(
             )
 
     repo = _signoff_repo(epic_id, root=root)
-    board = merged_board(repo)
-    meta = board.by_id.get(epic_id)
-    if meta is None or meta.tier != "epic":
-        raise PlanSignOffError(f"{epic_id} is not an active epic")
-    if meta.path.parent.name != "2_active":
-        raise PlanSignOffError("epic plan sign-off requires an active epic team")
-    if meta.plan_approved_at is not None:
-        raise PlanSignOffError(f"epic plan for {epic_id} is already approved")
+    with process_lock:
+        snapshot_meta = merged_board(repo).by_id.get(epic_id)
+        if snapshot_meta is None or snapshot_meta.tier != "epic":
+            raise PlanSignOffError(f"{epic_id} is not an active epic")
+        dependency_evidence = require_action_dependencies(epic_id, root=repo)
+        meta = dependency_evidence.owner
+        assert meta is not None  # satisfied evidence always identifies its owner
+        if meta.tier != "epic":
+            raise PlanSignOffError(f"{epic_id} is not an active epic")
+        if meta.path.parent.name != "2_active":
+            raise PlanSignOffError("epic plan sign-off requires an active epic team")
+        if meta.plan_approved_at is not None:
+            raise PlanSignOffError(f"epic plan for {epic_id} is already approved")
 
-    canonical = canonical_plan_revision(epic_id, root=repo)
-    if canonical is None:
-        raise PlanSignOffError(f"canonical plan revision unavailable for {epic_id}")
-    if plan_revision != canonical:
-        raise StalePlanRevision(
-            f"stale plan revision for {epic_id}: canonical is {canonical}, expected {plan_revision}"
-        )
+        canonical = canonical_plan_revision(epic_id, root=repo)
+        if canonical is None:
+            raise PlanSignOffError(f"canonical plan revision unavailable for {epic_id}")
+        if plan_revision != canonical:
+            raise StalePlanRevision(
+                f"stale plan revision for {epic_id}: canonical is {canonical}, expected {plan_revision}"
+            )
 
-    open_questions = unresolved_canonical_open_questions(epic_id, root=repo)
-    if open_questions:
-        joined = ", ".join(open_questions)
-        raise UnresolvedOpenQuestions(
-            f"unresolved open question(s) on {epic_id}: {joined}"
-        )
+        open_questions = unresolved_canonical_open_questions(epic_id, root=repo)
+        if open_questions:
+            joined = ", ".join(open_questions)
+            raise UnresolvedOpenQuestions(
+                f"unresolved open question(s) on {epic_id}: {joined}"
+            )
 
-    newly_signed = record_plan_sign_off(epic_id, role, canonical, root=repo)
-    valid = current_valid_sign_offs(epic_id, root=repo)
+        newly_signed = record_plan_sign_off(epic_id, role, canonical, root=repo)
+        valid = current_valid_sign_offs(epic_id, root=repo)
     return {
         "ok": True,
         "epic_id": epic_id,

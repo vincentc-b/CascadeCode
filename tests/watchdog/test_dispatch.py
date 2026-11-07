@@ -15,6 +15,7 @@ from cascade.watchdog import (
     register_teardown_hook,
     watchdog_tick,
 )
+from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from tests.support import add_doc, approve_board_feature, make_repo
 
 
@@ -122,7 +123,7 @@ def test_dispatch_feature_by_human_and_boss_and_unmet_deps(tmp_path: Path) -> No
 
     refused = dispatch_feature("feat_003", "human", root=root)
     assert refused.ok is False
-    assert refused.reason == "unmet_deps"
+    assert refused.reason == "dependency_unmet"
     assert refused.event is None
     waiting = read_doc("feat_003", root=root)
     assert waiting.meta.status == "backlog"
@@ -356,7 +357,7 @@ def test_depends_on_existing_but_not_completed(tmp_path: Path) -> None:
     )
     refused = dispatch_task("task_002", "boss", root=root)
     assert refused.ok is False
-    assert refused.reason == "unmet_deps"
+    assert refused.reason == "dependency_unmet"
     assert refused.event is None
     waiting = read_doc("task_002", root=root)
     assert waiting.meta.status == "backlog"
@@ -370,6 +371,87 @@ def test_depends_on_existing_but_not_completed(tmp_path: Path) -> None:
     assert started.event is not None
     assert started.event.type == "TaskDispatched"
     assert read_doc("task_002", root=root).meta.status == "active"
+
+
+def test_feature_dispatch_rereads_dependencies_added_after_approval(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Incomplete predecessor",
+        tier="feature",
+        parent="epic_001",
+    )
+    add_doc(root, id="feat_002", title="Approved child", tier="feature", parent="epic_001")
+    _activate_epic(root)
+    approve_board_feature(root, "feat_002")
+    stale_board = merged_board(root)
+
+    child = read_doc("feat_002", root=root)
+    child.meta.depends_on = ["feat_001"]
+    write_doc(child, root=root)
+
+    with merged_board_snapshot(root, stale_board):
+        result = dispatch_feature("feat_002", "boss", root=root)
+
+    assert result.ok is False
+    assert result.reason == "dependency_unmet"
+    assert read_doc("feat_002", root=root).meta.path.parent.name == "1_backlog"
+    events, _offset = read_events("feat_002", 0, root=root)
+    assert events == []
+
+
+def test_task_dispatch_observes_dependency_completion_despite_stale_snapshot(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Predecessor", tier="task", parent="feat_001")
+    add_doc(
+        root,
+        id="task_002",
+        title="Dependent",
+        tier="task",
+        parent="feat_001",
+        depends_on=["task_001"],
+    )
+    _open_feature(root)
+    stale_board = merged_board(root)
+    move_doc("task_001", "completed", root=root)
+
+    with merged_board_snapshot(root, stale_board):
+        result = dispatch_task("task_002", "boss", root=root)
+
+    assert result.ok is True
+    assert read_doc("task_002", root=root).meta.status == "active"
+
+
+def test_feature_dispatch_refresh_failure_is_stable_and_does_not_activate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Approved child", tier="feature", parent="epic_001")
+    _activate_epic(root)
+    approve_board_feature(root, "feat_001")
+
+    def fail_refresh(_root: Path):
+        raise OSError("source unavailable")
+
+    monkeypatch.setattr(
+        "cascade.planning_action_dependencies.refresh_merged_board", fail_refresh
+    )
+    result = dispatch_feature("feat_001", "human", root=root)
+
+    assert result.ok is False
+    assert result.reason == "dependency_status_unavailable"
+    assert read_doc("feat_001", root=root).meta.path.parent.name == "1_backlog"
+    events, _offset = read_events("feat_001", 0, root=root)
+    assert events == []
 
 
 def test_blocked_task_redispatch_and_cap(tmp_path: Path) -> None:
@@ -464,14 +546,14 @@ def test_unmet_deps_when_dependency_is_active_or_blocked(tmp_path: Path) -> None
     _open_feature(root)
     assert dispatch_task("task_001", "human", root=root).ok
     active_dep = dispatch_task("task_002", "boss", root=root)
-    assert active_dep.reason == "unmet_deps"
+    assert active_dep.reason == "dependency_unmet"
     assert read_doc("task_002", root=root).meta.status == "backlog"
 
     blocked = read_doc("task_001", root=root)
     blocked.meta.status = "blocked"
     write_doc(blocked, root=root)
     blocked_dep = dispatch_task("task_002", "human", root=root)
-    assert blocked_dep.reason == "unmet_deps"
+    assert blocked_dep.reason == "dependency_unmet"
     assert blocked_dep.event is None
     assert read_doc("task_002", root=root).meta.path.parent.name == "1_backlog"
 

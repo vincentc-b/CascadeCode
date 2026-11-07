@@ -78,7 +78,7 @@ def build_planning_custom_tools(
             )
 
         tools[name] = CustomTool(
-            description=f"Cascade {tier} tool {name}",
+            description=_planning_tool_description(tier, name),
             input_schema=schema,
             execute=_execute,
         )
@@ -192,21 +192,31 @@ def dispatch_planning_tool(
     elif tier == "epic":
         if not scope_id:
             raise ValueError("epic tier requires scope_id")
+        from cascade.epic.guard import EpicToolDenied
         from cascade.epic.wiring import load_epic_tools
         from cascade.epic.graph import invoke_tool
 
         load_epic_tools()
-
-        result = invoke_tool(scope_id, name, tool_args, root=repo)
+        try:
+            result = invoke_tool(scope_id, name, tool_args, root=repo)
+        except EpicToolDenied:
+            if name != "read_doc":
+                raise
+            raise PermissionError("content_access_denied") from None
     elif tier == "feature":
         if not scope_id:
             raise ValueError("feature tier requires scope_id")
+        from cascade.feature.guard import FeatureToolDenied
         from cascade.feature.wiring import load_feature_tools
         from cascade.feature.graph import invoke_tool
 
         load_feature_tools()
-
-        result = invoke_tool(scope_id, name, tool_args, root=repo)
+        try:
+            result = invoke_tool(scope_id, name, tool_args, root=repo)
+        except FeatureToolDenied:
+            if name != "read_doc":
+                raise
+            raise PermissionError("content_access_denied") from None
     else:
         result = _invoke_boss_tool(name, tool_args, root=repo)
 
@@ -261,11 +271,22 @@ def mcp_tool_catalog(tier: PlanningToolTier, tool_names: list[str]) -> list[dict
         tools.append(
             {
                 "name": name,
-                "description": f"Cascade {tier} tool {name}",
+                "description": _planning_tool_description(tier, name),
                 "inputSchema": schema,
             }
         )
     return tools
+
+
+def _planning_tool_description(tier: PlanningToolTier, name: str) -> str:
+    if tier == "epic" and name == "mint_feature":
+        return (
+            "Create a backlog feature. Cascade rechecks the owning epic's current "
+            "authoritative dependencies at this action boundary; dependency_unmet "
+            "and dependency_status_unavailable are distinct refusals. A "
+            "content_access_denied spec read does not establish either result."
+        )
+    return f"Cascade {tier} tool {name}"
 
 
 def _epic_tool_names() -> set[str]:
@@ -283,6 +304,11 @@ def _feature_tool_names() -> set[str]:
 _BOSS_TOOL_NAMES = frozenset({"dispatch_feature", "dispatch_task", "get_boss_view"})
 
 _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "refresh_dependency_status": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
     "publish_review_resolution": {
         "type": "object",
         "properties": {"action_id": {"type": "string"}},
@@ -360,6 +386,11 @@ _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 _FEATURE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "refresh_dependency_status": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
     "mint_task": {
         "type": "object",
         "properties": {

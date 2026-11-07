@@ -14,6 +14,8 @@ DispatchKind = Literal["epic", "feature", "task"]
 DispatchReason = Literal[
     "unauthorized",
     "unmet_deps",
+    "dependency_unmet",
+    "dependency_status_unavailable",
     "cap",
     "not_found",
     "bad_state",

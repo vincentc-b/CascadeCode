@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cascade.board.types import BoardIndex, WorkMeta
+from cascade.dependency_evaluation import evaluate_dependencies
 from cascade.war_room.room_settings import effective_stacked_pr_enabled
 from cascade.workspace.integration_worktree import (
     integration_branch,
@@ -126,11 +127,7 @@ def direct_feature_predecessors(meta: WorkMeta, board: BoardIndex) -> list[str]:
 
 
 def feature_dependency_ready(meta: WorkMeta, board: BoardIndex, *, root: Path) -> bool:
-    for dep_id in meta.depends_on:
-        dep = board.by_id.get(dep_id)
-        if dep is None or dep.status != "completed" or dep.path.parent.name != "3_completed":
-            return False
-    return True
+    return evaluate_dependencies(meta, root=root, board=board).satisfied
 
 
 def epic_blocks_feature_dispatch(

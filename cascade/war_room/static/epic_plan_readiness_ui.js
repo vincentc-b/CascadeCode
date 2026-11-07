@@ -33,6 +33,9 @@
 
   function approvePlanDisabledReason(readiness) {
     if (!readiness || readiness.can_approve_plan) return null;
+    if (readiness.approve_disabled_explanation) {
+      return String(readiness.approve_disabled_explanation);
+    }
     return humanizeApproveDisabledReason(readiness.approve_disabled_reason);
   }
 

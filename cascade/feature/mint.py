@@ -7,6 +7,7 @@ from pathlib import Path
 
 from cascade.board.errors import NotFound, SchemaError
 from cascade.board.id_reservations import release_work_id
+from cascade.board.lock import process_lock
 from cascade.board.paths import slugify
 from cascade.board.store import allocate_id, list_board, read_doc, write_doc
 from cascade.board.types import WorkDoc, WorkId, WorkMeta
@@ -14,9 +15,10 @@ from cascade.feature.checkout import feature_checkout_root
 from cascade.feature.guard import FeatureToolDenied, tool_guard
 from cascade.feature.registry import register_feature_tool
 from cascade.feature.scoped_docs import feature_read_doc, feature_write_doc
+from cascade.planning_action_dependencies import require_action_dependencies
 from cascade.watchdog import append_event
 from cascade.watchdog.types import Event
-from cascade.workspace.integration_worktree import merged_board
+from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 
 def mint_task(
     title: str,
@@ -29,6 +31,31 @@ def mint_task(
 ) -> WorkId:
     """Create a backlog task under this feature; does not dispatch or move columns."""
 
+    trunk = Path(root).resolve()
+    with process_lock:
+        _require_feature(feature_id, trunk)
+        evidence = require_action_dependencies(feature_id, root=trunk)
+        assert evidence.board is not None
+        with merged_board_snapshot(trunk, evidence.board):
+            return _mint_task(
+                title,
+                depends_on=depends_on,
+                skills=skills,
+                body_stub=body_stub,
+                feature_id=feature_id,
+                root=trunk,
+            )
+
+
+def _mint_task(
+    title: str,
+    depends_on: list[str] | None = None,
+    skills: list[str] | None = None,
+    body_stub: str = "",
+    *,
+    feature_id: str,
+    root: Path,
+) -> WorkId:
     trunk = Path(root).resolve()
     checkout = feature_checkout_root(feature_id, trunk=trunk)
     feature = _require_feature(feature_id, trunk)
