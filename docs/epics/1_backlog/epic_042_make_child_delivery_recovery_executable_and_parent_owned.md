@@ -49,6 +49,7 @@ Make every Task accountable for its delivery through successful integration into
 11. Make the Task delivery representation explicit in the War Room. If Task branches remain local, expose an owned delivery-review surface with the same conflict and validation evidence; if per-Task forge reviews are introduced, preserve stacked targets and exact-head leases and make the architectural migration explicit.
 12. Preserve durable dispatch authorization across queue consumption, restart, local completion, and review publication. The watchdog must not classify or move a legitimate active parent copy as an illegal dispatch during the completed-in-integration to review-pending handoff. Cover the repeated feat_038_003, feat_039_001, and feat_039_003 event ordering while retaining fail-closed rejection of truly unauthorized moves.
 13. Reconcile historical action state with authoritative completion. If a canonical merge or review completes after an earlier action terminalized, record an idempotent completed-equivalent outcome and clear the active incident without erasing failed attempts. A successfully completed Task must not retain an actionable blocked delivery forever.
+14. Treat unknown review mergeability, missing owned worktrees, fetch failures, stale-head admission refusals, validation failures, and publication failures as durable owned incidents. Route them to a concrete Feature or Epic team with bounded retry or an actionable blocker; the review poller must not silently skip them or leave a blocked action unreachable.
 
 ## Macro-architecture
 
