@@ -2,7 +2,7 @@
 id: epic_038
 title: Make planning dependency status authoritative
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_038_001
@@ -15,7 +15,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-06'
-updated: '2026-11-06'
+updated: '2026-11-07'
 provider: codex
 flex_mode: false
 models:
