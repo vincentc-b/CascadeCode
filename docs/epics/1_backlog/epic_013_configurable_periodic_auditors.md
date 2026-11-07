@@ -51,13 +51,20 @@ Run a periodic, configurable health audit across Cascade Tasks, Features, and Ep
 15. Prevent audit self-harm: cap work per pass, avoid holding global locks during providers/network/Git operations, respect canonical lock ordering, and surface an auditor failure without blocking unrelated delivery.
 16. Regression-test the `task_038_002_002` failure: a validated Task whose merge action is `retryable` but whose ID vanished from `pending-task-merges.json` must be detected, requeued through the canonical merge path, merged exactly once, rolled up to completed, and release dependent work.
 17. Cover stale-but-live owners, missing checkpoints, dirty worktrees, merge conflicts, busy targets, stale validation evidence, approval/comment gates, orphaned Feature/Epic planning turns, split-repository state, concurrent manual recovery, disabled audits, invalid intervals, restart timing, and an entirely healthy workspace.
+18. Schedule health audits independently from the ordinary watchdog maintenance chain. A slow forge fetch, review poll, Git operation, or model turn cannot indefinitely delay the next audit. Bound every subprocess and network operation with explicit timeout, cancellation, and durable retry evidence.
+19. Treat recovery capability as executable authority, not a label. At startup and per incident, prove the selected operation is registered, authorized for the concrete owning work ID, can reach the required worktree/action, and has a durable request/acknowledgement/result path. Missing capability is an actionable system incident, not investigating.
+20. Make remediation and recovery ledgers generation-aware. claimed, error, refused, deferred, unsafe, and prior no-op rows receive bounded retry/cooldown semantics and are re-evaluated when leases, branch heads, queue membership, evidence, document revision, parent blockage, or capability availability changes. Only terminal success for the same authoritative generation is permanently suppressing.
+21. Detect active Features and Epics with no live planning owner, no pending queue input, no open/pending review, dispatchable children making no progress, or completed local integration work not published for review. Provide concrete Feature-parent and Epic-parent recovery actions rather than classifying them healthy_or_not_actionable.
+22. Validate repair adapters with real end-to-end mutations in isolated repositories: route to the concrete owner, wake it, acknowledge, modify only the owned branch, run work-defined supervised checks, publish replacement evidence, clear only matching derived blockers, resume the original action, and reach terminal completion exactly once. Event-only and mocked-callback tests do not satisfy recovery acceptance.
+23. Verify recovery identity fields by type and authority. Work IDs, document revisions, commit SHAs, branch names, and incident generations are not interchangeable; specifically cover the orphan-resume regression where a Task parent revision was passed as its Feature ID.
+24. Incorporate the executable capabilities delivered by the stale-delivery and child-ownership recovery epics rather than duplicating them. Until a required capability exists, escalate that precise missing capability and retain the incident for later automatic re-evaluation.
 
 ## Macro-architecture
 
 To be developed by the Epic Manager and Epic Architect after activation.
 
 ## Cross-module constraints
-Extend the existing supervisor health projection, direct-report health sweep, durable action recovery, orphan-delivery recovery, lifecycle locks, and reconciliation commands instead of adding a parallel scheduler or status database. Treat board metadata, durable actions, execution leases, registered worktrees, and forge review state as authoritative according to their existing ownership boundaries. Separate observation from mutation and require a locked recheck before every repair. Agent rights must be capability-based, incident-scoped, auditable, and no broader than the owning team’s safe recovery authority. Preserve user changes, dirty worktrees, accepted history, and human decisions.
+Extend the existing supervisor health projection, direct-report health sweep, durable action recovery, orphan-delivery recovery, lifecycle locks, and reconciliation commands instead of adding a parallel scheduler or status database. Treat board metadata, durable actions, execution leases, registered worktrees, and forge review state as authoritative according to their existing ownership boundaries. Separate observation from mutation and require a locked recheck before every repair. Agent rights must be capability-based, incident-scoped, auditable, and no broader than the owning team’s safe recovery authority. Preserve user changes, dirty worktrees, accepted history, and human decisions. Run observation in a supervisor-owned lane independent of ordinary advancement/review polling, with bounded I/O and no global lock held across network, provider, test, or Git subprocesses. A recovery adapter is eligible only when its concrete operation and owner routing are registered and testable.
 
 ## Core dependencies
 
@@ -104,3 +111,32 @@ The Epic Team will create and sequence feature plans here. Treat the task/featur
 ## Amendment log
 
 - 2026-11-06 · Reframed periodic auditors from advisory repository analysis into authoritative lifecycle health detection and bounded recovery. Added the lost merge-queue entry from `task_038_002_002` as a required regression scenario.
+
+## Macro-architecture
+
+To be developed by the Epic Manager and Epic Architect after activation.
+
+## Core dependencies
+
+Build on the existing supervisor health projection, direct-report health sweep, orphan-delivery recovery, durable action recovery, lifecycle locks, board reconciliation, War Room recovery surfaces, and cascade.toml automation configuration. Consume the executable capabilities delivered by the stale Task delivery and parent-owned child recovery epics.
+
+## Feature breakdown
+
+The Epic Team will create and sequence feature plans here. Treat the task/feature/epic health model, independent scheduler, generation-aware incident ledger, and capability boundary as shared foundations before adding repair adapters or UI controls.
+
+## Open questions
+
+- Which existing recovery capabilities are complete enough to expose directly to the auditor, and which require a fail-closed human escalation until repaired?
+- What bounded recent-completion window best catches incomplete rollups without rescanning the full completed board every pass?
+- Which repair adapters must land before the auditor can be enabled by default without producing non-actionable incidents?
+
+## Decision log
+
+- 2026-10-22 · Human · Brief approved through merge request review.
+- 2026-11-06 · Human amendment · Make the auditor a configurable health-and-recovery loop for Tasks, Features, and Epics; default to every 30 minutes, remain silent when healthy, and grant incident-scoped repair capabilities when unhealthy.
+- 2026-11-07 · Human amendment · Require independent bounded scheduling, executable owner-scoped capabilities, generation-aware retries, and end-to-end proof of actual recovery mutations.
+
+## Amendment log
+
+- 2026-11-06 · Reframed periodic auditors from advisory repository analysis into authoritative lifecycle health detection and bounded recovery. Added the lost merge-queue entry from task_038_002_002 as a required regression scenario.
+- 2026-11-07 · Strengthened the auditor after repeated manual recovery of Tasks 037_002_004, 037_002_005, 037_003_002, and 037_003_005. Added independent execution, retryable negative outcomes, concrete ownership/capability checks, all-tier no-progress detection, and real mutation acceptance tests. Removed duplicated generated brief sections.
