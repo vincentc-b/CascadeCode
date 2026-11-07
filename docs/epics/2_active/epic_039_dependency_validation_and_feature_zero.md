@@ -151,6 +151,11 @@ None at epic contract level. The formerly open risk question is resolved by the 
   Chose Deliver three sequential slices: manifest/evidence/gates; authorized bootstrap/resume; War Room and acceptance. Require real local/container smoke evidence, including the Structurizr scenario, during delivery..
   Rationale: Reuse the existing stack and lifecycle surfaces. Planning availability checks need no new installs; real installation success must not be inferred from simulated tests or host-only checks.
   Honors: All eleven success criteria, especially 10–11; frugal-engineering high-signal testing and product-manager scope discipline..
+
+- `dec_004` · 2026-11-07 · Epic Manager · **Macro-architecture**
+  Chose Require independent explicit human approval for every dependency installation or upgrade, bound to dependency ID, exact version, authoritative source, checksum/digest, target environment, install scope/destination, exact operation, and cleanup plan; enforce it at the Cascade operation boundary across all execution routes..
+  Rationale: In response to the human planning clarification of 2026-11-07 (War Room message 60216dbe989d4a14993ad4679b7822c5): provider yolo and owned-worktree access provide capability only. Plan approval and bootstrap review alone cannot authorize installation. Batch review must persist independent approvals; changing a bound field invalidates only that entry. Read-only discovery and validation remain available without installation approval. Reconciled epic_039 and feat_039_001 through feat_039_003, including schema, runtime, UI, and acceptance obligations. This refines dec_001 and dec_002; it grants no installation authorization.
+  Honors: Human clarification; success criteria 3, 4, 7, 9, 10, 11; least-privilege scope and real installation/Structurizr acceptance requirements..
 ## Amendment log
 
 _(none)_
