@@ -2,7 +2,7 @@
 id: epic_037
 title: Make agent configuration failures actionable before dispatch
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_037_001
