@@ -79,6 +79,12 @@ from cascade.war_room.provider_routes import (
     try_handle_provider_post,
 )
 from cascade.war_room.health_routes import register_health_routes
+from cascade.war_room.human_auth import (
+    HumanIdentityVerifier,
+    LocalHumanIdentityVerifier,
+    SESSION_COOKIE,
+    load_or_create_local_human_verifier,
+)
 from cascade.war_room.dependency_routes import (
     BOOTSTRAP_REVIEW_PATH,
     INSTALLATION_APPROVAL_PATH,
@@ -221,6 +227,7 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         listen_socket: socket.socket | None = None,
         draining: threading.Event | None = None,
         authenticated_human: AuthenticatedHuman | None = None,
+        human_identity_verifier: HumanIdentityVerifier | None = None,
         dependency_executor: BoundedOperationExecutor | None = None,
     ) -> None:
         host, _port = server_address
@@ -229,7 +236,10 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         else:
             assert_loopback_host(listen_socket.getsockname()[0])
         self.root = Path(root).resolve()
+        # Retained as a compatibility input, but deliberately never consulted
+        # for authority. A process-wide identity is not request authentication.
         self.authenticated_human = authenticated_human
+        self.human_identity_verifier = human_identity_verifier
         self.dependency_executor = dependency_executor
         self._listen_socket = listen_socket
         install_epic_boot_hook(self.root)
@@ -527,6 +537,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         body = self._read_json_object()
         if body is None:
             return
+        if path == "/api/local_human_session":
+            self._establish_local_human_session(body)
+            return
         if try_handle_amendment_post(self, body):
             return
         if try_handle_provider_post(self, body):
@@ -541,6 +554,25 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 self._json_error(HTTPStatus.NOT_FOUND, "not found")
             return
         routes[path](self, body)
+
+    def _establish_local_human_session(self, body: dict[str, Any]) -> None:
+        verifier = self.server.human_identity_verifier
+        if not isinstance(verifier, LocalHumanIdentityVerifier) or not verifier.accepts_token(
+            body.get("token")
+        ):
+            self._json_error(HTTPStatus.UNAUTHORIZED, "invalid local human session")
+            return
+        payload = b'{"ok":true}'
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header(
+            "Set-Cookie",
+            f"{SESSION_COOKIE}={verifier.token}; Path=/; HttpOnly; SameSite=Strict",
+        )
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
     def do_PUT(self) -> None:
         self._method_not_allowed()
@@ -1381,6 +1413,7 @@ def serve(
     listen_socket: socket.socket | None = None,
     draining: threading.Event | None = None,
     authenticated_human: AuthenticatedHuman | None = None,
+    human_identity_verifier: HumanIdentityVerifier | None = None,
     dependency_executor: BoundedOperationExecutor | None = None,
 ) -> WarRoomHTTPServer:
     """Create and return a configured server (caller runs serve_forever or thread).
@@ -1402,6 +1435,7 @@ def serve(
         listen_socket=listen_socket,
         draining=draining,
         authenticated_human=authenticated_human,
+        human_identity_verifier=human_identity_verifier,
         dependency_executor=dependency_executor,
     )
 
@@ -1414,8 +1448,21 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
-    server = serve(root=args.root, host=args.host, port=args.port)
-    print(f"War Room http://{args.host}:{args.port}/ (root={server.root})")
+    root = args.root.resolve()
+    verifier = load_or_create_local_human_verifier(root)
+    from cascade.epic.local_dependency_executor import LocalBoundedDependencyExecutor
+
+    server = serve(
+        root=root,
+        host=args.host,
+        port=args.port,
+        human_identity_verifier=verifier,
+        dependency_executor=LocalBoundedDependencyExecutor(root),
+    )
+    print(
+        f"War Room http://{args.host}:{args.port}/#human_token={verifier.token} "
+        f"(root={server.root})"
+    )
     server.serve_forever()
 
 

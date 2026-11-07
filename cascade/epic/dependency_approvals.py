@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from cascade.board.gitutil import commit_paths, has_git
-from cascade.board.lock import process_lock
+from cascade.epic.dependency_lock import dependency_state_lock
 from cascade.epic.dependency_manifests import (
     DependencyEntry,
     InstallationApproval,
@@ -175,7 +175,7 @@ def approve_dependency_installations(
     if not isinstance(when, datetime) or when.tzinfo is None:
         raise DependencyApprovalError("approved_at must be timezone-aware")
 
-    with process_lock:
+    with dependency_state_lock(root=root):
         manifest = require_dependency_manifest(epic_id, root=root)
         if (
             expected_manifest_revision is not None

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from cascade.board.gitutil import commit_paths, has_git
-from cascade.board.lock import process_lock
+from cascade.epic.dependency_lock import dependency_state_lock
 from cascade.board.store import read_doc
 from cascade.epic.dependency_approvals import AuthenticatedHuman
 from cascade.epic.dependency_evidence import compute_dependency_readiness
@@ -1022,7 +1022,7 @@ def _append(
         raise DependencyBootstrapError(
             "bootstrap records can only be written for active epics"
         )
-    with process_lock:
+    with dependency_state_lock(root=repo):
         history = read_bootstrap_history(epic_id, root=repo)
         revision = history[-1].revision if history else 0
         if revision != expected_revision:

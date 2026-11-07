@@ -3,6 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <script>
+      (function () {
+        var marker = "#human_token=";
+        if (window.location.hash.indexOf(marker) !== 0) return;
+        var token = decodeURIComponent(window.location.hash.slice(marker.length));
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        fetch("/api/local_human_session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: token })
+        }).then(function (response) {
+          if (response.ok) window.location.reload();
+        });
+      }());
+    </script>
+    <script>
       setTimeout(function () {
         if (document.readyState === "complete") return;
         if (document.getElementById("load-deadline-banner")) return;

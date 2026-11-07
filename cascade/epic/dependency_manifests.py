@@ -18,8 +18,8 @@ from typing import Mapping, Sequence
 from cascade.board.context import resolve_tracking_root
 from cascade.board.errors import NotFound
 from cascade.board.gitutil import commit_paths, has_git
-from cascade.board.lock import process_lock
 from cascade.board.store import read_doc
+from cascade.epic.dependency_lock import dependency_state_lock
 from cascade.workspace.doc_root import resolve_doc_worktree
 from cascade.workspace.integration_worktree import locate_trunk
 
@@ -865,7 +865,7 @@ def write_dependency_manifest(
     if when.tzinfo is None:
         raise InvalidDependencyManifest("recorded_at must be timezone-aware")
     path = repo / _SIDECAR_DIR / f"{epic_id}.json"
-    with process_lock:
+    with dependency_state_lock(root=repo):
         history = read_dependency_manifest_history(epic_id, root=repo)
         current_revision = history[-1].revision if history else 0
         if expected_revision is not None and expected_revision != current_revision:

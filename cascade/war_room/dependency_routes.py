@@ -5,12 +5,12 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, Mapping
 
-from cascade.board.lock import process_lock
 from cascade.epic.dependency_approvals import (
     AuthenticatedHuman,
     DependencyApprovalError,
     approve_dependency_installations,
 )
+from cascade.epic.dependency_lock import dependency_state_lock
 from cascade.epic.dependency_bootstrap import (
     BootstrapScope,
     DependencyBootstrapError,
@@ -80,10 +80,9 @@ def handle_bootstrap_review(
         return
 
     try:
-        # Manifest/scope comparison and journal append share the canonical
-        # process lock, so a concurrent manifest write cannot authorize an
-        # obsolete review.
-        with process_lock:
+        # Comparison and append share the cross-process dependency-state lock
+        # used by manifest and bootstrap writers.
+        with dependency_state_lock(root=handler.server.root):
             manifest = require_dependency_manifest(epic_id, root=handler.server.root)
             current = read_bootstrap(epic_id, root=handler.server.root)
             if current is None:
@@ -270,7 +269,15 @@ def _authenticated_human(
             None,
         )
         return None
-    human = handler.server.authenticated_human
+    verifier = handler.server.human_identity_verifier
+    human = None
+    if verifier is not None:
+        human = verifier.verify_request(
+            method=handler.command,
+            path=handler.path.split("?", 1)[0],
+            headers=handler.headers,
+            client_address=handler.client_address,
+        )
     if not isinstance(human, AuthenticatedHuman):
         _refuse(
             handler,

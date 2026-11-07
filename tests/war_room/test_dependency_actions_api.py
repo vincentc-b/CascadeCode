@@ -33,6 +33,8 @@ from cascade.epic.dependency_runner import (
     OperationRequest,
 )
 from cascade.war_room.server import serve
+from cascade.war_room.human_auth import LocalHumanIdentityVerifier
+from cascade.war_room.dependency_routes import INSTALLATION_APPROVAL_PATH
 from tests.support import add_doc, make_repo
 
 
@@ -63,7 +65,11 @@ def _server(
         root=root,
         host="127.0.0.1",
         port=_free_port(),
-        authenticated_human=human,
+        human_identity_verifier=(
+            LocalHumanIdentityVerifier(human.subject, "test-human-token")
+            if human is not None
+            else None
+        ),
         dependency_executor=executor,
     )
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -76,18 +82,42 @@ def _server(
         thread.join(timeout=5)
 
 
-def _post(base: str, path: str, body: dict) -> tuple[int, dict]:
+def _post(
+    base: str,
+    path: str,
+    body: dict,
+    *,
+    authenticated: bool = False,
+    cookie: str | None = None,
+) -> tuple[int, dict]:
+    headers = {"Content-Type": "application/json"}
+    if authenticated:
+        headers["Authorization"] = "Bearer test-human-token"
+    if cookie is not None:
+        headers["Cookie"] = cookie
     request = urllib.request.Request(
         base + path,
         method="POST",
         data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(request) as response:
             return response.status, json.loads(response.read())
     except urllib.error.HTTPError as exc:
         return exc.code, json.loads(exc.read())
+
+
+def _establish_local_session(base: str) -> str:
+    request = urllib.request.Request(
+        base + "/api/local_human_session",
+        method="POST",
+        data=json.dumps({"token": "test-human-token"}).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request) as response:
+        assert response.status == 200
+        return response.headers["Set-Cookie"].split(";", 1)[0]
 
 
 def _target() -> EnvironmentIdentity:
@@ -177,7 +207,17 @@ def test_dependency_actions_require_a_trusted_human_boundary(tmp_path: Path) -> 
     add_doc(root, id="epic_001", title="Active", tier="epic", status="active")
     entry, _scope = _prepare(root)
 
-    with _server(root) as base:
+    # A server-wide identity is intentionally not a request principal.
+    server = serve(
+        root=root,
+        host="127.0.0.1",
+        port=_free_port(),
+        authenticated_human=AuthenticatedHuman("injected@example.test"),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
         status, payload = _post(
             base,
             "/api/approve_dependency_installations",
@@ -192,10 +232,34 @@ def test_dependency_actions_require_a_trusted_human_boundary(tmp_path: Path) -> 
                 ],
             },
         )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
     assert status == 401
     assert payload["refusal"]["code"] == "human_authentication_required"
     assert payload["dependency_status"]["epic_id"] == "epic_001"
+
+    approval_body = {
+        "epic_id": "epic_001",
+        "manifest_revision": 1,
+        "entries": [
+            {
+                "dependency_id": entry.dependency_id,
+                "binding": InstallationBinding.from_entry(entry).to_dict(),
+            }
+        ],
+    }
+    with _server(root, human=AuthenticatedHuman("verified@example.test")) as base:
+        authenticated_status, _ = _post(
+            base, INSTALLATION_APPROVAL_PATH, approval_body, authenticated=True
+        )
+        later_status, later = _post(base, INSTALLATION_APPROVAL_PATH, approval_body)
+
+    assert authenticated_status == 200
+    assert later_status == 401
+    assert later["refusal"]["code"] == "human_authentication_required"
 
 
 def test_review_approve_and_duplicate_ping_remain_distinct(
@@ -219,6 +283,7 @@ def test_review_approve_and_duplicate_ping_remain_distinct(
     human = AuthenticatedHuman("operator@example.test")
 
     with _server(root, human=human, executor=executor) as base:
+        cookie = _establish_local_session(base)
         bootstrap = read_bootstrap("epic_001", root=root)
         assert bootstrap is not None
         review_status, reviewed = _post(
@@ -230,6 +295,7 @@ def test_review_approve_and_duplicate_ping_remain_distinct(
                 "scope_fingerprint": scope.fingerprint,
                 "scope": scope.to_dict(),
             },
+            cookie=cookie,
         )
         assert review_status == 200
         assert reviewed["dependency_status"]["dependencies"][0][
@@ -247,6 +313,7 @@ def test_review_approve_and_duplicate_ping_remain_distinct(
                     {"dependency_id": entry.dependency_id, "binding": binding}
                 ],
             },
+            cookie=cookie,
         )
         assert approval_status == 200
         approval = approved["approvals"][0]
@@ -259,9 +326,11 @@ def test_review_approve_and_duplicate_ping_remain_distinct(
                 entry.dependency_id: approval["approval_id"]
             },
         }
-        ping_status, pinged = _post(base, "/api/ping_dependency_team", ping_body)
+        ping_status, pinged = _post(
+            base, "/api/ping_dependency_team", ping_body, cookie=cookie
+        )
         duplicate_status, duplicate = _post(
-            base, "/api/ping_dependency_team", ping_body
+            base, "/api/ping_dependency_team", ping_body, cookie=cookie
         )
 
     assert ping_status == duplicate_status == 200
