@@ -151,7 +151,7 @@ def test_attempt_events_are_append_only_reloadable_and_setup_requires_approval(
             selected_version=entry.version,
             integrity_reference=entry.digest,
         )
-    with pytest.raises(DependencyEvidenceError, match="approval reference"):
+    with pytest.raises(DependencyEvidenceError, match="bootstrap scope revision"):
         admit_dependency_check(
             "epic_001",
             entry.dependency_id,
@@ -159,15 +159,15 @@ def test_attempt_events_are_append_only_reloadable_and_setup_requires_approval(
             operation_kind=CheckOperationKind.INSTALL,
             exact_operation=entry.operation,
         )
-    setup = admit_dependency_check(
-        "epic_001",
-        entry.dependency_id,
-        root=board,
-        operation_kind=CheckOperationKind.INSTALL,
-        exact_operation=entry.operation,
-        approval_reference="approval-human-001",
-    )
-    assert setup.approval_reference == "approval-human-001"
+    with pytest.raises(DependencyEvidenceError, match="bootstrap scope revision"):
+        admit_dependency_check(
+            "epic_001",
+            entry.dependency_id,
+            root=board,
+            operation_kind=CheckOperationKind.INSTALL,
+            exact_operation=entry.operation,
+            approval_reference="approval-human-001",
+        )
 
 
 @pytest.mark.parametrize(

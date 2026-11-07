@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import uuid
 from collections.abc import Callable, Sequence
@@ -33,7 +34,15 @@ _APPROVAL_SIDECAR_DIR = "_dependency_installation_approvals"
 _SCHEMA_VERSION = 2
 _LEGACY_SCHEMA_VERSION = 1
 _UNKNOWN_EXACT_VALUES = frozenset(
-    {"unknown", "unspecified", "unresolved", "not known", "n/a", "not applicable"}
+    {
+        "unknown",
+        "unspecified",
+        "unresolved",
+        "not known",
+        "n/a",
+        "not applicable",
+        "latest",
+    }
 )
 _T = TypeVar("_T")
 
@@ -287,7 +296,9 @@ def _require_exact_authority(entry: DependencyEntry) -> None:
     }
     for field, value in exact.items():
         normalized = " ".join(value.strip().casefold().replace("-", " ").split())
-        if normalized in _UNKNOWN_EXACT_VALUES:
+        if normalized in _UNKNOWN_EXACT_VALUES or re.search(
+            r"(^|[/:._?&=])latest($|[/:._?&=])", value.casefold()
+        ):
             raise DependencyApprovalError(
                 f"dependency {entry.dependency_id} has unknown exact {field}"
             )
