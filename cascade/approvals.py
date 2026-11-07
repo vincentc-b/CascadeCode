@@ -9,7 +9,8 @@ from cascade.board.context import resolve_root
 from cascade.board.lock import process_lock
 from cascade.board.store import read_doc, write_doc
 from cascade.epic.plan_readiness import require_epic_plan_ready_for_approval
-from cascade.workspace.integration_worktree import merged_board
+from cascade.planning_action_dependencies import require_action_dependencies
+from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from cascade.watchdog.events import append_event
 from cascade.watchdog.types import Event
 
@@ -28,11 +29,15 @@ def epic_plan_approved(epic_id: str, *, root: Path) -> bool:
 
 def approve_feature(feature_id: str, *, root: Path) -> dict[str, object]:
     repo = resolve_root(root)
-    board = merged_board(repo)
-    meta = board.by_id.get(feature_id)
-    if meta is None or meta.tier != "feature":
-        raise ValueError("feature approval requires a feature on the board")
-    newly = _set_feature_approved(feature_id, root=repo)
+    with process_lock:
+        board = merged_board(repo)
+        meta = board.by_id.get(feature_id)
+        if meta is None or meta.tier != "feature":
+            raise ValueError("feature approval requires a feature on the board")
+        evidence = require_action_dependencies(feature_id, root=repo)
+        assert evidence.board is not None
+        with merged_board_snapshot(repo, evidence.board):
+            newly = _set_feature_approved(feature_id, root=repo)
     result: dict[str, object] = {
         "ok": True, "feature_id": feature_id, "newly_approved": newly
     }
@@ -44,29 +49,39 @@ def approve_feature(feature_id: str, *, root: Path) -> dict[str, object]:
 
 def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
     repo = resolve_root(root)
-    board = merged_board(repo)
-    epic = board.by_id.get(epic_id)
-    if epic is None or epic.tier != "epic" or epic.path.parent.name != "2_active":
-        raise ValueError("epic plan can only be approved while its team is active")
-    children = sorted(
-        meta.id
-        for meta in board.by_id.values()
-        if meta.tier == "feature" and meta.parent == epic_id
-    )
-    if not children:
-        raise ValueError("epic plan has no feature plans to approve yet")
-
     with process_lock:
         board = merged_board(repo)
         epic = board.by_id.get(epic_id)
-        if epic is not None and epic.plan_approved_at is None:
-            require_epic_plan_ready_for_approval(epic_id, root=repo, board=board)
-        for feature_id in children:
-            _set_feature_approved(feature_id, root=repo)
-        # The epic timestamp is the durable indication that the entire current plan
-        # was approved.  Write it only after every child so a child write failure
-        # cannot leave the plan marked approved while work remains blocked.
-        epic_newly = _set_epic_plan_approved(epic_id, root=repo)
+        if epic is None or epic.tier != "epic" or epic.path.parent.name != "2_active":
+            raise ValueError("epic plan can only be approved while its team is active")
+        children = sorted(
+            meta.id
+            for meta in board.by_id.values()
+            if meta.tier == "feature" and meta.parent == epic_id
+        )
+        if not children:
+            raise ValueError("epic plan has no feature plans to approve yet")
+        evidence = require_action_dependencies(epic_id, root=repo)
+        assert evidence.board is not None
+        board = evidence.board
+        epic = board.by_id.get(epic_id)
+        if epic is None or epic.tier != "epic" or epic.path.parent.name != "2_active":
+            raise ValueError("epic plan can only be approved while its team is active")
+        children = sorted(
+            meta.id
+            for meta in board.by_id.values()
+            if meta.tier == "feature" and meta.parent == epic_id
+        )
+        if not children:
+            raise ValueError("epic plan has no feature plans to approve yet")
+        with merged_board_snapshot(repo, board):
+            if epic is not None and epic.plan_approved_at is None:
+                require_epic_plan_ready_for_approval(epic_id, root=repo, board=board)
+            for feature_id in children:
+                _set_feature_approved(feature_id, root=repo)
+            # The epic timestamp durably indicates that the whole plan was approved.
+            # Write it only after every child to avoid a partially approved plan.
+            epic_newly = _set_epic_plan_approved(epic_id, root=repo)
 
     if epic_newly:
         for dest in (epic_id, "war_room"):

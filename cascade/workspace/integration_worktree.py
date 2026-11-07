@@ -678,6 +678,21 @@ def merged_board(trunk: Path) -> BoardIndex:
         return board
 
 
+def refresh_merged_board(trunk: Path) -> BoardIndex:
+    """Read a new supervisor board snapshot for an authorization boundary.
+
+    Unlike :func:`merged_board`, this deliberately ignores both the short-lived
+    cache and a request-scoped ``merged_board_snapshot``.  Those snapshots are
+    useful for coherent read responses, but are never authorization evidence.
+    """
+
+    trunk = locate_trunk(trunk).resolve()
+    with _merged_board_cache_lock:
+        board = _merged_board_uncached(trunk)
+        _merged_board_cache[trunk] = (time.monotonic() + _MERGED_BOARD_CACHE_TTL_S, board)
+        return board
+
+
 @contextmanager
 def merged_board_snapshot(trunk: Path, board: BoardIndex) -> Iterator[None]:
     """Reuse one board view during a read-only response on this context."""

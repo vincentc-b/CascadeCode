@@ -40,7 +40,7 @@ def test_manual_dispatch_refuses_blocked_follow_feature(lifecycle_scenario) -> N
         root=lifecycle_scenario.root,
     )
     assert result.ok is False
-    assert result.reason == "unmet_deps"
+    assert result.reason == "dependency_unmet"
     assert follow_feature_blocked_in_backlog(lifecycle_scenario)
 
 

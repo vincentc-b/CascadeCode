@@ -31,6 +31,10 @@ from cascade.epic.dependency_manifests import (
 )
 from cascade.epic.guard import EpicToolDenied
 from cascade.epic.mint import mint_feature
+from cascade.epic.plan_readiness import (
+    compute_epic_plan_readiness,
+    epic_plan_readiness_to_dict,
+)
 from cascade.epic.planning_signoffs import (
     DependenciesNotReady,
     canonical_plan_revision,
@@ -112,6 +116,14 @@ def test_absent_manifest_blocks_all_entry_points_and_none_required_passes(
 
     readiness = compute_dependency_readiness("epic_001", root=root)
     assert [row.reason for row in readiness.blockers] == ["missing_manifest"]
+    plan_readiness = compute_epic_plan_readiness("epic_001", root=root)
+    assert plan_readiness is not None
+    payload = epic_plan_readiness_to_dict(plan_readiness)
+    assert payload["dependency_status"]["outcome"] == "satisfied"
+    assert payload["can_approve_plan"] is False
+    assert payload["approve_disabled_reason"] == "dependencies_not_ready"
+    assert payload["dependency_blockers"][0]["code"] == "missing_manifest"
+    assert "dependencies_not_ready" in {row["code"] for row in payload["blockers"]}
     with pytest.raises(EpicToolDenied, match="missing_manifest"):
         mint_feature("Blocked", epic_id="epic_001", root=root)
     with pytest.raises(DependenciesNotReady, match="missing_manifest"):

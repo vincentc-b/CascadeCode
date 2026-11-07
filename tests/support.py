@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import subprocess
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 from cascade.board.paths import column_dir, column_for_status, slugify
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import WorkDoc, WorkMeta, WorkStatus, WorkTier
+from cascade.workspace.integration_worktree import IntegrationWorktree, save_registry
 
 _WORKSPACE = Path("/home/ubuntu/dev/CascadeCode").resolve()
 
@@ -124,6 +126,59 @@ UI and LangGraph.
 """
 
 _BODIES = {"epic": EPIC_BODY, "feature": FEATURE_BODY, "task": TASK_BODY}
+
+
+@dataclass(frozen=True)
+class SyntheticDependencyLifecycle:
+    """Synthetic form of the epic_034/epic_036 dependency incident."""
+
+    root: Path
+    owner_id: str = "epic_034"
+    dependency_id: str = "epic_036"
+
+
+def make_synthetic_dependency_lifecycle(tmp_path: Path) -> SyntheticDependencyLifecycle:
+    """Build canonical completion plus a stale registered active copy."""
+
+    root = make_repo(tmp_path)
+    add_doc(
+        root,
+        id="epic_036",
+        title="Synthetic private dependency",
+        tier="epic",
+        status="completed",
+    )
+    add_doc(
+        root,
+        id="epic_034",
+        title="Synthetic dependent epic",
+        tier="epic",
+        status="active",
+        depends_on=["epic_036"],
+    )
+    stale_root = root / ".cascade" / "worktrees" / "epic_epic_036"
+    stale_root.mkdir(parents=True)
+    add_doc(
+        stale_root,
+        id="epic_036",
+        title="Stale active dependency copy",
+        tier="epic",
+        status="active",
+    )
+    save_registry(
+        root,
+        [
+            IntegrationWorktree(
+                kind="epic",
+                work_id="epic_036",
+                branch="epic/epic_036",
+                path=stale_root,
+                base_sha="synthetic-base",
+            )
+        ],
+    )
+    declare_no_dependencies("epic_034", root=root)
+    return SyntheticDependencyLifecycle(root=root)
 
 
 DEFAULT_MODELS_TOML = """

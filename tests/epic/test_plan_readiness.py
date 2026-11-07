@@ -208,11 +208,18 @@ def test_board_and_doc_read_models_match_commands(board: Path) -> None:
         row = _epic_row(board_payload)
         assert row["plan_readiness"]["status"] == "ready_for_review"
         assert row["plan_readiness"]["can_approve_plan"] is True
+        assert row["dependency_status"] == row["plan_readiness"]["dependency_status"]
 
         doc_req = urllib.request.Request(f"http://127.0.0.1:{port}/api/doc/epic_001")
         with urllib.request.urlopen(doc_req) as resp:
             doc_payload = json.loads(resp.read().decode())
-        assert doc_payload["plan_readiness"] == row["plan_readiness"]
+        board_readiness = row["plan_readiness"]
+        doc_readiness = doc_payload["plan_readiness"]
+        board_observed_at = board_readiness["dependency_status"].pop("observed_at")
+        doc_observed_at = doc_readiness["dependency_status"].pop("observed_at")
+        assert board_observed_at
+        assert doc_observed_at
+        assert doc_readiness == board_readiness
 
         blocked = urllib.request.Request(
             f"http://127.0.0.1:{port}/api/approve_epic_plan",

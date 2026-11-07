@@ -450,6 +450,9 @@ def test_war_room_html_loads_war_room_js(ui_server):
     assert "/static/epic_plan_readiness_ui.js" in html
     assert "/static/dependency_review_ui.js" in html
     assert "/static/dependency_review.css" in html
+    assert "/static/dependency_status_ui.js" in html
+    assert 'id="dependency-current-summary"' in html
+    assert "Historical transcript" in html
 
 
 def test_epic_plan_readiness_ui_cases():
@@ -457,6 +460,16 @@ def test_epic_plan_readiness_ui_cases():
     if node is None:
         pytest.skip("node not on PATH")
     cases = Path(__file__).with_name("epic_plan_readiness_ui_cases.mjs")
+    result = subprocess.run([node, str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_dependency_status_ui_distinguishes_current_from_historical():
+    """Current refreshes replace status without rewriting dated transcript history."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not on PATH")
+    cases = Path(__file__).with_name("dependency_status_ui_cases.mjs")
     result = subprocess.run([node, str(cases)], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
 

@@ -33,7 +33,7 @@ from cascade.epic.dependency_status import (
     dependency_status_chat_summary,
     project_dependency_status,
 )
-from cascade.war_room.serialize import work_meta_to_dict
+from cascade.war_room.serialize import board_view_from_index, work_meta_to_dict
 from tests.support import add_doc, make_repo
 
 NOW = datetime(2026, 11, 7, 12, tzinfo=timezone.utc)
@@ -175,7 +175,15 @@ def test_changed_binding_is_stale_while_attempt_mismatch_remains_visible(tmp_pat
     assert row["binding"]["version"] == "2.0.0"
 
 
-def test_ready_projection_is_identical_in_board_and_chat_consumers(tmp_path: Path) -> None:
+def test_ready_projection_is_identical_in_board_and_chat_consumers(
+    tmp_path: Path, monkeypatch
+) -> None:
+    class FixedClock:
+        @staticmethod
+        def now(tz):
+            return NOW.astimezone(tz)
+
+    monkeypatch.setattr("cascade.dependency_projection.datetime", FixedClock)
     root = _board(tmp_path)
     environment = _environment()
     entry = _entry(environment)
@@ -207,7 +215,11 @@ def test_ready_projection_is_identical_in_board_and_chat_consumers(tmp_path: Pat
 
     assert projection["status"] == "ready"
     assert projection["dependencies"][0]["actual_environment"] == environment.to_dict()
-    assert board_row["dependency_status"] == projection
+    assert board_row["software_dependency_status"] == projection
+    view = board_view_from_index(list_board(root), root=root)
+    live_row = next(row for row in view["epics"]["2_active"] if row["id"] == "epic_001")
+    assert live_row["software_dependency_status"] == projection
+    assert live_row["dependency_status"]["outcome"] == "satisfied"
     assert '"status":"ready"' in dependency_status_chat_summary("epic_001", root=root)
 
 

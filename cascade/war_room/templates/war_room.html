@@ -295,6 +295,13 @@
               <p id="room-settings-status" class="status-line" aria-live="polite"></p>
             </div>
             <p class="chat-meta">Graph: <code id="chat-graph-id">${epic_graph_id}</code></p>
+            <section
+              id="dependency-current-summary"
+              class="dependency-current-summary"
+              aria-live="polite"
+              hidden
+            ></section>
+            <h3 class="transcript-history-heading">Historical transcript</h3>
             <div id="chat-messages" class="chat-messages" role="log"></div>
             <form id="chat-compose" class="chat-compose">
               <textarea
@@ -409,6 +416,7 @@
     <script src="/static/epic_close_review_ui.js"></script>
     <script src="/static/epic_plan_readiness_ui.js"></script>
     <script src="/static/dependency_review_ui.js?v=20261107"></script>
+    <script src="/static/dependency_status_ui.js"></script>
     <script src="/static/brief_defaults_ui.js?v=20261025"></script>
     <script src="/static/provider_recovery_dialog_ui.js?v=20261103"></script>
     <script src="/static/panel_resizing.js?v=20261105"></script>

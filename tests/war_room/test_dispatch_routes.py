@@ -239,7 +239,7 @@ def test_dispatch_refusal_unmet_deps_still_200(dispatch_board):
     status, body = _post(f"{base}/api/dispatch_feature", {"id": "feat_002"})
     assert status == HTTPStatus.OK
     assert body["ok"] is False
-    assert body["reason"] == "unmet_deps"
+    assert body["reason"] == "dependency_unmet"
     assert body["event"] is None
     assert read_doc("feat_002", root=root).meta.path.parent.name == "1_backlog"
 

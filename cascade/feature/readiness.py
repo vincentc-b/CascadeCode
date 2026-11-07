@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Mapping
 
 from cascade.board.types import BoardIndex, WorkMeta
+from cascade.dependency_evaluation import evaluate_dependencies
 from cascade.workspace.integration_worktree import merged_board
 
 _OPEN = {"backlog", "ready_to_plan"}
@@ -57,7 +58,7 @@ def compute_feature_readiness(
     if not _backlog_open(meta):
         blockers.append("not_in_backlog")
 
-    unmet = _unmet_dependency_ids(meta, board)
+    unmet = _unmet_dependency_ids(meta, board, root=root)
     if unmet:
         blockers.append(_unmet_deps_code(unmet))
 
@@ -133,13 +134,8 @@ def _backlog_open(meta: WorkMeta) -> bool:
     return meta.status in _OPEN and meta.path.parent.name == "1_backlog"
 
 
-def _unmet_dependency_ids(meta: WorkMeta, board: BoardIndex) -> list[str]:
-    missing: list[str] = []
-    for dep_id in meta.depends_on:
-        dep = board.by_id.get(dep_id)
-        if dep is None or dep.status != "completed" or dep.path.parent.name != "3_completed":
-            missing.append(dep_id)
-    return missing
+def _unmet_dependency_ids(meta: WorkMeta, board: BoardIndex, *, root: Path) -> list[str]:
+    return evaluate_dependencies(meta, root=root, board=board).unsatisfied_ids
 
 
 def _unmet_deps_code(dep_ids: list[str]) -> str:

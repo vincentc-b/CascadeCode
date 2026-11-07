@@ -117,7 +117,8 @@ def work_meta_to_dict(
                 epic_review_snapshot_to_dict(snapshot) if snapshot is not None else None
             )
             if meta.path.parent.name == "2_active":
-                value["dependency_status"] = project_dependency_status(
+                # Software setup approvals are separate from work-item dependency status.
+                value["software_dependency_status"] = project_dependency_status(
                     meta.id, root=root
                 )
         if (
@@ -596,6 +597,22 @@ def board_view_from_index(board, *, root: Path) -> dict:
             recovery_incident=incidents.get(meta.id),
             sidecars_preloaded=True,
         )
+        if meta.tier in {"epic", "feature"}:
+            readiness = item.get("plan_readiness")
+            if isinstance(readiness, dict) and isinstance(
+                readiness.get("dependency_status"), dict
+            ):
+                # Use the exact action-boundary projection already shown by
+                # readiness so two live labels cannot disagree.
+                item["dependency_status"] = readiness["dependency_status"]
+            else:
+                # Other rooms project this board snapshot, never chat prose.
+                # The normal board poll therefore clears completed blockers.
+                from cascade.dependency_projection import project_dependency_status
+
+                item["dependency_status"] = project_dependency_status(
+                    meta, root=root, board=board
+                ).to_dict()
         if _backlog_open_feature(meta):
             from cascade.feature.readiness import compute_feature_readiness
 
