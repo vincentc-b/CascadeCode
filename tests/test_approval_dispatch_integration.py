@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from cascade.approvals import approve_feature, feature_approved
 from tests.support import approve_epic_plan_when_ready
 from cascade.automation import advance_work, reconcile_approval_dispatch, reset_automation_memory
@@ -16,7 +15,17 @@ from cascade.watchdog import activate_epic, dispatch_feature, read_events
 from cascade.war_room.serialize import board_view_from_index
 from cascade.war_room.room_settings import write_stacked_pr_enabled
 from cascade.workspace.integration_worktree import merged_board
-from tests.support import add_doc, commit_board, make_repo
+from tests.support import (
+    add_configured_doc as add_doc,
+    commit_board,
+    install_fake_provider_inventory,
+    make_repo,
+)
+
+
+@pytest.fixture(autouse=True)
+def _fake_provider_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    install_fake_provider_inventory(monkeypatch)
 
 
 def _enable_automation(root: Path, *, enabled: bool = True) -> None:
@@ -237,6 +246,10 @@ def test_merge_gate_blocks_sibling_until_review_clears(
     root = make_repo(tmp_path)
     _enable_automation(root)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_002", title="Next", tier="feature", parent="epic_001")
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    # Model an older sibling reaching review after the epic was activated.
     add_doc(
         root,
         id="feat_001",
@@ -245,9 +258,7 @@ def test_merge_gate_blocks_sibling_until_review_clears(
         status="completed",
         parent="epic_001",
     )
-    add_doc(root, id="feat_002", title="Next", tier="feature", parent="epic_001")
     commit_board(root)
-    assert activate_epic("epic_001", "human", root=root).ok
     write_stacked_pr_enabled("epic_001", False, root=root)
     state = root / ".cascade" / "reviews.json"
     state.parent.mkdir(parents=True, exist_ok=True)

@@ -2,17 +2,69 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Iterable
 
+from cascade.agent.discovery.inventory import ProviderInventoryResult, get_provider_inventory
+from cascade.agent.selection_preflight import (
+    RuntimeSelection,
+    SelectionPreflight,
+    evaluate_work_selection,
+)
+from cascade.board.parse import parse_doc
 from cascade.board.context import resolve_root
 from cascade.board.lock import process_lock
 from cascade.board.store import read_doc, write_doc
+from cascade.board.types import WorkMeta
 from cascade.epic.plan_readiness import require_epic_plan_ready_for_approval
 from cascade.planning_action_dependencies import require_action_dependencies
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from cascade.watchdog.events import append_event
 from cascade.watchdog.types import Event
+
+
+class ApprovalSelectionError(ValueError):
+    """A complete, safe refusal before an approval mutates board state."""
+
+    def __init__(self, preflights: tuple[SelectionPreflight, ...]) -> None:
+        self.preflights = preflights
+        self.failures = tuple(item for item in preflights if not item.result.supported)
+        first = self.failures[0]
+        self.preflight = first.result
+        self.selections = first.selections
+        super().__init__(
+            first.result.message or "selected configuration is not supported"
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        first = self.failures[0]
+        return {
+            "ok": False,
+            "code": (
+                "provider_preflight_blocked"
+                if first.result.outcome == "blocked"
+                else "provider_preflight_unavailable"
+            ),
+            "error": str(self),
+            "preflight": first.result.to_dict(),
+            "selections": first.selections.to_dict(),
+            "preflights": [
+                {
+                    "preflight": item.result.to_dict(),
+                    "selections": item.selections.to_dict(),
+                }
+                for item in self.preflights
+            ],
+        }
+
+
+@dataclass(frozen=True)
+class _DispatchWarning:
+    message: str
+    preflight: object | None = None
+    selections: object | None = None
 
 
 def feature_approved(feature_id: str, *, root: Path) -> bool:
@@ -27,7 +79,12 @@ def epic_plan_approved(epic_id: str, *, root: Path) -> bool:
     return meta is not None and meta.tier == "epic" and meta.plan_approved_at is not None
 
 
-def approve_feature(feature_id: str, *, root: Path) -> dict[str, object]:
+def approve_feature(
+    feature_id: str,
+    *,
+    root: Path,
+    inventory: ProviderInventoryResult | None = None,
+) -> dict[str, object]:
     repo = resolve_root(root)
     with process_lock:
         board = merged_board(repo)
@@ -37,17 +94,30 @@ def approve_feature(feature_id: str, *, root: Path) -> dict[str, object]:
         evidence = require_action_dependencies(feature_id, root=repo)
         assert evidence.board is not None
         with merged_board_snapshot(repo, evidence.board):
+            current = evidence.board.by_id.get(feature_id)
+            if current is None or current.tier != "feature":
+                raise ValueError("feature approval requires a feature on the board")
+            if current.approved_at is None:
+                _require_approval_selections(
+                    (current,),
+                    root=repo,
+                    inventory=inventory,
+                    action="feature_approval",
+                )
             newly = _set_feature_approved(feature_id, root=repo)
     result: dict[str, object] = {
         "ok": True, "feature_id": feature_id, "newly_approved": newly
     }
-    if warning := _maybe_advance_after_approval(repo):
-        result["dispatch_pending"] = True
-        result["dispatch_error"] = warning
+    _add_dispatch_warning(result, _maybe_advance_after_approval(repo))
     return result
 
 
-def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
+def approve_epic_plan(
+    epic_id: str,
+    *,
+    root: Path,
+    inventory: ProviderInventoryResult | None = None,
+) -> dict[str, object]:
     repo = resolve_root(root)
     with process_lock:
         board = merged_board(repo)
@@ -77,6 +147,22 @@ def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
         with merged_board_snapshot(repo, board):
             if epic is not None and epic.plan_approved_at is None:
                 require_epic_plan_ready_for_approval(epic_id, root=repo, board=board)
+                approval_children = tuple(board.by_id[item] for item in children)
+            else:
+                # A repeated approval may authorize a child added after the
+                # original plan approval. Existing accepted children remain
+                # accepted even if current capability evidence has drifted.
+                approval_children = tuple(
+                    board.by_id[item]
+                    for item in children
+                    if board.by_id[item].approved_at is None
+                )
+            _require_approval_selections(
+                approval_children,
+                root=repo,
+                inventory=inventory,
+                action="epic_plan_approval",
+            )
             for feature_id in children:
                 _set_feature_approved(feature_id, root=repo)
             # The epic timestamp durably indicates that the whole plan was approved.
@@ -102,10 +188,77 @@ def approve_epic_plan(epic_id: str, *, root: Path) -> dict[str, object]:
                 root=repo,
             )
     result: dict[str, object] = {"ok": True, "epic_id": epic_id, "features": children}
-    if warning := _maybe_advance_after_approval(repo):
-        result["dispatch_pending"] = True
-        result["dispatch_error"] = warning
+    _add_dispatch_warning(result, _maybe_advance_after_approval(repo))
     return result
+
+
+def _require_approval_selections(
+    metas: Iterable[WorkMeta],
+    *,
+    root: Path,
+    inventory: ProviderInventoryResult | None,
+    action: str,
+) -> tuple[SelectionPreflight, ...]:
+    """Evaluate an immutable owning-document set before the first write."""
+
+    candidates = tuple(metas)
+    if not candidates:
+        return ()
+    available = inventory or get_provider_inventory()
+    preflights = tuple(
+        _evaluate_approval_meta(
+            meta,
+            root=root,
+            inventory=available,
+            action=action,
+        )
+        for meta in candidates
+    )
+    if any(not item.result.supported for item in preflights):
+        raise ApprovalSelectionError(preflights)
+    return preflights
+
+
+def _evaluate_approval_meta(
+    meta: WorkMeta,
+    *,
+    root: Path,
+    inventory: ProviderInventoryResult,
+    action: str,
+) -> SelectionPreflight:
+    """Read the snapshot-selected owning path and fail safely if it went stale."""
+
+    try:
+        doc = parse_doc(meta.path)
+        if doc.meta.id != meta.id or doc.meta.tier != meta.tier:
+            raise ValueError("owning document identity changed")
+    except Exception:
+        base = evaluate_work_selection(
+            meta,
+            root=root,
+            inventory=inventory,
+            action=action,
+        )
+        return evaluate_work_selection(
+            meta,
+            root=root,
+            inventory=inventory,
+            action=action,
+            runtime_selections=(
+                RuntimeSelection(
+                    role=item.role,
+                    provider="__stale__",
+                    model_id="__stale__",
+                )
+                for item in base.selections.selections
+            ),
+        )
+    return evaluate_work_selection(
+        doc,
+        root=root,
+        inventory=inventory,
+        action=action,
+    )
 
 
 def _set_feature_approved(feature_id: str, *, root: Path) -> bool:
@@ -119,7 +272,7 @@ def _set_feature_approved(feature_id: str, *, root: Path) -> bool:
     return True
 
 
-def _maybe_advance_after_approval(root: Path) -> str | None:
+def _maybe_advance_after_approval(root: Path) -> _DispatchWarning | None:
     from cascade.watchdog.config import read_automation_config
     from cascade.automation import reconcile_approval_dispatch
 
@@ -133,8 +286,28 @@ def _maybe_advance_after_approval(root: Path) -> str | None:
     except Exception as exc:
         # Approval is already durable. The watchdog can retry dispatch; report
         # that delay without claiming the approval itself failed.
-        return str(exc) or type(exc).__name__
+        preflight = getattr(exc, "preflight", None)
+        if isinstance(preflight, SelectionPreflight):
+            preflight = preflight.result
+        return _DispatchWarning(
+            str(exc) or type(exc).__name__,
+            preflight=preflight,
+            selections=getattr(exc, "selections", None),
+        )
     return None
+
+
+def _add_dispatch_warning(
+    result: dict[str, object], warning: _DispatchWarning | None
+) -> None:
+    if warning is None:
+        return
+    result["dispatch_pending"] = True
+    result["dispatch_error"] = warning.message
+    if warning.preflight is not None and hasattr(warning.preflight, "to_dict"):
+        result["preflight"] = warning.preflight.to_dict()
+    if warning.selections is not None and hasattr(warning.selections, "to_dict"):
+        result["selections"] = warning.selections.to_dict()
 
 
 def _set_epic_plan_approved(epic_id: str, *, root: Path) -> bool:

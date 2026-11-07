@@ -12,7 +12,6 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
-
 from cascade.approvals import (
     approve_epic_plan,
     approve_feature,
@@ -24,7 +23,18 @@ from cascade.board.store import read_doc
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.watchdog.events import read_events
 from cascade.workspace.integration_worktree import integration_worktree_path
-from tests.support import add_doc, approve_epic_plan_when_ready, commit_board, make_repo
+from tests.support import (
+    add_configured_doc as add_doc,
+    approve_epic_plan_when_ready,
+    commit_board,
+    install_fake_provider_inventory,
+    make_repo,
+)
+
+
+@pytest.fixture(autouse=True)
+def _fake_provider_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    install_fake_provider_inventory(monkeypatch)
 
 
 def test_missing_approval_is_unapproved(tmp_path: Path) -> None:
