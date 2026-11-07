@@ -28,6 +28,7 @@ from cascade.agent.discovery.inventory import (
     ProviderInventoryFailure,
     ProviderInventoryItem,
     ProviderInventoryResult,
+    project_inventory_freshness,
 )
 from cascade.agent.discovery.types import DiscoveredModel, ReasoningCapability
 from cascade.agent.providers import ProviderId, ProviderStatus
@@ -410,11 +411,14 @@ def reasoning_capability_to_dict(
 
 
 def inventory_freshness_to_dict(freshness: InventoryFreshness) -> dict[str, Any]:
+    freshness = project_inventory_freshness(freshness)
     return {
         "from_cache": freshness.from_cache,
         "fetched_at": freshness.fetched_at,
         "expires_at": freshness.expires_at,
         "ttl_seconds": freshness.ttl_seconds,
+        "age_seconds": freshness.age_seconds,
+        "stale": freshness.stale,
     }
 
 
@@ -443,6 +447,7 @@ def provider_inventory_failure_to_dict(
         "id": failure.provider_id,
         "reason": failure.reason,
         "message": failure.message,
+        "failure_kind": failure.failure_kind,
     }
 
 

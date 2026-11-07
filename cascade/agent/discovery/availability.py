@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from cascade.agent.discovery.types import DiscoveryFailureReason, ProviderDiscoverySnapshot
+from cascade.agent.discovery.types import (
+    DiscoveryFailureReason,
+    ProviderDiscoverySnapshot,
+)
 from cascade.agent.providers import ProviderId, probe_provider
 
 
@@ -10,7 +13,7 @@ def unavailable_snapshot(
     provider_id: ProviderId,
     *,
     failure: DiscoveryFailureReason,
-    message: str,
+    message: str | None = None,
 ) -> ProviderDiscoverySnapshot:
     return ProviderDiscoverySnapshot(
         provider_id=provider_id,

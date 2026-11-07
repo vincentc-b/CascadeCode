@@ -216,6 +216,7 @@ class CapabilityEvidence:
     cli_compatible: bool | None
     sdk_compatible: bool | None
     required_tool_host_compatible: bool | None
+    adapter_supported: bool | None = None
     unknown_evidence: tuple[UnknownEvidenceKind, ...] = ()
     setup_evidence_available: bool = False
 
@@ -408,6 +409,7 @@ def contract_projection(value: ContractDeclaration) -> dict[str, object]:
             "cli_compatible": value.cli_compatible,
             "sdk_compatible": value.sdk_compatible,
             "required_tool_host_compatible": value.required_tool_host_compatible,
+            "adapter_supported": value.adapter_supported,
             "unknown_evidence": list(value.unknown_evidence),
             "setup_evidence_available": value.setup_evidence_available,
         }
