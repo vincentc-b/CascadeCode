@@ -12,7 +12,7 @@ import os
 import re
 import tempfile
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -127,12 +127,17 @@ def approve_dependency_installations(
     approver: AuthenticatedHuman,
     root: Path,
     approved_at: datetime | None = None,
+    expected_manifest_revision: int | None = None,
+    expected_bindings: Mapping[str, InstallationBinding] | None = None,
 ) -> tuple[InstallationApproval, ...]:
     """Atomically append one independent approval for each current entry.
 
     A batch is only a user interaction convenience.  Every returned item has a
     distinct ID and complete reviewed-entry snapshot.  No partial batch is
     written when any requested entry is missing or lacks exact authority data.
+    Human-facing callers must supply the displayed manifest revision and
+    bindings; both are compared while holding the same lock used to append the
+    journal.  The optional form remains available to trusted internal callers.
     """
 
     if not isinstance(approver, AuthenticatedHuman):
@@ -146,12 +151,40 @@ def approve_dependency_installations(
         raise DependencyApprovalError("dependency IDs must be non-blank strings")
     if len(ids) != len(set(ids)):
         raise DependencyApprovalError("a dependency may appear only once per batch")
+    if expected_manifest_revision is not None and (
+        isinstance(expected_manifest_revision, bool)
+        or not isinstance(expected_manifest_revision, int)
+        or expected_manifest_revision < 1
+    ):
+        raise DependencyApprovalError("expected manifest revision must be positive")
+    if expected_bindings is not None:
+        if not isinstance(expected_bindings, Mapping):
+            raise DependencyApprovalError("expected bindings must be a mapping")
+        if set(expected_bindings) != set(ids):
+            raise DependencyApprovalError(
+                "expected bindings must contain every and only the requested dependencies"
+            )
+        if not all(
+            isinstance(binding, InstallationBinding)
+            for binding in expected_bindings.values()
+        ):
+            raise DependencyApprovalError(
+                "expected bindings must be installation bindings"
+            )
     when = approved_at or datetime.now(timezone.utc)
     if not isinstance(when, datetime) or when.tzinfo is None:
         raise DependencyApprovalError("approved_at must be timezone-aware")
 
     with process_lock:
         manifest = require_dependency_manifest(epic_id, root=root)
+        if (
+            expected_manifest_revision is not None
+            and manifest.revision != expected_manifest_revision
+        ):
+            raise DependencyApprovalError(
+                f"stale manifest revision for {epic_id}: current is "
+                f"{manifest.revision}, expected {expected_manifest_revision}"
+            )
         if not manifest.is_current_schema:
             raise DependencyApprovalError(
                 "legacy dependency manifests cannot grant installation authority"
@@ -165,6 +198,18 @@ def approve_dependency_installations(
                 f"current manifest has no dependency: {', '.join(missing)}"
             )
         requested = tuple(entries[dependency_id] for dependency_id in ids)
+        if expected_bindings is not None:
+            stale = [
+                entry.dependency_id
+                for entry in requested
+                if expected_bindings[entry.dependency_id]
+                != InstallationBinding.from_entry(entry)
+            ]
+            if stale:
+                raise DependencyApprovalError(
+                    "reviewed installation binding is stale for: "
+                    + ", ".join(stale)
+                )
         for entry in requested:
             _require_exact_authority(entry)
         existing = read_installation_approvals(epic_id, root=root)

@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from cascade.board.errors import NotFound
 from cascade.workspace.doc_root import read_doc_resolved
@@ -31,6 +31,7 @@ from cascade.boss.orphans import detect_orphans
 from cascade.boss.rollup import on_task_merged
 from cascade.boss.view import BossView, compute_boss_view
 from cascade.epic.boot import install_epic_boot_hook
+from cascade.epic.dependency_approvals import AuthenticatedHuman
 from cascade.feature.boot import install_feature_boot_hook
 from cascade.task.boot import install_task_boot_hook
 from cascade.epic.wiring import load_epic_tools
@@ -78,6 +79,12 @@ from cascade.war_room.provider_routes import (
     try_handle_provider_post,
 )
 from cascade.war_room.health_routes import register_health_routes
+from cascade.war_room.dependency_routes import (
+    BOOTSTRAP_REVIEW_PATH,
+    INSTALLATION_APPROVAL_PATH,
+    PING_TEAM_PATH,
+    register_dependency_routes,
+)
 from cascade.war_room.review_routes import register_review_routes
 from cascade.war_room.room_settings_routes import (
     register_room_settings_routes,
@@ -115,8 +122,17 @@ DRAIN_RETRY_AFTER_S = 5
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 _APPROVAL_POST_PATHS = frozenset(
-    {"/api/approve_epic_plan", "/api/approve_feature"}
+    {
+        "/api/approve_epic_plan",
+        "/api/approve_feature",
+        BOOTSTRAP_REVIEW_PATH,
+        INSTALLATION_APPROVAL_PATH,
+        PING_TEAM_PATH,
+    }
 )
+
+if TYPE_CHECKING:
+    from cascade.epic.dependency_runner import BoundedOperationExecutor
 
 
 def _boss_view_to_dict(view: BossView) -> dict[str, object]:
@@ -204,6 +220,8 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         root: Path,
         listen_socket: socket.socket | None = None,
         draining: threading.Event | None = None,
+        authenticated_human: AuthenticatedHuman | None = None,
+        dependency_executor: BoundedOperationExecutor | None = None,
     ) -> None:
         host, _port = server_address
         if listen_socket is None:
@@ -211,6 +229,8 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         else:
             assert_loopback_host(listen_socket.getsockname()[0])
         self.root = Path(root).resolve()
+        self.authenticated_human = authenticated_human
+        self.dependency_executor = dependency_executor
         self._listen_socket = listen_socket
         install_epic_boot_hook(self.root)
         install_feature_boot_hook(self.root)
@@ -1360,6 +1380,8 @@ def serve(
     handler_class: type[WarRoomRequestHandler] = WarRoomRequestHandler,
     listen_socket: socket.socket | None = None,
     draining: threading.Event | None = None,
+    authenticated_human: AuthenticatedHuman | None = None,
+    dependency_executor: BoundedOperationExecutor | None = None,
 ) -> WarRoomHTTPServer:
     """Create and return a configured server (caller runs serve_forever or thread).
 
@@ -1379,6 +1401,8 @@ def serve(
         root=root,
         listen_socket=listen_socket,
         draining=draining,
+        authenticated_human=authenticated_human,
+        dependency_executor=dependency_executor,
     )
 
 
@@ -1403,6 +1427,7 @@ register_provider_routes(WarRoomRequestHandler)
 register_review_routes(WarRoomRequestHandler)
 register_room_settings_routes(WarRoomRequestHandler)
 register_health_routes(WarRoomRequestHandler)
+register_dependency_routes(WarRoomRequestHandler)
 
 if __name__ == "__main__":
     main()
