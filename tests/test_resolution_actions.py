@@ -186,7 +186,7 @@ def _assert_admission_commands_are_read_only(commands: list[tuple[str, ...]]) ->
     """Admission may inspect Git, but must not invoke a mutation-capable command."""
 
     assert all(
-        command[:2] in {("git", "rev-parse"), ("git", "status")}
+        command[:2] in {("git", "rev-parse"), ("git", "status"), ("git", "merge-base")}
         for command in commands
     )
 
@@ -216,6 +216,29 @@ def test_admission_persists_a_non_mutating_handoff_after_all_safety_checks(
     assert handoff["authorized_refs"] == ["feat/feat_035_001", "epic/epic_035"]
     assert commands
     _assert_admission_commands_are_read_only(commands)
+
+
+def test_admission_accepts_clean_local_resolution_containing_both_review_heads(
+    tmp_path: Path,
+) -> None:
+    root, payload = _admission_ready_root(tmp_path)
+    subprocess.run(["git", "checkout", "epic/epic_035"], cwd=root, check=True, capture_output=True, text=True)
+    (root / "target.txt").write_text("target\n", encoding="utf-8")
+    subprocess.run(["git", "add", "target.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "advance target"], cwd=root, check=True, capture_output=True, text=True)
+    target_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    subprocess.run(["git", "checkout", "feat/feat_035_001"], cwd=root, check=True, capture_output=True, text=True)
+    (root / "source.txt").write_text("source\n", encoding="utf-8")
+    subprocess.run(["git", "add", "source.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "advance source"], cwd=root, check=True, capture_output=True, text=True)
+    source_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    payload.update(observed_source_head=source_sha, observed_target_head=target_sha)
+    subprocess.run(["git", "merge", "epic/epic_035", "--no-edit"], cwd=root, check=True, capture_output=True, text=True)
+
+    admission = admit_resolution_action(normalize_operator_request(payload), root=root)
+
+    assert source_sha != target_sha
+    assert admission.action["status"] == "mutation_ready"
 
 
 @pytest.mark.parametrize(

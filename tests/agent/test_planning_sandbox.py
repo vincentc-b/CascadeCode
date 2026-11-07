@@ -190,6 +190,7 @@ def test_run_role_receives_cursor_custom_tools(
     assert "read_comment" in turn.custom_tools
     assert "sign_off_plan" in turn.custom_tools
     assert "retry_integration_branch_update" in turn.custom_tools
+    assert "publish_review_resolution" in turn.custom_tools
 
 
 def test_run_role_receives_mcp_mapping_for_claude(

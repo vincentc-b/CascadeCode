@@ -67,7 +67,9 @@ def retry_team_integration_branch_update(
     work_id = str(evidence.get("affected_work_id") or "")
 
     def execute(_context: object) -> dict[str, object]:
-        result = _update_integration_branch(work_id, root=trunk)
+        result = _update_integration_branch(
+            work_id, root=trunk, allow_completed_recovery=True
+        )
         if not result.ok:
             raise ActionFailure(
                 "owner_decision",

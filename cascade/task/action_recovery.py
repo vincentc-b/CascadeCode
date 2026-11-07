@@ -536,6 +536,7 @@ def capture_and_route_action_failure(
     conflicting_paths: list[str] | tuple[str, ...] = (),
     attempt_bound: int = 100,
     cross_feature: bool = False,
+    owning_team: Mapping[str, Any] | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Durably capture a first failure and enqueue one owning-team inquiry.
@@ -567,11 +568,15 @@ def capture_and_route_action_failure(
         provenance=provenance,
         now=now,
     )
-    owner = derive_recovery_owner(
-        affected_work_id=affected_work_id,
-        intended_target_ref=intended_target_ref,
-        root=repo,
-        cross_feature=cross_feature,
+    owner = (
+        _validate_owning_team(owning_team)
+        if owning_team is not None
+        else derive_recovery_owner(
+            affected_work_id=affected_work_id,
+            intended_target_ref=intended_target_ref,
+            root=repo,
+            cross_feature=cross_feature,
+        )
     )
     investigation_id = f"recovery:{action_id}"
     failure_evidence = _validate_metadata(evidence, field="evidence")

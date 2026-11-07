@@ -10,7 +10,7 @@ import pytest
 
 from cascade.stacked_dispatch import read_feature_dispatch_selection
 from cascade.board.parse import render_doc
-from cascade.board.store import list_board, read_doc
+from cascade.board.store import list_board, move_doc, read_doc
 from cascade.epic.branch_recovery import retry_integration_branch_update
 from cascade.task.action_recovery import load_action
 from cascade.task.worktree import clear_task_runs
@@ -355,15 +355,19 @@ def test_epic_team_can_retry_owned_branch_update_and_complete_incident(
         check=True,
         capture_output=True,
     )
+    move_doc("epic_001", "completed", root=epic_wt)
+    assert inspect_branch_synchronization("epic_001", root=root).reason == "not_active"
 
     completed = retry_integration_branch_update(
         action_id, epic_id="epic_001", root=root
     )
     assert completed["recovery_state"] == "completed"
     assert completed["attempt_count"] == 1
-    assert inspect_branch_synchronization(
-        "epic_001", root=root
-    ).state.behind == 0  # type: ignore[union-attr]
+    recovered_inspection = inspect_branch_synchronization(
+        "epic_001", root=root, allow_completed_recovery=True
+    )
+    assert recovered_inspection.state is not None
+    assert recovered_inspection.state.behind == 0
 
     assert retry_integration_branch_update(
         action_id, epic_id="epic_001", root=root

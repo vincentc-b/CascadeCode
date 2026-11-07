@@ -684,7 +684,10 @@ def _push_credentials_available(trunk: Path, action: Mapping[str, object]) -> bo
         return False
     for record in _review_records(trunk).values():
         if str(record.get("url") or record.get("review_url") or "") == request.get("review_url") or str(record.get("number") or "") == str(request.get("review_id")):
-            return record.get("push_credentials_available", record.get("credentials_available")) is True
+            # Older Cascade review records predate capability markers. Treat
+            # only an explicit denial as unavailable; the exact-head lease and
+            # push remain the fail-closed credential check for those records.
+            return record.get("push_credentials_available", record.get("credentials_available")) is not False
     return False
 
 
