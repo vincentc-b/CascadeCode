@@ -2,7 +2,7 @@
 id: feat_037_004
 title: Expose actionable War Room diagnostics and readiness
 tier: feature
-status: active
+status: completed
 parent: epic_037
 children:
 - task_037_004_001
