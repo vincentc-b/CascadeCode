@@ -194,6 +194,31 @@ def test_unknown_exact_authority_data_blocks_the_entire_batch(
     assert read_installation_approvals("epic_001", root=board) == ()
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("version", "latest"),
+        ("source", "https://packages.example/tool/latest/archive"),
+        ("digest", "sha256:latest"),
+    ),
+)
+def test_latest_references_cannot_be_approved(
+    board: Path,
+    target: EnvironmentIdentity,
+    field: str,
+    value: str,
+) -> None:
+    write_entries(
+        board,
+        target,
+        (replace(dependency(target), **{field: value}),),
+        expected_revision=0,
+    )
+
+    with pytest.raises(DependencyApprovalError, match=f"unknown exact {field}"):
+        approve(board)
+
+
 def test_operation_boundary_denies_before_mutation_even_with_execution_capability(
     board: Path, target: EnvironmentIdentity
 ) -> None:

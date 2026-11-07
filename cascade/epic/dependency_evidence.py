@@ -9,13 +9,15 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, TypeVar
 
 from cascade.board.gitutil import commit_paths, has_git
 from cascade.board.lock import process_lock
@@ -32,6 +34,9 @@ from cascade.workspace.integration_worktree import locate_trunk
 
 _EVIDENCE_DIR = Path("docs") / "epics" / "2_active" / "_dependency_evidence"
 _SCHEMA_VERSION = 1
+_T = TypeVar("_T")
+
+
 class DependencyEvidenceError(ValueError):
     """Base error for invalid evidence operations or persisted evidence."""
 
@@ -61,6 +66,40 @@ class CheckResult(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class DependencyExecutionPolicy:
+    """Current policy constraints applied in addition to human approval.
+
+    The conservative default permits bounded project/container mutations only.
+    Callers may supply a policy resolved by a trusted lifecycle boundary, but its
+    revision and permissions are pinned on admission and rechecked at dispatch
+    and completion.
+    """
+
+    revision: str = "dependency-policy-v1"
+    allow_system_mutation: bool = False
+    allow_sudo: bool = False
+    allow_default_changes: bool = False
+    allow_credential_prompts: bool = False
+    allow_license_prompts: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.revision, str) or not self.revision.strip():
+            raise DependencyEvidenceError("policy.revision must be non-blank text")
+        for field in (
+            "allow_system_mutation",
+            "allow_sudo",
+            "allow_default_changes",
+            "allow_credential_prompts",
+            "allow_license_prompts",
+        ):
+            if not isinstance(getattr(self, field), bool):
+                raise DependencyEvidenceError(f"policy.{field} must be a boolean")
+
+
+DEFAULT_DEPENDENCY_EXECUTION_POLICY = DependencyExecutionPolicy()
+
+
+@dataclass(frozen=True, slots=True)
 class CheckAdmission:
     attempt_id: str
     dependency_id: str
@@ -75,6 +114,8 @@ class CheckAdmission:
     integrity_reference: str
     lock_references: tuple[str, ...]
     approval_reference: str | None
+    bootstrap_revision: int | None = None
+    policy_revision: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -92,31 +133,32 @@ class CheckAdmission:
             "integrity_reference": self.integrity_reference,
             "lock_references": list(self.lock_references),
             "approval_reference": self.approval_reference,
+            "bootstrap_revision": self.bootstrap_revision,
+            "policy_revision": self.policy_revision,
         }
 
     @classmethod
     def from_dict(cls, raw: object) -> CheckAdmission:
         data = _mapping(raw, "admission")
-        _keys(
-            data,
-            {
-                "type",
-                "attempt_id",
-                "dependency_id",
-                "manifest_revision",
-                "entry_revision",
-                "recipe_revision",
-                "exact_operation",
-                "operation_kind",
-                "target_environment_fingerprint",
-                "admitted_at",
-                "selected_version",
-                "integrity_reference",
-                "lock_references",
-                "approval_reference",
-            },
-            "admission",
-        )
+        fields = {
+            "type",
+            "attempt_id",
+            "dependency_id",
+            "manifest_revision",
+            "entry_revision",
+            "recipe_revision",
+            "exact_operation",
+            "operation_kind",
+            "target_environment_fingerprint",
+            "admitted_at",
+            "selected_version",
+            "integrity_reference",
+            "lock_references",
+            "approval_reference",
+        }
+        legacy = set(data) == fields
+        if not legacy:
+            _keys(data, fields | {"bootstrap_revision", "policy_revision"}, "admission")
         if data.get("type") != "admitted":
             raise DependencyEvidenceError("admission.type must be admitted")
         approval = data.get("approval_reference")
@@ -162,8 +204,31 @@ class CheckAdmission:
                 _text(ref, "admission.lock_reference") for ref in refs
             ),
             approval_reference=approval,
+            bootstrap_revision=(
+                None
+                if legacy or data.get("bootstrap_revision") is None
+                else _positive_int(
+                    data.get("bootstrap_revision"), "admission.bootstrap_revision"
+                )
+            ),
+            policy_revision=(
+                None
+                if legacy or data.get("policy_revision") is None
+                else _text(data.get("policy_revision"), "admission.policy_revision")
+            ),
         )
         _validate_approval_reference(kind, approval)
+        if (
+            not legacy
+            and kind is not CheckOperationKind.READ_ONLY
+            and (
+                admission.bootstrap_revision is None
+                or admission.policy_revision is None
+            )
+        ):
+            raise DependencyEvidenceError(
+                "mutation admission requires bootstrap and policy revisions"
+            )
         return admission
 
 
@@ -186,6 +251,9 @@ class CheckCompletion:
     integrity_reference: str
     lock_references: tuple[str, ...]
     approval_reference: str | None
+    bootstrap_revision: int | None = None
+    policy_revision: str | None = None
+    authority_current: bool = True
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -207,35 +275,41 @@ class CheckCompletion:
             "integrity_reference": self.integrity_reference,
             "lock_references": list(self.lock_references),
             "approval_reference": self.approval_reference,
+            "bootstrap_revision": self.bootstrap_revision,
+            "policy_revision": self.policy_revision,
+            "authority_current": self.authority_current,
         }
 
     @classmethod
     def from_dict(cls, raw: object) -> CheckCompletion:
         data = _mapping(raw, "completion")
-        _keys(
-            data,
-            {
-                "type",
-                "attempt_id",
-                "dependency_id",
-                "manifest_revision",
-                "entry_revision",
-                "recipe_revision",
-                "exact_operation",
-                "operation_kind",
-                "actual_environment",
-                "actual_environment_fingerprint",
-                "admitted_at",
-                "completed_at",
-                "result",
-                "redacted_output",
-                "selected_version",
-                "integrity_reference",
-                "lock_references",
-                "approval_reference",
-            },
-            "completion",
-        )
+        fields = {
+            "type",
+            "attempt_id",
+            "dependency_id",
+            "manifest_revision",
+            "entry_revision",
+            "recipe_revision",
+            "exact_operation",
+            "operation_kind",
+            "actual_environment",
+            "actual_environment_fingerprint",
+            "admitted_at",
+            "completed_at",
+            "result",
+            "redacted_output",
+            "selected_version",
+            "integrity_reference",
+            "lock_references",
+            "approval_reference",
+        }
+        legacy = set(data) == fields
+        if not legacy:
+            _keys(
+                data,
+                fields | {"bootstrap_revision", "policy_revision", "authority_current"},
+                "completion",
+            )
         if data.get("type") != "completed":
             raise DependencyEvidenceError("completion.type must be completed")
         try:
@@ -291,7 +365,39 @@ class CheckCompletion:
                 _text(ref, "completion.lock_reference") for ref in refs
             ),
             approval_reference=approval,
+            bootstrap_revision=(
+                None
+                if legacy or data.get("bootstrap_revision") is None
+                else _positive_int(
+                    data.get("bootstrap_revision"), "completion.bootstrap_revision"
+                )
+            ),
+            policy_revision=(
+                None
+                if legacy or data.get("policy_revision") is None
+                else _text(data.get("policy_revision"), "completion.policy_revision")
+            ),
+            authority_current=(
+                kind is CheckOperationKind.READ_ONLY
+                if legacy
+                else data.get("authority_current")
+            ),
         )
+        if not isinstance(completion.authority_current, bool):
+            raise DependencyEvidenceError(
+                "completion.authority_current must be a boolean"
+            )
+        if (
+            not legacy
+            and kind is not CheckOperationKind.READ_ONLY
+            and (
+                completion.bootstrap_revision is None
+                or completion.policy_revision is None
+            )
+        ):
+            raise DependencyEvidenceError(
+                "mutation completion requires bootstrap and policy revisions"
+            )
         if completion.completed_at < completion.admitted_at:
             raise DependencyEvidenceError("completion precedes admission")
         if completion.actual_environment_fingerprint != environment_fingerprint(actual):
@@ -459,52 +565,178 @@ def admit_dependency_check(
     operation_kind: CheckOperationKind,
     exact_operation: str,
     approval_reference: str | None = None,
+    bootstrap_revision: int | None = None,
+    execution_policy: DependencyExecutionPolicy = DEFAULT_DEPENDENCY_EXECUTION_POLICY,
     lock_references: Sequence[str] = (),
     admitted_at: datetime | None = None,
+    attempt_id: str | None = None,
 ) -> CheckAdmission:
     """Append an admission after binding it to the current entry and recipe."""
 
-    manifest = require_dependency_manifest(epic_id, root=root)
-    entry = _entry(manifest, dependency_id)
-    try:
-        kind = CheckOperationKind(operation_kind)
-    except (ValueError, TypeError) as exc:
-        raise DependencyEvidenceError("operation_kind is invalid") from exc
-    operation = _text(exact_operation, "exact_operation")
-    required_operation = (
-        entry.verification_recipe
-        if kind is CheckOperationKind.READ_ONLY
-        else entry.operation
-    )
-    if operation != required_operation:
-        raise DependencyEvidenceError(
-            "exact operation does not match the current dependency entry"
+    with process_lock:
+        manifest = require_dependency_manifest(epic_id, root=root)
+        entry = _entry(manifest, dependency_id)
+        try:
+            kind = CheckOperationKind(operation_kind)
+        except (ValueError, TypeError) as exc:
+            raise DependencyEvidenceError("operation_kind is invalid") from exc
+        operation = _text(exact_operation, "exact_operation")
+        required_operation = (
+            entry.verification_recipe
+            if kind is CheckOperationKind.READ_ONLY
+            else entry.operation
         )
-    _validate_approval_reference(kind, approval_reference)
-    when = admitted_at or datetime.now(timezone.utc)
-    _aware(when, "admitted_at")
-    admission = CheckAdmission(
-        attempt_id=f"attempt_{uuid.uuid4().hex}",
-        dependency_id=dependency_id,
-        manifest_revision=manifest.revision,
-        entry_revision=entry_evidence_revision(entry),
-        recipe_revision=recipe_revision(entry),
-        exact_operation=operation,
-        operation_kind=kind,
-        target_environment_fingerprint=environment_fingerprint(
-            entry.target_environment
-        ),
-        admitted_at=when,
-        selected_version=entry.version,
-        integrity_reference=entry.digest,
-        lock_references=(
-            tuple(_text(ref, "lock_reference") for ref in lock_references)
-            or entry.lock_references
-        ),
-        approval_reference=approval_reference,
-    )
-    _append_event(epic_id, admission, root=root)
+        if operation != required_operation:
+            raise DependencyEvidenceError(
+                "exact operation does not match the current dependency entry"
+            )
+        if kind is CheckOperationKind.READ_ONLY:
+            _validate_approval_reference(kind, approval_reference)
+        else:
+            _require_mutation_authority(
+                epic_id,
+                entry,
+                approval_reference,
+                bootstrap_revision,
+                execution_policy,
+                root=root,
+            )
+        stable_attempt_id = (
+            _text(attempt_id, "attempt_id")
+            if attempt_id is not None
+            else f"attempt_{uuid.uuid4().hex}"
+        )
+        events, _ = _read_store(epic_id, root=root)
+        existing = next(
+            (
+                event
+                for event in events
+                if isinstance(event, CheckAdmission)
+                and event.attempt_id == stable_attempt_id
+            ),
+            None,
+        )
+        if existing is not None:
+            expected = (
+                dependency_id,
+                manifest.revision,
+                entry_evidence_revision(entry),
+                recipe_revision(entry),
+                operation,
+                kind,
+                environment_fingerprint(entry.target_environment),
+                entry.version,
+                entry.digest,
+                tuple(_text(ref, "lock_reference") for ref in lock_references)
+                or entry.lock_references,
+                approval_reference,
+                bootstrap_revision
+                if kind is not CheckOperationKind.READ_ONLY
+                else None,
+                execution_policy.revision
+                if kind is not CheckOperationKind.READ_ONLY
+                else None,
+            )
+            actual = (
+                existing.dependency_id,
+                existing.manifest_revision,
+                existing.entry_revision,
+                existing.recipe_revision,
+                existing.exact_operation,
+                existing.operation_kind,
+                existing.target_environment_fingerprint,
+                existing.selected_version,
+                existing.integrity_reference,
+                existing.lock_references,
+                existing.approval_reference,
+                existing.bootstrap_revision,
+                existing.policy_revision,
+            )
+            if actual != expected:
+                raise DependencyEvidenceError(
+                    "stable attempt ID is already bound to different check evidence"
+                )
+            return existing
+        when = admitted_at or datetime.now(timezone.utc)
+        _aware(when, "admitted_at")
+        admission = CheckAdmission(
+            attempt_id=stable_attempt_id,
+            dependency_id=dependency_id,
+            manifest_revision=manifest.revision,
+            entry_revision=entry_evidence_revision(entry),
+            recipe_revision=recipe_revision(entry),
+            exact_operation=operation,
+            operation_kind=kind,
+            target_environment_fingerprint=environment_fingerprint(
+                entry.target_environment
+            ),
+            admitted_at=when,
+            selected_version=entry.version,
+            integrity_reference=entry.digest,
+            lock_references=(
+                tuple(_text(ref, "lock_reference") for ref in lock_references)
+                or entry.lock_references
+            ),
+            approval_reference=approval_reference,
+            bootstrap_revision=(
+                bootstrap_revision if kind is not CheckOperationKind.READ_ONLY else None
+            ),
+            policy_revision=(
+                execution_policy.revision
+                if kind is not CheckOperationKind.READ_ONLY
+                else None
+            ),
+        )
+        _append_event(epic_id, admission, root=root)
     return admission
+
+
+def dispatch_dependency_mutation(
+    epic_id: str,
+    attempt_id: str,
+    mutation: Callable[[], _T],
+    *,
+    root: Path,
+    execution_policy: DependencyExecutionPolicy = DEFAULT_DEPENDENCY_EXECUTION_POLICY,
+) -> _T:
+    """Recheck an admitted mutation immediately before invoking its dispatcher."""
+
+    if not callable(mutation):
+        raise DependencyEvidenceError("mutation dispatcher must be callable")
+    with process_lock:
+        events, _ = _read_store(epic_id, root=root)
+        admission = next(
+            (
+                event
+                for event in events
+                if isinstance(event, CheckAdmission) and event.attempt_id == attempt_id
+            ),
+            None,
+        )
+        if admission is None:
+            raise CheckAttemptNotFound(attempt_id)
+        if admission.operation_kind is CheckOperationKind.READ_ONLY:
+            raise DependencyEvidenceError(
+                "read-only checks do not use the mutation dispatcher"
+            )
+        if any(
+            isinstance(event, CheckCompletion) and event.attempt_id == attempt_id
+            for event in events
+        ):
+            raise CheckAttemptAlreadyCompleted(attempt_id)
+        manifest = require_dependency_manifest(epic_id, root=root)
+        entry = _entry(manifest, admission.dependency_id)
+        _require_admission_matches_entry(admission, manifest, entry)
+        _require_mutation_authority(
+            epic_id,
+            entry,
+            admission.approval_reference,
+            admission.bootstrap_revision,
+            execution_policy,
+            expected_policy_revision=admission.policy_revision,
+            root=root,
+        )
+        return mutation()
 
 
 def record_trusted_dependency_check_completion(
@@ -519,6 +751,39 @@ def record_trusted_dependency_check_completion(
     integrity_reference: str,
     lock_references: Sequence[str] = (),
     completed_at: datetime | None = None,
+    execution_policy: DependencyExecutionPolicy = DEFAULT_DEPENDENCY_EXECUTION_POLICY,
+) -> CheckCompletion:
+    """Record an outcome while serializing the final authority recheck."""
+
+    with process_lock:
+        return _record_trusted_dependency_check_completion(
+            epic_id,
+            attempt_id,
+            root=root,
+            actual_environment=actual_environment,
+            result=result,
+            redacted_output=redacted_output,
+            selected_version=selected_version,
+            integrity_reference=integrity_reference,
+            lock_references=lock_references,
+            completed_at=completed_at,
+            execution_policy=execution_policy,
+        )
+
+
+def _record_trusted_dependency_check_completion(
+    epic_id: str,
+    attempt_id: str,
+    *,
+    root: Path,
+    actual_environment: EnvironmentIdentity,
+    result: CheckResult,
+    redacted_output: str,
+    selected_version: str,
+    integrity_reference: str,
+    lock_references: Sequence[str] = (),
+    completed_at: datetime | None = None,
+    execution_policy: DependencyExecutionPolicy = DEFAULT_DEPENDENCY_EXECUTION_POLICY,
 ) -> CheckCompletion:
     """Trusted recorder boundary; callers must not source environment from a request."""
 
@@ -563,6 +828,25 @@ def record_trusted_dependency_check_completion(
         raise DependencyEvidenceError("result is invalid") from exc
     when = completed_at or datetime.now(timezone.utc)
     _aware(when, "completed_at")
+    authority_current = True
+    if admission.operation_kind is not CheckOperationKind.READ_ONLY:
+        try:
+            if entry is None:
+                raise DependencyEvidenceError("dependency entry was removed")
+            _require_admission_matches_entry(admission, manifest, entry)
+            _require_mutation_authority(
+                epic_id,
+                entry,
+                admission.approval_reference,
+                admission.bootstrap_revision,
+                execution_policy,
+                expected_policy_revision=admission.policy_revision,
+                root=root,
+            )
+        except ValueError:
+            # The outcome remains append-only history, but it can never become
+            # current readiness evidence.
+            authority_current = False
     completion = CheckCompletion(
         attempt_id=admission.attempt_id,
         dependency_id=admission.dependency_id,
@@ -581,6 +865,9 @@ def record_trusted_dependency_check_completion(
         integrity_reference=_text(integrity_reference, "integrity_reference"),
         lock_references=tuple(_text(ref, "lock_reference") for ref in lock_references),
         approval_reference=admission.approval_reference,
+        bootstrap_revision=admission.bootstrap_revision,
+        policy_revision=admission.policy_revision,
+        authority_current=authority_current,
     )
     if when < admission.admitted_at:
         raise DependencyEvidenceError("completion precedes admission")
@@ -775,6 +1062,8 @@ def _completion_blocker(
     current_entry: str,
     current_recipe: str,
 ) -> str | None:
+    if not completion.authority_current:
+        return "stale_authority"
     if (
         admission is None
         or completion.entry_revision != admission.entry_revision
@@ -814,6 +1103,7 @@ def _preferred_blocker(reasons: set[str]) -> str:
     for reason in (
         "unknown_environment",
         "mismatched_environment",
+        "stale_authority",
         "stale_admission",
         "stale_check",
         "check_failed",
@@ -836,6 +1126,125 @@ def _entry(manifest: DependencyManifestSnapshot, dependency_id: str) -> Dependen
     raise DependencyEvidenceError(
         f"dependency {dependency_id!r} is not in the current manifest"
     )
+
+
+def _require_admission_matches_entry(
+    admission: CheckAdmission,
+    manifest: DependencyManifestSnapshot,
+    entry: DependencyEntry,
+) -> None:
+    if (
+        admission.entry_revision != entry_evidence_revision(entry)
+        or admission.recipe_revision != recipe_revision(entry)
+        or admission.exact_operation != entry.operation
+        or admission.selected_version != entry.version
+        or admission.integrity_reference != entry.digest
+        or admission.target_environment_fingerprint
+        != environment_fingerprint(entry.target_environment)
+    ):
+        raise DependencyEvidenceError(
+            "admitted dependency mutation is stale or no longer exactly bound"
+        )
+    if admission.manifest_revision > manifest.revision:
+        raise DependencyEvidenceError("admitted manifest revision is invalid")
+
+
+def _require_mutation_authority(
+    epic_id: str,
+    entry: DependencyEntry,
+    approval_reference: str | None,
+    bootstrap_revision: int | None,
+    execution_policy: DependencyExecutionPolicy,
+    *,
+    root: Path,
+    expected_policy_revision: str | None = None,
+) -> None:
+    from cascade.epic.dependency_approvals import require_installation_approval
+    from cascade.epic.dependency_bootstrap import read_bootstrap
+
+    if not isinstance(execution_policy, DependencyExecutionPolicy):
+        raise DependencyEvidenceError("current dependency execution policy is required")
+    if (
+        expected_policy_revision is not None
+        and execution_policy.revision != expected_policy_revision
+    ):
+        raise DependencyEvidenceError("dependency execution policy revision is stale")
+    if not isinstance(bootstrap_revision, int) or isinstance(bootstrap_revision, bool):
+        raise DependencyEvidenceError(
+            "dependency mutation requires a bootstrap scope revision"
+        )
+    bootstrap = read_bootstrap(epic_id, root=root)
+    if bootstrap is None or bootstrap.revision != bootstrap_revision:
+        raise DependencyEvidenceError(
+            "dependency mutation bootstrap scope is missing or stale"
+        )
+    manifest = require_dependency_manifest(epic_id, root=root)
+    if bootstrap.scope.manifest_revision != manifest.revision:
+        raise DependencyEvidenceError(
+            "dependency mutation bootstrap scope is not current"
+        )
+    scoped = next(
+        (
+            row
+            for row in bootstrap.scope.entries
+            if row.dependency_id == entry.dependency_id
+        ),
+        None,
+    )
+    if scoped is None or (
+        scoped.source,
+        scoped.integrity_reference,
+        scoped.setup_operation,
+        scoped.destination,
+        scoped.cleanup,
+    ) != (
+        entry.source,
+        entry.integrity_reference,
+        entry.operation,
+        entry.install_destination,
+        entry.cleanup_plan,
+    ):
+        raise DependencyEvidenceError(
+            "dependency mutation does not match the reviewed bootstrap scope"
+        )
+    require_installation_approval(
+        epic_id,
+        entry.dependency_id,
+        approval_reference,
+        entry.operation,
+        root=root,
+    )
+    _require_policy_allows(entry, execution_policy)
+
+
+def _require_policy_allows(
+    entry: DependencyEntry, policy: DependencyExecutionPolicy
+) -> None:
+    operation = entry.operation.casefold()
+    destination = f"{entry.install_scope} {entry.install_destination}".casefold()
+    if not policy.allow_system_mutation and (
+        re.search(r"(^|\s)(system|global)(\s|$)", destination)
+        or re.search(r"(^|\s)/(usr|opt|etc)(/|\s|$)", destination)
+    ):
+        raise DependencyEvidenceError("current policy denies system mutation")
+    if not policy.allow_sudo and re.search(r"(^|\s)sudo(\s|$)", operation):
+        raise DependencyEvidenceError("current policy denies sudo")
+    if not policy.allow_default_changes and (
+        re.search(r"\b(set|change|update|replace)\b.{0,40}\bdefault\b", operation)
+        or re.search(r"\bdefault\b.{0,40}\b(set|change|update|replace)\b", operation)
+    ):
+        raise DependencyEvidenceError("current policy denies default changes")
+    if not policy.allow_credential_prompts and re.search(
+        r"\b(prompt|request|require|enter)\b.{0,40}"
+        r"\b(credential|password|token|api[ -]?key|login)\b",
+        operation,
+    ):
+        raise DependencyEvidenceError("current policy denies credential prompts")
+    if not policy.allow_license_prompts and (
+        re.search(r"\baccept\b.{0,40}\b(license|eula|agreement)\b", operation)
+        or re.search(r"\b(license|eula|agreement)\b.{0,40}\baccept\b", operation)
+    ):
+        raise DependencyEvidenceError("current policy denies license acceptance")
 
 
 def _append_event(
@@ -921,6 +1330,8 @@ def _read_store(
                 or event.exact_operation != admission.exact_operation
                 or event.operation_kind != admission.operation_kind
                 or event.approval_reference != admission.approval_reference
+                or event.bootstrap_revision != admission.bootstrap_revision
+                or event.policy_revision != admission.policy_revision
                 or event.admitted_at != admission.admitted_at
             ):
                 raise DependencyEvidenceError(
