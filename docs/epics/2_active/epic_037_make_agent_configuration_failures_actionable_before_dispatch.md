@@ -8,6 +8,7 @@ children:
 - feat_037_001
 - feat_037_002
 - feat_037_003
+- feat_037_004
 depends_on: []
 owners:
 - epic_manager
@@ -63,6 +64,7 @@ Use one pure capability evaluator and one stable reason/remedy vocabulary across
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_037_004
 - feat_037_003
 - feat_037_002
 - feat_037_001
