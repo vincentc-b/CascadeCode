@@ -180,7 +180,14 @@ async def run_swe_turn(
             root=repo,
         )
         if not preflight.supported:
-            reason = next((check.reason for check in preflight.checks if not check.supported), "provider_unavailable")
+            reason = next(
+                (
+                    check.result.reason
+                    for check in preflight.checks
+                    if not check.result.supported
+                ),
+                "provider_unavailable",
+            )
             return SweTurnResult(
                 failed_closed=preflight.classification == "deterministic",
                 may_retry=preflight.classification == "transient",

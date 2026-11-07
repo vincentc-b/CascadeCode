@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from cascade.agent.discovery.inventory import (
@@ -17,6 +19,7 @@ from cascade.agent.discovery.types import (
     ReasoningCapability,
 )
 from cascade.agent.providers import ALL_PROVIDER_IDS, ProviderId
+from cascade.war_room.serialize import inventory_freshness_to_dict
 
 
 def _model(model_id: str) -> DiscoveredModel:
@@ -265,3 +268,16 @@ def test_restart_safe_freshness_rejects_missing_wall_clock_and_clamps_skew() -> 
     assert missing.stale is True
     assert skewed.age_seconds == 0.0
     assert skewed.stale is False
+
+
+def test_invalid_freshness_serializes_without_nonfinite_timestamps() -> None:
+    invalid = project_inventory_freshness(
+        InventoryFreshness(False, float("nan"), float("inf"), float("nan")),
+        now=1_800_000_000.0,
+    )
+
+    assert invalid.fetched_at is None
+    assert invalid.expires_at is None
+    assert invalid.age_seconds is None
+    assert invalid.stale is True
+    json.dumps(inventory_freshness_to_dict(invalid), allow_nan=False)

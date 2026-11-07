@@ -146,9 +146,16 @@ def project_inventory_freshness(
     if not valid:
         return InventoryFreshness(
             from_cache=freshness.from_cache,
-            fetched_at=freshness.fetched_at,
-            expires_at=freshness.expires_at,
-            ttl_seconds=freshness.ttl_seconds,
+            fetched_at=None,
+            expires_at=None,
+            ttl_seconds=(
+                freshness.ttl_seconds
+                if isinstance(freshness.ttl_seconds, (int, float))
+                and not isinstance(freshness.ttl_seconds, bool)
+                and math.isfinite(freshness.ttl_seconds)
+                and freshness.ttl_seconds >= 0
+                else 0.0
+            ),
             age_seconds=None,
             stale=True,
         )

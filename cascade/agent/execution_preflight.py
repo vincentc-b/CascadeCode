@@ -9,39 +9,22 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
 
 from cascade.agent.discovery.inventory import refresh_provider_inventory
-from cascade.agent.preflight import ProviderCapabilityPreflight, preflight_provider_capability
+from cascade.agent.preflight import (
+    ProviderCapabilityBatchPreflight,
+    ProviderCapabilityPreflight,
+    RoleCapabilityPreflight,
+)
+from cascade.agent.selection_preflight import RuntimeSelection, evaluate_work_selection
 from cascade.board.context import resolve_root
-from cascade.provider_recovery_state import safe_provider_reason
+from cascade.board.store import read_doc
 from cascade.watchdog.lock import process_lock
 
-BlockerClassification = Literal["deterministic", "transient"]
-
-
-@dataclass(frozen=True)
-class ProviderSelection:
-    """The non-secret backend selection for one role about to start."""
-
-    role: str
-    provider: str
-    model_id: str
-    reasoning_level: str | None = None
-    flex_mode: bool | None = None
-
-
-@dataclass(frozen=True)
-class ExecutionPreflightResult:
-    """Result of checking all affected roles immediately before a turn."""
-
-    supported: bool
-    checks: tuple[ProviderCapabilityPreflight, ...]
-    affected_roles: tuple[str, ...]
-    classification: BlockerClassification | None = None
+# Compatibility name for callers constructing non-secret launch arguments.
+ProviderSelection = RuntimeSelection
 
 
 def recheck_provider_capability(
@@ -50,48 +33,38 @@ def recheck_provider_capability(
     tier: str,
     selections: tuple[ProviderSelection, ...],
     root: Path,
-) -> ExecutionPreflightResult:
+) -> ProviderCapabilityBatchPreflight:
     """Refresh capability immediately before execution and upsert its blocker.
 
     Discovery failures are represented by the existing safe capability contract;
     provider exception text and raw payloads never reach persistence.
     """
 
-    inventory = refresh_provider_inventory()
-    checks = tuple(
-        preflight_provider_capability(
-            provider=selection.provider,  # validated when the selection was seeded
-            model_id=selection.model_id,
-            tier=tier,
-            inventory=inventory,
-            reasoning_level=selection.reasoning_level,
-            flex_mode=selection.flex_mode,
-        )
-        for selection in selections
-    )
-    failed = tuple(
-        (selection, check)
-        for selection, check in zip(selections, checks, strict=True)
-        if not check.supported
-    )
+    repo = resolve_root(root)
+    doc = read_doc(work_id, root=repo)
+    if doc.meta.tier != tier:
+        raise ValueError(f"work tier mismatch for {work_id}")
+    result = evaluate_work_selection(
+        doc,
+        root=repo,
+        inventory=refresh_provider_inventory(),
+        action="execution",
+        runtime_selections=selections,
+    ).result
+    failed = tuple(check for check in result.checks if not check.result.supported)
     if not failed:
-        clear_provider_blocker(work_id, root=root)
-        return ExecutionPreflightResult(True, checks, ())
+        clear_provider_blocker(work_id, root=repo)
+        return result
 
-    # A bad requested configuration is deterministic.  A discovery/setup
-    # failure is transient unless there is also a deterministic rejection.
-    classification: BlockerClassification = (
-        "deterministic" if any(check.outcome == "unsupported" for _, check in failed) else "transient"
-    )
-    affected_roles = tuple(selection.role for selection, _ in failed)
+    assert result.classification is not None
     upsert_provider_blocker(
         work_id,
         tier=tier,
         failed=failed,
-        classification=classification,
-        root=root,
+        classification=result.classification,
+        root=repo,
     )
-    return ExecutionPreflightResult(False, checks, affected_roles, classification)
+    return result
 
 
 def provider_blocker(work_id: str, *, root: Path) -> dict[str, object] | None:
@@ -109,24 +82,25 @@ def upsert_provider_blocker(
     work_id: str,
     *,
     tier: str,
-    failed: tuple[tuple[ProviderSelection, ProviderCapabilityPreflight], ...],
-    classification: BlockerClassification,
+    failed: tuple[RoleCapabilityPreflight, ...],
+    classification: str,
     root: Path,
 ) -> dict[str, object]:
     """Refresh one safe blocker per work ID rather than appending incidents."""
 
     repo = resolve_root(root)
     now = datetime.now(timezone.utc).isoformat()
-    first_selection, first_check = failed[0]
+    first = failed[0]
+    first_check = first.result
     row: dict[str, object] = {
         "work_id": work_id,
         "tier": tier,
-        "affected_roles": sorted(selection.role for selection, _ in failed),
-        "provider": first_selection.provider,
+        "affected_roles": sorted(check.role for check in failed),
+        "provider": first_check.provider,
         "reason_code": first_check.reason,
         # Never retain provider-provided exception text.  This stable message
         # is safe to render after restart and shared by board/War Room.
-        "reason": safe_provider_reason(first_check.reason),
+        "reason": first_check.message,
         "classification": classification,
         "recommended_remedy": _recommended_remedy(first_check),
         "last_attempt": now,

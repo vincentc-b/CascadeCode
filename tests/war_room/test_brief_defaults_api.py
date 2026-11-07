@@ -60,11 +60,11 @@ def _patch_inventory(
 ) -> None:
     reasoning = ReasoningCapability(default_level="medium", override_levels=("low", "high"))
     models = (
-        DiscoveredModel(id="gpt-manager", display_name="Manager"),
-        DiscoveredModel(id="gpt-architect", display_name="Architect"),
-        DiscoveredModel(id="gpt-feature-lead", display_name="Feature lead"),
-        DiscoveredModel(id="gpt-feature-architect", display_name="Feature architect"),
-        DiscoveredModel(id="gpt-swe", display_name="SWE", reasoning=reasoning),
+        DiscoveredModel(id="gpt-manager", display_name="Manager", supports_flex_mode=supports_flex_mode),
+        DiscoveredModel(id="gpt-architect", display_name="Architect", supports_flex_mode=supports_flex_mode),
+        DiscoveredModel(id="gpt-feature-lead", display_name="Feature lead", supports_flex_mode=supports_flex_mode),
+        DiscoveredModel(id="gpt-feature-architect", display_name="Feature architect", supports_flex_mode=supports_flex_mode),
+        DiscoveredModel(id="gpt-swe", display_name="SWE", reasoning=reasoning, supports_flex_mode=supports_flex_mode),
     )
     mapping = {
         "cursor": _unavailable("cursor", failure="not_installed"),

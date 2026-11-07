@@ -116,6 +116,12 @@ class ProviderCapabilityBatchPreflight:
     def supported(self) -> bool:
         return self.outcome == "supported"
 
+    @property
+    def affected_roles(self) -> tuple[str, ...]:
+        """Compatibility projection used by execution-boundary consumers."""
+
+        return tuple(check.role for check in self.checks if not check.result.supported)
+
     def to_dict(self) -> dict[str, object]:
         return {
             "outcome": self.outcome,

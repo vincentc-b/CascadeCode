@@ -52,11 +52,17 @@ def _request() -> dict[str, object]:
 def _brief_inventory(monkeypatch) -> None:
     clear_provider_inventory_cache()
     models = (
-        DiscoveredModel(id="gpt-manager", display_name="Manager"),
-        DiscoveredModel(id="gpt-architect", display_name="Architect"),
-        DiscoveredModel(id="gpt-feature-lead", display_name="Feature lead"),
-        DiscoveredModel(id="gpt-feature-architect", display_name="Feature architect"),
-        DiscoveredModel(id="gpt-swe", display_name="SWE"),
+        DiscoveredModel(id="gpt-manager", display_name="Manager", supports_flex_mode=True),
+        DiscoveredModel(id="gpt-architect", display_name="Architect", supports_flex_mode=True),
+        DiscoveredModel(
+            id="gpt-feature-lead", display_name="Feature lead", supports_flex_mode=True
+        ),
+        DiscoveredModel(
+            id="gpt-feature-architect",
+            display_name="Feature architect",
+            supports_flex_mode=True,
+        ),
+        DiscoveredModel(id="gpt-swe", display_name="SWE", supports_flex_mode=True),
     )
     mapping = {
         "cursor": _unavailable("cursor", failure="not_installed"),

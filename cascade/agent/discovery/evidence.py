@@ -38,7 +38,7 @@ def _model_evidence(
         default: str | None = None
         if reasoning is not None:
             default = reasoning.default_level
-            levels = reasoning.override_levels or (reasoning.default_level,)
+            levels = tuple(dict.fromkeys((default, *reasoning.override_levels)))
         models.append(
             ModelCapabilityEvidence(
                 model_id=model.id,

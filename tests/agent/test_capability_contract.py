@@ -57,6 +57,8 @@ def test_role_order_and_representative_declarations_have_safe_json_projections()
             message="Agent configuration is malformed",
             provider="codex",
             field_sources={"provider": source},
+            document_path="docs/tasks/2_active/task_037_001_001.md",
+            document_revision="task-rev-7",
         ),
         CapabilityEvidence(
             provider="codex",
@@ -85,3 +87,6 @@ def test_role_order_and_representative_declarations_have_safe_json_projections()
     assert "credential" not in encoded.lower()
     assert "token" not in encoded.lower()
     assert list(projections[0]["field_sources"]) == ["model_id", "provider"]
+    assert projections[1]["document_revision"] == "task-rev-7"
+    assert projections[1]["reasoning_effective"] is None
+    assert projections[1]["effective_flex_mode"] is None

@@ -77,6 +77,30 @@ def test_unknown_metadata_and_compatibility_never_become_verified_support() -> N
     )
 
 
+def test_reasoning_evidence_includes_default_with_override_levels() -> None:
+    evidence = normalize_capability_evidence(
+        "codex",
+        snapshot=ProviderDiscoverySnapshot(
+            provider_id="codex",
+            available=True,
+            models=(
+                DiscoveredModel(
+                    id="gpt-safe",
+                    display_name="GPT Safe",
+                    reasoning=ReasoningCapability("medium", ("low", "high")),
+                ),
+            ),
+        ),
+    )
+
+    assert evidence.verified_model_catalog is not None
+    assert evidence.verified_model_catalog[0].reasoning_levels == (
+        "medium",
+        "low",
+        "high",
+    )
+
+
 def test_explicit_adapter_and_environment_rejections_remain_distinct() -> None:
     unsupported = normalize_capability_evidence(
         "future-provider",

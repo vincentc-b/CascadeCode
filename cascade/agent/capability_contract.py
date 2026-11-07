@@ -152,11 +152,12 @@ class SelectionIssue:
     provider: str | None = None
     model_id: str | None = None
     reasoning_level: str | None = None
+    reasoning_effective: str | None = None
     reviewed_flex_mode: bool | None = None
+    effective_flex_mode: bool | None = None
     field_sources: Mapping[str, SelectionSource] | None = None
     document_path: str | None = None
     document_revision: str | None = None
-
     def to_dict(self) -> dict[str, object]:
         return contract_projection(self)
 
@@ -383,7 +384,9 @@ def contract_projection(value: ContractDeclaration) -> dict[str, object]:
             "provider": value.provider,
             "model_id": value.model_id,
             "reasoning_level": value.reasoning_level,
+            "reasoning_effective": value.reasoning_effective,
             "reviewed_flex_mode": value.reviewed_flex_mode,
+            "effective_flex_mode": value.effective_flex_mode,
             "field_sources": _sources_projection(value.field_sources),
             "document_path": value.document_path,
             "document_revision": value.document_revision,
