@@ -22,6 +22,7 @@ from cascade.agent.discovery.inventory import (
     ProviderInventoryResult,
     refresh_provider_inventory,
 )
+from cascade.agent.discovery.types import ProviderCompatibilityEvidence
 from cascade.agent.execution_preflight import provider_blocker
 from cascade.agent.flex_continuation import (
     FlexContinuationEligibility,
@@ -121,6 +122,7 @@ def continue_without_flex_eligibility(
     *,
     root: Path | None = None,
     inventory: ProviderInventoryResult | None = None,
+    compatibility_cache: dict[str, ProviderCompatibilityEvidence] | None = None,
 ) -> FlexContinuationEligibility:
     """Compute a fresh action-bound projection without authorizing anything."""
 
@@ -161,6 +163,7 @@ def continue_without_flex_eligibility(
             inventory=inventory or refresh_provider_inventory(),
             action=str(failed_action.get("action_kind") or "continuation"),
             disable_flex=True,
+            compatibility_cache=compatibility_cache,
         ).result
     except (BoardError, OSError, ValueError):
         current = None

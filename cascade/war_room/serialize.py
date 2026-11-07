@@ -31,7 +31,11 @@ from cascade.agent.discovery.inventory import (
     get_provider_inventory,
     project_inventory_freshness,
 )
-from cascade.agent.discovery.types import DiscoveredModel, ReasoningCapability
+from cascade.agent.discovery.types import (
+    DiscoveredModel,
+    ProviderCompatibilityEvidence,
+    ReasoningCapability,
+)
 from cascade.agent.providers import ProviderId, ProviderStatus
 from cascade.review import EpicReviewSnapshot, OpenReview, epic_close_document_staged
 from cascade.war_room.room_settings import RoomSettings
@@ -160,6 +164,7 @@ def _provider_recovery_view(
     root: Path,
     return_to_backlog: dict[str, object] | None = None,
     inventory: ProviderInventoryResult | None = None,
+    compatibility_cache: dict[str, ProviderCompatibilityEvidence] | None = None,
 ) -> dict[str, object] | None:
     """Attach the safe, server-computed provider recovery projection to a row."""
 
@@ -173,7 +178,8 @@ def _provider_recovery_view(
         from cascade.provider_recovery_command import continue_without_flex_eligibility
 
         continuation = continue_without_flex_eligibility(
-            meta.id, root=root, inventory=inventory
+            meta.id, root=root, inventory=inventory,
+            compatibility_cache=compatibility_cache,
         ).to_dict()
 
     recovery = provider_recovery_state(
@@ -194,10 +200,24 @@ def _provider_recovery_view(
         "reasoning": dict(meta.reasoning or {}),
         "flex_mode": meta.flex_mode,
     }
-    failed_diagnostics = blocker.get("failed_preflight") if blocker else None
-    if isinstance(failed_diagnostics, dict):
-        recovery["failed_diagnostics"] = dict(failed_diagnostics)
-    failed_action = blocker.get("failed_action") if blocker else None
+    # The live readiness projection can change after an inventory refresh.
+    # Keep the failed execution snapshot available for the recovery dialog.
+    failed_preflight = blocker.get("failed_preflight")
+    if isinstance(failed_preflight, dict):
+        recovery["failed_diagnostics"] = dict(failed_preflight)
+    elif isinstance(blocker.get("checks"), list):
+        # Older execution blockers still retained the ordered role checks.
+        recovery["failed_diagnostics"] = {
+            "work_id": blocker.get("work_id"),
+            "action": blocker.get("action"),
+            "selection_fingerprint": blocker.get("selection_fingerprint"),
+            "inventory_freshness": blocker.get("inventory_freshness"),
+            "classification": blocker.get("classification"),
+            "reason_code": blocker.get("reason_code"),
+            "message": blocker.get("reason"),
+            "checks": blocker["checks"],
+        }
+    failed_action = blocker.get("failed_action")
     if isinstance(failed_action, dict):
         recovery["failed_action"] = dict(failed_action)
     return recovery
@@ -276,6 +296,7 @@ def _provider_readiness_view(
     root: Path,
     inventory: ProviderInventoryResult,
     recovery: dict[str, object] | None,
+    compatibility_cache: dict[str, ProviderCompatibilityEvidence] | None = None,
 ) -> dict[str, object]:
     """Evaluate one row using the board's single normalized inventory snapshot."""
 
@@ -286,6 +307,7 @@ def _provider_readiness_view(
         root=root,
         inventory=inventory,
         action="readiness",
+        compatibility_cache=compatibility_cache,
     ).result.to_dict()
     result["actions"] = _provider_readiness_actions(result, recovery=recovery)
     return result
@@ -710,6 +732,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
         "features": {col: [] for col in columns},
         "tasks": {col: [] for col in columns},
     }
+    compatibility_cache: dict[str, ProviderCompatibilityEvidence] = {}
     for meta in metas:
         key = _TIER_TO_VIEW_KEY[meta.tier]
         folder = column_folder_for_meta(meta, root=root)
@@ -765,6 +788,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
             root=root,
             return_to_backlog=item.get("return_to_backlog"),
             inventory=provider_inventory,
+            compatibility_cache=compatibility_cache,
         )
         review = item.get("review")
         if (
@@ -800,6 +824,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
                 root=root,
                 inventory=provider_inventory,
                 recovery=provider_recovery,
+                compatibility_cache=compatibility_cache,
             )
             item["provider_readiness"] = provider_readiness
             if provider_recovery is not None:

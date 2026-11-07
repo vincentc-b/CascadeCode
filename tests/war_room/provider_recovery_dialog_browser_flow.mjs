@@ -126,6 +126,7 @@ const el = {
   btnCancelProviderRecovery: control(),
   btnSubmitProviderRecovery: control(),
 };
+const returnFocus = control();
 
 let inventoryRequest = deferred();
 const recoveryRequests = [];
@@ -145,7 +146,7 @@ const context = {
   el,
   lastInvokedBoardAction: null,
   document: {
-    activeElement: control(),
+    activeElement: returnFocus,
     createElement() { return control({ selected: false }); },
   },
   lastBoardView: null,
@@ -185,9 +186,15 @@ const dialog = vm.runInNewContext(
     let providerRecoverySubmitInFlight = false;
     let providerRecoveryError = "";
     let providerRecoveryLoadToken = 0;
+    let providerRecoveryFailureContext = null;
+    let providerRecoveryReturnFocus = null;
     ${sourceSection(
       "  async function continueProviderRecoveryWithoutFlex(item)",
       "  function buildRow(item, tier, column)"
+    )}
+    ${sourceSection(
+      "  if (el.btnCloseProviderRecovery) el.btnCloseProviderRecovery.addEventListener",
+      "  if (el.btnProviderRecoveryInventoryRetry)"
     )}
     ({
       changeProviderRecovery,
@@ -244,11 +251,14 @@ await opening;
 assert.deepEqual(renderedRoles, ["swe"]);
 assert.equal(el.providerRecoveryFlexModeWrap.hidden, false);
 assert.equal(el.btnSubmitProviderRecovery.disabled, false);
+assert.equal(el.btnCloseProviderRecovery.focused, true);
 
 const beforeCancelRequests = recoveryRequests.length;
 dialog.closeProviderRecoveryDialog();
+el.providerRecoveryDialog.listeners.close();
 assert.equal(el.providerRecoveryDialog.open, false);
 assert.equal(recoveryRequests.length, beforeCancelRequests);
+assert.equal(returnFocus.focused, true);
 
 nextRecoveryRequest = deferred();
 const continued = dialog.continueProviderRecoveryWithoutFlex(item);
@@ -274,6 +284,12 @@ assert.equal(recoveryRequests.length, 2, "an in-flight change suppresses duplica
 assert.equal(dialog.state().inFlight, true);
 assert.equal(el.btnCancelProviderRecovery.disabled, true);
 assert.equal(el.btnSubmitProviderRecovery.disabled, true);
+let escapePrevented = false;
+el.providerRecoveryDialog.listeners.cancel({
+  preventDefault() { escapePrevented = true; },
+});
+assert.equal(escapePrevented, true, "Escape cannot dismiss an in-flight change");
+assert.equal(el.providerRecoveryDialog.open, true);
 nextRecoveryRequest.reject({ body: { reason: "Selection changed on the server." } });
 assert.equal(await firstSubmit, null);
 await duplicateSubmit;
@@ -281,6 +297,12 @@ assert.equal(el.providerRecoveryDialog.open, true);
 assert.match(el.providerRecoveryStatus.textContent, /Selection changed on the server/);
 assert.deepEqual(dialog.state().selection, savedSelection);
 assert.equal(el.btnSubmitProviderRecovery.disabled, false);
+
+escapePrevented = false;
+el.providerRecoveryDialog.listeners.cancel({
+  preventDefault() { escapePrevented = true; },
+});
+assert.equal(escapePrevented, false, "Escape remains available after a refusal");
 
 nextRecoveryRequest = deferred();
 const successfulSubmit = dialog.submitProviderRecovery({ preventDefault() {} });

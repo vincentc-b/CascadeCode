@@ -18,6 +18,7 @@ from cascade.agent.discovery.inventory import (
     ProviderInventoryResult,
     project_inventory_freshness,
 )
+from cascade.agent.discovery.types import ProviderCompatibilityEvidence
 from cascade.agent.preflight import (
     ProviderCapabilityBatchPreflight,
     evaluate_provider_capability_batch,
@@ -55,6 +56,7 @@ def evaluate_work_selection(
     action: str,
     runtime_selections: Iterable[RuntimeSelection] = (),
     disable_flex: bool = False,
+    compatibility_cache: dict[str, ProviderCompatibilityEvidence] | None = None,
 ) -> SelectionPreflight:
     """Resolve once and feed the shared result contract at every boundary.
 
@@ -92,15 +94,21 @@ def evaluate_work_selection(
         for item in selections.roles
         if item.provider is not None
     }
+
+    def compatibility(provider: str) -> ProviderCompatibilityEvidence | None:
+        if not any(item.provider_id == provider for item in inventory.providers):
+            return None
+        if compatibility_cache is None:
+            return probe_provider_compatibility(provider)
+        if provider not in compatibility_cache:
+            compatibility_cache[provider] = probe_provider_compatibility(provider)
+        return compatibility_cache[provider]
+
     evidence = {
         provider: capability_evidence_from_inventory(
             provider,
             inventory,
-            compatibility=(
-                probe_provider_compatibility(provider)
-                if any(item.provider_id == provider for item in inventory.providers)
-                else None
-            ),
+            compatibility=compatibility(provider),
         )
         for provider in providers
     }

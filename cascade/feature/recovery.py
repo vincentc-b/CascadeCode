@@ -32,7 +32,12 @@ def _owned_task(task_id: str, *, feature_id: str, root: Path):
     try:
         task = read_doc(task_id, root=feature_root)
     except NotFound:
-        raise ValueError(f"unknown task {task_id}") from None
+        # A Feature may have moved to a different checkout while its Task is
+        # still on the tracking board. Keep the parent check below authoritative.
+        try:
+            task = read_doc(task_id, root=root)
+        except NotFound:
+            raise ValueError(f"unknown task {task_id}") from None
     if task.meta.tier != "task" or task.meta.parent != feature_id:
         raise ValueError(f"{task_id} is not a child of {feature_id}")
     return task

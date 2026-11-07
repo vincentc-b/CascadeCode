@@ -178,6 +178,89 @@ def test_dispatch_feature_success(dispatch_board):
     assert read_doc("feat_001", root=root).meta.status == "active"
 
 
+def test_dispatch_feature_blocks_catalog_drift_after_epic_activation(
+    dispatch_board, monkeypatch
+):
+    base, root = dispatch_board
+    initial = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(
+                    DiscoveredModel(id="reviewed-model", display_name="Reviewed"),
+                ),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, 1.0, 20.0, 19.0),
+    )
+    epic = read_doc("epic_001", root=root)
+    epic.meta.provider = "codex"
+    epic.meta.models = {
+        role: "reviewed-model"
+        for role in (
+            "epic_manager",
+            "epic_architect",
+            "feature_lead",
+            "feature_architect",
+            "swe",
+        )
+    }
+    write_doc(epic, root=root)
+    inventory = {"value": initial}
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch.get_provider_inventory",
+        lambda: inventory["value"],
+    )
+    monkeypatch.setattr(
+        "cascade.approvals.get_provider_inventory", lambda: inventory["value"]
+    )
+    assert activate_epic("epic_001", "human", root=root).ok
+    feature = read_doc("feat_001", root=root)
+    feature.meta.provider = "codex"
+    feature.meta.models = {
+        "feature_lead": "reviewed-model",
+        "feature_architect": "reviewed-model",
+        "swe": "reviewed-model",
+    }
+    write_doc(feature, root=root)
+    for task_id in ("task_001", "task_002"):
+        task = read_doc(task_id, root=root)
+        task.meta.provider = "codex"
+        task.meta.models = {"swe": "reviewed-model"}
+        write_doc(task, root=root)
+    approve_board_feature(root, "feat_001")
+    drifted = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(DiscoveredModel(id="replacement", display_name="Replacement"),),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, 10.0, 20.0, 10.0),
+    )
+    inventory["value"] = drifted
+
+    status, body = _post(f"{base}/api/dispatch_feature", {"id": "feat_001"})
+
+    assert status == HTTPStatus.OK
+    assert body["ok"] is False
+    assert body["code"] == "provider_preflight_blocked"
+    assert body["preflight"]["action"] == "feature_dispatch"
+    assert [
+        check["role"]
+        for check in body["preflight"]["checks"]
+        if check["outcome"] != "supported"
+    ] == ["feature_lead", "feature_architect", "swe"]
+    assert body["preflight"]["remedies"] == ["choose_configuration"]
+    assert read_doc("feat_001", root=root).meta.status == "backlog"
+    events, _ = read_events("feat_001", 0, root=root)
+    assert sum(event.type == "FeatureDispatched" for event in events) == 0
+
+
 def test_dispatch_task_success_and_skills_unchanged_when_null(dispatch_board):
     base, root = dispatch_board
     assert activate_epic("epic_001", "human", root=root).ok

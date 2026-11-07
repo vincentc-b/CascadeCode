@@ -122,11 +122,15 @@ def test_board_uses_one_inventory_snapshot_and_projects_complete_roles(
         "cascade.war_room.serialize.get_provider_inventory",
         lambda: calls.append("inventory") or inventory,
     )
-    _support_compatibility(monkeypatch)
+    monkeypatch.setattr(
+        "cascade.agent.selection_preflight.probe_provider_compatibility",
+        lambda provider: calls.append(provider)
+        or ProviderCompatibilityEvidence(True, True, True),
+    )
 
     rows = board_view_from_index(list_board(root), root=root)["tasks"]["1_backlog"]
 
-    assert calls == ["inventory"]
+    assert calls == ["inventory", "codex"]
     assert {row["provider_readiness"]["outcome"] for row in rows} == {"supported"}
     for row in rows:
         readiness = row["provider_readiness"]
@@ -242,6 +246,11 @@ def test_inventory_refresh_reprojects_without_lifecycle_side_effects(
     assert before["provider_readiness"]["actions"]["provider_setup"] == {
         "eligible": True
     }
+    before_files = {
+        path.relative_to(root): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
 
     stage["available"] = True
     refreshed = fetch_brief_provider_inventory(root, force_refresh=True)
@@ -252,6 +261,12 @@ def test_inventory_refresh_reprojects_without_lifecycle_side_effects(
     assert after["provider_readiness"]["inventory_freshness"]["from_cache"] is True
     assert read_doc("task_001", root=root).meta.status == "active"
     assert not (root / ".cascade" / "provider_blockers.json").exists()
+    after_files = {
+        path.relative_to(root): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    assert after_files == before_files
 
 
 def test_cached_success_does_not_clear_durable_recovery_blocker(
@@ -273,17 +288,21 @@ def test_cached_success_does_not_clear_durable_recovery_blocker(
                         "classification": "transient",
                         "reason_code": "provider_not_authenticated",
                         "affected_roles": ["swe"],
+                        "failed_action": {
+                            "action_id": "attempt-1",
+                            "action_kind": "task_retry",
+                        },
                         "failed_preflight": {
+                            "action": "task_retry",
                             "outcome": "transient",
+                            "message": "Provider setup is required.",
                             "checks": [
                                 {
                                     "role": "swe",
-                                    "outcome": "unavailable",
+                                    "outcome": "transient",
                                     "message": "Provider setup is required.",
                                 }
                             ],
-                            "action": "task_retry",
-                            "message": "Provider setup is required.",
                         },
                     }
                 },
@@ -307,6 +326,8 @@ def test_cached_success_does_not_clear_durable_recovery_blocker(
     assert row["provider_recovery"]["diagnostics"]["outcome"] == "supported"
     assert row["provider_recovery"]["failed_diagnostics"]["action"] == "task_retry"
     assert row["provider_recovery"]["failed_diagnostics"]["checks"][0]["role"] == "swe"
+    assert row["provider_recovery"]["failed_diagnostics"]["outcome"] == "transient"
+    assert row["provider_recovery"]["failed_action"]["action_id"] == "attempt-1"
     assert row["provider_recovery"]["actions"]["retry"] == {"eligible": True}
     persisted = json.loads(blocker_path.read_text(encoding="utf-8"))
     assert persisted["blockers"]["task_001"]["active"] is True
