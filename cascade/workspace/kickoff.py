@@ -531,6 +531,18 @@ def _run_queue_delivery_locked(
 ) -> None:
     from cascade.watchdog.events import read_events
 
+    if tier in ("epic", "feature"):
+        from cascade.task.action_recovery import pending_recovery_team_ids
+        from cascade.workspace.integration_worktree import merged_board
+
+        meta = merged_board(repo).by_id.get(work_id)
+        if (
+            meta is None
+            or meta.path.parent.name != "2_active"
+            and work_id not in pending_recovery_team_ids(root=repo)
+        ):
+            return
+
     _resume_inflight_turn_if_needed(work_id, tier, repo, feature_id)
 
     if retry_staged and _unanswered_staged_input(

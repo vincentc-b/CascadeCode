@@ -8,6 +8,7 @@ import pytest
 from cascade.task.action_recovery import capture_and_route_action_failure
 from cascade.watchdog import Event, append_event
 from cascade.workspace.kickoff import (
+    _run_queue_delivery_locked,
     _queue_is_ahead,
     deliver_queue_kickoffs,
     resume_inflight_graphs,
@@ -64,6 +65,23 @@ def test_completed_team_recovery_event_reaches_a_role_turn(
     deliver_queue_kickoffs(root)
 
     assert started == [epic_id]
+
+
+def test_stale_delivery_job_does_not_resume_completed_team(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    epic_id = "epic_001"
+    add_doc(root, id=epic_id, title="Done", tier="epic", status="completed")
+    started: list[str] = []
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff._resume_inflight_turn_if_needed",
+        lambda work_id, *_args, **_kwargs: started.append(work_id),
+    )
+
+    _run_queue_delivery_locked(epic_id, "epic", root, None)
+
+    assert started == []
 
 
 def test_startup_recovery_includes_completed_team_with_pending_recovery(
