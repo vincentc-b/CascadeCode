@@ -23,10 +23,9 @@ ActionKind = Literal[
 ReceiptState = Literal[
     "authorized",
     "handoff_pending",
-    "handed_off",
     "completed",
-    "drifted",
-    "ambiguous_handoff",
+    "blocked",
+    "ambiguous",
 ]
 
 CONTINUATION_RECEIPT_SCHEMA = "flex-continuation-v1"
@@ -129,6 +128,8 @@ class DescendantWaiverStamp:
     source_role: SelectionRole
     source_document_revision: str
     source_member_fingerprint: str
+    descendant_work_id: str
+    descendant_role: SelectionRole
     descendant_document_revision: str
     descendant_member_fingerprint: str
 
@@ -195,7 +196,7 @@ class ContinuationReceipt:
     def __post_init__(self) -> None:
         if self.waiver.receipt_id != self.identity.receipt_id:
             raise ValueError("waiver and original action must name the same receipt")
-        if self.state in {"handed_off", "completed"} and not self.handoff_id:
+        if self.state == "completed" and not self.handoff_id:
             raise ValueError(f"{self.state} receipt requires a durable handoff_id")
 
 
@@ -230,6 +231,8 @@ def waiver_applies(
             and stamp.source_document_revision == member.document_revision
             and stamp.source_member_fingerprint
             == member.selection_member_fingerprint
+            and stamp.descendant_work_id == candidate.work_id
+            and stamp.descendant_role == candidate.role
             and stamp.descendant_document_revision == candidate.document_revision
             and stamp.descendant_member_fingerprint
             == candidate.selection_member_fingerprint
@@ -239,14 +242,13 @@ def waiver_applies(
 
 
 RECEIPT_TRANSITIONS: Mapping[ReceiptState, tuple[ReceiptState, ...]] = {
-    "authorized": ("handoff_pending", "drifted"),
-    "handoff_pending": ("handed_off", "drifted", "ambiguous_handoff"),
-    "handed_off": ("completed",),
+    "authorized": ("handoff_pending", "blocked"),
+    "handoff_pending": ("completed", "blocked", "ambiguous"),
     # Reconciliation may resolve uncertainty from durable ordinary-action
     # evidence, but it may never return the receipt to a replayable state.
-    "ambiguous_handoff": ("handed_off", "completed"),
+    "ambiguous": ("completed",),
     "completed": (),
-    "drifted": (),
+    "blocked": (),
 }
 
 
@@ -262,16 +264,14 @@ def receipt_transition_allowed(
     Once an adapter call may have started, absence of a handoff row is not
     proof that no lifecycle effect occurred.  Such a receipt must become
     ambiguous unless the ordinary gate proves non-acceptance.  Conversely,
-    entering or resolving ``handed_off`` requires its durable ordinary identity.
+    completing a receipt requires durable evidence of the ordinary handoff.
     """
 
     if target not in RECEIPT_TRANSITIONS[current]:
         return False
-    if current == "handoff_pending" and target == "drifted":
+    if current == "handoff_pending" and target == "blocked":
         return no_acceptance_proven
-    if target == "handed_off":
-        return durable_handoff_proven
-    if current == "ambiguous_handoff" and target == "completed":
+    if target == "completed":
         return durable_handoff_proven
     return True
 

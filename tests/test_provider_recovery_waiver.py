@@ -59,11 +59,18 @@ def _doc(root: Path, *, work_id: str, tier: str, parent: str | None = None) -> W
     )
 
 
-def _authorize(batch, *, role: str, root: Path) -> FlexWaiver:
+def _authorize(
+    batch,
+    *,
+    role: str,
+    root: Path,
+    waiver_id: str = "waiver-1",
+    receipt_id: str = "receipt-1",
+) -> FlexWaiver:
     selection = next(item for item in batch.selections if item.role == role)
     waiver = FlexWaiver(
-        waiver_id="waiver-1",
-        receipt_id="receipt-1",
+        waiver_id=waiver_id,
+        receipt_id=receipt_id,
         scope=(
             WaiverScopeMember(
                 work_id=selection.work_id,
@@ -156,3 +163,78 @@ def test_normal_descendant_stamp_carries_provenance_but_edit_invalidates(
         (root / ".cascade" / "provider_recoveries.json").read_text(encoding="utf-8")
     )
     assert set(ledger) >= {"version", "flex_waivers", "flex_waiver_stamps"}
+
+
+def test_waiver_stamp_keeps_original_source_across_two_mints(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _write_config(root)
+    epic = _doc(root, work_id="epic_001", tier="epic")
+    epic = replace(epic, meta=replace(epic.meta, models={"epic_manager": "task-model"}))
+    _authorize(resolve_effective_selections(epic, root=root), role="epic_manager", root=root)
+
+    feature = _doc(root, work_id="feat_001", tier="feature", parent="epic_001")
+    feature = replace(
+        feature, meta=replace(feature.meta, models={"feature_lead": "task-model"})
+    )
+    stamp_minted_descendant_waivers(
+        resolve_effective_selections(epic, root=root),
+        resolve_effective_selections(feature, root=root),
+        role_mapping={"epic_manager": "feature_lead"},
+        root=root,
+    )
+    feature_effective = resolve_effective_selections(feature, root=root)
+    assert feature_effective.selections[0].flex_waiver_id == "waiver-1"
+
+    task = _doc(root, work_id="task_001", tier="task", parent="feat_001")
+    task = replace(task, meta=replace(task.meta, models={"swe": "task-model"}))
+    stamps = stamp_minted_descendant_waivers(
+        feature_effective,
+        resolve_effective_selections(task, root=root),
+        role_mapping={"feature_lead": "swe"},
+        root=root,
+    )
+    assert len(stamps) == 1
+    assert stamps[0].source_work_id == "epic_001"
+    assert stamps[0].source_role == "epic_manager"
+    assert resolve_effective_selections(task, root=root).selections[0].flex_waiver_id == "waiver-1"
+
+
+def test_existing_child_stamp_is_not_reassigned_to_later_parent_waiver(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    _write_config(root)
+    parent = _doc(root, work_id="feat_001", tier="feature", parent="epic_001")
+    parent = replace(parent, meta=replace(parent.meta, models={"swe": "task-model"}))
+    child = _doc(root, work_id="task_001", tier="task", parent="feat_001")
+    child = replace(child, meta=replace(child.meta, models={"swe": "task-model"}))
+
+    _authorize(resolve_effective_selections(parent, root=root), role="swe", root=root)
+    first = stamp_minted_descendant_waivers(
+        resolve_effective_selections(parent, root=root),
+        resolve_effective_selections(child, root=root),
+        role_mapping={"swe": "swe"},
+        root=root,
+    )
+    assert len(first) == 1
+
+    revised_parent = replace(parent, sha="feat_001-revision-2")
+    _authorize(
+        resolve_effective_selections(revised_parent, root=root),
+        role="swe",
+        root=root,
+        waiver_id="waiver-2",
+        receipt_id="receipt-2",
+    )
+    assert stamp_minted_descendant_waivers(
+        resolve_effective_selections(revised_parent, root=root),
+        resolve_effective_selections(child, root=root),
+        role_mapping={"swe": "swe"},
+        root=root,
+    ) == ()
+    effective = resolve_effective_selections(child, root=root).selections[0]
+    assert effective.flex_waiver_id == "waiver-1"
+    ledger = json.loads(
+        (root / ".cascade" / "provider_recoveries.json").read_text(encoding="utf-8")
+    )
+    assert ledger["flex_waiver_stamps"]["task_001:swe"]["waiver_id"] == "waiver-1"

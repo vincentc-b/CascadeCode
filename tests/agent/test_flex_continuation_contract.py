@@ -47,23 +47,23 @@ def test_actions_identity_and_receipt_states_are_stable_and_safe() -> None:
     assert action.receipt_id == same.receipt_id
     assert action.receipt_id != changed.receipt_id
     assert receipt_transition_allowed("authorized", "handoff_pending")
-    assert receipt_transition_allowed("handoff_pending", "ambiguous_handoff")
-    assert not receipt_transition_allowed("handoff_pending", "drifted")
+    assert receipt_transition_allowed("handoff_pending", "ambiguous")
+    assert not receipt_transition_allowed("handoff_pending", "blocked")
     assert receipt_transition_allowed(
-        "handoff_pending", "drifted", no_acceptance_proven=True
+        "handoff_pending", "blocked", no_acceptance_proven=True
     )
     assert receipt_transition_allowed(
-        "ambiguous_handoff", "handed_off", durable_handoff_proven=True
+        "ambiguous", "completed", durable_handoff_proven=True
     )
-    assert not receipt_transition_allowed("ambiguous_handoff", "handoff_pending")
+    assert not receipt_transition_allowed("ambiguous", "completed")
+    assert not receipt_transition_allowed("ambiguous", "handoff_pending")
     assert not receipt_transition_allowed("completed", "handoff_pending")
     assert set(RECEIPT_TRANSITIONS) == {
         "authorized",
         "handoff_pending",
-        "handed_off",
         "completed",
-        "drifted",
-        "ambiguous_handoff",
+        "blocked",
+        "ambiguous",
     }
     assert SAFE_AUDIT_FIELDS.isdisjoint(FORBIDDEN_AUDIT_FIELDS)
     assert json.loads(json.dumps(contract_projection(action))) == contract_projection(
@@ -114,6 +114,8 @@ def test_waiver_is_exact_stamp_only_and_child_override_wins() -> None:
         source_role=source.role,
         source_document_revision=source.document_revision,
         source_member_fingerprint=source.selection_member_fingerprint,
+        descendant_work_id="task_037_003_001",
+        descendant_role="swe",
         descendant_document_revision="task-rev-1",
         descendant_member_fingerprint="member-b",
     )
@@ -132,4 +134,10 @@ def test_waiver_is_exact_stamp_only_and_child_override_wins() -> None:
     )
     assert not waiver_applies(
         (source,), replace(inherited, document_revision="task-rev-2")
+    )
+    assert not waiver_applies(
+        (source,), replace(inherited, work_id="task_037_003_002")
+    )
+    assert not waiver_applies(
+        (source,), replace(inherited, role="feature_lead")
     )

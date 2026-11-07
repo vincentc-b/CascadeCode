@@ -50,6 +50,7 @@ from cascade.provider_recovery_receipt import (
     read_failed_action_attempt,
     update_continuation_receipt,
 )
+from cascade.provider_recovery_ledger_lock import recovery_ledger_lock
 from cascade.watchdog.lock import process_lock
 from cascade.workspace.types import KickoffReason
 
@@ -120,8 +121,6 @@ def continue_without_flex_eligibility(
     *,
     root: Path | None = None,
     inventory: ProviderInventoryResult | None = None,
-    lifecycle_eligible: bool = True,
-    approval_eligible: bool = True,
 ) -> FlexContinuationEligibility:
     """Compute a fresh action-bound projection without authorizing anything."""
 
@@ -137,6 +136,14 @@ def continue_without_flex_eligibility(
             ),
             disabled_preflight=None,
         )
+    identity = _attempt_identity({"failed_action": failed_action})
+    try:
+        doc = read_doc_resolved(work_id, root=repo)
+        lifecycle_eligible, approval_eligible = _current_action_gates(
+            identity, doc, root=repo
+        )
+    except (BoardError, OSError, ValueError, TypeError, KeyError):
+        lifecycle_eligible, approval_eligible = False, False
     preliminary = evaluate_flex_continuation_eligibility(
         failed_action=failed_action,
         failed_preflight=failed_preflight,
@@ -172,8 +179,6 @@ def continue_without_flex_eligibility_command(
     actor: Actor = "system",
     root: Path | None = None,
     inventory: ProviderInventoryResult | None = None,
-    lifecycle_eligible: bool = True,
-    approval_eligible: bool = True,
 ) -> FlexContinuationEligibility:
     """Human-only command boundary used by the eventual authorization route.
 
@@ -192,8 +197,6 @@ def continue_without_flex_eligibility_command(
         work_id,
         root=root,
         inventory=inventory,
-        lifecycle_eligible=lifecycle_eligible,
-        approval_eligible=approval_eligible,
     )
 
 
@@ -209,8 +212,6 @@ def authorize_continue_without_flex_command(
     inventory: ProviderInventoryResult | None = None,
     gate: LifecycleGate | None = None,
     quiesce_timeout: float = 0.0,
-    lifecycle_eligible: bool = True,
-    approval_eligible: bool = True,
 ) -> FlexContinuationCommandResult:
     """Authorize exactly one failed action and atomically persist its waiver.
 
@@ -292,16 +293,26 @@ def authorize_continue_without_flex_command(
                     return _receipt_result(previous, idempotent=True)
 
                 doc = read_doc_resolved(work_id, root=repo)
+                lifecycle_eligible, approval_eligible = _current_action_gates(
+                    identity, doc, root=repo
+                )
                 if (
-                    doc.meta.tier != identity.target_tier
-                    or _owning_epic(doc.meta.id, doc.meta.tier, doc.meta.parent, repo)
+                    _owning_epic(doc.meta.id, doc.meta.tier, doc.meta.parent, repo)
                     != epic_id
-                    or not _original_lifecycle_matches(identity, doc, root=repo)
+                    or not lifecycle_eligible
                 ):
                     return _continuation_error(
                         work_id,
                         "lifecycle_blocker",
                         "The original lifecycle action is no longer eligible.",
+                        action_id=identity.action_id,
+                        receipt_id=identity.receipt_id,
+                    )
+                if not approval_eligible:
+                    return _continuation_error(
+                        work_id,
+                        "approval_blocker",
+                        "The approval required by the original action is no longer valid.",
                         action_id=identity.action_id,
                         receipt_id=identity.receipt_id,
                     )
@@ -538,21 +549,9 @@ def replay_authorized_continuation_command(
     claim = claim_continuation_handoff(receipt_id, root=repo)
     if not claim.claimed:
         current = read_continuation_receipt(receipt_id, root=repo) or receipt
-        if current.get("state") == "handoff_pending" and claim.handoff_id:
-            update_continuation_receipt(
-                receipt_id,
-                "ambiguous",
-                root=repo,
-                handoff_id=claim.handoff_id,
-                evidence={
-                    "reason_code": "turn_handoff_unproven",
-                    "retry_outcome": {
-                        "ok": False,
-                        "reason": "restart_after_handoff_claim",
-                    },
-                },
-            )
-            current = read_continuation_receipt(receipt_id, root=repo) or current
+        # Another caller may still be inside the ordinary action.  A duplicate
+        # request cannot infer a crash from the pending claim and must not
+        # replace the first caller's eventual blocked or completed outcome.
         return _receipt_result(current, idempotent=True)
     assert claim.handoff_id is not None
 
@@ -765,6 +764,11 @@ def _read_completed(root: Path, work_id: str, fingerprint: str) -> dict[str, str
 
 
 def _write_completed(root: Path, work_id: str, fingerprint: str, result: ProviderRecoveryResult) -> None:
+    with recovery_ledger_lock(root):
+        _write_completed_locked(root, work_id, fingerprint, result)
+
+
+def _write_completed_locked(root: Path, work_id: str, fingerprint: str, result: ProviderRecoveryResult) -> None:
     path = _ledger_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     existing: dict[str, object] = {}
@@ -849,17 +853,67 @@ def _identity_message(code: str) -> str:
     }.get(code, "The failed-action identity is invalid.")
 
 
-def _original_lifecycle_matches(
-    identity: OriginalActionIdentity, doc, *, root: Path
-) -> bool:
+def _current_action_gates(
+    identity: OriginalActionIdentity | None, doc, *, root: Path
+) -> tuple[bool, bool]:
+    """Read current lifecycle and approval facts for the original action."""
+
+    if (
+        identity is None
+        or doc.meta.id != identity.work_id
+        or doc.meta.tier != identity.target_tier
+    ):
+        return False, False
     status = doc.meta.status
-    if identity.action_kind in ("epic_activation", "feature_dispatch"):
-        return status in ("backlog", "ready_to_plan")
-    if identity.action_kind == "task_retry":
-        return status == "blocked"
+    if identity.action_kind == "epic_activation":
+        lifecycle = identity.target_tier == "epic" and status in (
+            "backlog",
+            "ready_to_plan",
+        )
+    elif identity.action_kind == "feature_dispatch":
+        lifecycle = identity.target_tier == "feature" and status in (
+            "backlog",
+            "ready_to_plan",
+        )
+    elif identity.action_kind == "task_retry":
+        lifecycle = (
+            identity.target_tier == "task"
+            and status == "blocked"
+            and doc.meta.path.parent.name == "2_active"
+        )
+    elif identity.action_kind == "approval_dispatch":
+        lifecycle = identity.target_tier in ("feature", "task") and status in (
+            "backlog",
+            "ready_to_plan",
+        )
+    else:
+        return False, False
+    if not lifecycle:
+        return False, False
+
+    from cascade.planning_action_dependencies import evaluate_action_dependencies
+
+    dependencies = evaluate_action_dependencies(identity.work_id, root=root)
+    if dependencies.owner is None or dependencies.outcome != "satisfied":
+        return False, False
+
+    if identity.target_tier == "feature":
+        from cascade.feature.readiness import (
+            compute_feature_readiness,
+            dispatch_refusal_from_readiness,
+        )
+
+        readiness = compute_feature_readiness(
+            identity.work_id, root=root, board=dependencies.board
+        )
+        if readiness is None:
+            return False, False
+        if not readiness.approved:
+            return True, False
+        if dispatch_refusal_from_readiness(readiness):
+            return False, True
+
     if identity.action_kind == "approval_dispatch":
-        if status not in ("backlog", "ready_to_plan"):
-            return False
         from cascade.boss.view import compute_boss_view
 
         view = compute_boss_view(root=root)
@@ -868,8 +922,9 @@ def _original_lifecycle_matches(
             if identity.target_tier == "feature"
             else view.dispatchable_tasks
         )
-        return identity.work_id in candidates
-    return False
+        if identity.work_id not in candidates:
+            return False, True
+    return True, True
 
 
 def _receipt_result(

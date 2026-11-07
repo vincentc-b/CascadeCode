@@ -101,6 +101,7 @@ def test_same_failed_action_is_eligible_only_after_full_flex_off_pass() -> None:
     assert result.reason_code == "eligible"
     assert result.action_id == "attempt-7"
     assert result.receipt_id == _identity().receipt_id
+    assert result.to_dict()["document_revision"] == "rev-1"
     assert "provider_payload" not in repr(result.to_dict())
 
 
@@ -145,6 +146,30 @@ def test_mixed_failure_stale_inventory_and_current_blocker_fail_closed() -> None
         disabled_preflight=replace(stale_disabled, selection_fingerprint="b" * 64),
     )
     assert changed.reason_code == "selection_changed"
+
+
+def test_original_transient_failure_prevents_continuation_after_fresh_pass() -> None:
+    roles = (
+        _selection("feature_lead"),
+        _selection("feature_architect"),
+        _selection("swe"),
+    )
+    failed = _batch(*roles).to_dict()
+    failed["checks"][1].update(
+        outcome="unavailable",
+        reason="capability_unknown",
+        classification="transient",
+    )
+    disabled = _batch(*(replace(item, effective_flex_mode=False) for item in roles))
+
+    result = evaluate_flex_continuation_eligibility(
+        failed_action=contract_projection(_identity()),
+        failed_preflight=failed,
+        disabled_preflight=disabled,
+    )
+
+    assert not result.eligible
+    assert result.reason_code == "transient_blocker"
 
 
 def test_command_boundary_rejects_non_human_callers_before_reading_state() -> None:

@@ -12,7 +12,11 @@ from cascade.agent.providers import parse_provider_id, probe_providers
 from cascade.board.errors import BoardError, NotFound
 from cascade.workspace.doc_root import read_doc_resolved
 from cascade.provider_recovery import ProviderRecoveryRequest
-from cascade.provider_recovery_command import recover_active_item_provider_command
+from cascade.provider_recovery_command import (
+    AuthenticatedHumanPrincipal,
+    continue_without_flex_command,
+    recover_active_item_provider_command,
+)
 from cascade.watchdog.config import read_providers_config
 from cascade.war_room.serialize import providers_view_to_dict
 
@@ -22,6 +26,7 @@ if TYPE_CHECKING:
 _TOKEN_SUFFIX = "/token"
 _FORGET_SUFFIX = "/forget"
 _RECOVERY_PREFIX = "/api/provider-recovery/"
+_CONTINUE_ACTION = "continue-without-flex"
 
 
 def register_provider_routes(handler_cls: type[WarRoomRequestHandler]) -> None:
@@ -72,10 +77,16 @@ def _handle_recovery_post(
     """
 
     parts = path.removeprefix(_RECOVERY_PREFIX).strip("/").split("/")
-    if len(parts) != 2 or not parts[0] or parts[1] not in {"change", "retry"}:
+    if len(parts) != 2 or not parts[0] or parts[1] not in {
+        "change",
+        "retry",
+        _CONTINUE_ACTION,
+    }:
         handler._json_error(HTTPStatus.NOT_FOUND, "not found")
         return True
     work_id, action = parts
+    if action == _CONTINUE_ACTION:
+        return _handle_continue_without_flex(handler, work_id, body)
     try:
         doc = read_doc_resolved(work_id, root=handler.server.root)
         blocker = provider_blocker(work_id, root=handler.server.root)
@@ -129,6 +140,47 @@ def _handle_recovery_post(
     # provider process start.  Keep the incident active until that start runs
     # a fresh successful execution check of the complete blocked scope.
     handler._json_response(HTTPStatus.OK, result.to_dict())
+    return True
+
+
+def _handle_continue_without_flex(
+    handler: WarRoomRequestHandler, work_id: str, body: dict[str, Any]
+) -> bool:
+    """Authorize and replay one concrete failed action from an explicit click."""
+
+    expected = {
+        "failed_action_id",
+        "expected_document_revision",
+        "expected_selection_fingerprint",
+    }
+    if set(body) != expected or not all(
+        isinstance(body.get(name), str)
+        and bool(body[name])
+        and body[name].strip() == body[name]
+        for name in expected
+    ):
+        handler._json_error(
+            HTTPStatus.BAD_REQUEST,
+            "failed_action_id, expected_document_revision, and expected_selection_fingerprint are required",
+        )
+        return True
+
+    # Identity is intentionally supplied by the loopback War Room server, not
+    # accepted from browser JSON. Agent/scheduler callers cannot self-assert a
+    # human principal at the command boundary.
+    result = continue_without_flex_command(
+        work_id,
+        failed_action_id=body["failed_action_id"],
+        expected_document_revision=body["expected_document_revision"],
+        expected_selection_fingerprint=body["expected_selection_fingerprint"],
+        principal=AuthenticatedHumanPrincipal("human:war-room"),
+        actor="human",
+        root=handler.server.root,
+    )
+    handler._json_response(
+        HTTPStatus.OK if result.ok else HTTPStatus.CONFLICT,
+        result.to_dict(),
+    )
     return True
 
 
@@ -240,7 +292,11 @@ def provider_api_path_exists(path: str) -> bool:
         return True
     if path.startswith(_RECOVERY_PREFIX):
         parts = path.removeprefix(_RECOVERY_PREFIX).strip("/").split("/")
-        return len(parts) == 2 and bool(parts[0]) and parts[1] in {"change", "retry"}
+        return (
+            len(parts) == 2
+            and bool(parts[0])
+            and parts[1] in {"change", "retry", _CONTINUE_ACTION}
+        )
     if not path.startswith("/api/providers/"):
         return False
     rest = path.removeprefix("/api/providers/").strip("/")

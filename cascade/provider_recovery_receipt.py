@@ -22,7 +22,7 @@ from cascade.agent.flex_continuation_contract import (
     contract_projection,
 )
 from cascade.board.context import resolve_root
-from cascade.watchdog.lock import process_lock
+from cascade.provider_recovery_ledger_lock import recovery_ledger_lock
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +55,7 @@ def persist_failed_action_attempt(
         "replay_arguments": dict(replay_arguments),
         "recorded_at": _now(),
     }
-    with process_lock:
+    with recovery_ledger_lock(repo):
         ledger = _read(repo)
         existing = ledger.get("failed_actions")
         attempts = dict(existing) if isinstance(existing, dict) else {}
@@ -70,7 +70,7 @@ def persist_failed_action_attempt(
 
 def read_failed_action_attempt(action_id: str, *, root: Path) -> dict[str, object] | None:
     repo = resolve_root(root)
-    with process_lock:
+    with recovery_ledger_lock(repo):
         rows = _read(repo).get("failed_actions")
         row = rows.get(action_id) if isinstance(rows, dict) else None
     return dict(row) if isinstance(row, dict) else None
@@ -108,7 +108,7 @@ def persist_authorized_continuation(
         "inventory_freshness": contract_projection(waiver.inventory_freshness),
     }
     waiver_row = contract_projection(waiver)
-    with process_lock:
+    with recovery_ledger_lock(repo):
         ledger = _read(repo)
         existing_receipts = ledger.get("continuation_receipts")
         receipts = (
@@ -139,7 +139,7 @@ def read_continuation_receipt(
     receipt_id: str, *, root: Path
 ) -> dict[str, object] | None:
     repo = resolve_root(root)
-    with process_lock:
+    with recovery_ledger_lock(repo):
         rows = _read(repo).get("continuation_receipts")
         row = rows.get(receipt_id) if isinstance(rows, dict) else None
     return dict(row) if isinstance(row, dict) else None
@@ -149,7 +149,7 @@ def claim_continuation_handoff(receipt_id: str, *, root: Path) -> HandoffClaim:
     """Claim the original action once, durably, before any adapter call."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with recovery_ledger_lock(repo):
         ledger = _read(repo)
         existing = ledger.get("continuation_receipts")
         receipts = dict(existing) if isinstance(existing, dict) else {}
@@ -198,7 +198,7 @@ def update_continuation_receipt(
     from cascade.agent.flex_continuation_contract import receipt_transition_allowed
 
     repo = resolve_root(root)
-    with process_lock:
+    with recovery_ledger_lock(repo):
         ledger = _read(repo)
         existing = ledger.get("continuation_receipts")
         receipts = dict(existing) if isinstance(existing, dict) else {}
@@ -252,7 +252,7 @@ def record_continuation_lifecycle_effect(
     """Record the durable ordinary-action effect before kickoff is attempted."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with recovery_ledger_lock(repo):
         ledger = _read(repo)
         existing = ledger.get("continuation_receipts")
         receipts = dict(existing) if isinstance(existing, dict) else {}

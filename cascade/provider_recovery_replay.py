@@ -13,8 +13,8 @@ from typing import Iterator
 
 from cascade.agent.capability_contract import EffectiveSelection
 from cascade.board.context import resolve_root
+from cascade.provider_recovery_ledger_lock import recovery_ledger_lock
 from cascade.provider_recovery_receipt import record_continuation_lifecycle_effect
-from cascade.watchdog.lock import process_lock
 from cascade.watchdog.model_resolve import (
     resolve_effective_selections,
     selection_member_fingerprint,
@@ -162,7 +162,7 @@ def _persist_lineage(context: ReplayContext, after: dict[str, object]) -> None:
         "after": after,
     }
     key = f"{context.receipt_id}:{context.handoff_id}"
-    with process_lock:
+    with recovery_ledger_lock(context.root):
         ledger = _read(context.root)
         existing = ledger.get("flex_waiver_lineage")
         rows = dict(existing) if isinstance(existing, dict) else {}

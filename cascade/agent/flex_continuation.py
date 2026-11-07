@@ -68,6 +68,7 @@ class FlexContinuationEligibility:
     action_id: str | None = None
     receipt_id: str | None = None
     work_id: str | None = None
+    document_revision: str | None = None
     selection_fingerprint: str | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -96,6 +97,7 @@ def evaluate_flex_continuation_eligibility(
         "action_id": identity.action_id,
         "receipt_id": identity.receipt_id,
         "work_id": identity.work_id,
+        "document_revision": identity.document_revision,
         "selection_fingerprint": identity.selection_fingerprint,
     }
     if not isinstance(failed_preflight, Mapping):
@@ -130,11 +132,15 @@ def evaluate_flex_continuation_eligibility(
     ]
     if not any(check.get("reason") == "flex_mode_not_supported" for check in failed):
         return _result("no_flex_rejection", **common)
+    if any(check.get("classification") == "transient" for check in failed):
+        return _result("transient_blocker", **common)
     deterministic = [
         check for check in failed if check.get("classification") == "deterministic"
     ]
     if any(check.get("reason") != "flex_mode_not_supported" for check in deterministic):
         return _result("mixed_deterministic_failures", **common)
+    if len(deterministic) != len(failed):
+        return _result("capability_blocker", **common)
     if not lifecycle_eligible:
         return _result("lifecycle_blocker", **common)
     if not approval_eligible:

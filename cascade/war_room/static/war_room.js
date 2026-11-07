@@ -989,6 +989,40 @@
     }
   }
 
+  async function continueProviderRecoveryWithoutFlex(item) {
+    const action = item.provider_recovery &&
+      item.provider_recovery.actions &&
+      item.provider_recovery.actions.continue_without_flex;
+    if (!action || action.eligible !== true) return null;
+    try {
+      const { body } = await apiPost(
+        "/api/provider-recovery/" + encodeURIComponent(item.id) + "/continue-without-flex",
+        {
+          failed_action_id: action.action_id,
+          expected_document_revision: action.document_revision,
+          expected_selection_fingerprint: action.selection_fingerprint,
+        }
+      );
+      setStatus(
+        body.ok
+          ? "Continuation without Flex accepted for " + item.id + "."
+          : (body.reason || "Continuation without Flex was refused."),
+        !body.ok
+      );
+      return body;
+    } catch (err) {
+      setStatus(
+        (err.body && (err.body.reason || err.body.error)) ||
+          err.message ||
+          "Continuation without Flex was refused.",
+        true
+      );
+      throw err;
+    } finally {
+      await refreshBoard();
+    }
+  }
+
   function populateProviderRecoveryProviders() {
     if (!el.providerRecoveryProvider || !providerRecoveryInventory || !providerRecoverySelection) return;
     el.providerRecoveryProvider.replaceChildren();
@@ -1321,6 +1355,11 @@
     }
     if (typeof providerRecoveryAction === "function" && providerRecoveryAction(providerRecovery, "provider_setup")) {
       actions.appendChild(actionButton("Provider setup", openProviderSetup));
+    }
+    if (typeof providerRecoveryAction === "function" && providerRecoveryAction(providerRecovery, "continue_without_flex")) {
+      actions.appendChild(actionButton("Continue without Flex", function () {
+        return continueProviderRecoveryWithoutFlex(item);
+      }));
     }
 
     const startable = OPEN_STATUSES[item.status] === true;

@@ -162,11 +162,12 @@ const dialog = vm.runInNewContext(
     let providerRecoveryError = "";
     let providerRecoveryLoadToken = 0;
     ${sourceSection(
-      "  function populateProviderRecoveryProviders()",
+      "  async function continueProviderRecoveryWithoutFlex(item)",
       "  function buildRow(item, tier, column)"
     )}
     ({
       changeProviderRecovery,
+      continueProviderRecoveryWithoutFlex,
       retryProviderRecoveryInventory,
       submitProviderRecovery,
       closeProviderRecoveryDialog,
@@ -186,6 +187,14 @@ const item = {
   id: "task_001",
   tier: "task",
   provider_recovery: {
+    actions: {
+      continue_without_flex: {
+        eligible: true,
+        action_id: "attempt-7",
+        document_revision: "revision-7",
+        selection_fingerprint: "fingerprint-7",
+      },
+    },
     selection: {
       provider: "codex",
       models: { swe: "worker" },
@@ -210,13 +219,27 @@ dialog.closeProviderRecoveryDialog();
 assert.equal(el.providerRecoveryDialog.open, false);
 assert.equal(recoveryRequests.length, beforeCancelRequests);
 
+nextRecoveryRequest = deferred();
+const continued = dialog.continueProviderRecoveryWithoutFlex(item);
+assert.deepEqual(JSON.parse(JSON.stringify(recoveryRequests[0])), {
+  path: "/api/provider-recovery/task_001/continue-without-flex",
+  payload: {
+    failed_action_id: "attempt-7",
+    expected_document_revision: "revision-7",
+    expected_selection_fingerprint: "fingerprint-7",
+  },
+});
+nextRecoveryRequest.resolve({ body: { ok: true, state: "completed", receipt_id: "receipt-7" } });
+assert.equal((await continued).receipt_id, "receipt-7");
+assert.equal(refreshCount, 1);
+
 inventoryRequest = { promise: Promise.resolve(inventory) };
 await dialog.changeProviderRecovery(item);
 const savedSelection = JSON.parse(JSON.stringify(dialog.state().selection));
 nextRecoveryRequest = deferred();
 const firstSubmit = dialog.submitProviderRecovery({ preventDefault() {} });
 const duplicateSubmit = dialog.submitProviderRecovery({ preventDefault() {} });
-assert.equal(recoveryRequests.length, 1, "an in-flight change suppresses duplicate submits");
+assert.equal(recoveryRequests.length, 2, "an in-flight change suppresses duplicate submits");
 assert.equal(dialog.state().inFlight, true);
 assert.equal(el.btnCancelProviderRecovery.disabled, true);
 assert.equal(el.btnSubmitProviderRecovery.disabled, true);
@@ -230,7 +253,7 @@ assert.equal(el.btnSubmitProviderRecovery.disabled, false);
 
 nextRecoveryRequest = deferred();
 const successfulSubmit = dialog.submitProviderRecovery({ preventDefault() {} });
-assert.deepEqual(recoveryRequests[1], {
+assert.deepEqual(recoveryRequests[2], {
   path: "/api/provider-recovery/task_001/change",
   payload: {
     provider: "codex",
@@ -242,7 +265,7 @@ assert.deepEqual(recoveryRequests[1], {
 nextRecoveryRequest.resolve({ body: { ok: true } });
 await successfulSubmit;
 assert.equal(el.providerRecoveryDialog.open, false);
-assert.equal(refreshCount, 1);
+assert.equal(refreshCount, 2);
 
 inventoryRequest = { promise: Promise.reject(new Error("inventory offline")) };
 await dialog.changeProviderRecovery(item);

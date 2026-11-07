@@ -20,7 +20,7 @@ from cascade.agent.flex_continuation_contract import (
     waiver_applies,
 )
 from cascade.board.context import resolve_root
-from cascade.watchdog.lock import process_lock
+from cascade.provider_recovery_ledger_lock import recovery_ledger_lock
 
 
 def persist_flex_waiver(waiver: FlexWaiver, *, root: Path) -> FlexWaiver:
@@ -28,7 +28,7 @@ def persist_flex_waiver(waiver: FlexWaiver, *, root: Path) -> FlexWaiver:
 
     repo = resolve_root(root)
     row = contract_projection(waiver)
-    with process_lock:
+    with recovery_ledger_lock(repo):
         ledger = _read(repo)
         existing_rows = ledger.get("flex_waivers")
         rows = dict(existing_rows) if isinstance(existing_rows, dict) else {}
@@ -43,7 +43,7 @@ def persist_flex_waiver(waiver: FlexWaiver, *, root: Path) -> FlexWaiver:
 
 def read_flex_waiver(waiver_id: str, *, root: Path) -> FlexWaiver | None:
     repo = resolve_root(root)
-    with process_lock:
+    with recovery_ledger_lock(repo):
         rows = _read(repo).get("flex_waivers")
         row = rows.get(waiver_id) if isinstance(rows, dict) else None
     return _decode_waiver(row)
@@ -55,7 +55,7 @@ def apply_persisted_flex_waivers(
     """Apply exactly one matching direct or normally stamped waiver per role."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with recovery_ledger_lock(repo):
         ledger = _read(repo)
     waiver_rows = ledger.get("flex_waivers")
     if not isinstance(waiver_rows, dict):
@@ -151,6 +151,9 @@ def stamp_minted_descendant_waivers(
     repo = resolve_root(root)
     parent_roles = {item.role: item for item in parent.selections}
     descendant_roles = {item.role: item for item in descendant.selections}
+    with recovery_ledger_lock(repo):
+        existing_stamps = _read(repo).get("flex_waiver_stamps")
+    inherited_stamps = existing_stamps if isinstance(existing_stamps, dict) else {}
     created: list[tuple[str, str, DescendantWaiverStamp]] = []
     for source_role, descendant_role in role_mapping.items():
         source = parent_roles.get(source_role)
@@ -165,27 +168,65 @@ def stamp_minted_descendant_waivers(
             or source.reviewed_flex_mode != child.reviewed_flex_mode
         ):
             continue
+        source_stamp = _decode_stamp(
+            inherited_stamps.get(_stamp_key(source.work_id, source.role)),
+            waiver_id=source.flex_waiver_id,
+        )
+        if source.flex_waiver_source_work_id != source.work_id:
+            if (
+                source_stamp is None
+                or source_stamp.descendant_work_id != source.work_id
+                or source_stamp.descendant_role != source.role
+                or source_stamp.descendant_document_revision != source.document_revision
+                or source_stamp.descendant_member_fingerprint != _member_fingerprint(source)
+            ):
+                continue
+            origin = (
+                source_stamp.source_work_id,
+                source_stamp.source_role,
+                source_stamp.source_document_revision,
+                source_stamp.source_member_fingerprint,
+            )
+        else:
+            origin = (
+                source.work_id,
+                source.role,
+                source.document_revision,
+                _member_fingerprint(source),
+            )
         stamp = DescendantWaiverStamp(
             waiver_id=source.flex_waiver_id,
-            source_work_id=source.work_id,
-            source_role=source.role,
-            source_document_revision=source.document_revision,
-            source_member_fingerprint=_member_fingerprint(source),
+            source_work_id=origin[0],
+            source_role=origin[1],
+            source_document_revision=origin[2],
+            source_member_fingerprint=origin[3],
+            descendant_work_id=child.work_id,
+            descendant_role=child.role,
             descendant_document_revision=child.document_revision,
             descendant_member_fingerprint=_member_fingerprint(child),
         )
         created.append((child.work_id, child.role, stamp))
     if not created:
         return ()
-    with process_lock:
+    with recovery_ledger_lock(repo):
         ledger = _read(repo)
         existing_stamps = ledger.get("flex_waiver_stamps")
         stamps = dict(existing_stamps) if isinstance(existing_stamps, dict) else {}
+        persisted: list[DescendantWaiverStamp] = []
         for work_id, role, stamp in created:
-            stamps[_stamp_key(work_id, role)] = contract_projection(stamp)
+            key = _stamp_key(work_id, role)
+            # A child minted under one lineage cannot be reassigned by a
+            # later stamp attempt. A newly authorized action must use fresh
+            # eligibility and cannot silently adopt an existing child.
+            if key in stamps:
+                continue
+            stamps[key] = contract_projection(stamp)
+            persisted.append(stamp)
+        if not persisted:
+            return ()
         ledger["flex_waiver_stamps"] = stamps
         _write(repo, ledger)
-    return tuple(stamp for _, _, stamp in created)
+    return tuple(persisted)
 
 
 def _member_fingerprint(selection: EffectiveSelection) -> str:
