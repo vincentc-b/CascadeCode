@@ -767,6 +767,12 @@ def manifest_path(epic_id: str, *, root: Path) -> Path:
     return repo / _SIDECAR_DIR / f"{epic_id}.json"
 
 
+def dependency_manifest_repository(epic_id: str, *, root: Path) -> Path:
+    """Return the repository that owns an epic's canonical manifest history."""
+
+    return _manifest_repo(epic_id, root=root)
+
+
 def read_dependency_manifest_history(
     epic_id: str, *, root: Path
 ) -> tuple[DependencyManifestSnapshot, ...]:
