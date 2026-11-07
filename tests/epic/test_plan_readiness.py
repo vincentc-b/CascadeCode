@@ -29,6 +29,7 @@ from tests.support import (
     add_doc,
     approve_epic_plan_when_ready,
     commit_board,
+    declare_no_dependencies,
     make_repo,
     sign_off_both_planning_roles,
 )
@@ -47,6 +48,7 @@ def board(tmp_path: Path) -> Path:
         parent="epic_001",
     )
     commit_board(root, "initial")
+    declare_no_dependencies("epic_001", root=root)
     return root
 
 
@@ -136,7 +138,9 @@ def test_both_sign_offs_enable_approval_and_read_model(board: Path) -> None:
 def test_revision_change_resets_readiness(board: Path) -> None:
     revision_a = _revision(board)
     sign_off_both_planning_roles("epic_001", root=board)
-    assert compute_epic_plan_readiness("epic_001", root=board).status == "ready_for_review"
+    assert (
+        compute_epic_plan_readiness("epic_001", root=board).status == "ready_for_review"
+    )
 
     epic = read_doc("epic_001", root=board)
     epic.body = EPIC_BODY.replace("None yet.", "Revised scope.")

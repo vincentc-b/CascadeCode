@@ -32,7 +32,7 @@ REQUIRED_PLANNING_ROLES: frozenset[PlanningRole] = frozenset(
 OPEN_QUESTIONS_SECTION = section_slug("Open questions")
 
 _SIDECAR_DIR = Path("docs") / "epics" / "2_active" / "_planning_signoffs"
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
@@ -56,17 +56,23 @@ class UnresolvedOpenQuestions(PlanSignOffError):
     """Epic still has open canonical open-question threads."""
 
 
+class DependenciesNotReady(PlanSignOffError):
+    """Current dependency manifest/evidence does not permit planning."""
+
+
 @dataclass(frozen=True, slots=True)
 class PlanSignOff:
     role: PlanningRole
     plan_revision: str
     signed_at: datetime
+    evidence_snapshot_id: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
             "role": self.role,
             "plan_revision": self.plan_revision,
             "signed_at": self.signed_at.astimezone(timezone.utc).isoformat(),
+            "evidence_snapshot_id": self.evidence_snapshot_id,
         }
 
     @classmethod
@@ -74,6 +80,7 @@ class PlanSignOff:
         role = raw.get("role")
         plan_revision = raw.get("plan_revision")
         signed_at = raw.get("signed_at")
+        evidence_snapshot_id = raw.get("evidence_snapshot_id")
         if role not in REQUIRED_PLANNING_ROLES:
             return None
         if not isinstance(plan_revision, str) or not _SHA_RE.match(plan_revision):
@@ -86,7 +93,17 @@ class PlanSignOff:
             return None
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
-        return cls(role=role, plan_revision=plan_revision, signed_at=parsed)
+        if evidence_snapshot_id is not None and (
+            not isinstance(evidence_snapshot_id, str)
+            or not evidence_snapshot_id.strip()
+        ):
+            return None
+        return cls(
+            role=role,
+            plan_revision=plan_revision,
+            signed_at=parsed,
+            evidence_snapshot_id=evidence_snapshot_id,
+        )
 
 
 def sidecar_path(epic_id: str, *, root: Path) -> Path:
@@ -143,14 +160,14 @@ def read_plan_sign_offs(epic_id: str, *, root: Path) -> tuple[PlanSignOff, ...]:
     if not isinstance(rows, list):
         return ()
     parsed: list[PlanSignOff] = []
-    seen: set[tuple[PlanningRole, str]] = set()
+    seen: set[tuple[PlanningRole, str, str | None]] = set()
     for row in rows:
         if not isinstance(row, dict):
             continue
         record = PlanSignOff.from_dict(row)
         if record is None:
             continue
-        key = (record.role, record.plan_revision)
+        key = (record.role, record.plan_revision, record.evidence_snapshot_id)
         if key in seen:
             continue
         seen.add(key)
@@ -183,7 +200,19 @@ def current_valid_sign_offs(
     revision = plan_revision or canonical_plan_revision(epic_id, root=root)
     if revision is None:
         return {}
-    return valid_sign_offs_for_revision(read_plan_sign_offs(epic_id, root=root), revision)
+    from cascade.epic.dependency_evidence import dependency_evidence_snapshot_is_current
+
+    valid: dict[PlanningRole, PlanSignOff] = {}
+    for row in read_plan_sign_offs(epic_id, root=root):
+        if (
+            row.plan_revision == revision
+            and row.evidence_snapshot_id is not None
+            and dependency_evidence_snapshot_is_current(
+                epic_id, row.evidence_snapshot_id, root=root
+            )
+        ):
+            valid[row.role] = row
+    return valid
 
 
 def unresolved_canonical_open_questions(epic_id: str, *, root: Path) -> tuple[str, ...]:
@@ -217,9 +246,7 @@ def sign_off_epic_plan(
         if actor not in REQUIRED_PLANNING_ROLES:
             raise InvalidPlanningRole(f"invalid planning actor {actor!r}")
         if actor != role:
-            raise UnauthorizedPlanningSignOff(
-                f"{actor!r} cannot sign off for {role!r}"
-            )
+            raise UnauthorizedPlanningSignOff(f"{actor!r} cannot sign off for {role!r}")
 
     repo = _signoff_repo(epic_id, root=root)
     with process_lock:
@@ -251,7 +278,34 @@ def sign_off_epic_plan(
                 f"unresolved open question(s) on {epic_id}: {joined}"
             )
 
-        newly_signed = record_plan_sign_off(epic_id, role, canonical, root=repo)
+        from cascade.epic.dependency_evidence import (
+            compute_dependency_readiness,
+            create_dependency_evidence_snapshot,
+        )
+
+        dependency_readiness = compute_dependency_readiness(epic_id, root=repo)
+        if not dependency_readiness.ready:
+            details = ", ".join(
+                f"{row.reason}:{row.dependency_id or 'manifest'}"
+                for row in dependency_readiness.blockers
+            )
+            raise DependenciesNotReady(f"dependencies_not_ready ({details})")
+        existing_valid = current_valid_sign_offs(
+            epic_id, root=repo, plan_revision=canonical
+        )
+        if role in existing_valid:
+            snapshot_id = existing_valid[role].evidence_snapshot_id
+            newly_signed = False
+        else:
+            evidence_snapshot = create_dependency_evidence_snapshot(epic_id, root=repo)
+            snapshot_id = evidence_snapshot.snapshot_id
+            newly_signed = record_plan_sign_off(
+                epic_id,
+                role,
+                canonical,
+                root=repo,
+                evidence_snapshot_id=snapshot_id,
+            )
         valid = current_valid_sign_offs(epic_id, root=repo)
     return {
         "ok": True,
@@ -259,9 +313,8 @@ def sign_off_epic_plan(
         "role": role,
         "plan_revision": canonical,
         "newly_signed": newly_signed,
-        "sign_offs": {
-            signed_role: row.to_dict() for signed_role, row in valid.items()
-        },
+        "evidence_snapshot_id": snapshot_id,
+        "sign_offs": {signed_role: row.to_dict() for signed_role, row in valid.items()},
     }
 
 
@@ -272,6 +325,7 @@ def record_plan_sign_off(
     *,
     root: Path,
     signed_at: datetime | None = None,
+    evidence_snapshot_id: str | None = None,
 ) -> bool:
     """Persist one role sign-off for ``plan_revision``. Returns False when idempotent."""
 
@@ -284,12 +338,37 @@ def record_plan_sign_off(
     if when.tzinfo is None:
         when = when.replace(tzinfo=timezone.utc)
 
+    if evidence_snapshot_id is None:
+        existing_valid = current_valid_sign_offs(
+            epic_id, root=root, plan_revision=plan_revision
+        )
+        if role in existing_valid:
+            return False
+        from cascade.epic.dependency_evidence import create_dependency_evidence_snapshot
+
+        evidence_snapshot_id = create_dependency_evidence_snapshot(
+            epic_id, root=root
+        ).snapshot_id
+
     path = sidecar_path(epic_id, root=root)
     with process_lock:
         existing = read_plan_sign_offs(epic_id, root=root)
-        if any(row.role == role and row.plan_revision == plan_revision for row in existing):
+        if any(
+            row.role == role
+            and row.plan_revision == plan_revision
+            and row.evidence_snapshot_id == evidence_snapshot_id
+            for row in existing
+        ):
             return False
-        updated = (*existing, PlanSignOff(role=role, plan_revision=plan_revision, signed_at=when))
+        updated = (
+            *existing,
+            PlanSignOff(
+                role=role,
+                plan_revision=plan_revision,
+                signed_at=when,
+                evidence_snapshot_id=evidence_snapshot_id,
+            ),
+        )
         _write_sidecar(path, updated)
         _commit_sidecar(epic_id, path, root=root, role=role)
     return True
@@ -346,7 +425,9 @@ def _write_sidecar(path: Path, sign_offs: tuple[PlanSignOff, ...]) -> None:
         "version": _SCHEMA_VERSION,
         "sign_offs": [row.to_dict() for row in sign_offs],
     }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def _signoff_repo(epic_id: str, *, root: Path) -> Path:

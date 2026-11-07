@@ -55,6 +55,7 @@ class EpicPlanReadiness:
     approve_disabled_explanation: str | None
     dependency_status: DependencyStatusProjection
     blockers: tuple[PlanReadinessBlocker, ...]
+    dependency_blockers: tuple[dict[str, object], ...] = ()
 
 
 def compute_epic_plan_readiness(
@@ -90,6 +91,10 @@ def compute_epic_plan_readiness(
     sign_offs = {role: row.to_dict() for role, row in valid.items()}
     missing_roles = _missing_roles(valid)
 
+    from cascade.epic.dependency_evidence import compute_dependency_readiness
+
+    dependency_readiness = compute_dependency_readiness(epic_id, root=root)
+    dependency_blockers = tuple(row.to_dict() for row in dependency_readiness.blockers)
     dependency_outcome = dependency_evidence.outcome
     dependency_status = project_dependency_evaluation(
         epic_id, dependency_evidence.evaluation
@@ -100,6 +105,14 @@ def compute_epic_plan_readiness(
         revision_available=revision is not None,
         missing_roles=missing_roles,
     )
+    if dependency_blockers:
+        blockers += (
+            PlanReadinessBlocker(
+                code="dependencies_not_ready",
+                category="dependency",
+                explanation="Validate software prerequisites before approval.",
+            ),
+        )
     if dependency_outcome != "satisfied":
         return EpicPlanReadiness(
             status="planning",
@@ -112,6 +125,7 @@ def compute_epic_plan_readiness(
             ),
             dependency_status=dependency_status,
             blockers=blockers,
+            dependency_blockers=dependency_blockers,
         )
 
     if open_questions:
@@ -124,6 +138,7 @@ def compute_epic_plan_readiness(
             approve_disabled_explanation="Resolve all open questions before approval.",
             dependency_status=dependency_status,
             blockers=blockers,
+            dependency_blockers=dependency_blockers,
         )
 
     if revision is None:
@@ -138,6 +153,20 @@ def compute_epic_plan_readiness(
             ),
             dependency_status=dependency_status,
             blockers=blockers,
+            dependency_blockers=dependency_blockers,
+        )
+
+    if dependency_blockers:
+        return EpicPlanReadiness(
+            status="planning",
+            plan_revision=revision,
+            sign_offs=sign_offs,
+            can_approve_plan=False,
+            approve_disabled_reason="dependencies_not_ready",
+            approve_disabled_explanation="Validate software prerequisites before approval.",
+            dependency_status=dependency_status,
+            blockers=blockers,
+            dependency_blockers=dependency_blockers,
         )
 
     if missing_roles:
@@ -151,6 +180,7 @@ def compute_epic_plan_readiness(
             approve_disabled_explanation=_readiness_explanation(reason),
             dependency_status=dependency_status,
             blockers=blockers,
+            dependency_blockers=dependency_blockers,
         )
 
     return EpicPlanReadiness(
@@ -191,6 +221,7 @@ def epic_plan_readiness_to_dict(readiness: EpicPlanReadiness) -> dict[str, objec
         "sign_offs": dict(readiness.sign_offs),
         "can_approve_plan": readiness.can_approve_plan,
         "approve_disabled_reason": readiness.approve_disabled_reason,
+        "dependency_blockers": list(readiness.dependency_blockers),
         "approve_disabled_explanation": readiness.approve_disabled_explanation,
         "dependency_status": readiness.dependency_status.to_dict(),
         "blockers": [blocker.to_dict() for blocker in readiness.blockers],

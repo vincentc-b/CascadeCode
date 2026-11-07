@@ -11,7 +11,7 @@ from cascade.board.store import list_board, read_doc, reset_id_reservations, wri
 from cascade.epic.guard import EpicToolDenied, tool_guard
 from cascade.epic.mint import list_children, mint_feature
 from cascade.watchdog import read_events
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, declare_no_dependencies, make_repo
 
 _REQUIRED_FEATURE_HEADINGS = (
     "Parent Epic",
@@ -35,7 +35,9 @@ def _reset_ids() -> None:
 @pytest.fixture
 def epic_board(tmp_path: Path) -> dict[str, object]:
     root = make_repo(tmp_path)
-    epic = add_doc(root, id="epic_001", title="Functional MVP", tier="epic", status="active")
+    epic = add_doc(
+        root, id="epic_001", title="Functional MVP", tier="epic", status="active"
+    )
     existing = add_doc(
         root,
         id="feat_001",
@@ -55,6 +57,7 @@ def epic_board(tmp_path: Path) -> dict[str, object]:
         status="backlog",
         parent="feat_001",
     )
+    declare_no_dependencies("epic_001", root=root)
     return {"root": root, "epic": epic, "existing": existing, "task": task}
 
 
@@ -116,22 +119,30 @@ def test_mint_copies_epic_provider_and_models(epic_board: dict[str, object]) -> 
     }
 
 
-def test_mint_creates_backlog_feature_with_headings(epic_board: dict[str, object]) -> None:
+def test_mint_creates_backlog_feature_with_headings(
+    epic_board: dict[str, object],
+) -> None:
     root = epic_board["root"]
-    feature_id = mint_feature("New capability", body_stub="Ship it.", epic_id="epic_001", root=root)
+    feature_id = mint_feature(
+        "New capability", body_stub="Ship it.", epic_id="epic_001", root=root
+    )
     doc = read_doc(feature_id, root=root)
     assert doc.meta.status == "backlog"
     assert doc.meta.parent == "epic_001"
     assert doc.meta.path.parent.name == "1_backlog"
     assert doc.meta.path.is_file()
     assert "Ship it." in doc.body
-    found = {line[3:].strip() for line in doc.body.splitlines() if line.startswith("## ")}
+    found = {
+        line[3:].strip() for line in doc.body.splitlines() if line.startswith("## ")
+    }
     assert set(_REQUIRED_FEATURE_HEADINGS) <= found
     parent_section = doc.body.split("## Parent Epic")[1].split("##")[0]
     assert "epic_001" in parent_section
 
 
-def test_mint_updates_epic_children_and_breakdown(epic_board: dict[str, object]) -> None:
+def test_mint_updates_epic_children_and_breakdown(
+    epic_board: dict[str, object],
+) -> None:
     root = epic_board["root"]
     first = mint_feature("One", epic_id="epic_001", root=root)
     epic = read_doc("epic_001", root=root)
@@ -191,7 +202,9 @@ def test_mint_copies_depends_on(epic_board: dict[str, object]) -> None:
 def test_mint_rejects_unknown_dep(epic_board: dict[str, object]) -> None:
     root = epic_board["root"]
     with pytest.raises(EpicToolDenied):
-        mint_feature("Bad dep", depends_on=["feat_missing"], epic_id="epic_001", root=root)
+        mint_feature(
+            "Bad dep", depends_on=["feat_missing"], epic_id="epic_001", root=root
+        )
 
 
 def test_mint_rejects_task_dep(epic_board: dict[str, object]) -> None:
@@ -219,8 +232,12 @@ def test_tasks_path_write_denied_by_guard(epic_board: dict[str, object]) -> None
 
 
 def test_mint_module_has_no_dispatch_symbols() -> None:
-    text = Path(__file__).resolve().parents[2].joinpath("cascade/epic/mint.py").read_text(
-        encoding="utf-8"
+    text = (
+        Path(__file__)
+        .resolve()
+        .parents[2]
+        .joinpath("cascade/epic/mint.py")
+        .read_text(encoding="utf-8")
     )
     for symbol in ("move_doc", "dispatch_feature", "dispatch_task", "activate_epic"):
         assert symbol not in text

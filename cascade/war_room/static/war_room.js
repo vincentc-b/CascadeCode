@@ -17,6 +17,7 @@
   const BacklogPriorityUiApi = globalThis.BacklogPriorityUi;
   const BranchSyncUiApi = globalThis.BranchSyncUi;
   const EpicPlanReadinessUi = globalThis.EpicPlanReadinessUi;
+  const DependencyReviewUi = globalThis.DependencyReviewUi;
   const DependencyStatusUi = globalThis.DependencyStatusUi;
   const BriefDefaultsUi = globalThis.BriefDefaultsUi;
   const ProviderRecoveryDialogUi = globalThis.ProviderRecoveryDialogUi;
@@ -1290,6 +1291,16 @@
 
     if (tier === "epics" && column === "2_active") {
       appendEpicReturnFeedback(row, item.return_to_backlog);
+      if (item.software_dependency_status && DependencyReviewUi) {
+        DependencyReviewUi.appendPanel(document, row, item.software_dependency_status, {
+          onProjection: function (projection) {
+            item.software_dependency_status = projection;
+            if (projection.planning_readiness) {
+              item.plan_readiness = projection.planning_readiness;
+            }
+          },
+        });
+      }
     }
 
     const actions = document.createElement("div");
