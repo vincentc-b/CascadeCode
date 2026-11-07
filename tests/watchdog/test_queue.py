@@ -5,6 +5,7 @@ from pathlib import Path
 
 from cascade.watchdog import Event, append_event, read_events
 from cascade.watchdog.events import prune_completed_work_queues, remove_queue_if_unchanged
+from cascade.task.action_recovery import capture_and_route_action_failure
 from tests.support import add_doc, make_repo
 
 
@@ -270,3 +271,21 @@ def test_prune_keeps_completed_feature_awaiting_review(
 
     assert prune_completed_work_queues(root=root) == []
     assert (root / "docs/_queue/feat_001.jsonl").is_file()
+
+
+def test_prune_keeps_completed_team_queue_with_pending_recovery(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Done", tier="epic", status="completed")
+    capture_and_route_action_failure(
+        "epic_001:review_rebase",
+        "review_rebase",
+        affected_work_id="epic_001",
+        intended_target_ref="main",
+        root=root,
+        failure_code="review_conflict",
+        safe_summary="The completed Epic still owns an unresolved review.",
+        owning_team={"kind": "epic_team", "work_id": "epic_001"},
+    )
+
+    assert prune_completed_work_queues(root=root) == []
+    assert (root / "docs/_queue/epic_001.jsonl").is_file()
