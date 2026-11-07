@@ -10,7 +10,7 @@ from cascade.board.errors import GitError
 from cascade.board.store import move_doc, read_doc
 from cascade.boss.merge import merge_task_branch
 from cascade.feature.publication import prepare_feature_publication, validate_feature_publication
-from cascade.feature.publication import _build_publication_tail
+from cascade.feature.publication import _build_publication_tail, _task_deliverable_commit
 from cascade.review import ensure_feature_review
 from cascade.task.git_tools import swe_commit
 from cascade.task.worktree import clear_task_runs, get_task_run
@@ -99,6 +99,73 @@ def test_prepare_feature_publication_folds_history_to_one_commit_per_task(
     assert feature.meta.status == "completed"
     assert feature.meta.path.parent.name == "3_completed"
     assert _git(feature_entry.path, "status", "--porcelain", "--untracked-files=no") == ""
+
+
+def test_legacy_task_commit_uses_durable_validation_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    product = root / "product.py"
+    product.write_text("VALUE = 0\n", encoding="utf-8")
+    _git(root, "add", "product.py")
+    _git(root, "commit", "-m", "base")
+    _git(root, "checkout", "-b", "task/task_001")
+    product.write_text("VALUE = 1\n", encoding="utf-8")
+    _git(root, "commit", "-am", "legacy task delivery")
+    delivery = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "-b", "feat/feat_001")
+    monkeypatch.setattr(
+        "cascade.feature.publication.load_action",
+        lambda _action_id, *, root: {
+            "action_kind": "queued_task_merge",
+            "recovery_state": "blocked",
+            "metadata": {"final_validation": {
+                "task_id": "task_001",
+                "deliverable_sha": delivery,
+                "feature_base_sha": _git(root, "rev-parse", f"{delivery}^"),
+            }},
+        },
+    )
+
+    assert _task_deliverable_commit(root, "task_001") == delivery
+
+
+def test_legacy_validation_merge_uses_task_side_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    product = root / "product.py"
+    product.write_text("VALUE = 0\n", encoding="utf-8")
+    _git(root, "add", "product.py")
+    _git(root, "commit", "-m", "base")
+    base = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "-b", "feat/feat_001")
+    (root / "feature.txt").write_text("current feature\n", encoding="utf-8")
+    _git(root, "add", "feature.txt")
+    _git(root, "commit", "-m", "feature checkpoint")
+    feature_base = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "-b", "task/task_001", base)
+    product.write_text("VALUE = 1\n", encoding="utf-8")
+    _git(root, "commit", "-am", "legacy task delivery")
+    task_parent = _git(root, "rev-parse", "HEAD")
+    _git(root, "merge", "--no-ff", "feat/feat_001", "-m", "validate current feature")
+    validated = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "feat/feat_001")
+    _git(root, "merge", "--no-ff", "task/task_001", "-m", "integrate task")
+    monkeypatch.setattr(
+        "cascade.feature.publication.load_action",
+        lambda _action_id, *, root: {
+            "action_kind": "queued_task_merge",
+            "recovery_state": "completed",
+            "metadata": {"final_validation": {
+                "task_id": "task_001",
+                "deliverable_sha": validated,
+                "feature_base_sha": feature_base,
+            }},
+        },
+    )
+
+    assert _task_deliverable_commit(root, "task_001") == task_parent
 
 
 def test_publication_reuses_integration_resolution_for_conflicting_task_patch(
