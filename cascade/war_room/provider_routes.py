@@ -6,7 +6,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 from cascade.agent.credentials import forget_user_store_token, write_user_store_token
-from cascade.agent.execution_preflight import clear_provider_blocker, provider_blocker
+from cascade.agent.execution_preflight import provider_blocker
 from cascade.agent.errors import ProviderConfigError
 from cascade.agent.providers import parse_provider_id, probe_providers
 from cascade.board.errors import BoardError, NotFound
@@ -125,10 +125,9 @@ def _handle_recovery_post(
             disposition=result.disposition,
         )
         return True
-    # A successful fresh turn or compatible resume has a valid current
-    # selection.  Resolve only this work item's blocker; siblings and children
-    # retain their independent durable observations.
-    clear_provider_blocker(work_id, root=handler.server.root)
+    # Selection recovery authorizes a future attempt but is not itself a
+    # provider process start.  Keep the incident active until that start runs
+    # a fresh successful execution check of the complete blocked scope.
     handler._json_response(HTTPStatus.OK, result.to_dict())
     return True
 

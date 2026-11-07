@@ -8,7 +8,6 @@ from langgraph.graph import END, START, StateGraph
 
 from cascade.agent.errors import TurnCancelledForDrain
 from cascade.agent.graph_turn import (
-    clear_turn_model_override,
     flex_mode_for_role,
     format_turn_prompt,
     latest_input,
@@ -270,17 +269,32 @@ def _swe_role_content(state: TaskGraphState) -> str:
         return no_input_message("swe")
 
     model_id, model_source = model_for_role(state, "swe")
+    provider_id, provider_source = provider_for_role(state, "swe")
+    task_id = state.get("task_id") or ""
+    repo = _repo_for_state(task_id)
+    if _run_role_fn is None and (model_id is None or provider_id is None):
+        from cascade.agent.execution_preflight import (
+            ProviderSelection,
+            recheck_provider_capability,
+        )
+
+        preflight = recheck_provider_capability(
+            task_id,
+            tier="task",
+            selections=(ProviderSelection("swe", provider_id or "", model_id or ""),),
+            root=repo,
+        )
+        if not preflight.supported:
+            return f"swe: provider blocked — {preflight.reason_code} ({preflight.classification})"
+
     if model_id is None:
         return missing_model_message("swe")
 
-    provider_id, provider_source = provider_for_role(state, "swe")
     if provider_id is None:
         return missing_provider_message("swe")
 
     reasoning_level, reasoning_source = reasoning_for_role(state, "swe")
     flex_mode = flex_mode_for_role(state, "swe")
-    task_id = state.get("task_id") or ""
-    repo = _repo_for_state(task_id)
     prompt = format_turn_prompt(
         messages,
         provider_id=provider_id,

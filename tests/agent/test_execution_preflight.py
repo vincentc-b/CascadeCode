@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from cascade.agent.discovery.inventory import (
@@ -18,6 +19,7 @@ from cascade.agent.discovery.types import (
 )
 from cascade.agent.execution_preflight import (
     ProviderSelection,
+    clear_provider_blocker,
     provider_blocker,
     recheck_provider_capability,
 )
@@ -37,6 +39,25 @@ def _inventory(*, model_id: str) -> ProviderInventoryResult:
         ),
         failures=(),
         freshness=InventoryFreshness(False, 1.0, 2.0, 1.0),
+    )
+
+
+def _inventory_models(
+    *model_ids: str, from_cache: bool = False
+) -> ProviderInventoryResult:
+    return ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=tuple(
+                    DiscoveredModel(id=model_id, display_name=model_id)
+                    for model_id in model_ids
+                ),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(from_cache, 1.0, 2.0, 1.0),
     )
 
 
@@ -60,6 +81,29 @@ def _task(root: Path, model_id: str) -> None:
     doc.meta.provider = "codex"
     doc.meta.models = {"swe": model_id}
     write_doc(doc, root=root)
+
+
+def _feature(root: Path) -> tuple[ProviderSelection, ...]:
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        parent="epic_001",
+    )
+    doc = read_doc("feat_001", root=root)
+    doc.meta.provider = "codex"
+    doc.meta.models = {
+        "feature_lead": "offered-model",
+        "feature_architect": "missing-model",
+        "swe": "missing-model",
+    }
+    write_doc(doc, root=root)
+    return tuple(
+        ProviderSelection(role, "codex", model)
+        for role, model in doc.meta.models.items()
+    )
 
 
 def test_execution_preflight_upserts_safe_deterministic_blocker_and_clears_it(
@@ -147,6 +191,100 @@ def test_execution_preflight_persists_one_retryable_blocker_across_restart(
     assert restarted["recommended_remedy"] == "retry_provider_setup"
     assert restarted["affected_roles"] == ["swe"]
     assert "message" not in restarted
+
+
+def test_blocker_retains_complete_scope_provenance_and_requires_fresh_clear(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    selections = _feature(root)
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.refresh_provider_inventory",
+        lambda: _inventory_models("offered-model"),
+    )
+
+    blocked = recheck_provider_capability(
+        "feat_001", tier="feature", selections=selections, root=root
+    )
+
+    assert blocked.affected_roles == ("feature_architect", "swe")
+    incident = provider_blocker("feat_001", root=root)
+    assert incident is not None
+    assert incident["action"] == "execution"
+    assert incident["selection_fingerprint"] == blocked.selection_fingerprint
+    checks = incident["checks"]
+    assert isinstance(checks, list)
+    assert [check["role"] for check in checks] == [
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    ]
+    assert checks[0]["outcome"] == "supported"
+    assert checks[1]["document_path"]
+    assert checks[1]["document_revision"]
+    assert checks[1]["field_sources"]
+
+    # A supported cached result is useful readiness information, but cannot
+    # resolve an execution incident.
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.refresh_provider_inventory",
+        lambda: _inventory_models("offered-model", "missing-model", from_cache=True),
+    )
+    cached = recheck_provider_capability(
+        "feat_001", tier="feature", selections=selections, root=root
+    )
+    assert cached.supported
+    assert provider_blocker("feat_001", root=root) is not None
+    fresh_evidence = replace(
+        cached,
+        inventory_freshness=replace(cached.inventory_freshness, from_cache=False),
+    )
+    assert not clear_provider_blocker(
+        "feat_001",
+        result=replace(fresh_evidence, checks=fresh_evidence.checks[:1]),
+        root=root,
+    )
+    assert not clear_provider_blocker(
+        "feat_001",
+        result=replace(fresh_evidence, work_id="feat_999"),
+        root=root,
+    )
+
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.refresh_provider_inventory",
+        lambda: _inventory_models("offered-model", "missing-model"),
+    )
+    fresh = recheck_provider_capability(
+        "feat_001", tier="feature", selections=selections, root=root
+    )
+    assert fresh.supported
+    assert provider_blocker("feat_001", root=root) is None
+
+
+def test_post_activation_selection_drift_is_persisted_not_replaced(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _task(root, "reviewed-model")
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.refresh_provider_inventory",
+        lambda: _inventory_models("reviewed-model", "stale-runtime-model"),
+    )
+
+    result = recheck_provider_capability(
+        "task_001",
+        tier="task",
+        selections=(ProviderSelection("swe", "codex", "stale-runtime-model"),),
+        root=root,
+    )
+
+    assert result.reason_code == "stale_selection"
+    incident = provider_blocker("task_001", root=root)
+    assert incident is not None
+    assert incident["reason_code"] == "stale_selection"
+    check = incident["checks"][0]
+    assert check["model_id"] == "reviewed-model"
+    assert check["field_sources"]
 
 
 def test_preview_and_execution_share_effective_selection_and_fingerprint(

@@ -104,7 +104,7 @@ def _inventory(*, model: str | None) -> ProviderInventoryResult:
     )
 
 
-def test_change_is_human_authorized_and_clears_only_recovered_blocker(
+def test_change_is_human_authorized_and_keeps_blocker_until_fresh_start(
     tmp_path, monkeypatch
 ) -> None:
     root, work_id = _blocked_task(tmp_path)
@@ -142,7 +142,7 @@ def test_change_is_human_authorized_and_clears_only_recovered_blocker(
     blockers = json.loads(
         (root / ".cascade" / "provider_blockers.json").read_text(encoding="utf-8")
     )["blockers"]
-    assert blockers[work_id]["active"] is False
+    assert blockers[work_id]["active"] is True
     assert blockers["task_002"]["active"] is True
 
 
@@ -285,10 +285,24 @@ def test_post_start_provider_loss_survives_restart_and_retry_recovers_only_targe
 
     assert try_handle_provider_post(handler, {})
     assert handler.responses[0][0] == 200
-    assert provider_blocker(work_id, root=root) is None
+    # Recovery updates reviewed pins, but only the next provider process start
+    # may resolve the durable execution incident.
+    assert provider_blocker(work_id, root=root) is not None
     pins = graph.get_state(thread_config(work_id)).values
     assert pins["model_ids"]["swe"] == "model-a"
     assert pins["model_id"] is None
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.refresh_provider_inventory",
+        lambda: _inventory(model="model-a"),
+    )
+    fresh = recheck_provider_capability(
+        work_id,
+        tier="task",
+        selections=(ProviderSelection("swe", "codex", "model-a"),),
+        root=root,
+    )
+    assert fresh.supported
+    assert provider_blocker(work_id, root=root) is None
     sibling = provider_blocker("task_002", root=root)
     assert sibling is not None and sibling["active"] is True
 
