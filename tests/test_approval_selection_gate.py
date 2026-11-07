@@ -17,6 +17,7 @@ from cascade.agent.discovery.types import DiscoveredModel
 from cascade.agent.selection_admission import SelectionAdmissionError
 from cascade.agent.selection_preflight import evaluate_work_selection
 from cascade.approvals import ApprovalSelectionError, approve_epic_plan, approve_feature
+from cascade.board.parse import parse_doc
 from cascade.board.store import read_doc, write_doc
 from cascade.war_room.server import WarRoomRequestHandler
 from tests.support import add_doc, make_repo, sign_off_both_planning_roles
@@ -69,6 +70,52 @@ def test_feature_approval_rejects_invalid_late_override_before_timestamp(
         "swe",
     )
     assert caught.value.selections.roles[-1].document_path.endswith("feat_001_feature.md")
+
+
+def test_feature_approval_preflights_existing_tasks_before_timestamp(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    _select_feature(root, "feat_001")
+    task = read_doc("task_001", root=root)
+    task.meta.provider = "codex"
+    task.meta.models = {"swe": "future-model"}
+    write_doc(task, root=root)
+
+    with pytest.raises(ApprovalSelectionError) as caught:
+        approve_feature("feat_001", root=root, inventory=_inventory("offered"))
+
+    assert [item.result.work_id for item in caught.value.preflights] == [
+        "feat_001",
+        "task_001",
+    ]
+    assert caught.value.preflight.affected_roles == ("swe",)
+    assert read_doc("feat_001", root=root).meta.approved_at is None
+
+
+def test_feature_approval_rejects_selection_changed_after_board_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_feature(root, "feat_001")
+
+    def changed_document(path: Path):
+        doc = parse_doc(path)
+        doc.meta.models["swe"] = "changed-after-snapshot"
+        return doc
+
+    monkeypatch.setattr("cascade.approvals.parse_doc", changed_document)
+
+    with pytest.raises(ApprovalSelectionError) as caught:
+        approve_feature("feat_001", root=root, inventory=_inventory("offered"))
+
+    assert caught.value.preflight.reason_code == "stale_selection"
+    assert read_doc("feat_001", root=root).meta.approved_at is None
 
 
 def test_feature_approval_projects_owning_document_loss_as_stale_selection(
@@ -132,6 +179,29 @@ def test_epic_approval_preflights_all_children_before_first_write(tmp_path: Path
     assert read_doc("epic_001", root=root).meta.plan_approved_at is None
 
 
+def test_epic_approval_preflights_existing_tasks_before_first_write(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    _select_feature(root, "feat_001")
+    task = read_doc("task_001", root=root)
+    task.meta.provider = "codex"
+    task.meta.models = {"swe": "future-model"}
+    write_doc(task, root=root)
+    sign_off_both_planning_roles("epic_001", root=root)
+
+    with pytest.raises(ApprovalSelectionError) as caught:
+        approve_epic_plan("epic_001", root=root, inventory=_inventory("offered"))
+
+    assert [item.result.work_id for item in caught.value.preflights] == [
+        "feat_001",
+        "task_001",
+    ]
+    assert read_doc("feat_001", root=root).meta.approved_at is None
+    assert read_doc("epic_001", root=root).meta.plan_approved_at is None
+
+
 def test_accepted_approval_survives_drift_and_reports_reconciliation_preflight(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -156,7 +226,7 @@ def test_accepted_approval_survives_drift_and_reports_reconciliation_preflight(
         lambda _root: SimpleNamespace(enabled=True),
     )
 
-    def reject_dispatch(_root: Path) -> None:
+    def reject_dispatch(_root: Path, **_kwargs: object) -> None:
         raise refusal
 
     monkeypatch.setattr(
@@ -168,6 +238,38 @@ def test_accepted_approval_survives_drift_and_reports_reconciliation_preflight(
     assert result["newly_approved"] is False
     assert result["dispatch_pending"] is True
     assert result["preflight"]["reason_code"] == "model_not_offered"  # type: ignore[index]
+    assert read_doc("feat_001", root=root).meta.approved_at == approved_at
+
+
+def test_approval_reports_dispatch_refusal_returned_by_reconciliation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_feature(root, "feat_001")
+    available = _inventory("offered")
+    approve_feature("feat_001", root=root, inventory=available)
+    approved_at = read_doc("feat_001", root=root).meta.approved_at
+
+    _select_feature(root, "feat_001", swe="future-model")
+    root.joinpath("cascade.toml").write_text("[automation]\nenabled = true\n")
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch.get_provider_inventory", lambda: available
+    )
+
+    result = approve_feature("feat_001", root=root, inventory=available)
+
+    assert result["newly_approved"] is False
+    assert result["dispatch_pending"] is True
+    assert [
+        item["role"]
+        for item in result["preflight"]["checks"]  # type: ignore[index]
+        if item["outcome"] != "supported"
+    ] == ["swe"]
+    refusals = result["dispatch_refusals"]
+    assert [item["work_id"] for item in refusals] == ["feat_001"]  # type: ignore[union-attr]
+    assert refusals[0]["preflight"] == result["preflight"]  # type: ignore[index]
     assert read_doc("feat_001", root=root).meta.approved_at == approved_at
 
 

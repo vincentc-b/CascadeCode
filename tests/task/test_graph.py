@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
 
 from cascade.agent.types import RoleResult
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
 from cascade.board.store import read_doc, write_doc
 from cascade.task.graph import (
     clear_task_graph_sessions,
@@ -27,7 +34,33 @@ from tests.support import add_doc, commit_board, make_repo
 
 
 @pytest.fixture(autouse=True)
-def _isolation() -> None:
+def _isolation(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = time.time()
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="cursor",
+                display_name="Cursor",
+                models=tuple(
+                    DiscoveredModel(id=model, display_name=model)
+                    for model in ("proj-epic", "proj-feature", "proj-task", TEST_MODEL_ID)
+                ),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, now, now + 300, 300),
+    )
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.refresh_provider_inventory", lambda: inventory
+    )
+    from cascade.workspace.kickoff import kickoff_turn
+
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.kickoff_turn",
+        lambda reason: kickoff_turn(reason) if reason.kind == "human_message" else None,
+    )
     clear_task_runs()
     clear_task_graph_sessions()
     clear_task_wiring_state()
@@ -228,27 +261,47 @@ def test_red_then_green_tests_allow_finished_provider_to_queue_merge(
     on_tests_finished(task_id, {"exit_code": 1}, root=root)
     assert read_doc(task_id, root=root).meta.status == "active"
     from cascade.task.graph import _auto_merge_finished_task
-    from cascade.task.swe_turn import has_deliverable_commit
-
     monkeypatch.setattr("cascade.task.swe_turn.has_deliverable_commit", lambda _run: True)
     _auto_merge_finished_task(task_id, root)
     retry_events, _ = read_events(task_id, 0, root=root)
     assert retry_events[-1].type == "TaskValidationRetryRequested"
     assert retry_events[-1].payload["validation_failure"] == 1
 
-    on_tests_finished(task_id, {"exit_code": 0}, root=root)
+    run = get_task_run(task_id)
+    assert run is not None
+    (run.worktree / "delivery.txt").write_text("implemented\n", encoding="utf-8")
+    subprocess.run(["git", "add", "delivery.txt"], cwd=run.worktree, check=True)
+    subprocess.run(["git", "commit", "-m", "deliver task"], cwd=run.worktree, check=True, capture_output=True)
+
+    def rev_parse(ref: str) -> str:
+        return subprocess.run(
+            ["git", "rev-parse", ref], cwd=root, check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    evidence = {
+        "task_id": task_id,
+        "deliverable_sha": rev_parse(run.branch),
+        "feature_base_sha": rev_parse("feat/feat_001"),
+    }
+    from cascade.task_rollup import queue_task_merge, queued_delivery_evidence
+
+    queued: list[str] = []
+
+    def capture_queue(value: str, **kwargs: object) -> None:
+        queued.append(value)
+        queue_task_merge(value, **kwargs)
+
+    monkeypatch.setattr("cascade.task_rollup.queue_task_merge", capture_queue)
+    on_tests_finished(task_id, {"exit_code": 0, "final_validation": evidence}, root=root)
+    assert queued_delivery_evidence(task_id, root=root) == evidence
 
     # An MCP subprocess records the test result durably; the supervisor's
     # process-local TaskRun has not seen its state change.
-    run = get_task_run(task_id)
-    assert run is not None
     run.state = "coding"
 
-    queued: list[str] = []
-    monkeypatch.setattr("cascade.task_rollup.queue_task_merge", lambda value, **_kw: queued.append(value))
     monkeypatch.setattr("cascade.task_rollup.retry_pending_task_merges", lambda _root: [])
     _auto_merge_finished_task(task_id, root)
-    assert queued == [task_id]
+    assert queued and set(queued) == {task_id}
 
 
 def test_final_red_tests_retry_twice_then_block_without_queueing_merge(

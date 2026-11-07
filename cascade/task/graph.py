@@ -309,8 +309,10 @@ def _swe_role_content(state: TaskGraphState) -> str:
     from cascade.task.execution import mark_running
     from cascade.task.wiring import begin_validation_turn
 
-    mark_running(task_id, root=repo)
-    begin_validation_turn(task_id)
+    def on_admitted() -> None:
+        mark_running(task_id, root=repo)
+        begin_validation_turn(task_id)
+
     try:
         outcome = run_coro_sync(
             run_swe_turn(
@@ -323,6 +325,7 @@ def _swe_role_content(state: TaskGraphState) -> str:
                 flex_mode=flex_mode,
                 commit_message=default_swe_commit_message(task_id),
                 run_role_fn=_run_role_fn,
+                on_admitted=on_admitted,
             )
         )
     except TurnCancelledForDrain:

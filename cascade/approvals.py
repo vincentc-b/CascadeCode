@@ -22,7 +22,7 @@ from cascade.epic.plan_readiness import require_epic_plan_ready_for_approval
 from cascade.planning_action_dependencies import require_action_dependencies
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from cascade.watchdog.events import append_event
-from cascade.watchdog.types import Event
+from cascade.watchdog.types import DispatchResult, Event
 
 
 class ApprovalSelectionError(ValueError):
@@ -65,6 +65,7 @@ class _DispatchWarning:
     message: str
     preflight: object | None = None
     selections: object | None = None
+    refusals: tuple[tuple[str, DispatchResult], ...] = ()
 
 
 def feature_approved(feature_id: str, *, root: Path) -> bool:
@@ -99,7 +100,7 @@ def approve_feature(
                 raise ValueError("feature approval requires a feature on the board")
             if current.approved_at is None:
                 _require_approval_selections(
-                    (current,),
+                    (current, *_approval_tasks(evidence.board.by_id.values(), feature_id)),
                     root=repo,
                     inventory=inventory,
                     action="feature_approval",
@@ -157,8 +158,16 @@ def approve_epic_plan(
                     for item in children
                     if board.by_id[item].approved_at is None
                 )
+            approval_scope = tuple(
+                item
+                for child in approval_children
+                for item in (
+                    child,
+                    *_approval_tasks(board.by_id.values(), child.id),
+                )
+            )
             _require_approval_selections(
-                approval_children,
+                approval_scope,
                 root=repo,
                 inventory=inventory,
                 action="epic_plan_approval",
@@ -190,6 +199,19 @@ def approve_epic_plan(
     result: dict[str, object] = {"ok": True, "epic_id": epic_id, "features": children}
     _add_dispatch_warning(result, _maybe_advance_after_approval(repo))
     return result
+
+
+def _approval_tasks(metas: Iterable[WorkMeta], feature_id: str) -> tuple[WorkMeta, ...]:
+    return tuple(
+        sorted(
+            (
+                item
+                for item in metas
+                if item.tier == "task" and item.parent == feature_id
+            ),
+            key=lambda item: item.id,
+        )
+    )
 
 
 def _require_approval_selections(
@@ -232,6 +254,16 @@ def _evaluate_approval_meta(
         doc = parse_doc(meta.path)
         if doc.meta.id != meta.id or doc.meta.tier != meta.tier:
             raise ValueError("owning document identity changed")
+        if (
+            doc.meta.parent != meta.parent
+            or doc.meta.parent_rev != meta.parent_rev
+            or doc.meta.provider != meta.provider
+            or doc.meta.model != meta.model
+            or doc.meta.models != meta.models
+            or doc.meta.reasoning != meta.reasoning
+            or doc.meta.flex_mode != meta.flex_mode
+        ):
+            raise ValueError("owning selection changed after board snapshot")
     except Exception:
         base = evaluate_work_selection(
             meta,
@@ -279,10 +311,14 @@ def _maybe_advance_after_approval(root: Path) -> _DispatchWarning | None:
     # Approval is the dispatch trigger. Broad completion maintenance can involve
     # remote review calls or pending merges and must not hold this HTTP request
     # ahead of newly eligible work.
+    refusals: list[tuple[str, DispatchResult]] = []
     try:
         if not read_automation_config(root).enabled:
             return None
-        reconcile_approval_dispatch(root)
+        reconcile_approval_dispatch(
+            root,
+            on_refusal=lambda work_id, refusal: refusals.append((work_id, refusal)),
+        )
     except Exception as exc:
         # Approval is already durable. The watchdog can retry dispatch; report
         # that delay without claiming the approval itself failed.
@@ -293,6 +329,15 @@ def _maybe_advance_after_approval(root: Path) -> _DispatchWarning | None:
             str(exc) or type(exc).__name__,
             preflight=preflight,
             selections=getattr(exc, "selections", None),
+            refusals=tuple(refusals),
+        )
+    if refusals:
+        first = refusals[0][1]
+        assert first.preflight is not None
+        return _DispatchWarning(
+            first.preflight.message or first.reason or "dispatch pending",
+            preflight=first.preflight,
+            refusals=tuple(refusals),
         )
     return None
 
@@ -308,6 +353,16 @@ def _add_dispatch_warning(
         result["preflight"] = warning.preflight.to_dict()
     if warning.selections is not None and hasattr(warning.selections, "to_dict"):
         result["selections"] = warning.selections.to_dict()
+    if warning.refusals:
+        result["dispatch_refusals"] = [
+            {
+                "work_id": work_id,
+                "reason": refusal.reason,
+                "preflight": refusal.preflight.to_dict(),
+            }
+            for work_id, refusal in warning.refusals
+            if refusal.preflight is not None
+        ]
 
 
 def _set_epic_plan_approved(epic_id: str, *, root: Path) -> bool:

@@ -7,14 +7,6 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-import pytest
-
-from cascade.agent.discovery.inventory import (
-    InventoryFreshness,
-    ProviderInventoryItem,
-    ProviderInventoryResult,
-)
-from cascade.agent.discovery.types import DiscoveredModel
 from cascade.board.paths import column_dir, column_for_status, slugify
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import WorkDoc, WorkMeta, WorkStatus, WorkTier
@@ -383,52 +375,6 @@ def _git(root: Path, *args: str) -> None:
 
 
 TEST_MODEL_ID = "test-model"
-
-_CONFIGURED_ROLES = {
-    "epic": (
-        "epic_manager",
-        "epic_architect",
-        "feature_lead",
-        "feature_architect",
-        "swe",
-    ),
-    "feature": ("feature_lead", "feature_architect", "swe"),
-    "task": ("swe",),
-}
-
-
-def add_configured_doc(root: Path, **kwargs: object) -> WorkDoc:
-    """Create a work document with a complete deterministic test selection."""
-
-    doc = add_doc(root, **kwargs)  # type: ignore[arg-type]
-    doc.meta.provider = "codex"
-    doc.meta.models = {
-        role: TEST_MODEL_ID for role in _CONFIGURED_ROLES[doc.meta.tier]
-    }
-    write_doc(doc, root=root)
-    return read_doc(doc.meta.id, root=root)
-
-
-def install_fake_provider_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make approval and dispatch admission accept configured test documents."""
-
-    inventory = ProviderInventoryResult(
-        providers=(
-            ProviderInventoryItem(
-                provider_id="codex",
-                display_name="Codex",
-                models=(
-                    DiscoveredModel(id=TEST_MODEL_ID, display_name=TEST_MODEL_ID),
-                ),
-            ),
-        ),
-        failures=(),
-        freshness=InventoryFreshness(False, 1.0, 2.0, 1.0),
-    )
-    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
-    monkeypatch.setattr(
-        "cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory
-    )
 
 
 def write_swe_default_role_skills(root: Path) -> None:

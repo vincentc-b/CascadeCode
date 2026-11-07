@@ -117,8 +117,6 @@ def test_parent_epic_denied_without_parent_rev(board):
 
 def test_read_self_task_and_own_comments(board):
     root = board["root"]
-    feature = board["feature"]
-    own_task = board["own_task"]
 
     self_doc = feature_read_doc("feat_001", feature_id="feat_001", root=root)
     assert self_doc.meta.id == "feat_001"
@@ -206,6 +204,27 @@ def test_write_rejects_late_invalid_role_override_without_saving(board, monkeypa
     after = read_doc("feat_001", root=root)
     assert after.meta.provider == before.meta.provider
     assert after.meta.models == before.meta.models
+
+
+def test_write_rechecks_changed_parent_revision_before_saving(board, monkeypatch):
+    root = board["root"]
+    before = read_doc("feat_001", root=root)
+    proposed = deepcopy(before)
+    proposed.meta.parent_rev = "unreviewed-parent-revision"
+    monkeypatch.setattr(
+        "cascade.agent.selection_admission.get_provider_inventory",
+        lambda: ProviderInventoryResult(
+            providers=(),
+            failures=(),
+            freshness=InventoryFreshness(False, 1.0, 2.0, 1.0),
+        ),
+    )
+
+    with pytest.raises(FeatureToolDenied) as caught:
+        feature_write_doc(proposed, feature_id="feat_001", root=root)
+
+    assert caught.value.preflight.result.supported is False
+    assert read_doc("feat_001", root=root).meta.parent_rev == before.meta.parent_rev
 
 
 def test_write_denied_epic_and_task(board):

@@ -12,29 +12,54 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
+
 from cascade.approvals import (
     approve_epic_plan,
     approve_feature,
     epic_plan_approved,
     feature_approved,
 )
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
 from cascade.board.errors import BoardError, GitError
-from cascade.board.store import read_doc
+from cascade.board.store import read_doc, write_doc
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.watchdog.events import read_events
 from cascade.workspace.integration_worktree import integration_worktree_path
-from tests.support import (
-    add_configured_doc as add_doc,
-    approve_epic_plan_when_ready,
-    commit_board,
-    install_fake_provider_inventory,
-    make_repo,
-)
+from tests.support import add_doc, approve_epic_plan_when_ready, commit_board, make_repo
 
 
 @pytest.fixture(autouse=True)
-def _fake_provider_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
-    install_fake_provider_inventory(monkeypatch)
+def supported_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = time.time()
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(DiscoveredModel(id="offered", display_name="Offered"),),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, now, now + 300, 300),
+    )
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
+
+
+def _select_supported(root: Path, work_id: str) -> None:
+    doc = read_doc(work_id, root=root)
+    roles = {
+        "epic": ("epic_manager", "epic_architect", "feature_lead", "feature_architect", "swe"),
+        "feature": ("feature_lead", "feature_architect", "swe"),
+    }[doc.meta.tier]
+    doc.meta.provider = "codex"
+    doc.meta.models = {role: "offered" for role in roles}
+    write_doc(doc, root=root)
 
 
 def test_missing_approval_is_unapproved(tmp_path: Path) -> None:
@@ -50,6 +75,7 @@ def test_approve_feature_persists_and_is_idempotent(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
 
     first = approve_feature("feat_001", root=root)
     assert first["newly_approved"] is True
@@ -66,6 +92,8 @@ def test_epic_approval_snapshots_children_and_is_idempotent(tmp_path: Path) -> N
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(root, id="feat_001", title="One", tier="feature", parent="epic_001")
     add_doc(root, id="feat_002", title="Two", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
+    _select_supported(root, "feat_002")
 
     first = approve_epic_plan_when_ready("epic_001", root=root)
     assert first["features"] == ["feat_001", "feat_002"]
@@ -87,6 +115,7 @@ def test_child_added_after_epic_approval_stays_unapproved(tmp_path: Path) -> Non
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(root, id="feat_001", title="One", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
     approve_epic_plan_when_ready("epic_001", root=root)
 
     add_doc(root, id="feat_002", title="Later", tier="feature", parent="epic_001")
@@ -100,6 +129,8 @@ def test_epic_approval_commits_docs_in_their_owning_checkouts(tmp_path: Path) ->
     (root / ".gitignore").write_text(".cascade/\n", encoding="utf-8")
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "epic_001")
+    _select_supported(root, "feat_001")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
     epic_root = integration_worktree_path("epic", "epic_001", trunk=root)
@@ -123,6 +154,7 @@ def test_epic_approval_marks_plan_only_after_all_children_succeed(
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
 
     def fail_child(feature_id: str, *, root: Path) -> bool:
         raise RuntimeError(f"could not approve {feature_id}")
@@ -162,6 +194,8 @@ def test_approve_feature_enables_dispatch_when_automation_off(tmp_path: Path) ->
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "epic_001")
+    _select_supported(root, "feat_001")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
     refused = dispatch_feature("feat_001", "human", root=root)
@@ -179,6 +213,7 @@ def test_approve_feature_api(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
     from cascade.war_room.server import serve
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:

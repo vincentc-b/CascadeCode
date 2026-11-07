@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+from dataclasses import replace
 from pathlib import Path
 
 from cascade.agent.discovery.inventory import (
@@ -13,6 +15,7 @@ from cascade.agent.selection_preflight import (
     SelectionPreflight,
     evaluate_work_selection,
 )
+from cascade.board.parse import render_doc
 from cascade.board.types import WorkDoc, WorkMeta
 
 
@@ -45,8 +48,18 @@ def admit_work_selection(
     """Return the complete safe result or raise it without persisting ``doc``."""
 
     available = inventory or get_provider_inventory()
+    # A candidate's SHA is the optimistic write token for the old content.
+    # Its selection provenance must instead describe the proposed content.
+    candidate = (
+        replace(
+            doc,
+            sha=f"sha256:{hashlib.sha256(render_doc(doc).encode('utf-8')).hexdigest()}",
+        )
+        if isinstance(doc, WorkDoc)
+        else doc
+    )
     preflight = evaluate_work_selection(
-        doc,
+        candidate,
         root=Path(root).resolve(),
         inventory=available,
         action=action,
@@ -56,7 +69,7 @@ def admit_work_selection(
         # Reuse the shared evaluator's stale-selection projection so callers
         # receive the same safe role batch as launch-time provenance drift.
         preflight = evaluate_work_selection(
-            doc,
+            candidate,
             root=Path(root).resolve(),
             inventory=available,
             action=action,
@@ -88,6 +101,7 @@ def selection_configuration_changed(
         or before.models != after.models
         or before.reasoning != after.reasoning
         or before.flex_mode != after.flex_mode
+        or before.parent_rev != after.parent_rev
     )
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ from cascade.agent.selection_admission import (
     SelectionAdmissionError,
     admit_work_selection,
 )
+from cascade.board.parse import render_doc
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import WorkDoc
 from tests.support import add_doc, make_repo
@@ -113,3 +115,27 @@ def test_admission_marks_stale_document_provenance(tmp_path: Path) -> None:
 
     assert caught.value.result.reason_code == "stale_selection"
     assert caught.value.result.affected_roles == ("swe",)
+
+
+def test_candidate_fingerprint_uses_proposed_content_not_write_token(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    doc = _task(root, "offered-model")
+    write_doc(doc, root=root)
+    candidate = read_doc("task_001", root=root)
+    old_revision = candidate.sha
+    candidate.meta.models = {"swe": "other-model"}
+
+    admitted = admit_work_selection(
+        candidate,
+        root=root,
+        inventory=_inventory("offered-model", "other-model"),
+        action="task_configuration_write",
+        expected_revision=old_revision,
+    )
+
+    proposed_revision = "sha256:" + hashlib.sha256(
+        render_doc(candidate).encode("utf-8")
+    ).hexdigest()
+    assert candidate.sha == old_revision
+    assert admitted.selections.roles[0].document_revision == proposed_revision
+    assert admitted.selections.selection_fingerprint != old_revision

@@ -78,6 +78,34 @@ def test_epic_activation_rejects_unsupported_roles_before_state_change(
     assert read_doc("epic_001", root=root).meta.status == "ready_to_plan"
 
 
+def test_epic_activation_checks_future_feature_and_swe_roles_before_side_effects(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    for role in ("epic_manager", "epic_architect"):
+        _pin_model(root, "epic_001", role, "offered")
+    for role in ("feature_lead", "feature_architect", "swe"):
+        _pin_model(root, "epic_001", role, "future-model")
+    commit_board(root)
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", _inventory)
+
+    result = activate_epic("epic_001", "human", root=root)
+
+    assert result.reason == "provider_preflight_blocked"
+    assert result.preflight is not None
+    assert result.preflight.affected_roles == (
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    )
+    assert read_doc("epic_001", root=root).meta.status == "ready_to_plan"
+    assert get_integration_worktree(root, "epic", "epic_001") is None
+    assert not checkpoint_path("epic_001", root=root).exists()
+    events, _ = read_events("epic_001", 0, root=root)
+    assert events == []
+
+
 def test_failed_epic_preflight_creates_no_worktree_checkpoint_or_event(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -183,6 +211,7 @@ def test_feature_and_task_dispatch_reject_before_transition(
         _pin_model(root, "epic_001", role, "offered")
     for role in ("feature_lead", "feature_architect", "swe"):
         _pin_model(root, "feat_001", role, "offered")
+    _pin_model(root, "task_001", "swe", "offered")
     monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", _inventory)
     monkeypatch.setattr("cascade.approvals.get_provider_inventory", _inventory)
 

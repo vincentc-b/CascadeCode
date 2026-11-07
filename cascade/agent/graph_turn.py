@@ -267,12 +267,23 @@ async def run_planning_role_turn(
         )
 
         tier = "feature" if turn_kwargs.get("feature_id") else "epic"
-        selections = _provider_selections(state)
-        if not any(selection.role == role for selection in selections):
-            selections = (
-                *selections,
-                ProviderSelection(role, provider_id or "", model_id or ""),
-            )
+        # The current role may carry a one-turn model override.  Compare the
+        # actual launch arguments with the authorized document, rather than
+        # checking the older pinned values from the graph checkpoint.
+        selections = (
+            *(
+                selection
+                for selection in _provider_selections(state)
+                if selection.role != role
+            ),
+            ProviderSelection(
+                role,
+                provider_id or "",
+                model_id or "",
+                reasoning_level=reasoning_for_role(state, role)[0],
+                flex_mode=flex_mode_for_role(state, role),
+            ),
+        )
         # Check every pinned role on this work item, not just the role whose
         # process happens to start first. A missing current-role pin becomes
         # structured ``stale_selection`` evidence instead of bypassing the

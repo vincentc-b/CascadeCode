@@ -3,29 +3,58 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
+
 from cascade.approvals import approve_feature, feature_approved
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
 from tests.support import approve_epic_plan_when_ready
 from cascade.automation import advance_work, reconcile_approval_dispatch, reset_automation_memory
-from cascade.board.store import move_doc, read_doc
+from cascade.board.store import move_doc, read_doc, write_doc
 from cascade.boss.view import compute_boss_view
 from cascade.watchdog import activate_epic, dispatch_feature, read_events
 from cascade.war_room.serialize import board_view_from_index
 from cascade.war_room.room_settings import write_stacked_pr_enabled
-from cascade.workspace.integration_worktree import merged_board
-from tests.support import (
-    add_configured_doc as add_doc,
-    commit_board,
-    install_fake_provider_inventory,
-    make_repo,
-)
+from cascade.workspace.integration_worktree import doc_filesystem_root, merged_board
+from tests.support import add_doc as _add_doc, commit_board, make_repo
 
 
 @pytest.fixture(autouse=True)
-def _fake_provider_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
-    install_fake_provider_inventory(monkeypatch)
+def supported_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = time.time()
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(DiscoveredModel(id="offered", display_name="Offered"),),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, now, now + 300, 300),
+    )
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
+
+
+def add_doc(root: Path, **kwargs):
+    doc = _add_doc(root, **kwargs)
+    roles = {
+        "epic": ("epic_manager", "epic_architect", "feature_lead", "feature_architect", "swe"),
+        "feature": ("feature_lead", "feature_architect", "swe"),
+    }.get(doc.meta.tier, ())
+    if roles:
+        doc.meta.provider = "codex"
+        doc.meta.models = {role: "offered" for role in roles}
+        write_doc(doc, root=root)
+    return doc
 
 
 def _enable_automation(root: Path, *, enabled: bool = True) -> None:
@@ -160,7 +189,7 @@ def test_epic_approval_reports_pending_when_dispatch_fails_then_retries(
     add_doc(root, id="feat_001", title="Ready", tier="feature", parent="epic_001")
     _quiet_dispatch(monkeypatch)
 
-    def fail_dispatch(_root: Path) -> None:
+    def fail_dispatch(_root: Path, **_kwargs: object) -> None:
         raise RuntimeError("temporary dispatch failure")
 
     with monkeypatch.context() as patch:
@@ -249,16 +278,14 @@ def test_merge_gate_blocks_sibling_until_review_clears(
     add_doc(root, id="feat_002", title="Next", tier="feature", parent="epic_001")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
-    # Model an older sibling reaching review after the epic was activated.
     add_doc(
-        root,
+        doc_filesystem_root("epic_001", trunk=root),
         id="feat_001",
         title="Under review",
         tier="feature",
         status="completed",
         parent="epic_001",
     )
-    commit_board(root)
     write_stacked_pr_enabled("epic_001", False, root=root)
     state = root / ".cascade" / "reviews.json"
     state.parent.mkdir(parents=True, exist_ok=True)
