@@ -87,8 +87,9 @@ def prune_completed_work_queues(*, root: Path | None = None) -> list[str]:
 
     Active and blocked work queues double as dispatch-authorization evidence,
     so they must not be removed merely because their current events were read.
-    A completed Feature also remains live while its merge request is pending.
-    Special feeds (``boss`` and ``war_room``) have their own lifecycle.
+    A completed Feature also remains live while its merge request is pending,
+    and a completed planning team remains live while it owns a routed recovery
+    decision. Special feeds (``boss`` and ``war_room``) have their own lifecycle.
     """
 
     repo = resolve_root(root)
@@ -100,7 +101,10 @@ def prune_completed_work_queues(*, root: Path | None = None) -> list[str]:
     from cascade.board.work_ids import tier_of_work_id
     from cascade.workspace.integration_worktree import merged_board
 
+    from cascade.task.action_recovery import pending_recovery_team_ids
+
     board = merged_board(repo)
+    pending_recovery = pending_recovery_team_ids(root=repo)
     removable: list[str] = []
     for path in sorted(queue_dir.glob("*.jsonl")):
         work_id = path.stem
@@ -120,11 +124,18 @@ def prune_completed_work_queues(*, root: Path | None = None) -> list[str]:
 
             if feature_review_pending(work_id, root=repo):
                 continue
+        if work_id in pending_recovery:
+            continue
         removable.append(work_id)
 
     removed: list[str] = []
     with process_lock:
+        # Recheck under the unlink lock so a concurrently routed recovery cannot
+        # lose the queue that authorized its owning-team turn.
+        pending_recovery = pending_recovery_team_ids(root=repo)
         for work_id in removable:
+            if work_id in pending_recovery:
+                continue
             path = _queue_path(repo, work_id)
             try:
                 path.unlink()

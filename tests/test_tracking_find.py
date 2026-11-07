@@ -47,6 +47,7 @@ def test_merged_review_snapshot_exposes_immutable_merge_commit(tmp_path: Path) -
         if args[:3] == ["gh", "pr", "view"]:
             return subprocess.CompletedProcess(args, 0, json.dumps({
                 "state": "MERGED", "baseRefName": "main", "mergeCommit": {"oid": sha},
+                "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN",
                 "comments": [], "reviews": [],
             }), "")
         return subprocess.CompletedProcess(args, 0, "[]", "")
@@ -54,6 +55,27 @@ def test_merged_review_snapshot_exposes_immutable_merge_commit(tmp_path: Path) -
     snapshot = tracking.merge_request_snapshot(tmp_path, mr, runner=runner)
     assert snapshot["state"] == "merged"
     assert snapshot["merge_sha"] == sha
+    assert snapshot["mergeability"] == "mergeable"
+
+
+def test_review_snapshot_exposes_conflicting_mergeability(tmp_path: Path) -> None:
+    mr = tracking.MergeRequest(
+        url="https://github.com/example/project/pull/8", number="8", forge="github",
+        source_branch="epic/epic_038", target_branch="main", draft=False,
+    )
+
+    def runner(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
+        if args[:3] == ["gh", "pr", "view"]:
+            return subprocess.CompletedProcess(args, 0, json.dumps({
+                "state": "OPEN", "baseRefName": "main", "mergeCommit": None,
+                "mergeable": "CONFLICTING", "mergeStateStatus": "DIRTY",
+                "comments": [], "reviews": [],
+            }), "")
+        return subprocess.CompletedProcess(args, 0, "[]", "")
+
+    snapshot = tracking.merge_request_snapshot(tmp_path, mr, runner=runner)
+    assert snapshot["state"] == "open"
+    assert snapshot["mergeability"] == "conflicting"
 
 
 def test_review_snapshot_distinguishes_missing_review(tmp_path: Path) -> None:

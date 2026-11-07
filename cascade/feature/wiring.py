@@ -22,6 +22,7 @@ def load_feature_tools() -> None:
     import cascade.feature.docs_tool as docs_tool_mod
     import cascade.feature.mint as mint_mod
     import cascade.feature.recovery as recovery_mod
+    import cascade.feature.review_recovery as review_recovery_mod
     import cascade.planning_dependency_tools as dependency_tools_mod
     from cascade.review import reply_feature_review
 
@@ -34,6 +35,7 @@ def load_feature_tools() -> None:
         "recover_task",
         "refresh_dependency_status",
         "retry_integration_branch_update",
+        "publish_review_resolution",
     )
     if all(name in feature_tools() for name in expected):
         return
@@ -56,6 +58,10 @@ def load_feature_tools() -> None:
     register_feature_tool(
         "retry_integration_branch_update",
         branch_recovery_mod.retry_integration_branch_update,
+    )
+    register_feature_tool(
+        "publish_review_resolution",
+        review_recovery_mod.publish_review_resolution,
     )
 
 

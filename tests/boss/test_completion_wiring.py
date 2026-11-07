@@ -111,13 +111,17 @@ def test_poll_reviews_reconciles_after_review_poll(
         lambda _root: order.append("poll"),
     )
     monkeypatch.setattr(
+        "cascade.review_health.reconcile_open_review_health",
+        lambda _root: order.append("review_health") or [],
+    )
+    monkeypatch.setattr(
         "cascade.completion_reconcile.reconcile_completion_with_prompts",
         lambda *, root=None: order.append("reconcile") or {"features": [], "epics": []},
     )
 
     poll_reviews(root)
 
-    assert order == ["poll", "reconcile"]
+    assert order == ["poll", "review_health", "reconcile"]
 
 
 def test_watchdog_startup_reconciles(
