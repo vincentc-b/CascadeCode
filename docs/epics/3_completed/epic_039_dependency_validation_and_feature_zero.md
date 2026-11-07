@@ -156,6 +156,11 @@ None at epic contract level. The formerly open risk question is resolved by the 
   Chose Require independent explicit human approval for every dependency installation or upgrade, bound to dependency ID, exact version, authoritative source, checksum/digest, target environment, install scope/destination, exact operation, and cleanup plan; enforce it at the Cascade operation boundary across all execution routes..
   Rationale: In response to the human planning clarification of 2026-11-07 (War Room message 60216dbe989d4a14993ad4679b7822c5): provider yolo and owned-worktree access provide capability only. Plan approval and bootstrap review alone cannot authorize installation. Batch review must persist independent approvals; changing a bound field invalidates only that entry. Read-only discovery and validation remain available without installation approval. Reconciled epic_039 and feat_039_001 through feat_039_003, including schema, runtime, UI, and acceptance obligations. This refines dec_001 and dec_002; it grants no installation authorization.
   Honors: Human clarification; success criteria 3, 4, 7, 9, 10, 11; least-privilege scope and real installation/Structurizr acceptance requirements..
+
+- `dec_005` · 2026-11-07 · Epic Manager · **Delivery acceptance status**
+  Chose Keep epic delivery acceptance incomplete despite completed lifecycle markers until criteria 10 and 11 have separately authorized real installation, Structurizr runtime/check, and adapter-feasibility evidence. Retain this work in existing slices B and C without waiving scope or creating a new feature..
+  Rationale: The feature completion review found that the epic acceptance report marks criteria 10–11 unpassed and the slice-B smoke record contains only read-only observations. Completion markers and deterministic tests cannot establish the required real outcomes. Prepare exact operation bindings before human review and execute only after independent installation approvals and separate feasibility authorization.
+  Honors: epic_039 success criteria 10–11, dec_003 and dec_004, the human per-dependency approval requirement, and existing feature 002/003 acceptance obligations..
 ## Amendment log
 
 _(none)_
