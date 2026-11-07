@@ -114,6 +114,11 @@ None outstanding for product scope. The initial implementation-risk question is 
   Chose Use complete effective-role evaluation at admission and fresh evaluation at execution, with one structured per-role contract and the existing durable incident store..
   Rationale: Dispatch currently validates only immediate roles and returns no refusal when model/config resolution raises. Execution and recovery also lose per-role evidence. Unified source/revision-aware results close these gaps while keeping readiness read-only and preserving the fresh launch gate.
   Honors: Success criteria 1–3 and 6–9; one pure evaluator; no silent fall-throughs; no lifecycle effects on deterministic refusal..
+
+- `dec_003` · 2026-11-07 · Epic Manager · **Macro-architecture**
+  Chose Treat Continue without Flex as a human-authorized runtime waiver bound to the original action and selected revision, with durable retry receipts and no reviewed-plan rewrite..
+  Rationale: Changing reviewed configuration merely to waive a service tier would invalidate approvals and risk mismatched snapshots. A narrowly scoped runtime authorization preserves the reviewed plan and existing work; fresh full-batch eligibility and an idempotent original-action handoff prevent masking other failures or duplicating provider turns.
+  Honors: Success criteria 2, 5, 7 and 8; explicit human authorization; preservation of provider/model/reasoning selections, reviewed content and existing work..
 ## Amendment log
 
 _(none)_
