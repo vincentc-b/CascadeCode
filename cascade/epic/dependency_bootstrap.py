@@ -852,6 +852,40 @@ def record_bootstrap_blockers(
     )
 
 
+def clear_bootstrap_blockers(
+    epic_id: str,
+    *,
+    root: Path,
+    expected_revision: int,
+    dependency_id: str | None = None,
+    artifact_id: str | None = None,
+) -> BootstrapSnapshot:
+    """Clear resolved blockers for one exact dependency or feasibility artifact."""
+
+    if dependency_id is None and artifact_id is None:
+        raise DependencyBootstrapError("a blocker identity is required for clearing")
+    if dependency_id is not None:
+        dependency_id = _text(dependency_id, "dependency_id")
+    if artifact_id is not None:
+        artifact_id = _text(artifact_id, "artifact_id")
+    current = _require_bootstrap(epic_id, root=root)
+    retained = tuple(
+        row
+        for row in current.blockers
+        if not (
+            (dependency_id is None or row.dependency_id == dependency_id)
+            and (artifact_id is None or row.artifact_id == artifact_id)
+        )
+    )
+    return _replace(
+        current,
+        blockers=retained,
+        epic_id=epic_id,
+        root=root,
+        expected_revision=expected_revision,
+    )
+
+
 def project_bootstrap(epic_id: str, *, root: Path) -> BootstrapProjection:
     current = _require_bootstrap(epic_id, root=root)
     manifest = require_dependency_manifest(epic_id, root=root)
