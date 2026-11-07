@@ -2,7 +2,7 @@
 id: feat_037_003
 title: Add human-authorized idempotent continuation without Flex
 tier: feature
-status: active
+status: completed
 parent: epic_037
 children:
 - task_037_003_001
