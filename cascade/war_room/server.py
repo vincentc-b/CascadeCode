@@ -300,6 +300,9 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         if self._listen_socket is not None:
             self.socket = self._listen_socket
             self.server_address = self.socket.getsockname()
+            host, port = self.server_address[:2]
+            self.server_name = socket.getfqdn(host)
+            self.server_port = port
             return
         super().server_bind()
 
