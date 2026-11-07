@@ -33,6 +33,11 @@ def test_recovery_action_uses_modal_and_shared_inventory() -> None:
     recovery_source = source[source.index("async function changeProviderRecovery") :]
     assert "globalThis.prompt" not in recovery_source
     assert 'id="provider-recovery-dialog"' in template
+    assert 'aria-labelledby="provider-recovery-title"' in template
+    assert 'id="provider-recovery-failure-checks"' in template
+    assert 'id="provider-recovery-readiness-summary"' in template
     assert "/static/provider_recovery_dialog_ui.js" in template
     assert '"/api/brief/inventory"' in source
     assert "ProviderRecoveryDialogUi.buildPayload" in source
+    assert "appendProviderReadinessUi(row, item)" in source
+    assert 'addEventListener("close", restoreProviderRecoveryFocus)' in source

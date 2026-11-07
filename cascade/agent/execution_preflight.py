@@ -135,6 +135,14 @@ def upsert_provider_blocker(
             row["first_attempt"] = previous["first_attempt"]
         else:
             row["first_attempt"] = now
+        if failed_action is None and isinstance(previous, dict):
+            # An execution recheck may observe a newer failure without being a
+            # new recoverable action. Keep the original action and its safe
+            # diagnostics available to the recovery view until a fresh check
+            # succeeds or a new canonical failed action replaces them.
+            for key in ("failed_action", "failed_preflight"):
+                if isinstance(previous.get(key), dict):
+                    row[key] = previous[key]
         records[work_id] = row
         _write(repo, records)
     return dict(row)

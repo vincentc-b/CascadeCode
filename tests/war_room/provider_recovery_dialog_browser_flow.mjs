@@ -47,6 +47,7 @@ function control(extra = {}) {
       hidden: false,
       textContent: "",
       value: "",
+      isConnected: true,
       classList: {
         add() {},
         remove() {},
@@ -55,6 +56,7 @@ function control(extra = {}) {
       addEventListener(name, handler) {
         listeners[name] = handler;
       },
+      focus() { this.focused = true; },
       appendChild(child) {
         this.children.push(child);
         if (child.selected) this.value = child.value;
@@ -103,6 +105,16 @@ const el = {
     close() { this.open = false; this.closeCount += 1; },
   }),
   providerRecoveryTitle: control(),
+  providerRecoverySummary: control(),
+  providerRecoveryPartial: control(),
+  providerRecoveryFailure: control(),
+  providerRecoveryFailureSummary: control(),
+  providerRecoveryFailureMeta: control(),
+  providerRecoveryFailureChecks: control(),
+  providerRecoveryReadinessSummary: control(),
+  providerRecoveryReadinessFreshness: control(),
+  providerRecoverySelection: control(),
+  providerRecoveryRemedies: control(),
   providerRecoveryStatus: control(),
   providerRecoveryProvider: control(),
   providerRecoveryFlexMode: control(),
@@ -114,6 +126,7 @@ const el = {
   btnCancelProviderRecovery: control(),
   btnSubmitProviderRecovery: control(),
 };
+const returnFocus = control();
 
 let inventoryRequest = deferred();
 const recoveryRequests = [];
@@ -131,9 +144,21 @@ const context = {
   BriefDefaultsUi,
   ProviderRecoveryDialogUi,
   el,
+  lastInvokedBoardAction: null,
   document: {
+    activeElement: returnFocus,
     createElement() { return control({ selected: false }); },
   },
+  lastBoardView: null,
+  providerRecoveryAction(recovery, name) {
+    return !!(recovery && recovery.actions && recovery.actions[name] && recovery.actions[name].eligible);
+  },
+  readinessAction(readiness, name) {
+    return !!(readiness && readiness.actions && readiness.actions[name] && readiness.actions[name].eligible);
+  },
+  retryProviderRecovery() { return Promise.resolve({ ok: false }); },
+  openProviderSetup() { return Promise.resolve(); },
+  openBriefEdit() { return Promise.resolve(); },
   apiGet(path) {
     assert.equal(path, "/api/brief/inventory");
     return inventoryRequest.promise;
@@ -161,9 +186,15 @@ const dialog = vm.runInNewContext(
     let providerRecoverySubmitInFlight = false;
     let providerRecoveryError = "";
     let providerRecoveryLoadToken = 0;
+    let providerRecoveryFailureContext = null;
+    let providerRecoveryReturnFocus = null;
     ${sourceSection(
       "  async function continueProviderRecoveryWithoutFlex(item)",
       "  function buildRow(item, tier, column)"
+    )}
+    ${sourceSection(
+      "  if (el.btnCloseProviderRecovery) el.btnCloseProviderRecovery.addEventListener",
+      "  if (el.btnProviderRecoveryInventoryRetry)"
     )}
     ({
       changeProviderRecovery,
@@ -186,8 +217,15 @@ const dialog = vm.runInNewContext(
 const item = {
   id: "task_001",
   tier: "task",
+  provider_readiness: {
+    outcome: "transient",
+    message: "Provider capability could not be confirmed.",
+    inventory_freshness: { stale: true, fetched_at: null },
+    actions: { refresh: { eligible: true } },
+  },
   provider_recovery: {
     actions: {
+      change_provider: { eligible: true },
       continue_without_flex: {
         eligible: true,
         action_id: "attempt-7",
@@ -213,11 +251,14 @@ await opening;
 assert.deepEqual(renderedRoles, ["swe"]);
 assert.equal(el.providerRecoveryFlexModeWrap.hidden, false);
 assert.equal(el.btnSubmitProviderRecovery.disabled, false);
+assert.equal(el.btnCloseProviderRecovery.focused, true);
 
 const beforeCancelRequests = recoveryRequests.length;
 dialog.closeProviderRecoveryDialog();
+el.providerRecoveryDialog.listeners.close();
 assert.equal(el.providerRecoveryDialog.open, false);
 assert.equal(recoveryRequests.length, beforeCancelRequests);
+assert.equal(returnFocus.focused, true);
 
 nextRecoveryRequest = deferred();
 const continued = dialog.continueProviderRecoveryWithoutFlex(item);
@@ -243,6 +284,12 @@ assert.equal(recoveryRequests.length, 2, "an in-flight change suppresses duplica
 assert.equal(dialog.state().inFlight, true);
 assert.equal(el.btnCancelProviderRecovery.disabled, true);
 assert.equal(el.btnSubmitProviderRecovery.disabled, true);
+let escapePrevented = false;
+el.providerRecoveryDialog.listeners.cancel({
+  preventDefault() { escapePrevented = true; },
+});
+assert.equal(escapePrevented, true, "Escape cannot dismiss an in-flight change");
+assert.equal(el.providerRecoveryDialog.open, true);
 nextRecoveryRequest.reject({ body: { reason: "Selection changed on the server." } });
 assert.equal(await firstSubmit, null);
 await duplicateSubmit;
@@ -250,6 +297,12 @@ assert.equal(el.providerRecoveryDialog.open, true);
 assert.match(el.providerRecoveryStatus.textContent, /Selection changed on the server/);
 assert.deepEqual(dialog.state().selection, savedSelection);
 assert.equal(el.btnSubmitProviderRecovery.disabled, false);
+
+escapePrevented = false;
+el.providerRecoveryDialog.listeners.cancel({
+  preventDefault() { escapePrevented = true; },
+});
+assert.equal(escapePrevented, false, "Escape remains available after a refusal");
 
 nextRecoveryRequest = deferred();
 const successfulSubmit = dialog.submitProviderRecovery({ preventDefault() {} });
@@ -270,9 +323,10 @@ assert.equal(refreshCount, 2);
 inventoryRequest = { promise: Promise.reject(new Error("inventory offline")) };
 await dialog.changeProviderRecovery(item);
 assert.match(el.providerRecoveryStatus.textContent, /Could not refresh model inventory/);
-assert.equal(el.btnProviderRecoveryInventoryRetry.hidden, false);
+assert.equal(el.btnProviderRecoveryInventoryRetry.hidden, true);
+assert.ok(el.providerRecoveryRemedies.children.some((child) => child.textContent === "Refresh provider inventory"));
 await dialog.retryProviderRecoveryInventory();
 assert.match(el.providerRecoveryStatus.textContent, /Could not refresh model inventory/);
-assert.equal(el.btnProviderRecoveryInventoryRetry.hidden, false);
+assert.equal(el.btnProviderRecoveryInventoryRetry.hidden, true);
 
 console.log("provider_recovery_dialog_browser_flow: ok");

@@ -28,9 +28,14 @@ from cascade.agent.discovery.inventory import (
     ProviderInventoryFailure,
     ProviderInventoryItem,
     ProviderInventoryResult,
+    get_provider_inventory,
     project_inventory_freshness,
 )
-from cascade.agent.discovery.types import DiscoveredModel, ReasoningCapability
+from cascade.agent.discovery.types import (
+    DiscoveredModel,
+    ProviderCompatibilityEvidence,
+    ReasoningCapability,
+)
 from cascade.agent.providers import ProviderId, ProviderStatus
 from cascade.review import EpicReviewSnapshot, OpenReview, epic_close_document_staged
 from cascade.war_room.room_settings import RoomSettings
@@ -158,6 +163,8 @@ def _provider_recovery_view(
     *,
     root: Path,
     return_to_backlog: dict[str, object] | None = None,
+    inventory: ProviderInventoryResult | None = None,
+    compatibility_cache: dict[str, ProviderCompatibilityEvidence] | None = None,
 ) -> dict[str, object] | None:
     """Attach the safe, server-computed provider recovery projection to a row."""
 
@@ -171,7 +178,8 @@ def _provider_recovery_view(
         from cascade.provider_recovery_command import continue_without_flex_eligibility
 
         continuation = continue_without_flex_eligibility(
-            meta.id, root=root
+            meta.id, root=root, inventory=inventory,
+            compatibility_cache=compatibility_cache,
         ).to_dict()
 
     recovery = provider_recovery_state(
@@ -192,7 +200,117 @@ def _provider_recovery_view(
         "reasoning": dict(meta.reasoning or {}),
         "flex_mode": meta.flex_mode,
     }
+    # The live readiness projection can change after an inventory refresh.
+    # Keep the failed execution snapshot available for the recovery dialog.
+    failed_preflight = blocker.get("failed_preflight")
+    if isinstance(failed_preflight, dict):
+        recovery["failed_diagnostics"] = dict(failed_preflight)
+    elif isinstance(blocker.get("checks"), list):
+        # Older execution blockers still retained the ordered role checks.
+        recovery["failed_diagnostics"] = {
+            "work_id": blocker.get("work_id"),
+            "action": blocker.get("action"),
+            "selection_fingerprint": blocker.get("selection_fingerprint"),
+            "inventory_freshness": blocker.get("inventory_freshness"),
+            "classification": blocker.get("classification"),
+            "reason_code": blocker.get("reason_code"),
+            "message": blocker.get("reason"),
+            "checks": blocker["checks"],
+        }
+    failed_action = blocker.get("failed_action")
+    if isinstance(failed_action, dict):
+        recovery["failed_action"] = dict(failed_action)
     return recovery
+
+
+def _provider_readiness_actions(
+    readiness: dict[str, object],
+    *,
+    recovery: dict[str, object] | None,
+) -> dict[str, dict[str, object]]:
+    """Project read-only controls without granting command authority."""
+
+    remedies = {
+        remedy for remedy in readiness.get("remedies", ()) if isinstance(remedy, str)
+    }
+    freshness = readiness.get("inventory_freshness")
+    stale = isinstance(freshness, dict) and freshness.get("stale") is True
+    transient = readiness.get("outcome") == "transient"
+    recovery_actions = recovery.get("actions") if isinstance(recovery, dict) else None
+    recovery_actions = recovery_actions if isinstance(recovery_actions, dict) else {}
+
+    def recovery_action(name: str) -> dict[str, object]:
+        value = recovery_actions.get(name)
+        if isinstance(value, dict):
+            return dict(value)
+        return {
+            "eligible": False,
+            "reason_code": "no_provider_blocker",
+            "reason": "No failed provider action is available for recovery.",
+        }
+
+    refresh_eligible = stale or transient or "refresh_and_retry" in remedies
+    return {
+        "refresh": (
+            {"eligible": True}
+            if refresh_eligible
+            else {
+                "eligible": False,
+                "reason_code": "inventory_current",
+                "reason": "Provider inventory is current and no transient failure requires refresh.",
+            }
+        ),
+        "retry": recovery_action("retry"),
+        "provider_setup": (
+            {"eligible": True}
+            if "open_provider_setup" in remedies
+            else recovery_action("provider_setup")
+        ),
+        "change_provider": (
+            {"eligible": True}
+            if remedies.intersection({"choose_configuration", "migrate_or_default"})
+            else recovery_action("change_provider")
+        ),
+        "continue_without_flex": recovery_action("continue_without_flex"),
+    }
+
+
+def _unknown_provider_inventory() -> ProviderInventoryResult:
+    """Fail closed when the bounded inventory snapshot cannot be acquired."""
+
+    return ProviderInventoryResult(
+        providers=(),
+        failures=(),
+        freshness=InventoryFreshness(
+            from_cache=False,
+            fetched_at=None,
+            expires_at=None,
+            ttl_seconds=0.0,
+        ),
+    )
+
+
+def _provider_readiness_view(
+    meta: WorkMeta,
+    *,
+    root: Path,
+    inventory: ProviderInventoryResult,
+    recovery: dict[str, object] | None,
+    compatibility_cache: dict[str, ProviderCompatibilityEvidence] | None = None,
+) -> dict[str, object]:
+    """Evaluate one row using the board's single normalized inventory snapshot."""
+
+    from cascade.agent.selection_preflight import evaluate_work_selection
+
+    result = evaluate_work_selection(
+        meta,
+        root=root,
+        inventory=inventory,
+        action="readiness",
+        compatibility_cache=compatibility_cache,
+    ).result.to_dict()
+    result["actions"] = _provider_readiness_actions(result, recovery=recovery)
+    return result
 
 
 def work_doc_to_dict(doc: WorkDoc, *, root: Path | None = None) -> dict:
@@ -259,7 +377,24 @@ def dispatch_result_to_dict(result: DispatchResult) -> dict:
         "event": event_to_dict(result.event) if result.event is not None else None,
     }
     if result.preflight is not None:
-        payload["preflight"] = result.preflight.to_dict()
+        # Keep the stable machine reason for compatibility, but lead consumers
+        # with the evaluator's safe operator-facing explanation.  The complete
+        # batch remains available for role-by-role diagnostics.
+        preflight = result.preflight.to_dict()
+        message = getattr(result.preflight, "message", None)
+        if not isinstance(message, str) or not message:
+            candidate = preflight.get("message")
+            message = (
+                candidate
+                if isinstance(candidate, str) and candidate
+                else "Provider configuration blocked this action."
+            )
+        payload["code"] = result.reason
+        payload["error"] = message
+        payload["message"] = message
+        payload["preflight"] = preflight
+    if result.selections is not None:
+        payload["selections"] = result.selections.to_dict()
     return payload
 
 
@@ -579,12 +714,25 @@ def board_view_from_index(board, *, root: Path) -> dict:
     sync_views = branch_sync_views(metas, root=root)
     incidents = recovery_incidents_by_work_id(root=root)
 
+    # A board render is one projection boundary.  Acquire the bounded cache
+    # once and reuse that immutable evidence for every backlog/active row so a
+    # large board cannot trigger provider discovery per item (or mix snapshots
+    # within one response).
+    if metas:
+        try:
+            provider_inventory = get_provider_inventory()
+        except Exception:
+            provider_inventory = _unknown_provider_inventory()
+    else:
+        provider_inventory = None
+
     columns = ("1_backlog", "2_active", "3_completed")
     view: dict[str, dict[str, list]] = {
         "epics": {col: [] for col in columns},
         "features": {col: [] for col in columns},
         "tasks": {col: [] for col in columns},
     }
+    compatibility_cache: dict[str, ProviderCompatibilityEvidence] = {}
     for meta in metas:
         key = _TIER_TO_VIEW_KEY[meta.tier]
         folder = column_folder_for_meta(meta, root=root)
@@ -635,8 +783,12 @@ def board_view_from_index(board, *, root: Path) -> dict:
             item["return_to_backlog"] = evaluate_return_eligibility(
                 load_return_eligibility_snapshot(meta.id, root=root)
             ).to_dict()
-        item["provider_recovery"] = _provider_recovery_view(
-            meta, root=root, return_to_backlog=item.get("return_to_backlog")
+        provider_recovery = _provider_recovery_view(
+            meta,
+            root=root,
+            return_to_backlog=item.get("return_to_backlog"),
+            inventory=provider_inventory,
+            compatibility_cache=compatibility_cache,
         )
         review = item.get("review")
         if (
@@ -666,6 +818,22 @@ def board_view_from_index(board, *, root: Path) -> dict:
             # verifies that the review landed.
             folder = "2_active"
             item["status"] = "active"
+        if folder in {"1_backlog", "2_active"} and provider_inventory is not None:
+            provider_readiness = _provider_readiness_view(
+                meta,
+                root=root,
+                inventory=provider_inventory,
+                recovery=provider_recovery,
+                compatibility_cache=compatibility_cache,
+            )
+            item["provider_readiness"] = provider_readiness
+            if provider_recovery is not None:
+                # The incident remains durable until a fresh execution-boundary
+                # recheck resolves it.  Live diagnostics may change after a
+                # cache refresh, but never erase or authorize recovery from the
+                # persisted blocker.
+                provider_recovery["diagnostics"] = provider_readiness
+        item["provider_recovery"] = provider_recovery
         view[key][folder].append(item)
 
     from cascade.war_room.completed_epics import (

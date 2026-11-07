@@ -32,7 +32,7 @@ from cascade.provider_recovery_receipt import (
     claim_continuation_handoff,
     read_continuation_receipt,
 )
-from cascade.watchdog import activate_epic, dispatch_feature
+from cascade.watchdog import activate_epic, dispatch_feature, read_events
 from cascade.watchdog.model_resolve import resolve_effective_selections
 from tests.support import add_doc, make_repo
 
@@ -344,6 +344,14 @@ def test_epic_replay_records_lineage_and_completes_on_durable_turn(
     tmp_path: Path, monkeypatch
 ) -> None:
     root, inventory, blocker = _failed_epic(tmp_path, monkeypatch)
+    reviewed = read_doc("epic_001", root=root)
+    reviewed_plan = reviewed.body
+    reviewed_selection = (
+        reviewed.meta.provider,
+        reviewed.meta.models,
+        reviewed.meta.reasoning,
+        reviewed.meta.flex_mode,
+    )
     authorized = _authorize(root, inventory, blocker)
     monkeypatch.setattr("cascade.workspace.kickoff._kickoff_turn", lambda *_args: True)
 
@@ -362,9 +370,18 @@ def test_epic_replay_records_lineage_and_completes_on_durable_turn(
     receipt = ledger["continuation_receipts"][authorized.receipt_id]
     assert receipt["lifecycle_effect"]["event_type"] == "EpicActivated"
     assert receipt["turn_handoff"]["work_id"] == "epic_001"
+    events, _ = read_events("epic_001", 0, root=root)
+    assert sum(event.type == "EpicActivated" for event in events) == 1
     lineage = next(iter(ledger["flex_waiver_lineage"].values()))
     assert lineage["before"]["document_path"] != lineage["after"]["document_path"]
     active = read_doc("epic_001", root=root)
+    assert active.body == reviewed_plan
+    assert (
+        active.meta.provider,
+        active.meta.models,
+        active.meta.reasoning,
+        active.meta.flex_mode,
+    ) == reviewed_selection
     assert all(
         not item.effective_flex_mode
         for item in resolve_effective_selections(active, root=root).selections

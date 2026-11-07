@@ -26,6 +26,7 @@ from cascade.agent.execution_preflight import (
     ProviderSelection,
     clear_provider_blocker,
     provider_blocker,
+    record_failed_provider_action,
     recheck_provider_capability,
 )
 from cascade.agent.graph_turn import run_planning_role_turn
@@ -197,6 +198,41 @@ def test_execution_preflight_persists_one_retryable_blocker_across_restart(
     assert restarted["recommended_remedy"] == "retry_provider_setup"
     assert restarted["affected_roles"] == ["swe"]
     assert "message" not in restarted
+
+
+def test_execution_recheck_preserves_failed_action_context(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _task(root, "missing-model")
+    selection = ProviderSelection("swe", "codex", "missing-model")
+    failed = evaluate_work_selection(
+        read_doc("task_001", root=root),
+        root=root,
+        inventory=_inventory(model_id="offered-model"),
+        action="task_retry",
+    ).result
+    original = record_failed_provider_action(
+        "task_001",
+        tier="task",
+        action_kind="task_retry",
+        result=failed,
+        root=root,
+    )
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.refresh_provider_inventory",
+        lambda: _inventory(model_id="offered-model"),
+    )
+
+    recheck_provider_capability(
+        "task_001", tier="task", selections=(selection,), root=root
+    )
+
+    current = provider_blocker("task_001", root=root)
+    assert current is not None
+    assert current["action"] == "execution"
+    assert current["failed_action"] == original["failed_action"]
+    assert current["failed_preflight"] == original["failed_preflight"]
 
 
 def test_blocker_retains_complete_scope_provenance_and_requires_fresh_clear(

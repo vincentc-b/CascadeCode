@@ -262,6 +262,14 @@ def test_approval_reports_dispatch_refusal_returned_by_reconciliation(
 
     assert result["newly_approved"] is False
     assert result["dispatch_pending"] is True
+    assert result["approval_committed"] is True
+    assert result["message"].startswith("Approval saved; dispatch pending:")
+    assert result["dispatch_outcome"] == {
+        "launched": [],
+        "not_launched": ["feat_001"],
+        "pending": True,
+        "message": "The selected model is not offered",
+    }
     assert [
         item["role"]
         for item in result["preflight"]["checks"]  # type: ignore[index]
@@ -270,6 +278,7 @@ def test_approval_reports_dispatch_refusal_returned_by_reconciliation(
     refusals = result["dispatch_refusals"]
     assert [item["work_id"] for item in refusals] == ["feat_001"]  # type: ignore[union-attr]
     assert refusals[0]["preflight"] == result["preflight"]  # type: ignore[index]
+    assert refusals[0]["selections"] == result["selections"]  # type: ignore[index]
     assert read_doc("feat_001", root=root).meta.approved_at == approved_at
 
 

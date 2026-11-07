@@ -13,6 +13,7 @@ from cascade.board.store import move_doc, read_doc, save_doc, write_doc
 from cascade.board.types import BoardIndex, WorkMeta
 from cascade.dependency_evaluation import evaluate_dependencies
 from cascade.agent.discovery.inventory import get_provider_inventory
+from cascade.agent.capability_contract import EffectiveSelectionBatch
 from cascade.agent.preflight import (
     ProviderCapabilityBatchPreflight,
 )
@@ -522,7 +523,7 @@ def _provider_preflight_refusal(
             inventory=inventory,
             action=action,
         )
-        result = evaluate_work_selection(
+        evaluated = evaluate_work_selection(
             meta,
             root=root,
             inventory=inventory,
@@ -535,14 +536,15 @@ def _provider_preflight_refusal(
                 )
                 for item in base.selections.selections
             ),
-        ).result
+        )
     else:
-        result = evaluate_work_selection(
+        evaluated = evaluate_work_selection(
             doc,
             root=root,
             inventory=inventory,
             action=action,
-        ).result
+        )
+    result = evaluated.result
     if result.supported:
         return None
     if action_kind is not None:
@@ -568,7 +570,7 @@ def _provider_preflight_refusal(
         if result.outcome == "blocked"
         else "provider_preflight_unavailable"
     )
-    return _fail(reason, preflight=result)
+    return _fail(reason, preflight=result, selections=evaluated.selections)
 
 
 def _failed_action_kind(meta: WorkMeta, by: str) -> ActionKind | None:
@@ -606,8 +608,15 @@ def _fail(
     reason: str,
     *,
     preflight: ProviderCapabilityBatchPreflight | None = None,
+    selections: EffectiveSelectionBatch | None = None,
 ) -> DispatchResult:
-    return DispatchResult(ok=False, reason=reason, event=None, preflight=preflight)
+    return DispatchResult(
+        ok=False,
+        reason=reason,
+        event=None,
+        preflight=preflight,
+        selections=selections,
+    )
 
 
 def _relocate_active(work_id: str, *, dest_root: Path, trunk: Path) -> None:
