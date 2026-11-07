@@ -2,7 +2,7 @@
 id: feat_039_003
 title: War Room dependency review, resume, and acceptance flow
 tier: feature
-status: active
+status: completed
 parent: epic_039
 children:
 - task_039_003_001
