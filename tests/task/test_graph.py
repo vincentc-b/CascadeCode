@@ -29,12 +29,14 @@ from cascade.task.registry import register_task_tool
 from cascade.task.worktree import clear_task_runs, create_task_worktree, get_task_run
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 from cascade.watchdog.events import read_events
+from cascade.watchdog.hooks import clear_hooks
 from tests.support import TEST_MODEL_ID, approve_board_feature
 from tests.support import add_doc, commit_board, make_repo
 
 
 @pytest.fixture(autouse=True)
 def _isolation(monkeypatch: pytest.MonkeyPatch) -> None:
+    clear_hooks()
     now = time.time()
     inventory = ProviderInventoryResult(
         providers=(
@@ -68,6 +70,7 @@ def _isolation(monkeypatch: pytest.MonkeyPatch) -> None:
     clear_task_runs()
     clear_task_graph_sessions()
     clear_task_wiring_state()
+    clear_hooks()
 
 
 def _board_plain(tmp_path: Path, *, models: bool = True) -> tuple[Path, str]:
