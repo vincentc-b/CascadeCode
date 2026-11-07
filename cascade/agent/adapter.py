@@ -78,8 +78,10 @@ def build_agent_options(turn: RoleTurn, *, api_key: str) -> AgentOptions:
     }
     if custom_tools:
         local_kwargs["custom_tools"] = custom_tools
+    if turn.permission_mode == "yolo":
+        local_kwargs["sandbox_options"] = SandboxOptions(enabled=False)
     # Cursor's local filesystem sandbox blocks stdio MCP; planning turns need Cascade tools.
-    elif turn.role in _PLANNING_ROLES and not mcp_servers:
+    elif not custom_tools and turn.role in _PLANNING_ROLES and not mcp_servers:
         local_kwargs["sandbox_options"] = SandboxOptions(enabled=True)
 
     # tools=[] disables built-in Cursor tools only; omit when unset so custom_tools

@@ -20,6 +20,7 @@ RoleId = Literal[
 ]
 
 RoleResultStatus = Literal["finished", "error"]
+ProviderPermissionMode = Literal["default", "yolo"]
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,10 @@ class RoleTurn:
     custom_tools: Mapping[str, Any] | None = None
     reasoning_level: str | None = None
     flex_mode: bool | None = None
+    # Project-selected provider launch policy. ``default`` adds no optional
+    # permission flag; ``yolo`` opts into the provider's non-interactive,
+    # unrestricted permission mode.
+    permission_mode: ProviderPermissionMode = "default"
     # Feature/Epic recovery input is identical for every provider launcher.
     recovery: ProviderRecoveryLaunch | None = None
 

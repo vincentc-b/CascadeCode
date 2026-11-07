@@ -9,7 +9,6 @@ with a trailing ``-`` argument when supported, otherwise appended as the final a
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from cascade.agent.cli_common import (
     assert_claude_non_interactive,
@@ -50,6 +49,13 @@ def build_claude_argv(
         "--output-format",
         "text",
     ]
+    if turn.permission_mode == "yolo":
+        if "--dangerously-skip-permissions" not in print_help:
+            raise ProviderCliError(
+                f"{CLAUDE_BINARY} --help does not document "
+                "--dangerously-skip-permissions"
+            )
+        argv.append("--dangerously-skip-permissions")
     if mcp_config_path is not None:
         if not mcp_ok:
             raise ProviderToolHostError(

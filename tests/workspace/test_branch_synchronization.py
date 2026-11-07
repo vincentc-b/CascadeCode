@@ -11,6 +11,7 @@ import pytest
 from cascade.stacked_dispatch import read_feature_dispatch_selection
 from cascade.board.parse import render_doc
 from cascade.board.store import list_board, read_doc
+from cascade.epic.branch_recovery import retry_integration_branch_update
 from cascade.task.action_recovery import load_action
 from cascade.task.worktree import clear_task_runs
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
@@ -315,6 +316,60 @@ def test_conflict_aborts_and_restores_head(tmp_path: Path) -> None:
         capture_output=True,
     )
     assert merge_head.returncode != 0
+
+
+def test_epic_team_can_retry_owned_branch_update_and_complete_incident(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    assert activate_epic("epic_001", "human", root=root).ok
+    assert update_integration_branch("epic_001", root=root).ok
+    epic_wt = integration_worktree_path("epic", "epic_001", trunk=root)
+
+    _commit_on_branch(
+        epic_wt, "epic/epic_001", "conflict.txt", "epic side\n", "epic change"
+    )
+    _commit_on_branch(root, "main", "conflict.txt", "trunk side\n", "trunk change")
+
+    failed = update_integration_branch("epic_001", root=root)
+    assert not failed.ok and failed.reason == "branch_conflict"
+    action_id = "epic_001:integration_branch_update"
+    action = load_action(action_id, root=root)
+    assert action is not None
+    assert action["recovery_state"] == "awaiting_owner_decision"
+
+    merge = subprocess.run(
+        ["git", "merge", "main", "--no-edit"],
+        cwd=epic_wt,
+        check=False,
+        capture_output=True,
+    )
+    assert merge.returncode != 0
+    (epic_wt / "conflict.txt").write_text("resolved\n", encoding="utf-8")
+    subprocess.run(["git", "add", "conflict.txt"], cwd=epic_wt, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "resolve owned branch update"],
+        cwd=epic_wt,
+        check=True,
+        capture_output=True,
+    )
+
+    completed = retry_integration_branch_update(
+        action_id, epic_id="epic_001", root=root
+    )
+    assert completed["recovery_state"] == "completed"
+    assert completed["attempt_count"] == 1
+    assert inspect_branch_synchronization(
+        "epic_001", root=root
+    ).state.behind == 0  # type: ignore[union-attr]
+
+    assert retry_integration_branch_update(
+        action_id, epic_id="epic_001", root=root
+    ) == completed
+    with pytest.raises(PermissionError, match="different team"):
+        retry_integration_branch_update(action_id, epic_id="epic_999", root=root)
 
 
 def test_task_update_uses_parent_feature_base(tmp_path: Path) -> None:

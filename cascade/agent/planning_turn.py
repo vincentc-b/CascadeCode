@@ -1,4 +1,4 @@
-"""Public helpers: scratch sandbox + MCP + ``run_role`` for planning roles."""
+"""Public helpers: owned team worktrees + MCP + ``run_role`` planning roles."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from cascade.agent.planning_sandbox import (
 )
 from cascade.agent.providers import ProviderId
 from cascade.agent.recovery_contract import ProviderRecoveryLaunch
-from cascade.agent.types import RoleId, RoleResult, RoleTurn
+from cascade.agent.types import ProviderPermissionMode, RoleId, RoleResult, RoleTurn
 
 _EPIC_ROLES = frozenset({"epic_manager", "epic_architect"})
 _FEATURE_ROLES = frozenset({"feature_lead", "feature_architect"})
@@ -43,6 +43,10 @@ async def run_epic_planning_turn(
         raise ValueError(f"not an epic planning role: {role}")
     validate_model_id(model_id)
     repo = Path(root).resolve()
+    from cascade.workspace.integration_worktree import doc_filesystem_root
+    from cascade.watchdog.config import provider_permission_mode
+
+    workspace = doc_filesystem_root(epic_id, trunk=repo).resolve()
     paths = collect_epic_readable_paths(epic_id, root=repo)
     scratch = materialize_scratch(repo, paths, tier="epic")
     return await _run_sandbox_turn(
@@ -59,7 +63,9 @@ async def run_epic_planning_turn(
             tier="epic",
             scope_id=epic_id,
             role=role,
+            workspace_dir=workspace,
         ),
+        permission_mode=provider_permission_mode(repo, provider),
     )
 
 
@@ -79,6 +85,10 @@ async def run_feature_planning_turn(
         raise ValueError(f"not a feature planning role: {role}")
     validate_model_id(model_id)
     repo = Path(root).resolve()
+    from cascade.feature.checkout import feature_checkout_root
+    from cascade.watchdog.config import provider_permission_mode
+
+    workspace = feature_checkout_root(feature_id, trunk=repo).resolve()
     paths = collect_feature_readable_paths(feature_id, root=repo)
     scratch = materialize_scratch(repo, paths, tier="feature")
     return await _run_sandbox_turn(
@@ -95,7 +105,9 @@ async def run_feature_planning_turn(
             tier="feature",
             scope_id=feature_id,
             role=role,
+            workspace_dir=workspace,
         ),
+        permission_mode=provider_permission_mode(repo, provider),
     )
 
 
@@ -134,8 +146,10 @@ async def _run_sandbox_turn(
     reasoning_level: str | None = None,
     flex_mode: bool | None = None,
     recovery: ProviderRecoveryLaunch | None = None,
+    permission_mode: ProviderPermissionMode = "default",
 ) -> RoleResult:
     scratch = sandbox.scratch_dir
+    cwd = sandbox.turn_cwd
     effects_path = scratch / ".cascade_effects.jsonl"
     collector = ToolEffectCollector()
     if provider in ("cursor", "fake"):
@@ -144,12 +158,13 @@ async def _run_sandbox_turn(
             provider=provider,
             model_id=model_id,
             prompt=_recovery_prompt(prompt, recovery),
-            cwd=scratch,
+            cwd=cwd,
             tools=[],
             custom_tools=build_planning_custom_tools(sandbox, collector),
             reasoning_level=reasoning_level,
             flex_mode=flex_mode,
             recovery=recovery,
+            permission_mode=permission_mode,
         )
     else:
         turn = RoleTurn(
@@ -157,11 +172,12 @@ async def _run_sandbox_turn(
             provider=provider,
             model_id=model_id,
             prompt=_recovery_prompt(prompt, recovery),
-            cwd=scratch,
+            cwd=cwd,
             tools=build_planning_mcp_servers(sandbox),
             reasoning_level=reasoning_level,
             flex_mode=flex_mode,
             recovery=recovery,
+            permission_mode=permission_mode,
         )
     try:
         result = await run_role(turn)
