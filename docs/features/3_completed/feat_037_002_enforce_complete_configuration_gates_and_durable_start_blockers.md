@@ -2,7 +2,7 @@
 id: feat_037_002
 title: Enforce complete configuration gates and durable start blockers
 tier: feature
-status: active
+status: completed
 parent: epic_037
 children:
 - task_037_002_001
