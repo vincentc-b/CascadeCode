@@ -9,6 +9,12 @@ from cascade.board.errors import NotFound
 from cascade.board.store import list_board, read_doc, write_doc
 from cascade.board.types import WorkDoc, WorkMeta
 
+from cascade.agent.selection_admission import (
+    SelectionAdmissionError,
+    admit_work_selection,
+    selection_configuration_changed,
+)
+
 from cascade.feature.checkout import feature_checkout_root
 from cascade.feature.guard import FeatureToolDenied, tool_guard
 
@@ -154,6 +160,20 @@ def feature_write_doc(doc: WorkDoc, *, feature_id: str, root: Path) -> str | Non
         updated.sha = current.sha
     else:
         updated.meta.path = target
+    if selection_configuration_changed(current, updated):
+        try:
+            admit_work_selection(
+                updated,
+                root=checkout,
+                action="feature_configuration_write",
+                expected_revision=current.sha,
+            )
+        except SelectionAdmissionError as exc:
+            denied = FeatureToolDenied(str(exc))
+            denied.preflight = exc.preflight  # type: ignore[attr-defined]
+            denied.selections = exc.selections  # type: ignore[attr-defined]
+            denied.result = exc.result  # type: ignore[attr-defined]
+            raise denied from exc
     return write_doc(updated, root=checkout)
 
 

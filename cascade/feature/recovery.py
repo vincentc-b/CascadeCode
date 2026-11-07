@@ -179,12 +179,15 @@ def retry_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object
                 "recovery": status,
             }
         result = dispatch_task(task_id, "boss", root=trunk)
-    return {
+    response: dict[str, object] = {
         "ok": result.ok,
         "reason": result.reason,
         "task_id": task_id,
         "recovery": recovery_status(task_id, feature_id=feature_id, root=trunk),
     }
+    if result.preflight is not None:
+        response["preflight"] = result.preflight.to_dict()
+    return response
 
 
 def recover_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object]:
