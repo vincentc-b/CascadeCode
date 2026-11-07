@@ -2,7 +2,7 @@
 id: feat_039_002
 title: Authorized bootstrap and resumable dependency checks
 tier: feature
-status: active
+status: completed
 parent: epic_039
 children:
 - task_039_002_001
