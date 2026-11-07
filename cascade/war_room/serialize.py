@@ -194,6 +194,12 @@ def _provider_recovery_view(
         "reasoning": dict(meta.reasoning or {}),
         "flex_mode": meta.flex_mode,
     }
+    failed_diagnostics = blocker.get("failed_preflight") if blocker else None
+    if isinstance(failed_diagnostics, dict):
+        recovery["failed_diagnostics"] = dict(failed_diagnostics)
+    failed_action = blocker.get("failed_action") if blocker else None
+    if isinstance(failed_action, dict):
+        recovery["failed_action"] = dict(failed_action)
     return recovery
 
 

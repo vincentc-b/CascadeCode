@@ -534,6 +534,39 @@ body {
   font-size: 0.9rem;
 }
 
+.provider-readiness-status {
+  display: inline-block;
+  margin: 0.2rem 0 0.25rem;
+  padding: 0.12rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.provider-readiness-ready { color: #86efac; border-color: #22c55e; }
+.provider-readiness-blocked { color: #fecaca; border-color: #ef4444; }
+.provider-readiness-unknown { color: #fde68a; border-style: dashed; }
+
+.provider-diagnostics {
+  margin: 0.75rem 0;
+  padding: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+}
+
+.provider-diagnostics h3 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+.provider-diagnostics p { margin: 0.2rem 0; }
+.provider-diagnostics-meta { color: var(--muted); font-size: 0.78rem; overflow-wrap: anywhere; }
+.provider-diagnostic-checks { margin: 0.55rem 0 0; padding-left: 1.25rem; }
+.provider-diagnostic-checks li + li { margin-top: 0.55rem; }
+.provider-diagnostic-role { font-weight: 700; }
+.provider-diagnostic-selection,
+.provider-diagnostic-provenance { display: block; overflow-wrap: anywhere; }
+.provider-diagnostic-provenance { color: var(--muted); font-size: 0.75rem; }
+.provider-recovery-partial { color: #fde68a; font-weight: 700; }
+.provider-recovery-remedies { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+
 .task-execution-status-running,
 .task-execution-status-healthy {
   color: #d1fae5;

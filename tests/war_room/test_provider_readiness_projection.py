@@ -273,6 +273,18 @@ def test_cached_success_does_not_clear_durable_recovery_blocker(
                         "classification": "transient",
                         "reason_code": "provider_not_authenticated",
                         "affected_roles": ["swe"],
+                        "failed_preflight": {
+                            "outcome": "transient",
+                            "checks": [
+                                {
+                                    "role": "swe",
+                                    "outcome": "unavailable",
+                                    "message": "Provider setup is required.",
+                                }
+                            ],
+                            "action": "task_retry",
+                            "message": "Provider setup is required.",
+                        },
                     }
                 },
             }
@@ -293,6 +305,8 @@ def test_cached_success_does_not_clear_durable_recovery_blocker(
     assert row["provider_readiness"]["outcome"] == "supported"
     assert row["provider_recovery"]["active"] is True
     assert row["provider_recovery"]["diagnostics"]["outcome"] == "supported"
+    assert row["provider_recovery"]["failed_diagnostics"]["action"] == "task_retry"
+    assert row["provider_recovery"]["failed_diagnostics"]["checks"][0]["role"] == "swe"
     assert row["provider_recovery"]["actions"]["retry"] == {"eligible": True}
     persisted = json.loads(blocker_path.read_text(encoding="utf-8"))
     assert persisted["blockers"]["task_001"]["active"] is True

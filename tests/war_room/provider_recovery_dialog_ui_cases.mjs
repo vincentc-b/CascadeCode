@@ -137,4 +137,80 @@ assert.match(failedRefresh.text, /Could not refresh model inventory/);
 assert.equal(failedRefresh.error, true);
 assert.equal(failedRefresh.recoverable, true);
 
+const blockedBatch = {
+  action: "feature_dispatch",
+  message: "The selected model is not offered.",
+  selection_fingerprint: "fingerprint-1",
+  inventory_freshness: { stale: false, fetched_at: 100, age_seconds: 4.4 },
+  checks: [
+    {
+      role: "feature_lead",
+      outcome: "supported",
+      provider: "codex",
+      model_id: "manager",
+      reasoning_effective: "high",
+      effective_flex_mode: false,
+      message: "Available.",
+      document_path: "docs/features/feat_001.md",
+      document_revision: "rev-1",
+    },
+    {
+      role: "swe",
+      outcome: "unsupported",
+      provider: "codex",
+      model_id: "future-worker",
+      message: "The selected model is not offered.",
+      document_path: "docs/tasks/task_001.md",
+      document_revision: "rev-2",
+    },
+  ],
+};
+const diagnostic = recoveryUi.diagnosticView(blockedBatch);
+assert.equal(diagnostic.action, "feature dispatch");
+assert.equal(diagnostic.checks.length, 2);
+assert.equal(diagnostic.checks[0].role, "Feature Lead");
+assert.match(diagnostic.checks[0].selection, /Flex off/);
+assert.match(diagnostic.checks[1].provenance, /rev-2/);
+assert.equal(
+  recoveryUi.failureBatch(null, { failed_diagnostics: blockedBatch }),
+  blockedBatch
+);
+const combined = recoveryUi.failureBatch({
+  message: "Approval saved; two launches were blocked.",
+  dispatch_refusals: [
+    { work_id: "feat_001", preflight: blockedBatch },
+    { work_id: "feat_002", preflight: Object.assign({}, blockedBatch, { checks: [blockedBatch.checks[1]] }) },
+  ],
+});
+assert.equal(combined.checks.length, 3);
+assert.equal(combined.checks[0].work_id, "feat_001");
+assert.equal(combined.checks[2].work_id, "feat_002");
+assert.equal(recoveryUi.diagnosticView(combined).checks[2].role, "SWE (feat_002)");
+
+assert.deepEqual(recoveryUi.readinessSummary({
+  outcome: "supported",
+  message: "Available.",
+  inventory_freshness: { stale: false, fetched_at: 100, age_seconds: 2 },
+}), {
+  kind: "ready",
+  label: "Configuration ready",
+  detail: "Available.",
+  freshness: "Inventory freshness: current (2s old)",
+});
+assert.match(
+  recoveryUi.readinessSummary({
+    outcome: "transient",
+    inventory_freshness: { stale: true, fetched_at: null },
+  }).label,
+  /unknown · stale/
+);
+assert.equal(
+  recoveryUi.partialOutcome({
+    dispatch_pending: true,
+    approval_committed: true,
+    dispatch_outcome: { launched: ["feat_001"], not_launched: ["feat_002"] },
+  }),
+  "Approval was saved. Launched: feat_001. Not launched: feat_002."
+);
+
 console.log("provider_recovery_dialog_ui_cases: ok");
