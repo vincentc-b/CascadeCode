@@ -13,7 +13,11 @@ from typing import Literal, Mapping
 
 
 RecoveryActionName = Literal[
-    "change_provider", "retry", "provider_setup", "return_to_backlog"
+    "change_provider",
+    "retry",
+    "provider_setup",
+    "return_to_backlog",
+    "continue_without_flex",
 ]
 
 _SAFE_REASONS = {
@@ -57,6 +61,7 @@ def recovery_actions(
     blocker: Mapping[str, object] | None,
     turn_stoppable: bool | None,
     return_to_backlog: Mapping[str, object] | None = None,
+    continue_without_flex: Mapping[str, object] | None = None,
 ) -> dict[str, dict[str, object]]:
     """Evaluate control eligibility from an authoritative read-only snapshot.
 
@@ -102,12 +107,17 @@ def recovery_actions(
     else:
         returned = RecoveryAction(False, "return_not_eligible", "The Epic is not eligible to return to backlog.")
 
-    return {
+    actions = {
         "change_provider": turn_action(True).to_dict(),
         "retry": retry.to_dict(),
         "provider_setup": setup.to_dict(),
         "return_to_backlog": returned.to_dict(),
     }
+    # Legacy blockers and previews have no concrete action identity.  Do not
+    # manufacture a continuation control for them.
+    if continue_without_flex is not None:
+        actions["continue_without_flex"] = dict(continue_without_flex)
+    return actions
 
 
 def provider_recovery_state(
@@ -117,6 +127,7 @@ def provider_recovery_state(
     status: str,
     turn_stoppable: bool | None,
     return_to_backlog: Mapping[str, object] | None = None,
+    continue_without_flex: Mapping[str, object] | None = None,
 ) -> dict[str, object] | None:
     """Serialize one durable blocker and its action contract for an API row."""
 
@@ -141,6 +152,7 @@ def provider_recovery_state(
             blocker=blocker,
             turn_stoppable=turn_stoppable,
             return_to_backlog=return_to_backlog,
+            continue_without_flex=continue_without_flex,
         ),
     }
 

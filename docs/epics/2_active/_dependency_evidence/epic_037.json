@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "epic_id": "epic_037",
+  "events": [],
+  "snapshots": [
+    {
+      "snapshot_id": "evidence_33b35ef504d94e12bbcf23d3530c3999",
+      "manifest_revision": 1,
+      "created_at": "2026-11-07T22:02:55.612237+00:00",
+      "accepted": []
+    },
+    {
+      "snapshot_id": "evidence_fd9188921a1c422695744f5f44dce9b8",
+      "manifest_revision": 1,
+      "created_at": "2026-11-07T22:03:35.135682+00:00",
+      "accepted": []
+    }
+  ]
+}

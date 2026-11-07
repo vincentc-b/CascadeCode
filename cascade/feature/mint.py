@@ -145,6 +145,16 @@ def _mint_task(
     if task_id is None:
         raise SchemaError("failed to allocate task id after persistence retries")
 
+    from cascade.provider_recovery_waiver import stamp_minted_descendant_waivers
+    from cascade.watchdog.model_resolve import resolve_effective_selections
+
+    stamp_minted_descendant_waivers(
+        resolve_effective_selections(feature, root=trunk),
+        resolve_effective_selections(doc, root=trunk),
+        role_mapping={"swe": "swe"},
+        root=trunk,
+    )
+
     feature = feature_read_doc(feature_id, feature_id=feature_id, root=trunk)
     if task_id not in feature.meta.children:
         feature.meta.children.append(task_id)

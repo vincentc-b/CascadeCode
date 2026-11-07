@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "epic_id": "epic_037",
+  "snapshots": [
+    {
+      "revision": 1,
+      "recorded_at": "2026-11-07T22:01:14.245720+00:00",
+      "target_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment": null,
+      "none_required": true,
+      "dependencies": []
+    }
+  ]
+}

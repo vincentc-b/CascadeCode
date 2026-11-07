@@ -18,6 +18,7 @@ from cascade.watchdog.blockage import (
     reconcile_direct_report_blockage,
 )
 from cascade.watchdog.dispatch import dispatch_task
+from cascade.war_room.serialize import dispatch_result_to_dict
 from cascade.workspace.integration_worktree import doc_filesystem_root, locate_trunk
 
 
@@ -31,7 +32,12 @@ def _owned_task(task_id: str, *, feature_id: str, root: Path):
     try:
         task = read_doc(task_id, root=feature_root)
     except NotFound:
-        raise ValueError(f"unknown task {task_id}") from None
+        # A Feature may have moved to a different checkout while its Task is
+        # still on the tracking board. Keep the parent check below authoritative.
+        try:
+            task = read_doc(task_id, root=root)
+        except NotFound:
+            raise ValueError(f"unknown task {task_id}") from None
     if task.meta.tier != "task" or task.meta.parent != feature_id:
         raise ValueError(f"{task_id} is not a child of {feature_id}")
     return task
@@ -179,12 +185,12 @@ def retry_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object
                 "recovery": status,
             }
         result = dispatch_task(task_id, "boss", root=trunk)
-    return {
-        "ok": result.ok,
-        "reason": result.reason,
+    response: dict[str, object] = {
+        **dispatch_result_to_dict(result),
         "task_id": task_id,
         "recovery": recovery_status(task_id, feature_id=feature_id, root=trunk),
     }
+    return response
 
 
 def recover_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object]:

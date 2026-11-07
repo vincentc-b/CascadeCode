@@ -7,11 +7,14 @@ from pathlib import Path
 
 from cascade.agent.discovery.inventory import ProviderInventoryResult, get_provider_inventory
 from cascade.agent.providers import parse_provider_id
+from cascade.agent.selection_admission import (
+    SelectionAdmissionError,
+    admit_work_selection,
+)
 from cascade.board.parse import render_doc
 from cascade.board.types import WorkDoc
 from cascade.brief_stack import (
-    BRIEF_STACK_ROLES, normalize_reasoning_overrides, parse_brief_models,
-    validate_models_against_inventory,
+    BRIEF_STACK_ROLES, parse_brief_models,
 )
 from cascade.briefs import _clean, normalize_flex_mode
 from cascade.watchdog.config import read_providers_config
@@ -72,27 +75,12 @@ def validate_brief_edit(
     config = read_providers_config(root)
     provider = parse_provider_id(_clean(str(raw.get("provider") or ""), "provider"))
     models = parse_brief_models(raw, table=config.tables[provider])
-    saved = dict(target.meta.models or {})
-    warnings: list[str] = []
-    try:
-        item = validate_models_against_inventory(
-            provider, models, inventory or get_provider_inventory()
-        )
-    except ValueError as exc:
-        if provider != target.meta.provider or any(
-            models.get(role) != saved.get(role) for role in BRIEF_STACK_ROLES
-        ):
-            raise
-        item = None
-        warnings.append(str(exc))
-    reasoning_input, cleared = _parse_reasoning(raw)
-    reasoning = (
-        dict(reasoning_input)
-        if item is None
-        else normalize_reasoning_overrides(
-            models, reasoning_input, provider_item=item
-        )
+    available = inventory or get_provider_inventory()
+    item = next(
+        (entry for entry in available.providers if entry.provider_id == provider), None
     )
+    reasoning_input, cleared = _parse_reasoning(raw)
+    reasoning = dict(reasoning_input)
     reasoning = {role: value for role, value in reasoning.items() if role not in cleared}
     if "flex_mode" not in raw and provider == target.meta.provider:
         flex_mode = target.meta.flex_mode
@@ -103,7 +91,7 @@ def validate_brief_edit(
     additional = raw.get("additional_markdown")
     if additional is not None and not isinstance(additional, str):
         raise ValueError("additional markdown must be text")
-    return BriefEditRequest(
+    edit = BriefEditRequest(
         title=_clean(str(raw.get("title") or ""), "title"),
         intent=_clean(str(raw.get("intent") or ""), "intent"),
         success_criteria=_clean(str(raw.get("success_criteria") or ""), "success criteria"),
@@ -116,8 +104,19 @@ def validate_brief_edit(
         original=target,
         flex_mode=flex_mode,
         additional_markdown=additional,
-        warnings=tuple(warnings),
     )
+    try:
+        admit_work_selection(
+            render_brief_edit(edit),
+            root=root,
+            inventory=available,
+            action="brief_preview",
+        )
+        return edit
+    except SelectionAdmissionError as exc:
+        if exc.result.reason_code == "reasoning_not_supported":
+            exc.args = ("reasoning override is not supported for the selected model",)
+        raise
 
 
 def render_brief_edit(edit: BriefEditRequest) -> WorkDoc:

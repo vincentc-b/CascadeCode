@@ -128,7 +128,30 @@ def _run_kickoff(reason: KickoffReason, repo: Path) -> None:
         with lifecycle_gate().turn(reason.work_id), _graph_lock(reason.work_id):
             token = _model_turn_authorized.set(True)
             try:
-                _kickoff_turn(reason, repo)
+                turn_handed_off = _kickoff_turn(reason, repo)
+                if (
+                    turn_handed_off
+                    and reason.continuation_receipt_id is not None
+                    and reason.continuation_handoff_id is not None
+                ):
+                    from cascade.provider_recovery_receipt import (
+                        update_continuation_receipt,
+                    )
+
+                    update_continuation_receipt(
+                        reason.continuation_receipt_id,
+                        "completed",
+                        root=repo,
+                        handoff_id=reason.continuation_handoff_id,
+                        evidence={
+                            "retry_outcome": {"ok": True, "reason": None},
+                            "turn_handoff": {
+                                "work_id": reason.work_id,
+                                "kind": reason.kind,
+                                "recorded_at": time.time(),
+                            }
+                        },
+                    )
             finally:
                 _model_turn_authorized.reset(token)
     except LifecycleTurnRejected:
@@ -724,7 +747,7 @@ def _commit_classified_queue_batch(
     return int(resolved)
 
 
-def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
+def _kickoff_turn(reason: KickoffReason, repo: Path) -> bool:
     from cascade.workspace.integration_worktree import doc_filesystem_root
 
     doc = None
@@ -743,7 +766,7 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
     except (NotFound, GitError):
         tier = _tier_from_work_id(reason.work_id)
     if tier not in ("epic", "feature", "task"):
-        return
+        return False
 
     feature_id = reason.feature_id or (doc.meta.parent if doc is not None else None)
     if reason.kind != "resume_inflight" and not _graph_has_inflight_turn(
@@ -797,7 +820,7 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
             reason.model_id,
             toast_on_failure=reason.kind in ("human_message", "comment"),
         ):
-            return
+            return False
         _invoke_role_turn(
             reason.work_id,
             tier,
@@ -805,7 +828,7 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
             feature_id=reason.feature_id or (doc.meta.parent if doc else None),
             model_id=reason.model_id,
         )
-        return
+        return True
 
     if reason.kind == "resume_inflight":
         if not _graph_has_inflight_turn(
@@ -814,9 +837,9 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
             root=repo,
             feature_id=reason.feature_id or (doc.meta.parent if doc else None),
         ):
-            return
+            return False
         if not _checkpoint_has_models(reason.work_id, tier, root=repo, feature_id=reason.feature_id):
-            return
+            return False
         _invoke_role_turn(
             reason.work_id,
             tier,
@@ -825,10 +848,10 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
             model_id=reason.model_id,
             resume=True,
         )
-        return
+        return True
 
     if doc is None:
-        return
+        return False
 
     if reason.kind in ("activate", "dispatch", "queue_event"):
         if not _checkpoint_has_models(reason.work_id, tier, root=repo, feature_id=reason.feature_id):
@@ -847,16 +870,16 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
                     reason.model_id,
                     toast_on_failure=False,
                 ):
-                    return
+                    return False
             else:
-                return
+                return False
         if not _has_turn_input(
             reason.work_id,
             tier,
             root=repo,
             feature_id=reason.feature_id or doc.meta.parent,
         ):
-            return
+            return False
         _invoke_role_turn(
             reason.work_id,
             tier,
@@ -864,6 +887,8 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
             feature_id=reason.feature_id or doc.meta.parent,
             model_id=reason.model_id,
         )
+        return True
+    return False
 
 
 def _tier_from_work_id(work_id: str) -> str | None:
@@ -888,6 +913,7 @@ def _ensure_role_models(
     parent = meta.parent if meta is not None else None
     explicit_model = model_id is not None and str(model_id).strip()
     if _checkpoint_has_models(work_id, tier, root=repo, feature_id=parent):
+        _refresh_runtime_flex_waivers(work_id, tier, meta, repo)
         return True
     if meta is None and not explicit_model:
         return False
@@ -974,7 +1000,60 @@ def _ensure_role_models(
         if toast_on_failure:
             toast_model_config_failure(work_id, str(exc), root=repo)
         return False
+    _refresh_runtime_flex_waivers(work_id, tier, meta, repo)
     return True
+
+
+def _refresh_runtime_flex_waivers(work_id: str, tier: str, meta, repo: Path) -> None:
+    """Refresh only effective Flex and waiver provenance on an existing graph."""
+
+    if meta is None or tier not in ("epic", "feature", "task"):
+        return
+    from cascade.watchdog.model_resolve import resolve_effective_selections
+
+    selections = resolve_effective_selections(meta, root=repo).selections
+    selected = {item.role: item for item in selections}
+    roles = {
+        "epic": ("epic_manager", "epic_architect"),
+        "feature": ("feature_lead", "feature_architect"),
+        "task": ("swe",),
+    }[tier]
+    if any(role not in selected for role in roles):
+        return
+    payload = {
+        "flex_modes": {role: selected[role].effective_flex_mode for role in roles},
+        "flex_waiver_ids": {
+            role: selected[role].flex_waiver_id
+            for role in roles
+            if selected[role].flex_waiver_id is not None
+        },
+        "flex_waiver_receipt_ids": {
+            role: selected[role].flex_waiver_receipt_id
+            for role in roles
+            if selected[role].flex_waiver_receipt_id is not None
+        },
+        "flex_waiver_source_work_ids": {
+            role: selected[role].flex_waiver_source_work_id
+            for role in roles
+            if selected[role].flex_waiver_source_work_id is not None
+        },
+    }
+    if tier == "epic":
+        from cascade.epic.checkpoint import thread_config
+        from cascade.epic.graph import ensure_epic_graph
+
+        graph, config = ensure_epic_graph(work_id, root=repo), thread_config(work_id)
+    elif tier == "feature":
+        from cascade.feature.checkpoint import thread_config
+        from cascade.feature.graph import ensure_feature_graph
+
+        graph, config = ensure_feature_graph(work_id, root=repo), thread_config(work_id)
+    else:
+        from cascade.task.checkpoint import thread_config
+        from cascade.task.graph import ensure_task_graph
+
+        graph, config = ensure_task_graph(work_id, root=repo, feature_id=meta.parent), thread_config(work_id)
+    graph.update_state(config, payload)
 
 
 def _checkpoint_has_providers(

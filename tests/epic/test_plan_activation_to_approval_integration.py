@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import socket
 import threading
+import time
 import urllib.error
 import urllib.request
 from http import HTTPStatus
@@ -14,6 +15,12 @@ from typing import Any
 import pytest
 
 from cascade.approvals import epic_plan_approved
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
 from cascade.board.store import read_doc, write_doc
 from cascade.comments.store import comment, resolve_comment
 from cascade.epic.planning_signoffs import canonical_plan_revision
@@ -74,7 +81,21 @@ def _readiness_from_api(base: str, epic_id: str) -> dict[str, Any]:
     row = _epic_row(board, epic_id)
     doc = _get_json(base, f"/api/doc/{epic_id}")
     readiness = row["plan_readiness"]
-    assert doc["plan_readiness"] == readiness
+    doc_readiness = doc["plan_readiness"]
+    assert doc_readiness.keys() == readiness.keys()
+    for key, value in readiness.items():
+        if key == "dependency_status":
+            assert {
+                field: field_value
+                for field, field_value in doc_readiness[key].items()
+                if field != "observed_at"
+            } == {
+                field: field_value
+                for field, field_value in value.items()
+                if field != "observed_at"
+            }
+        else:
+            assert doc_readiness[key] == value
     return readiness
 
 
@@ -114,7 +135,9 @@ def _assert_readiness(
 
 
 @pytest.fixture
-def planning_board(tmp_path: Path) -> tuple[Path, str]:
+def planning_board(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, str]:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Flow epic", tier="epic", status="ready_to_plan")
     add_doc(
@@ -134,6 +157,30 @@ def planning_board(tmp_path: Path) -> tuple[Path, str]:
         status="backlog",
         parent="epic_002",
     )
+    for work_id in ("epic_001", "epic_002", "feat_001", "feat_002"):
+        doc = read_doc(work_id, root=root)
+        roles = (
+            ("epic_manager", "epic_architect", "feature_lead", "feature_architect", "swe")
+            if doc.meta.tier == "epic"
+            else ("feature_lead", "feature_architect", "swe")
+        )
+        doc.meta.provider = "codex"
+        doc.meta.models = {role: "offered" for role in roles}
+        write_doc(doc, root=root)
+    now = time.time()
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(DiscoveredModel(id="offered", display_name="Offered"),),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, now, now + 300, 300),
+    )
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
     commit_board(root, "initial")
     declare_no_dependencies("epic_002", root=root)
     approve_epic_plan_when_ready("epic_002", root=root)

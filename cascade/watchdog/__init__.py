@@ -19,7 +19,9 @@ from cascade.watchdog.model_resolve import (
     ResolvedBackend,
     ResolvedModel,
     resolve_backend,
+    resolve_effective_selections,
     resolve_model,
+    selection_fingerprint,
 )
 from cascade.watchdog.role_skills import (
     RoleSkillDefaults,
@@ -73,7 +75,9 @@ __all__ = [
     "read_models_table",
     "read_providers_config",
     "resolve_backend",
+    "resolve_effective_selections",
     "resolve_model",
+    "selection_fingerprint",
     "RoleSkillDefaults",
     "default_role_skill_paths",
     "load_role_skills_context",
