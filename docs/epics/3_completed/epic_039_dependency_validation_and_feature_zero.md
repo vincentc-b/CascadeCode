@@ -159,3 +159,10 @@ None at epic contract level. The formerly open risk question is resolved by the 
 ## Amendment log
 
 _(none)_
+
+
+## Delivery acceptance status — 2026-11-07
+
+Cascade marks all three features and the epic completed. These lifecycle markers do not establish full delivery acceptance: the [epic acceptance report](../../task_artifacts/task_039_003_004_epic_acceptance.md) reports criteria 1–9 passed and criteria 10–11 unpassed. The [slice-B smoke record](../../task_artifacts/task_039_002_005_smoke_acceptance.md) contains read-only observations, but no authorized real project-local installation, in-container runtime/Structurizr check, or separately authorized adapter feasibility result. Epic delivery acceptance remains incomplete; these requirements are not waived.
+
+Remaining work stays within slices B and C. Prepare complete exact dependency operation bindings and a bounded adapter-feasibility scope for human review; obtain independent human installation approvals and separate feasibility authorization; then run the guarded real attempts and append actual environment, integrity, output, cleanup, and feasibility evidence to the existing acceptance artifacts. Plan approval, feature completion, cached image metadata, and deterministic tests grant no installation authority and cannot substitute for this evidence. Preserve accepted implementation and existing history. No new feature or product adapter is required to close this acceptance gap.
