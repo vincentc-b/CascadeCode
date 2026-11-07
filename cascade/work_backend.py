@@ -32,7 +32,7 @@ def feature_backend_from_epic(
             if epic_role in epic.models:
                 mapped[feature_role] = epic.models[epic_role]
         for key, value in epic.models.items():
-            if key in ("feature_lead", "feature_architect"):
+            if key in ("feature_lead", "feature_architect", "swe"):
                 mapped[key] = value
         if mapped:
             models = mapped
@@ -51,7 +51,7 @@ def reasoning_for_feature_from_epic(epic: WorkMeta) -> dict[str, str] | None:
         level = _non_blank(epic.reasoning.get(epic_role))
         if level is not None:
             mapped[feature_role] = level
-    for role in ("feature_lead", "feature_architect"):
+    for role in ("feature_lead", "feature_architect", "swe"):
         level = _non_blank(epic.reasoning.get(role))
         if level is not None:
             mapped[role] = level

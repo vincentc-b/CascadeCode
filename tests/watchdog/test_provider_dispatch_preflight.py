@@ -68,10 +68,13 @@ def test_epic_activation_rejects_unsupported_roles_before_state_change(
     assert result.reason == "provider_preflight_blocked"
     assert result.preflight is not None
     assert result.preflight.outcome == "blocked"
-    assert {item.role for item in result.preflight.checks} == {
+    assert tuple(item.role for item in result.preflight.checks) == (
         "epic_manager",
         "epic_architect",
-    }
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    )
     assert read_doc("epic_001", root=root).meta.status == "ready_to_plan"
 
 
@@ -102,7 +105,13 @@ def test_transient_preflight_preserves_state_and_can_be_retried(
 ) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
-    for role in ("epic_manager", "epic_architect"):
+    for role in (
+        "epic_manager",
+        "epic_architect",
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    ):
         _pin_model(root, "epic_001", role, "offered")
     monkeypatch.setattr(
         "cascade.watchdog.dispatch.get_provider_inventory", _unavailable_inventory
@@ -126,9 +135,15 @@ def test_feature_and_task_dispatch_reject_before_transition(
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
-    for role in ("epic_manager", "epic_architect"):
+    for role in (
+        "epic_manager",
+        "epic_architect",
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    ):
         _pin_model(root, "epic_001", role, "offered")
-    for role in ("feature_lead", "feature_architect"):
+    for role in ("feature_lead", "feature_architect", "swe"):
         _pin_model(root, "feat_001", role, "missing")
     monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", _inventory)
 
@@ -139,7 +154,7 @@ def test_feature_and_task_dispatch_reject_before_transition(
     assert feature.reason == "provider_preflight_blocked"
     assert read_doc("feat_001", root=root).meta.status == "backlog"
 
-    for role in ("feature_lead", "feature_architect"):
+    for role in ("feature_lead", "feature_architect", "swe"):
         _pin_model(root, "feat_001", role, "offered")
     assert dispatch_feature("feat_001", "human", root=root).ok
     _pin_model(root, "task_001", "swe", "missing")

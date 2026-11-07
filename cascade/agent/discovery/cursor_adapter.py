@@ -49,7 +49,7 @@ def discover_cursor_models() -> ProviderDiscoverySnapshot:
     except Exception as exc:
         return unavailable_snapshot(
             provider_id,
-            failure="api_error",
+            failure="discovery_unavailable",
             message=sanitize_provider_error(exc),
         )
 
@@ -75,7 +75,7 @@ def discover_cursor_models() -> ProviderDiscoverySnapshot:
     if not models:
         return unavailable_snapshot(
             provider_id,
-            failure="api_error",
+            failure="empty",
             message="empty model catalog",
         )
 

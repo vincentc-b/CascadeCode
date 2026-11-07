@@ -173,7 +173,7 @@ def legal_model_keys_for_tier(tier: str) -> frozenset[str]:
     if tier == "epic":
         return frozenset(BRIEF_STACK_ROLES)
     if tier == "feature":
-        return frozenset({"feature_lead", "feature_architect"})
+        return frozenset({"feature_lead", "feature_architect", "swe"})
     if tier == "task":
         return frozenset({"swe"})
     raise ValueError(f"unknown tier: {tier!r}")

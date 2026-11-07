@@ -19,6 +19,12 @@ _ADAPTERS: dict[ProviderId, DiscoverFn] = {
 }
 
 
+def supports_discovery_adapter(provider_id: str) -> bool:
+    """Return registry evidence without running the adapter or probing its host."""
+
+    return provider_id in _ADAPTERS
+
+
 def discover_provider(provider_id: ProviderId) -> ProviderDiscoverySnapshot:
     try:
         fn = _ADAPTERS[provider_id]

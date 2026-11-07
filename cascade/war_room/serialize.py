@@ -28,6 +28,7 @@ from cascade.agent.discovery.inventory import (
     ProviderInventoryFailure,
     ProviderInventoryItem,
     ProviderInventoryResult,
+    project_inventory_freshness,
 )
 from cascade.agent.discovery.types import DiscoveredModel, ReasoningCapability
 from cascade.agent.providers import ProviderId, ProviderStatus
@@ -242,22 +243,7 @@ def dispatch_result_to_dict(result: DispatchResult) -> dict:
         "event": event_to_dict(result.event) if result.event is not None else None,
     }
     if result.preflight is not None:
-        payload["preflight"] = {
-            "outcome": result.preflight.outcome,
-            "checks": [
-                {
-                    "role": check.role,
-                    "outcome": check.result.outcome,
-                    "reason": check.result.reason,
-                    "provider": check.result.provider,
-                    "model_id": check.result.model_id,
-                    "tier": check.result.tier,
-                    "message": check.result.message,
-                    "retryable": check.result.retryable,
-                }
-                for check in result.preflight.checks
-            ],
-        }
+        payload["preflight"] = result.preflight.to_dict()
     return payload
 
 
@@ -410,11 +396,14 @@ def reasoning_capability_to_dict(
 
 
 def inventory_freshness_to_dict(freshness: InventoryFreshness) -> dict[str, Any]:
+    freshness = project_inventory_freshness(freshness)
     return {
         "from_cache": freshness.from_cache,
         "fetched_at": freshness.fetched_at,
         "expires_at": freshness.expires_at,
         "ttl_seconds": freshness.ttl_seconds,
+        "age_seconds": freshness.age_seconds,
+        "stale": freshness.stale,
     }
 
 
@@ -443,6 +432,7 @@ def provider_inventory_failure_to_dict(
         "id": failure.provider_id,
         "reason": failure.reason,
         "message": failure.message,
+        "failure_kind": failure.failure_kind,
     }
 
 

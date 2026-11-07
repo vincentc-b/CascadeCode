@@ -27,6 +27,16 @@ from cascade.workspace.integration_worktree import (
 from tests.support import add_doc, commit_board, make_repo
 
 
+@pytest.fixture(autouse=True)
+def _snapshot_tests_skip_provider_gate(monkeypatch) -> None:
+    # These tests exercise remote brief provenance. Their older brief fixtures
+    # intentionally have no complete role selection for capability preflight.
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch._provider_preflight_refusal",
+        lambda *_args, **_kwargs: None,
+    )
+
+
 def _init_bare_remote(tmp_path: Path) -> Path:
     remote = tmp_path / "remote.git"
     subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)

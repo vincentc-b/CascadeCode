@@ -262,7 +262,11 @@ async def run_planning_role_turn(
         return missing_provider_message(role)
 
     scope_id = turn_kwargs.get("feature_id") or turn_kwargs.get("epic_id")
-    if isinstance(scope_id, str) and scope_id:
+    # Like the SWE runner seam, injected planning runners are deterministic
+    # unit-test adapters rather than provider processes. Production runners are
+    # defined in planning_turn and always pass through the fresh execution gate.
+    production_runner = run_turn.__module__ == "cascade.agent.planning_turn"
+    if isinstance(scope_id, str) and scope_id and production_runner:
         from cascade.agent.execution_preflight import ProviderSelection, recheck_provider_capability
 
         tier = "feature" if turn_kwargs.get("feature_id") else "epic"
@@ -276,7 +280,14 @@ async def run_planning_role_turn(
             root=Path(root).resolve(),
         )
         if not preflight.supported:
-            reason = next((check.reason for check in preflight.checks if not check.supported), "provider_unavailable")
+            reason = next(
+                (
+                    check.result.reason
+                    for check in preflight.checks
+                    if not check.result.supported
+                ),
+                "provider_unavailable",
+            )
             return f"{role}: provider blocked — {reason} ({preflight.classification})"
 
     reasoning_level, reasoning_source = reasoning_for_role(state, role)

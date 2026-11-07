@@ -271,7 +271,7 @@ def test_post_start_provider_loss_survives_restart_and_retry_recovers_only_targe
     )
     board = board_view_from_index(list_board(root), root=root)
     row = board["tasks"]["2_active"][0]
-    assert row["provider_recovery"]["reason_code"] == "provider_unavailable"
+    assert row["provider_recovery"]["reason_code"] == "discovery_unavailable"
     assert row["provider_recovery"]["actions"]["retry"] == {"eligible": True}
     assert row["provider_recovery"]["actions"]["provider_setup"] == {"eligible": True}
     assert row["provider_recovery"]["actions"]["return_to_backlog"]["reason_code"] == "not_epic"
