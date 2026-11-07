@@ -22,6 +22,7 @@ models:
 reasoning:
   feature_lead: high
   feature_architect: high
+approved_at: '2026-11-07T01:36:41.471719+00:00'
 ---
 # Expose actionable War Room diagnostics and readiness
 
