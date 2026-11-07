@@ -11,7 +11,47 @@ from cascade.war_room.planning_transcript import (
     append_planning_turn_to_chat,
     sync_planning_transcript_to_chat,
 )
-from tests.support import add_doc, make_repo
+from cascade.war_room.serialize import board_view_from_index
+from cascade.workspace.integration_worktree import merged_board
+from tests.support import SyntheticDependencyLifecycle, add_doc, make_repo
+
+
+def _epic_row(payload: dict, epic_id: str) -> dict:
+    for column in ("1_backlog", "2_active", "3_completed"):
+        for row in payload["epics"][column]:
+            if row["id"] == epic_id:
+                return row
+    raise KeyError(epic_id)
+
+
+def test_historical_blocker_does_not_override_synthetic_live_completion(
+    synthetic_dependency_lifecycle: SyntheticDependencyLifecycle,
+) -> None:
+    scenario = synthetic_dependency_lifecycle
+    append_planning_turn_to_chat(
+        scenario.owner_id,
+        [
+            {
+                "role": "epic_manager",
+                "content": f"Blocked by {scenario.dependency_id}.",
+            }
+        ],
+        root=scenario.root,
+    )
+
+    board = merged_board(scenario.root)
+    payload = board_view_from_index(board, root=scenario.root)
+    row = _epic_row(payload, scenario.owner_id)
+
+    assert read_messages(scenario.owner_id, root=scenario.root)[0]["body"] == (
+        f"Blocked by {scenario.dependency_id}."
+    )
+    assert row["dependency_status"]["outcome"] == "satisfied"
+    assert row["plan_readiness"]["dependency_status"] == row["dependency_status"]
+    assert all(
+        blocker["category"] != "dependency"
+        for blocker in row["plan_readiness"]["blockers"]
+    )
 
 
 def test_append_planning_turn_writes_agent_lines(tmp_path: Path) -> None:

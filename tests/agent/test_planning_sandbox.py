@@ -7,7 +7,11 @@ import json
 from pathlib import Path
 import pytest
 
-from cascade.agent.mcp_wrappers import ToolEffectCollector, dispatch_planning_tool
+from cascade.agent.mcp_wrappers import (
+    ToolEffectCollector,
+    dispatch_planning_tool,
+    mcp_tool_catalog,
+)
 from cascade.agent.planning_sandbox import (
     collect_epic_readable_paths,
     materialize_scratch,
@@ -132,6 +136,16 @@ def test_dispatch_planning_tool_hits_guarded_mint_feature(
     assert calls and calls[0][0] == "mint_feature"
     assert calls[0][1]["epic_id"] == "epic_001"
     assert collector.effects and collector.effects[0].tool == "mint_feature"
+
+
+def test_mint_feature_catalog_guidance_keeps_dependency_failures_distinct() -> None:
+    catalog = mcp_tool_catalog("epic", ["mint_feature"])
+
+    description = catalog[0]["description"]
+    assert "dependency_unmet" in description
+    assert "dependency_status_unavailable" in description
+    assert "content_access_denied" in description
+    assert "rechecks" in description
 
 
 def test_materialize_only_allowed_epic_docs(epic_board: dict) -> None:

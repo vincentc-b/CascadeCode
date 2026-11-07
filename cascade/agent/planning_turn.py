@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from cascade.agent.adapter import run_role, validate_model_id
@@ -22,9 +23,24 @@ from cascade.agent.planning_sandbox import (
 from cascade.agent.providers import ProviderId
 from cascade.agent.recovery_contract import ProviderRecoveryLaunch
 from cascade.agent.types import RoleId, RoleResult, RoleTurn
+from cascade.board.parse import parse_doc
+from cascade.planning_dependency_tools import refresh_planning_dependencies
 
 _EPIC_ROLES = frozenset({"epic_manager", "epic_architect"})
 _FEATURE_ROLES = frozenset({"feature_lead", "feature_architect"})
+
+_DEPENDENCY_PROJECTION_HEADING = (
+    "Authoritative dependency status projection "
+    "(read-only; does not grant content access or authorize actions):"
+)
+_DEPENDENCY_PROJECTION_BOUNDARY = (
+    "A spec read denied by scoped authorization is content_access_denied "
+    "independently of this dependency outcome. Treat outcome/reason fields as "
+    "machine-readable and explanation fields as guidance only. Normal planning "
+    "actions, including mint_feature, recheck authoritative dependency status: "
+    "dependency_unmet means a known prerequisite is incomplete, while "
+    "dependency_status_unavailable means status could not be established."
+)
 
 
 async def run_epic_planning_turn(
@@ -44,12 +60,13 @@ async def run_epic_planning_turn(
     validate_model_id(model_id)
     repo = Path(root).resolve()
     paths = collect_epic_readable_paths(epic_id, root=repo)
+    turn_prompt = _with_dependency_projection(prompt, owner_path=paths[0], root=repo)
     scratch = materialize_scratch(repo, paths, tier="epic")
     return await _run_sandbox_turn(
         role=role,
         provider=provider,
         model_id=model_id,
-        prompt=prompt,
+        prompt=turn_prompt,
         reasoning_level=reasoning_level,
         flex_mode=flex_mode,
         recovery=recovery,
@@ -80,12 +97,13 @@ async def run_feature_planning_turn(
     validate_model_id(model_id)
     repo = Path(root).resolve()
     paths = collect_feature_readable_paths(feature_id, root=repo)
+    turn_prompt = _with_dependency_projection(prompt, owner_path=paths[0], root=repo)
     scratch = materialize_scratch(repo, paths, tier="feature")
     return await _run_sandbox_turn(
         role=role,
         provider=provider,
         model_id=model_id,
-        prompt=prompt,
+        prompt=turn_prompt,
         reasoning_level=reasoning_level,
         flex_mode=flex_mode,
         recovery=recovery,
@@ -185,3 +203,14 @@ def _recovery_prompt(prompt: str, recovery: ProviderRecoveryLaunch | None) -> st
     if recovery is None:
         return prompt
     return f"{recovery.prompt_block()}\n\n{prompt}"
+
+
+def _with_dependency_projection(prompt: str, *, owner_path: Path, root: Path) -> str:
+    """Append lifecycle-only dependency context from the current owning spec."""
+
+    owner = parse_doc(owner_path).meta
+    projection = refresh_planning_dependencies(owner.id, root=root)
+    payload = json.dumps(projection, sort_keys=True, separators=(",", ":"))
+    return "\n\n".join(
+        (prompt, _DEPENDENCY_PROJECTION_HEADING, payload, _DEPENDENCY_PROJECTION_BOUNDARY)
+    )
