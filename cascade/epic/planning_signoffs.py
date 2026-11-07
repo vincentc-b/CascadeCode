@@ -159,14 +159,14 @@ def read_plan_sign_offs(epic_id: str, *, root: Path) -> tuple[PlanSignOff, ...]:
     if not isinstance(rows, list):
         return ()
     parsed: list[PlanSignOff] = []
-    seen: set[tuple[PlanningRole, str]] = set()
+    seen: set[tuple[PlanningRole, str, str | None]] = set()
     for row in rows:
         if not isinstance(row, dict):
             continue
         record = PlanSignOff.from_dict(row)
         if record is None:
             continue
-        key = (record.role, record.plan_revision)
+        key = (record.role, record.plan_revision, record.evidence_snapshot_id)
         if key in seen:
             continue
         seen.add(key)
@@ -201,17 +201,17 @@ def current_valid_sign_offs(
         return {}
     from cascade.epic.dependency_evidence import dependency_evidence_snapshot_is_current
 
-    candidates = valid_sign_offs_for_revision(
-        read_plan_sign_offs(epic_id, root=root), revision
-    )
-    return {
-        role: row
-        for role, row in candidates.items()
-        if row.evidence_snapshot_id is not None
-        and dependency_evidence_snapshot_is_current(
-            epic_id, row.evidence_snapshot_id, root=root
-        )
-    }
+    valid: dict[PlanningRole, PlanSignOff] = {}
+    for row in read_plan_sign_offs(epic_id, root=root):
+        if (
+            row.plan_revision == revision
+            and row.evidence_snapshot_id is not None
+            and dependency_evidence_snapshot_is_current(
+                epic_id, row.evidence_snapshot_id, root=root
+            )
+        ):
+            valid[row.role] = row
+    return valid
 
 
 def unresolved_canonical_open_questions(epic_id: str, *, root: Path) -> tuple[str, ...]:

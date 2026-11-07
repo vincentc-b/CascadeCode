@@ -227,7 +227,7 @@ def require_installation_approval(
     epic_id: str,
     dependency_id: str,
     approval_id: str | None,
-    attempted_operation: str,
+    attempted_binding: InstallationBinding,
     *,
     root: Path,
 ) -> InstallationApproval:
@@ -242,9 +242,13 @@ def require_installation_approval(
         raise InstallationApprovalDenied(
             "dependency setup approval is missing, stale, or bound to another entry"
         )
-    if attempted_operation != approval.binding.operation:
+    if (
+        not isinstance(attempted_binding, InstallationBinding)
+        or attempted_binding.dependency_id != dependency_id
+        or attempted_binding != approval.binding
+    ):
         raise InstallationApprovalDenied(
-            "attempted dependency operation does not match its approval"
+            "attempted dependency binding does not match its approval"
         )
     return approval
 
@@ -253,7 +257,7 @@ def invoke_approved_installation(
     epic_id: str,
     dependency_id: str,
     approval_id: str | None,
-    attempted_operation: str,
+    attempted_binding: InstallationBinding,
     mutation: Callable[[], _T],
     *,
     root: Path,
@@ -269,7 +273,7 @@ def invoke_approved_installation(
         epic_id,
         dependency_id,
         approval_id,
-        attempted_operation,
+        attempted_binding,
         root=root,
     )
     return mutation()

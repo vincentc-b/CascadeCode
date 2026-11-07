@@ -25,6 +25,7 @@ from cascade.epic.dependency_manifests import (
     DependencyEntry,
     DependencyManifestDraft,
     EnvironmentIdentity,
+    InstallationBinding,
     manifest_path,
     write_dependency_manifest,
 )
@@ -34,6 +35,7 @@ from cascade.epic.planning_signoffs import (
     DependenciesNotReady,
     canonical_plan_revision,
     current_valid_sign_offs,
+    read_plan_sign_offs,
     sign_off_epic_plan,
 )
 from tests.support import add_doc, make_repo
@@ -237,8 +239,52 @@ def test_plan_approval_never_creates_installation_authority(tmp_path: Path) -> N
     assert read_installation_approvals("epic_001", root=root) == ()
     with pytest.raises(InstallationApprovalDenied):
         require_installation_approval(
-            "epic_001", "dep_python", None, entry.operation, root=root
+            "epic_001", "dep_python", None, InstallationBinding.from_entry(entry), root=root
         )
+
+
+def test_roles_can_sign_same_plan_revision_again_with_fresh_evidence(
+    tmp_path: Path,
+) -> None:
+    root = board(tmp_path)
+    entry = dependency("dep_python", environment())
+    write_dependency_manifest(
+        "epic_001",
+        DependencyManifestDraft(entry.target_environment, None, False, (entry,)),
+        root=root,
+        expected_revision=0,
+    )
+    complete(root, entry, entry.target_environment)
+    mint_feature("Child", epic_id="epic_001", root=root)
+    revision = canonical_plan_revision("epic_001", root=root)
+    assert revision is not None
+    for role in ("epic_manager", "epic_architect"):
+        sign_off_epic_plan("epic_001", role, revision, root=root)
+
+    changed = replace(entry, verification_recipe="check dep_python --strict")
+    write_dependency_manifest(
+        "epic_001",
+        DependencyManifestDraft(changed.target_environment, None, False, (changed,)),
+        root=root,
+        expected_revision=1,
+    )
+    assert current_valid_sign_offs("epic_001", root=root) == {}
+    complete(root, changed, changed.target_environment)
+    assert canonical_plan_revision("epic_001", root=root) == revision
+
+    for role in ("epic_manager", "epic_architect"):
+        assert sign_off_epic_plan("epic_001", role, revision, root=root)[
+            "newly_signed"
+        ]
+    stored = read_plan_sign_offs("epic_001", root=root)
+    assert len(stored) == 4
+    assert all(sum(row.role == role for row in stored) == 2 for role in (
+        "epic_manager", "epic_architect"
+    ))
+    assert set(current_valid_sign_offs("epic_001", root=root)) == {
+        "epic_manager", "epic_architect"
+    }
+    assert approve_epic_plan("epic_001", root=root)["ok"] is True
 
 
 def test_legacy_v1_manifest_is_history_not_current_authority(tmp_path: Path) -> None:

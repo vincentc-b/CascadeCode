@@ -22,6 +22,7 @@ from cascade.epic.dependency_manifests import (
     DependencyEntry,
     DependencyManifestDraft,
     EnvironmentIdentity,
+    InstallationBinding,
     read_dependency_manifest,
     write_dependency_manifest,
 )
@@ -210,7 +211,7 @@ def test_operation_boundary_denies_before_mutation_even_with_execution_capabilit
             "epic_001",
             "dep_python",
             None,
-            entry.operation,
+            InstallationBinding.from_entry(entry),
             lambda: mutated.append("installed"),
             root=board,
         )
@@ -222,7 +223,7 @@ def test_operation_boundary_denies_before_mutation_even_with_execution_capabilit
             "epic_001",
             "dep_python",
             approval.approval_id,
-            "upgrade Python behind the approval's back",
+            replace(approval.binding, operation="upgrade Python behind the approval's back"),
             lambda: mutated.append("installed"),
             root=board,
         )
@@ -232,12 +233,54 @@ def test_operation_boundary_denies_before_mutation_even_with_execution_capabilit
             "epic_001",
             "dep_python",
             approval.approval_id,
-            entry.operation,
+            InstallationBinding.from_entry(entry),
             lambda: "installed",
             root=board,
         )
         == "installed"
     )
+
+
+@pytest.mark.parametrize(
+    ("field", "changed"),
+    (
+        ("dependency_id", "dep_other"),
+        ("version", "3.12.8"),
+        ("source", "https://mirror.example/python"),
+        ("digest", "sha256:other"),
+        ("target_environment", EnvironmentIdentity(
+            "other", "container", "linux", "x86_64",
+            runner="other", repository="example/cascade", worktree="/work/cascade",
+            sandbox="container", runtime="python-3.12",
+            container_digest="sha256:runner-image",
+        )),
+        ("install_scope", "system"),
+        ("install_destination", "/opt/python"),
+        ("operation", "upgrade Python"),
+        ("cleanup_plan", "leave files behind"),
+    ),
+)
+def test_operation_boundary_compares_complete_attempted_binding(
+    board: Path,
+    target: EnvironmentIdentity,
+    field: str,
+    changed: object,
+) -> None:
+    entry = dependency(target)
+    write_entries(board, target, (entry,), expected_revision=0)
+    approval = approve(board)[0]
+    mutated: list[str] = []
+
+    with pytest.raises(InstallationApprovalDenied, match="binding does not match"):
+        invoke_approved_installation(
+            "epic_001",
+            "dep_python",
+            approval.approval_id,
+            replace(approval.binding, **{field: changed}),
+            lambda: mutated.append("installed"),
+            root=board,
+        )
+    assert mutated == []
 
 
 def test_read_only_manifest_check_needs_no_installation_approval(
@@ -251,7 +294,7 @@ def test_read_only_manifest_check_needs_no_installation_approval(
     assert read_dependency_manifest("epic_001", root=board).dependencies == (entry,)
     with pytest.raises(InstallationApprovalDenied):
         require_installation_approval(
-            "epic_001", "dep_python", None, entry.operation, root=board
+            "epic_001", "dep_python", None, InstallationBinding.from_entry(entry), root=board
         )
 
 
