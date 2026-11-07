@@ -876,6 +876,7 @@ def _ensure_role_models(
     parent = meta.parent if meta is not None else None
     explicit_model = model_id is not None and str(model_id).strip()
     if _checkpoint_has_models(work_id, tier, root=repo, feature_id=parent):
+        _refresh_runtime_flex_waivers(work_id, tier, meta, repo)
         return True
     if meta is None and not explicit_model:
         return False
@@ -962,7 +963,60 @@ def _ensure_role_models(
         if toast_on_failure:
             toast_model_config_failure(work_id, str(exc), root=repo)
         return False
+    _refresh_runtime_flex_waivers(work_id, tier, meta, repo)
     return True
+
+
+def _refresh_runtime_flex_waivers(work_id: str, tier: str, meta, repo: Path) -> None:
+    """Refresh only effective Flex and waiver provenance on an existing graph."""
+
+    if meta is None or tier not in ("epic", "feature", "task"):
+        return
+    from cascade.watchdog.model_resolve import resolve_effective_selections
+
+    selections = resolve_effective_selections(meta, root=repo).selections
+    selected = {item.role: item for item in selections}
+    roles = {
+        "epic": ("epic_manager", "epic_architect"),
+        "feature": ("feature_lead", "feature_architect"),
+        "task": ("swe",),
+    }[tier]
+    if any(role not in selected for role in roles):
+        return
+    payload = {
+        "flex_modes": {role: selected[role].effective_flex_mode for role in roles},
+        "flex_waiver_ids": {
+            role: selected[role].flex_waiver_id
+            for role in roles
+            if selected[role].flex_waiver_id is not None
+        },
+        "flex_waiver_receipt_ids": {
+            role: selected[role].flex_waiver_receipt_id
+            for role in roles
+            if selected[role].flex_waiver_receipt_id is not None
+        },
+        "flex_waiver_source_work_ids": {
+            role: selected[role].flex_waiver_source_work_id
+            for role in roles
+            if selected[role].flex_waiver_source_work_id is not None
+        },
+    }
+    if tier == "epic":
+        from cascade.epic.checkpoint import thread_config
+        from cascade.epic.graph import ensure_epic_graph
+
+        graph, config = ensure_epic_graph(work_id, root=repo), thread_config(work_id)
+    elif tier == "feature":
+        from cascade.feature.checkpoint import thread_config
+        from cascade.feature.graph import ensure_feature_graph
+
+        graph, config = ensure_feature_graph(work_id, root=repo), thread_config(work_id)
+    else:
+        from cascade.task.checkpoint import thread_config
+        from cascade.task.graph import ensure_task_graph
+
+        graph, config = ensure_task_graph(work_id, root=repo, feature_id=meta.parent), thread_config(work_id)
+    graph.update_state(config, payload)
 
 
 def _checkpoint_has_providers(

@@ -340,7 +340,12 @@ def _write_completed(root: Path, work_id: str, fingerprint: str, result: Provide
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump({"version": 1, "recoveries": rows}, handle, indent=2, sort_keys=True)
+            # Flex continuation waivers and descendant stamps share this
+            # ledger.  Provider replacement must preserve those independent
+            # rows instead of rebuilding the file around legacy recoveries.
+            payload = dict(existing) if isinstance(existing, dict) else {}
+            payload.update({"version": 2, "recoveries": rows})
+            json.dump(payload, handle, indent=2, sort_keys=True)
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())

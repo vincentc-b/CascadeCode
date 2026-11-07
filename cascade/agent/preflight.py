@@ -55,6 +55,9 @@ class ProviderCapabilityPreflight:
     selection_fingerprint: str | None = None
     capability_scope: Literal["provider", "model"] | None = None
     inventory_freshness: InventoryFreshness | None = None
+    flex_waiver_id: str | None = None
+    flex_waiver_receipt_id: str | None = None
+    flex_waiver_source_work_id: str | None = None
 
     @property
     def supported(self) -> bool:
@@ -87,6 +90,9 @@ class ProviderCapabilityPreflight:
             "selection_fingerprint": self.selection_fingerprint,
             "capability_scope": self.capability_scope,
             "inventory_freshness": _freshness_to_dict(self.inventory_freshness),
+            "flex_waiver_id": self.flex_waiver_id,
+            "flex_waiver_receipt_id": self.flex_waiver_receipt_id,
+            "flex_waiver_source_work_id": self.flex_waiver_source_work_id,
         }
 
 
@@ -283,7 +289,7 @@ def _result(
         if classification == "deterministic"
         else "unavailable"
     )
-    return ProviderCapabilityPreflight(
+    result = ProviderCapabilityPreflight(
         outcome,
         reason,
         selection.provider,
@@ -309,6 +315,14 @@ def _result(
         scope,
         freshness,
     )
+    if isinstance(selection, EffectiveSelection):
+        result = replace(
+            result,
+            flex_waiver_id=selection.flex_waiver_id,
+            flex_waiver_receipt_id=selection.flex_waiver_receipt_id,
+            flex_waiver_source_work_id=selection.flex_waiver_source_work_id,
+        )
+    return result
 
 
 def _can_disable_flex(

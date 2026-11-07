@@ -331,12 +331,36 @@ def resolve_effective_selections(
         else item
         for item in provisional
     )
-    return EffectiveSelectionBatch(
+    batch = EffectiveSelectionBatch(
         work_id=meta.id,
         tier=tier,
         roles=completed,
         selection_fingerprint=fingerprint,
     )
+    # Runtime waivers are deliberately applied after the reviewed-selection
+    # fingerprint is complete.  They can change only effective Flex and carry
+    # their audit identity alongside the selection.
+    try:
+        from cascade.provider_recovery_waiver import apply_persisted_flex_waivers
+
+        return apply_persisted_flex_waivers(batch, root=repo)
+    except (OSError, ValueError):
+        # A missing or malformed ledger fails closed to the reviewed request.
+        return batch
+
+
+def selection_member_fingerprint(selection: EffectiveSelection) -> str:
+    """Bind one role member to the complete reviewed selection revision."""
+
+    payload = {
+        "schema": SELECTION_FINGERPRINT_SCHEMA,
+        "selection_fingerprint": selection.selection_fingerprint,
+        "work_id": selection.work_id,
+        "role": selection.role,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
 
 def selection_fingerprint(

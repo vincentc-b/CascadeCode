@@ -35,6 +35,8 @@ class RuntimeSelection:
     model_id: str
     reasoning_level: str | None = None
     flex_mode: bool | None = None
+    flex_waiver_id: str | None = None
+    flex_waiver_receipt_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -126,6 +128,8 @@ def _mark_runtime_drift(
             and runtime.model_id == item.model_id
             and runtime.reasoning_level == item.reasoning_level
             and bool(runtime.flex_mode) == item.effective_flex_mode
+            and runtime.flex_waiver_id == item.flex_waiver_id
+            and runtime.flex_waiver_receipt_id == item.flex_waiver_receipt_id
         )
         if matches:
             roles.append(item)

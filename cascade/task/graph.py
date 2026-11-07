@@ -9,6 +9,7 @@ from langgraph.graph import END, START, StateGraph
 from cascade.agent.errors import TurnCancelledForDrain
 from cascade.agent.graph_turn import (
     flex_mode_for_role,
+    flex_waiver_for_role,
     format_turn_prompt,
     latest_input,
     missing_model_message,
@@ -295,6 +296,7 @@ def _swe_role_content(state: TaskGraphState) -> str:
 
     reasoning_level, reasoning_source = reasoning_for_role(state, "swe")
     flex_mode = flex_mode_for_role(state, "swe")
+    waiver_id, waiver_receipt_id = flex_waiver_for_role(state, "swe")
     prompt = format_turn_prompt(
         messages,
         provider_id=provider_id,
@@ -323,6 +325,8 @@ def _swe_role_content(state: TaskGraphState) -> str:
                 root=repo,
                 reasoning_level=reasoning_level,
                 flex_mode=flex_mode,
+                flex_waiver_id=waiver_id,
+                flex_waiver_receipt_id=waiver_receipt_id,
                 commit_message=default_swe_commit_message(task_id),
                 run_role_fn=_run_role_fn,
                 on_admitted=on_admitted,
