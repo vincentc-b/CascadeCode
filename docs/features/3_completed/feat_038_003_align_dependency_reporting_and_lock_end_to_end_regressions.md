@@ -2,7 +2,7 @@
 id: feat_038_003
 title: Align dependency reporting and lock end-to-end regressions
 tier: feature
-status: backlog
+status: completed
 parent: epic_038
 children:
 - task_038_003_001
@@ -17,7 +17,7 @@ owners:
 skills: []
 parent_rev: 8a611a4fde3d0ac9ee1c8b97e253579193371386
 created: '2026-11-06'
-updated: '2026-11-06'
+updated: '2026-11-07'
 provider: codex
 flex_mode: false
 models:
