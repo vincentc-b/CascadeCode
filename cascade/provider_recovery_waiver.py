@@ -68,6 +68,12 @@ def apply_persisted_flex_waivers(
     stamps = ledger.get("flex_waiver_stamps")
     if not isinstance(stamps, dict):
         stamps = {}
+    lineage_rows = ledger.get("flex_waiver_lineage")
+    if not isinstance(lineage_rows, dict):
+        lineage_rows = {}
+    receipt_rows = ledger.get("continuation_receipts")
+    if not isinstance(receipt_rows, dict):
+        receipt_rows = {}
     roles = []
     for item in batch.roles:
         if not isinstance(item, EffectiveSelection) or not item.reviewed_flex_mode:
@@ -86,7 +92,13 @@ def apply_persisted_flex_waivers(
                 selection_member_fingerprint=member_fingerprint,
                 stamp=stamp,
             )
-            if waiver_applies(waiver.scope, candidate):
+            lineage_source = _lineage_source(
+                item,
+                waiver=waiver,
+                rows=lineage_rows,
+                receipts=receipt_rows,
+            )
+            if waiver_applies(waiver.scope, candidate) or lineage_source is not None:
                 source = next(
                     member.work_id
                     for member in waiver.scope
@@ -103,6 +115,10 @@ def apply_persisted_flex_waivers(
                         and stamp.source_document_revision == member.document_revision
                         and stamp.source_member_fingerprint
                         == member.selection_member_fingerprint
+                    )
+                    or (
+                        member.work_id == lineage_source
+                        and member.role == item.role
                     )
                 )
                 matches.append((waiver, source))
@@ -176,6 +192,55 @@ def _member_fingerprint(selection: EffectiveSelection) -> str:
     from cascade.watchdog.model_resolve import selection_member_fingerprint
 
     return selection_member_fingerprint(selection)
+
+
+def _lineage_source(
+    selection: EffectiveSelection,
+    *,
+    waiver: FlexWaiver,
+    rows: Mapping[str, object],
+    receipts: Mapping[str, object],
+) -> str | None:
+    """Match only a persisted post-transition identity for this pending claim."""
+
+    receipt = receipts.get(waiver.receipt_id)
+    if not isinstance(receipt, dict) or receipt.get("state") not in (
+        "handoff_pending",
+        "ambiguous",
+        "completed",
+    ):
+        return None
+    handoff_id = receipt.get("handoff_id")
+    row = rows.get(f"{waiver.receipt_id}:{handoff_id}")
+    if (
+        not isinstance(row, dict)
+        or row.get("waiver_id") != waiver.waiver_id
+        or row.get("handoff_id") != handoff_id
+    ):
+        return None
+    after = row.get("after")
+    roles = after.get("roles") if isinstance(after, dict) else None
+    if not isinstance(roles, list):
+        return None
+    fingerprint = _member_fingerprint(selection)
+    matched = next(
+        (
+            member
+            for member in roles
+            if isinstance(member, dict)
+            and member.get("role") == selection.role
+            and member.get("provider") == selection.provider
+            and member.get("model_id") == selection.model_id
+            and member.get("reasoning_level") == selection.reasoning_level
+            and member.get("requested_flex") == selection.reviewed_flex_mode
+            and member.get("document_revision") == selection.document_revision
+            and member.get("member_fingerprint") == fingerprint
+        ),
+        None,
+    )
+    if matched is None:
+        return None
+    return str(row.get("work_id")) if row.get("work_id") else None
 
 
 def _decode_waiver(row: object) -> FlexWaiver | None:

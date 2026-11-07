@@ -94,6 +94,12 @@ def _boot_after(
     """Boot runs after the process lock is released so a hook can tick without deadlock."""
 
     if result.ok:
+        from cascade.provider_recovery_replay import record_canonical_replay_transition
+
+        if not record_canonical_replay_transition(
+            result, work_id=work_id, root=root
+        ):
+            return result
         if tier == "task":
             from cascade.task.execution import mark_queued
 
@@ -101,14 +107,18 @@ def _boot_after(
         invoke_boot(tier, work_id)
         from cascade.workspace.kickoff import kickoff_turn
         from cascade.workspace.types import KickoffReason
+        from cascade.provider_recovery_replay import kickoff_receipt
 
         kind = "activate" if tier == "epic" else "dispatch"
+        continuation = kickoff_receipt(work_id, root)
         kickoff_turn(
             KickoffReason(
                 kind=kind,  # type: ignore[arg-type]
                 work_id=work_id,
                 by=by,  # type: ignore[arg-type]
                 root=root,
+                continuation_receipt_id=(continuation[0] if continuation else None),
+                continuation_handoff_id=(continuation[1] if continuation else None),
             )
         )
     return result

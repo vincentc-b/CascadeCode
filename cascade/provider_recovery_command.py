@@ -44,9 +44,11 @@ from cascade.provider_recovery import (
     recover_active_item_provider,
 )
 from cascade.provider_recovery_receipt import (
+    claim_continuation_handoff,
     persist_authorized_continuation,
     read_continuation_receipt,
     read_failed_action_attempt,
+    update_continuation_receipt,
 )
 from cascade.watchdog.lock import process_lock
 from cascade.workspace.types import KickoffReason
@@ -498,9 +500,190 @@ def recover_active_provider(*args, **kwargs) -> ProviderRecoveryCommandResult:
 def continue_without_flex_command(
     *args, **kwargs
 ) -> FlexContinuationCommandResult:
-    """Public mutation alias for the action-bound authorization command."""
+    """Authorize and replay the concrete original action at most once."""
 
-    return authorize_continue_without_flex_command(*args, **kwargs)
+    authorized = authorize_continue_without_flex_command(*args, **kwargs)
+    if not authorized.ok or authorized.receipt_id is None:
+        return authorized
+    root = kwargs.get("root")
+    return replay_authorized_continuation_command(
+        authorized.receipt_id, root=root
+    )
+
+
+def replay_authorized_continuation_command(
+    receipt_id: str,
+    *,
+    root: Path | None = None,
+) -> FlexContinuationCommandResult:
+    """Claim and invoke only the persisted original action through its gate."""
+
+    repo = resolve_root(root)
+    receipt = read_continuation_receipt(receipt_id, root=repo)
+    if receipt is None:
+        return _continuation_error(
+            "", "missing_receipt", "The continuation receipt does not exist."
+        )
+    work_id = str(receipt.get("work_id") or "")
+    action_id = str(receipt.get("action_id") or "")
+    attempt = read_failed_action_attempt(action_id, root=repo)
+    if attempt is None:
+        return _continuation_error(
+            work_id,
+            "missing_failed_action",
+            "The original failed action is unavailable.",
+            action_id=action_id,
+            receipt_id=receipt_id,
+        )
+    claim = claim_continuation_handoff(receipt_id, root=repo)
+    if not claim.claimed:
+        current = read_continuation_receipt(receipt_id, root=repo) or receipt
+        if current.get("state") == "handoff_pending" and claim.handoff_id:
+            update_continuation_receipt(
+                receipt_id,
+                "ambiguous",
+                root=repo,
+                handoff_id=claim.handoff_id,
+                evidence={
+                    "reason_code": "turn_handoff_unproven",
+                    "retry_outcome": {
+                        "ok": False,
+                        "reason": "restart_after_handoff_claim",
+                    },
+                },
+            )
+            current = read_continuation_receipt(receipt_id, root=repo) or current
+        return _receipt_result(current, idempotent=True)
+    assert claim.handoff_id is not None
+
+    from cascade.provider_recovery_replay import (
+        ReplayContext,
+        continuation_replay_context,
+        selection_snapshot,
+    )
+
+    try:
+        before = selection_snapshot(work_id, root=repo)
+        if (
+            before.get("document_revision") != receipt.get("document_revision")
+            or before.get("selection_fingerprint")
+            != receipt.get("selection_fingerprint")
+        ):
+            update_continuation_receipt(
+                receipt_id,
+                "blocked",
+                root=repo,
+                handoff_id=claim.handoff_id,
+                evidence={
+                    "reason_code": "selection_changed",
+                    "blocker": {"reason": "selection_changed"},
+                    "retry_outcome": {"ok": False, "reason": "selection_changed"},
+                },
+            )
+            current = read_continuation_receipt(receipt_id, root=repo) or receipt
+            return _receipt_result(current, idempotent=False)
+        context = ReplayContext(
+            receipt_id=receipt_id,
+            handoff_id=claim.handoff_id,
+            waiver_id=str(receipt.get("waiver_id") or ""),
+            work_id=work_id,
+            before=before,
+            root=repo,
+        )
+        with continuation_replay_context(context):
+            accepted, reason = _invoke_original_action(attempt, root=repo)
+    except Exception:
+        update_continuation_receipt(
+            receipt_id,
+            "ambiguous",
+            root=repo,
+            handoff_id=claim.handoff_id,
+            evidence={
+                "reason_code": "handoff_uncertain",
+                "retry_outcome": {"ok": False, "reason": "handoff_uncertain"},
+            },
+        )
+        current = read_continuation_receipt(receipt_id, root=repo) or receipt
+        return _receipt_result(current, idempotent=False)
+
+    if not accepted:
+        update_continuation_receipt(
+            receipt_id,
+            "blocked",
+            root=repo,
+            handoff_id=claim.handoff_id,
+            evidence={
+                "reason_code": reason or "ordinary_gate_refused",
+                "blocker": {"reason": reason or "ordinary_gate_refused"},
+                "retry_outcome": {"ok": False, "reason": reason},
+            },
+        )
+    else:
+        current = read_continuation_receipt(receipt_id, root=repo)
+        if current is not None and current.get("state") != "completed":
+            update_continuation_receipt(
+                receipt_id,
+                "ambiguous",
+                root=repo,
+                handoff_id=claim.handoff_id,
+                evidence={
+                    "reason_code": "turn_handoff_unproven",
+                    "retry_outcome": {"ok": True, "reason": reason},
+                },
+            )
+    current = read_continuation_receipt(receipt_id, root=repo) or receipt
+    return _receipt_result(current, idempotent=False)
+
+
+def _invoke_original_action(
+    attempt: dict[str, object], *, root: Path
+) -> tuple[bool, str | None]:
+    action = attempt.get("failed_action")
+    arguments = attempt.get("replay_arguments")
+    if not isinstance(action, dict) or not isinstance(arguments, dict):
+        return False, "invalid_failed_action"
+    kind = action.get("action_kind")
+    work_id = action.get("work_id")
+    actor = arguments.get("by")
+    if not isinstance(work_id, str) or actor not in ("human", "boss"):
+        return False, "invalid_replay_arguments"
+
+    if kind == "epic_activation":
+        if actor != "human":
+            return False, "invalid_replay_arguments"
+        from cascade.watchdog.dispatch import activate_epic
+
+        result = activate_epic(work_id, actor, root=root)
+        return result.ok, result.reason
+    if kind == "feature_dispatch":
+        from cascade.watchdog.dispatch import dispatch_feature
+
+        result = dispatch_feature(work_id, actor, root=root)
+        return result.ok, result.reason
+    if kind == "approval_dispatch":
+        target_tier = action.get("target_tier")
+        if actor != "boss":
+            return False, "invalid_replay_arguments"
+        if target_tier == "feature":
+            from cascade.watchdog.dispatch import dispatch_feature
+
+            result = dispatch_feature(work_id, actor, root=root)
+        elif target_tier == "task":
+            from cascade.watchdog.dispatch import dispatch_task
+
+            result = dispatch_task(work_id, actor, root=root)
+        else:
+            return False, "invalid_replay_target"
+        return result.ok, result.reason
+    if kind == "task_retry":
+        feature_id = arguments.get("feature_id")
+        if not isinstance(feature_id, str):
+            return False, "invalid_replay_arguments"
+        from cascade.feature.recovery import retry_task
+
+        result = retry_task(work_id, feature_id=feature_id, root=root)
+        return bool(result.get("ok")), str(result.get("reason") or "") or None
+    return False, "unsupported_action"
 
 
 def _is_active(doc) -> bool:
@@ -692,8 +875,14 @@ def _original_lifecycle_matches(
 def _receipt_result(
     receipt: dict[str, object], *, idempotent: bool
 ) -> FlexContinuationCommandResult:
+    state = receipt.get("state") if isinstance(receipt.get("state"), str) else None
+    reason_code = (
+        receipt.get("reason_code")
+        if isinstance(receipt.get("reason_code"), str)
+        else None
+    )
     return FlexContinuationCommandResult(
-        ok=True,
+        ok=state not in ("blocked", "ambiguous"),
         work_id=str(receipt.get("work_id") or ""),
         action_id=(
             receipt.get("action_id")
@@ -710,12 +899,13 @@ def _receipt_result(
             if isinstance(receipt.get("waiver_id"), str)
             else None
         ),
-        state=(
-            receipt.get("state")
-            if isinstance(receipt.get("state"), str)
-            else None
+        state=state,
+        reason=(
+            "Continuation authorization is durable."
+            if reason_code is None
+            else reason_code.replace("_", " ").capitalize() + "."
         ),
-        reason="Continuation authorization is durable.",
+        error_code=reason_code if state in ("blocked", "ambiguous") else None,
         idempotent=idempotent,
     )
 
@@ -746,6 +936,7 @@ __all__ = [
     "continue_without_flex_command",
     "continue_without_flex_eligibility",
     "continue_without_flex_eligibility_command",
+    "replay_authorized_continuation_command",
     "recover_active_item_provider_command",
     "recover_active_provider",
 ]

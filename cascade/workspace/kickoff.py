@@ -128,7 +128,30 @@ def _run_kickoff(reason: KickoffReason, repo: Path) -> None:
         with lifecycle_gate().turn(reason.work_id), _graph_lock(reason.work_id):
             token = _model_turn_authorized.set(True)
             try:
-                _kickoff_turn(reason, repo)
+                turn_handed_off = _kickoff_turn(reason, repo)
+                if (
+                    turn_handed_off
+                    and reason.continuation_receipt_id is not None
+                    and reason.continuation_handoff_id is not None
+                ):
+                    from cascade.provider_recovery_receipt import (
+                        update_continuation_receipt,
+                    )
+
+                    update_continuation_receipt(
+                        reason.continuation_receipt_id,
+                        "completed",
+                        root=repo,
+                        handoff_id=reason.continuation_handoff_id,
+                        evidence={
+                            "retry_outcome": {"ok": True, "reason": None},
+                            "turn_handoff": {
+                                "work_id": reason.work_id,
+                                "kind": reason.kind,
+                                "recorded_at": time.time(),
+                            }
+                        },
+                    )
             finally:
                 _model_turn_authorized.reset(token)
     except LifecycleTurnRejected:
@@ -712,7 +735,7 @@ def _commit_classified_queue_batch(
     return int(resolved)
 
 
-def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
+def _kickoff_turn(reason: KickoffReason, repo: Path) -> bool:
     from cascade.workspace.integration_worktree import doc_filesystem_root
 
     doc = None
@@ -731,7 +754,7 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
     except (NotFound, GitError):
         tier = _tier_from_work_id(reason.work_id)
     if tier not in ("epic", "feature", "task"):
-        return
+        return False
 
     feature_id = reason.feature_id or (doc.meta.parent if doc is not None else None)
     if reason.kind != "resume_inflight" and not _graph_has_inflight_turn(
@@ -785,7 +808,7 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
             reason.model_id,
             toast_on_failure=reason.kind in ("human_message", "comment"),
         ):
-            return
+            return False
         _invoke_role_turn(
             reason.work_id,
             tier,
@@ -793,7 +816,7 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
             feature_id=reason.feature_id or (doc.meta.parent if doc else None),
             model_id=reason.model_id,
         )
-        return
+        return True
 
     if reason.kind == "resume_inflight":
         if not _graph_has_inflight_turn(
@@ -802,9 +825,9 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
             root=repo,
             feature_id=reason.feature_id or (doc.meta.parent if doc else None),
         ):
-            return
+            return False
         if not _checkpoint_has_models(reason.work_id, tier, root=repo, feature_id=reason.feature_id):
-            return
+            return False
         _invoke_role_turn(
             reason.work_id,
             tier,
@@ -813,10 +836,10 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
             model_id=reason.model_id,
             resume=True,
         )
-        return
+        return True
 
     if doc is None:
-        return
+        return False
 
     if reason.kind in ("activate", "dispatch", "queue_event"):
         if not _checkpoint_has_models(reason.work_id, tier, root=repo, feature_id=reason.feature_id):
@@ -835,16 +858,16 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
                     reason.model_id,
                     toast_on_failure=False,
                 ):
-                    return
+                    return False
             else:
-                return
+                return False
         if not _has_turn_input(
             reason.work_id,
             tier,
             root=repo,
             feature_id=reason.feature_id or doc.meta.parent,
         ):
-            return
+            return False
         _invoke_role_turn(
             reason.work_id,
             tier,
@@ -852,6 +875,8 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> None:
             feature_id=reason.feature_id or doc.meta.parent,
             model_id=reason.model_id,
         )
+        return True
+    return False
 
 
 def _tier_from_work_id(work_id: str) -> str | None:

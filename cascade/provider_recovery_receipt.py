@@ -180,6 +180,104 @@ def claim_continuation_handoff(receipt_id: str, *, root: Path) -> HandoffClaim:
     return HandoffClaim(True, receipt_id, "handoff_pending", handoff_id)
 
 
+def update_continuation_receipt(
+    receipt_id: str,
+    target: str,
+    *,
+    root: Path,
+    handoff_id: str | None = None,
+    evidence: Mapping[str, object] | None = None,
+) -> dict[str, object] | None:
+    """Durably advance a claimed receipt without ever making it replayable.
+
+    ``completed`` is accepted only after the canonical action has recorded both
+    its lifecycle effect and its turn handoff.  ``blocked`` is reserved for an
+    ordinary gate refusal; every other post-claim failure is ambiguous.
+    """
+
+    from cascade.agent.flex_continuation_contract import receipt_transition_allowed
+
+    repo = resolve_root(root)
+    with process_lock:
+        ledger = _read(repo)
+        existing = ledger.get("continuation_receipts")
+        receipts = dict(existing) if isinstance(existing, dict) else {}
+        current = receipts.get(receipt_id)
+        if not isinstance(current, dict):
+            return None
+        if handoff_id is not None and current.get("handoff_id") != handoff_id:
+            return dict(current)
+        state = str(current.get("state") or "")
+        if state == target:
+            return dict(current)
+        proof = dict(evidence or {})
+        lifecycle = current.get("lifecycle_effect")
+        durable_handoff = proof.get("turn_handoff")
+        allowed = False
+        if state in ("authorized", "handoff_pending", "ambiguous", "completed", "blocked"):
+            allowed = receipt_transition_allowed(
+                state,  # type: ignore[arg-type]
+                target,  # type: ignore[arg-type]
+                no_acceptance_proven=target == "blocked",
+                durable_handoff_proven=(
+                    target == "completed"
+                    and isinstance(lifecycle, dict)
+                    and isinstance(durable_handoff, dict)
+                ),
+            )
+        if not allowed:
+            return dict(current)
+        now = _now()
+        updated = {
+            **current,
+            **proof,
+            "state": target,
+            "state_changed_at": now,
+            "last_seen_at": now,
+        }
+        receipts[receipt_id] = updated
+        ledger["continuation_receipts"] = receipts
+        _write(repo, ledger)
+    return dict(updated)
+
+
+def record_continuation_lifecycle_effect(
+    receipt_id: str,
+    handoff_id: str,
+    *,
+    root: Path,
+    event_type: str,
+    event_dest: str,
+) -> dict[str, object] | None:
+    """Record the durable ordinary-action effect before kickoff is attempted."""
+
+    repo = resolve_root(root)
+    with process_lock:
+        ledger = _read(repo)
+        existing = ledger.get("continuation_receipts")
+        receipts = dict(existing) if isinstance(existing, dict) else {}
+        current = receipts.get(receipt_id)
+        if (
+            not isinstance(current, dict)
+            or current.get("handoff_id") != handoff_id
+            or current.get("state") not in ("handoff_pending", "ambiguous")
+        ):
+            return dict(current) if isinstance(current, dict) else None
+        updated = {
+            **current,
+            "lifecycle_effect": {
+                "event_type": event_type,
+                "event_dest": event_dest,
+                "recorded_at": _now(),
+            },
+            "last_seen_at": _now(),
+        }
+        receipts[receipt_id] = updated
+        ledger["continuation_receipts"] = receipts
+        _write(repo, ledger)
+    return dict(updated)
+
+
 def _same_authorization(left: Mapping[str, object], right: Mapping[str, object]) -> bool:
     stable = (
         "receipt_id",
@@ -236,4 +334,6 @@ __all__ = [
     "persist_failed_action_attempt",
     "read_continuation_receipt",
     "read_failed_action_attempt",
+    "record_continuation_lifecycle_effect",
+    "update_continuation_receipt",
 ]

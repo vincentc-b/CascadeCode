@@ -21,12 +21,14 @@ from cascade.board.store import read_doc, write_doc
 from cascade.provider_recovery_command import (
     AuthenticatedHumanPrincipal,
     authorize_continue_without_flex_command,
+    replay_authorized_continuation_command,
 )
 from cascade.provider_recovery_receipt import (
     claim_continuation_handoff,
     read_continuation_receipt,
 )
 from cascade.watchdog import activate_epic
+from cascade.watchdog.model_resolve import resolve_effective_selections
 from tests.support import add_doc, make_repo
 
 
@@ -197,3 +199,60 @@ def test_concurrent_and_restarted_pending_claim_is_single_use(
     assert not restarted.claimed
     assert restarted.state == "handoff_pending"
     assert restarted.handoff_id in handoff_ids
+
+
+def test_epic_replay_records_lineage_and_completes_on_durable_turn(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root, inventory, blocker = _failed_epic(tmp_path, monkeypatch)
+    authorized = _authorize(root, inventory, blocker)
+    monkeypatch.setattr("cascade.workspace.kickoff._kickoff_turn", lambda *_args: True)
+
+    replayed = replay_authorized_continuation_command(
+        authorized.receipt_id, root=root
+    )
+    duplicate = replay_authorized_continuation_command(
+        authorized.receipt_id, root=root
+    )
+
+    assert replayed.ok and replayed.state == "completed"
+    assert duplicate.state == "completed" and duplicate.idempotent
+    ledger = json.loads(
+        (root / ".cascade" / "provider_recoveries.json").read_text(encoding="utf-8")
+    )
+    receipt = ledger["continuation_receipts"][authorized.receipt_id]
+    assert receipt["lifecycle_effect"]["event_type"] == "EpicActivated"
+    assert receipt["turn_handoff"]["work_id"] == "epic_001"
+    lineage = next(iter(ledger["flex_waiver_lineage"].values()))
+    assert lineage["before"]["document_path"] != lineage["after"]["document_path"]
+    active = read_doc("epic_001", root=root)
+    assert all(
+        not item.effective_flex_mode
+        for item in resolve_effective_selections(active, root=root).selections
+    )
+
+    active.body += "\nLater unrelated edit.\n"
+    write_doc(active, root=root)
+    edited = read_doc("epic_001", root=root)
+    assert all(
+        item.effective_flex_mode
+        for item in resolve_effective_selections(edited, root=root).selections
+    )
+
+
+def test_event_without_turn_evidence_stays_ambiguous_and_never_replays(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root, inventory, blocker = _failed_epic(tmp_path, monkeypatch)
+    authorized = _authorize(root, inventory, blocker)
+    monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args: None)
+
+    first = replay_authorized_continuation_command(authorized.receipt_id, root=root)
+    duplicate = replay_authorized_continuation_command(
+        authorized.receipt_id, root=root
+    )
+
+    assert first.state == "ambiguous"
+    assert duplicate.state == "ambiguous" and duplicate.idempotent
+    events = (root / "docs" / "_queue" / "epic_001.jsonl").read_text().splitlines()
+    assert len(events) == 1
