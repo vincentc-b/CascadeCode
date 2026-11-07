@@ -22,6 +22,7 @@ models:
 reasoning:
   feature_lead: high
   feature_architect: high
+approved_at: '2026-11-07T23:40:31.614381+00:00'
 ---
 # Actionable declaration guidance and complete planning recovery
 
