@@ -105,6 +105,10 @@ None outstanding for product scope. The initial implementation-risk question is 
 
 - 2026-11-06 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-07 · Epic Manager · **Feature breakdown**
+  Chose Deliver four dependent features: shared configuration/diagnostics, lifecycle gates/blockers, audited Flex continuation, then War Room readiness and integrated validation..
+  Rationale: The existing code already supplies discovery, pure preflight, blockers and a recovery dialog. Sequencing their shared contracts avoids parallel implementations and covers all ten success criteria without a separate infrastructure or test-only feature.
+  Honors: Approved intent; success criteria 1–10; frugal engineering and product-manager scope guidance..
 ## Amendment log
 
 _(none)_
