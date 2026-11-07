@@ -551,6 +551,14 @@ def _live_sha(worktree: Path, ref: str) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def _is_ancestor(worktree: Path, ancestor: str, descendant: str) -> bool:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=worktree, capture_output=True, text=True, encoding="utf-8",
+    )
+    return result.returncode == 0
+
+
 def _dirty_paths(worktree: Path) -> tuple[str, ...]:
     result = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all"],
@@ -644,10 +652,16 @@ def _evaluate_admission(
             message="The resolved worktree cannot read both authorized review heads.",
             resume_action="Fetch or restore the authorized refs, then retry admission.", paths=(worktree,),
         )
-    if (source_sha, target_sha) != (context.observed_source_head, context.observed_target_head):
+    source_matches = source_sha == context.observed_source_head
+    source_is_owned_ahead = bool(
+        source_sha
+        and context.observed_source_head != context.observed_target_head
+        and _is_ancestor(worktree, context.observed_source_head, source_sha)
+    )
+    if target_sha != context.observed_target_head or not (source_matches or source_is_owned_ahead):
         return _admission_blocker(
             context, checkpoint="observed_heads", code="stale_observed_heads",
-            message="The live authorized refs no longer match the observed review heads.",
+            message="The live authorized refs no longer match the observed review heads or a clean owned source descended from the observed source.",
             resume_action="Refresh review heads and submit a new resolution action.", paths=(worktree,),
         )
     dirty = _dirty_paths(worktree)
@@ -664,7 +678,13 @@ def _evaluate_admission(
         accountable_team=context.accountable_team,
         worktree=str(worktree),
         authorized_refs=context.authorized_refs,
-        observed_shas=(source_sha, target_sha),
+        # The handoff protects the forge-observed remote heads. A clean owned
+        # worktree may legitimately be ahead while the remote source still
+        # needs an exact-head lease during publication.
+        observed_shas=(
+            context.observed_source_head,
+            context.observed_target_head,
+        ),
     )
 
 
@@ -680,13 +700,16 @@ def admit_resolution_action(
         state = _load(path)
         existing = state.get(key)
         if isinstance(existing, dict):
-            return ResolutionActionAdmission(key, key, dict(existing), reused=True)
+            if (
+                existing.get("status") != "blocked"
+                or existing.get("request") != request.as_dict()
+            ):
+                return ResolutionActionAdmission(key, key, dict(existing), reused=True)
         resolution = resolve_review_context(request, root=trunk)
-        action: dict[str, object] = {
-            "action_id": key,
-            "idempotency_key": key,
-            "request": request.as_dict(),
-        }
+        action: dict[str, object] = dict(existing) if isinstance(existing, dict) else {}
+        action.update(action_id=key, idempotency_key=key, request=request.as_dict())
+        action.pop("blocker", None)
+        action.pop("handoff", None)
         if resolution.blocker is not None:
             blocker = AdmissionBlocker(
                 checkpoint="context_resolution",
@@ -707,7 +730,9 @@ def admit_resolution_action(
                 action.update(status="mutation_ready", handoff=outcome.as_dict())
         state[key] = action
         _save(path, state)
-        return ResolutionActionAdmission(key, key, dict(action), reused=False)
+        return ResolutionActionAdmission(
+            key, key, dict(action), reused=isinstance(existing, dict)
+        )
 
 
 def resolution_action(action_id: str, *, root: Path) -> dict[str, object] | None:

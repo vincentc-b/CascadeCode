@@ -288,6 +288,45 @@ def test_first_branch_action_failure_routes_once_to_feature_team_and_survives_re
     assert load_action("task_001:merge_to_feature", root=root) == captured
 
 
+def test_existing_routing_marker_restores_a_pruned_recovery_event(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    captured = capture_and_route_action_failure(
+        "epic_001:review_rebase",
+        "review_rebase",
+        affected_work_id="epic_001",
+        intended_target_ref="main",
+        root=root,
+        failure_code="review_conflict",
+        safe_summary="The Epic review conflicts with main.",
+        conflicting_paths=["cascade/task/action_recovery.py"],
+        owning_team={"kind": "epic_team", "work_id": "epic_001"},
+    )
+    queue = root / "docs/_queue/epic_001.jsonl"
+    queue.unlink()
+
+    restored = capture_and_route_action_failure(
+        "epic_001:review_rebase",
+        "review_rebase",
+        affected_work_id="epic_001",
+        intended_target_ref="main",
+        root=root,
+        failure_code="new_failure_code_must_not_replace_durable_evidence",
+        safe_summary="New text must not replace the original episode.",
+        owning_team={"kind": "epic_team", "work_id": "epic_001"},
+    )
+
+    assert restored == captured
+    events, _ = read_events("epic_001", 0, root=root)
+    assert len(events) == 1
+    assert events[0].payload["failure_code"] == "review_conflict"
+    assert events[0].payload["safe_summary"] == "The Epic review conflicts with main."
+    assert events[0].payload["conflicting_paths"] == [
+        "cascade/task/action_recovery.py"
+    ]
+
+
 def test_branch_action_failure_uses_epic_target_or_blocks_ambiguous_owner(
     tmp_path: Path,
 ) -> None:

@@ -56,7 +56,7 @@ class BranchSyncUpdateResult:
 
 
 def inspect_branch_synchronization(
-    work_id: str, *, root: Path | None = None
+    work_id: str, *, root: Path | None = None, allow_completed_recovery: bool = False
 ) -> BranchSyncInspection:
     """Resolve base/ahead/behind for an active work item without mutating git state."""
 
@@ -74,7 +74,13 @@ def inspect_branch_synchronization(
     if kind is None:
         return BranchSyncInspection(ok=False, reason="wrong_tier")
 
-    if column_for_status(meta.status) != "active" or meta.status != "active":
+    active = column_for_status(meta.status) == "active" and meta.status == "active"
+    completed_recovery = (
+        allow_completed_recovery
+        and column_for_status(meta.status) == "completed"
+        and meta.status == "completed"
+    )
+    if not active and not completed_recovery:
         return BranchSyncInspection(ok=False, reason="not_active")
 
     base_branch = _resolve_base_branch(meta, trunk)
@@ -104,7 +110,7 @@ def inspect_branch_synchronization(
 
 
 def _update_integration_branch(
-    work_id: str, *, root: Path | None = None
+    work_id: str, *, root: Path | None = None, allow_completed_recovery: bool = False
 ) -> BranchSyncUpdateResult:
     """Merge the tier-aware base into the integration branch under ``process_lock``."""
 
@@ -113,7 +119,9 @@ def _update_integration_branch(
         return BranchSyncUpdateResult(ok=False, reason="not_a_git_repo")
 
     with process_lock:
-        inspection = inspect_branch_synchronization(work_id, root=trunk)
+        inspection = inspect_branch_synchronization(
+            work_id, root=trunk, allow_completed_recovery=allow_completed_recovery
+        )
         if not inspection.ok or inspection.state is None:
             return BranchSyncUpdateResult(ok=False, reason=inspection.reason)
 

@@ -27,6 +27,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+plan_approved_at: '2026-11-06T19:52:48.306339+00:00'
 ---
 # Make planning dependency status authoritative
 

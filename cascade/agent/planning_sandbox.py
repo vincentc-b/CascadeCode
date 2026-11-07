@@ -19,13 +19,20 @@ PlanningTier = Literal["epic", "feature", "boss"]
 
 @dataclass(frozen=True)
 class PlanningSandbox:
-    """Ephemeral scratch tree plus the real repo root tools mutate."""
+    """Per-turn runtime files plus the checkout assigned to the team."""
 
     scratch_dir: Path
     repo_root: Path
     tier: PlanningTier
     scope_id: str | None
     role: RoleId | None = None
+    workspace_dir: Path | None = None
+
+    @property
+    def turn_cwd(self) -> Path:
+        """Repository-backed cwd for teams; scratch cwd for the Boss."""
+
+        return self.workspace_dir or self.scratch_dir
 
 
 def collect_epic_readable_paths(epic_id: str, *, root: Path) -> list[Path]:

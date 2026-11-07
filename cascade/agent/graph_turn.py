@@ -361,7 +361,12 @@ def _provider_selections(state: dict):
 
 
 _PLANNING_TOOL_DIRECTIVE = (
-    "Cascade MCP tools are the only way to change board markdown. "
+    "Your current directory is the team's owned integration worktree. You may inspect and edit "
+    "files there, run repository checks, and use Git for that owned branch. Do not modify product "
+    "trunk or another team's worktree. Do not install or upgrade a dependency unless the current "
+    "work item contains explicit human authorization for that exact dependency, version, source, "
+    "environment, and install scope. Cascade MCP tools remain the authoritative way to change "
+    "board markdown and lifecycle state. "
     "To update an epic or feature spec, call read_doc, then write_doc with the full revised body, "
     "and record_decision for each decision-log entry. "
     "War Room chat and turn text are not the spec — never claim the plan was updated unless write_doc succeeded."
@@ -384,7 +389,7 @@ def _scope_line(role: RoleId, scope_id: str) -> str:
     return (
         f"You are {role} on the Cascade {tier} team for `{scope_id}`. "
         f"Every board tool is already bound to `{scope_id}`; pass work_id \"{scope_id}\" "
-        f"to read_doc for its spec (a copy is also at ./plan.md)."
+        "to read_doc for its spec."
     )
 
 

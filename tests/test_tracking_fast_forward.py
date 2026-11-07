@@ -64,14 +64,63 @@ def test_redundant_lifecycle_commits_reconcile_with_merged_review(
     assert fast_forward_branch(local, "epic/epic_001") == reconciled_sha
 
 
-def test_substantive_local_change_stays_blocked(tmp_path: Path) -> None:
-    local, _accepted_sha = _diverged_review_target(tmp_path)
-    (local / "state.txt").write_text("new plan\n", encoding="utf-8")
-    _git(local, "commit", "-am", "unpublished plan")
+def test_nonconflicting_epic_plan_commit_is_preserved_with_merged_review(
+    tmp_path: Path,
+) -> None:
+    local, accepted_sha = _diverged_review_target(tmp_path)
+    (local / "epic-plan.md").write_text("new decision\n", encoding="utf-8")
+    _git(local, "add", "epic-plan.md")
+    _git(local, "commit", "-m", "record epic decision")
     local_sha = _git(local, "rev-parse", "HEAD")
 
-    with pytest.raises(GitError, match="fast-forward"):
+    reconciled_sha = fast_forward_branch(local, "epic/epic_001")
+
+    assert reconciled_sha == _git(local, "rev-parse", "HEAD")
+    assert (local / "epic-plan.md").read_text(encoding="utf-8") == "new decision\n"
+    assert (local / "feature.txt").read_text(encoding="utf-8") == "merged feature\n"
+    _git(local, "merge-base", "--is-ancestor", local_sha, reconciled_sha)
+    _git(local, "merge-base", "--is-ancestor", accepted_sha, reconciled_sha)
+    assert _git(local, "status", "--porcelain") == ""
+    assert fast_forward_branch(local, "epic/epic_001") == reconciled_sha
+
+
+def test_conflicting_epic_plan_commit_stays_blocked_and_clean(tmp_path: Path) -> None:
+    local, _accepted_sha = _diverged_review_target(tmp_path)
+
+    writer = tmp_path / "conflicting-writer"
+    _git(tmp_path, "clone", str(tmp_path / "remote.git"), str(writer))
+    _git(writer, "config", "user.name", "Test")
+    _git(writer, "config", "user.email", "test@example.com")
+    (writer / "state.txt").write_text("remote plan\n", encoding="utf-8")
+    _git(writer, "commit", "-am", "change remote plan")
+    _git(writer, "push", "origin", "epic/epic_001")
+
+    (local / "state.txt").write_text("local plan\n", encoding="utf-8")
+    _git(local, "commit", "-am", "change local plan")
+    local_sha = _git(local, "rev-parse", "HEAD")
+
+    with pytest.raises(GitError, match="CONFLICT|divergent"):
         fast_forward_branch(local, "epic/epic_001")
 
     assert _git(local, "rev-parse", "HEAD") == local_sha
     assert _git(local, "status", "--porcelain") == ""
+    assert (
+        subprocess.run(
+            ["git", "rev-parse", "--verify", "-q", "MERGE_HEAD"],
+            cwd=local,
+            capture_output=True,
+        ).returncode
+        != 0
+    )
+
+
+def test_dirty_review_target_is_not_synchronized(tmp_path: Path) -> None:
+    local, _accepted_sha = _diverged_review_target(tmp_path)
+    (local / "untracked.txt").write_text("do not publish\n", encoding="utf-8")
+    local_sha = _git(local, "rev-parse", "HEAD")
+
+    with pytest.raises(GitError, match="local changes"):
+        fast_forward_branch(local, "epic/epic_001")
+
+    assert _git(local, "rev-parse", "HEAD") == local_sha
+    assert (local / "untracked.txt").read_text(encoding="utf-8") == "do not publish\n"

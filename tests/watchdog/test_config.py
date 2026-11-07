@@ -14,6 +14,7 @@ from cascade.watchdog import (
     read_providers_config,
     task_parallelism,
 )
+from cascade.watchdog.config import provider_permission_mode
 from cascade.board import read_doc
 from tests.support import add_doc, make_repo
 
@@ -218,3 +219,31 @@ swe = "claude-role-swe"
             "codex": ModelsTable(),
         },
     )
+
+
+def test_provider_permission_mode_defaults_and_yolo_opt_in(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    (root / "cascade.toml").write_text(
+        """
+[providers]
+default = "cursor"
+
+[providers.cursor]
+epic = "composer"
+
+[providers.cursor.launch]
+permissions = "yolo"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert provider_permission_mode(root, "cursor") == "yolo"
+    assert provider_permission_mode(root, "codex") == "default"
+
+    (root / "cascade.toml").write_text(
+        '[providers]\ndefault = "cursor"\n[providers.cursor.launch]\npermissions = "wide"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="default.*yolo"):
+        provider_permission_mode(root, "cursor")

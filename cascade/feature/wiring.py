@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from cascade.board.errors import NotFound
-from cascade.board.store import read_doc
 from cascade.feature.graph import ingest_human, seed_feature_role_models
 from cascade.watchdog.boot_model import toast_model_config_failure
 from cascade.watchdog.config import ConfigError
@@ -17,11 +16,13 @@ def load_feature_tools() -> None:
     """Import tool modules so they register. Idempotent."""
 
     import cascade.feature.amendments as amendments_mod
+    import cascade.feature.branch_recovery as branch_recovery_mod
     import cascade.feature.comments_tool as comments_tool_mod
     import cascade.feature.decisions as decisions_mod
     import cascade.feature.docs_tool as docs_tool_mod
     import cascade.feature.mint as mint_mod
     import cascade.feature.recovery as recovery_mod
+    import cascade.feature.review_recovery as review_recovery_mod
     from cascade.review import reply_feature_review
 
     from cascade.feature.registry import feature_tools, register_feature_tool
@@ -30,7 +31,7 @@ def load_feature_tools() -> None:
         "mint_task", "list_children", "record_decision", "read_doc", "write_doc",
         "reply_comment", "propose_epic_amendment", "ack_amendment",
         "reply_merge_request_comment", "revise_task", "retry_task", "recovery_status",
-        "recover_task",
+        "recover_task", "retry_integration_branch_update", "publish_review_resolution",
     )
     if all(name in feature_tools() for name in expected):
         return
@@ -47,6 +48,14 @@ def load_feature_tools() -> None:
     register_feature_tool("retry_task", recovery_mod.retry_task)
     register_feature_tool("recovery_status", recovery_mod.recovery_status)
     register_feature_tool("recover_task", recovery_mod.recover_task)
+    register_feature_tool(
+        "retry_integration_branch_update",
+        branch_recovery_mod.retry_integration_branch_update,
+    )
+    register_feature_tool(
+        "publish_review_resolution",
+        review_recovery_mod.publish_review_resolution,
+    )
 
 
 def accept_human_chat(
