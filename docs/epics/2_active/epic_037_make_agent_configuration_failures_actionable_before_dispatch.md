@@ -4,7 +4,8 @@ title: Make agent configuration failures actionable before dispatch
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_037_001
 depends_on: []
 owners:
 - epic_manager
@@ -60,6 +61,7 @@ Use one pure capability evaluator and one stable reason/remedy vocabulary across
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_037_001
 
 The Epic Team will create and sequence feature plans here.
 
