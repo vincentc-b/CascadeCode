@@ -37,7 +37,18 @@ def board(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def target() -> EnvironmentIdentity:
-    return EnvironmentIdentity("ci-linux", "container", "linux", "x86_64")
+    return EnvironmentIdentity(
+        "ci-linux",
+        "container",
+        "linux",
+        "x86_64",
+        runner="github-actions",
+        repository="example/cascade",
+        worktree="/work/cascade",
+        sandbox="container",
+        runtime="python-3.12",
+        container_digest="sha256:runner-image",
+    )
 
 
 def dependency(
@@ -116,12 +127,18 @@ def test_batch_persists_independent_human_approvals_and_reloads(
     changed_python = replace(python, digest="sha256:new-python")
     changed_node = replace(node, verification_recipe="node --version && npm --version")
     write_entries(board, target, (changed_python, changed_node), expected_revision=1)
-    assert current_installation_approval(
-        "epic_001", "dep_python", created[0].approval_id, root=board
-    ) is None
-    assert current_installation_approval(
-        "epic_001", "dep_node", created[1].approval_id, root=board
-    ) == created[1]
+    assert (
+        current_installation_approval(
+            "epic_001", "dep_python", created[0].approval_id, root=board
+        )
+        is None
+    )
+    assert (
+        current_installation_approval(
+            "epic_001", "dep_node", created[1].approval_id, root=board
+        )
+        == created[1]
+    )
 
 
 @pytest.mark.parametrize(
@@ -153,9 +170,12 @@ def test_every_binding_field_invalidates_only_that_entry(
     manifest_target = revised.target_environment
     write_entries(board, manifest_target, (revised,), expected_revision=1)
 
-    assert current_installation_approval(
-        "epic_001", original.dependency_id, approval.approval_id, root=board
-    ) is None
+    assert (
+        current_installation_approval(
+            "epic_001", original.dependency_id, approval.approval_id, root=board
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize("field", ("version", "source", "digest"))
@@ -207,14 +227,17 @@ def test_operation_boundary_denies_before_mutation_even_with_execution_capabilit
             root=board,
         )
     assert mutated == []
-    assert invoke_approved_installation(
-        "epic_001",
-        "dep_python",
-        approval.approval_id,
-        entry.operation,
-        lambda: "installed",
-        root=board,
-    ) == "installed"
+    assert (
+        invoke_approved_installation(
+            "epic_001",
+            "dep_python",
+            approval.approval_id,
+            entry.operation,
+            lambda: "installed",
+            root=board,
+        )
+        == "installed"
+    )
 
 
 def test_read_only_manifest_check_needs_no_installation_approval(

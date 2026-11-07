@@ -181,7 +181,9 @@ def commit_board(root: Path, message: str = "board") -> None:
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0 and "nothing to commit" not in (result.stdout + result.stderr):
+    if result.returncode != 0 and "nothing to commit" not in (
+        result.stdout + result.stderr
+    ):
         raise subprocess.CalledProcessError(
             result.returncode,
             result.args,
@@ -195,7 +197,9 @@ def make_git_repo(tmp_path: Path) -> Path:
 
     root = (tmp_path / "repo").resolve()
     if root == _WORKSPACE or _WORKSPACE in root.parents:
-        raise RuntimeError("refusing to build a test repo inside the CascadeCode workspace")
+        raise RuntimeError(
+            "refusing to build a test repo inside the CascadeCode workspace"
+        )
     root.mkdir()
     _git(root, "init", "-b", "main")
     _git(root, "config", "user.email", "test@example.com")
@@ -215,7 +219,9 @@ def make_repo(
 
     root = (tmp_path / "repo").resolve()
     if root == _WORKSPACE or _WORKSPACE in root.parents:
-        raise RuntimeError("refusing to build a test repo inside the CascadeCode workspace")
+        raise RuntimeError(
+            "refusing to build a test repo inside the CascadeCode workspace"
+        )
     for tier in ("epics", "features", "tasks"):
         for column in ("1_backlog", "2_active", "3_completed"):
             (root / "docs" / tier / column).mkdir(parents=True)
@@ -225,7 +231,9 @@ def make_repo(
     if models:
         toml_lines.append(DEFAULT_MODELS_TOML)
     if toml_lines:
-        (root / "cascade.toml").write_text("\n".join(toml_lines) + "\n", encoding="utf-8")
+        (root / "cascade.toml").write_text(
+            "\n".join(toml_lines) + "\n", encoding="utf-8"
+        )
     if git:
         _git(root, "init", "-b", "main")
         _git(root, "config", "user.email", "test@example.com")
@@ -251,6 +259,7 @@ def sign_off_both_planning_roles(epic_id: str, *, root: Path) -> str:
         sign_off_epic_plan,
     )
 
+    declare_no_dependencies(epic_id, root=root)
     revision = canonical_plan_revision(epic_id, root=root)
     assert revision is not None, f"no canonical plan revision for {epic_id}"
     for role in ("epic_manager", "epic_architect"):
@@ -264,11 +273,44 @@ def sign_off_both_planning_roles(epic_id: str, *, root: Path) -> str:
     return revision
 
 
+def declare_no_dependencies(epic_id: str, *, root: Path) -> None:
+    """Give lifecycle tests an explicit current no-dependency declaration."""
+
+    from cascade.epic.dependency_manifests import (
+        DependencyManifestDraft,
+        EnvironmentIdentity,
+        read_dependency_manifest,
+        write_dependency_manifest,
+    )
+
+    if read_dependency_manifest(epic_id, root=root) is not None:
+        return
+    target = EnvironmentIdentity(
+        "planning",
+        "host",
+        "test",
+        "native",
+        runner="pytest",
+        repository=str(root.resolve()),
+        worktree=str(root.resolve()),
+        sandbox="test",
+        runtime="python",
+        container_digest="not_applicable",
+    )
+    write_dependency_manifest(
+        epic_id,
+        DependencyManifestDraft(target, None, True, ()),
+        root=root,
+        expected_revision=0,
+    )
+
+
 def approve_epic_plan_when_ready(epic_id: str, *, root: Path):
     """Sign off both planning roles, then approve the epic plan."""
 
     from cascade.approvals import approve_epic_plan
 
+    declare_no_dependencies(epic_id, root=root)
     sign_off_both_planning_roles(epic_id, root=root)
     return approve_epic_plan(epic_id, root=root)
 
@@ -363,4 +405,6 @@ def install_fake_planning_turns(monkeypatch) -> None:
         return RoleResult(text=f"{role}:{prompt}", status="finished")
 
     monkeypatch.setattr("cascade.agent.planning_turn.run_epic_planning_turn", fake_epic)
-    monkeypatch.setattr("cascade.agent.planning_turn.run_feature_planning_turn", fake_feature)
+    monkeypatch.setattr(
+        "cascade.agent.planning_turn.run_feature_planning_turn", fake_feature
+    )

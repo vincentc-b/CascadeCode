@@ -44,6 +44,12 @@ def target() -> EnvironmentIdentity:
         kind="container",
         platform="linux",
         architecture="x86_64",
+        runner="github-actions",
+        repository="example/cascade",
+        worktree="/work/cascade",
+        sandbox="container",
+        runtime="python-3.12",
+        container_digest="sha256:runner-image",
     )
 
 
@@ -61,7 +67,9 @@ def dependency(target: EnvironmentIdentity) -> DependencyEntry:
     )
 
 
-def test_absent_manifest_is_distinct_and_required_reads_fail_closed(board: Path) -> None:
+def test_absent_manifest_is_distinct_and_required_reads_fail_closed(
+    board: Path,
+) -> None:
     assert read_dependency_manifest("epic_001", root=board) is None
     assert read_dependency_manifest_history("epic_001", root=board) == ()
 
@@ -105,7 +113,9 @@ def test_revisions_are_append_only_addressable_and_optimistically_guarded(
         root=board,
         expected_revision=0,
     )
-    revised_entry = replace(dependency(target), version="3.12.8", digest="sha256:def456")
+    revised_entry = replace(
+        dependency(target), version="3.12.8", digest="sha256:def456"
+    )
     second = write_dependency_manifest(
         "epic_001",
         DependencyManifestDraft(target, target, False, (revised_entry,)),
@@ -118,9 +128,12 @@ def test_revisions_are_append_only_addressable_and_optimistically_guarded(
     assert read_dependency_manifest("epic_001", root=board) == second
     assert read_dependency_manifest("epic_001", root=board, revision=1) == first
     assert read_dependency_manifest_history("epic_001", root=board) == (first, second)
-    assert write_dependency_manifest(
-        "epic_001", second.draft, root=board, expected_revision=2
-    ) == second
+    assert (
+        write_dependency_manifest(
+            "epic_001", second.draft, root=board, expected_revision=2
+        )
+        == second
+    )
 
     with pytest.raises(StaleDependencyManifestRevision, match="current is 2"):
         write_dependency_manifest(
@@ -143,7 +156,7 @@ def test_environment_and_installation_approval_bindings_are_exact(
 
     assert environment_identities_match(target, target)
     assert not environment_identities_match(
-        target, replace(target, environment_id="developer-laptop")
+        target, replace(target, runner="developer-laptop")
     )
     assert installation_approval_is_valid(approval, entry)
     assert installation_approval_is_valid(

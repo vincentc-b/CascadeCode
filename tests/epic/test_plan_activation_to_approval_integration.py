@@ -22,6 +22,7 @@ from tests.support import (
     add_doc,
     approve_epic_plan_when_ready,
     commit_board,
+    declare_no_dependencies,
     make_repo,
 )
 
@@ -134,6 +135,7 @@ def planning_board(tmp_path: Path) -> tuple[Path, str]:
         parent="epic_002",
     )
     commit_board(root, "initial")
+    declare_no_dependencies("epic_002", root=root)
     approve_epic_plan_when_ready("epic_002", root=root)
     assert epic_plan_approved("epic_002", root=root)
 
@@ -211,7 +213,9 @@ READINESS_EXPECTATIONS: tuple[tuple[str, dict[str, Any]], ...] = (
 )
 
 
-def test_activation_to_approval_planning_gate_flow(planning_board: tuple[Path, str]) -> None:
+def test_activation_to_approval_planning_gate_flow(
+    planning_board: tuple[Path, str],
+) -> None:
     root, base = planning_board
     epic_id = "epic_001"
 
@@ -219,8 +223,12 @@ def test_activation_to_approval_planning_gate_flow(planning_board: tuple[Path, s
     assert status == HTTPStatus.OK
     assert body["ok"] is True
     assert read_doc(epic_id, root=root).meta.status == "active"
+    declare_no_dependencies(epic_id, root=root)
 
-    assert _post_conflict(base, "/api/approve_epic_plan", {"id": epic_id}) == HTTPStatus.CONFLICT
+    assert (
+        _post_conflict(base, "/api/approve_epic_plan", {"id": epic_id})
+        == HTTPStatus.CONFLICT
+    )
 
     revision_a = _assert_readiness(
         base,
@@ -235,7 +243,10 @@ def test_activation_to_approval_planning_gate_flow(planning_board: tuple[Path, s
         role="epic_manager",
         plan_revision=revision_a,
     )
-    assert _post_conflict(base, "/api/approve_epic_plan", {"id": epic_id}) == HTTPStatus.CONFLICT
+    assert (
+        _post_conflict(base, "/api/approve_epic_plan", {"id": epic_id})
+        == HTTPStatus.CONFLICT
+    )
     revision_a = _assert_readiness(
         base,
         epic_id,
@@ -289,7 +300,10 @@ def test_activation_to_approval_planning_gate_flow(planning_board: tuple[Path, s
     revision_b = canonical_plan_revision(epic_id, root=root)
     assert revision_b is not None and revision_b != revision_a
 
-    assert _post_conflict(base, "/api/approve_epic_plan", {"id": epic_id}) == HTTPStatus.CONFLICT
+    assert (
+        _post_conflict(base, "/api/approve_epic_plan", {"id": epic_id})
+        == HTTPStatus.CONFLICT
+    )
     assert (
         _post_conflict(
             base,

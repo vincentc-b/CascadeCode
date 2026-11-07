@@ -30,6 +30,15 @@ def mint_feature(
 
     repo = Path(root).resolve()
     _require_epic(epic_id, repo)
+    from cascade.epic.dependency_evidence import compute_dependency_readiness
+
+    dependency_readiness = compute_dependency_readiness(epic_id, root=repo)
+    if not dependency_readiness.ready:
+        details = ", ".join(
+            f"{row.reason}:{row.dependency_id or 'manifest'}"
+            for row in dependency_readiness.blockers
+        )
+        raise EpicToolDenied(f"dependencies_not_ready ({details})")
 
     deps = list(depends_on or [])
     board = merged_board(repo)
@@ -54,7 +63,13 @@ def mint_feature(
     for _attempt in range(8):
         board = merged_board(repo)
         candidate = allocate_id("feature", board, parent_id=epic_id)
-        path = repo / "docs" / "features" / "1_backlog" / f"{candidate}_{slugify(title)}.md"
+        path = (
+            repo
+            / "docs"
+            / "features"
+            / "1_backlog"
+            / f"{candidate}_{slugify(title)}.md"
+        )
         if not tool_guard(path, "write", epic_id=epic_id, root=repo):
             release_work_id(candidate)
             raise EpicToolDenied(f"write denied for {path}")

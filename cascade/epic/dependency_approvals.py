@@ -30,7 +30,8 @@ from cascade.epic.dependency_manifests import (
 from cascade.workspace.integration_worktree import locate_trunk
 
 _APPROVAL_SIDECAR_DIR = "_dependency_installation_approvals"
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+_LEGACY_SCHEMA_VERSION = 1
 _UNKNOWN_EXACT_VALUES = frozenset(
     {"unknown", "unspecified", "unresolved", "not known", "n/a", "not applicable"}
 )
@@ -80,18 +81,30 @@ def read_installation_approvals(
     if not isinstance(raw, dict):
         raise DependencyApprovalError("installation approval journal must be an object")
     if set(raw) != {"version", "epic_id", "approvals"}:
-        raise DependencyApprovalError("installation approval journal has invalid fields")
-    if raw.get("version") != _SCHEMA_VERSION:
-        raise DependencyApprovalError("unsupported installation approval schema version")
+        raise DependencyApprovalError(
+            "installation approval journal has invalid fields"
+        )
+    schema_version = raw.get("version")
+    if schema_version not in {_LEGACY_SCHEMA_VERSION, _SCHEMA_VERSION}:
+        raise DependencyApprovalError(
+            "unsupported installation approval schema version"
+        )
     if raw.get("epic_id") != epic_id:
-        raise DependencyApprovalError("installation approval epic_id does not match path")
+        raise DependencyApprovalError(
+            "installation approval epic_id does not match path"
+        )
     rows = raw.get("approvals")
     if not isinstance(rows, list) or not rows:
         raise DependencyApprovalError("persisted approval journal must not be empty")
     try:
-        approvals = tuple(InstallationApproval.from_dict(row) for row in rows)
+        approvals = tuple(
+            InstallationApproval.from_dict(row, schema_version=schema_version)
+            for row in rows
+        )
     except InvalidDependencyManifest as exc:
-        raise DependencyApprovalError("invalid persisted installation approval") from exc
+        raise DependencyApprovalError(
+            "invalid persisted installation approval"
+        ) from exc
     ids = [row.approval_id for row in approvals]
     if len(ids) != len(set(ids)):
         raise DependencyApprovalError("installation approval IDs must be unique")
@@ -130,8 +143,14 @@ def approve_dependency_installations(
 
     with process_lock:
         manifest = require_dependency_manifest(epic_id, root=root)
+        if not manifest.is_current_schema:
+            raise DependencyApprovalError(
+                "legacy dependency manifests cannot grant installation authority"
+            )
         entries = {row.dependency_id: row for row in manifest.dependencies}
-        missing = [dependency_id for dependency_id in ids if dependency_id not in entries]
+        missing = [
+            dependency_id for dependency_id in ids if dependency_id not in entries
+        ]
         if missing:
             raise DependencyApprovalError(
                 f"current manifest has no dependency: {', '.join(missing)}"
@@ -179,6 +198,8 @@ def current_installation_approval(
     """Return the named approval only when its current entry binding still matches."""
 
     manifest = require_dependency_manifest(epic_id, root=root)
+    if not manifest.is_current_schema:
+        return None
     entry = next(
         (row for row in manifest.dependencies if row.dependency_id == dependency_id),
         None,
@@ -193,7 +214,11 @@ def current_installation_approval(
         ),
         None,
     )
-    if approval is None or approval.binding != InstallationBinding.from_entry(entry):
+    if (
+        approval is None
+        or approval.schema_version != _SCHEMA_VERSION
+        or approval.binding != InstallationBinding.from_entry(entry)
+    ):
         return None
     return approval
 
@@ -251,8 +276,16 @@ def invoke_approved_installation(
 
 
 def _require_exact_authority(entry: DependencyEntry) -> None:
-    for field in ("version", "source", "digest"):
-        value = getattr(entry, field)
+    if not entry.target_environment.is_fully_specified:
+        raise DependencyApprovalError(
+            f"dependency {entry.dependency_id} has unknown target environment"
+        )
+    exact = {
+        "version": entry.version,
+        "source": entry.source,
+        "digest": entry.digest,
+    }
+    for field, value in exact.items():
         normalized = " ".join(value.strip().casefold().replace("-", " ").split())
         if normalized in _UNKNOWN_EXACT_VALUES:
             raise DependencyApprovalError(

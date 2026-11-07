@@ -27,6 +27,7 @@ from tests.support import (
     add_doc,
     approve_epic_plan_when_ready,
     commit_board,
+    declare_no_dependencies,
     make_repo,
 )
 
@@ -44,6 +45,7 @@ def board(tmp_path: Path) -> Path:
         parent="epic_001",
     )
     commit_board(root, "initial")
+    declare_no_dependencies("epic_001", root=root)
     return root
 
 
@@ -59,7 +61,9 @@ def test_each_role_signs_for_current_revision(board: Path) -> None:
         "epic_001", "epic_manager", revision, root=board, actor="epic_manager"
     )
     assert manager["newly_signed"] is True
-    assert manager["sign_offs"] == {"epic_manager": manager["sign_offs"]["epic_manager"]}
+    assert manager["sign_offs"] == {
+        "epic_manager": manager["sign_offs"]["epic_manager"]
+    }
 
     architect = sign_off_epic_plan(
         "epic_001", "epic_architect", revision, root=board, actor="epic_architect"

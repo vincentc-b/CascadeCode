@@ -40,7 +40,18 @@ def board(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def environment() -> EnvironmentIdentity:
-    return EnvironmentIdentity("ci-linux", "container", "linux", "x86_64")
+    return EnvironmentIdentity(
+        "ci-linux",
+        "container",
+        "linux",
+        "x86_64",
+        runner="github-actions",
+        repository="example/cascade",
+        worktree="/work/cascade",
+        sandbox="container",
+        runtime="python-3.12",
+        container_digest="sha256:runner-image",
+    )
 
 
 def dependency(
@@ -162,8 +173,14 @@ def test_attempt_events_are_append_only_reloadable_and_setup_requires_approval(
 @pytest.mark.parametrize(
     ("actual", "reason"),
     [
-        (EnvironmentIdentity("developer-laptop", "host", "linux", "x86_64"), "mismatched_environment"),
-        (EnvironmentIdentity("unknown", "container", "linux", "x86_64"), "unknown_environment"),
+        (
+            EnvironmentIdentity("developer-laptop", "host", "linux", "x86_64"),
+            "mismatched_environment",
+        ),
+        (
+            EnvironmentIdentity("unknown", "container", "linux", "x86_64"),
+            "unknown_environment",
+        ),
     ],
 )
 def test_projection_rejects_mismatched_and_unknown_actual_environments(
@@ -222,7 +239,9 @@ def test_revision_change_selectively_invalidates_and_snapshots_remain_immutable(
     board: Path, environment: EnvironmentIdentity
 ) -> None:
     python = dependency(environment)
-    node = dependency(environment, "dep_node", version="22.1.0", recipe="node --version")
+    node = dependency(
+        environment, "dep_node", version="22.1.0", recipe="node --version"
+    )
     write_manifest(board, environment, (python, node), expected_revision=0)
     python_attempt, _ = complete(board, environment, python)
     node_attempt, _ = complete(
@@ -254,4 +273,3 @@ def test_revision_change_selectively_invalidates_and_snapshots_remain_immutable(
     assert read_dependency_evidence_snapshots("epic_001", root=board) == (snapshot,)
     assert snapshot.manifest_revision == 1
     assert len(snapshot.accepted) == 2
-

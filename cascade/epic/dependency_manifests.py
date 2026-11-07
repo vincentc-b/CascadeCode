@@ -24,7 +24,9 @@ from cascade.workspace.doc_root import resolve_doc_worktree
 from cascade.workspace.integration_worktree import locate_trunk
 
 _SIDECAR_DIR = Path("docs") / "epics" / "2_active" / "_dependency_manifests"
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+_LEGACY_SCHEMA_VERSION = 1
+_UNKNOWN_VALUES = frozenset({"unknown", "unspecified", "pending", "unresolved"})
 _DEPENDENCY_ID_RE = re.compile(r"^dep_[a-z0-9][a-z0-9_-]*$")
 
 
@@ -52,10 +54,34 @@ class EnvironmentIdentity:
     kind: str
     platform: str
     architecture: str
+    runner: str | None = None
+    repository: str | None = None
+    worktree: str | None = None
+    sandbox: str | None = None
+    runtime: str | None = None
+    container_digest: str | None = None
 
     def __post_init__(self) -> None:
         for field in ("environment_id", "kind", "platform", "architecture"):
             _require_text(getattr(self, field), f"environment.{field}")
+        # The first four fields are retained as source-compatible labels for the
+        # slice-A API.  New records persist the execution identity explicitly.
+        defaults = {
+            "runner": self.environment_id,
+            "repository": "current-repository",
+            "worktree": self.environment_id,
+            "sandbox": self.kind,
+            "runtime": f"{self.platform}/{self.architecture}",
+            "container_digest": (
+                "unknown" if self.kind.casefold() == "container" else "not_applicable"
+            ),
+        }
+        for field, default in defaults.items():
+            value = getattr(self, field)
+            if value is None:
+                object.__setattr__(self, field, default)
+            else:
+                _require_text(value, f"environment.{field}")
 
     def to_dict(self) -> dict[str, str]:
         return {
@@ -63,21 +89,62 @@ class EnvironmentIdentity:
             "kind": self.kind,
             "platform": self.platform,
             "architecture": self.architecture,
+            "runner": self.runner,
+            "repository": self.repository,
+            "worktree": self.worktree,
+            "sandbox": self.sandbox,
+            "runtime": self.runtime,
+            "container_digest": self.container_digest,
         }
 
     @classmethod
-    def from_dict(cls, raw: object, *, field: str = "environment") -> EnvironmentIdentity:
+    def from_dict(
+        cls, raw: object, *, field: str = "environment"
+    ) -> EnvironmentIdentity:
         data = _require_mapping(raw, field)
-        _require_exact_keys(
-            data,
-            {"environment_id", "kind", "platform", "architecture"},
-            field,
-        )
+        legacy = {"environment_id", "kind", "platform", "architecture"}
+        current = legacy | {
+            "runner",
+            "repository",
+            "worktree",
+            "sandbox",
+            "runtime",
+            "container_digest",
+        }
+        if set(data) not in (legacy, current):
+            _require_exact_keys(data, current, field)
         return cls(
             environment_id=_required_string(data, "environment_id", field),
             kind=_required_string(data, "kind", field),
             platform=_required_string(data, "platform", field),
             architecture=_required_string(data, "architecture", field),
+            runner=_optional_string(data, "runner", field),
+            repository=_optional_string(data, "repository", field),
+            worktree=_optional_string(data, "worktree", field),
+            sandbox=_optional_string(data, "sandbox", field),
+            runtime=_optional_string(data, "runtime", field),
+            container_digest=_optional_string(data, "container_digest", field),
+        )
+
+    @property
+    def is_fully_specified(self) -> bool:
+        values = (
+            self.runner,
+            self.repository,
+            self.worktree,
+            self.sandbox,
+            self.runtime,
+            self.container_digest,
+        )
+        if not all(
+            isinstance(value, str) and value.strip().casefold() not in _UNKNOWN_VALUES
+            for value in values
+        ):
+            return False
+        return not (
+            self.kind.casefold() == "container"
+            and self.container_digest.strip().casefold()
+            in {"not_applicable", "not applicable", "n/a"}
         )
 
 
@@ -94,6 +161,14 @@ class DependencyEntry:
     operation: str
     cleanup_plan: str
     verification_recipe: str
+    requested_range: str | None = None
+    resolved_version: str | None = None
+    expected_verification_result: str = "success"
+    feasibility_proof_requirements: tuple[str, ...] = ()
+    feasibility_proof_references: tuple[str, ...] = ()
+    install_destination: str | None = None
+    lock_references: tuple[str, ...] = ()
+    integrity_reference: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.dependency_id, str) or not _DEPENDENCY_ID_RE.fullmatch(
@@ -116,6 +191,34 @@ class DependencyEntry:
             raise InvalidDependencyManifest(
                 "dependency.target_environment must be an EnvironmentIdentity"
             )
+        derived = {
+            "requested_range": self.version,
+            "resolved_version": self.version,
+            "install_destination": self.install_scope,
+            "integrity_reference": self.digest,
+        }
+        for field, default in derived.items():
+            value = getattr(self, field)
+            if value is None:
+                object.__setattr__(self, field, default)
+            else:
+                _require_text(value, f"dependency.{field}")
+        _require_text(
+            self.expected_verification_result,
+            "dependency.expected_verification_result",
+        )
+        for field in (
+            "feasibility_proof_requirements",
+            "feasibility_proof_references",
+            "lock_references",
+        ):
+            value = getattr(self, field)
+            if not isinstance(value, tuple) or not all(
+                isinstance(item, str) and item.strip() for item in value
+            ):
+                raise InvalidDependencyManifest(
+                    f"dependency.{field} must be a tuple of strings"
+                )
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -128,6 +231,14 @@ class DependencyEntry:
             "operation": self.operation,
             "cleanup_plan": self.cleanup_plan,
             "verification_recipe": self.verification_recipe,
+            "requested_range": self.requested_range or self.version,
+            "resolved_version": self.resolved_version or self.version,
+            "expected_verification_result": self.expected_verification_result,
+            "feasibility_proof_requirements": list(self.feasibility_proof_requirements),
+            "feasibility_proof_references": list(self.feasibility_proof_references),
+            "install_destination": self.install_destination or self.install_scope,
+            "lock_references": list(self.lock_references),
+            "integrity_reference": self.integrity_reference or self.digest,
         }
 
     @classmethod
@@ -144,7 +255,29 @@ class DependencyEntry:
             "cleanup_plan",
             "verification_recipe",
         }
-        _require_exact_keys(data, fields, "dependency")
+        legacy = set(data) == fields
+        current_fields = fields | {
+            "requested_range",
+            "resolved_version",
+            "expected_verification_result",
+            "feasibility_proof_requirements",
+            "feasibility_proof_references",
+            "install_destination",
+            "lock_references",
+            "integrity_reference",
+        }
+        if not legacy:
+            _require_exact_keys(data, current_fields, "dependency")
+        requirements = data.get("feasibility_proof_requirements", [])
+        references = data.get("feasibility_proof_references", [])
+        locks = data.get("lock_references", [])
+        for value, name in (
+            (requirements, "feasibility_proof_requirements"),
+            (references, "feasibility_proof_references"),
+            (locks, "lock_references"),
+        ):
+            if not isinstance(value, list):
+                raise InvalidDependencyManifest(f"dependency.{name} must be a list")
         return cls(
             dependency_id=_required_string(data, "dependency_id", "dependency"),
             version=_required_string(data, "version", "dependency"),
@@ -158,6 +291,44 @@ class DependencyEntry:
             cleanup_plan=_required_string(data, "cleanup_plan", "dependency"),
             verification_recipe=_required_string(
                 data, "verification_recipe", "dependency"
+            ),
+            requested_range=(
+                None
+                if legacy
+                else _required_string(data, "requested_range", "dependency")
+            ),
+            resolved_version=(
+                None
+                if legacy
+                else _required_string(data, "resolved_version", "dependency")
+            ),
+            expected_verification_result=(
+                "success"
+                if legacy
+                else _required_string(
+                    data, "expected_verification_result", "dependency"
+                )
+            ),
+            feasibility_proof_requirements=tuple(
+                _require_text(row, "dependency.feasibility_proof_requirement")
+                for row in requirements
+            ),
+            feasibility_proof_references=tuple(
+                _require_text(row, "dependency.feasibility_proof_reference")
+                for row in references
+            ),
+            install_destination=(
+                None
+                if legacy
+                else _required_string(data, "install_destination", "dependency")
+            ),
+            lock_references=tuple(
+                _require_text(row, "dependency.lock_reference") for row in locks
+            ),
+            integrity_reference=(
+                None
+                if legacy
+                else _required_string(data, "integrity_reference", "dependency")
             ),
         )
 
@@ -199,13 +370,8 @@ class DependencyManifestDraft:
         ids = [row.dependency_id for row in self.dependencies]
         if len(ids) != len(set(ids)):
             raise InvalidDependencyManifest("dependency_id values must be unique")
-        if any(
-            row.target_environment != self.target_environment
-            for row in self.dependencies
-        ):
-            raise InvalidDependencyManifest(
-                "each dependency target_environment must match the manifest target_environment"
-            )
+        # The top-level target is a compatibility/display default only.  Current
+        # authority is always the per-entry target, so entries may differ.
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -263,6 +429,7 @@ class DependencyManifestSnapshot:
     actual_environment: EnvironmentIdentity | None
     none_required: bool
     dependencies: tuple[DependencyEntry, ...]
+    schema_version: int = _SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if (
@@ -270,8 +437,13 @@ class DependencyManifestSnapshot:
             or not isinstance(self.revision, int)
             or self.revision < 1
         ):
-            raise InvalidDependencyManifest("manifest revision must be a positive integer")
-        if not isinstance(self.recorded_at, datetime) or self.recorded_at.tzinfo is None:
+            raise InvalidDependencyManifest(
+                "manifest revision must be a positive integer"
+            )
+        if (
+            not isinstance(self.recorded_at, datetime)
+            or self.recorded_at.tzinfo is None
+        ):
             raise InvalidDependencyManifest("recorded_at must be timezone-aware")
         DependencyManifestDraft(
             target_environment=self.target_environment,
@@ -297,7 +469,9 @@ class DependencyManifestSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, raw: object) -> DependencyManifestSnapshot:
+    def from_dict(
+        cls, raw: object, *, schema_version: int = _SCHEMA_VERSION
+    ) -> DependencyManifestSnapshot:
         data = _require_mapping(raw, "snapshot")
         _require_exact_keys(
             data,
@@ -328,7 +502,16 @@ class DependencyManifestSnapshot:
                 if key not in {"revision", "recorded_at"}
             }
         )
-        return cls(revision=revision, recorded_at=when, **_draft_to_dict_for_init(draft))
+        return cls(
+            revision=revision,
+            recorded_at=when,
+            schema_version=schema_version,
+            **_draft_to_dict_for_init(draft),
+        )
+
+    @property
+    def is_current_schema(self) -> bool:
+        return self.schema_version == _SCHEMA_VERSION
 
 
 def _draft_to_dict_for_init(draft: DependencyManifestDraft) -> dict[str, object]:
@@ -350,6 +533,7 @@ class InstallationBinding:
     digest: str
     target_environment: EnvironmentIdentity
     install_scope: str
+    install_destination: str
     operation: str
     cleanup_plan: str
 
@@ -363,6 +547,7 @@ class InstallationBinding:
             "source",
             "digest",
             "install_scope",
+            "install_destination",
             "operation",
             "cleanup_plan",
         ):
@@ -380,6 +565,7 @@ class InstallationBinding:
             "digest": self.digest,
             "target_environment": self.target_environment.to_dict(),
             "install_scope": self.install_scope,
+            "install_destination": self.install_destination,
             "operation": self.operation,
             "cleanup_plan": self.cleanup_plan,
         }
@@ -397,7 +583,10 @@ class InstallationBinding:
             "operation",
             "cleanup_plan",
         }
-        _require_exact_keys(data, fields, "approval.binding")
+        legacy = set(data) == fields
+        fields.add("install_destination")
+        if not legacy:
+            _require_exact_keys(data, fields, "approval.binding")
         dependency_id = _required_string(data, "dependency_id", "approval.binding")
         if not _DEPENDENCY_ID_RE.fullmatch(dependency_id):
             raise InvalidDependencyManifest("approval.binding.dependency_id is invalid")
@@ -411,6 +600,11 @@ class InstallationBinding:
                 field="approval.binding.target_environment",
             ),
             install_scope=_required_string(data, "install_scope", "approval.binding"),
+            install_destination=(
+                _required_string(data, "install_scope", "approval.binding")
+                if legacy
+                else _required_string(data, "install_destination", "approval.binding")
+            ),
             operation=_required_string(data, "operation", "approval.binding"),
             cleanup_plan=_required_string(data, "cleanup_plan", "approval.binding"),
         )
@@ -424,6 +618,7 @@ class InstallationBinding:
             digest=entry.digest,
             target_environment=entry.target_environment,
             install_scope=entry.install_scope,
+            install_destination=entry.install_destination or entry.install_scope,
             operation=entry.operation,
             cleanup_plan=entry.cleanup_plan,
         )
@@ -439,13 +634,17 @@ class InstallationApproval:
     approved_at: datetime
     reviewed_manifest_revision: int
     reviewed_entry: DependencyEntry
+    schema_version: int = _SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         _require_text(self.approval_id, "approval_id")
         _require_text(self.approver_id, "approver_id")
         if not isinstance(self.binding, InstallationBinding):
             raise InvalidDependencyManifest("binding must be an InstallationBinding")
-        if not isinstance(self.approved_at, datetime) or self.approved_at.tzinfo is None:
+        if (
+            not isinstance(self.approved_at, datetime)
+            or self.approved_at.tzinfo is None
+        ):
             raise InvalidDependencyManifest("approved_at must be timezone-aware")
         if (
             isinstance(self.reviewed_manifest_revision, bool)
@@ -464,6 +663,7 @@ class InstallationApproval:
 
     def to_dict(self) -> dict[str, object]:
         return {
+            "schema_version": self.schema_version,
             "approval_id": self.approval_id,
             "binding": self.binding.to_dict(),
             "approver_id": self.approver_id,
@@ -473,20 +673,21 @@ class InstallationApproval:
         }
 
     @classmethod
-    def from_dict(cls, raw: object) -> InstallationApproval:
+    def from_dict(
+        cls, raw: object, *, schema_version: int = _SCHEMA_VERSION
+    ) -> InstallationApproval:
         data = _require_mapping(raw, "approval")
-        _require_exact_keys(
-            data,
-            {
-                "approval_id",
-                "binding",
-                "approver_id",
-                "approved_at",
-                "reviewed_manifest_revision",
-                "reviewed_entry",
-            },
-            "approval",
-        )
+        fields = {
+            "approval_id",
+            "binding",
+            "approver_id",
+            "approved_at",
+            "reviewed_manifest_revision",
+            "reviewed_entry",
+        }
+        legacy = set(data) == fields
+        if not legacy:
+            _require_exact_keys(data, fields | {"schema_version"}, "approval")
         approved_at = data.get("approved_at")
         if not isinstance(approved_at, str):
             raise InvalidDependencyManifest("approval.approved_at must be a string")
@@ -506,6 +707,13 @@ class InstallationApproval:
             approved_at=when,
             reviewed_manifest_revision=revision,
             reviewed_entry=DependencyEntry.from_dict(data.get("reviewed_entry")),
+            schema_version=(
+                schema_version
+                if legacy
+                else _positive_schema_version(
+                    data.get("schema_version"), "approval.schema_version"
+                )
+            ),
         )
 
 
@@ -520,16 +728,35 @@ def installation_approval_is_valid(
 def environment_identities_match(
     target: EnvironmentIdentity, actual: EnvironmentIdentity
 ) -> bool:
-    """Environment matching is exact and never falls back to a display label."""
+    """Match trusted execution identity field-by-field; unknown never matches."""
 
-    return target == actual
+    if not target.is_fully_specified or not actual.is_fully_specified:
+        return False
+    return (
+        target.runner,
+        target.repository,
+        target.worktree,
+        target.sandbox,
+        target.runtime,
+        target.container_digest,
+    ) == (
+        actual.runner,
+        actual.repository,
+        actual.worktree,
+        actual.sandbox,
+        actual.runtime,
+        actual.container_digest,
+    )
 
 
 def validate_dependency_manifest(raw: object) -> DependencyManifestDraft:
     """Validate an unrevisioned public payload and return its typed form."""
 
     if isinstance(raw, DependencyManifestDraft):
-        return raw
+        # Canonicalize compatibility defaults before equality, fingerprinting,
+        # or persistence so dataclass replacement cannot retain stale derived
+        # values when a legacy field changes.
+        return DependencyManifestDraft.from_dict(raw.to_dict())
     return DependencyManifestDraft.from_dict(raw)
 
 
@@ -556,14 +783,24 @@ def read_dependency_manifest_history(
         ) from exc
     data = _require_mapping(raw, "manifest history")
     _require_exact_keys(data, {"version", "epic_id", "snapshots"}, "manifest history")
-    if data.get("version") != _SCHEMA_VERSION:
-        raise InvalidDependencyManifest("unsupported dependency manifest schema version")
+    schema_version = data.get("version")
+    if schema_version not in {_LEGACY_SCHEMA_VERSION, _SCHEMA_VERSION}:
+        raise InvalidDependencyManifest(
+            "unsupported dependency manifest schema version"
+        )
     if data.get("epic_id") != epic_id:
-        raise InvalidDependencyManifest("dependency manifest epic_id does not match path")
+        raise InvalidDependencyManifest(
+            "dependency manifest epic_id does not match path"
+        )
     rows = data.get("snapshots")
     if not isinstance(rows, list) or not rows:
-        raise InvalidDependencyManifest("persisted manifest history must contain a snapshot")
-    snapshots = tuple(DependencyManifestSnapshot.from_dict(row) for row in rows)
+        raise InvalidDependencyManifest(
+            "persisted manifest history must contain a snapshot"
+        )
+    snapshots = tuple(
+        DependencyManifestSnapshot.from_dict(row, schema_version=schema_version)
+        for row in rows
+    )
     expected = tuple(range(1, len(snapshots) + 1))
     if tuple(row.revision for row in snapshots) != expected:
         raise InvalidDependencyManifest(
@@ -590,7 +827,9 @@ def read_dependency_manifest(
         return None
 
 
-def require_dependency_manifest(epic_id: str, *, root: Path) -> DependencyManifestSnapshot:
+def require_dependency_manifest(
+    epic_id: str, *, root: Path
+) -> DependencyManifestSnapshot:
     """Read the current snapshot and fail closed when the legacy state is absent."""
 
     manifest = read_dependency_manifest(epic_id, root=root)
@@ -729,3 +968,15 @@ def _require_exact_keys(
 
 def _required_string(data: Mapping[str, object], key: str, field: str) -> str:
     return _require_text(data.get(key), f"{field}.{key}")
+
+
+def _optional_string(data: Mapping[str, object], key: str, field: str) -> str | None:
+    if key not in data:
+        return None
+    return _require_text(data.get(key), f"{field}.{key}")
+
+
+def _positive_schema_version(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise InvalidDependencyManifest(f"{field} must be a positive integer")
+    return value
