@@ -2,7 +2,7 @@
 id: feat_037_001
 title: Unify effective role configuration and capability diagnostics
 tier: feature
-status: active
+status: completed
 parent: epic_037
 children:
 - task_037_001_001
