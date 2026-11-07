@@ -448,6 +448,8 @@ def test_war_room_html_loads_war_room_js(ui_server):
     _status, html, _headers = _get_html(f"{base}/")
     assert "/static/war_room.js" in html
     assert "/static/epic_plan_readiness_ui.js" in html
+    assert "/static/dependency_review_ui.js" in html
+    assert "/static/dependency_review.css" in html
 
 
 def test_epic_plan_readiness_ui_cases():
@@ -475,6 +477,8 @@ def test_plan_page_includes_epic_readiness_host(ui_server):
     assert status == HTTPStatus.OK
     assert 'id="epic-plan-readiness-host"' in html
     assert "/static/epic_plan_readiness_ui.js" in html
+    assert 'id="dependency-review-host"' in html
+    assert "/static/dependency_review_ui.js" in html
 
 
 def test_plan_page_includes_comment_compose(ui_server):

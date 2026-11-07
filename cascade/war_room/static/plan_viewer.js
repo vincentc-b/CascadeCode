@@ -753,6 +753,31 @@
     return { chrome: chrome, refreshReadiness: refreshReadiness };
   }
 
+  function initDependencyReviewChrome(workId, projection, readinessMount, options) {
+    options = options || {};
+    var DependencyReviewUi = options.DependencyReviewUi || globalThis.DependencyReviewUi;
+    var host = document.getElementById("dependency-review-host");
+    if (!host || !DependencyReviewUi || !projection) return null;
+    host.hidden = false;
+    return DependencyReviewUi.renderInto(document, host, projection, {
+      post: options.post,
+      onProjection: function (next) {
+        if (
+          readinessMount && next.planning_readiness &&
+          globalThis.EpicPlanReadinessUi
+        ) {
+          globalThis.EpicPlanReadinessUi.applyReadinessToPlanBar(
+            readinessMount.chrome,
+            document,
+            next.planning_readiness,
+            workId
+          );
+        }
+        if (typeof options.onProjection === "function") options.onProjection(next);
+      },
+    });
+  }
+
   function fillHeaderElements(meta, sha, workId) {
     var title = (meta && meta.title) || workId || "Plan";
     var pageTitleEl = document.getElementById("plan-page-title");
@@ -1778,8 +1803,16 @@
           if (bodyEl) {
             bodyEl.hidden = false;
           }
+          var readinessMount = null;
           if (meta.tier === "epic" && doc.plan_readiness) {
-            initEpicPlanReadinessChrome(workId, doc.plan_readiness);
+            readinessMount = initEpicPlanReadinessChrome(workId, doc.plan_readiness);
+          }
+          if (meta.tier === "epic" && meta.dependency_status) {
+            initDependencyReviewChrome(
+              workId,
+              meta.dependency_status,
+              readinessMount
+            );
           }
           initPlanComments(workId, meta.tier, {
             bodyEl: bodyEl,
@@ -1832,5 +1865,6 @@
     MERMAID_SCRIPT_SRC: MERMAID_SCRIPT_SRC,
     initPlanComments: initPlanComments,
     initEpicPlanReadinessChrome: initEpicPlanReadinessChrome,
+    initDependencyReviewChrome: initDependencyReviewChrome,
   };
 });
