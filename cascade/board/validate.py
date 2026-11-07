@@ -56,7 +56,7 @@ _EPIC_STACK_MODEL_KEYS = frozenset(
 )
 _LEGAL_MODEL_KEYS: dict[WorkTier, frozenset[str]] = {
     "epic": _EPIC_STACK_MODEL_KEYS,
-    "feature": frozenset({"feature_lead", "feature_architect"}),
+    "feature": frozenset({"feature_lead", "feature_architect", "swe"}),
     "task": frozenset({"swe"}),
 }
 

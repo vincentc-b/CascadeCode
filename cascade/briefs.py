@@ -17,6 +17,7 @@ from cascade.agent.discovery.inventory import (
     get_provider_inventory,
 )
 from cascade.agent.discovery.normalize import sanitize_provider_error
+from cascade.agent.selection_preflight import evaluate_work_selection
 from cascade.agent.providers import parse_provider_id
 from cascade.board.errors import GitError
 from cascade.board.gitutil import _run
@@ -28,11 +29,9 @@ from cascade.board.types import WorkDoc, WorkMeta
 from cascade.brief_stack import (
     BRIEF_STACK_ROLES,
     brief_selection_from_meta,
-    normalize_reasoning_overrides,
     parse_brief_models,
     parse_brief_reasoning,
     role_models_for_provider,
-    validate_models_against_inventory,
 )
 from cascade.tracking import MergeRequest, create_merge_request, forge_ready, push_branch
 from cascade.watchdog.config import read_providers_config
@@ -171,33 +170,49 @@ def validate_brief(raw: dict[str, object], *, root: Path) -> BriefRequest:
     models = parse_brief_models(raw, table=table)
     reasoning_input = parse_brief_reasoning(raw)
     inventory = get_provider_inventory()
-    provider_item = validate_models_against_inventory(provider, models, inventory)
-    flex_mode = normalize_flex_mode(raw.get("flex_mode"), provider_item)
-    reasoning = normalize_reasoning_overrides(
-        models,
-        reasoning_input,
-        provider_item=provider_item,
+    provider_item = next(
+        (item for item in inventory.providers if item.provider_id == provider), None
     )
-    return BriefRequest(
+    if provider_item is None:
+        flex_mode = False
+    else:
+        flex_mode = normalize_flex_mode(raw.get("flex_mode"), provider_item)
+    request = BriefRequest(
         title=_clean(str(raw.get("title") or ""), "title"),
         intent=_clean(str(raw.get("intent") or ""), "intent"),
         success_criteria=_clean(str(raw.get("success_criteria") or ""), "success criteria"),
         constraints=str(raw.get("constraints") or "").strip(),
         provider=provider,
         models=models,
-        reasoning=reasoning,
+        reasoning=reasoning_input,
         flex_mode=flex_mode,
     )
+    preview = build_brief_doc(
+        request,
+        "epic_preview",
+        Path(root) / "docs/epics/1_backlog/epic_preview.md",
+    )
+    result = evaluate_work_selection(
+        preview,
+        root=root,
+        inventory=inventory,
+        action="brief_preview",
+    ).result
+    if not result.supported:
+        if result.reason_code == "reasoning_not_supported":
+            raise ValueError("reasoning override is not supported for the selected model")
+        raise ValueError(result.message or "selected configuration is not supported")
+    return request
 
 
 def normalize_flex_mode(raw: object, provider_item: ProviderInventoryItem) -> bool:
     """Default from capability and prevent unsupported providers enabling flex."""
 
     if raw is None:
-        return provider_item.supports_flex_mode
+        return bool(provider_item.supports_flex_mode)
     if not isinstance(raw, bool):
         raise ValueError("flex_mode must be a boolean")
-    return raw and provider_item.supports_flex_mode
+    return raw and bool(provider_item.supports_flex_mode)
 
 
 def _next_epic_id(root: Path) -> str:

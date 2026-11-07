@@ -26,7 +26,9 @@ from cursor_sdk.types import (
 )
 
 
-def _authenticated_probe(monkeypatch: pytest.MonkeyPatch, *, installed: bool = True) -> None:
+def _authenticated_probe(
+    monkeypatch: pytest.MonkeyPatch, *, installed: bool = True
+) -> None:
     from cascade.agent.providers import ProviderStatus
 
     def fake_probe(provider_id: str) -> ProviderStatus:
@@ -37,7 +39,9 @@ def _authenticated_probe(monkeypatch: pytest.MonkeyPatch, *, installed: bool = T
             auth_source="env",
         )
 
-    monkeypatch.setattr("cascade.agent.discovery.availability.probe_provider", fake_probe)
+    monkeypatch.setattr(
+        "cascade.agent.discovery.availability.probe_provider", fake_probe
+    )
 
 
 def test_reasoning_from_cursor_parameters_default_only() -> None:
@@ -131,7 +135,7 @@ def test_cursor_adapter_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     snap = discover_cursor_models()
     assert snap.available is False
-    assert snap.failure == "api_error"
+    assert snap.failure == "discovery_unavailable"
     assert snap.message == "Boom"
     assert "secret" not in (snap.message or "")
 
@@ -204,14 +208,18 @@ def test_codex_adapter_filters_hidden(monkeypatch: pytest.MonkeyPatch) -> None:
     assert snap.models[0].supports_flex_mode is False
 
 
-def test_codex_adapter_reads_flex_capability_per_model(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_codex_adapter_reads_flex_capability_per_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _authenticated_probe(monkeypatch)
     monkeypatch.setattr(
         "cascade.agent.discovery.codex_adapter._run_codex_debug_models",
-        lambda: {"models": [
-            {"slug": "standard-only", "service_tiers": [{"id": "priority"}]},
-            {"slug": "flex-enabled", "service_tiers": [{"id": "flex"}]},
-        ]},
+        lambda: {
+            "models": [
+                {"slug": "standard-only", "service_tiers": [{"id": "priority"}]},
+                {"slug": "flex-enabled", "service_tiers": [{"id": "flex"}]},
+            ]
+        },
     )
     snap = discover_codex_models()
     assert snap.supports_flex_mode is True
@@ -232,7 +240,7 @@ def test_codex_adapter_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     snap = discover_codex_models()
     assert snap.available is False
-    assert snap.failure == "api_error"
+    assert snap.failure == "discovery_unavailable"
 
 
 def test_claude_adapter_paginates(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -15,10 +15,8 @@ from cascade.dependency_evaluation import evaluate_dependencies
 from cascade.agent.discovery.inventory import get_provider_inventory
 from cascade.agent.preflight import (
     ProviderCapabilityBatchPreflight,
-    RoleCapabilityPreflight,
-    batch_provider_capability_preflight,
-    preflight_provider_capability,
 )
+from cascade.agent.selection_preflight import evaluate_work_selection
 from cascade.epic.activation import _drop_stale_copies, activate_epic_on_worktree
 from cascade.planning_action_dependencies import evaluate_action_dependencies
 from cascade.watchdog.config import task_parallelism
@@ -487,45 +485,19 @@ def _provider_preflight_refusal(
 ) -> DispatchResult | None:
     """Check every role the dispatch will start before any durable work begins.
 
-    Older boards without a complete model selection retain their existing
-    dispatch behavior; their launcher already handles the missing selection.
-    Once a selection resolves, however, capability is a hard pre-dispatch
-    gate and the returned payload remains safe to expose to operators.
+    Resolution is fail closed: incomplete legacy documents are represented as
+    safe selection issues rather than silently skipping the gate.
     """
 
-    from cascade.agent.errors import ProviderConfigError
-    from cascade.watchdog.config import ConfigError
-    from cascade.watchdog.model_resolve import ModelConfigError, resolve_backend
-
-    roles_by_tier = {
-        "epic": ("epic_manager", "epic_architect"),
-        "feature": ("feature_lead", "feature_architect"),
-        "task": ("swe",),
-    }
-    roles = roles_by_tier.get(meta.tier)
-    if roles is None:
+    if meta.tier not in ("epic", "feature", "task"):
         return None
-    try:
-        backends = tuple(resolve_backend(role, meta, root=root) for role in roles)
-    except (ModelConfigError, ProviderConfigError, ConfigError):
-        return None
-
     inventory = get_provider_inventory()
-    checks = tuple(
-        RoleCapabilityPreflight(
-            role=role,
-            result=preflight_provider_capability(
-                provider=backend.provider,
-                model_id=backend.model.model_id,
-                tier=meta.tier,
-                inventory=inventory,
-                reasoning_level=backend.reasoning,
-                flex_mode=backend.flex_mode,
-            ),
-        )
-        for role, backend in zip(roles, backends, strict=True)
-    )
-    result = batch_provider_capability_preflight(checks)
+    result = evaluate_work_selection(
+        meta,
+        root=root,
+        inventory=inventory,
+        action="dispatch",
+    ).result
     if result.supported:
         return None
     reason = (

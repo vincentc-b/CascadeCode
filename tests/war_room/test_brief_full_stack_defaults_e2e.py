@@ -161,6 +161,7 @@ def test_full_stack_brief_defaults_discovery_create_reload_and_downstream(
     assert feature.meta.models == {
         "feature_lead": "gpt-feature-lead",
         "feature_architect": "gpt-feature-architect",
+        "swe": "gpt-swe",
     }
     assert feature.meta.flex_mode is True
 
