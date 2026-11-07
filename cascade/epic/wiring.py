@@ -22,6 +22,7 @@ def load_epic_tools() -> None:
     import cascade.epic.docs_tool as docs_tool_mod
     import cascade.epic.mint as mint_mod
     import cascade.epic.recovery as recovery_mod
+    import cascade.epic.review_recovery as review_recovery_mod
     import cascade.epic.stubs as stubs_mod
 
     from cascade.epic.registry import epic_tools
@@ -37,6 +38,7 @@ def load_epic_tools() -> None:
         "resolve_amendment",
         "reconcile_stacked_review_gap",
         "retry_integration_branch_update",
+        "publish_review_resolution",
     )
     if all(name in epic_tools() for name in expected):
         return
@@ -47,6 +49,7 @@ def load_epic_tools() -> None:
     importlib.reload(amendments_mod)
     importlib.reload(recovery_mod)
     importlib.reload(branch_recovery_mod)
+    importlib.reload(review_recovery_mod)
 
 
 def accept_human_chat(

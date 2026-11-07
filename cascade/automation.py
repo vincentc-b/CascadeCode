@@ -114,6 +114,9 @@ def poll_reviews(root: Path) -> None:
         from cascade.review import poll_feature_reviews
 
         poll_feature_reviews(root)
+        from cascade.review_health import reconcile_open_review_health
+
+        reconcile_open_review_health(root)
         from cascade.completion_reconcile import reconcile_completion_with_prompts
 
         reconcile_completion_with_prompts(root=root)

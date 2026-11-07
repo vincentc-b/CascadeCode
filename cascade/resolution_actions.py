@@ -551,6 +551,14 @@ def _live_sha(worktree: Path, ref: str) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def _is_ancestor(worktree: Path, ancestor: str, descendant: str) -> bool:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=worktree, capture_output=True, text=True, encoding="utf-8",
+    )
+    return result.returncode == 0
+
+
 def _dirty_paths(worktree: Path) -> tuple[str, ...]:
     result = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all"],
@@ -644,10 +652,17 @@ def _evaluate_admission(
             message="The resolved worktree cannot read both authorized review heads.",
             resume_action="Fetch or restore the authorized refs, then retry admission.", paths=(worktree,),
         )
-    if (source_sha, target_sha) != (context.observed_source_head, context.observed_target_head):
+    source_matches = source_sha == context.observed_source_head
+    source_is_resolved_ahead = bool(
+        source_sha
+        and context.observed_source_head != context.observed_target_head
+        and _is_ancestor(worktree, context.observed_source_head, source_sha)
+        and _is_ancestor(worktree, context.observed_target_head, source_sha)
+    )
+    if target_sha != context.observed_target_head or not (source_matches or source_is_resolved_ahead):
         return _admission_blocker(
             context, checkpoint="observed_heads", code="stale_observed_heads",
-            message="The live authorized refs no longer match the observed review heads.",
+            message="The live authorized refs no longer match the observed review heads or a clean local resolution containing both observed heads.",
             resume_action="Refresh review heads and submit a new resolution action.", paths=(worktree,),
         )
     dirty = _dirty_paths(worktree)

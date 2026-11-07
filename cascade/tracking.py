@@ -326,7 +326,7 @@ def merge_request_snapshot(
     if mr.forge == "github":
         args = [
             "gh", "pr", "view", mr.url, "--json",
-            "state,isDraft,comments,reviews,url,baseRefName,mergeCommit",
+            "state,isDraft,comments,reviews,url,baseRefName,mergeCommit,mergeable,mergeStateStatus",
         ]
     else:
         args = ["glab", "mr", "view", mr.url, "--output", "json"]
@@ -362,6 +362,8 @@ def merge_request_snapshot(
                     pass
         state = str(raw.get("state") or "").lower()
         target_branch = str(raw.get("baseRefName") or "").strip()
+        mergeable = str(raw.get("mergeable") or "").lower()
+        merge_state = str(raw.get("mergeStateStatus") or "").lower()
     else:
         comments = list(raw.get("notes") or raw.get("discussions") or [])
         state = str(raw.get("state") or "").lower()
@@ -370,7 +372,15 @@ def merge_request_snapshot(
         target_branch = str(
             raw.get("target_branch") or raw.get("targetBranch") or ""
         ).strip()
+        mergeable = str(raw.get("merge_status") or raw.get("mergeStatus") or "").lower()
+        merge_state = str(raw.get("detailed_merge_status") or raw.get("detailedMergeStatus") or "").lower()
     out: dict[str, object] = {"state": state, "comments": comments, "url": mr.url}
+    if mergeable in {"conflicting", "cannot_be_merged", "cannot_be_merged_recheck"} or merge_state in {"dirty", "conflict", "conflicts", "cannot_be_merged"}:
+        out["mergeability"] = "conflicting"
+    elif mergeable in {"mergeable", "can_be_merged"}:
+        out["mergeability"] = "mergeable"
+    else:
+        out["mergeability"] = "unknown"
     merge_commit = raw.get("mergeCommit") if mr.forge == "github" else raw.get("merge_commit_sha")
     merge_sha = merge_commit.get("oid") if isinstance(merge_commit, dict) else merge_commit
     if isinstance(merge_sha, str) and merge_sha:

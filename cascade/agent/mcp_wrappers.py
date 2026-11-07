@@ -283,6 +283,11 @@ def _feature_tool_names() -> set[str]:
 _BOSS_TOOL_NAMES = frozenset({"dispatch_feature", "dispatch_task", "get_boss_view"})
 
 _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "publish_review_resolution": {
+        "type": "object",
+        "properties": {"action_id": {"type": "string"}},
+        "required": ["action_id"],
+    },
     "retry_integration_branch_update": {
         "type": "object",
         "properties": {"action_id": {"type": "string"}},
