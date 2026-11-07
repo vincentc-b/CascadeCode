@@ -64,61 +64,12 @@ Run a periodic, configurable health audit across Cascade Tasks, Features, and Ep
 To be developed by the Epic Manager and Epic Architect after activation.
 
 ## Cross-module constraints
+
 Extend the existing supervisor health projection, direct-report health sweep, durable action recovery, orphan-delivery recovery, lifecycle locks, and reconciliation commands instead of adding a parallel scheduler or status database. Treat board metadata, durable actions, execution leases, registered worktrees, and forge review state as authoritative according to their existing ownership boundaries. Separate observation from mutation and require a locked recheck before every repair. Agent rights must be capability-based, incident-scoped, auditable, and no broader than the owning team’s safe recovery authority. Preserve user changes, dirty worktrees, accepted history, and human decisions. Run observation in a supervisor-owned lane independent of ordinary advancement/review polling, with bounded I/O and no global lock held across network, provider, test, or Git subprocesses. A recovery adapter is eligible only when its concrete operation and owner routing are registered and testable.
 
 ## Core dependencies
 
-To be identified during epic planning.
-
-## Feature breakdown
-
-The Epic Team will create and sequence feature plans here.
-
-## Open questions
-
-- Which implementation risks should be resolved before the first feature starts?
-
-## Decision log
-
-- 2026-10-22 · Human · Brief approved through merge request review.
-
-## Amendment log
-
-_(none)_
-
-## Macro-architecture
-
-To be developed by the Epic Manager and Epic Architect after activation.
-
-## Core dependencies
-
-Build on the existing supervisor health projection, direct-report health sweep, orphan-delivery recovery, durable action recovery, lifecycle locks, board reconciliation, War Room recovery surfaces, and `cascade.toml` automation configuration.
-
-## Feature breakdown
-
-The Epic Team will create and sequence feature plans here. Treat the task/feature/epic health model and capability boundary as shared foundations before adding repair adapters or UI controls.
-
-## Open questions
-
-- Which existing recovery capabilities are complete enough to expose directly to the auditor, and which require a fail-closed human escalation until repaired?
-- What bounded recent-completion window best catches incomplete rollups without rescanning the full completed board every pass?
-
-## Decision log
-
-- 2026-10-22 · Human · Brief approved through merge request review.
-- 2026-11-06 · Human amendment · Make the auditor a configurable health-and-recovery loop for Tasks, Features, and Epics; default to every 30 minutes, remain silent when healthy, and grant incident-scoped repair capabilities when unhealthy.
-
-## Amendment log
-
-- 2026-11-06 · Reframed periodic auditors from advisory repository analysis into authoritative lifecycle health detection and bounded recovery. Added the lost merge-queue entry from `task_038_002_002` as a required regression scenario.
-
-## Macro-architecture
-
-To be developed by the Epic Manager and Epic Architect after activation.
-
-## Core dependencies
-
-Build on the existing supervisor health projection, direct-report health sweep, orphan-delivery recovery, durable action recovery, lifecycle locks, board reconciliation, War Room recovery surfaces, and cascade.toml automation configuration. Consume the executable capabilities delivered by the stale Task delivery and parent-owned child recovery epics.
+Build on the existing supervisor health projection, direct-report health sweep, orphan-delivery recovery, durable action recovery, lifecycle locks, board reconciliation, War Room recovery surfaces, and `cascade.toml` automation configuration. Consume the executable capabilities delivered by the stale Task delivery and parent-owned child recovery epics.
 
 ## Feature breakdown
 
@@ -138,5 +89,5 @@ The Epic Team will create and sequence feature plans here. Treat the task/featur
 
 ## Amendment log
 
-- 2026-11-06 · Reframed periodic auditors from advisory repository analysis into authoritative lifecycle health detection and bounded recovery. Added the lost merge-queue entry from task_038_002_002 as a required regression scenario.
+- 2026-11-06 · Reframed periodic auditors from advisory repository analysis into authoritative lifecycle health detection and bounded recovery. Added the lost merge-queue entry from `task_038_002_002` as a required regression scenario.
 - 2026-11-07 · Strengthened the auditor after repeated manual recovery of Tasks 037_002_004, 037_002_005, 037_003_002, and 037_003_005. Added independent execution, retryable negative outcomes, concrete ownership/capability checks, all-tier no-progress detection, and real mutation acceptance tests. Removed duplicated generated brief sections.
