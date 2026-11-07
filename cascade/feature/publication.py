@@ -10,6 +10,7 @@ from pathlib import Path
 
 from cascade.board.errors import GitError, NotFound
 from cascade.board.store import list_board, read_doc
+from cascade.task.action_recovery import load_action
 from cascade.workspace.integration_worktree import (
     get_integration_worktree,
     integration_branch,
@@ -234,12 +235,61 @@ def _task_deliverable_commit(root: Path, task_id: str) -> str:
         body = _git(root, "show", "-s", "--format=%B", sha).stdout
         if _task_trailers(body) == [task_id]:
             candidates.append(sha)
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        receipt_commit = _validated_receipt_deliverable(root, task_id, branch)
+        if receipt_commit is not None:
+            return receipt_commit
     if len(candidates) != 1:
         raise GitError(
             f"{branch} must contain exactly one commit with Cascade-Task: {task_id}; "
             f"found {len(candidates)}"
         )
-    return candidates[0]
+    raise AssertionError("unreachable")
+
+
+def _validated_receipt_deliverable(root: Path, task_id: str, branch: str) -> str | None:
+    """Recover one legacy deliverable from durable final-validation evidence."""
+
+    action = load_action(f"{task_id}:queued_merge", root=locate_trunk(root))
+    if not isinstance(action, dict) or action.get("action_kind") != "queued_task_merge":
+        return None
+    metadata = action.get("metadata")
+    evidence = metadata.get("final_validation") if isinstance(metadata, dict) else None
+    if not isinstance(evidence, dict) or evidence.get("task_id") != task_id:
+        return None
+    validated_sha = evidence.get("deliverable_sha")
+    feature_base_sha = evidence.get("feature_base_sha")
+    if not isinstance(validated_sha, str) or not isinstance(feature_base_sha, str):
+        return None
+    if not _commit_exists(root, validated_sha) or not _commit_exists(root, feature_base_sha):
+        return None
+    if not _is_ancestor(root, validated_sha, branch) or not _is_ancestor(root, validated_sha, "HEAD"):
+        return None
+
+    parents = _git(root, "show", "-s", "--format=%P", validated_sha).stdout.split()
+    if len(parents) == 1:
+        candidate = validated_sha
+    elif len(parents) == 2 and parents.count(feature_base_sha) == 1:
+        candidate = parents[0] if parents[1] == feature_base_sha else parents[1]
+    else:
+        return None
+    candidate_parents = _git(root, "show", "-s", "--format=%P", candidate).stdout.split()
+    if len(candidate_parents) != 1 or not _is_ancestor(root, candidate, branch):
+        return None
+    paths = [
+        path
+        for path in _git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", candidate).stdout.splitlines()
+        if path
+    ]
+    if not paths or all(path.startswith(_LIFECYCLE_PREFIXES) for path in paths):
+        return None
+    return candidate
+
+
+def _commit_exists(root: Path, sha: str) -> bool:
+    return _git(root, "cat-file", "-e", f"{sha}^{{commit}}", check=False).returncode == 0
 
 
 def _build_publication_tail(
