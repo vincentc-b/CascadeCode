@@ -264,6 +264,115 @@ def test_admission_accepts_clean_owned_source_ahead_before_target_resolution(
     assert admission.action["handoff"]["observed_shas"] == [source_sha, target_sha]
 
 
+def test_review_health_admission_uses_fetched_remote_target_when_local_target_diverged(
+    tmp_path: Path,
+) -> None:
+    root, payload = _admission_ready_root(tmp_path)
+    remote = tmp_path / "origin.git"
+    subprocess.run(
+        ["git", "init", "--bare", str(remote)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(remote)],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "push", "origin", "feat/feat_035_001", "epic/epic_035"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        [
+            "git",
+            "fetch",
+            "--no-tags",
+            "origin",
+            "refs/heads/feat/feat_035_001:refs/remotes/origin/feat/feat_035_001",
+            "refs/heads/epic/epic_035:refs/remotes/origin/epic/epic_035",
+        ],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    remote_source = subprocess.run(
+        ["git", "rev-parse", "refs/remotes/origin/feat/feat_035_001"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    remote_target = subprocess.run(
+        ["git", "rev-parse", "refs/remotes/origin/epic/epic_035"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "checkout", "epic/epic_035"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", "local planning decision"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    local_target = subprocess.run(
+        ["git", "rev-parse", "epic/epic_035"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "checkout", "feat/feat_035_001"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload.update(
+        observed_source_head=remote_source,
+        observed_target_head=remote_target,
+    )
+    request = normalize_epic_031_recovery_request(
+        {
+            "review": {
+                "id": payload["review_id"],
+                "url": payload["review_url"],
+                "source_branch": payload["source_ref"],
+                "target_branch": payload["target_ref"],
+                "state": "open",
+            },
+            "source_sha": remote_source,
+            "target_sha": remote_target,
+            "actor": "supervisor:review_health",
+            "assignment": {"owner": "feature:feat_035_001"},
+        }
+    )
+
+    admission = admit_resolution_action(request, root=root)
+
+    assert local_target != remote_target
+    assert admission.action["status"] == "mutation_ready"
+    assert admission.action["handoff"]["observed_shas"] == [
+        remote_source,
+        remote_target,
+    ]
+
+
 def test_retryable_blocked_admission_is_rechecked_with_the_same_identity(
     tmp_path: Path,
 ) -> None:
