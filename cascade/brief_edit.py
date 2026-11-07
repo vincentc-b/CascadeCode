@@ -7,7 +7,10 @@ from pathlib import Path
 
 from cascade.agent.discovery.inventory import ProviderInventoryResult, get_provider_inventory
 from cascade.agent.providers import parse_provider_id
-from cascade.agent.selection_preflight import evaluate_work_selection
+from cascade.agent.selection_admission import (
+    SelectionAdmissionError,
+    admit_work_selection,
+)
 from cascade.board.parse import render_doc
 from cascade.board.types import WorkDoc
 from cascade.brief_stack import (
@@ -102,27 +105,18 @@ def validate_brief_edit(
         flex_mode=flex_mode,
         additional_markdown=additional,
     )
-    result = evaluate_work_selection(
-        render_brief_edit(edit),
-        root=root,
-        inventory=available,
-        action="brief_preview",
-    ).result
-    if result.supported:
+    try:
+        admit_work_selection(
+            render_brief_edit(edit),
+            root=root,
+            inventory=available,
+            action="brief_preview",
+        )
         return edit
-    proposed = render_brief_edit(edit).meta
-    unchanged_selection = (
-        proposed.provider == target.meta.provider
-        and dict(proposed.models or {}) == dict(target.meta.models or {})
-        and dict(proposed.reasoning or {}) == dict(target.meta.reasoning or {})
-        and proposed.flex_mode == target.meta.flex_mode
-    )
-    message = result.message or "selected configuration is not supported"
-    if unchanged_selection:
-        return replace(edit, warnings=(message,))
-    if result.reason_code == "reasoning_not_supported":
-        raise ValueError("reasoning override is not supported for the selected model")
-    raise ValueError(message)
+    except SelectionAdmissionError as exc:
+        if exc.result.reason_code == "reasoning_not_supported":
+            exc.args = ("reasoning override is not supported for the selected model",)
+        raise
 
 
 def render_brief_edit(edit: BriefEditRequest) -> WorkDoc:

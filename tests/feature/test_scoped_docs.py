@@ -8,6 +8,12 @@ from pathlib import Path
 import pytest
 
 import cascade.feature.docs_tool  # noqa: F401 — registers tools
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
 from cascade.board.store import pin_parent, read_doc, write_doc
 from cascade.feature.guard import FeatureToolDenied
 from cascade.feature.registry import feature_tools
@@ -161,6 +167,45 @@ def test_write_own_feature_only(board):
     assert sha is not None
     updated = read_doc("feat_001", root=root)
     assert "dec_test" in updated.body
+
+
+def test_write_rejects_late_invalid_role_override_without_saving(board, monkeypatch):
+    root = board["root"]
+    before = read_doc("feat_001", root=root)
+    proposed = deepcopy(before)
+    proposed.meta.provider = "codex"
+    proposed.meta.models = {
+        "feature_lead": "planning-model",
+        "feature_architect": "future-model",
+        "swe": "swe-model",
+    }
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=tuple(
+                    DiscoveredModel(id=value, display_name=value)
+                    for value in ("planning-model", "swe-model")
+                ),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, 1.0, 2.0, 1.0),
+    )
+    monkeypatch.setattr(
+        "cascade.agent.selection_admission.get_provider_inventory",
+        lambda: inventory,
+    )
+
+    with pytest.raises(FeatureToolDenied) as caught:
+        feature_write_doc(proposed, feature_id="feat_001", root=root)
+
+    assert caught.value.result.reason_code == "model_not_offered"
+    assert caught.value.result.affected_roles == ("feature_architect",)
+    after = read_doc("feat_001", root=root)
+    assert after.meta.provider == before.meta.provider
+    assert after.meta.models == before.meta.models
 
 
 def test_write_denied_epic_and_task(board):
