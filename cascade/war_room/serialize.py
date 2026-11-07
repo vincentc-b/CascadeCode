@@ -110,11 +110,16 @@ def work_meta_to_dict(
         value["plan_approved"] = meta.plan_approved_at is not None
         if root is not None:
             from cascade.review import epic_review_snapshot
+            from cascade.epic.dependency_status import project_dependency_status
 
             snapshot = epic_review_snapshot(meta.id, root=root)
             value["implementation_review"] = (
                 epic_review_snapshot_to_dict(snapshot) if snapshot is not None else None
             )
+            if meta.path.parent.name == "2_active":
+                value["dependency_status"] = project_dependency_status(
+                    meta.id, root=root
+                )
         if (
             root is not None
             and meta.plan_approved_at is None
