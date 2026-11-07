@@ -154,6 +154,33 @@ class SelectionIssue:
     reasoning_level: str | None = None
     reviewed_flex_mode: bool | None = None
     field_sources: Mapping[str, SelectionSource] | None = None
+    document_path: str | None = None
+    document_revision: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return contract_projection(self)
+
+
+@dataclass(frozen=True)
+class EffectiveSelectionBatch:
+    """Ordered effective selections (or safe issues) for one work item."""
+
+    work_id: str
+    tier: WorkTier
+    roles: tuple[SelectionOrIssue, ...]
+    selection_fingerprint: str
+
+    @property
+    def complete(self) -> bool:
+        return all(isinstance(item, EffectiveSelection) for item in self.roles)
+
+    @property
+    def selections(self) -> tuple[EffectiveSelection, ...]:
+        return tuple(item for item in self.roles if isinstance(item, EffectiveSelection))
+
+    @property
+    def issues(self) -> tuple[SelectionIssue, ...]:
+        return tuple(item for item in self.roles if isinstance(item, SelectionIssue))
 
     def to_dict(self) -> dict[str, object]:
         return contract_projection(self)
@@ -199,6 +226,7 @@ class CapabilityEvidence:
 SelectionOrIssue: TypeAlias = EffectiveSelection | SelectionIssue
 ContractDeclaration: TypeAlias = (
     EffectiveSelection
+    | EffectiveSelectionBatch
     | SelectionIssue
     | SelectionSource
     | ModelCapabilityEvidence
@@ -356,6 +384,16 @@ def contract_projection(value: ContractDeclaration) -> dict[str, object]:
             "reasoning_level": value.reasoning_level,
             "reviewed_flex_mode": value.reviewed_flex_mode,
             "field_sources": _sources_projection(value.field_sources),
+            "document_path": value.document_path,
+            "document_revision": value.document_revision,
+        }
+    if isinstance(value, EffectiveSelectionBatch):
+        return {
+            "work_id": value.work_id,
+            "tier": value.tier,
+            "roles": [contract_projection(item) for item in value.roles],
+            "selection_fingerprint": value.selection_fingerprint,
+            "complete": value.complete,
         }
     if isinstance(value, CapabilityEvidence):
         catalog = value.verified_model_catalog
