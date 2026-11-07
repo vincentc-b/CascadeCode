@@ -551,6 +551,27 @@ def _live_sha(worktree: Path, ref: str) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def _admission_target_sha(
+    request: ResolutionActionRequest,
+    worktree: Path,
+    target_ref: str,
+) -> str | None:
+    """Resolve the target identity observed by the admission caller.
+
+    Proactive review health fetches both forge heads into remote-tracking refs
+    immediately before constructing its request.  Its target evidence must be
+    compared with that fetched remote head, not with a possibly divergent
+    operator/product-trunk branch.  Explicit operator admission retains the
+    existing local-ref contract because it has no corresponding fetch
+    boundary.
+    """
+
+    if request.source == "epic_031_recovery":
+        branch = target_ref.removeprefix("refs/heads/")
+        return _live_sha(worktree, f"refs/remotes/origin/{branch}")
+    return _live_sha(worktree, target_ref)
+
+
 def _is_ancestor(worktree: Path, ancestor: str, descendant: str) -> bool:
     result = subprocess.run(
         ["git", "merge-base", "--is-ancestor", ancestor, descendant],
@@ -645,7 +666,9 @@ def _evaluate_admission(
             paths=(worktree,),
         )
     source_sha = _live_sha(worktree, context.authorized_refs[0])
-    target_sha = _live_sha(worktree, context.authorized_refs[1])
+    target_sha = _admission_target_sha(
+        request, worktree, context.authorized_refs[1]
+    )
     if source_sha is None or target_sha is None:
         return _admission_blocker(
             context, checkpoint="metadata", code="observed_head_metadata_missing",

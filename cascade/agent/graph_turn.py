@@ -338,6 +338,11 @@ async def run_planning_role_turn(
         reasoning_source=reasoning_source,
         role_skills=role_skills,
     )
+    live_epic_id = _dependency_epic_id(turn_kwargs, root=repo)
+    if live_epic_id is not None:
+        from cascade.epic.dependency_status import dependency_status_chat_summary
+
+        prompt = f"{prompt}\n\n{dependency_status_chat_summary(live_epic_id, root=repo)}"
     prompt = _append_planning_tool_directive(
         role,
         prompt,
@@ -369,6 +374,22 @@ async def run_planning_role_turn(
     if result.status == "error":
         return run_error_message(role, result)
     return result.text
+
+
+def _dependency_epic_id(turn_kwargs: dict[str, object], *, root: Path) -> str | None:
+    epic_id = turn_kwargs.get("epic_id")
+    if isinstance(epic_id, str) and epic_id:
+        return epic_id
+    feature_id = turn_kwargs.get("feature_id")
+    if not isinstance(feature_id, str) or not feature_id:
+        return None
+    try:
+        from cascade.workspace.doc_root import read_doc_resolved
+
+        doc = read_doc_resolved(feature_id, root=root)
+    except Exception:
+        return None
+    return doc.meta.parent if doc.meta.parent and doc.meta.parent.startswith("epic_") else None
 
 
 def _provider_selections(state: dict):

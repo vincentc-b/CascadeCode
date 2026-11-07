@@ -275,6 +275,8 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     signal.signal(signal.SIGINT, on_operator_stop)
 
     from cascade.war_room.server import serve
+    from cascade.war_room.human_auth import load_or_create_local_human_verifier
+    from cascade.epic.local_dependency_executor import LocalBoundedDependencyExecutor
     from cascade.watchdog.config import worker_drain_seconds
     from cascade.watchdog.loop import run_watchdog
 
@@ -340,10 +342,18 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     except OSError as exc:
         _fail(f"invalid inherited listen fd {handshake.listen_fd}: {exc}")
 
+    human_verifier = load_or_create_local_human_verifier(ws.path)
     server = serve(
         root=ws.path,
         listen_socket=listen_socket,
         draining=draining_event(),
+        human_identity_verifier=human_verifier,
+        dependency_executor=LocalBoundedDependencyExecutor(ws.path),
+    )
+    print(
+        "War Room authorized actions: "
+        f"http://127.0.0.1:{server.server_port}/#human_token={human_verifier.token}",
+        file=sys.stderr,
     )
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()

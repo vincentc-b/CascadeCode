@@ -26,7 +26,12 @@ from cascade.epic.checkpoint import checkpoint_path, thread_config
 from cascade.war_room.server import serve
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.workspace.kickoff import wait_for_background_kickoffs
-from tests.support import add_doc, make_repo, approve_board_feature
+from tests.support import (
+    add_doc,
+    approve_board_feature,
+    declare_no_dependencies,
+    make_repo,
+)
 
 
 def _free_port() -> int:
@@ -174,6 +179,7 @@ def test_load_epic_tools_reregisters_after_clear() -> None:
 def test_invoke_mint_feature_after_load(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    declare_no_dependencies("epic_001", root=root)
     load_epic_tools()
     feature_id = invoke_tool(
         "epic_001",

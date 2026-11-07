@@ -27,6 +27,7 @@ from cascade.war_room.server import WarRoomRequestHandler
 from tests.support import (
     SyntheticDependencyLifecycle,
     add_doc,
+    declare_no_dependencies,
     make_repo,
     sign_off_both_planning_roles,
 )
@@ -80,6 +81,7 @@ def test_sign_off_refuses_unmet_dependency_without_writing_sidecar(tmp_path: Pat
         status="active",
         depends_on=["epic_001"],
     )
+    declare_no_dependencies("epic_002", root=root)
     revision = canonical_plan_revision("epic_002", root=root)
     assert revision is not None
 
@@ -119,6 +121,7 @@ def test_readiness_and_sign_off_observe_dependency_completed_during_planning(
         depends_on=["epic_001"],
     )
     stale = merged_board(root)
+    declare_no_dependencies("epic_002", root=root)
     revision = canonical_plan_revision("epic_002", root=root)
     assert revision is not None
     move_doc("epic_001", "completed", root=root)
@@ -398,6 +401,7 @@ def test_mint_allows_incomplete_child_predecessor_when_owner_is_ready(
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(root, id="feat_001", title="First", tier="feature", parent="epic_001")
 
+    declare_no_dependencies("epic_001", root=root)
     minted = mint_feature(
         "Second",
         depends_on=["feat_001"],
@@ -417,6 +421,7 @@ def test_sequential_mint_bulk_approval_and_dependency_gated_dispatch(
     monkeypatch.setattr("cascade.watchdog.dispatch.has_git", lambda _root: False)
     monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args: None)
 
+    declare_no_dependencies("epic_001", root=root)
     first = mint_feature("First", epic_id="epic_001", root=root)
     second = mint_feature(
         "Second", depends_on=[first], epic_id="epic_001", root=root
@@ -477,6 +482,7 @@ def test_mint_refreshes_owner_after_dependency_completes(tmp_path: Path) -> None
         status="active",
         depends_on=["epic_001"],
     )
+    declare_no_dependencies("epic_002", root=root)
     stale = merged_board(root)
     move_doc("epic_001", "completed", root=root)
 
