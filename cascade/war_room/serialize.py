@@ -159,12 +159,22 @@ def _provider_recovery_view(
     from cascade.epic.lifecycle_gate import lifecycle_gate
     from cascade.provider_recovery_state import provider_recovery_state
 
+    blocker = provider_blocker(meta.id, root=root)
+    continuation = None
+    if blocker and isinstance(blocker.get("failed_action"), dict):
+        from cascade.provider_recovery_command import continue_without_flex_eligibility
+
+        continuation = continue_without_flex_eligibility(
+            meta.id, root=root
+        ).to_dict()
+
     recovery = provider_recovery_state(
-        provider_blocker(meta.id, root=root),
+        blocker,
         tier=meta.tier,
         status=meta.status,
         turn_stoppable=lifecycle_gate().turn_stoppable(meta.id),
         return_to_backlog=return_to_backlog,
+        continue_without_flex=continuation,
     )
     if recovery is None:
         return None

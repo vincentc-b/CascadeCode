@@ -17,7 +17,16 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable, Literal
 
-from cascade.agent.discovery.inventory import ProviderInventoryResult
+from cascade.agent.discovery.inventory import (
+    ProviderInventoryResult,
+    refresh_provider_inventory,
+)
+from cascade.agent.execution_preflight import provider_blocker
+from cascade.agent.flex_continuation import (
+    FlexContinuationEligibility,
+    evaluate_flex_continuation_eligibility,
+)
+from cascade.agent.selection_preflight import evaluate_work_selection
 from cascade.board.context import resolve_root
 from cascade.board.errors import BoardError, NotFound
 from cascade.workspace.doc_root import read_doc_resolved
@@ -30,7 +39,9 @@ from cascade.provider_recovery import (
 from cascade.watchdog.lock import process_lock
 from cascade.workspace.types import KickoffReason
 
-Actor = Literal["human", "agent", "system"]
+Actor = Literal[
+    "human", "agent", "system", "scheduler", "refresh", "automatic_retry"
+]
 Kickoff = Callable[[KickoffReason], None]
 
 
@@ -48,6 +59,88 @@ class ProviderRecoveryCommandResult:
     def to_dict(self) -> dict[str, object]:
         result = asdict(self)
         return {key: value for key, value in result.items() if value is not None}
+
+
+def continue_without_flex_eligibility(
+    work_id: str,
+    *,
+    root: Path | None = None,
+    inventory: ProviderInventoryResult | None = None,
+    lifecycle_eligible: bool = True,
+    approval_eligible: bool = True,
+) -> FlexContinuationEligibility:
+    """Compute a fresh action-bound projection without authorizing anything."""
+
+    repo = resolve_root(root)
+    blocker = provider_blocker(work_id, root=repo)
+    failed_action = blocker.get("failed_action") if blocker else None
+    failed_preflight = blocker.get("failed_preflight") if blocker else None
+    if not isinstance(failed_action, dict) or not isinstance(failed_preflight, dict):
+        return evaluate_flex_continuation_eligibility(
+            failed_action=failed_action if isinstance(failed_action, dict) else None,
+            failed_preflight=(
+                failed_preflight if isinstance(failed_preflight, dict) else None
+            ),
+            disabled_preflight=None,
+        )
+    preliminary = evaluate_flex_continuation_eligibility(
+        failed_action=failed_action,
+        failed_preflight=failed_preflight,
+        disabled_preflight=None,
+        lifecycle_eligible=lifecycle_eligible,
+        approval_eligible=approval_eligible,
+    )
+    if preliminary.reason_code != "inventory_not_fresh":
+        return preliminary
+    try:
+        doc = read_doc_resolved(work_id, root=repo)
+        current = evaluate_work_selection(
+            doc,
+            root=repo,
+            inventory=inventory or refresh_provider_inventory(),
+            action=str(failed_action.get("action_kind") or "continuation"),
+            disable_flex=True,
+        ).result
+    except (BoardError, OSError, ValueError):
+        current = None
+    return evaluate_flex_continuation_eligibility(
+        failed_action=failed_action,
+        failed_preflight=failed_preflight,
+        disabled_preflight=current,
+        lifecycle_eligible=lifecycle_eligible,
+        approval_eligible=approval_eligible,
+    )
+
+
+def continue_without_flex_eligibility_command(
+    work_id: str,
+    *,
+    actor: Actor = "system",
+    root: Path | None = None,
+    inventory: ProviderInventoryResult | None = None,
+    lifecycle_eligible: bool = True,
+    approval_eligible: bool = True,
+) -> FlexContinuationEligibility:
+    """Human-only command boundary used by the eventual authorization route.
+
+    This task remains read-only: a successful response says that a later
+    authorization command may proceed, not that a waiver has been created.
+    """
+
+    if actor != "human":
+        return FlexContinuationEligibility(
+            False,
+            "unauthorized",
+            "An explicit human authorization is required.",
+            work_id=work_id or None,
+        )
+    return continue_without_flex_eligibility(
+        work_id,
+        root=root,
+        inventory=inventory,
+        lifecycle_eligible=lifecycle_eligible,
+        approval_eligible=approval_eligible,
+    )
 
 
 def recover_active_item_provider_command(

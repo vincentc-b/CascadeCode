@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from cascade.agent.discovery.inventory import (
@@ -10,8 +11,10 @@ from cascade.agent.discovery.inventory import (
     ProviderInventoryItem,
     ProviderInventoryResult,
 )
-from cascade.agent.discovery.types import DiscoveredModel
+from cascade.agent.discovery.types import DiscoveredModel, ProviderCompatibilityEvidence
+from cascade.agent.execution_preflight import provider_blocker
 from cascade.epic.checkpoint import checkpoint_path
+from cascade.provider_recovery_command import continue_without_flex_eligibility_command
 from cascade.board.store import read_doc, write_doc
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task, read_events
 from cascade.workspace.integration_worktree import get_integration_worktree
@@ -43,6 +46,28 @@ def _unavailable_inventory() -> ProviderInventoryResult:
             ),
         ),
         freshness=InventoryFreshness(False, 1.0, 2.0, 1.0),
+    )
+
+
+def _flex_rejected_inventory() -> ProviderInventoryResult:
+    now = time.time()
+    return ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(
+                    DiscoveredModel(
+                        id="offered",
+                        display_name="Offered",
+                        supports_flex_mode=False,
+                    ),
+                ),
+                supports_flex_mode=False,
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, now, now + 300.0, 300.0),
     )
 
 
@@ -126,6 +151,45 @@ def test_failed_epic_preflight_creates_no_worktree_checkpoint_or_event(
     assert not checkpoint_path("epic_001", root=root).exists()
     events, _ = read_events("epic_001", 0, root=root)
     assert events == []
+
+
+def test_flex_failure_records_concrete_action_for_fresh_human_eligibility(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    for role in (
+        "epic_manager",
+        "epic_architect",
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    ):
+        _pin_model(root, "epic_001", role, "offered")
+    doc = read_doc("epic_001", root=root)
+    doc.meta.flex_mode = True
+    write_doc(doc, root=root)
+    inventory = _flex_rejected_inventory()
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory
+    )
+    monkeypatch.setattr(
+        "cascade.agent.selection_preflight.probe_provider_compatibility",
+        lambda _provider: ProviderCompatibilityEvidence(True, True, True),
+    )
+
+    refusal = activate_epic("epic_001", "human", root=root)
+    blocker = provider_blocker("epic_001", root=root)
+    eligibility = continue_without_flex_eligibility_command(
+        "epic_001", actor="human", root=root, inventory=inventory
+    )
+
+    assert refusal.reason == "provider_preflight_blocked"
+    assert blocker is not None
+    assert blocker["failed_action"]["action_kind"] == "epic_activation"
+    assert blocker["failed_preflight"]["reason_code"] == "flex_mode_not_supported"
+    assert eligibility.eligible
+    assert eligibility.action_id == blocker["failed_action"]["action_id"]
 
 
 def test_activation_rejects_stale_owning_document_before_side_effects(

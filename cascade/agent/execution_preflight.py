@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +19,11 @@ from cascade.agent.preflight import (
     ProviderCapabilityPreflight,
 )
 from cascade.agent.capability_contract import role_scope
+from cascade.agent.flex_continuation_contract import (
+    ActionKind,
+    OriginalActionIdentity,
+    contract_projection as continuation_contract_projection,
+)
 from cascade.agent.selection_preflight import RuntimeSelection, evaluate_work_selection
 from cascade.board.context import resolve_root
 from cascade.board.store import read_doc
@@ -82,6 +88,7 @@ def upsert_provider_blocker(
     tier: str,
     result: ProviderCapabilityBatchPreflight,
     root: Path,
+    failed_action: OriginalActionIdentity | None = None,
 ) -> dict[str, object]:
     """Refresh one complete safe blocker per work ID instead of appending."""
 
@@ -116,6 +123,9 @@ def upsert_provider_blocker(
         "last_attempt": now,
         "active": True,
     }
+    if failed_action is not None:
+        row["failed_action"] = continuation_contract_projection(failed_action)
+        row["failed_preflight"] = result.to_dict()
     with process_lock:
         records = _read(repo)
         previous = records.get(work_id)
@@ -128,6 +138,53 @@ def upsert_provider_blocker(
         records[work_id] = row
         _write(repo, records)
     return dict(row)
+
+
+def record_failed_provider_action(
+    work_id: str,
+    *,
+    tier: str,
+    action_kind: ActionKind,
+    result: ProviderCapabilityBatchPreflight,
+    root: Path,
+    trigger_id: str | None = None,
+) -> dict[str, object]:
+    """Persist one concrete canonical action failure for read-only recovery.
+
+    A new canonical attempt receives a new opaque identity even when it targets
+    the same work item.  The mutable per-work blocker remains only the current
+    presentation projection.
+    """
+
+    revisions = {
+        check.result.document_revision
+        for check in result.checks
+        if check.result.document_revision is not None
+    }
+    if (
+        result.action != action_kind
+        or result.work_id != work_id
+        or result.selection_fingerprint is None
+        or len(revisions) != 1
+        or tier not in ("epic", "feature", "task")
+    ):
+        raise ValueError("failed action requires one complete reviewed selection")
+    identity = OriginalActionIdentity(
+        action_id=uuid.uuid4().hex,
+        action_kind=action_kind,
+        work_id=work_id,
+        target_tier=tier,  # type: ignore[arg-type]
+        document_revision=next(iter(revisions)),
+        selection_fingerprint=result.selection_fingerprint,
+        trigger_id=trigger_id,
+    )
+    return upsert_provider_blocker(
+        work_id,
+        tier=tier,
+        result=result,
+        root=root,
+        failed_action=identity,
+    )
 
 
 def clear_provider_blocker(

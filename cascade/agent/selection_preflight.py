@@ -52,6 +52,7 @@ def evaluate_work_selection(
     inventory: ProviderInventoryResult,
     action: str,
     runtime_selections: Iterable[RuntimeSelection] = (),
+    disable_flex: bool = False,
 ) -> SelectionPreflight:
     """Resolve once and feed the shared result contract at every boundary.
 
@@ -70,6 +71,16 @@ def evaluate_work_selection(
         root=Path(root).resolve(),
         provider_reasoning_defaults=reasoning_defaults,
     )
+    if disable_flex:
+        selections = replace(
+            selections,
+            roles=tuple(
+                replace(item, effective_flex_mode=False)
+                if isinstance(item, EffectiveSelection)
+                else item
+                for item in selections.roles
+            ),
+        )
     expected = {item.role: item for item in runtime_selections}
     if expected:
         selections = _mark_runtime_drift(selections, expected)
