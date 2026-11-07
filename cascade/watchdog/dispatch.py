@@ -543,6 +543,11 @@ def _provider_preflight_refusal(
                 action_kind=action_kind,
                 result=result,
                 root=root,
+                original_actor=by,
+                replay_arguments={
+                    "by": by,
+                    **({"feature_id": meta.parent} if meta.parent else {}),
+                },
             )
         except ValueError:
             # An incomplete/stale selection is still refused, but cannot mint
@@ -562,7 +567,7 @@ def _failed_action_kind(meta: WorkMeta, by: str) -> ActionKind | None:
     if meta.tier == "epic":
         return "epic_activation"
     if meta.tier == "feature":
-        return "feature_dispatch"
+        return "approval_dispatch" if by == "boss" else "feature_dispatch"
     if meta.tier == "task" and meta.status == "blocked":
         return "task_retry"
     if meta.tier == "task" and by == "boss":

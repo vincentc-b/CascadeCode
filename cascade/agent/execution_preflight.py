@@ -148,6 +148,9 @@ def record_failed_provider_action(
     result: ProviderCapabilityBatchPreflight,
     root: Path,
     trigger_id: str | None = None,
+    original_actor: str = "system",
+    document_path: str | None = None,
+    replay_arguments: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Persist one concrete canonical action failure for read-only recovery.
 
@@ -177,6 +180,17 @@ def record_failed_provider_action(
         document_revision=next(iter(revisions)),
         selection_fingerprint=result.selection_fingerprint,
         trigger_id=trigger_id,
+    )
+    from cascade.provider_recovery_receipt import persist_failed_action_attempt
+
+    primary = result.checks[0].result
+    persist_failed_action_attempt(
+        identity,
+        failed_preflight=result.to_dict(),
+        original_actor=original_actor,
+        document_path=document_path or primary.document_path or "unavailable",
+        replay_arguments=replay_arguments or {},
+        root=root,
     )
     return upsert_provider_blocker(
         work_id,
