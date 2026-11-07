@@ -20,7 +20,14 @@ from cascade.epic.planning_signoffs import (
     sidecar_path,
     valid_sign_offs_for_revision,
 )
-from tests.support import EPIC_BODY, add_doc, approve_epic_plan_when_ready, commit_board, make_repo
+from tests.support import (
+    EPIC_BODY,
+    add_doc,
+    approve_epic_plan_when_ready,
+    commit_board,
+    declare_no_dependencies,
+    make_repo,
+)
 
 
 @pytest.fixture
@@ -36,6 +43,7 @@ def board(tmp_path: Path) -> Path:
         parent="epic_001",
     )
     commit_board(root, "initial")
+    declare_no_dependencies("epic_001", root=root)
     return root
 
 
@@ -51,7 +59,7 @@ def test_hydration_writes_empty_sidecar_for_active_unapproved(board: Path) -> No
     path = sidecar_path("epic_001", root=board)
     assert path.is_file()
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["version"] == 1
+    assert payload["version"] == 2
     assert payload["sign_offs"] == []
     assert current_valid_sign_offs("epic_001", root=board) == {}
 
@@ -61,12 +69,18 @@ def test_record_and_idempotent_sign_off(board: Path) -> None:
     assert revision is not None
     when = datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc)
 
-    assert record_plan_sign_off(
-        "epic_001", "epic_manager", revision, root=board, signed_at=when
-    ) is True
-    assert record_plan_sign_off(
-        "epic_001", "epic_manager", revision, root=board, signed_at=when
-    ) is False
+    assert (
+        record_plan_sign_off(
+            "epic_001", "epic_manager", revision, root=board, signed_at=when
+        )
+        is True
+    )
+    assert (
+        record_plan_sign_off(
+            "epic_001", "epic_manager", revision, root=board, signed_at=when
+        )
+        is False
+    )
 
     stored = read_plan_sign_offs("epic_001", root=board)
     assert len(stored) == 1
@@ -81,8 +95,12 @@ def test_record_and_idempotent_sign_off(board: Path) -> None:
 def test_both_roles_same_revision(board: Path) -> None:
     revision = canonical_plan_revision("epic_001", root=board)
     assert revision is not None
-    assert record_plan_sign_off("epic_001", "epic_manager", revision, root=board) is True
-    assert record_plan_sign_off("epic_001", "epic_architect", revision, root=board) is True
+    assert (
+        record_plan_sign_off("epic_001", "epic_manager", revision, root=board) is True
+    )
+    assert (
+        record_plan_sign_off("epic_001", "epic_architect", revision, root=board) is True
+    )
     valid = current_valid_sign_offs("epic_001", root=board)
     assert set(valid) == {"epic_manager", "epic_architect"}
 
@@ -128,8 +146,13 @@ def test_new_revision_adds_role_sign_off_without_dropping_old(board: Path) -> No
     assert revision_b is not None
     assert revision_b != revision_a
 
-    assert record_plan_sign_off("epic_001", "epic_manager", revision_b, root=board) is True
-    roles_revisions = {(row.role, row.plan_revision) for row in read_plan_sign_offs("epic_001", root=board)}
+    assert (
+        record_plan_sign_off("epic_001", "epic_manager", revision_b, root=board) is True
+    )
+    roles_revisions = {
+        (row.role, row.plan_revision)
+        for row in read_plan_sign_offs("epic_001", root=board)
+    }
     assert ("epic_manager", revision_a) in roles_revisions
     assert ("epic_manager", revision_b) in roles_revisions
 

@@ -30,6 +30,7 @@ class EpicPlanReadiness:
     sign_offs: dict[PlanningRole, dict[str, object]]
     can_approve_plan: bool
     approve_disabled_reason: str | None
+    dependency_blockers: tuple[dict[str, object], ...] = ()
 
 
 def compute_epic_plan_readiness(
@@ -60,6 +61,11 @@ def compute_epic_plan_readiness(
     sign_offs = {role: row.to_dict() for role, row in valid.items()}
     missing_roles = _missing_roles(valid)
 
+    from cascade.epic.dependency_evidence import compute_dependency_readiness
+
+    dependency_readiness = compute_dependency_readiness(epic_id, root=root)
+    dependency_blockers = tuple(row.to_dict() for row in dependency_readiness.blockers)
+
     if open_questions:
         return EpicPlanReadiness(
             status="planning",
@@ -67,6 +73,7 @@ def compute_epic_plan_readiness(
             sign_offs=sign_offs,
             can_approve_plan=False,
             approve_disabled_reason="unresolved_open_questions",
+            dependency_blockers=dependency_blockers,
         )
 
     if revision is None:
@@ -76,6 +83,17 @@ def compute_epic_plan_readiness(
             sign_offs=sign_offs,
             can_approve_plan=False,
             approve_disabled_reason="canonical_revision_unavailable",
+            dependency_blockers=dependency_blockers,
+        )
+
+    if dependency_blockers:
+        return EpicPlanReadiness(
+            status="planning",
+            plan_revision=revision,
+            sign_offs=sign_offs,
+            can_approve_plan=False,
+            approve_disabled_reason="dependencies_not_ready",
+            dependency_blockers=dependency_blockers,
         )
 
     if missing_roles:
@@ -86,6 +104,7 @@ def compute_epic_plan_readiness(
             sign_offs=sign_offs,
             can_approve_plan=False,
             approve_disabled_reason=reason,
+            dependency_blockers=dependency_blockers,
         )
 
     return EpicPlanReadiness(
@@ -94,6 +113,7 @@ def compute_epic_plan_readiness(
         sign_offs=sign_offs,
         can_approve_plan=True,
         approve_disabled_reason=None,
+        dependency_blockers=(),
     )
 
 
@@ -123,6 +143,7 @@ def epic_plan_readiness_to_dict(readiness: EpicPlanReadiness) -> dict[str, objec
         "sign_offs": dict(readiness.sign_offs),
         "can_approve_plan": readiness.can_approve_plan,
         "approve_disabled_reason": readiness.approve_disabled_reason,
+        "dependency_blockers": list(readiness.dependency_blockers),
     }
 
 
