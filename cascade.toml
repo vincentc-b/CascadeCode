@@ -23,5 +23,15 @@ epic = "claude-opus-5-5"       # epic_manager, epic_architect
 feature = "claude-sonnet-5-5"  # feature_lead, feature_architect
 task = "composer-2.5"          # swe
 
+[providers.cursor.launch]
+# Provider sandbox bypass does not grant lifecycle or dependency-install authority.
+permissions = "yolo"
+
+[providers.claude.launch]
+permissions = "yolo"
+
 [providers.codex]
 task = "gpt-5.6-sol"            # swe for Codex-backed work
+
+[providers.codex.launch]
+permissions = "yolo"
