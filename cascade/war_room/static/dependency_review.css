@@ -1,0 +1,157 @@
+.dependency-review-host,
+.dependency-review-panel {
+  margin-top: 0.75rem;
+}
+
+.dependency-review-panel {
+  padding: 0.6rem;
+  border: 1px solid var(--border, var(--plan-border, #888));
+  border-radius: 6px;
+  background: color-mix(in srgb, Canvas 94%, CanvasText 6%);
+  color: inherit;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.dependency-review-status-dependency_blocked,
+.dependency-review-status-awaiting_authorization,
+.dependency-review-status-blocked {
+  border-color: #b45309;
+}
+
+.dependency-review-status-ready {
+  border-color: #15803d;
+}
+
+.dependency-review-heading,
+.dependency-review-entry-heading,
+.dependency-review-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.dependency-review-heading {
+  justify-content: space-between;
+}
+
+.dependency-review-title,
+.dependency-review-subheading {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.dependency-review-badge {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.dependency-review-approval-current,
+.dependency-review-ready {
+  color: #15803d;
+}
+
+.dependency-review-approval-missing,
+.dependency-review-approval-stale,
+.dependency-review-warning,
+.dependency-review-feedback-error {
+  color: #b45309;
+}
+
+.dependency-review-feedback {
+  margin: 0.45rem 0;
+  font-weight: 600;
+}
+
+.dependency-review-bootstrap,
+.dependency-review-entry {
+  margin-top: 0.55rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border, var(--plan-border, #888));
+  border-radius: 5px;
+}
+
+.dependency-review-entry-ready {
+  border-color: #15803d;
+}
+
+.dependency-review-fields {
+  display: grid;
+  grid-template-columns: minmax(8.5rem, 0.35fr) minmax(0, 1fr);
+  gap: 0.2rem 0.55rem;
+  margin: 0.45rem 0;
+}
+
+.dependency-review-field {
+  display: contents;
+}
+
+.dependency-review-field-label {
+  font-weight: 700;
+}
+
+.dependency-review-field-value,
+.dependency-review-fields dd {
+  margin: 0;
+}
+
+.dependency-review-code,
+.dependency-review-output {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.dependency-review-output {
+  max-height: 12rem;
+  margin: 0;
+  padding: 0.35rem;
+  overflow: auto;
+  border-radius: 4px;
+  background: color-mix(in srgb, Canvas 88%, CanvasText 12%);
+  color: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dependency-review-detail-summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.dependency-review-select {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.dependency-review-controls {
+  margin-top: 0.6rem;
+}
+
+.dependency-review-action {
+  padding: 0.3rem 0.55rem;
+  cursor: pointer;
+}
+
+.dependency-review-approval-reference,
+.dependency-review-warning,
+.dependency-review-planning,
+.dependency-review-ready {
+  margin: 0.4rem 0 0;
+}
+
+@media (max-width: 42rem) {
+  .dependency-review-fields {
+    display: block;
+  }
+
+  .dependency-review-field {
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+}

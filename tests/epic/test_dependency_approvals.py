@@ -142,6 +142,40 @@ def test_batch_persists_independent_human_approvals_and_reloads(
     )
 
 
+def test_reviewed_batch_rejects_one_stale_binding_without_writing_any_approval(
+    board: Path, target: EnvironmentIdentity
+) -> None:
+    python = dependency(target)
+    node = replace(
+        dependency(target, "dep_node"),
+        version="22.11.0",
+        source="https://node.example/v22.11.0",
+        digest="sha256:def456",
+        operation="install Node 22.11.0 into .tools/node",
+        install_scope="epic worktree at .tools/node",
+        cleanup_plan="remove .tools/node",
+    )
+    write_entries(board, target, (python, node), expected_revision=0)
+    reviewed = {
+        row.dependency_id: InstallationBinding.from_entry(row)
+        for row in (python, node)
+    }
+    changed_python = replace(python, digest="sha256:changed")
+    write_entries(board, target, (changed_python, node), expected_revision=1)
+
+    with pytest.raises(DependencyApprovalError, match="binding is stale"):
+        approve_dependency_installations(
+            "epic_001",
+            ("dep_python", "dep_node"),
+            approver=AuthenticatedHuman("human-42@example.test"),
+            root=board,
+            expected_manifest_revision=2,
+            expected_bindings=reviewed,
+        )
+
+    assert read_installation_approvals("epic_001", root=board) == ()
+
+
 @pytest.mark.parametrize(
     ("field", "changed"),
     (

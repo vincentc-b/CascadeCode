@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cascade.epic.dependency_approvals import (
+    AuthenticatedHuman,
     current_installation_approval,
     read_installation_approvals,
 )
@@ -94,6 +95,7 @@ def resume_dependency_bootstrap(
     gate: LifecycleGate | None = None,
     quiesce_timeout: float = 0.0,
     kickoff: Callable[[KickoffReason], None] | None = None,
+    requester: AuthenticatedHuman | None = None,
 ) -> DependencyResumeResult:
     """Revalidate one human ping without treating it as authority or evidence.
 
@@ -118,6 +120,9 @@ def resume_dependency_bootstrap(
             "approval references must map dependency IDs to approval IDs"
         )
 
+    if requester is not None and not isinstance(requester, AuthenticatedHuman):
+        raise DependencyResumeError("requester must be an authenticated human")
+    requester_id = requester.subject if requester is not None else "human"
     action_id = _action_id(epic_id, request_id)
     action = create_or_load_action(
         action_id,
@@ -132,7 +137,7 @@ def resume_dependency_bootstrap(
         },
         lifecycle_state="dependency_revalidation_requested",
         owning_team={"kind": "epic_team", "work_id": epic_id},
-        provenance={"actor": "human", "request_id": request_id},
+        provenance={"actor": requester_id, "request_id": request_id},
     )
     before_attempts = int(action.get("attempt_count") or 0)
     planning_resumed = False
@@ -168,7 +173,7 @@ def resume_dependency_bootstrap(
             KickoffReason(
                 kind="human_message",
                 work_id=epic_id,
-                by="human",
+                by=requester_id,
                 root=root,
                 message={
                     "role": "human",

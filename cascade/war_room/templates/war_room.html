@@ -3,6 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <script>
+      (function () {
+        var marker = "#human_token=";
+        if (window.location.hash.indexOf(marker) !== 0) return;
+        var token = decodeURIComponent(window.location.hash.slice(marker.length));
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        fetch("/api/local_human_session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: token })
+        }).then(function (response) {
+          if (response.ok) window.location.reload();
+        });
+      }());
+    </script>
+    <script>
       setTimeout(function () {
         if (document.readyState === "complete") return;
         if (document.getElementById("load-deadline-banner")) return;
@@ -28,6 +43,7 @@
       media="print"
       onload="this.media='all'; this.onload=null;"
     />
+    <link rel="stylesheet" href="/static/dependency_review.css?v=20261107" />
     <noscript><link rel="stylesheet" href="/static/war_room.css" /></noscript>
   </head>
   <body>
@@ -392,9 +408,10 @@
     <script src="/static/branch_sync_ui.js"></script>
     <script src="/static/epic_close_review_ui.js"></script>
     <script src="/static/epic_plan_readiness_ui.js"></script>
+    <script src="/static/dependency_review_ui.js?v=20261107"></script>
     <script src="/static/brief_defaults_ui.js?v=20261025"></script>
     <script src="/static/provider_recovery_dialog_ui.js?v=20261103"></script>
     <script src="/static/panel_resizing.js?v=20261105"></script>
-    <script src="/static/war_room.js?v=20261025"></script>
+    <script src="/static/war_room.js?v=20261107-dependencies"></script>
   </body>
 </html>
