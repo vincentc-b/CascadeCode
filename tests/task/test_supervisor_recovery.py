@@ -167,7 +167,7 @@ def test_validated_commit_is_requeued_once_and_restart_replays_ledger(
     assert ledger["recoveries"]["delivery-validated"]["decision"] == "requeue_commit"
 
 
-def test_resume_attaches_existing_dirty_workspace_and_queues_once(
+def test_resume_uses_authoritative_feature_id_not_pinned_parent_revision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _board(tmp_path)
@@ -177,7 +177,7 @@ def test_resume_attaches_existing_dirty_workspace_and_queues_once(
     )
     monkeypatch.setattr(
         "cascade.task.worktree.attach_active_task_run",
-        lambda *args, **kwargs: SimpleNamespace(parent_rev="feat-pin"),
+        lambda *args, **kwargs: SimpleNamespace(parent_rev="parent-commit-sha"),
     )
     monkeypatch.setattr(
         "cascade.task.execution.mark_stall_recovery_queued",
@@ -195,7 +195,7 @@ def test_resume_attaches_existing_dirty_workspace_and_queues_once(
     assert result.decision == "resume_workspace"
     assert result.mutated
     assert result.attempt == 7
-    assert kickoff == [("task_001", root, "feat-pin")]
+    assert kickoff == [("task_001", root, "feat_001")]
 
 
 def test_completed_delivery_and_unsafe_workspace_never_attach_or_mutate(
@@ -243,7 +243,7 @@ def test_concurrent_resume_requests_share_one_mutation_and_kickoff(
     def attach(*args: object, **kwargs: object) -> SimpleNamespace:
         nonlocal attachments
         attachments += 1
-        return SimpleNamespace(parent_rev="feat-pin")
+        return SimpleNamespace(parent_rev="parent-commit-sha")
 
     def mark_queued(*args: object, **kwargs: object) -> dict[str, int]:
         nonlocal queue_writes
@@ -274,4 +274,4 @@ def test_concurrent_resume_requests_share_one_mutation_and_kickoff(
 
     assert all(result == results[0] for result in results)
     assert (attachments, queue_writes) == (1, 1)
-    assert kickoffs == [("task_001", root, "feat-pin")]
+    assert kickoffs == [("task_001", root, "feat_001")]

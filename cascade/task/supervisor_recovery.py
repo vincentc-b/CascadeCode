@@ -97,7 +97,13 @@ def recover_orphan_delivery(
                         pinned_inputs=_pinned_inputs(task_id, task.meta.parent, repo),
                     )
                 )
-                result, resume = _apply_incident(incident, incident_id, attempt, repo)
+                result, resume = _apply_incident(
+                    incident,
+                    incident_id,
+                    attempt,
+                    repo,
+                    feature_id=task.meta.parent,
+                )
 
         ledger[incident_id] = result.as_dict()
         _write_ledger(repo, ledger)
@@ -163,6 +169,8 @@ def _apply_incident(
     incident_id: str,
     attempt: int | None,
     repo: Path,
+    *,
+    feature_id: str | None,
 ) -> tuple[RecoveryResult, tuple[str, str | None] | None]:
     if incident.outcome == "live_owner":
         return _result(incident_id, "no_op_live_owner", incident.reason, attempt), None
@@ -209,7 +217,7 @@ def _apply_incident(
                 _optional_int(row.get("attempt")),
                 mutated=True,
             ),
-            (incident.task_id, run.parent_rev),
+            (incident.task_id, feature_id),
         )
     return _result(
         incident_id, "unsafe", "unknown_recovery_outcome", attempt, incident
