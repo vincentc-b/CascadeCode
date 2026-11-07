@@ -131,6 +131,9 @@ class EffectiveSelection:
     document_path: str
     document_revision: str
     selection_fingerprint: str
+    flex_waiver_id: str | None = None
+    flex_waiver_receipt_id: str | None = None
+    flex_waiver_source_work_id: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return contract_projection(self)

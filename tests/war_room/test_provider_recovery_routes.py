@@ -23,7 +23,10 @@ from cascade.board.store import list_board, move_doc, read_doc, write_doc
 from cascade.epic.lifecycle_gate import LifecycleGate
 from cascade.task.checkpoint import thread_config
 from cascade.task.graph import ensure_task_graph
-from cascade.provider_recovery_command import ProviderRecoveryCommandResult
+from cascade.provider_recovery_command import (
+    FlexContinuationCommandResult,
+    ProviderRecoveryCommandResult,
+)
 from cascade.war_room.provider_routes import try_handle_provider_post
 from cascade.war_room.serialize import board_view_from_index
 from cascade.workspace.integration_worktree import ensure_integration_worktree
@@ -144,6 +147,81 @@ def test_change_is_human_authorized_and_keeps_blocker_until_fresh_start(
     )["blockers"]
     assert blockers[work_id]["active"] is True
     assert blockers["task_002"]["active"] is True
+
+
+def test_continue_route_supplies_human_principal_and_returns_durable_receipt(
+    tmp_path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    observed = {}
+
+    def continue_command(item, **kwargs):
+        observed.update(item=item, **kwargs)
+        return FlexContinuationCommandResult(
+            True,
+            item,
+            action_id="attempt-7",
+            receipt_id="receipt-7",
+            waiver_id="waiver-7",
+            state="completed",
+            reason="Continuation completed.",
+        )
+
+    monkeypatch.setattr(
+        "cascade.war_room.provider_routes.continue_without_flex_command",
+        continue_command,
+    )
+    handler = _Handler(
+        root, "/api/provider-recovery/feat_001/continue-without-flex"
+    )
+
+    assert try_handle_provider_post(
+        handler,
+        {
+            "failed_action_id": "attempt-7",
+            "expected_document_revision": "revision-7",
+            "expected_selection_fingerprint": "fingerprint-7",
+        },
+    )
+
+    assert handler.responses == [
+        (
+            200,
+            {
+                "ok": True,
+                "work_id": "feat_001",
+                "action_id": "attempt-7",
+                "receipt_id": "receipt-7",
+                "waiver_id": "waiver-7",
+                "state": "completed",
+                "reason": "Continuation completed.",
+                "idempotent": False,
+            },
+        )
+    ]
+    assert observed["actor"] == "human"
+    assert observed["principal"].authorized
+    assert observed["principal"].subject == "human:war-room"
+    assert observed["failed_action_id"] == "attempt-7"
+
+
+def test_continue_route_rejects_browser_supplied_identity(tmp_path) -> None:
+    handler = _Handler(
+        make_repo(tmp_path, git=False),
+        "/api/provider-recovery/feat_001/continue-without-flex",
+    )
+
+    assert try_handle_provider_post(
+        handler,
+        {
+            "failed_action_id": "attempt-7",
+            "expected_document_revision": "revision-7",
+            "expected_selection_fingerprint": "fingerprint-7",
+            "principal": {"subject": "human:forged"},
+        },
+    )
+
+    assert handler.responses[0][0] == 400
 
 
 def test_change_route_uses_active_integration_copy_over_trunk_backlog(tmp_path, monkeypatch):

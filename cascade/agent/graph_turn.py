@@ -132,6 +132,15 @@ def flex_mode_for_role(state: dict, role: RoleId) -> bool | None:
     return value if isinstance(value, bool) else None
 
 
+def flex_waiver_for_role(state: dict, role: RoleId) -> tuple[str | None, str | None]:
+    waiver_id = (state.get("flex_waiver_ids") or {}).get(role)
+    receipt_id = (state.get("flex_waiver_receipt_ids") or {}).get(role)
+    return (
+        waiver_id if isinstance(waiver_id, str) else None,
+        receipt_id if isinstance(receipt_id, str) else None,
+    )
+
+
 def format_role_skill_paths(playbooks: list[dict]) -> str:
     paths = [str(entry.get("path", "")) for entry in playbooks]
     return "Role skill paths: " + ", ".join(paths)
@@ -270,6 +279,7 @@ async def run_planning_role_turn(
         # The current role may carry a one-turn model override.  Compare the
         # actual launch arguments with the authorized document, rather than
         # checking the older pinned values from the graph checkpoint.
+        waiver_id, waiver_receipt_id = flex_waiver_for_role(state, role)
         selections = (
             *(
                 selection
@@ -282,6 +292,8 @@ async def run_planning_role_turn(
                 model_id or "",
                 reasoning_level=reasoning_for_role(state, role)[0],
                 flex_mode=flex_mode_for_role(state, role),
+                flex_waiver_id=waiver_id,
+                flex_waiver_receipt_id=waiver_receipt_id,
             ),
         )
         # Check every pinned role on this work item, not just the role whose
@@ -368,6 +380,8 @@ def _provider_selections(state: dict):
     models = state.get("model_ids") or {}
     reasoning = state.get("reasoning_ids") or {}
     flex = state.get("flex_modes") or {}
+    waiver_ids = state.get("flex_waiver_ids") or {}
+    waiver_receipts = state.get("flex_waiver_receipt_ids") or {}
     selections: list[ProviderSelection] = []
     for role in sorted(set(providers) & set(models)):
         provider = str(providers[role]).strip()
@@ -380,6 +394,8 @@ def _provider_selections(state: dict):
                     model_id=model_id,
                     reasoning_level=str(reasoning[role]).strip() if reasoning.get(role) else None,
                     flex_mode=flex.get(role) if isinstance(flex.get(role), bool) else None,
+                    flex_waiver_id=waiver_ids.get(role) if isinstance(waiver_ids.get(role), str) else None,
+                    flex_waiver_receipt_id=waiver_receipts.get(role) if isinstance(waiver_receipts.get(role), str) else None,
                 )
             )
     return tuple(selections)

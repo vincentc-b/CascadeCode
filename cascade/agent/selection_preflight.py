@@ -35,6 +35,8 @@ class RuntimeSelection:
     model_id: str
     reasoning_level: str | None = None
     flex_mode: bool | None = None
+    flex_waiver_id: str | None = None
+    flex_waiver_receipt_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,7 @@ def evaluate_work_selection(
     inventory: ProviderInventoryResult,
     action: str,
     runtime_selections: Iterable[RuntimeSelection] = (),
+    disable_flex: bool = False,
 ) -> SelectionPreflight:
     """Resolve once and feed the shared result contract at every boundary.
 
@@ -70,6 +73,16 @@ def evaluate_work_selection(
         root=Path(root).resolve(),
         provider_reasoning_defaults=reasoning_defaults,
     )
+    if disable_flex:
+        selections = replace(
+            selections,
+            roles=tuple(
+                replace(item, effective_flex_mode=False)
+                if isinstance(item, EffectiveSelection)
+                else item
+                for item in selections.roles
+            ),
+        )
     expected = {item.role: item for item in runtime_selections}
     if expected:
         selections = _mark_runtime_drift(selections, expected)
@@ -115,6 +128,8 @@ def _mark_runtime_drift(
             and runtime.model_id == item.model_id
             and runtime.reasoning_level == item.reasoning_level
             and bool(runtime.flex_mode) == item.effective_flex_mode
+            and runtime.flex_waiver_id == item.flex_waiver_id
+            and runtime.flex_waiver_receipt_id == item.flex_waiver_receipt_id
         )
         if matches:
             roles.append(item)

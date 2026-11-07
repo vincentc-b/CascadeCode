@@ -31,6 +31,8 @@ class KickoffReason:
     message: dict | None = None
     feature_id: str | None = None
     model_id: str | None = None
+    continuation_receipt_id: str | None = None
+    continuation_handoff_id: str | None = None
 
 
 @dataclass(frozen=True)

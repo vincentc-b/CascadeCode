@@ -64,3 +64,27 @@ def test_clean_and_dirty_tasks_share_non_destructive_recovery_contract() -> None
     clean = recovery_actions(tier="task", status="active", blocker=_blocker(), turn_stoppable=True)
     dirty = recovery_actions(tier="task", status="active", blocker=_blocker(), turn_stoppable=True)
     assert clean == dirty
+
+
+def test_continue_without_flex_is_only_projected_for_a_concrete_action() -> None:
+    absent = recovery_actions(
+        tier="task", status="active", blocker=_blocker(), turn_stoppable=True
+    )
+    eligible = recovery_actions(
+        tier="task",
+        status="active",
+        blocker=_blocker(classification="deterministic"),
+        turn_stoppable=True,
+        continue_without_flex={
+            "eligible": True,
+            "reason_code": "eligible",
+            "action_id": "attempt-7",
+        },
+    )
+
+    assert "continue_without_flex" not in absent
+    assert eligible["continue_without_flex"] == {
+        "eligible": True,
+        "reason_code": "eligible",
+        "action_id": "attempt-7",
+    }

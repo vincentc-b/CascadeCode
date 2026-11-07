@@ -16,6 +16,8 @@ from cascade.agent.discovery.inventory import get_provider_inventory
 from cascade.agent.preflight import (
     ProviderCapabilityBatchPreflight,
 )
+from cascade.agent.execution_preflight import record_failed_provider_action
+from cascade.agent.flex_continuation_contract import ActionKind
 from cascade.agent.selection_preflight import RuntimeSelection, evaluate_work_selection
 from cascade.board.parse import parse_doc
 from cascade.epic.activation import _drop_stale_copies, activate_epic_on_worktree
@@ -92,6 +94,12 @@ def _boot_after(
     """Boot runs after the process lock is released so a hook can tick without deadlock."""
 
     if result.ok:
+        from cascade.provider_recovery_replay import record_canonical_replay_transition
+
+        if not record_canonical_replay_transition(
+            result, work_id=work_id, root=root
+        ):
+            return result
         if tier == "task":
             from cascade.task.execution import mark_queued
 
@@ -99,14 +107,18 @@ def _boot_after(
         invoke_boot(tier, work_id)
         from cascade.workspace.kickoff import kickoff_turn
         from cascade.workspace.types import KickoffReason
+        from cascade.provider_recovery_replay import kickoff_receipt
 
         kind = "activate" if tier == "epic" else "dispatch"
+        continuation = kickoff_receipt(work_id, root)
         kickoff_turn(
             KickoffReason(
                 kind=kind,  # type: ignore[arg-type]
                 work_id=work_id,
                 by=by,  # type: ignore[arg-type]
                 root=root,
+                continuation_receipt_id=(continuation[0] if continuation else None),
+                continuation_handoff_id=(continuation[1] if continuation else None),
             )
         )
     return result
@@ -132,7 +144,7 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("existing_activation_run")
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
-    if refusal := _provider_preflight_refusal(meta, root=root):
+    if refusal := _provider_preflight_refusal(meta, by=by, root=root):
         return refusal
     if not has_git(root):
         move_doc(work_id, "active", root=root)
@@ -204,7 +216,7 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("not_found")
     if reason := dispatch_refusal_from_readiness(readiness):
         return _fail(reason)
-    if refusal := _provider_preflight_refusal(meta, root=root):
+    if refusal := _provider_preflight_refusal(meta, by=by, root=root):
         return refusal
 
     from cascade.stacked_dispatch import ensure_feature_dispatch_selection
@@ -294,7 +306,7 @@ def _dispatch_task(
 
     if blocked := refusal_if_blocked(work_id, root=root):
         return _fail(blocked)
-    if refusal := _provider_preflight_refusal(meta, root=root):
+    if refusal := _provider_preflight_refusal(meta, by=by, root=root):
         return refusal
 
     if not has_git(root):
@@ -482,6 +494,7 @@ def _emit(root: Path, dest: str, event_type: str, payload: dict[str, object]) ->
 def _provider_preflight_refusal(
     meta: WorkMeta,
     *,
+    by: str,
     root: Path,
 ) -> DispatchResult | None:
     """Check every role the dispatch will start before any durable work begins.
@@ -493,7 +506,8 @@ def _provider_preflight_refusal(
     if meta.tier not in ("epic", "feature", "task"):
         return None
     inventory = get_provider_inventory()
-    action = "epic_activation" if meta.tier == "epic" else f"{meta.tier}_dispatch"
+    action_kind = _failed_action_kind(meta, by)
+    action = action_kind or f"{meta.tier}_dispatch"
     try:
         doc = parse_doc(meta.path)
         if not _same_dispatch_selection(meta, doc.meta):
@@ -531,12 +545,44 @@ def _provider_preflight_refusal(
         ).result
     if result.supported:
         return None
+    if action_kind is not None:
+        try:
+            record_failed_provider_action(
+                meta.id,
+                tier=meta.tier,
+                action_kind=action_kind,
+                result=result,
+                root=root,
+                original_actor=by,
+                replay_arguments={
+                    "by": by,
+                    **({"feature_id": meta.parent} if meta.parent else {}),
+                },
+            )
+        except ValueError:
+            # An incomplete/stale selection is still refused, but cannot mint
+            # the concrete identity required by Flex continuation.
+            pass
     reason = (
         "provider_preflight_blocked"
         if result.outcome == "blocked"
         else "provider_preflight_unavailable"
     )
     return _fail(reason, preflight=result)
+
+
+def _failed_action_kind(meta: WorkMeta, by: str) -> ActionKind | None:
+    """Map only the four continuation adapters; ordinary Task dispatch is out."""
+
+    if meta.tier == "epic":
+        return "epic_activation"
+    if meta.tier == "feature":
+        return "approval_dispatch" if by == "boss" else "feature_dispatch"
+    if meta.tier == "task" and meta.status == "blocked":
+        return "task_retry"
+    if meta.tier == "task" and by == "boss":
+        return "approval_dispatch"
+    return None
 
 
 def _same_dispatch_selection(indexed: WorkMeta, owning: WorkMeta) -> bool:

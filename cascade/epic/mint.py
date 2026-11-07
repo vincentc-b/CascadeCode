@@ -117,6 +117,20 @@ def _mint_feature(
     if feature_id is None:
         raise SchemaError("failed to allocate feature id after persistence retries")
 
+    from cascade.provider_recovery_waiver import stamp_minted_descendant_waivers
+    from cascade.watchdog.model_resolve import resolve_effective_selections
+
+    stamp_minted_descendant_waivers(
+        resolve_effective_selections(epic_doc, root=repo),
+        resolve_effective_selections(doc, root=repo),
+        role_mapping={
+            "epic_manager": "feature_lead",
+            "epic_architect": "feature_architect",
+            "swe": "swe",
+        },
+        root=repo,
+    )
+
     epic = epic_read_doc(epic_id, epic_id=epic_id, root=repo)
     if feature_id not in epic.meta.children:
         epic.meta.children.append(feature_id)
