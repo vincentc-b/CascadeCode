@@ -143,7 +143,25 @@ def test_retry_preserves_dispatch_preflight_response(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = make_repo(tmp_path, git=False)
-    preflight = SimpleNamespace(to_dict=lambda: {"reason_code": "model_not_offered"})
+    preflight = SimpleNamespace(
+        message="The selected model is not offered",
+        to_dict=lambda: {
+            "reason_code": "model_not_offered",
+            "message": "The selected model is not offered",
+        },
+    )
+    selections = SimpleNamespace(
+        to_dict=lambda: {
+            "work_id": "task_001",
+            "roles": [
+                {
+                    "role": "swe",
+                    "document_path": "docs/tasks/2_active/task_001.md",
+                    "document_revision": "reviewed-revision",
+                }
+            ],
+        }
+    )
     monkeypatch.setattr(
         "cascade.feature.recovery.recovery_status",
         lambda *_args, **_kwargs: {"action": "retry"},
@@ -155,6 +173,7 @@ def test_retry_preserves_dispatch_preflight_response(
             reason="provider_preflight_blocked",
             event=None,
             preflight=preflight,  # type: ignore[arg-type]
+                selections=selections,  # type: ignore[arg-type]
         ),
     )
 
@@ -162,7 +181,10 @@ def test_retry_preserves_dispatch_preflight_response(
 
     assert result["ok"] is False
     assert result["reason"] == "provider_preflight_blocked"
-    assert result["preflight"] == {"reason_code": "model_not_offered"}
+    assert result["code"] == "provider_preflight_blocked"
+    assert result["error"] == "The selected model is not offered"
+    assert result["preflight"]["reason_code"] == "model_not_offered"
+    assert result["selections"]["roles"][0]["document_revision"] == "reviewed-revision"
 
 
 def test_concurrent_retry_requests_resume_at_most_one_execution(tmp_path: Path) -> None:

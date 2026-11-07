@@ -349,7 +349,24 @@ def dispatch_result_to_dict(result: DispatchResult) -> dict:
         "event": event_to_dict(result.event) if result.event is not None else None,
     }
     if result.preflight is not None:
-        payload["preflight"] = result.preflight.to_dict()
+        # Keep the stable machine reason for compatibility, but lead consumers
+        # with the evaluator's safe operator-facing explanation.  The complete
+        # batch remains available for role-by-role diagnostics.
+        preflight = result.preflight.to_dict()
+        message = getattr(result.preflight, "message", None)
+        if not isinstance(message, str) or not message:
+            candidate = preflight.get("message")
+            message = (
+                candidate
+                if isinstance(candidate, str) and candidate
+                else "Provider configuration blocked this action."
+            )
+        payload["code"] = result.reason
+        payload["error"] = message
+        payload["message"] = message
+        payload["preflight"] = preflight
+    if result.selections is not None:
+        payload["selections"] = result.selections.to_dict()
     return payload
 
 

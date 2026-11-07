@@ -17,7 +17,13 @@ from unittest.mock import patch
 
 import pytest
 
-from cascade.board import move_doc, read_doc
+from cascade.board import move_doc, read_doc, write_doc
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
 from cascade.comments.store import comment
 from cascade.boss.epic_complete import reset_epic_close_prompt_surfaces
 from cascade.boss.epic_complete import EpicCompleteResult
@@ -106,6 +112,59 @@ def test_activate_epic_human_success(dispatch_board):
     assert body["event"]["payload"]["by"] == "human"
     assert "T" in body["event"]["ts"]
     assert read_doc("epic_001", root=root).meta.path.parent.name == "2_active"
+
+
+def test_activate_epic_provider_refusal_returns_complete_safe_diagnostics(
+    dispatch_board, monkeypatch
+):
+    base, root = dispatch_board
+    epic = read_doc("epic_001", root=root)
+    epic.meta.provider = "codex"
+    epic.meta.models = {
+        "epic_manager": "offered",
+        "epic_architect": "future-architect",
+        "feature_lead": "offered",
+        "feature_architect": "offered",
+        "swe": "future-swe",
+    }
+    write_doc(epic, root=root)
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(DiscoveredModel(id="offered", display_name="Offered"),),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, 10.0, 20.0, 10.0),
+    )
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory
+    )
+
+    status, body = _post(f"{base}/api/activate_epic", {"id": "epic_001"})
+
+    assert status == HTTPStatus.OK
+    assert body["ok"] is False
+    assert body["code"] == "provider_preflight_blocked"
+    assert body["error"] == "The selected model is not offered"
+    assert body["message"] == body["error"]
+    assert [
+        check["role"]
+        for check in body["preflight"]["checks"]
+        if check["outcome"] != "supported"
+    ] == ["epic_architect", "swe"]
+    assert body["preflight"]["inventory_freshness"]["from_cache"] is False
+    assert body["preflight"]["remedies"] == ["choose_configuration"]
+    assert body["selections"]["work_id"] == "epic_001"
+    assert all(
+        role["document_path"] and role["document_revision"]
+        for role in body["selections"]["roles"]
+    )
+    events, _ = read_events("epic_001", 0, root=root)
+    assert not any(event.type == "EpicActivated" for event in events)
+    assert read_doc("epic_001", root=root).meta.path.parent.name == "1_backlog"
 
 
 def test_dispatch_feature_success(dispatch_board):

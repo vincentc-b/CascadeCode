@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from cascade.agent.capability_contract import EffectiveSelectionBatch
     from cascade.agent.preflight import ProviderCapabilityBatchPreflight
 
 Principal = Literal["human", "boss"]
@@ -47,3 +48,4 @@ class DispatchResult:
     reason: str | None
     event: Event | None
     preflight: ProviderCapabilityBatchPreflight | None = None
+    selections: EffectiveSelectionBatch | None = None

@@ -40,6 +40,7 @@ class ApprovalSelectionError(ValueError):
 
     def to_dict(self) -> dict[str, object]:
         first = self.failures[0]
+        message = str(self)
         return {
             "ok": False,
             "code": (
@@ -47,7 +48,8 @@ class ApprovalSelectionError(ValueError):
                 if first.result.outcome == "blocked"
                 else "provider_preflight_unavailable"
             ),
-            "error": str(self),
+            "error": message,
+            "message": message,
             "preflight": first.result.to_dict(),
             "selections": first.selections.to_dict(),
             "preflights": [
@@ -66,6 +68,7 @@ class _DispatchWarning:
     preflight: object | None = None
     selections: object | None = None
     refusals: tuple[tuple[str, DispatchResult], ...] = ()
+    launched: tuple[str, ...] = ()
 
 
 def feature_approved(feature_id: str, *, root: Path) -> bool:
@@ -315,7 +318,7 @@ def _maybe_advance_after_approval(root: Path) -> _DispatchWarning | None:
     try:
         if not read_automation_config(root).enabled:
             return None
-        reconcile_approval_dispatch(
+        dispatched = reconcile_approval_dispatch(
             root,
             on_refusal=lambda work_id, refusal: refusals.append((work_id, refusal)),
         )
@@ -338,6 +341,7 @@ def _maybe_advance_after_approval(root: Path) -> _DispatchWarning | None:
             first.preflight.message or first.reason or "dispatch pending",
             preflight=first.preflight,
             refusals=tuple(refusals),
+            launched=tuple((*dispatched["features"], *dispatched["tasks"])),
         )
     return None
 
@@ -349,6 +353,15 @@ def _add_dispatch_warning(
         return
     result["dispatch_pending"] = True
     result["dispatch_error"] = warning.message
+    result["message"] = f"Approval saved; dispatch pending: {warning.message}"
+    result["approval_committed"] = True
+    refused_ids = [work_id for work_id, _refusal in warning.refusals]
+    result["dispatch_outcome"] = {
+        "launched": list(warning.launched),
+        "not_launched": refused_ids,
+        "pending": True,
+        "message": warning.message,
+    }
     if warning.preflight is not None and hasattr(warning.preflight, "to_dict"):
         result["preflight"] = warning.preflight.to_dict()
     if warning.selections is not None and hasattr(warning.selections, "to_dict"):
@@ -358,11 +371,22 @@ def _add_dispatch_warning(
             {
                 "work_id": work_id,
                 "reason": refusal.reason,
+                "code": refusal.reason,
+                "error": refusal.preflight.message,
+                "message": refusal.preflight.message,
                 "preflight": refusal.preflight.to_dict(),
+                **(
+                    {"selections": refusal.selections.to_dict()}
+                    if refusal.selections is not None
+                    else {}
+                ),
             }
             for work_id, refusal in warning.refusals
             if refusal.preflight is not None
         ]
+        first = warning.refusals[0][1]
+        if first.selections is not None:
+            result["selections"] = first.selections.to_dict()
 
 
 def _set_epic_plan_approved(epic_id: str, *, root: Path) -> bool:

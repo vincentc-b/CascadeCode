@@ -18,6 +18,7 @@ from cascade.watchdog.blockage import (
     reconcile_direct_report_blockage,
 )
 from cascade.watchdog.dispatch import dispatch_task
+from cascade.war_room.serialize import dispatch_result_to_dict
 from cascade.workspace.integration_worktree import doc_filesystem_root, locate_trunk
 
 
@@ -180,13 +181,10 @@ def retry_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object
             }
         result = dispatch_task(task_id, "boss", root=trunk)
     response: dict[str, object] = {
-        "ok": result.ok,
-        "reason": result.reason,
+        **dispatch_result_to_dict(result),
         "task_id": task_id,
         "recovery": recovery_status(task_id, feature_id=feature_id, root=trunk),
     }
-    if result.preflight is not None:
-        response["preflight"] = result.preflight.to_dict()
     return response
 
 
