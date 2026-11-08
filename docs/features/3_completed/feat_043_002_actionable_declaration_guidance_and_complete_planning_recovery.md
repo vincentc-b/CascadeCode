@@ -2,7 +2,7 @@
 id: feat_043_002
 title: Actionable declaration guidance and complete planning recovery
 tier: feature
-status: backlog
+status: completed
 parent: epic_043
 children: []
 depends_on:
@@ -13,7 +13,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-07'
-updated: '2026-11-07'
+updated: '2026-11-08'
 provider: codex
 flex_mode: false
 models:
@@ -72,3 +72,11 @@ None.
 ## Decision log
 
 None yet.
+
+## Final direct delivery · 2026-11-08
+
+Status: completed. Implementation through `a37f05ff` and preceding commits supersedes the earlier partial-completion audit. The operator explicitly requested implementation directly on main because the affected tool could not reliably implement its own repairs. No acceptance criteria are waived.
+
+This existing child plan is satisfied by the Epic 43 implementation delivered directly on main. Its scope, requirements and accepted history are preserved; completion records the operator-authorized direct delivery, not a fabricated Task merge or forge review. The Epic 43 final-delivery section maps the acceptance evidence.
+
+Validation: the combined affected acceptance suite passed 164 tests; additional targeted crash, failure, and cross-process checks passed. This records scoped acceptance, not a claim that every unrelated repository test passes.

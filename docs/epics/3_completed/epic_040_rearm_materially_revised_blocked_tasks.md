@@ -2,7 +2,7 @@
 id: epic_040
 title: Rearm materially revised blocked Tasks
 tier: epic
-status: backlog
+status: completed
 parent: null
 children: []
 depends_on: []
@@ -46,7 +46,7 @@ Let an owning Feature Team safely continue a blocked child Task after the parent
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+Implemented through the existing supervised lifecycle, durable recovery actions, owned worktrees, and validation gates. See final delivery below.
 
 ## Cross-module constraints
 
@@ -54,15 +54,15 @@ Build on revise_task, recovery_status, retry_task, dispatch_task, Task execution
 
 ## Core dependencies
 
-To be identified during epic planning.
+Uses existing project infrastructure; no new external package or installation.
 
 ## Feature breakdown
 
-The Epic Team will create and sequence feature plans here.
+Delivered directly on main under the operator request. No synthetic child plans or review records are created.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+None outstanding for this brief; the earlier audit gaps are resolved by the final delivery below.
 
 ## Decision log
 
@@ -80,3 +80,13 @@ Status: open; partial implementation in `b55abca2`. The prior blanket completion
 - A changed body hash currently counts as material revision. Criterion 3 and the cross-module constraint still require proving that the revised contract addresses the blocker; cosmetic edits must not independently authorize recovery.
 - Criterion 5 still needs an explicit safe-worktree dispatch check and negative coverage.
 - Criterion 7 still needs the complete scope-blocker → authorized revision → successful delivery acceptance sequence; the current regression proves dispatch and preserved history only.
+
+## Final direct delivery · 2026-11-08
+
+Status: completed. Implementation through `a37f05ff` and preceding commits supersedes the earlier partial-completion audit. The operator explicitly requested implementation directly on main because the affected tool could not reliably implement its own repairs. No acceptance criteria are waived.
+
+All acceptance criteria are implemented. Contract revision records now include normalized deliverable evidence, not just a changed body hash. Scope failures require changed authorized deliverables; cosmetic edits and external credential refusals do not buy another attempt. Prepared revision intent precedes the document commit, so restart can recover an interrupted write without duplicate dispatch. Normal dispatch rechecks ownership, lease, dependencies, parent pin and the existing branch/worktree. Scoped unfinished source work is preserved for the owning Task; protected-path changes remain refused with actionable evidence. The Task guards are unchanged.
+
+Acceptance crosses a real denied planning-file write, deterministic failure, parent-owned prose revision, one supervised Task turn, source/test commits, exact-head validation, and one normal merge. Separate cases prove duplicate/concurrent retry refusal, failure-history retention, root-level source deliverables, external-permission refusal, dirty scoped-work preservation, protected-path refusal, and fresh-process recovery after interruption between the document and receipt writes. See `tests/test_task_recovery_generations_regressions.py` and `tests/feature/test_recovery.py`.
+
+Validation: the combined affected acceptance suite passed 164 tests; additional targeted crash, failure, and cross-process checks passed. This records scoped acceptance, not a claim that every unrelated repository test passes.

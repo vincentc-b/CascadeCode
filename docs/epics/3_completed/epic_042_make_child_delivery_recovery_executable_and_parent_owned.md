@@ -2,7 +2,7 @@
 id: epic_042
 title: Make child delivery recovery executable and parent-owned
 tier: epic
-status: backlog
+status: completed
 parent: null
 children: []
 depends_on: []
@@ -53,7 +53,7 @@ Make every Task accountable for its delivery through successful integration into
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+Implemented through the existing supervised lifecycle, durable recovery actions, owned worktrees, and validation gates. See final delivery below.
 
 ## Cross-module constraints
 
@@ -61,15 +61,15 @@ Build on durable action recovery, Task worktrees/checkpoints, execution leases, 
 
 ## Core dependencies
 
-To be identified during epic planning.
+Uses existing project infrastructure; no new external package or installation.
 
 ## Feature breakdown
 
-The Epic Team will create and sequence feature plans here.
+Delivered directly on main under the operator request. No synthetic child plans or review records are created.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+None outstanding for this brief; the earlier audit gaps are resolved by the final delivery below.
 
 ## Decision log
 
@@ -87,3 +87,15 @@ Status: open; partial implementation in `b55abca2`. The prior blanket completion
 - Criterion 14 remains incomplete: routed `review_health` incidents do not themselves provide the admitted mutation action required by review-resolution publication. A review becoming healthy while still open also needs reconciliation of the prior health incident.
 - Criteria 1 and 11 remain incomplete: completed Task serialization omits delivery action/validation details, so the evidence is not visible through terminal completion.
 - Criteria 9 and 10 need the exact semantic-lock-mismatch scenario, multiple sibling blockers, and restart between acknowledgement and validation. Existing narrower successful recovery tests are not substitutes for these cases.
+
+## Final direct delivery · 2026-11-08
+
+Status: completed. Implementation through `a37f05ff` and preceding commits supersedes the earlier partial-completion audit. The operator explicitly requested implementation directly on main because the affected tool could not reliably implement its own repairs. No acceptance criteria are waived.
+
+All acceptance criteria are implemented. Review-health inquiries now re-enter current-head admission through the existing owner-checked publication tool, instead of directing teams to an operation that cannot accept their action. Fetch/snapshot/worktree/admission failures retain concrete owners and actionable retry instructions. Healthy or integrated reviews reconcile obsolete incidents; recurring failures create a new deduplicated generation. Validation/publication failure remains owned, preserves failed attempts, and can retry the same action. Acknowledgements are durably persisted.
+
+Task delivery evidence remains visible after completion. The board preloads action/queue data once per response, retaining terminal validation and attempt history without invoking recovery controls for completed Tasks. Task lifecycle locks and execution/action/orphan/queue storage resolve to one canonical tracking trunk across owned worktrees; source Git operations remain in the product repository. MCP subprocesses preserve repository context across launch.
+
+Acceptance includes the one-file semantic conflict and process_lock/recovery_ledger_lock mismatch: eleven tests fail for the wrong lock, the owning Task fixes it additively, eleven pass, and the original action merges once. Restart after acknowledgement and multiple sibling incidents are covered; the unrelated sibling blocker survives. Existing completed-team wakeup, concurrent recovery, and the three named Feature dispatch-authorization sequences are included. See `tests/test_task_recovery_generations_regressions.py`, `tests/test_review_health.py`, `tests/task/test_lifecycle_lock.py`, `tests/test_war_room_autonomy_regressions.py`, `tests/workspace/test_completed_recovery_kickoff.py`, and `tests/war_room/test_board_recovery_cost.py`.
+
+Validation: the combined affected acceptance suite passed 164 tests; additional targeted crash, failure, and cross-process checks passed. This records scoped acceptance, not a claim that every unrelated repository test passes.
