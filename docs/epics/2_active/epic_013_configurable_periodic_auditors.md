@@ -174,6 +174,14 @@ Retried the original `epic_013:integration_branch_update` action as requested. A
 
 Canonical children show Feature 001 completed, Feature 002 active with five tasks, and Features 003–005 in the approved sequential backlog. Child inspection reports no incidents for Features 001 or 002. Continue Feature 002 through its owning team, then Features 003–005 through normal dependency/approval gates. All 24 criteria, provider/dependency policy, existing approval provenance and Feature 005 default-on release acceptance remain unchanged. Product tests were not repeated for this publication/documentation follow-up; recorded merge validation remains 51 passed and 12 provider-preflight fixture failures.
 
+## Feature 002 release-gate follow-up — 2026-11-08
+
+In reply to TeamMessage `feat_013_002:feat_013_002:architect-release-gate-da175ad3`: reviewed commit `da175ad3`, which removes the explicit enabled health-audit table from new workspace scaffolds while preserving parsed enabled=true/30m defaults and explicit operator opt-in. The worker currently requires explicit periodic opt-in, so scaffolding that table would prematurely activate new workspaces. This correction implements the existing Feature 005 release gate; it does not amend criterion 1 or make opt-in the final product default. Feature 005 must prove default-on behavior for both newly initialized and existing workspaces with omitted settings, plus explicit disablement, after real Task/Feature/Epic repair acceptance.
+
+The Feature 002 team reports 42/42 focused configuration, lane and initialization checks passing, task 003 running with a live owner, and its authoritative dependency refresh now satisfied for Feature 001. This closes the unconfirmed refresh follow-up in `dec_012`; it is team-reported evidence, not an epic-bound dependency query. Current epic child projection independently shows Feature 001 completed and Feature 002 active; child inspection reports no incidents. Final Feature 002 validation remains required after task integration. Product tests were not rerun in this documentation review.
+
+All 24 criteria, five-feature sequencing, approval and provider/dependency policy remain unchanged. The same integration-update action still requires its guarded idle-boundary retry and terminal receipt; this active-team status does not establish that the retry precondition has changed.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
