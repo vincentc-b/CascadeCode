@@ -145,6 +145,16 @@ Command: `python -m pytest -q tests/watchdog/test_health.py tests/task/test_supe
 
 Result: 22 passed, 2 failed in 14.13 seconds. The failures were `test_health_sweep_retries_failed_blocked_task_once_through_dispatch` and `test_recovery_failure_is_recorded_once_for_concurrent_and_repeated_sweeps`; both stopped while activating their fixture Epic with `provider_preflight_blocked`, before exercising recovery. This planning change modifies no product code and does not claim a green baseline or completion of new audit acceptance. `feat_013_003` must use deterministic provider-inventory fixtures without weakening production admission and demonstrate both recovery cases; `feat_013_005` must record a passing integrated release suite. No provider change or installation is authorized to work around the fixture failures.
 
+### Integration branch recovery · 2026-11-08
+
+Recovery action: `epic_013:integration_branch_update`; investigation: `recovery:epic_013:integration_branch_update`. Merge `d6ffc071` incorporates product trunk `2f0746e1` into the owned `epic/epic_013` branch. The sole conflict was deletion of the active epic spec on trunk versus subsequent owned-plan edits. Preserve the live active plan, all five children, all 24 criteria, handoffs, dependency manifest/evidence and original sign-off records; discard the incoming duplicate backlog brief only in this owned checkout. Product source and tests match the merged trunk exactly. No product-trunk or other-team worktree edits were made.
+
+Approval provenance remains the human `EpicPlanApproved` event and trunk commit `9e574dbc`, whose backlog copy records `plan_approved_at: 2026-11-08T01:57:14.900392+00:00`. The active copy has no approval timestamp; MCP `write_doc` reloads canonical metadata and does not apply supplied metadata changes. This note preserves provenance without manufacturing a new approval or claiming that the active metadata was repaired.
+
+Validation command: `python -m pytest -q tests/watchdog/test_audit.py tests/watchdog/test_audit_candidates.py tests/watchdog/test_incidents.py tests/watchdog/test_capabilities.py tests/watchdog/test_reservations.py tests/workspace/test_branch_synchronization.py`. Result: **51 passed, 12 failed** in 15.79 seconds. All five audit foundation modules passed. All 12 branch-synchronization tests failed at fixture activation with `provider_preflight_blocked`, before testing synchronization. Document whitespace and unresolved-index checks passed; the broader diff reports an existing trailing blank line in trunk's `tests/watchdog/test_audit_candidates.py`. This is merge validation, not Feature 005 release acceptance.
+
+The canonical retry recorded attempt 1 as `awaiting_owner_decision` with reason `busy` and no conflict paths. Read-only synchronization inspection confirms `base_branch=main`, `behind=0`, and `update_blocked_reason=busy`; the epic planning graph is in flight. The Git conflict is repaired, but the durable action is **not completed**. Once the owning graph is idle, resume the same action through `retry_integration_branch_update(action_id="epic_013:integration_branch_update")`; preserve its history and require a terminal receipt. Do not clear graph ownership or mark success manually.
+
 ## Open questions
 
 No product-scope questions remain for this revision.
