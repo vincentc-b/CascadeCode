@@ -77,6 +77,7 @@ def dispatch_task(
     skills: list[Path] | None = None,
     *,
     root: Path | None = None,
+    expected_parent: str | None = None,
 ) -> DispatchResult:
     """Human or Boss starts a task when dependencies are done and a slot is free.
 
@@ -89,7 +90,7 @@ def dispatch_task(
     from cascade.task.lifecycle_lock import task_lifecycle_lock
 
     with task_lifecycle_lock(root=repo):
-        result = _dispatch_task(work_id, by, skills, repo)
+        result = _dispatch_task(work_id, by, skills, repo, expected_parent=expected_parent)
         if result.ok:
             from cascade.task.execution import _read, _write
 
@@ -286,6 +287,8 @@ def _dispatch_task(
     by: str,
     skills: list[Path] | None,
     root: Path,
+    *,
+    expected_parent: str | None = None,
 ) -> DispatchResult:
     if by not in ("human", "boss"):
         return _fail("unauthorized")
@@ -301,6 +304,8 @@ def _dispatch_task(
     meta = dependency_evidence.owner
     if meta is None:
         return _fail("not_found")
+    if expected_parent is not None and meta.parent != expected_parent:
+        return _fail("task_parent_changed")
     if not _task_can_start(meta):
         return _fail("bad_state")
     from cascade.task.execution import execution_lease_is_live

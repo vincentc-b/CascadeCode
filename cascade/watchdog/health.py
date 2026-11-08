@@ -119,6 +119,7 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
     repo = resolve_root(root)
     observations: list[ChildHealthObservation] = []
     orphan_delivery_candidates: list[ChildHealthObservation] = []
+    remediation_candidates: list[tuple[WorkDoc, WorkDoc, ChildHealthObservation]] = []
     with process_lock:
         board = merged_board(repo)
         supervisors = [
@@ -168,7 +169,7 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
                     # workspace state while it holds the Task lifecycle lock.
                     orphan_delivery_candidates.append(observation)
                 if observation.classification == "remediation_eligible":
-                    _remediate_if_unchanged(repo, supervisor, child, observation)
+                    remediation_candidates.append((supervisor, child, observation))
                 elif observation.classification == "unresolved":
                     propagate_direct_report_blockage(
                         supervisor, child, observation.reason, root=repo
@@ -178,6 +179,11 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
                 # Writes use optimistic tokens. Refresh before considering a
                 # sibling so independent causes converge after our own update.
                 supervisor = read_doc(supervisor.meta.id, root=repo)
+
+    # Claim/recheck each remediation in a short transaction, then dispatch
+    # outside the broad sweep lock so boot hooks and model tools can read state.
+    for supervisor, child, observation in remediation_candidates:
+        _remediate_if_unchanged(repo, supervisor, child, observation)
 
     # Do not hold the broad sweep lock while starting recovery.  A candidate
     # can be stale by now; supervisor_recover_task_delivery treats its stable
@@ -256,87 +262,88 @@ def _remediate_if_unchanged(
     child: WorkDoc,
     observation: ChildHealthObservation,
 ) -> None:
-    if child.sha is None:
-        _log.warning(
-            "cannot remediate %s without a persisted document SHA", child.meta.id
+    with process_lock:
+        if child.sha is None:
+            _log.warning(
+                "cannot remediate %s without a persisted document SHA", child.meta.id
+            )
+            return
+        evidence = {
+            "document_revision": child.sha,
+            "supervisor_revision": supervisor.sha,
+            "supervisor_status": supervisor.meta.status,
+            "child_status": child.meta.status,
+            "execution_attempt": observation.execution_attempt,
+            "execution_phase": observation.execution_phase,
+            "execution_outcome": observation.execution_outcome,
+            "parent_blockage": [
+                asdict(blocker) for blocker in supervisor.meta.monitoring_blockers
+            ],
+        }
+        generation = authoritative_generation(
+            work_id=child.meta.id,
+            tier=child.meta.tier,
+            evidence=evidence,
+            capability="retry_task",
         )
-        return
-    evidence = {
-        "document_revision": child.sha,
-        "supervisor_revision": supervisor.sha,
-        "supervisor_status": supervisor.meta.status,
-        "child_status": child.meta.status,
-        "execution_attempt": observation.execution_attempt,
-        "execution_phase": observation.execution_phase,
-        "execution_outcome": observation.execution_outcome,
-        "parent_blockage": [
-            asdict(blocker) for blocker in supervisor.meta.monitoring_blockers
-        ],
-    }
-    generation = authoritative_generation(
-        work_id=child.meta.id,
-        tier=child.meta.tier,
-        evidence=evidence,
-        capability="retry_task",
-    )
-    key = RemediationIncidentKey(supervisor.meta.id, child.meta.id, generation)
-    try:
-        ledger = _read_ledger(repo)
-    except (OSError, ValueError) as exc:
-        _log.warning("cannot read remediation ledger for %s: %s", child.meta.id, exc)
-        return
-    eligibility = project_incident(
-        generation, ledger, failure_class=observation.reason
-    )
-    if not eligibility.eligible:
-        return
-    prior_attempts = (
-        list(eligibility.prior.get("attempts") or [])
-        if eligibility.prior is not None
-        else []
-    )
-    attempt_number = len(prior_attempts) + 1
-    try:
-        current = read_doc(child.meta.id, root=repo)
-    except Exception as exc:
-        _log.warning("health revalidation failed for %s: %s", child.meta.id, exc)
-        return
-    unchanged = (
-        current.meta.id == child.meta.id
-        and current.meta.parent == supervisor.meta.id
-        and current.meta.status == child.meta.status
-        and current.meta.path.parent.name == legal_folder(child.meta.status)
-        and current.sha == child.sha
-    )
-    if not unchanged or current.meta.status in {"completed", "cancelled"}:
-        return
-    disposition = {
-        "incident": asdict(key),
-        "observed_at": datetime.now(timezone.utc).isoformat(),
-        "action": "retry_task",
-        "result": "claimed",
-        "reason": observation.reason,
-    }
-    contract = incident_record(
-        work_id=child.meta.id,
-        tier=child.meta.tier,
-        accountable_owner=f"{supervisor.meta.tier}:{supervisor.meta.id}",
-        failure_class=observation.reason,
-        generation=generation,
-        evidence=evidence,
-        selected_capability="retry_task",
-        request={"action": "retry_task", "feature_id": supervisor.meta.id},
-        attempts=[
-            *prior_attempts,
-            {"attempt": attempt_number, "outcome": None},
-        ],
-        outcome="claimed",
-    )
-    # Preserve the historical identity keys while extending that same row
-    # with the shared contract (rather than creating another status store).
-    disposition["incident"] = {**disposition["incident"], **contract}
-    ledger[key.storage_key] = disposition
-    _write_ledger(repo, ledger)
+        key = RemediationIncidentKey(supervisor.meta.id, child.meta.id, generation)
+        try:
+            ledger = _read_ledger(repo)
+        except (OSError, ValueError) as exc:
+            _log.warning("cannot read remediation ledger for %s: %s", child.meta.id, exc)
+            return
+        eligibility = project_incident(
+            generation, ledger, failure_class=observation.reason
+        )
+        if not eligibility.eligible:
+            return
+        prior_attempts = (
+            list(eligibility.prior.get("attempts") or [])
+            if eligibility.prior is not None
+            else []
+        )
+        attempt_number = len(prior_attempts) + 1
+        try:
+            current = read_doc(child.meta.id, root=repo)
+        except Exception as exc:
+            _log.warning("health revalidation failed for %s: %s", child.meta.id, exc)
+            return
+        unchanged = (
+            current.meta.id == child.meta.id
+            and current.meta.parent == supervisor.meta.id
+            and current.meta.status == child.meta.status
+            and current.meta.path.parent.name == legal_folder(child.meta.status)
+            and current.sha == child.sha
+        )
+        if not unchanged or current.meta.status in {"completed", "cancelled"}:
+            return
+        disposition = {
+            "incident": asdict(key),
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+            "action": "retry_task",
+            "result": "claimed",
+            "reason": observation.reason,
+        }
+        contract = incident_record(
+            work_id=child.meta.id,
+            tier=child.meta.tier,
+            accountable_owner=f"{supervisor.meta.tier}:{supervisor.meta.id}",
+            failure_class=observation.reason,
+            generation=generation,
+            evidence=evidence,
+            selected_capability="retry_task",
+            request={"action": "retry_task", "feature_id": supervisor.meta.id},
+            attempts=[
+                *prior_attempts,
+                {"attempt": attempt_number, "outcome": None},
+            ],
+            outcome="claimed",
+        )
+        # Preserve the historical identity keys while extending that same row
+        # with the shared contract (rather than creating another status store).
+        disposition["incident"] = {**disposition["incident"], **contract}
+        ledger[key.storage_key] = disposition
+        _write_ledger(repo, ledger)
     try:
         result = retry_task(child.meta.id, feature_id=supervisor.meta.id, root=repo)
         disposition["result"] = "accepted" if result.get("ok") else "refused"
@@ -379,9 +386,10 @@ def _remediate_if_unchanged(
             **disposition["incident"],
             **final_contract,
         }
-        ledger = _read_ledger(repo)
-        ledger[key.storage_key] = disposition
-        _write_ledger(repo, ledger)
+        with process_lock:
+            ledger = _read_ledger(repo)
+            ledger[key.storage_key] = disposition
+            _write_ledger(repo, ledger)
 
 
 def _ledger_path(repo: Path) -> Path:
