@@ -473,6 +473,10 @@ def merge_lifecycle_source(
                     feature_id=feature_id,
                 ):
                     return BranchSyncUpdateResult(ok=False, reason="busy")
+                if source_meta.tier == "task":
+                    from cascade.task.worktree import task_worktree_has_changes
+                    if task_worktree_has_changes(source_work_id, root=trunk):
+                        return BranchSyncUpdateResult(ok=False, reason="source_dirty")
 
         board = merged_board(trunk)
         meta = board.by_id.get(checkout_work_id)

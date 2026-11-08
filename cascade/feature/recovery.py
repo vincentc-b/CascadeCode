@@ -191,6 +191,12 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
     if checkout is not None:
         affected["checkout"] = checkout.path.as_posix()
 
+    delivery_wait = None
+    if not terminal and typed_reason != "permission_refused" and phase == "awaiting_merge":
+        from cascade.task_rollup import pending_task_merges
+        if task_id in pending_task_merges(trunk):
+            delivery_wait = "parent_turn_boundary"
+
     if typed_reason == "permission_refused" and not revised:
         next_safe_step = (
             "Resolve the required permission or credential; retry cannot bypass it."
@@ -204,6 +210,13 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
     elif terminal:
         next_safe_step = (
             "Revise the Task or resolve its terminal blocker before another dispatch."
+        )
+        action = "none"
+    elif delivery_wait is not None:
+        next_safe_step = (
+            "Task delivery is queued. Finish this planning turn so the supervisor "
+            "can recheck and merge the child between parent turns. Do not poll or "
+            "sleep waiting for the merge; resume on the completion or recovery event."
         )
         action = "none"
     else:
@@ -220,6 +233,7 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
         "owner": execution.get("owner_pid"),
         "affected": affected,
         "next_safe_step": next_safe_step,
+        "delivery_wait": delivery_wait,
         "terminal_blocker": {"retryable": retryable},
         "action": action,
         "incident": incident.as_dict() if incident is not None else None,

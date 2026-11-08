@@ -64,6 +64,8 @@ def swe_write(
     target = _resolve_path(path, wt)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
+    from cascade.task.wiring import invalidate_validated_delivery
+    invalidate_validated_delivery(task_id, root=repo)
 
 
 def task_read_doc(work_id: str, *, task_id: str, root: Path) -> WorkDoc:
