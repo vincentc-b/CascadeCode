@@ -274,6 +274,14 @@ Feature 002's latest Task 005 review reports two pending handoff cases: a pre-ad
 
 All 24 success criteria, existing approvals, provider/dependency policy and Feature 005's real Task/Feature/Epic recovery gate before default-on remain unchanged. No product code or product tests changed in this preparation turn.
 
+## Current Task 005 handoff and planning boundary — 2026-11-08
+
+In reply to OperatorReviewFinding `epic13-main-planning-yield-a4172014` and TeamMessage `feat_013_002:feat_013_002:task005-new-commit-review-20261108-0710`: the owning Feature reports that queued delivery `a2b22ed1` was invalidated by clean Task commit `33328215`, with Task 005 still active under a live owner. Its pending/accepted claim states address the parent-crash handoff design, but the reported parent-side `accept_claim` lock/store path still needs bounded deadline/cancellation and held-lock/nonregular-file regression evidence. These are existing bounded-admission and crash-safe retry requirements; neither correction nor final acceptance is claimed here.
+
+The pending post-handoff import must include current main through `a4172014`, including `6e32c7f4`. The operator reports 17 passing recovery/fairness checks for the planning-boundary fix; this is reported framework evidence, not Epic-run validation. Preserve the approved plan, accepted Feature 001 records, live Task work and the late Task 004 draft. After canonical Task 005 delivery, synchronize and publish the owned Epic base, then validate Feature 002 on its integrated clean revision before publication. Do not integrate against a pending child delivery or duplicate the Task execution.
+
+Finish planning turns when only child execution, queued merge or external review remains: the supervisor integrates children between parent turns. Do not poll or sleep inside the parent turn. Fresh epic projection confirms Feature 002 active without monitoring blockers and Features 003–005 approved and sequentially dependent. All 24 criteria and Feature 005's real all-tier recovery gate before default-on remain unchanged.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
