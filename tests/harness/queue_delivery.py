@@ -139,14 +139,27 @@ def seed_active_feature_board(root: Path) -> str:
         id=feature_id,
         title="Queue cursor feature",
         tier="feature",
-        status="ready_to_plan",
+        status="backlog",
         parent="epic_017",
     )
+    from cascade.board.store import read_doc, write_doc
+    for work_id in ("epic_017", feature_id):
+        doc = read_doc(work_id, root=root)
+        doc.meta.provider = "codex"
+        doc.meta.models = {"feature_lead": "proj-feature", "feature_architect": "proj-feature", "swe": "proj-task"}
+        if work_id == "epic_017":
+            doc.meta.models.update(epic_manager="proj-epic", epic_architect="proj-epic")
+        write_doc(doc, root=root)
     git_commit_all(root)
     return feature_id
 
 
 def install_queue_delivery_test_isolation(monkeypatch: pytest.MonkeyPatch) -> CountingBlockedTurnRunner:
+    from tests.test_approval_selection_gate import _inventory
+
+    inventory = _inventory("proj-epic", "proj-feature", "proj-task")
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
     clear_epic_graph_sessions()
     clear_feature_graph_sessions()
     clear_hooks()
@@ -165,7 +178,8 @@ def boot_feature_graph(root: Path, feature_id: str) -> None:
     install_epic_boot_hook(root)
     install_feature_boot_hook(root)
     install_kickoff(root)
-    assert activate_epic("epic_017", "human", root=root).ok
+    result = activate_epic("epic_017", "human", root=root)
+    assert result.ok, result
     from tests.support import approve_board_feature
 
     approve_board_feature(root, feature_id)

@@ -125,12 +125,13 @@ def _update_integration_branch(
         if not inspection.ok or inspection.state is None:
             return BranchSyncUpdateResult(ok=False, reason=inspection.reason)
 
-        if inspection.update_blocked_reason is not None:
+        state = inspection.state
+        already_integrated = state.behind == 0 and inspection.update_blocked_reason == "busy"
+        if inspection.update_blocked_reason is not None and not already_integrated:
             return BranchSyncUpdateResult(
                 ok=False, reason=inspection.update_blocked_reason
             )
 
-        state = inspection.state
         kind = _integration_kind(state.tier)
         assert kind is not None
 
@@ -140,6 +141,18 @@ def _update_integration_branch(
         meta = merged_board(trunk).by_id.get(work_id)
 
         if state.behind == 0:
+            # The owning team can finish a repair during its own live turn.
+            # Acknowledging an already-integrated base performs no Git mutation
+            # and must not self-refuse as busy. All checkout invariants remain.
+            if meta is None:
+                return BranchSyncUpdateResult(ok=False, reason="not_found")
+            blocked = _preflight_blocked(meta, kind, trunk, ignore_inflight=True)
+            if blocked is not None:
+                return BranchSyncUpdateResult(ok=False, reason=blocked)
+            if not _merge_state_clean(checkout):
+                return BranchSyncUpdateResult(ok=False, reason="invariant")
+            if _run(["merge-base", "--is-ancestor", state.base_branch, "HEAD"], checkout, check=False).returncode != 0:
+                return BranchSyncUpdateResult(ok=False, reason="busy" if already_integrated else "invariant")
             return BranchSyncUpdateResult(ok=True, no_op=True, merge_sha=head_sha(checkout))
 
         pre_sha = head_sha(checkout)
@@ -537,10 +550,10 @@ def _resolve_integration_checkout(
 
 
 def _preflight_blocked(
-    meta: WorkMeta, kind: IntegrationKind, trunk: Path
+    meta: WorkMeta, kind: IntegrationKind, trunk: Path, *, ignore_inflight: bool = False
 ) -> SyncBlockReason | None:
     feature_id = meta.parent if meta.tier == "task" else None
-    if _graph_has_inflight_turn(
+    if not ignore_inflight and _graph_has_inflight_turn(
         meta.id, meta.tier, root=trunk, feature_id=feature_id
     ):
         return "busy"
