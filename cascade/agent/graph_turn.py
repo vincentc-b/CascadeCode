@@ -434,7 +434,12 @@ _PLANNING_TOOL_DIRECTIVE = (
     "board markdown and lifecycle state. "
     "To update an epic or feature spec, call read_doc, then write_doc with the full revised body, "
     "and record_decision for each decision-log entry. "
-    "War Room chat and turn text are not the spec — never claim the plan was updated unless write_doc succeeded."
+    "War Room chat and turn text are not the spec — never claim the plan was updated unless write_doc succeeded. "
+    "When progress depends on a child execution, queued merge, or external review, finish the "
+    "current planning turn with a concise handoff once your actionable owned work is done. "
+    "Do not sleep or repeatedly poll while waiting inside a planning turn: your active turn "
+    "can prevent child delivery into the owned branch. The supervisor integrates validated "
+    "children between parent turns and wakes your team on new completion or recovery events."
 )
 
 _EPIC_PLANNING_ROLES = frozenset({"epic_manager", "epic_architect"})
