@@ -190,17 +190,56 @@ def _fast_forward_detached_retry_branch(root: Path, branch: str, base_ref: str) 
 
 
 def remove_task_worktree(task_run: TaskRun, *, root: Path) -> None:
-    """Remove the worktree checkout; keep the local branch for human merge."""
+    """Remove only a clean checkout; preserve later edits and the local branch."""
 
     root = root.resolve()
     wt = task_run.worktree.resolve()
-    _git(root, "worktree", "remove", "--force", str(wt))
+    if _checkout_has_changes(wt):
+        return
+    # Git also checks cleanliness at removal, covering edits after our check.
+    # A refused cleanup must retain the registration and all source files.
+    if _git(root, "worktree", "remove", str(wt), check=False).returncode:
+        return
     from cascade.workspace.integration_worktree import (
         unregister_missing_integration_worktree,
     )
 
     unregister_missing_integration_worktree("task", task_run.task_id, trunk=root)
     _runs.pop(task_run.task_id, None)
+
+
+def task_worktree_has_changes(task_id: str, *, root: Path) -> bool:
+    """Whether an existing source checkout contains work beyond its branch tip."""
+
+    from cascade.board.context import get_project_context
+    from cascade.workspace.integration_worktree import load_registry_readonly, locate_trunk
+
+    trunk = locate_trunk(Path(root))
+    project = get_project_context()
+    if project is not None and trunk in {
+        project.target.root.resolve(), project.tracking.root.resolve()
+    }:
+        trunk = project.target.root.resolve()
+    entry = next((row for row in load_registry_readonly(trunk)
+                  if row.kind == "task" and row.work_id == task_id), None)
+    run = get_task_run(task_id)
+    checkout = entry.path if entry is not None else (run.worktree if run else None)
+    # A retained, validated branch can be delivered after checkout retirement.
+    return bool(checkout and checkout.exists() and _checkout_has_changes(checkout))
+
+
+def _checkout_has_changes(checkout: Path) -> bool:
+    status = _git(checkout, "status", "--porcelain", "--untracked-files=all", check=False)
+    if status.returncode or status.stdout.strip():
+        return True
+    for marker in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply", "sequencer"):
+        location = _git(checkout, "rev-parse", "--git-path", marker, check=False)
+        if location.returncode:
+            return True
+        path = Path(location.stdout.strip())
+        if (path if path.is_absolute() else checkout / path).exists():
+            return True
+    return False
 
 
 def worktree_path(task_id: str, *, root: Path) -> Path:

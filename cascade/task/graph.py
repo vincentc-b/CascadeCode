@@ -381,6 +381,11 @@ def _auto_merge_finished_task(task_id: str, root: Path) -> None:
         if not has_deliverable_commit(run):
             fail_task(task_id, "no_task_changes", root=root)
             return
+        from cascade.task.worktree import task_worktree_has_changes
+        if task_worktree_has_changes(task_id, root=root):
+            from cascade.task_rollup import defer_uncommitted_delivery
+            defer_uncommitted_delivery(task_id, root=root)
+            return
         from cascade.task.execution import execution_view
 
         execution = execution_view(task_id, root=root)
