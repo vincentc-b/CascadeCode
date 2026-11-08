@@ -191,6 +191,37 @@ def reconcile_completion_rollup(
 ) -> dict[str, object]:
     """Reconcile one Epic closeout and report its durable terminal state."""
 
+    return _reconcile_epic_completion(
+        epic_id,
+        action="reconcile_completion_rollup",
+        root=root,
+        expected_generation=expected_generation,
+    )
+
+
+def publish_integration_review(
+    epic_id: str,
+    *,
+    root: Path,
+    expected_generation: str | None = None,
+) -> dict[str, object]:
+    """Publish completed Epic work through its existing closeout path."""
+
+    return _reconcile_epic_completion(
+        epic_id,
+        action="publish_integration_review",
+        root=root,
+        expected_generation=expected_generation,
+    )
+
+
+def _reconcile_epic_completion(
+    epic_id: str,
+    *,
+    action: str,
+    root: Path,
+    expected_generation: str | None,
+) -> dict[str, object]:
     trunk = locate_trunk(root)
     from cascade.boss.epic_complete import (
         epic_completed_recorded,
@@ -213,7 +244,7 @@ def reconcile_completion_rollup(
         }
     observation = _admit_epic_action(
         epic_id,
-        "reconcile_completion_rollup",
+        action,
         root=trunk,
         expected_generation=expected_generation,
     )
@@ -475,4 +506,5 @@ register_epic_tool("reconcile_stacked_review_gap", reconcile_stacked_review_gap)
 register_epic_tool("resume_owner", resume_owner)
 register_epic_tool("restore_feature_dispatch", restore_feature_dispatch)
 register_epic_tool("recover_feature", recover_feature)
+register_epic_tool("publish_integration_review", publish_integration_review)
 register_epic_tool("reconcile_completion_rollup", reconcile_completion_rollup)

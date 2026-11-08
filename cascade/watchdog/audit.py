@@ -1350,6 +1350,16 @@ def incident_failure_class(tier: WorkTier, reason: str, evidence: AuditEvidence)
             # Observation already reports store reachability separately.  Do
             # not infer executable authority from an unreadable recovery row.
             pass
+    if tier in {"feature", "epic"} and evidence.parent_action is not None:
+        action = evidence.parent_action.candidate_action
+        if action == "resume_planning_owner":
+            return "parent_owner_stalled"
+        if action.startswith("restore_child_dispatch:"):
+            return "child_dispatch_stalled"
+        if action == "publish_integration_review":
+            return "publication_stalled"
+        if action == "reconcile_completion_rollup":
+            return "completion_rollup_stalled"
     return reason
 
 

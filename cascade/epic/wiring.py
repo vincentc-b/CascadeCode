@@ -47,6 +47,7 @@ def load_epic_tools() -> None:
         "resume_owner",
         "restore_feature_dispatch",
         "recover_feature",
+        "publish_integration_review",
         "reconcile_completion_rollup",
         "refresh_dependency_status",
         "retry_integration_branch_update",
