@@ -8,7 +8,6 @@ sweep observation and concurrent callers cannot steal a live task.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import tempfile
@@ -25,6 +24,11 @@ from cascade.task.orphan_delivery import (
     snapshot_orphan_delivery_state,
 )
 from cascade.task.lifecycle_lock import lifecycle_root, task_lifecycle_lock
+from cascade.watchdog.incidents import (
+    authoritative_generation,
+    incident_record,
+    project_incident,
+)
 
 RecoveryDecision = Literal[
     "no_op_live_owner",
@@ -72,6 +76,12 @@ def recover_orphan_delivery(
         attempt = _execution_attempt(task_id, repo)
         incident_id = observed_incident or _incident_id(task_id, attempt)
         ledger = _read_ledger(repo)
+        facts: dict[str, object] = {
+            "status": task.meta.status,
+            "parent": task.meta.parent,
+            "document_revision": task.sha,
+        }
+        generation: str | None = None
 
         # Do not enqueue while the worker is draining, or while cancellation
         # owns the lifecycle transition.  Neither condition is recoverable by
@@ -89,48 +99,128 @@ def recover_orphan_delivery(
                 )
             else:
                 state = snapshot_orphan_delivery_state(
-                    task_id, root=repo,
+                    task_id,
+                    root=repo,
                     pinned_inputs=_pinned_inputs(task_id, task.meta.parent, repo),
                 )
                 from cascade.task_rollup import _merge_head_pair
 
                 heads = _merge_head_pair(task_id, repo)
-                facts = {"state": asdict(state), "heads": list(heads) if heads else None,
-                         "status": task.meta.status, "parent": task.meta.parent}
-                generation = hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()[:24]
+                facts = {
+                    "state": asdict(state),
+                    "heads": list(heads) if heads else None,
+                    "status": task.meta.status,
+                    "parent": task.meta.parent,
+                    "document_revision": task.sha,
+                }
+                generation = authoritative_generation(
+                    work_id=task_id,
+                    tier="task",
+                    evidence=facts,
+                    capability="supervisor_recover_task_delivery",
+                )
                 # Observations are hints, never authorization or cache identity.
-                incident_id = f"{_incident_id(task_id, attempt)}:{generation}"
-                previous = _result_from_row(ledger.get(incident_id))
+                incident_id = f"{_incident_id(task_id, attempt)}:{generation[-24:]}"
+                previous_row = ledger.get(incident_id)
+                previous = _result_from_row(previous_row)
+                if (
+                    previous is not None
+                    and isinstance(previous_row, dict)
+                    and isinstance(previous_row.get("incident"), dict)
+                    and project_incident(
+                        generation, {incident_id: previous_row}
+                    ).eligible
+                ):
+                    previous = None
                 if previous is not None:
                     from cascade.task.execution import execution_view
+
                     execution = execution_view(task_id, root=repo) or {}
-                    if previous.decision != "resume_workspace" or execution.get("health") != "stale":
+                    if (
+                        previous.decision != "resume_workspace"
+                        or execution.get("health") != "stale"
+                    ):
                         return previous
                     # A persisted handoff with no live owner is replayable after
                     # the queue reservation expires (including supervisor exit).
                     result = previous
                     resume = (task_id, task.meta.parent)
                     from cascade.task.execution import mark_stall_recovery_queued
+
                     mark_stall_recovery_queued(task_id, root=repo)
                 else:
                     incident = derive_orphan_delivery_incident(state)
                     result, resume = _apply_incident(
-                        incident, incident_id, attempt, repo,
+                        incident,
+                        incident_id,
+                        attempt,
+                        repo,
                         feature_id=task.meta.parent,
                     )
-                    result = replace(result, diagnostics={
-                        **(result.diagnostics or {}), "generation": generation,
-                        "observation": facts,
-                    })
+                    result = replace(
+                        result,
+                        diagnostics={
+                            **(result.diagnostics or {}),
+                            "generation": generation,
+                            "observation": facts,
+                        },
+                    )
 
-        ledger[incident_id] = result.as_dict()
+        if generation is None:
+            generation = authoritative_generation(
+                work_id=task_id,
+                tier="task",
+                evidence=facts,
+                capability="supervisor_recover_task_delivery",
+            )
+            incident_id = f"{_incident_id(task_id, attempt)}:{generation[-24:]}"
+            result = replace(
+                result,
+                incident_id=incident_id,
+                diagnostics={
+                    **(result.diagnostics or {}),
+                    "generation": generation,
+                    "observation": facts,
+                },
+            )
+        ledger[incident_id] = _ledger_row(
+            result,
+            task_id=task_id,
+            owner=(
+                f"feature:{task.meta.parent}" if task.meta.parent else f"task:{task_id}"
+            ),
+            generation=generation,
+            evidence=facts,
+            prior=ledger.get(incident_id),
+        )
         if resume is not None:
             # The queued transition is our own handoff, not a new external
             # generation. Reserve its resulting observation before unlocking.
-            queued_facts = {**facts, "state": {**facts["state"], "execution_phase": "queued"}}
-            queued_generation = hashlib.sha256(json.dumps(queued_facts, sort_keys=True).encode()).hexdigest()[:24]
-            queued_id = f"{_incident_id(task_id, result.attempt)}:{queued_generation}"
-            ledger[queued_id] = result.as_dict()
+            queued_facts = {
+                **facts,
+                "state": {**facts["state"], "execution_phase": "queued"},
+            }
+            queued_generation = authoritative_generation(
+                work_id=task_id,
+                tier="task",
+                evidence=queued_facts,
+                capability="supervisor_recover_task_delivery",
+            )
+            queued_id = (
+                f"{_incident_id(task_id, result.attempt)}:{queued_generation[-24:]}"
+            )
+            ledger[queued_id] = _ledger_row(
+                result,
+                task_id=task_id,
+                owner=(
+                    f"feature:{task.meta.parent}"
+                    if task.meta.parent
+                    else f"task:{task_id}"
+                ),
+                generation=queued_generation,
+                evidence=queued_facts,
+                prior=ledger.get(queued_id),
+            )
         _write_ledger(repo, ledger)
 
     # Starting a model turn while the lifecycle lock is held invites lock
@@ -179,8 +269,14 @@ def recovery_incident(task_id: str, *, root: Path) -> RecoveryResult | None:
     latest = candidates[-1] if candidates else None
     if latest is not None and latest.reason == "validated_delivery_already_queued":
         from cascade.task_rollup import pending_task_merges
+
         if task_id not in pending_task_merges(repo):
-            return _result(latest.incident_id, "unsafe", "delivery_invalidated_revalidation_pending", latest.attempt)
+            return _result(
+                latest.incident_id,
+                "unsafe",
+                "delivery_invalidated_revalidation_pending",
+                latest.attempt,
+            )
     return latest
 
 
@@ -395,6 +491,56 @@ def _result_from_row(row: dict[str, object] | None) -> RecoveryResult | None:
         _optional_int(row.get("attempt")),
         dict(row["diagnostics"]) if isinstance(row.get("diagnostics"), dict) else None,
     )  # type: ignore[arg-type]
+
+
+def _ledger_row(
+    result: RecoveryResult,
+    *,
+    task_id: str,
+    owner: str,
+    generation: str,
+    evidence: dict[str, object],
+    prior: dict[str, object] | None,
+) -> dict[str, object]:
+    row = result.as_dict()
+    prior_contract = prior.get("incident") if isinstance(prior, dict) else None
+    attempts = (
+        list(prior_contract.get("attempts") or [])
+        if isinstance(prior_contract, dict)
+        else []
+    )
+    attempts.append(
+        {
+            "attempt": result.attempt,
+            "decision": result.decision,
+            "reason": result.reason,
+        }
+    )
+    if result.decision == "requeue_commit":
+        outcome = "success"
+    elif result.decision == "resume_workspace":
+        outcome = "claimed"
+    elif result.decision == "unsafe":
+        outcome = "unsafe"
+    elif result.decision == "defer_draining":
+        outcome = "deferred"
+    else:
+        outcome = "no_op"
+    row["incident"] = incident_record(
+        work_id=task_id,
+        tier="task",
+        accountable_owner=owner,
+        failure_class=result.reason,
+        generation=generation,
+        evidence=evidence,
+        selected_capability="supervisor_recover_task_delivery",
+        request={"incident_id": result.incident_id},
+        acknowledgement={"decision": result.decision},
+        result={"reason": result.reason, "mutated": result.mutated},
+        attempts=attempts,
+        outcome=outcome,  # type: ignore[arg-type]
+    )
+    return row
 
 
 def _optional_int(value: object) -> int | None:

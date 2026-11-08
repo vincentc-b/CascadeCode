@@ -18,10 +18,16 @@ from pathlib import Path
 from typing import Any, Literal, Mapping
 
 from cascade.board.context import resolve_root
+from cascade.board.work_ids import parse_work_id_parts
 from cascade.task.lifecycle_lock import (
     lifecycle_root,
     task_lifecycle_lock,
     task_lifecycle_read_lock,
+)
+from cascade.watchdog.incidents import (
+    append_generation_history,
+    authoritative_generation,
+    incident_record,
 )
 
 FailureClassification = Literal[
@@ -362,6 +368,7 @@ def create_or_load_action(
             "updated_at": created,
             "attempts": [],
         }
+        _refresh_incident(action, now=now)
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
@@ -441,6 +448,7 @@ def update_recovery_record(
             recovery["human_blocker"] = None
         stamped = _iso(now)
         action.update(recovery=recovery, updated_at=stamped)
+        _refresh_incident(action, now=now)
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 3)
         payload["actions"] = actions
@@ -469,6 +477,7 @@ def replace_action_metadata(
         if action is None:
             raise ActionNotFound(action_id)
         action["metadata"] = replacement
+        _refresh_incident(action)
         actions[action_id] = action
         payload["actions"] = actions
         _write_payload(repo, payload)
@@ -602,7 +611,10 @@ def capture_and_route_action_failure(
             raise ActionNotFound(action_id)
         action_recovery = dict(action.get("recovery") or {})
         marker = action_recovery.get("routing_marker")
-        if isinstance(marker, Mapping) and marker.get("investigation_id") == investigation_id:
+        if (
+            isinstance(marker, Mapping)
+            and marker.get("investigation_id") == investigation_id
+        ):
             durable_owner = action_recovery.get("owning_team")
             if (
                 action.get("recovery_state") == "awaiting_owner_decision"
@@ -611,17 +623,25 @@ def capture_and_route_action_failure(
                 and isinstance(durable_owner.get("work_id"), str)
             ):
                 durable_evidence = action_recovery.get("evidence")
-                stored = durable_evidence if isinstance(durable_evidence, Mapping) else {}
+                stored = (
+                    durable_evidence if isinstance(durable_evidence, Mapping) else {}
+                )
                 _enqueue_recovery_request_if_missing(
                     str(durable_owner["work_id"]),
                     investigation_id=investigation_id,
                     action_id=action_id,
                     action_kind=action_kind,
-                    affected_work_id=str(stored.get("affected_work_id") or affected_work_id),
+                    affected_work_id=str(
+                        stored.get("affected_work_id") or affected_work_id
+                    ),
                     failure_code=str(stored.get("failure_code") or failure_code),
                     safe_summary=str(stored.get("safe_summary") or safe_summary),
-                    conflicting_paths=tuple(stored.get("conflicting_paths") or conflicting_paths),
-                    intended_target_ref=stored.get("intended_target_ref", intended_target_ref),
+                    conflicting_paths=tuple(
+                        stored.get("conflicting_paths") or conflicting_paths
+                    ),
+                    intended_target_ref=stored.get(
+                        "intended_target_ref", intended_target_ref
+                    ),
                     root=repo,
                     now=now,
                 )
@@ -805,9 +825,13 @@ def record_action_checkpoint(
     normalized_shas = _string_map(shas, field="checkpoint SHAs")
     paths = _paths(affected_paths)
     if not isinstance(command_summary, str) or not isinstance(test_summary, str):
-        raise ActionRecoveryError("checkpoint command and test summaries must be strings")
+        raise ActionRecoveryError(
+            "checkpoint command and test summaries must be strings"
+        )
     if not isinstance(resume_instructions, str) or not resume_instructions:
-        raise ActionRecoveryError("checkpoint resume instructions must be a nonempty string")
+        raise ActionRecoveryError(
+            "checkpoint resume instructions must be a nonempty string"
+        )
     repo = resolve_root(root)
     with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
@@ -824,8 +848,19 @@ def record_action_checkpoint(
             "test_summary": test_summary,
             "resume_instructions": resume_instructions,
         }
-        checkpoints = [dict(item) for item in action.get("checkpoints", []) if isinstance(item, dict)]
-        existing = next((item for item in checkpoints if item.get("checkpoint_id") == checkpoint_id), None)
+        checkpoints = [
+            dict(item)
+            for item in action.get("checkpoints", [])
+            if isinstance(item, dict)
+        ]
+        existing = next(
+            (
+                item
+                for item in checkpoints
+                if item.get("checkpoint_id") == checkpoint_id
+            ),
+            None,
+        )
         if existing is not None:
             comparable = {key: existing.get(key) for key in checkpoint}
             if comparable != checkpoint:
@@ -835,7 +870,10 @@ def record_action_checkpoint(
             return _copy(action)
         stamped = _iso(now)
         checkpoints.append({**checkpoint, "recorded_at": stamped})
-        action.update(checkpoints=checkpoints, checkpoint=checkpoints[-1], updated_at=stamped)
+        action.update(
+            checkpoints=checkpoints, checkpoint=checkpoints[-1], updated_at=stamped
+        )
+        _refresh_incident(action, now=now)
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
@@ -865,7 +903,9 @@ def reconcile_action(
     _validate_identity(action_id)
     if local_head is not None and (not isinstance(local_head, str) or not local_head):
         raise ActionRecoveryError("local head must be a nonempty SHA or None")
-    if remote_head is not None and (not isinstance(remote_head, str) or not remote_head):
+    if remote_head is not None and (
+        not isinstance(remote_head, str) or not remote_head
+    ):
         raise ActionRecoveryError("remote head must be a nonempty SHA or None")
     paths = _paths(dirty_paths)
     repo = resolve_root(root)
@@ -875,10 +915,18 @@ def reconcile_action(
         action = actions.get(action_id)
         if action is None:
             raise ActionNotFound(action_id)
-        checkpoint = action.get("checkpoint") if isinstance(action.get("checkpoint"), dict) else None
+        checkpoint = (
+            action.get("checkpoint")
+            if isinstance(action.get("checkpoint"), dict)
+            else None
+        )
         decision = _reconciliation_for(
-            action, checkpoint, local_head=local_head, remote_head=remote_head,
-            rebase_in_progress=rebase_in_progress, dirty_paths=paths,
+            action,
+            checkpoint,
+            local_head=local_head,
+            remote_head=remote_head,
+            rebase_in_progress=rebase_in_progress,
+            dirty_paths=paths,
         )
         durable = decision.as_dict()
         # Reconciliation itself is idempotent.  Do not churn timestamps or
@@ -897,20 +945,31 @@ def _string_map(value: Mapping[str, str], *, field: str) -> dict[str, str]:
     if not isinstance(value, Mapping):
         raise ActionRecoveryError(f"{field} must be a mapping")
     normalized = {str(key): item for key, item in value.items()}
-    if not normalized or any(not key or not isinstance(item, str) or not item for key, item in normalized.items()):
-        raise ActionRecoveryError(f"{field} must contain nonempty string keys and values")
+    if not normalized or any(
+        not key or not isinstance(item, str) or not item
+        for key, item in normalized.items()
+    ):
+        raise ActionRecoveryError(
+            f"{field} must contain nonempty string keys and values"
+        )
     return dict(sorted(normalized.items()))
 
 
 def _paths(value: tuple[str, ...] | list[str]) -> tuple[str, ...]:
-    if not isinstance(value, (tuple, list)) or any(not isinstance(path, str) or not path for path in value):
+    if not isinstance(value, (tuple, list)) or any(
+        not isinstance(path, str) or not path for path in value
+    ):
         raise ActionRecoveryError("affected paths must be nonempty strings")
     return tuple(dict.fromkeys(value))
 
 
 def _reconciliation_for(
-    action: Mapping[str, Any], checkpoint: Mapping[str, Any] | None, *,
-    local_head: str | None, remote_head: str | None, rebase_in_progress: bool,
+    action: Mapping[str, Any],
+    checkpoint: Mapping[str, Any] | None,
+    *,
+    local_head: str | None,
+    remote_head: str | None,
+    rebase_in_progress: bool,
     dirty_paths: tuple[str, ...],
 ) -> ActionReconciliation:
     checkpoint_id = checkpoint.get("checkpoint_id") if checkpoint else None
@@ -918,33 +977,139 @@ def _reconciliation_for(
     instructions = checkpoint.get("resume_instructions") if checkpoint else None
     state = action.get("recovery_state")
     if state == "completed":
-        return ActionReconciliation("already_completed", "action_completed", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+        return ActionReconciliation(
+            "already_completed",
+            "action_completed",
+            action["action_id"],
+            checkpoint_id,
+            local_head,
+            remote_head,
+            affected,
+            instructions,
+        )
     if state in {"blocked", "awaiting_owner_decision", "awaiting_human_gate"}:
-        return ActionReconciliation("blocker", "action_not_resumable", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+        return ActionReconciliation(
+            "blocker",
+            "action_not_resumable",
+            action["action_id"],
+            checkpoint_id,
+            local_head,
+            remote_head,
+            affected,
+            instructions,
+        )
     if checkpoint is None:
-        return ActionReconciliation("blocker", "checkpoint_missing", action["action_id"], None, local_head, remote_head)
+        return ActionReconciliation(
+            "blocker",
+            "checkpoint_missing",
+            action["action_id"],
+            None,
+            local_head,
+            remote_head,
+        )
     shas = checkpoint.get("shas")
     if not isinstance(shas, Mapping):
-        return ActionReconciliation("blocker", "checkpoint_invalid", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+        return ActionReconciliation(
+            "blocker",
+            "checkpoint_invalid",
+            action["action_id"],
+            checkpoint_id,
+            local_head,
+            remote_head,
+            affected,
+            instructions,
+        )
     target = shas.get("target_head")
     source = shas.get("source_head")
     rebased = shas.get("rebased_head")
     published = shas.get("published_head")
     if not isinstance(target, str) or not isinstance(source, str):
-        return ActionReconciliation("blocker", "checkpoint_heads_missing", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+        return ActionReconciliation(
+            "blocker",
+            "checkpoint_heads_missing",
+            action["action_id"],
+            checkpoint_id,
+            local_head,
+            remote_head,
+            affected,
+            instructions,
+        )
     if published and remote_head == published:
-        return ActionReconciliation("already_completed", "published_head_on_remote", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+        return ActionReconciliation(
+            "already_completed",
+            "published_head_on_remote",
+            action["action_id"],
+            checkpoint_id,
+            local_head,
+            remote_head,
+            affected,
+            instructions,
+        )
     if remote_head != target:
-        return ActionReconciliation("blocker", "remote_head_changed", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+        return ActionReconciliation(
+            "blocker",
+            "remote_head_changed",
+            action["action_id"],
+            checkpoint_id,
+            local_head,
+            remote_head,
+            affected,
+            instructions,
+        )
     if rebase_in_progress:
-        return ActionReconciliation("resume", "rebase_in_progress", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+        return ActionReconciliation(
+            "resume",
+            "rebase_in_progress",
+            action["action_id"],
+            checkpoint_id,
+            local_head,
+            remote_head,
+            affected,
+            instructions,
+        )
     if dirty_paths:
-        return ActionReconciliation("blocker", "dirty_worktree", action["action_id"], checkpoint_id, local_head, remote_head, dirty_paths, instructions)
+        return ActionReconciliation(
+            "blocker",
+            "dirty_worktree",
+            action["action_id"],
+            checkpoint_id,
+            local_head,
+            remote_head,
+            dirty_paths,
+            instructions,
+        )
     if isinstance(rebased, str) and local_head == rebased:
-        return ActionReconciliation("resume", "rebased_head_present", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+        return ActionReconciliation(
+            "resume",
+            "rebased_head_present",
+            action["action_id"],
+            checkpoint_id,
+            local_head,
+            remote_head,
+            affected,
+            instructions,
+        )
     if local_head == source:
-        return ActionReconciliation("safe_retry", "source_head_unchanged", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
-    return ActionReconciliation("blocker", "local_head_changed", action["action_id"], checkpoint_id, local_head, remote_head, affected, instructions)
+        return ActionReconciliation(
+            "safe_retry",
+            "source_head_unchanged",
+            action["action_id"],
+            checkpoint_id,
+            local_head,
+            remote_head,
+            affected,
+            instructions,
+        )
+    return ActionReconciliation(
+        "blocker",
+        "local_head_changed",
+        action["action_id"],
+        checkpoint_id,
+        local_head,
+        remote_head,
+        affected,
+        instructions,
+    )
 
 
 def recovery_actions(*, root: Path) -> list[dict[str, Any]]:
@@ -1185,6 +1350,7 @@ def start_attempt(
         action["recovery_state"] = recovery_state
         action["updated_at"] = started
         action["attempts"] = attempts
+        _refresh_incident(action, now=now)
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
@@ -1246,6 +1412,7 @@ def finalize_attempt(
         action["updated_at"] = finished
         action["attempts"] = attempts
         action.pop("execution_claim", None)
+        _refresh_incident(action, now=now)
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
@@ -1317,7 +1484,9 @@ def repair_action(
             "completion_metadata": None,
         }
         repairs.append(entry)
-        action.update(repair_attempts=repairs, recovery_state="repairing", updated_at=started)
+        action.update(
+            repair_attempts=repairs, recovery_state="repairing", updated_at=started
+        )
         actions[action_id] = action
         payload["actions"] = actions
         _write_payload(repo, payload)
@@ -1330,10 +1499,18 @@ def repair_action(
                 classification = classification or "terminal_blocker"
                 final_state = _FAILURE_STATES[classification]
         except ActionFailure as exc:
-            outcome, classification, metadata = "failed", exc.classification, exc.metadata
+            outcome, classification, metadata = (
+                "failed",
+                exc.classification,
+                exc.metadata,
+            )
             final_state = _FAILURE_STATES[classification]
         except BaseException as exc:
-            outcome, classification, final_state = "failed", "terminal_blocker", "blocked"
+            outcome, classification, final_state = (
+                "failed",
+                "terminal_blocker",
+                "blocked",
+            )
             metadata = {"error_type": type(exc).__name__, "message": str(exc)}
 
         # Re-read while still holding the lock: a nested operation may have
@@ -1455,6 +1632,7 @@ def _claim_resume_attempt(
             attempts=attempts,
             execution_claim={"claim_id": claim_id, "claimed_at": claimed_at},
         )
+        _refresh_incident(action, now=now)
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
@@ -1534,16 +1712,27 @@ def resume_action(
                 preflight(context)
         except ActionFailure as exc:
             return finalize_attempt(
-                action_id, context.attempt_number, root=repo, outcome="failed",
+                action_id,
+                context.attempt_number,
+                root=repo,
+                outcome="failed",
                 classification=exc.classification,
                 recovery_state=_FAILURE_STATES[exc.classification],
-                completion_metadata=exc.metadata, now=now,
+                completion_metadata=exc.metadata,
+                now=now,
             )
         except BaseException as exc:
             return finalize_attempt(
-                action_id, context.attempt_number, root=repo, outcome="failed",
-                classification="terminal_blocker", recovery_state="blocked",
-                completion_metadata={"error_type": type(exc).__name__, "message": str(exc)},
+                action_id,
+                context.attempt_number,
+                root=repo,
+                outcome="failed",
+                classification="terminal_blocker",
+                recovery_state="blocked",
+                completion_metadata={
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                },
                 now=now,
             )
     try:
@@ -1560,15 +1749,21 @@ def resume_action(
         outcome, classification, state = "failed", "terminal_blocker", "blocked"
         metadata = {"error_type": type(exc).__name__, "message": str(exc)}
     return finalize_attempt(
-        action_id, context.attempt_number, root=repo, outcome=outcome,
-        classification=classification, recovery_state=state,
-        completion_metadata=metadata, now=now,
+        action_id,
+        context.attempt_number,
+        root=repo,
+        outcome=outcome,
+        classification=classification,
+        recovery_state=state,
+        completion_metadata=metadata,
+        now=now,
     )
 
 
 def reconcile_completed_task_delivery(task_id: str, *, root: Path) -> None:
     """Canonical completion supersedes an obsolete blocker, retaining attempts."""
     from cascade.board.store import read_doc
+
     repo = resolve_root(root)
     with task_lifecycle_lock(root=repo):
         if read_doc(task_id, root=repo).meta.status != "completed":
@@ -1579,8 +1774,12 @@ def reconcile_completed_task_delivery(task_id: str, *, root: Path) -> None:
         if action is None or action.get("recovery_state") == "completed":
             return
         action["recovery_state"] = "completed"
-        action["completion_reconciliation"] = {"reason": "canonical_task_completed", "at": _iso(None)}
+        action["completion_reconciliation"] = {
+            "reason": "canonical_task_completed",
+            "at": _iso(None),
+        }
         action["updated_at"] = _iso(None)
+        _refresh_incident(action)
         payload["actions"] = actions
         _write_payload(repo, payload)
 
@@ -1605,9 +1804,12 @@ def acknowledge_team_recovery(work_id: str, *, root: Path) -> None:
             _write_payload(repo, payload)
 
 
-def rearm_validated_task_action(task_id: str, evidence: Mapping[str, str], *, root: Path) -> dict[str, Any]:
+def rearm_validated_task_action(
+    task_id: str, evidence: Mapping[str, str], *, root: Path
+) -> dict[str, Any]:
     """A newly validated head pair may rearm the same action without erasing history."""
     from cascade.task_rollup import delivery_evidence_is_current
+
     repo = resolve_root(root)
     action_id = f"{task_id}:queued_merge"
     with task_lifecycle_lock(root=repo):
@@ -1620,12 +1822,138 @@ def rearm_validated_task_action(task_id: str, evidence: Mapping[str, str], *, ro
         identity = dict(evidence)
         if any(g.get("validation") == identity for g in generations):
             return _copy(action)
-        generations.append({"validation": identity, "at": _iso(None),
-                            "previous_state": action["recovery_state"]})
-        if action["recovery_state"] == "blocked" and action.get("failure_classification") != "human_gate":
+        generations.append(
+            {
+                "validation": identity,
+                "at": _iso(None),
+                "previous_state": action["recovery_state"],
+            }
+        )
+        if (
+            action["recovery_state"] == "blocked"
+            and action.get("failure_classification") != "human_gate"
+        ):
             action["recovery_state"] = "retryable"
             action["failure_classification"] = None
-            action["attempt_bound"] = max(int(action.get("attempt_bound") or 1), int(action.get("attempt_count") or 0) + 1)
+            action["attempt_bound"] = max(
+                int(action.get("attempt_bound") or 1),
+                int(action.get("attempt_count") or 0) + 1,
+            )
+        _refresh_incident(action)
         payload["actions"] = actions
         _write_payload(repo, payload)
         return _copy(action)
+
+
+def _refresh_incident(action: dict[str, Any], *, now: datetime | None = None) -> None:
+    """Add the shared incident envelope when a typed affected work item exists."""
+
+    recovery = (
+        action.get("recovery") if isinstance(action.get("recovery"), Mapping) else {}
+    )
+    metadata = (
+        action.get("metadata") if isinstance(action.get("metadata"), Mapping) else {}
+    )
+    recovery_evidence = (
+        recovery.get("evidence")
+        if isinstance(recovery.get("evidence"), Mapping)
+        else {}
+    )
+    owner = (
+        recovery.get("owning_team")
+        if isinstance(recovery.get("owning_team"), Mapping)
+        else {}
+    )
+    candidates = (
+        recovery_evidence.get("affected_work_id"),
+        metadata.get("affected_work_id"),
+        metadata.get("task_id"),
+        metadata.get("feature_id"),
+        metadata.get("epic_id"),
+        owner.get("work_id"),
+        str(action.get("action_id") or "").split(":", 1)[0],
+    )
+    work_id = next(
+        (
+            candidate
+            for candidate in candidates
+            if isinstance(candidate, str) and _work_tier(candidate) is not None
+        ),
+        None,
+    )
+    if work_id is None:
+        return
+    tier = _work_tier(work_id)
+    if tier is None:
+        return
+    action_kind = str(action.get("action_kind") or "action_recovery")
+    evidence = {
+        "action_id": action.get("action_id"),
+        "action_kind": action_kind,
+        "metadata": metadata,
+        "lifecycle_state": recovery.get("lifecycle_state"),
+        "owning_team": owner,
+        "evidence": recovery_evidence,
+        "checkpoint": action.get("checkpoint"),
+        "delivery_generations": action.get("delivery_generations"),
+    }
+    # Capability authority is part of the generation: a previously successful
+    # action must be reconsidered when registration, owner scope, reachability,
+    # locking, or retry policy changes even if lifecycle evidence is unchanged.
+    from cascade.watchdog.incidents import capability_authority_fingerprint
+
+    generation = authoritative_generation(
+        work_id=work_id,
+        tier=tier,
+        evidence=evidence,
+        capability=action_kind,
+        capability_fingerprint=capability_authority_fingerprint(),
+    )
+    state = str(action.get("recovery_state") or "pending")
+    if state == "completed":
+        outcome = "success"
+    elif state in {"running", "repairing", "resuming", "routing", "investigating"}:
+        outcome = "claimed"
+    elif state in {"blocked", "awaiting_human_gate"}:
+        outcome = "unsafe"
+    elif state in {"awaiting_owner_decision", "pending", "ready_to_resume", "repaired"}:
+        outcome = "deferred"
+    else:
+        outcome = "error"
+    concrete_owner = (
+        f"{owner.get('kind')}:{owner.get('work_id')}"
+        if owner.get("kind") and owner.get("work_id")
+        else f"{tier}:{work_id}"
+    )
+    contract = incident_record(
+        work_id=work_id,
+        tier=tier,
+        accountable_owner=concrete_owner,
+        failure_class=str(action.get("failure_classification") or "action_recovery"),
+        generation=generation,
+        evidence=evidence,
+        selected_capability=action_kind,
+        request={
+            "original_action": recovery.get("original_action")
+            or {"action_id": action.get("action_id"), "action_kind": action_kind}
+        },
+        acknowledgement={
+            "execution_claim": action.get("execution_claim"),
+            "routing_marker": recovery.get("routing_marker"),
+        },
+        result={"recovery_state": state},
+        attempts=[
+            item for item in action.get("attempts") or [] if isinstance(item, Mapping)
+        ],
+        outcome=outcome,  # type: ignore[arg-type]
+        now=now,
+        attempt_bound=max(int(action.get("attempt_bound") or 1), 1),
+    )
+    append_generation_history(action, contract)
+
+
+def _work_tier(work_id: str) -> str | None:
+    try:
+        return parse_work_id_parts(work_id).tier
+    except Exception:
+        return None

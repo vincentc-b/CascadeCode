@@ -7,6 +7,7 @@ import subprocess
 from datetime import date
 from pathlib import Path
 
+import cascade.watchdog.audit as audit
 from cascade.board.context import set_project_context
 from cascade.watchdog.audit import CandidateBudget, select_audit_candidates
 from cascade.workspace.types import ProjectContext
@@ -199,4 +200,31 @@ def test_unreadable_sources_and_missing_canonical_documents_are_unavailable(
     assert missing.evidence_errors == ("canonical_document_unavailable",)
     assert (sidecars / "executions.json").read_bytes() == before
     assert not (sidecars / "worktrees.lock").exists()
+
+
+def test_unchanged_passes_reuse_completed_inventory_and_new_completion_is_seen(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Active", tier="epic", status="active")
+    add_doc(root, id="epic_002", title="Old", tier="epic", status="completed")
+    _commit(root)
+    scanned: list[Path] = []
+    original = audit._scan_meta
+
+    def counting_scan(path: Path):
+        scanned.append(path)
+        return original(path)
+
+    monkeypatch.setattr(audit, "_scan_meta", counting_scan)
+    select_audit_candidates(root=root, today=date(2026, 11, 20))
+    scanned.clear()
+    select_audit_candidates(root=root, today=date(2026, 11, 20))
+    assert scanned
+    assert all("3_completed" not in path.parts for path in scanned)
+
+    add_doc(root, id="epic_003", title="Recent", tier="epic", status="completed")
+    page = select_audit_candidates(root=root, today=date.today())
+    assert "epic_003" in _ids(page)
+    assert any("3_completed" in path.parts for path in scanned)
 

@@ -12,9 +12,11 @@ import binascii
 import hashlib
 import json
 import time
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
+from threading import RLock
 from typing import Any, Callable, Literal, Mapping, TypeAlias
 
 from cascade.board.context import (
@@ -23,15 +25,17 @@ from cascade.board.context import (
     resolve_tracking_root,
 )
 from cascade.board.gitutil import _run, head_sha
-from cascade.board.store import list_board, read_doc
-from cascade.board.types import BoardIndex, WorkDoc, WorkTier
+from cascade.board.errors import SchemaError
+from cascade.board.store import _scan_meta, read_doc
+from cascade.board.types import BoardIndex, WorkDoc, WorkMeta, WorkTier
 from cascade.board.work_ids import parse_work_id_parts
 from cascade.epic.plan_readiness import compute_epic_plan_readiness
 from cascade.feature.readiness import compute_feature_readiness
 from cascade.task.action_recovery import recovery_actions
 from cascade.task.execution import execution_views
 from cascade.watchdog.health import classify_child
-from cascade.workspace.integration_worktree import merged_board
+from cascade.watchdog.incidents import capability_authority_fingerprint
+from cascade.workspace.integration_worktree import merged_board_readonly
 
 AuditClassification = Literal[
     "healthy", "expected_wait", "proven_incident", "unavailable_evidence"
@@ -126,7 +130,9 @@ class AuditGeneration:
             raise AuditIdentityError("generation must be a sha256 identity")
         digest = self.value.removeprefix("sha256:")
         if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
-            raise AuditIdentityError("generation must contain a full lowercase sha256 digest")
+            raise AuditIdentityError(
+                "generation must contain a full lowercase sha256 digest"
+            )
 
     def __str__(self) -> str:
         return self.value
@@ -224,7 +230,10 @@ class CandidateBudget:
     def __post_init__(self) -> None:
         if type(self.max_items) is not int or not 1 <= self.max_items <= 100:
             raise ValueError("candidate budget must contain 1 to 100 items")
-        if not isinstance(self.max_seconds, (int, float)) or not 0 < self.max_seconds <= 60:
+        if (
+            not isinstance(self.max_seconds, (int, float))
+            or not 0 < self.max_seconds <= 60
+        ):
             raise ValueError("candidate budget must contain at most 60 seconds")
 
 
@@ -260,14 +269,103 @@ _UNRESOLVED_SOURCES = (
 _TERMINAL_MARKERS = {
     "completed",
     "succeeded",
+    "success",
     "merged",
     "closed",
     "repaired",
-    "already_delivered",
     "requeue_commit",
-    "resume_workspace",
-    "no_op_live_owner",
 }
+_COMPLETED_CACHE_LIMIT = 16
+_completed_cache_lock = RLock()
+_completed_cache: OrderedDict[
+    Path,
+    tuple[
+        tuple[tuple[int, int, int, int] | None, ...],
+        dict[str, WorkMeta],
+        date,
+        dict[str, WorkMeta],
+    ],
+] = OrderedDict()
+
+
+def _candidate_board(
+    tracking: Path, cutoff: date
+) -> tuple[dict[str, WorkMeta], dict[str, WorkMeta], dict[str, WorkMeta]]:
+    """Read live metadata and reuse completed metadata until a directory changes.
+
+    Canonical board writes replace files, which changes the containing directory.
+    A new process scans completed directories once; unchanged passes do not
+    inspect every completed document again.
+    """
+
+    directories = tuple(
+        tracking / "docs" / dirname / "3_completed"
+        for dirname in ("tasks", "features", "epics")
+    )
+
+    def signature(path: Path) -> tuple[int, int, int, int] | None:
+        if not path.is_dir():
+            return None
+        stat = path.stat()
+        return stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns
+
+    stamps = tuple(signature(path) for path in directories)
+    with _completed_cache_lock:
+        cached = _completed_cache.get(tracking)
+        if cached is not None and cached[0] == stamps:
+            _completed_cache.move_to_end(tracking)
+            completed = cached[1]
+            recent = (
+                cached[3]
+                if cached[2] == cutoff
+                else {
+                    work_id: meta
+                    for work_id, meta in completed.items()
+                    if meta.status == "completed" and meta.updated >= cutoff
+                }
+            )
+        else:
+            completed = {}
+            for directory in directories:
+                _scan_candidate_directory(directory, completed)
+            recent = {
+                work_id: meta
+                for work_id, meta in completed.items()
+                if meta.status == "completed" and meta.updated >= cutoff
+            }
+            # A concurrent canonical write may have changed a directory while
+            # it was scanned. Return this read, but do not cache it.
+        if stamps == tuple(signature(path) for path in directories):
+            _completed_cache[tracking] = (stamps, completed, cutoff, recent)
+            _completed_cache.move_to_end(tracking)
+            while len(_completed_cache) > _COMPLETED_CACHE_LIMIT:
+                _completed_cache.popitem(last=False)
+
+    live: dict[str, WorkMeta] = {}
+    for dirname in ("tasks", "features", "epics"):
+        for column in ("1_backlog", "2_active"):
+            _scan_candidate_directory(tracking / "docs" / dirname / column, live)
+    if live.keys() & completed.keys():
+        duplicate = next(iter(live.keys() & completed.keys()))
+        raise SchemaError(f"duplicate id {duplicate} in live and completed board")
+    return live, completed, recent
+
+
+def _scan_candidate_directory(directory: Path, output: dict[str, WorkMeta]) -> None:
+    if not directory.is_dir():
+        return
+    for path in sorted(directory.glob("*.md")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        try:
+            meta = _scan_meta(path)
+        except (SchemaError, OSError, UnicodeDecodeError):
+            continue
+        if meta.id in output:
+            raise SchemaError(
+                f"duplicate id {meta.id} at {path} and {output[meta.id].path}"
+            )
+        output[meta.id] = meta
 
 
 def select_audit_candidates(
@@ -292,18 +390,19 @@ def select_audit_candidates(
     # ``merged_board`` acquires the product registry's file lock.  Candidate
     # selection needs lifecycle truth from tracking and reads product-worktree
     # provenance separately, so avoid even that incidental lock-file write.
-    board = list_board(tracking)
     positions, next_tier = _decode_candidate_cursor(cursor)
     cutoff = (today or date.today()) - timedelta(days=7)
+    live, completed, recent = _candidate_board(tracking, cutoff)
     reasons: dict[tuple[WorkTier, str], set[str]] = {}
     errors: dict[tuple[WorkTier, str], set[str]] = {}
 
-    for meta in board.by_id.values():
+    for meta in live.values():
         key = (meta.tier, meta.id)
         if meta.status not in {"completed", "cancelled"}:
             reasons.setdefault(key, set()).add("nonterminal")
-        elif meta.status == "completed" and meta.updated >= cutoff:
-            reasons.setdefault(key, set()).add("recently_completed")
+    for meta in recent.values():
+        key = (meta.tier, meta.id)
+        reasons.setdefault(key, set()).add("recently_completed")
 
     unresolved, unavailable = _unresolved_candidate_references(product)
     for source, work_id in unresolved:
@@ -314,7 +413,7 @@ def select_audit_candidates(
             continue
         key = (tier, str(typed_id))
         reasons.setdefault(key, set()).add(f"unresolved_{source}")
-        meta = board.by_id.get(str(typed_id))
+        meta = live.get(str(typed_id)) or completed.get(str(typed_id))
         if meta is None or meta.tier != tier:
             errors.setdefault(key, set()).add("canonical_document_unavailable")
 
@@ -324,14 +423,16 @@ def select_audit_candidates(
         if not path.is_dir():
             errors.setdefault(key, set()).add("registered_worktree_unavailable")
             unavailable.append(f"worktree:{key[1]}:unavailable")
-        meta = board.by_id.get(key[1])
+        meta = live.get(key[1]) or completed.get(key[1])
         if meta is None or meta.tier != key[0]:
             reasons.setdefault(key, set()).add("unresolved_cleanup")
             errors.setdefault(key, set()).add("canonical_document_unavailable")
         elif meta.status in {"completed", "cancelled"}:
             reasons.setdefault(key, set()).add("unresolved_cleanup")
     lanes: dict[WorkTier, list[str]] = {
-        tier: sorted(work_id for candidate_tier, work_id in reasons if candidate_tier == tier)
+        tier: sorted(
+            work_id for candidate_tier, work_id in reasons if candidate_tier == tier
+        )
         for tier in _CANDIDATE_TIERS
     }
     selected: list[AuditCandidate] = []
@@ -343,9 +444,7 @@ def select_audit_candidates(
             break
         tier = _CANDIDATE_TIERS[tier_index]
         tier_index = (tier_index + 1) % len(_CANDIDATE_TIERS)
-        work_id = _next_candidate_id(
-            lanes[tier], positions[tier], selected_keys, tier
-        )
+        work_id = _next_candidate_id(lanes[tier], positions[tier], selected_keys, tier)
         if work_id is None:
             empty_turns += 1
             continue
@@ -479,10 +578,11 @@ def _read_json_source(path: Path, label: str) -> tuple[Any | None, str | None]:
 
 def _unresolved_candidate_references(
     product: Path,
+    sources: tuple[tuple[str, str], ...] = _UNRESOLVED_SOURCES,
 ) -> tuple[list[tuple[str, str]], list[str]]:
     references: list[tuple[str, str]] = []
     unavailable: list[str] = []
-    for label, filename in _UNRESOLVED_SOURCES:
+    for label, filename in sources:
         payload, error = _read_json_source(product / ".cascade" / filename, label)
         if error:
             unavailable.append(error)
@@ -493,7 +593,136 @@ def _unresolved_candidate_references(
             unavailable.append(f"{label}:unavailable")
             continue
         _collect_unresolved_references(payload, label, references)
+        if label == "reconciliation":
+            reviews, review_error = _read_json_source(
+                product / ".cascade" / "reviews.json", "review"
+            )
+            if review_error or (
+                reviews is not None and not isinstance(reviews, Mapping)
+            ):
+                unavailable.append("reconciliation:unavailable")
+            elif reviews is None:
+                if _has_unresolved_resolution_review_identity(payload):
+                    unavailable.append("reconciliation:unavailable")
+            elif isinstance(reviews, Mapping):
+                if not _collect_resolution_review_references(
+                    payload, reviews, references
+                ):
+                    unavailable.append("reconciliation:unavailable")
     return references, unavailable
+
+
+def _has_unresolved_resolution_review_identity(value: Any) -> bool:
+    """Return whether a live resolution row requires the review registry."""
+
+    if isinstance(value, list):
+        return any(_has_unresolved_resolution_review_identity(item) for item in value)
+    if not isinstance(value, Mapping) or _reference_is_terminal(value):
+        return False
+    request = value.get("request")
+    if isinstance(request, Mapping) and any(
+        str(request.get(field) or "").strip()
+        for field in ("review_id", "review_url")
+    ):
+        return True
+    if _is_resolution_action_row(value):
+        return True
+    return any(
+        _has_unresolved_resolution_review_identity(item)
+        for item in value.values()
+        if isinstance(item, (Mapping, list))
+    )
+
+
+def _collect_resolution_review_references(
+    value: Any,
+    reviews: Mapping[str, Any],
+    references: list[tuple[str, str]],
+) -> bool:
+    """Attribute real resolution-action rows through their review registry owner."""
+
+    if isinstance(value, list):
+        results = tuple(
+            _collect_resolution_review_references(item, reviews, references)
+            for item in value
+        )
+        return all(results)
+    if not isinstance(value, Mapping) or _reference_is_terminal(value):
+        return True
+    valid = True
+    request = value.get("request")
+    if isinstance(request, Mapping):
+        review_id = str(request.get("review_id") or "").strip()
+        review_url = str(request.get("review_url") or "").strip()
+        id_matches: set[str] = set()
+        url_matches: set[str] = set()
+        for owner_id, record in reviews.items():
+            if not isinstance(owner_id, str) or not isinstance(record, Mapping):
+                continue
+            number = str(record.get("number") or record.get("review_id") or "").strip()
+            url = str(record.get("url") or record.get("review_url") or "").strip()
+            if review_id and review_id == number:
+                id_matches.add(owner_id)
+            if review_url and review_url == url:
+                url_matches.add(owner_id)
+        identity_matches = [
+            matches
+            for identity, matches in (
+                (review_id, id_matches),
+                (review_url, url_matches),
+            )
+            if identity
+        ]
+        owners = {
+            next(iter(matches))
+            for matches in identity_matches
+            if len(matches) == 1
+        }
+        owner_id = (
+            next(iter(owners))
+            if identity_matches
+            and all(len(matches) == 1 for matches in identity_matches)
+            and len(owners) == 1
+            else None
+        )
+        if owner_id is not None and _looks_like_work_id(owner_id):
+            references.append(("reconciliation", owner_id))
+        else:
+            valid = False
+    elif _is_resolution_action_row(value):
+        valid = False
+    for item in value.values():
+        if isinstance(item, (Mapping, list)):
+            valid = (
+                _collect_resolution_review_references(item, reviews, references)
+                and valid
+            )
+    return valid
+
+
+def _is_resolution_action_row(value: Mapping[str, Any]) -> bool:
+    """Distinguish a persisted action from its surrounding registry wrappers."""
+
+    return any(value.get(field) is not None for field in ("action_id", "idempotency_key"))
+
+
+def _reference_is_terminal(value: Mapping[str, Any]) -> bool:
+    states = {
+        str(value.get(field)).lower()
+        for field in (
+            "status",
+            "state",
+            "stage",
+            "outcome",
+            "recovery_state",
+            "result",
+            "decision",
+        )
+        if value.get(field) is not None
+    }
+    return (bool(states) and states.issubset(_TERMINAL_MARKERS)) or value.get(
+        "closed"
+    ) is True
 
 
 def _collect_unresolved_references(
@@ -509,23 +738,7 @@ def _collect_unresolved_references(
         return
     if not isinstance(value, Mapping):
         return
-    states = {
-        str(value.get(field)).lower()
-        for field in (
-            "status",
-            "state",
-            "stage",
-            "outcome",
-            "recovery_state",
-            "result",
-            "decision",
-        )
-        if value.get(field) is not None
-    }
-    terminal = bool(states) and states.issubset(_TERMINAL_MARKERS)
-    if value.get("closed") is True:
-        terminal = True
-    if terminal:
+    if _reference_is_terminal(value):
         return
     identity_fields = {
         "work_id",
@@ -541,7 +754,9 @@ def _collect_unresolved_references(
         if (
             key in identity_fields
             or key.endswith("_work_id")
-            or key == "owner_id" and isinstance(item, str) and _looks_like_work_id(item)
+            or key == "owner_id"
+            and isinstance(item, str)
+            and _looks_like_work_id(item)
         )
         and isinstance(item, str)
     }
@@ -664,14 +879,19 @@ class AuditObservation:
 
     def __post_init__(self) -> None:
         if self.classification not in {
-            "healthy", "expected_wait", "proven_incident", "unavailable_evidence"
+            "healthy",
+            "expected_wait",
+            "proven_incident",
+            "unavailable_evidence",
         }:
             raise AuditIdentityError("unknown audit classification")
         _require_exact(self.evidence, AuditEvidence, "evidence")
         if self.classification == "proven_incident":
             _require_exact(self.incident, AuditIncidentIdentity, "incident")
         elif self.incident is not None:
-            raise AuditIdentityError("only a proven incident may carry incident identity")
+            raise AuditIdentityError(
+                "only a proven incident may carry incident identity"
+            )
 
     @property
     def work_id(self) -> TaskId | FeatureId | EpicId:
@@ -714,7 +934,7 @@ def project_audit_observation(
     """Project one canonical work item without invoking any mutation path."""
 
     product, tracking = _canonical_repositories(root)
-    board = merged_board(tracking)
+    board = merged_board_readonly(tracking)
     doc = read_doc(work_id, root=tracking)
     return _project_doc(doc, board=board, product=product, tracking=tracking)
 
@@ -725,11 +945,13 @@ def project_audit_observations(
     """Project the canonical board in stable tier/ID order, without writes."""
 
     product, tracking = _canonical_repositories(root)
-    board = merged_board(tracking)
+    board = merged_board_readonly(tracking)
     order = {"epic": 0, "feature": 1, "task": 2}
     docs = (
         read_doc(meta.id, root=tracking)
-        for meta in sorted(board.by_id.values(), key=lambda row: (order[row.tier], row.id))
+        for meta in sorted(
+            board.by_id.values(), key=lambda row: (order[row.tier], row.id)
+        )
     )
     return tuple(
         _project_doc(doc, board=board, product=product, tracking=tracking)
@@ -755,11 +977,16 @@ def _canonical_repositories(root: Path | None) -> tuple[Path, Path]:
 def _project_doc(
     doc: WorkDoc, *, board: BoardIndex, product: Path, tracking: Path
 ) -> AuditObservation:
-    git_head = head_sha(product)
-    branch = _branch(product)
+    worktrees, worktree_errors = _registered_worktrees(product)
+    worktree = worktrees.get((doc.meta.tier, doc.meta.id))
+    git_root = worktree if worktree is not None else product
+    git_head = head_sha(git_root) if git_root.is_dir() else None
+    branch = _branch(git_root) if git_root.is_dir() else None
     execution: Mapping[str, Any] | None = None
     gates: list[str] = []
-    errors: list[str] = []
+    errors: list[str] = list(worktree_errors)
+    if worktree is not None and not worktree.is_dir():
+        errors.append("registered_worktree_unavailable")
     if doc.sha is None:
         errors.append("document_revision_unavailable")
     if git_head is None:
@@ -770,9 +997,16 @@ def _project_doc(
     if doc.meta.tier == "task":
         execution = execution_views({doc.meta.id}, root=product).get(doc.meta.id)
     gates.extend(_dependency_gates(doc, board))
+    review_gate, review_error = _review_gate(doc.meta.id, product)
+    if review_gate is not None:
+        gates.append(review_gate)
+    if review_error is not None:
+        errors.append(review_error)
     if doc.meta.tier == "feature":
         try:
-            readiness = compute_feature_readiness(doc.meta.id, root=tracking, board=board)
+            readiness = compute_feature_readiness(
+                doc.meta.id, root=tracking, board=board
+            )
             if readiness is not None:
                 gates.extend(readiness.blockers)
             if doc.meta.status not in {"backlog", "ready_to_plan"}:
@@ -797,6 +1031,8 @@ def _project_doc(
     unresolved, recovery_error = _unresolved_references(doc.meta.id, product)
     if recovery_error is not None:
         errors.append(recovery_error)
+    if worktree is not None and doc.meta.status in {"completed", "cancelled"}:
+        unresolved = (*unresolved, f"worktree:{doc.meta.id}")
     evidence = AuditEvidence(
         tracking_repository=tracking,
         product_repository=product,
@@ -810,7 +1046,7 @@ def _project_doc(
         unresolved_references=unresolved,
         errors=tuple(errors),
     )
-    generation = _generation(doc, git_head, branch, evidence)
+    generation = _generation(doc, git_head, branch, evidence, board=board)
     identity = _identity(doc, git_head, branch, generation)
     classification, reason = _classification(doc, board, evidence)
     incident = (
@@ -837,24 +1073,54 @@ def _unresolved_references(
         actions = recovery_actions(root=product)
     except Exception:
         return (), "action_recovery_unavailable"
-    return (
-        tuple(
-            sorted(
-                str(row.get("action_id"))
-                for row in actions
-                if row.get("recovery_state") != "completed"
-                and (
-                    row.get("affected_work_id") == work_id
-                    or ((row.get("recovery") or {}).get("evidence") or {}).get(
-                        "affected_work_id"
-                    )
-                    == work_id
-                )
-                and row.get("action_id")
+    references = {
+        str(row.get("action_id"))
+        for row in actions
+        if row.get("recovery_state") != "completed"
+        and (
+            row.get("affected_work_id") == work_id
+            or ((row.get("recovery") or {}).get("evidence") or {}).get(
+                "affected_work_id"
             )
+            == work_id
+        )
+        and row.get("action_id")
+    }
+    unresolved, errors = _unresolved_candidate_references(
+        product, _UNRESOLVED_SOURCES[2:]
+    )
+    references.update(
+        f"{source}:{work_id}"
+        for source, candidate_id in unresolved
+        if candidate_id == work_id and source in {"reconciliation", "cleanup"}
+    )
+    relevant_error = next(
+        (
+            error
+            for error in errors
+            if error.split(":", 1)[0] in {"reconciliation", "cleanup"}
         ),
         None,
     )
+    return tuple(sorted(references)), relevant_error
+
+
+def _review_gate(work_id: str, product: Path) -> tuple[str | None, str | None]:
+    """An open review remains a human wait even after its work doc completes."""
+
+    payload, error = _read_json_source(product / ".cascade" / "reviews.json", "review")
+    if error is not None:
+        return None, error
+    if payload is None:
+        return None, None
+    if not isinstance(payload, Mapping):
+        return None, "review:unavailable"
+    record = payload.get(work_id)
+    if record is None:
+        return None, None
+    if not isinstance(record, Mapping):
+        return None, "review:unavailable"
+    return ("review_pending", None) if not record.get("closed") else (None, None)
 
 
 def _classification(
@@ -862,14 +1128,16 @@ def _classification(
 ) -> tuple[AuditClassification, str]:
     if evidence.errors:
         return "unavailable_evidence", evidence.errors[0]
+    if evidence.unresolved_references:
+        return "proven_incident", "unresolved_recovery_reference"
+    if "review_pending" in evidence.gates:
+        return "expected_wait", "review_pending"
     if doc.meta.status in {"completed", "cancelled"}:
         return "healthy", "terminal"
     if evidence.gates:
         return "expected_wait", evidence.gates[0]
     if doc.meta.status in {"backlog", "ready_to_plan", "cancelling"}:
         return "expected_wait", "lifecycle_gate"
-    if evidence.unresolved_references:
-        return "proven_incident", "unresolved_recovery_reference"
     if doc.meta.status == "blocked":
         return "proven_incident", "blocked"
     if doc.meta.tier == "task":
@@ -925,7 +1193,12 @@ def _identity(
 
 
 def _generation(
-    doc: WorkDoc, head: str | None, branch: str | None, evidence: AuditEvidence
+    doc: WorkDoc,
+    head: str | None,
+    branch: str | None,
+    evidence: AuditEvidence,
+    *,
+    board: BoardIndex,
 ) -> AuditGeneration:
     payload = {
         "work_id": doc.meta.id,
@@ -935,11 +1208,66 @@ def _generation(
         "branch": branch,
         "status": evidence.status,
         "gates": evidence.gates,
-        "execution": evidence.execution,
+        # Elapsed age is derived from the observation clock, not a change to
+        # the authoritative lease. Keep the heartbeat timestamp in the hash.
+        "execution": (
+            {
+                key: value
+                for key, value in evidence.execution.items()
+                if key != "heartbeat_age_seconds"
+            }
+            if evidence.execution is not None
+            else None
+        ),
         "unresolved_references": evidence.unresolved_references,
+        "errors": evidence.errors,
+        "capability_fingerprint": capability_authority_fingerprint(),
+        "direct_reports": _direct_report_inputs(doc, board, evidence),
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     return AuditGeneration("sha256:" + hashlib.sha256(encoded.encode()).hexdigest())
+
+
+def _direct_report_inputs(
+    doc: WorkDoc, board: BoardIndex, evidence: AuditEvidence
+) -> tuple[Mapping[str, Any], ...]:
+    """Include the direct-report facts that can change a supervisor incident."""
+
+    if doc.meta.tier == "task":
+        return ()
+    task_ids = {
+        child_id
+        for child_id in doc.meta.children
+        if (meta := board.by_id.get(child_id)) is not None and meta.tier == "task"
+    }
+    task_views = (
+        execution_views(task_ids, root=evidence.product_repository) if task_ids else {}
+    )
+    children = []
+    for child_id in doc.meta.children:
+        meta = board.by_id.get(child_id)
+        if meta is None:
+            children.append({"work_id": child_id, "missing": True})
+            continue
+        child = read_doc(child_id, root=evidence.tracking_repository)
+        item: dict[str, Any] = {
+            "work_id": child_id,
+            "status": child.meta.status,
+            "document_revision": child.sha,
+        }
+        if child.meta.tier == "task":
+            view = task_views.get(child_id)
+            item["execution"] = (
+                {
+                    key: value
+                    for key, value in view.items()
+                    if key != "heartbeat_age_seconds"
+                }
+                if view is not None
+                else None
+            )
+        children.append(item)
+    return tuple(children)
 
 
 def _branch(root: Path) -> str | None:

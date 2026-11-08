@@ -147,6 +147,24 @@ def load_registry(trunk: Path) -> list[IntegrationWorktree]:
         return _load_registry_unlocked(trunk)
 
 
+def load_registry_readonly(trunk: Path) -> list[IntegrationWorktree]:
+    """Read the registry without creating a lock file on a healthy audit."""
+
+    trunk = trunk.resolve()
+    lock_path = trunk / ".cascade" / _REGISTRY_LOCK_NAME
+    with _registry_thread_lock:
+        if not lock_path.exists():
+            # Registry publication replaces its JSON file atomically. A writer
+            # that creates the lock concurrently cannot expose a partial read.
+            return _load_registry_unlocked(trunk)
+        with lock_path.open("r", encoding="utf-8") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_SH)
+            try:
+                return _load_registry_unlocked(trunk)
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def _save_registry_unlocked(trunk: Path, entries: list[IntegrationWorktree]) -> None:
     """Atomically publish ``entries`` while the caller owns the registry lock."""
 
@@ -638,12 +656,13 @@ def is_trunk_pointer(meta: WorkMeta) -> bool:
     return meta.tier == "epic" and meta.integration_branch is not None
 
 
-def _boards_for_trunk(trunk: Path) -> list[BoardIndex]:
+def _boards_for_trunk(trunk: Path, *, readonly: bool = False) -> list[BoardIndex]:
     """One board scan per checkout. Callers must not scan again per work id."""
 
     trunk = trunk.resolve()
     boards = [list_board(trunk)]
-    for entry in load_registry(trunk):
+    entries = load_registry_readonly(trunk) if readonly else load_registry(trunk)
+    for entry in entries:
         if entry.path.is_dir():
             boards.append(list_board(entry.path))
     return boards
@@ -693,6 +712,12 @@ def refresh_merged_board(trunk: Path) -> BoardIndex:
         return board
 
 
+def merged_board_readonly(trunk: Path) -> BoardIndex:
+    """Read a fresh merged board without creating registry lock state."""
+
+    return _merged_board_uncached(locate_trunk(trunk).resolve(), readonly=True)
+
+
 @contextmanager
 def merged_board_snapshot(trunk: Path, board: BoardIndex) -> Iterator[None]:
     """Reuse one board view during a read-only response on this context."""
@@ -704,11 +729,11 @@ def merged_board_snapshot(trunk: Path, board: BoardIndex) -> Iterator[None]:
         _board_snapshot.reset(token)
 
 
-def _merged_board_uncached(trunk: Path) -> BoardIndex:
+def _merged_board_uncached(trunk: Path, *, readonly: bool = False) -> BoardIndex:
     """Build the supervisor view from trunk and registered worktrees."""
 
     trunk = trunk.resolve()
-    boards = _boards_for_trunk(trunk)
+    boards = _boards_for_trunk(trunk, readonly=readonly)
     trunk_board = boards[0]
     completed_trunk_epics = {
         work_id: meta
