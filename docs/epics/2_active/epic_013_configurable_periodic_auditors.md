@@ -238,6 +238,16 @@ Validation on merge `c598ffe1`: 19 focused tests passed (protected audit waits, 
 
 Epic Architect review: all 24 criteria are unchanged from approved revision `172e856c`; ancestry checks confirm `1ed5121c`, `5b4334c6`, `2db3a8c6` and `1c8db112` are included. The retry correction preserves locked admission and concrete parent verification while releasing lifecycle locks before provider work, consistent with the approved recovery contract. No architecture amendment is needed. The manager-recorded 19 passing checks remain the validation evidence; no product tests rerun for this documentation review. Feature 002 final integrated validation and Feature 005 real all-tier recovery acceptance remain outstanding.
 
+## Delivery blocker fix integration — 2026-11-08
+
+In reply to OperatorReviewFinding `epic13-main-delivery-blocker-fix-25794f1f`: fetched `origin/main` at `25794f1f` and merged it conflict-free into the clean owned Epic branch at `77e0e46b`. Only `cascade/task_rollup.py` and its focused regression file changed across this merge; the approved Epic plan and accepted Feature 001 completion records were preserved. The original integration recovery action remains completed; this synchronization does not rearm it.
+
+Queue publication now preserves the validated Feature head. Matching derived Task delivery blockers reconcile after successful canonical merge, while sibling/manual/comment gates and exact validation evidence remain authoritative. The five imported real-worktree regressions passed on the committed merge (`python -m pytest -q tests/task/test_delivery_blocker_validation.py`: 5 passed); `git diff --check` passed. This focused evidence does not establish final Feature 002 acceptance.
+
+Fresh canonical child projection shows Feature 001 completed, Feature 002 active without monitoring blockers, and Features 003–005 approved backlog dependents. The owning Feature reports Tasks 001–003 completed, Task 004 live and Task 005 pending. Preserve live Task work and bring the published Epic base into Feature 002 through its normal integration path before final clean-head supervised validation and publication. Preserve its scheduler, shutdown, observer cleanup, timeout-evidence retention and nonregular runtime-read corrections, including `50fa8dc3` and `2c012422`. Task 004's reported reservation handoff, capability fingerprint, process cleanup and manual cancellation findings remain covered by existing acceptance; no final correction or merge is claimed here.
+
+All 24 criteria, existing approval/provider/dependency policy, five-feature sequence and Feature 005's real Task/Feature/Epic recovery gate before default-on activation remain unchanged. Continue Task 005 acceptance and Features 003–005 through normal dependency gates. No dependency installation or scope amendment is needed.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
