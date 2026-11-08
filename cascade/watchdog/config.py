@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,6 +23,11 @@ _DEFAULT_WORKER_DRAIN_SECONDS = 120.0
 _DEFAULT_CONVERGENCE_STALL_THRESHOLD_SECONDS = 600.0
 _DEFAULT_TURN_PROGRESS_NO_PROGRESS_DEADLINE_SECONDS = 600.0
 _DEFAULT_SUPERVISOR_HEALTH_SWEEP_SECONDS = 60.0
+_DEFAULT_HEALTH_AUDIT_INTERVAL_SECONDS = 30 * 60
+_MIN_HEALTH_AUDIT_INTERVAL_SECONDS = 60
+_MAX_HEALTH_AUDIT_INTERVAL_SECONDS = 24 * 60 * 60
+_HEALTH_AUDIT_INTERVAL_RE = re.compile(r"([1-9][0-9]*)([smhd])")
+_DURATION_UNIT_SECONDS = {"s": 1, "m": 60, "h": 60 * 60, "d": 24 * 60 * 60}
 
 _TIER_KEYS = ("epic", "feature", "task", "boss")
 _DEFAULT_COMPLETED_EPIC_DISPLAY_LIMIT = 10
@@ -57,6 +63,14 @@ class AutomationConfig:
     enabled: bool = True
     poll_seconds: float = 15.0
     remote: str = "origin"
+
+
+@dataclass(frozen=True)
+class HealthAuditConfig:
+    """Periodic health-audit settings, independent of workflow automation."""
+
+    enabled: bool = True
+    interval_seconds: int = _DEFAULT_HEALTH_AUDIT_INTERVAL_SECONDS
 
 
 def provider_permission_mode(root: Path, provider: ProviderId) -> ProviderPermissionMode:
@@ -227,6 +241,53 @@ def read_automation_config(root: Path) -> AutomationConfig:
     if not isinstance(remote, str) or not remote.strip():
         raise ConfigError("automation.remote must be a non-blank string")
     return AutomationConfig(enabled=enabled, poll_seconds=float(poll_seconds), remote=remote.strip())
+
+
+def read_health_audit_config(root: Path) -> HealthAuditConfig:
+    """Return strict ``[automation.health_audit]`` settings and defaults.
+
+    This reader deliberately does not consult ``automation.enabled``. Health audits
+    have their own lifecycle and remain available in otherwise manual workspaces.
+    """
+
+    data = _load_cascade_toml(root)
+    automation = data.get("automation")
+    if not isinstance(automation, dict):
+        return HealthAuditConfig()
+    raw = automation.get("health_audit")
+    if raw is None:
+        return HealthAuditConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("[automation.health_audit] must be a table")
+
+    enabled = raw.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ConfigError("automation.health_audit.enabled must be a boolean")
+
+    interval = raw.get("interval", "30m")
+    if not isinstance(interval, str):
+        raise ConfigError(
+            "automation.health_audit.interval must be a positive integer duration "
+            f"with an s, m, h, or d unit, got {interval!r}"
+        )
+    match = _HEALTH_AUDIT_INTERVAL_RE.fullmatch(interval)
+    if match is None:
+        raise ConfigError(
+            "automation.health_audit.interval must be a positive integer duration "
+            f"with an s, m, h, or d unit, got {interval!r}"
+        )
+    try:
+        seconds = int(match.group(1)) * _DURATION_UNIT_SECONDS[match.group(2)]
+    except ValueError as exc:
+        raise ConfigError(
+            f"automation.health_audit.interval is too large, got {interval!r}"
+        ) from exc
+    if not _MIN_HEALTH_AUDIT_INTERVAL_SECONDS <= seconds <= _MAX_HEALTH_AUDIT_INTERVAL_SECONDS:
+        raise ConfigError(
+            "automation.health_audit.interval must be between 1m and 24h inclusive, "
+            f"got {interval!r}"
+        )
+    return HealthAuditConfig(enabled=enabled, interval_seconds=seconds)
 
 
 def _require_non_blank_string(value: object, label: str) -> str:

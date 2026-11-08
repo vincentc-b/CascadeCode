@@ -55,6 +55,10 @@ def test_init_creates_board_columns_gitignore_and_toml(tmp_path: Path) -> None:
     with (root / "cascade.toml").open("rb") as handle:
         data = tomllib.load(handle)
     assert data["task_parallelism"] == 4
+    assert data["automation"]["health_audit"] == {
+        "enabled": True,
+        "interval": "30m",
+    }
     assert data["providers"]["default"] == "cursor"
     assert data["providers"]["cursor"]["epic"] == ""
     assert data["providers"]["claude"]["task"] == ""
