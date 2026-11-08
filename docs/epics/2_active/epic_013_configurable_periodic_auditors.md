@@ -258,6 +258,22 @@ Preserve the late Task 004 draft until its concrete review fixes are covered by 
 
 Fresh canonical child projection shows Feature 001 completed, Feature 002 active without monitoring blockers and approved Features 003–005 sequentially dependent. Task 005 content access was denied, so its handoff and final validation were not independently verified. Synchronization guidance and a request for the safe handoff boundary were enqueued to the owning Feature; receipt is not yet confirmed. All 24 criteria, existing approvals/provider/dependency policy and Feature 005's real all-tier recovery gate before default-on activation remain unchanged.
 
+## Feature 003 adapter preparation — 2026-11-08
+
+In reply to OperatorReviewFinding `epic13-feature003-preparation-existing-adapters`: retain the approved Feature 002 → 003 → 004 → 005 sequence. This is implementation and acceptance guidance under criteria 8–13, 16–17 and 19–24, not early dispatch, a new feature or a scope amendment. Fresh canonical children show Feature 001 completed, Feature 002 active without monitoring blockers and Features 003–005 approved backlog dependents.
+
+Feature 003 should map a concrete Task `queued_task_merge` action and authoritative validation evidence to executable `validated_delivery_missing` or `delivery_reconciliation` capability. A generic `unresolved_recovery_reference` alone does not prove an executable repair. Reserve under existing lifecycle locks, then invoke the canonical supervisor delivery recovery outside broad locks; use deferred kickoffs for resumed model work so the audit lane remains bounded. Preserve the original Task queued-merge action and reuse `enqueue_validated_delivery`, `rearm_validated_task_action`, pending-merge retry and matching-blocker reconciliation. Adapt the existing entry points only as needed; do not create a second delivery algorithm.
+
+Route conflicts using existing `capture_and_route_action_failure`, `pending_recovery_team_ids` and `acknowledge_team_recovery` with the concrete work ID. Add narrowly scoped routing/diagnosis capability where executable authority is missing; do not weaken mutation guards. The `HEALTH_AUDITOR_ROLE` label must be backed by a bounded diagnostic turn when diagnosis is necessary, with incident identity, scoped tools and durable acknowledgement/result. Deterministic requeue must make zero model turns.
+
+Use real isolated-repository recovery fixtures, including `tests/test_task_recovery_generations_regressions.py`, through the audit entry point. Demonstrate lost-queue validated Task recovery to exactly one canonical merge, completed rollup and dependent release; moved-base exact-head supervised revalidation with the original action; concurrent manual/audit/restart deduplication; preserved human/comment/dependency/dirty/live-owner gates; and automatic reevaluation when capability arrives. Mocked snapshot/enqueue callbacks or emitted events alone do not meet acceptance. Recreate the historical `task_038_002_002` failure only in isolated repositories; the operator reports its live action is already completed.
+
+Review validation retry accounting across legitimate parent-base changes: repeated changed generations must not exhaust the unchanged-failure budget, while actual failures for unchanged input remain bounded. This applies the existing generation-aware retry contract; it does not authorize unlimited retries. Consume framework fixes `25794f1f` and `6e32c7f4` through the approved synchronization path rather than duplicating their queue/evidence and dirty-source protections.
+
+Feature 002's latest Task 005 review reports two pending handoff cases: a pre-adapter interrupted reservation must remain eligible at attempt_bound=1, and spawned exact-token reconciliation must restore trusted split-product/tracking ProjectContext to find the authoritative ledger. These belong to existing Feature 002 reservation acceptance. The Task is still reported live; its final handoff and integrated validation are not confirmed. Keep `6e32c7f4` integration pending the requested safe handoff boundary and preserve the late Task 004 draft until replacement commits and acceptance cover it.
+
+All 24 success criteria, existing approvals, provider/dependency policy and Feature 005's real Task/Feature/Epic recovery gate before default-on remain unchanged. No product code or product tests changed in this preparation turn.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
