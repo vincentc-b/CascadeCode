@@ -41,6 +41,12 @@ def tool_guard(path: Path | str, op: str, *, epic_id: str, root: Path) -> bool:
     if epic.meta.tier != "epic":
         return False
 
+    # A direct child's canonical spec may live in its own registered checkout.
+    # This only selects a root for a read; all write paths retain the parent's
+    # original sandbox and normal ownership checks still apply below.
+    child_root = _direct_child_read_root(path, epic_id=epic_id, trunk=trunk) if op == "read" else None
+    if child_root is not None:
+        checkout = child_root
     board_root = checkout
     resolved = _resolve_under_root(path, checkout)
     if resolved is None and checkout != trunk:
@@ -69,6 +75,29 @@ def tool_guard(path: Path | str, op: str, *, epic_id: str, root: Path) -> bool:
     if op == "write":
         return _allow_write(resolved, parts, epic_id=epic_id, repo=board_root)
     return _allow_read(resolved, parts, epic_id=epic_id, repo=board_root)
+
+
+def _direct_child_read_root(path: Path | str, *, epic_id: str, trunk: Path) -> Path | None:
+    from cascade.workspace.integration_worktree import git_root_for_path, merged_board_readonly
+    from cascade.board.context import resolve_tracking_root
+    from cascade.board.errors import GitError
+
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        return None
+    work_id = filename_work_id(candidate)
+    if work_id is None:
+        return None
+    meta = merged_board_readonly(resolve_tracking_root(trunk)).by_id.get(work_id)
+    if (
+        meta is None or meta.tier != "feature" or meta.parent != epic_id
+        or candidate.resolve() != meta.path.resolve()
+    ):
+        return None
+    try:
+        return git_root_for_path(meta.path)
+    except GitError:
+        return None
 
 
 def _walks_symlink(path: Path | str, root: Path) -> bool:

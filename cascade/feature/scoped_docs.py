@@ -103,9 +103,12 @@ def feature_read_doc(work_id: str, *, feature_id: str, root: Path) -> WorkDoc:
             raise FeatureToolDenied(f"read denied for {live_path}")
         return doc
 
-    checkout = feature_checkout_root(feature_id, trunk=repo)
     try:
-        doc = read_doc(work_id, root=checkout)
+        from cascade.board.context import resolve_tracking_root
+        from cascade.workspace.integration_worktree import doc_filesystem_root
+
+        owner_root = doc_filesystem_root(work_id, trunk=resolve_tracking_root(repo))
+        doc = read_doc(work_id, root=owner_root)
     except NotFound:
         raise FeatureToolDenied(f"unknown work id {work_id}") from None
 
