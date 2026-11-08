@@ -19,7 +19,17 @@ from cascade.watchdog.health import classify_child, sweep_supervisor_health
 from tests.support import add_doc, approve_board_feature, make_repo
 
 
-def _active_feature_with_blocked_task(tmp_path: Path) -> Path:
+def _active_feature_with_blocked_task(tmp_path: Path, monkeypatch) -> Path:
+    # Provider capability preflight is covered separately; these tests exercise
+    # remediation after the lifecycle has already reached a blocked task.
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch._provider_preflight_refusal",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "cascade.approvals._require_approval_selections",
+        lambda *_args, **_kwargs: (),
+    )
     root = make_repo(tmp_path)
     add_doc(
         root,
@@ -58,7 +68,7 @@ def _active_feature_with_blocked_task(tmp_path: Path) -> Path:
 def test_health_sweep_retries_failed_blocked_task_once_through_dispatch(
     tmp_path: Path, monkeypatch,
 ) -> None:
-    root = _active_feature_with_blocked_task(tmp_path)
+    root = _active_feature_with_blocked_task(tmp_path, monkeypatch)
     calls = 0
     calls_lock = Lock()
     real_retry = health_module.retry_task
@@ -268,7 +278,7 @@ def test_health_sweep_does_not_nominate_live_task_owner(
 def test_recovery_failure_is_recorded_once_for_concurrent_and_repeated_sweeps(
     tmp_path: Path, monkeypatch,
 ) -> None:
-    root = _active_feature_with_blocked_task(tmp_path)
+    root = _active_feature_with_blocked_task(tmp_path, monkeypatch)
     calls = 0
     calls_lock = Lock()
 
