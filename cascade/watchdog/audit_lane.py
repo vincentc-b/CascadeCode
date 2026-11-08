@@ -32,6 +32,8 @@ from cascade.board.context import get_project_context, resolve_root
 from cascade.board.gitutil import inherited_git_process_group
 from cascade.watchdog.audit import (
     CandidateBudget,
+    _restore_parent_observation_episodes,
+    _snapshot_parent_observation_episodes,
     project_audit_observation,
     select_audit_candidates,
 )
@@ -234,6 +236,7 @@ def run_bounded_audit_pass(
             max_items,
             observer_deadline,
             project_context_payload(),
+            _snapshot_parent_observation_episodes(),
         ),
         name="health-audit-pass",
         daemon=True,
@@ -266,7 +269,9 @@ def run_bounded_audit_pass(
                     grace=cleanup_grace,
                 )
                 if succeeded:
-                    return result
+                    completed, episodes = result
+                    _restore_parent_observation_episodes(episodes)
+                    return completed
                 raise result
             if not worker.is_alive():
                 _reap_audit_observer(
@@ -283,7 +288,9 @@ def run_bounded_audit_pass(
                             "health audit observer exited without a result"
                         ) from exc
                     if succeeded:
-                        return result
+                        completed, episodes = result
+                        _restore_parent_observation_episodes(episodes)
+                        return completed
                     raise result
                 raise RuntimeError("health audit observer exited without a result")
     finally:
@@ -298,6 +305,9 @@ def _audit_observer_process(
     max_items: int,
     deadline: float,
     context_payload: object,
+    parent_observation_episodes: tuple[
+        tuple[str, str, str, str, float, int], ...
+    ],
 ) -> None:
     """Run observer work in a process that the claim owner can always reap."""
 
@@ -307,6 +317,7 @@ def _audit_observer_process(
         # releasing the workspace claim, even if this process is unresponsive.
         os.setsid()
         restore_project_context(context_payload)
+        _restore_parent_observation_episodes(parent_observation_episodes)
         with inherited_git_process_group():
             result: AuditPassResult | BaseException = _run_bounded_audit_pass_inline(
                 root,
@@ -316,7 +327,7 @@ def _audit_observer_process(
                 max_seconds=max(0.0, deadline - time.monotonic()),
                 monotonic=time.monotonic,
             )
-        payload = (True, result)
+        payload = (True, (result, _snapshot_parent_observation_episodes()))
     except BaseException as exc:
         payload = (False, exc)
     try:

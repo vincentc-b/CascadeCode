@@ -12,14 +12,13 @@ from cascade.board.store import read_doc, write_doc
 from cascade.task.action_recovery import recovery_actions
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.watchdog.audit import project_audit_observation
-from cascade.watchdog.audit_recovery import dispatch_audit_recovery
 from cascade.watchdog.events import read_events
 from cascade.workspace.integration_worktree import load_registry
 from cascade.workspace.kickoff import (
     kickoff_graph_queue_event,
     wait_for_background_kickoffs,
 )
-from tests.support import add_doc, commit_board, make_repo
+from tests.support import add_doc, commit_board, make_repo, run_audit_recovery_entry
 
 
 def _git(root: Path, *args: str) -> str:
@@ -39,19 +38,15 @@ def _commit_pending(root: Path, message: str) -> None:
         _git(root, "commit", "-m", message)
 
 
-def _prove_parent_incident(root: Path, work_id: str, action: str):
-    """Observe one unchanged generation across the configured audit interval."""
+def _prime_parent_incident(root: Path, work_id: str, action: str):
+    """Start the no-progress interval; the public audit entry proves it later."""
 
     first = project_audit_observation(work_id, root=root, monotonic=lambda: 0.0)
-    proven = project_audit_observation(work_id, root=root, monotonic=lambda: 1800.0)
     assert first.classification == "expected_wait"
     assert first.reason.startswith("observing:")
-    assert proven.classification == "proven_incident"
-    assert proven.reason == action
-    assert first.generation == proven.generation
-    assert proven.evidence.parent_action is not None
-    assert proven.evidence.parent_action.observation_count == 2
-    return proven
+    assert first.evidence.parent_action is not None
+    assert first.evidence.parent_action.candidate_action == action
+    return first
 
 
 def _successful_reservation(root: Path, work_id: str, capability: str):
@@ -161,10 +156,10 @@ def test_registered_feature_and_epic_recovery_publish_and_finish_once(
     _commit_pending(feature_entry.path, "record feature owner input")
     feature_head = _git(feature_entry.path, "rev-parse", "HEAD")
 
-    feature_observation = _prove_parent_incident(
+    feature_observation = _prime_parent_incident(
         root, "feat_001", "reconcile_completion_rollup"
     )
-    assert dispatch_audit_recovery(root, "feat_001")
+    assert "feat_001" in run_audit_recovery_entry(root).incident_work_ids
     feature_receipt = _successful_reservation(
         root, "feat_001", "reconcile_completion_rollup"
     )
@@ -185,10 +180,10 @@ def test_registered_feature_and_epic_recovery_publish_and_finish_once(
     assert wait_for_background_kickoffs(5)
     _commit_pending(epic_entry.path, "acknowledge feature completion")
     epic_head = _git(epic_entry.path, "rev-parse", "HEAD")
-    epic_observation = _prove_parent_incident(
+    epic_observation = _prime_parent_incident(
         root, "epic_001", "reconcile_completion_rollup"
     )
-    assert dispatch_audit_recovery(root, "epic_001")
+    assert "epic_001" in run_audit_recovery_entry(root).incident_work_ids
     deferred = [
         row["incident"]
         for row in recovery_actions(root=root)
@@ -201,10 +196,10 @@ def test_registered_feature_and_epic_recovery_publish_and_finish_once(
     assert deferred[0]["accountable_owner"] == "epic_team:epic_001"
 
     _manually_land_owned_branch(root, "epic/epic_001")
-    epic_observation = _prove_parent_incident(
+    epic_observation = _prime_parent_incident(
         root, "epic_001", "reconcile_completion_rollup"
     )
-    assert dispatch_audit_recovery(root, "epic_001")
+    assert "epic_001" in run_audit_recovery_entry(root).incident_work_ids
     epic_receipt = _successful_reservation(
         root, "epic_001", "reconcile_completion_rollup"
     )
@@ -221,8 +216,9 @@ def test_registered_feature_and_epic_recovery_publish_and_finish_once(
 
     # A restarted worker sees terminal state and the durable successful claim;
     # neither adapter, publication, event nor cleanup can run a second time.
-    assert not dispatch_audit_recovery(root, "feat_001")
-    assert not dispatch_audit_recovery(root, "epic_001")
+    terminal = run_audit_recovery_entry(root)
+    assert "feat_001" not in terminal.incident_work_ids
+    assert "epic_001" not in terminal.incident_work_ids
     assert len(
         [event for event in read_events("epic_001", 0, root=root)[0]
          if event.type == "FeatureCompleted"]
