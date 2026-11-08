@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "epic_id": "epic_013",
+  "snapshots": [
+    {
+      "revision": 1,
+      "recorded_at": "2026-11-08T01:23:56.684745+00:00",
+      "target_environment": {
+        "environment_id": "epic_013-owned-integration",
+        "kind": "local",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "codex:ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode/.cascade/worktrees/epic_epic_013",
+        "sandbox": "disabled; owned integration worktree only",
+        "runtime": "Python 3.12.8 (/opt/conda/bin/python); Git 2.34.1; Node 20.20.2",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment": null,
+      "none_required": true,
+      "dependencies": []
+    }
+  ]
+}
