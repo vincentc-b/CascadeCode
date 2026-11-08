@@ -2,7 +2,7 @@
 id: feat_013_002
 title: Run bounded health audits in an independent supervisor lane
 tier: feature
-status: active
+status: completed
 parent: epic_013
 children:
 - task_013_002_001
