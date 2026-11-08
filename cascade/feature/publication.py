@@ -401,8 +401,14 @@ def _integration_merge_snapshot(
         if source_in_parents.count(True) != 1:
             continue
         if any(_is_ancestor(root, later_sha, merge_sha) for later_sha in later_task_commits):
-            return None
+            break
         return merge_sha
+    # A fast-forward has no integration merge. Its validated source tree is
+    # the integration snapshot, provided it precedes every later Task.
+    if _is_ancestor(root, source_sha, final_ref) and not any(
+        _is_ancestor(root, later_sha, source_sha) for later_sha in later_task_commits
+    ):
+        return source_sha
     return None
 
 
