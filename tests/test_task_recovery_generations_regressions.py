@@ -240,7 +240,7 @@ def test_audit_requeues_lost_validated_delivery_through_original_action(
 
 @pytest.mark.parametrize(
     "claim_owner_immediately",
-    [True, False, "real", "restart", "conflict", "semantic_restart"],
+    [True, False, "real", "audit", "restart", "conflict", "semantic_restart"],
 )
 def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
     tmp_path: Path, claim_owner_immediately: bool | str, monkeypatch
@@ -305,6 +305,8 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             "feature_id": "feat_001",
             "provider_ids": {"swe": "codex"},
             "model_ids": {"swe": "offered"},
+            "reasoning_ids": {"swe": "medium"},
+            "flex_modes": {"swe": False},
         },
     )
     mark_queued("task_001", root=root)
@@ -412,7 +414,13 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         if claim_owner_immediately:
             mark_running(task_id, root=repo)
 
-    if claim_owner_immediately in ("real", "restart", "conflict", "semantic_restart"):
+    if claim_owner_immediately in (
+        "real",
+        "audit",
+        "restart",
+        "conflict",
+        "semantic_restart",
+    ):
         from cascade.task.graph import set_task_run_role_fn, clear_task_graph_sessions
         from cascade.task.wiring import load_task_tools
         from cascade.task.worktree import clear_task_runs
@@ -438,6 +446,8 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         async def provider(turn):
             starts.append(("task_001", "feat_001"))
             assert turn.cwd == task.path
+            assert (turn.provider, turn.model_id) == ("codex", "offered")
+            assert (turn.reasoning_level, turn.flex_mode) == ("medium", False)
             if conflict:
                 refused = invoke_tool(
                     "task_001",
@@ -517,6 +527,12 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             from cascade.workspace.kickoff import kickoff_graph_queue_event
 
             kickoff_graph_queue_event("task_001", root=root, by="watchdog")
+        elif claim_owner_immediately == "audit":
+            from cascade.watchdog.audit_recovery import dispatch_audit_recovery
+            from cascade.workspace.kickoff import wait_for_background_kickoffs
+
+            assert dispatch_audit_recovery(root, "task_001")
+            assert wait_for_background_kickoffs()
         elif claim_owner_immediately == "restart":
             from cascade.workspace.up import resume_interrupted_task_runs
             from cascade.workspace.kickoff import wait_for_background_kickoffs
