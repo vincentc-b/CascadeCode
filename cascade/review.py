@@ -702,7 +702,9 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         push_branch(entry.path, source, force_with_lease=remote_lease_sha)
     else:
         push_branch(entry.path, source)
-    mr = create_merge_request(
+    mr = find_merge_request(
+        entry.path, source_branch=source, target_branch=target,
+    ) or create_merge_request(
         entry.path,
         title=f"{feature_id}: {doc.meta.title}",
         body=(
