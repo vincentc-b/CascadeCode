@@ -52,7 +52,11 @@ def augment_swe_prompt_with_work_context(task_id: str, prompt: str, *, root: Pat
     task = task_read_doc(task_id, task_id=task_id, root=root)
     sections = [
         "Execute the Task below now. Implement the change in the worktree, run "
-        "relevant tests, and leave a deliverable commit. You MUST call Cascade's "
+        "relevant tests, and leave a deliverable commit. Commit the completed implementation "
+        "with swe_commit, then call swe_run_tests on the clean committed tree as your final "
+        "validation step. A green result must include final_validation before you finish. "
+        "Any subsequent edit, commit or merge invalidates that evidence: rerun the tool. "
+        "You MUST call Cascade's "
         "swe_run_tests tool with the scoped test command before finishing; tests run "
         "only through a native shell do not satisfy the supervised merge gate. Do not "
         "merely summarize the plan or report completion.",

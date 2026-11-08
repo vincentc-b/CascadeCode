@@ -357,3 +357,23 @@ def test_forbidden_doc_path_surfaces_failure_not_adapter_text(tmp_path: Path) ->
     from tests.agent import test_swe_turn as swe_turn_tests
 
     swe_turn_tests.test_forbidden_doc_path_fails_closed_without_commit(tmp_path, "feat_001")
+
+
+def test_validation_retry_preserves_durable_missing_final_validation(tmp_path, monkeypatch):
+    root, task_id = _board_with_worktree(tmp_path)
+    with (root / "cascade.toml").open("a") as handle:
+        handle.write("\n[automation]\nenabled = true\n")
+    from cascade.task.wiring import on_tests_finished, begin_validation_turn
+    from cascade.task.graph import _auto_merge_finished_task
+    from cascade.task.execution import mark_running
+    mark_running(task_id, root=root)
+    on_tests_finished(task_id, {"exit_code": 0}, root=root)
+    # The parent supervisor does not share the MCP process's Python memory.
+    begin_validation_turn(task_id)
+    monkeypatch.setattr("cascade.task.swe_turn.has_deliverable_commit", lambda run: True)
+    _auto_merge_finished_task(task_id, root)
+    events, _ = read_events(task_id, 0, root=root)
+    retry = events[-1]
+    assert retry.type == "TaskValidationRetryRequested"
+    assert retry.payload["reason"] == "final_validation_required"
+    assert "clean committed tree" in retry.payload["instruction"]

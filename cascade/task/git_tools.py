@@ -55,6 +55,15 @@ def swe_run_tests(
     }
     if final_validation is not None:
         outcome["final_validation"] = final_validation
+    elif result.returncode == 0:
+        outcome["delivery_ready"] = False
+        outcome["reason"] = "final_validation_required"
+        outcome["next_step"] = (
+            "Tests passed, but this run did not validate a clean committed deliverable. "
+            "Commit the implementation with swe_commit, then call swe_run_tests again. "
+            "Finish only after a green result includes final_validation; any later edit, "
+            "commit or merge requires another supervised test run."
+        )
     return outcome
 
 
