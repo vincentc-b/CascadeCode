@@ -83,10 +83,13 @@ class SweTurnResult:
     failure_reason: str | None = None
 
 
-def resolve_swe_task_run(task_id: str) -> TaskRun:
+def resolve_swe_task_run(task_id: str, *, root: Path | None = None) -> TaskRun:
     """Return the active task run or raise if no worktree is registered."""
 
     run = get_task_run(task_id)
+    if run is None and root is not None:
+        from cascade.task.worktree import attach_active_task_run
+        run = attach_active_task_run(task_id, root=root)
     if run is None:
         raise RuntimeError(f"no active task run for {task_id!r}")
     return run
@@ -104,7 +107,7 @@ def build_swe_role_turn(
 ) -> RoleTurn:
     """Assemble a ``RoleTurn`` with cwd set to the task worktree."""
 
-    run = resolve_swe_task_run(task_id)
+    run = resolve_swe_task_run(task_id, root=root)
     from cascade.watchdog.config import provider_permission_mode
 
     permission_mode = provider_permission_mode(root, provider)  # type: ignore[arg-type]
@@ -162,7 +165,9 @@ async def run_swe_turn(
     from cascade.task.wiring import clear_swe_turn_success, route_swe_turn_failure
 
     repo = Path(root).resolve()
-    run = resolve_swe_task_run(task_id)
+    run = resolve_swe_task_run(task_id, root=root)
+    from cascade.task.action_recovery import acknowledge_team_recovery
+    acknowledge_team_recovery(task_id, root=repo)
     # An injected runner is a local test seam, not a provider process.  Keep
     # unit tests deterministic; all production turns use ``run_role`` and
     # therefore pass through the fresh check immediately before invocation.

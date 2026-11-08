@@ -139,3 +139,18 @@ def _resolve_under_root(path: Path | str, root: Path) -> Path | None:
     except (OSError, ValueError):
         return None
     return resolved
+
+
+def contract_scope_blocker(body: str) -> dict[str, object] | None:
+    import re
+    sections = re.split(r"(?m)^##\s+", body)
+    paths = []
+    for section in sections[1:]:
+        heading, _, content = section.partition("\n")
+        if heading.strip().casefold() not in {"deliverables", "files", "allowed paths", "expected deliverables", "scope", "files likely touched"}:
+            continue
+        paths.extend(re.findall(r"(?:`|^\s*[-*]\s+)([A-Za-z0-9_.-]+/[A-Za-z0-9_./*-]+)", content, re.M))
+    if paths and all(_under_denied_prefix(Path(path).parts, _WRITE_DENIED) for path in paths):
+        return {"reason": "task_scope_denied", "paths": sorted(set(paths)),
+                "next_step": "Feature team must record planning prose itself and revise the Task to an authorized deliverable."}
+    return None

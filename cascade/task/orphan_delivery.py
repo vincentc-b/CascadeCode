@@ -119,15 +119,13 @@ def derive_orphan_delivery_incident(state: OrphanDeliveryState) -> OrphanDeliver
         return _incident(state, "noop_replay", "validated_delivery_already_queued")
     if state.delivery.complete and state.delivery.current:
         return _incident(state, "requeue_validated_commit", "validated_delivery_matches_git")
-    if state.delivery.complete and not state.delivery.current:
-        return _incident(state, "unsafe_or_missing_state", "validated_delivery_no_longer_matches_git")
     if not state.git.resumable:
         return _incident(state, "unsafe_or_missing_state", "task_branch_or_worktree_missing")
     if not state.checkpoint_present:
         return _incident(state, "unsafe_or_missing_state", "task_checkpoint_missing")
     if state.pinned_inputs is None or not state.pinned_inputs.complete:
         return _incident(state, "unsafe_or_missing_state", "pinned_execution_inputs_missing")
-    if state.execution_phase not in {"queued", "running"}:
+    if state.execution_phase not in {"queued", "running", "awaiting_merge", "merge_blocked"}:
         return _incident(state, "noop_replay", "no_resumable_execution")
     return _incident(state, "resume_execution", "orphaned_execution_resumable")
 

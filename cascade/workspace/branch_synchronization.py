@@ -372,7 +372,10 @@ def preflight_lifecycle_merge_target(
     kind = _integration_kind(meta.tier)
     if kind is None:
         return BranchSyncUpdateResult(ok=False, reason="wrong_tier")
-    if column_for_status(meta.status) != "active" or meta.status != "active":
+    # Derived monitoring blockage must not prevent the child integration
+    # which resolves it. Manual blockage and unrelated lifecycle gates remain.
+    derived = meta.status == "blocked" and any(b.blocked_supervisor for b in meta.monitoring_blockers)
+    if column_for_status(meta.status) != "active" or (meta.status != "active" and not derived):
         return BranchSyncUpdateResult(ok=False, reason="not_active")
 
     work_branch = integration_branch(kind, work_id)

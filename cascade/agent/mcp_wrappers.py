@@ -38,6 +38,8 @@ def _planning_tool_names(sandbox: PlanningSandbox) -> list[str]:
         names = _epic_tool_names()
         if sandbox.role in ("epic_manager", "epic_architect"):
             names.add("sign_off_plan")
+        else:
+            names -= {"read_dependency_manifest", "write_dependency_manifest"}
         return sorted(names)
     if sandbox.tier == "feature":
         from cascade.feature.wiring import load_feature_tools
@@ -169,6 +171,10 @@ def dispatch_planning_tool(
     """Invoke a guarded Cascade tool (same entrypoints graphs use)."""
 
     repo = Path(repo_root).resolve()
+    if name in {"message_team", "supervise_child"}:
+        allowed = {"recipient_id", "body", "request_id"} if name == "message_team" else {"child_id", "action"}
+        if set(args) - allowed:
+            raise PermissionError("team controls do not accept caller scope overrides")
     if tier in ("epic", "feature") and name in ("dispatch_feature", "dispatch_task"):
         raise ValueError(f"{name} is not available during {tier} planning turns")
     tool_args = _normalize_planning_tool_args(
@@ -178,7 +184,15 @@ def dispatch_planning_tool(
         "epic_manager", "epic_architect"
     ):
         tool_args["author"] = role
-    if tier == "epic" and name == "sign_off_plan":
+    if name in {"read_dependency_manifest", "write_dependency_manifest"}:
+        if tier != "epic" or role not in ("epic_manager", "epic_architect") or not scope_id:
+            raise PermissionError("owning Epic planning role required")
+        allowed = set() if name == "read_dependency_manifest" else {"manifest", "expected_revision"}
+        if set(tool_args) != allowed:
+            raise ValueError("manifest tool requires exactly its declared arguments; scope overrides denied")
+        from cascade.epic import dependency_manifest_authoring as authoring
+        result = getattr(authoring, name)(**tool_args, epic_id=scope_id, root=repo)
+    elif tier == "epic" and name == "sign_off_plan":
         from cascade.epic.planning_signoffs import sign_off_epic_plan
 
         if role not in ("epic_manager", "epic_architect") or not scope_id:
@@ -304,6 +318,19 @@ def _feature_tool_names() -> set[str]:
 _BOSS_TOOL_NAMES = frozenset({"dispatch_feature", "dispatch_task", "get_boss_view"})
 
 _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "message_team": {"type": "object", "properties": {
+        "recipient_id": {"type": "string"}, "body": {"type": "string"},
+        "request_id": {"type": "string"}}, "required": ["recipient_id", "body", "request_id"]},
+    "supervise_child": {"type": "object", "properties": {
+        "child_id": {"type": "string"}, "action": {"type": "string", "enum": ["inspect", "recover"]}},
+        "required": ["child_id"]},
+    "read_dependency_manifest": {"type": "object", "properties": {}, "additionalProperties": False},
+    "write_dependency_manifest": {
+        "type": "object", "properties": {
+            "manifest": {"type": "object"},
+            "expected_revision": {"type": "integer", "minimum": 0},
+        }, "required": ["manifest", "expected_revision"], "additionalProperties": False,
+    },
     "refresh_dependency_status": {
         "type": "object",
         "properties": {},

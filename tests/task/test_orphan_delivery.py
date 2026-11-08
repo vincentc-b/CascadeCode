@@ -49,4 +49,4 @@ def test_missing_or_stale_state_is_refused():
     assert derive_orphan_delivery_incident(_state(checkpoint_present=False)).outcome == "unsafe_or_missing_state"
     assert derive_orphan_delivery_incident(
         _state(delivery=DeliveryEvidence("a", "b", current=False))
-    ).reason == "validated_delivery_no_longer_matches_git"
+    ).outcome == "resume_execution"

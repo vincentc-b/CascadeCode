@@ -24,8 +24,10 @@ from tests.support import add_doc, make_repo
 
 @pytest.fixture
 def board(tmp_path: Path) -> Path:
-    root = make_repo(tmp_path, git=False)
+    root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Active", tier="epic", status="active")
+    from cascade.workspace.integration_worktree import create_integration_worktree
+    create_integration_worktree("epic", "epic_001", branch="epic/epic_001", base_ref="HEAD", trunk=root)
     return root
 
 

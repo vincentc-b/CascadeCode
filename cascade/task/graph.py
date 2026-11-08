@@ -84,6 +84,16 @@ def ensure_task_graph(task_id: str, *, root: Path, feature_id: str | None = None
     """Compile (or return cached) task subgraph with a local SQLite checkpointer."""
 
     repo = Path(root).resolve()
+    from cascade.board.store import read_doc
+    from cascade.board.errors import NotFound
+    try:
+        parent = read_doc(task_id, root=repo).meta.parent
+    except NotFound:
+        parent = None
+    if parent is not None:
+        if feature_id is not None and feature_id != parent:
+            raise ValueError("Task graph Feature identity disagrees with authoritative parent")
+        feature_id = parent
     key = (str(repo), task_id)
     _session_roots[key] = repo
     _session_features[key] = feature_id
@@ -187,6 +197,8 @@ def invoke_tool(task_id: str, name: str, args: dict, *, root: Path, feature_id: 
     from cascade.task.failure import classify_error, maybe_retry
     from cascade.task.wiring import get_infra_attempt, on_tests_finished, on_tool_error, set_infra_attempt
 
+    if name in {"message_team", "supervise_child"} and set(args) & {"task_id", "feature_id", "epic_id", "root"}:
+        raise PermissionError("team controls do not accept caller scope overrides")
     tools = task_tools()
     if name not in tools:
         raise KeyError(name)

@@ -10,7 +10,6 @@ from cascade.task.guard import TaskToolDenied, task_tool_guard
 from cascade.task.registry import register_task_tool
 from cascade.task.worktree import TaskRun, get_task_run
 
-_DEFAULT_TEST_CMD = ("python3", "-m", "pytest", "-q")
 _OUTPUT_SUMMARY_LIMIT = 32_000
 _NON_DELIVERABLE_PREFIXES = ("docs/tasks/", "docs/_queue/", "docs/_war_room/")
 
@@ -28,13 +27,20 @@ def swe_run_tests(
     root: Path,
     cmd: list[str] | None = None,
 ) -> dict[str, object]:
-    """Run pytest in the task worktree; return exit code and captured output."""
+    """Run repository checks in the Task worktree and bind evidence to tested heads."""
 
     _ = root
     _assert_task_run(task_id, task_run)
     wt = task_run.worktree.resolve()
-    argv = list(cmd) if cmd is not None else list(_DEFAULT_TEST_CMD)
-    _validate_pytest_cmd(argv)
+    from cascade.validation_command import validation_command
+    configured = validation_command(Path(root).resolve())
+    argv = list(cmd) if cmd is not None else list(configured)
+    if tuple(argv) != configured:
+        _validate_pytest_cmd(argv)
+    if not _git(wt, "status", "--porcelain").stdout.strip() and _deliverable_commits(task_run):
+        synchronization = integrate_feature(task_id=task_id, task_run=task_run, root=root)
+        if not synchronization["ok"]:
+            return {"exit_code": 1, "output": synchronization["output"], "recovery": synchronization}
     final_validation = _validation_target(task_id, task_run, root=Path(root).resolve())
     result = subprocess.run(
         argv,
@@ -72,6 +78,8 @@ def _validation_target(task_id: str, task_run: TaskRun, *, root: Path) -> dict[s
     )
     if source.returncode != 0 or target.returncode != 0:
         return None
+    if _git(task_run.worktree, "merge-base", "--is-ancestor", target.stdout.strip(), source.stdout.strip(), check=False).returncode:
+        return None
     return {
         "task_id": task_id,
         "deliverable_sha": source.stdout.strip(),
@@ -86,7 +94,7 @@ def swe_commit(
     task_run: TaskRun,
     root: Path,
 ) -> str:
-    """Create or amend the task's sole deliverable commit; never push."""
+    """Commit scoped Task work, preserving additive recovery history; never push."""
 
     repo = Path(root).resolve()
     _assert_task_run(task_id, task_run)
@@ -95,19 +103,9 @@ def swe_commit(
     _assert_commit_paths_allowed(task_id, wt, board_root=repo)
     deliverable_commits = _deliverable_commits(task_run)
     count = len(deliverable_commits)
-    if count > 1:
-        raise GitError(
-            f"task/{task_id} already has {count} deliverable commits; "
-            "refusing to add more"
-        )
-    if count == 1 and deliverable_commits[0] != _git(wt, "rev-parse", "HEAD").stdout.strip():
-        raise GitError(
-            f"task/{task_id} has a lifecycle commit after its deliverable; "
-            "refusing to amend the wrong commit"
-        )
     _git(wt, "add", "-A")
     trailer = f"Cascade-Task: {task_id}"
-    if count == 1:
+    if count == 1 and deliverable_commits[0] == _git(wt, "rev-parse", "HEAD").stdout.strip() and _git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0:
         existing = _git(wt, "log", "-1", "--format=%B").stdout.strip()
         commit_message = _with_task_trailer(existing or message, trailer)
         _git(wt, "commit", "--amend", "-m", commit_message)
@@ -227,6 +225,15 @@ def _assert_commit_paths_allowed(
             worktree_root=worktree,
             board_root=board_root,
         ):
+            # A supervised merge may stage protected planning files from the
+            # parent. Accept only byte-identical parent versions; the Task
+            # still cannot author or resolve protected paths.
+            merge = _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False)
+            if merge.returncode == 0:
+                parent = merge.stdout.strip()
+                if (_git(worktree, "diff", "--quiet", parent, "--", rel, check=False).returncode == 0
+                    and _git(worktree, "diff", "--cached", "--quiet", parent, "--", rel, check=False).returncode == 0):
+                    continue
             raise TaskToolDenied(f"commit refused: path not allowed: {rel}")
 
 
@@ -273,3 +280,23 @@ def _git(worktree: Path, *args: str, check: bool = True) -> subprocess.Completed
         detail = (result.stderr or result.stdout or "").strip()
         raise GitError(detail or f"git {' '.join(args)} failed")
     return result
+
+
+def integrate_feature(*, task_id: str, task_run: TaskRun, root: Path) -> dict[str, object]:
+    """Integrate only the authoritative parent into the existing owned branch."""
+    from cascade.board.store import read_doc
+    _assert_task_run(task_id, task_run)
+    wt = task_run.worktree.resolve()
+    _assert_task_branch(task_id, wt)
+    task = read_doc(task_id, root=root)
+    if task.meta.status != "active" or not task.meta.parent:
+        raise TaskToolDenied("integration requires an active Task and its parent")
+    if _git(wt, "status", "--porcelain").stdout.strip():
+        return {"ok": False, "output": "Commit scoped edits or resolve the existing merge before integrating."}
+    target = f"refs/heads/feat/{task.meta.parent}"
+    result = _git(wt, "merge", "--no-edit", target, check=False)
+    from cascade.task.wiring import invalidate_validated_delivery
+    invalidate_validated_delivery(task_id, root=root)
+    return {"ok": result.returncode == 0, "output": _output_summary(result.stdout, result.stderr),
+            "owner": task_id, "supervisor": task.meta.parent, "target": target,
+            "conflict_paths": _git(wt, "diff", "--name-only", "--diff-filter=U").stdout.splitlines()}

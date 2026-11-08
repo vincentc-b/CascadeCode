@@ -57,7 +57,7 @@ def project_dependency_status(epic_id: str, *, root: Path) -> dict[str, Any]:
         return _unavailable(
             epic_id,
             "missing_manifest",
-            "No canonical dependency manifest has been recorded.",
+            "The owning Epic Manager or Architect must call read_dependency_manifest then write_dependency_manifest with expected_revision=0. Declare none_required=true and dependencies=[] with a complete target environment when no dependencies are needed. Declaration does not authorize installation.",
             root=repo,
         )
 

@@ -1531,6 +1531,26 @@
       backlogEpicPriorityUi.decorateRow(row, item);
     }
 
+    if (item.delivery_review) {
+      const delivery = item.delivery_review;
+      const details = document.createElement("details");
+      details.className = "task-delivery-review";
+      const summary = document.createElement("summary");
+      summary.textContent = "Local Task delivery review · " +
+        (delivery.action && delivery.action.recovery_state || (delivery.queued ? "queued" : item.status));
+      details.appendChild(summary);
+      const description = document.createElement("p");
+      description.textContent = "Owner: " + delivery.owner + " · Supervisor: " + delivery.supervisor +
+        " · " + delivery.source_branch + " → " + delivery.target_branch;
+      details.appendChild(description);
+      const evidence = document.createElement("pre");
+      evidence.textContent = JSON.stringify({ validation: delivery.validation,
+        recovery: delivery.action && delivery.action.recovery,
+        attempts: delivery.action && delivery.action.attempts }, null, 2);
+      details.appendChild(evidence);
+      row.appendChild(details);
+    }
+
     if (item.recovery_incident && typeof appendRecoveryIncident === "function") {
       appendRecoveryIncident(row, actions, item.recovery_incident);
     }

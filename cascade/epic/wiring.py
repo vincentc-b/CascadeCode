@@ -20,6 +20,7 @@ def load_epic_tools() -> None:
     import cascade.epic.branch_recovery as branch_recovery_mod
     import cascade.epic.decisions as decisions_mod
     import cascade.epic.docs_tool as docs_tool_mod
+    import cascade.epic.dependency_manifest_authoring as manifest_mod
     import cascade.epic.mint as mint_mod
     import cascade.epic.recovery as recovery_mod
     import cascade.epic.review_recovery as review_recovery_mod
@@ -27,8 +28,13 @@ def load_epic_tools() -> None:
     import cascade.planning_dependency_tools as dependency_tools_mod
 
     from cascade.epic.registry import epic_tools, register_epic_tool
+    from cascade.team_supervision import message_team, supervise_child
+    register_epic_tool("message_team", message_team)
+    register_epic_tool("supervise_child", supervise_child)
 
     expected = (
+        "read_dependency_manifest",
+        "write_dependency_manifest",
         "mint_feature",
         "list_children",
         "record_decision",
@@ -44,6 +50,8 @@ def load_epic_tools() -> None:
     )
     if all(name in epic_tools() for name in expected):
         return
+    register_epic_tool("read_dependency_manifest", manifest_mod.read_dependency_manifest)
+    register_epic_tool("write_dependency_manifest", manifest_mod.write_dependency_manifest)
     importlib.reload(mint_mod)
     importlib.reload(decisions_mod)
     importlib.reload(docs_tool_mod)

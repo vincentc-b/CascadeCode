@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -35,15 +34,7 @@ _ALLOWED_OPERATIONS = (
     "push_source_with_force_with_lease",
 )
 
-# This is intentionally a concrete repository command rather than caller input:
-# the execution turn must not turn an admitted rebase capability into arbitrary
-# shell execution.  It is also the narrowest regression suite for this boundary.
-_REPOSITORY_CHECK_COMMAND = (
-    sys.executable,
-    "-m",
-    "pytest",
-    "tests/test_review_rebase.py",
-)
+from cascade.validation_command import validation_command
 
 
 @dataclass(frozen=True)
@@ -235,12 +226,13 @@ def check_and_publish_review_rebase(
     if _dirty_paths(worktree):
         return _publication_blocked("worktree_clean", "dirty_unrelated_paths", "The authorized worktree has uncommitted paths; they were left untouched.", worktree)
 
+    command = validation_command(locate_trunk(worktree))
     check_result = subprocess.run(
-        _REPOSITORY_CHECK_COMMAND, cwd=worktree, capture_output=True,
+        command, cwd=worktree, capture_output=True,
         text=True, encoding="utf-8",
     )
     check = ReviewRebaseCheck(
-        _REPOSITORY_CHECK_COMMAND, check_result.returncode,
+        command, check_result.returncode,
         check_result.stdout, check_result.stderr,
     )
     if check.returncode:

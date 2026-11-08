@@ -65,6 +65,9 @@ def reconcile_open_review_health(root: Path) -> list[dict[str, object]]:
     board = merged_board(trunk)
     results: list[dict[str, object]] = []
     for owner_id, record in sorted(_review_records(trunk).items()):
+        if record.get("stage") == "completed" or str(record.get("state") or record.get("forge_state") or "").lower() == "merged":
+            _reconcile_completed_review(owner_id, trunk)
+            continue
         if record.get("closed"):
             continue
         state = str(record.get("state") or record.get("forge_state") or "open").lower()
@@ -87,14 +90,19 @@ def reconcile_open_review_health(root: Path) -> list[dict[str, object]]:
         try:
             snapshot = merge_request_snapshot(trunk, review)
         except (GitError, OSError, ValueError):
+            results.append(_route_health_failure(trunk, owner, record, "review_snapshot_failed"))
             continue
+        if snapshot.get("state") == "open" and snapshot.get("mergeability") not in {"conflicting", "mergeable", "clean"}:
+            results.append(_route_health_failure(trunk, owner, record, "mergeability_unknown"))
         if snapshot.get("state") != "open" or snapshot.get("mergeability") != "conflicting":
             continue
         entry = get_integration_worktree(trunk, owner.tier, owner_id)
         if entry is None or not entry.path.is_dir():
+            results.append(_route_health_failure(trunk, owner, record, "owned_worktree_missing"))
             continue
         heads = _fetch_review_heads(entry.path, source_ref, target_ref)
         if heads is None:
+            results.append(_route_health_failure(trunk, owner, record, "review_fetch_failed"))
             continue
         source_sha, target_sha = heads
         # Forge mergeability may lag immediately after a successful publication.
@@ -119,6 +127,7 @@ def reconcile_open_review_health(root: Path) -> list[dict[str, object]]:
         )
         admission = admit_resolution_action(request, root=trunk)
         if admission.action.get("status") != "mutation_ready":
+            _route_health_failure(trunk, owner, record, "review_admission_refused")
             results.append({"owner_id": owner_id, "action_id": admission.action_id, "outcome": "blocked"})
             continue
         if local_review_resolution_ready(
@@ -157,3 +166,35 @@ def reconcile_open_review_health(root: Path) -> list[dict[str, object]]:
         )
         results.append({"owner_id": owner_id, "action_id": admission.action_id, "outcome": "routed"})
     return results
+
+
+def _route_health_failure(root, owner, record, code):
+    from hashlib import sha256
+    identity = sha256(json.dumps(record, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    action_id = f"{owner.id}:review-health:{code}:{identity}"
+    capture_and_route_action_failure(
+        action_id, "review_health", affected_work_id=owner.id,
+        intended_target_ref=record.get("target_branch"), root=root,
+        failure_code=code,
+        safe_summary=f"Review health requires attention: {code}. Inspect the owned review/worktree and retry the normal review recovery operation.",
+        evidence={"review_url": record.get("url"), "source_ref": record.get("source_branch")},
+        owning_team={"kind": f"{owner.tier}_team", "work_id": owner.id},
+    )
+    return {"owner_id": owner.id, "action_id": action_id, "outcome": "routed", "reason": code}
+
+
+def _reconcile_completed_review(work_id: str, root: Path) -> None:
+    """The canonical closed review supersedes earlier failed repair attempts."""
+    from cascade.task.action_recovery import _read_payload, _write_payload, _actions, _iso
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+    with task_lifecycle_lock(root=root):
+        payload = _read_payload(root)
+        changed = False
+        for action in _actions(payload).values():
+            evidence = (action.get("recovery") or {}).get("evidence") or {}
+            if evidence.get("affected_work_id") == work_id and action.get("recovery_state") != "completed":
+                action["recovery_state"] = "completed"
+                action["completion_reconciliation"] = {"reason": "canonical_review_completed", "at": _iso(None)}
+                changed = True
+        if changed:
+            _write_payload(root, payload)

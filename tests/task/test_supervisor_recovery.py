@@ -54,7 +54,7 @@ def _state(**changes: object) -> OrphanDeliveryState:
     return OrphanDeliveryState(**values)  # type: ignore[arg-type]
 
 
-def test_live_owner_is_durable_noop_and_replay_does_not_resnapshot(
+def test_live_owner_replay_rechecks_current_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _board(tmp_path)
@@ -78,7 +78,7 @@ def test_live_owner_is_durable_noop_and_replay_does_not_resnapshot(
     assert first.decision == "no_op_live_owner"
     assert not first.mutated
     assert second == first
-    assert calls == 1
+    assert calls == 2
 
 
 def test_draining_defers_before_any_recovery_mutation(
@@ -160,11 +160,11 @@ def test_validated_commit_is_requeued_once_and_restart_replays_ledger(
 
     assert (first.decision, first.mutated) == ("requeue_commit", True)
     assert replay == first
-    assert (snapshots, enqueues) == (1, 1)
+    assert (snapshots, enqueues) == (2, 1)
     ledger = json.loads(
         (root / ".cascade" / "orphan_delivery_recoveries.json").read_text(encoding="utf-8")
     )
-    assert ledger["recoveries"]["delivery-validated"]["decision"] == "requeue_commit"
+    assert ledger["recoveries"][first.incident_id]["decision"] == "requeue_commit"
 
 
 def test_resume_uses_authoritative_feature_id_not_pinned_parent_revision(

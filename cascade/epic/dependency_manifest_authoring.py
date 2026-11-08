@@ -64,7 +64,7 @@ _DEPENDENCY_KEYS = frozenset(
 def read_dependency_manifest(*, epic_id: str, root: Path) -> dict[str, Any]:
     """Return the current canonical snapshot, or an explicit revision-zero miss."""
 
-    repo = dependency_manifest_repository(epic_id, root=Path(root).resolve())
+    repo = _owned_repository(epic_id, root)
     with dependency_state_lock(root=repo):
         snapshot = read_canonical_manifest(epic_id, root=repo)
         return _result(epic_id, snapshot, root=repo)
@@ -93,8 +93,12 @@ def write_dependency_manifest(
     # remains backwards compatible; new authoring is current-schema only.
     _validate_public_manifest_shape(manifest)
     draft = validate_dependency_manifest(manifest)
+    environments = [draft.target_environment, draft.actual_environment,
+                    *(entry.target_environment for entry in draft.dependencies)]
+    if any(env is not None and not env.is_fully_specified for env in environments):
+        raise InvalidDependencyManifest("complete environment identities are required")
 
-    repo = dependency_manifest_repository(epic_id, root=Path(root).resolve())
+    repo = _owned_repository(epic_id, root)
     with dependency_state_lock(root=repo):
         snapshot = write_canonical_manifest(
             epic_id,
@@ -169,3 +173,22 @@ def _exact_mapping(
             f"{field} has unknown field(s): {', '.join(sorted(unknown))}"
         )
     return raw
+
+
+def _owned_repository(epic_id: str, root: Path) -> Path:
+    from cascade.board.store import read_doc
+    from cascade.workspace.integration_worktree import get_integration_worktree, locate_trunk
+    from cascade.board.context import resolve_tracking_root
+
+    trunk = locate_trunk(resolve_tracking_root(root))
+    entry = get_integration_worktree(trunk, "epic", epic_id)
+    if entry is None or not entry.path.is_dir():
+        raise PermissionError("owning Epic integration worktree unavailable")
+    repo = dependency_manifest_repository(epic_id, root=trunk)
+    doc = read_doc(epic_id, root=repo)
+    if doc.meta.tier != "epic" or doc.meta.status != "active":
+        raise PermissionError("manifest authoring requires an active owned Epic")
+    path = repo / "docs/epics/2_active/_dependency_manifests" / f"{epic_id}.json"
+    if not path.resolve().is_relative_to(repo.resolve()) or any(p.is_symlink() for p in [path, *path.parents] if p != repo.parent):
+        raise PermissionError("manifest path escape denied")
+    return repo

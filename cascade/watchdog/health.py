@@ -185,7 +185,7 @@ def _orphan_delivery_candidate(observation: ChildHealthObservation) -> bool:
     # the shared recovery operation to prove the expected queue handoff still
     # exists (or recover it when it does not).
     return observation.execution_outcome is None and (
-        observation.execution_phase == "awaiting_merge"
+        observation.execution_phase in {"awaiting_merge", "merge_blocked"}
         or observation.execution_phase in {"queued", "running"}
         and observation.reason == "delegated_to_task_watchdog"
     )

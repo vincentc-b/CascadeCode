@@ -349,6 +349,9 @@ async def run_planning_role_turn(
         scope_id=turn_kwargs.get("feature_id") or turn_kwargs.get("epic_id"),  # type: ignore[arg-type]
         latest=latest_input(messages),
     )
+    if isinstance(scope_id, str) and scope_id:
+        from cascade.task.action_recovery import acknowledge_team_recovery
+        acknowledge_team_recovery(scope_id, root=repo)
     try:
         result = await run_turn(
             role,

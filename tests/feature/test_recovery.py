@@ -281,7 +281,7 @@ def test_tool_and_health_sweep_share_one_scoped_recovery_incident(
     assert tool_result["outcome"] == "blocker"
     blockers = read_doc("feat_001", root=root).meta.monitoring_blockers
     assert [(item.child_id, item.incident_id) for item in blockers] == [
-        ("task_001", "task_001:delivery:1")
+        ("task_001", tool_result["recovery"]["incident_id"])
     ]
     assert recovery_status("task_001", feature_id="feat_001", root=root)[
         "incident"

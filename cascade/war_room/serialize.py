@@ -98,6 +98,16 @@ def work_meta_to_dict(
             from cascade.task.execution import execution_view
 
             value["execution"] = execution_view(meta.id, root=root)
+        from cascade.task_rollup import queued_delivery_evidence, pending_task_merges
+        from cascade.task.action_recovery import load_action
+        delivery_active = meta.status in {"active", "blocked"}
+        value["delivery_review"] = {
+            "kind": "local_task_delivery", "owner": meta.id, "supervisor": meta.parent,
+            "source_branch": f"task/{meta.id}", "target_branch": f"feat/{meta.parent}",
+            "validation": queued_delivery_evidence(meta.id, root=root) if delivery_active else None,
+            "queued": delivery_active and meta.id in pending_task_merges(root),
+            "action": load_action(f"{meta.id}:queued_merge", root=root) if delivery_active else None,
+        }
         # Recovery stays attached to the original action; its contract, rather
         # than broad board state, authorizes any safe retry control.
         if meta.parent and meta.status in {"active", "blocked"}:

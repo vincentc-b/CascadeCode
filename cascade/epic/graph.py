@@ -180,6 +180,10 @@ def invoke_tool(epic_id: str, name: str, args: dict, *, root: Path) -> object:
 
     from cascade.epic.guard import EpicToolDenied
 
+    if name in {"read_dependency_manifest", "write_dependency_manifest"}:
+        raise EpicToolDenied("manifest tools require the authenticated planning-role dispatcher")
+    if name in {"message_team", "supervise_child"} and set(args) & {"task_id", "feature_id", "epic_id", "root"}:
+        raise PermissionError("team controls do not accept caller scope overrides")
     tools = epic_tools()
     if name not in tools:
         raise KeyError(name)

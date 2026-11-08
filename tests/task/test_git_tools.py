@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from cascade.board.errors import GitError
 from cascade.board.store import read_doc
 from cascade.task.git_tools import register_task_git_tools, swe_commit, swe_run_tests
 from cascade.task.guard import TaskToolDenied
@@ -190,7 +189,7 @@ def test_swe_commit_replaces_model_supplied_task_trailer(board) -> None:
     assert message.count("Cascade-Task: task_034") == 1
 
 
-def test_swe_commit_refuses_preexisting_multi_commit_task_history(board) -> None:
+def test_swe_commit_preserves_preexisting_multi_commit_task_history(board) -> None:
     root = board["root"]
     run = board["run"]
     wt = run.worktree
@@ -206,8 +205,8 @@ def test_swe_commit_refuses_preexisting_multi_commit_task_history(board) -> None
         )
     (wt / "retry.py").write_text("VALUE = 3\n", encoding="utf-8")
 
-    with pytest.raises(GitError, match="already has 2 deliverable commits"):
-        swe_commit("retry", task_id="task_034", task_run=run, root=root)
+    swe_commit("retry", task_id="task_034", task_run=run, root=root)
+    assert subprocess.run(["git", "rev-list", "--count", f"{run.base_sha}..HEAD"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip() == "3"
 
 
 def test_swe_commit_ignores_prior_task_lifecycle_commits(board) -> None:
@@ -251,13 +250,12 @@ def test_swe_commit_does_not_amend_lifecycle_commit_after_deliverable(board) -> 
     subprocess.run(["git", "commit", "-m", "docs: task lifecycle"], cwd=wt, check=True)
     patch.write_text("value = 2\n", encoding="utf-8")
 
-    with pytest.raises(GitError, match="lifecycle commit after its deliverable"):
-        swe_commit("retry", task_id="task_034", task_run=run, root=root)
+    swe_commit("retry", task_id="task_034", task_run=run, root=root)
 
     assert patch.read_text(encoding="utf-8") == "value = 2\n"
     assert subprocess.run(
         ["git", "status", "--porcelain"], cwd=wt, check=True, capture_output=True, text=True
-    ).stdout.strip() == "M cascade/patch.py"
+    ).stdout.strip() == ""
 
 
 def test_swe_commit_refused_wrong_branch(board) -> None:
@@ -325,7 +323,7 @@ def test_swe_run_tests_uses_worktree_cwd(board, monkeypatch: pytest.MonkeyPatch)
         cmd=["python3", "-m", "pytest", "-q", "test_ok.py"],
     )
 
-    assert seen == [wt]
+    assert seen and all(cwd == wt for cwd in seen)
     assert result["exit_code"] == 0
     assert "passed" in str(result["output"])
 

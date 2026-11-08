@@ -8,10 +8,11 @@ sweep observation and concurrent callers cannot steal a live task.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -23,7 +24,7 @@ from cascade.task.orphan_delivery import (
     derive_orphan_delivery_incident,
     snapshot_orphan_delivery_state,
 )
-from cascade.watchdog.lock import process_lock
+from cascade.task.lifecycle_lock import task_lifecycle_lock
 
 RecoveryDecision = Literal[
     "no_op_live_owner",
@@ -66,14 +67,11 @@ def recover_orphan_delivery(
 
     repo = resolve_root(root)
     resume: tuple[str, str | None] | None = None
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         task = read_doc(task_id, root=repo)
         attempt = _execution_attempt(task_id, repo)
         incident_id = observed_incident or _incident_id(task_id, attempt)
         ledger = _read_ledger(repo)
-        previous = _result_from_row(ledger.get(incident_id))
-        if previous is not None:
-            return previous
 
         # Do not enqueue while the worker is draining, or while cancellation
         # owns the lifecycle transition.  Neither condition is recoverable by
@@ -90,22 +88,49 @@ def recover_orphan_delivery(
                     incident_id, "defer_draining", "worker_draining", attempt
                 )
             else:
-                incident = derive_orphan_delivery_incident(
-                    snapshot_orphan_delivery_state(
-                        task_id,
-                        root=repo,
-                        pinned_inputs=_pinned_inputs(task_id, task.meta.parent, repo),
+                state = snapshot_orphan_delivery_state(
+                    task_id, root=repo,
+                    pinned_inputs=_pinned_inputs(task_id, task.meta.parent, repo),
+                )
+                from cascade.task_rollup import _merge_head_pair
+
+                heads = _merge_head_pair(task_id, repo)
+                facts = {"state": asdict(state), "heads": list(heads) if heads else None,
+                         "status": task.meta.status, "parent": task.meta.parent}
+                generation = hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()[:24]
+                # Observations are hints, never authorization or cache identity.
+                incident_id = f"{_incident_id(task_id, attempt)}:{generation}"
+                previous = _result_from_row(ledger.get(incident_id))
+                if previous is not None:
+                    from cascade.task.execution import execution_view
+                    execution = execution_view(task_id, root=repo) or {}
+                    if previous.decision != "resume_workspace" or execution.get("health") != "stale":
+                        return previous
+                    # A persisted handoff with no live owner is replayable after
+                    # the queue reservation expires (including supervisor exit).
+                    result = previous
+                    resume = (task_id, task.meta.parent)
+                    from cascade.task.execution import mark_stall_recovery_queued
+                    mark_stall_recovery_queued(task_id, root=repo)
+                else:
+                    incident = derive_orphan_delivery_incident(state)
+                    result, resume = _apply_incident(
+                        incident, incident_id, attempt, repo,
+                        feature_id=task.meta.parent,
                     )
-                )
-                result, resume = _apply_incident(
-                    incident,
-                    incident_id,
-                    attempt,
-                    repo,
-                    feature_id=task.meta.parent,
-                )
+                    result = replace(result, diagnostics={
+                        **(result.diagnostics or {}), "generation": generation,
+                        "observation": facts,
+                    })
 
         ledger[incident_id] = result.as_dict()
+        if resume is not None:
+            # The queued transition is our own handoff, not a new external
+            # generation. Reserve its resulting observation before unlocking.
+            queued_facts = {**facts, "state": {**facts["state"], "execution_phase": "queued"}}
+            queued_generation = hashlib.sha256(json.dumps(queued_facts, sort_keys=True).encode()).hexdigest()[:24]
+            queued_id = f"{_incident_id(task_id, result.attempt)}:{queued_generation}"
+            ledger[queued_id] = result.as_dict()
         _write_ledger(repo, ledger)
 
     # Starting a model turn while the lifecycle lock is held invites lock
@@ -151,7 +176,12 @@ def recovery_incident(task_id: str, *, root: Path) -> RecoveryResult | None:
         if incident_id.startswith(prefix)
         and (result := _result_from_row(row)) is not None
     ]
-    return max(candidates, key=_incident_sort_key, default=None)
+    latest = candidates[-1] if candidates else None
+    if latest is not None and latest.reason == "validated_delivery_already_queued":
+        from cascade.task_rollup import pending_task_merges
+        if task_id not in pending_task_merges(repo):
+            return _result(latest.incident_id, "unsafe", "delivery_invalidated_revalidation_pending", latest.attempt)
+    return latest
 
 
 def _incident_sort_key(result: RecoveryResult) -> tuple[int, str]:
@@ -326,7 +356,7 @@ def _write_ledger(root: Path, ledger: dict[str, dict[str, object]]) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(
-                {"version": 1, "recoveries": ledger}, handle, indent=2, sort_keys=True
+                {"version": 1, "recoveries": ledger}, handle, indent=2, sort_keys=False
             )
             handle.write("\n")
             handle.flush()

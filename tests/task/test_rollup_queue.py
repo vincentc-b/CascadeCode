@@ -96,7 +96,7 @@ def test_conflict_is_persisted_as_semantic_block_without_repeat_merge(
     assert action["recovery_state"] == "awaiting_owner_decision"
     assert action["failure_classification"] == "owner_decision"
     decision = action["owner_decisions"][0]
-    assert decision["owner"] == "feature_team"
+    assert decision["owner"] == "task_team"
     assert decision["metadata"]["evidence"] == {
         "source_sha": "source1",
         "target_sha": "target1",
@@ -195,7 +195,7 @@ def test_semantic_handoff_scope_and_resolution_resume_original_queue(
     assert action is not None
     decision = action["owner_decisions"][0]
     decision_id = decision["decision_id"]
-    assert decision["owner"] == "feature_team"
+    assert decision["owner"] == "task_team"
     assert retry_pending_task_merges(root) == []
     assert merges == ["task_001"]
 

@@ -195,7 +195,7 @@ def test_execution_stops_authorized_semantic_conflict_for_human_decision(tmp_pat
 def test_checks_then_publishes_same_source_with_explicit_lease(tmp_path: Path, monkeypatch) -> None:
     root, turn = _execution_ready_turn(tmp_path)
     rebased = execute_review_rebase(turn, authorized_paths=("source.txt",))
-    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+    monkeypatch.setattr(review_rebase, "validation_command", lambda root: (sys.executable, "-c", ""))
 
     publication = check_and_publish_review_rebase(turn, rebased)
 
@@ -210,7 +210,7 @@ def test_checks_then_publishes_same_source_with_explicit_lease(tmp_path: Path, m
 def test_failed_checks_preserve_rebased_work_and_skip_publication(tmp_path: Path, monkeypatch) -> None:
     root, turn = _execution_ready_turn(tmp_path)
     rebased = execute_review_rebase(turn, authorized_paths=("source.txt",))
-    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", "raise SystemExit(1)"))
+    monkeypatch.setattr(review_rebase, "validation_command", lambda root: (sys.executable, "-c", "raise SystemExit(1)"))
 
     publication = check_and_publish_review_rebase(turn, rebased)
 
@@ -225,7 +225,7 @@ def test_failed_checks_preserve_rebased_work_and_skip_publication(tmp_path: Path
 def test_changed_remote_source_after_checks_stops_before_lease_push(tmp_path: Path, monkeypatch) -> None:
     root, turn = _execution_ready_turn(tmp_path)
     rebased = execute_review_rebase(turn, authorized_paths=("source.txt",))
-    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+    monkeypatch.setattr(review_rebase, "validation_command", lambda root: (sys.executable, "-c", ""))
     remote = _git(root, "remote", "get-url", "origin")
     updater = tmp_path / "updater-after-rebase"
     _git(tmp_path, "clone", remote, str(updater))
@@ -268,7 +268,7 @@ def test_end_to_end_clean_owned_rebase_records_evidence_and_updates_only_review_
         authorization_calls += 1
         return authorized_action(*args, **kwargs)
 
-    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+    monkeypatch.setattr(review_rebase, "validation_command", lambda root: (sys.executable, "-c", ""))
     monkeypatch.setattr(review_rebase.subprocess, "run", record_command)
     monkeypatch.setattr(review_rebase, "_authorized_action", record_authorization)
 
@@ -316,7 +316,7 @@ def test_recovery_workflow_publishes_once_and_reconciles_completed_action(
     tmp_path: Path, monkeypatch
 ) -> None:
     root, turn = _execution_ready_turn(tmp_path)
-    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+    monkeypatch.setattr(review_rebase, "validation_command", lambda root: (sys.executable, "-c", ""))
     pushes: list[tuple[str, ...]] = []
     run = subprocess.run
 
@@ -383,7 +383,7 @@ def test_recovery_resumes_interrupted_checkpoint_without_duplicate_publication(
     """A restarted process uses the durable checkpoint instead of repeating Git effects."""
 
     root, turn = _execution_ready_turn(tmp_path)
-    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+    monkeypatch.setattr(review_rebase, "validation_command", lambda root: (sys.executable, "-c", ""))
     pushes: list[tuple[str, ...]] = []
     run = subprocess.run
 

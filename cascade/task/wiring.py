@@ -32,6 +32,8 @@ _last_test_passed: dict[str, bool] = {}
 def load_task_tools() -> None:
     """Register all task SWE tools idempotently."""
 
+    from cascade.team_supervision import message_team
+    register_task_tool("message_team", message_team)
     expected = (
         "swe_read",
         "swe_write",

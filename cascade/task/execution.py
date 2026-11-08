@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from cascade.board.context import resolve_root
-from cascade.watchdog.lock import process_lock
+from cascade.task.lifecycle_lock import task_lifecycle_lock
 
 ExecutionPhase = Literal["queued", "running", "awaiting_merge", "merge_blocked", "terminal"]
 ExecutionOutcome = Literal["succeeded", "failed"]
@@ -99,10 +99,15 @@ def _write(root: Path, records: dict[str, dict[str, Any]]) -> None:
 def mark_queued(task_id: str, *, root: Path, now: datetime | None = None) -> dict[str, Any]:
     repo = resolve_root(root)
     current = now or _now()
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         previous = records.get(task_id, {})
+        history = list(previous.get("attempt_history", []))
+        if previous:
+            history.append({k: v for k, v in previous.items() if k != "attempt_history"})
         record = {
+            "attempt_history": history,
+            "contract_revisions": previous.get("contract_revisions", []),
             "task_id": task_id,
             "attempt": int(previous.get("attempt") or 0) + 1,
             "phase": "queued",
@@ -124,7 +129,7 @@ def mark_queued(task_id: str, *, root: Path, now: datetime | None = None) -> dic
 def mark_running(task_id: str, *, root: Path, now: datetime | None = None) -> dict[str, Any]:
     repo = resolve_root(root)
     current = now or _now()
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = dict(records.get(task_id, {}))
         record.update(
@@ -154,7 +159,7 @@ def mark_awaiting_merge(task_id: str, *, root: Path, now: datetime | None = None
 
     repo = resolve_root(root)
     current = now or _now()
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = records.get(task_id)
         if record is None or record.get("phase") == "terminal":
@@ -191,7 +196,7 @@ def mark_merge_blocked(
         "source_sha": source_sha,
         "target_sha": target_sha,
     }
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = records.get(task_id)
         if record is None or record.get("phase") == "terminal":
@@ -215,7 +220,7 @@ def mark_merge_blocked(
 def heartbeat(task_id: str, *, root: Path, now: datetime | None = None) -> None:
     repo = resolve_root(root)
     current = now or _now()
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = records.get(task_id)
         if record is None or record.get("phase") == "terminal":
@@ -232,7 +237,7 @@ def record_running_error(
 
     repo = resolve_root(root)
     current = now or _now()
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = records.get(task_id)
         if record is None:
@@ -250,7 +255,7 @@ def record_running_error(
 
 def clear_validation_failures(task_id: str, *, root: Path) -> None:
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = records.get(task_id)
         if record is None:
@@ -266,7 +271,7 @@ def mark_validation_retry(task_id: str, error: str, *, root: Path) -> int:
 
     repo = resolve_root(root)
     current = _now()
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = dict(records.get(task_id, {}))
         failures = int(record.get("validation_failures") or 0) + 1
@@ -301,7 +306,7 @@ def mark_terminal(
 ) -> dict[str, Any]:
     repo = resolve_root(root)
     current = now or _now()
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = dict(records.get(task_id, {}))
         record.update(
@@ -334,7 +339,7 @@ def execution_view(
     stale_after: timedelta = DEFAULT_STALE_AFTER,
 ) -> dict[str, Any] | None:
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         record = _read(repo).get(task_id)
     if record is None:
         return None
@@ -355,7 +360,7 @@ def execution_views(
     """Build multiple execution views from one sidecar read."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
     current = now or _now()
     return {
@@ -403,7 +408,7 @@ def read_stall_disposition(
     """Return durable stall disposition for one episode signature, if recorded."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         record = _read(repo).get(task_id)
     if record is None:
         return None
@@ -424,7 +429,7 @@ def write_stall_disposition(
     """Merge one episode-keyed stall disposition into the execution sidecar."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = dict(records.get(task_id, {"task_id": task_id}))
         dispositions = record.get("stall_dispositions")
@@ -446,7 +451,7 @@ def read_in_flight_turn(task_id: str, *, root: Path) -> dict[str, Any] | None:
     """Return in-flight turn binding for a running task, if any."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         record = _read(repo).get(task_id)
     if record is None:
         return None
@@ -460,7 +465,7 @@ def patch_in_flight_turn(
     """Merge in-flight turn metadata into the execution sidecar."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = dict(records.get(task_id, {"task_id": task_id}))
         current = record.get("in_flight_turn")
@@ -474,7 +479,7 @@ def patch_in_flight_turn(
 
 def clear_in_flight_turn(task_id: str, *, root: Path) -> None:
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = records.get(task_id)
         if record is None:
@@ -489,7 +494,7 @@ def running_tasks_with_in_flight_turns(root: Path) -> list[tuple[str, dict[str, 
     """Return running tasks that currently expose an in-flight turn binding."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
     rows: list[tuple[str, dict[str, Any]]] = []
     for task_id, record in records.items():
@@ -508,7 +513,7 @@ def mark_stall_recovery_queued(
 
     repo = resolve_root(root)
     current = now or _now()
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         records = _read(repo)
         record = dict(records.get(task_id, {}))
         record.update(

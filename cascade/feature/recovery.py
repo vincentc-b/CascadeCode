@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cascade.board.errors import GitError, NotFound
-from cascade.board.lock import process_lock
+from cascade.task.lifecycle_lock import task_lifecycle_lock
 from cascade.board.store import read_doc, write_doc
 from cascade.feature.registry import register_feature_tool
 from cascade.task.supervisor_recovery import (
@@ -47,13 +47,32 @@ def revise_task(task_id: str, body: str, *, feature_id: str, root: Path) -> str 
     """Replace an owned blocked/backlog Task body before a supervised retry."""
 
     trunk = locate_trunk(Path(root).resolve())
-    task = _owned_task(task_id, feature_id=feature_id, root=trunk)
-    if task.meta.status not in ("backlog", "ready_to_plan", "blocked"):
-        raise ValueError(f"{task_id} cannot be revised while {task.meta.status}")
-    if not isinstance(body, str) or not body.strip():
-        raise ValueError("task body must not be empty")
-    task.body = body.strip() + "\n"
-    return write_doc(task, root=task.meta.path.parents[3])
+    from hashlib import sha256
+    from cascade.task.execution import _read, _write, execution_lease_is_live
+
+    with task_lifecycle_lock(root=trunk):
+        task = _owned_task(task_id, feature_id=feature_id, root=trunk)
+        if task.meta.status not in ("backlog", "ready_to_plan", "blocked"):
+            raise ValueError(f"{task_id} cannot be revised while {task.meta.status}")
+        if execution_lease_is_live(task_id, root=trunk):
+            raise ValueError("live execution owns this Task")
+        if not isinstance(body, str) or not body.strip():
+            raise ValueError("task body must not be empty")
+        normalized = body.strip() + "\n"
+        if normalized == task.body.strip() + "\n":
+            return None
+        old = sha256(task.body.strip().encode()).hexdigest()
+        new = sha256(normalized.strip().encode()).hexdigest()
+        task.body = normalized
+        revision = write_doc(task, root=task.meta.path.parents[3])
+        records = _read(trunk)
+        row = records.setdefault(task_id, {})
+        revisions = row.setdefault("contract_revisions", [])
+        if not any(r.get("new_revision") == new for r in revisions):
+            revisions.append({"old_revision": old, "new_revision": new,
+                              "commit": revision, "consumed": False})
+        _write(trunk, records)
+        return revision
 
 
 def _typed_reason(error: object, *, blocked: bool) -> str:
@@ -62,7 +81,7 @@ def _typed_reason(error: object, *, blocked: bool) -> str:
     value = str(error or "").strip().lower()
     if any(
         token in value
-        for token in ("permission", "unauthorized", "forbidden", "credential")
+        for token in ("permission", "unauthorized", "forbidden", "credential", "write denied", "commit refused")
     ):
         return "permission_refused"
     if any(
@@ -126,17 +145,21 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
     # been queued, another terminal outcome must be revised or resolved rather
     # than becoming a second orchestration path through the same control.
     attempt_count = int(execution.get("attempt") or 0)
+    from hashlib import sha256
+    current_revision = sha256(task.body.strip().encode()).hexdigest()
+    revisions = execution.get("contract_revisions", [])
+    revised = any(r.get("new_revision") == current_revision and not r.get("consumed") for r in revisions)
     retryable = (
         terminal
-        and attempt_count <= 1
-        and typed_reason in {"transient_forge_failure", "blocked_execution"}
+        and (revised or (attempt_count <= 1
+        and typed_reason in {"transient_forge_failure", "blocked_execution"}))
     )
     checkout = get_integration_worktree(trunk, "task", task_id)
     affected: dict[str, object] = {"branch": integration_branch("task", task_id)}
     if checkout is not None:
         affected["checkout"] = checkout.path.as_posix()
 
-    if typed_reason == "permission_refused":
+    if typed_reason == "permission_refused" and not revised:
         next_safe_step = (
             "Resolve the required permission or credential; retry cannot bypass it."
         )
@@ -160,6 +183,7 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
         "phase": phase,
         "reason": typed_reason,
         "attempt_count": attempt_count,
+        "contract_revisions": revisions,
         "owner": execution.get("owner_pid"),
         "affected": affected,
         "next_safe_step": next_safe_step,
@@ -175,7 +199,7 @@ def retry_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object
     trunk = locate_trunk(Path(root).resolve())
     # dispatch_task takes this same re-entrant lock while it changes the board.
     # The check and transition are therefore one atomic retry claim.
-    with process_lock:
+    with task_lifecycle_lock(root=trunk):
         status = recovery_status(task_id, feature_id=feature_id, root=trunk)
         if status["action"] != "retry":
             return {

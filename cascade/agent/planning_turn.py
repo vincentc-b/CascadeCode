@@ -39,7 +39,11 @@ _DEPENDENCY_PROJECTION_BOUNDARY = (
     "machine-readable and explanation fields as guidance only. Normal planning "
     "actions, including mint_feature, recheck authoritative dependency status: "
     "dependency_unmet means a known prerequisite is incomplete, while "
-    "dependency_status_unavailable means status could not be established."
+    "dependency_status_unavailable means status could not be established. "
+    "For missing_manifest, the owning Epic Manager or Architect must use "
+    "read_dependency_manifest then write_dependency_manifest with expected_revision=0 "
+    "and complete target environment identity. Declare none_required=true and "
+    "dependencies=[] only when no software is needed. Declaration grants no install authority."
 )
 
 

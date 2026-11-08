@@ -33,7 +33,7 @@ def test_monitor_publishes_an_already_resolved_owned_review(
     resolved_head = _git(root, "rev-parse", "HEAD")
     monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
     monkeypatch.setattr(review_health, "merge_request_snapshot", _conflicting_snapshot)
-    monkeypatch.setattr(review_rebase, "_REPOSITORY_CHECK_COMMAND", (sys.executable, "-c", ""))
+    monkeypatch.setattr(review_rebase, "validation_command", lambda root: (sys.executable, "-c", ""))
 
     result = reconcile_open_review_health(root)
 

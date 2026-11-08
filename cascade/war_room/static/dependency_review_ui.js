@@ -360,6 +360,12 @@
       appendText(document, body, "p", "dependency-review-warning", error.code + ": " + error.detail);
     });
 
+    if ((projection.errors || []).some(function (error) { return error.code === "missing_manifest"; })) {
+      appendText(document, body, "p", "dependency-review-guidance",
+        "The Epic Manager or Architect must declare dependencies first. Ask the team to use read_dependency_manifest and write_dependency_manifest. If none are needed, declare none_required with a complete target environment. Installation approval remains a separate human action.");
+      return { host: host, feedback: feedback, projection: projection };
+    }
+
     var post = options.post || defaultPost;
     function applyProjection(next) {
       projection = next || projection;

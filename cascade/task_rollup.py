@@ -32,7 +32,7 @@ _QUEUED_MERGE_KIND = "queued_task_merge"
 # short-lived transient refusal terminal during normal supervisor operation.
 _QUEUED_MERGE_ATTEMPT_BOUND = 100
 _SEMANTIC_CONFLICT_OWNERS = {
-    "task_code": "feature_team",
+    "task_code": "task_team",
     "cross_feature": "epic_team",
     "epic_contract": "epic_team",
 }
@@ -96,6 +96,17 @@ def _queued_merge_action(
         action = replace_action_metadata(
             _queued_merge_action_id(task_id), metadata, root=root
         )
+    if delivery_evidence is not None and delivery_evidence_is_current(task_id, delivery_evidence, root=root):
+        from cascade.task.action_recovery import rearm_validated_task_action
+        action = rearm_validated_task_action(task_id, delivery_evidence, root=root)
+        for decision in action.get("owner_decisions", []):
+            if decision.get("state") == "awaiting_resolution":
+                action = record_owner_resolution(
+                    action["action_id"], decision["decision_id"],
+                    f"validated:{delivery_evidence['deliverable_sha']}:{delivery_evidence['feature_base_sha']}",
+                    root=root, metadata={"final_validation": delivery_evidence},
+                )
+        _clear_delivery_blockers(task_id, root)
     return action
 
 
@@ -151,9 +162,6 @@ def invalidate_task_merge(task_id: str, *, root: Path) -> None:
     """Remove a stale delivery from scheduling while retaining its action history."""
 
     repo = resolve_root(root)
-    action = load_action(_queued_merge_action_id(task_id), root=repo)
-    if action is not None and action.get("metadata") != {"task_id": task_id}:
-        replace_action_metadata(_queued_merge_action_id(task_id), {"task_id": task_id}, root=repo)
     with process_lock:
         pending = _read(repo)
         if task_id in pending:
@@ -170,6 +178,14 @@ def retry_pending_task_merges(root: Path) -> list[str]:
     """Retry durable task merges and return ids completed on this pass."""
 
     repo = resolve_root(root)
+    from cascade.task.action_recovery import recovery_actions, reconcile_completed_task_delivery
+    for historical in recovery_actions(root=repo):
+        if historical.get("action_kind") != _QUEUED_MERGE_KIND or historical.get("recovery_state") == "completed":
+            continue
+        task_id = (historical.get("metadata") or {}).get("task_id")
+        if task_id and _already_completed_equivalent(task_id, repo):
+            reconcile_completed_task_delivery(task_id, root=repo)
+            _clear_delivery_blockers(task_id, repo)
     completed: list[str] = []
     removable: list[str] = []
     with process_lock:
@@ -185,6 +201,13 @@ def retry_pending_task_merges(root: Path) -> list[str]:
             # A branch moved after validation.  Do not execute an old merge;
             # the next final validation will publish a replacement handoff.
             invalidate_task_merge(task_id, root=repo)
+            removable.append(task_id)
+            continue
+        if _already_completed_equivalent(task_id, repo):
+            from cascade.task.action_recovery import reconcile_completed_task_delivery
+            reconcile_completed_task_delivery(task_id, root=repo)
+            _clear_delivery_blockers(task_id, repo)
+            completed.append(task_id)
             removable.append(task_id)
             continue
         state = action.get("recovery_state")
@@ -248,11 +271,11 @@ def _resume_queued_merge(task_id: str, root: Path) -> ActionResult:
         )
         return ActionResult("failed", "owner_decision", metadata)
     if reason in {
-        "busy", "checkout_missing", "merge_target_missing", "wrong_branch", "post_merge_failed",
+        "busy", "not_active", "checkout_missing", "merge_target_missing", "wrong_branch", "post_merge_failed",
     }:
         if reason != "busy":
             _record_merge_refusal(task_id, result, root)
-        classification = "transient_retry" if reason == "busy" else "deterministic_repair"
+        classification = "transient_retry" if reason in {"busy", "not_active"} else "deterministic_repair"
         return ActionResult("failed", classification, metadata)
     if reason not in {"task_not_found", "wrong_column", "not_mergeable"}:
         _record_merge_refusal(task_id, result, root)
@@ -298,6 +321,20 @@ def handoff_semantic_conflict(
         separators=(",", ":"),
     ).encode("utf-8")
     decision_id = f"semantic-conflict:{sha256(encoded).hexdigest()}"
+    from cascade.task.action_recovery import capture_and_route_action_failure
+    action = load_action(action_id, root=root) or {}
+    task_id = (action.get("metadata") or {}).get("task_id")
+    if task_id:
+        task = read_doc(task_id, root=root)
+        recipient = task_id if scope == "task_code" else read_doc(task.meta.parent, root=root).meta.parent
+        capture_and_route_action_failure(
+            action_id, _QUEUED_MERGE_KIND, affected_work_id=task_id,
+            intended_target_ref=f"feat/{task.meta.parent}", root=root,
+            failure_code="branch_conflict", safe_summary="Resolve the owned Task branch conflict, commit scoped edits and run supervised validation.",
+            evidence={**identity_evidence, "supervisor": task.meta.parent},
+            conflicting_paths=evidence["conflict_paths"],
+            owning_team={"kind": owner, "work_id": recipient},
+        )
     return record_owner_decision(
         action_id,
         decision_id,
@@ -416,3 +453,18 @@ def _record_merge_refusal(task_id: str, result, root: Path) -> None:
         ),
         root=root,
     )
+
+
+def _clear_delivery_blockers(task_id: str, root: Path) -> None:
+    from cascade.watchdog.blockage import reconcile_direct_report_blockage
+    child = read_doc(task_id, root=root)
+    if not child.meta.parent:
+        return
+    parent = read_doc(child.meta.parent, root=root)
+    for blocker in list(parent.meta.monitoring_blockers):
+        if blocker.child_id != task_id:
+            continue
+        if blocker.incident_id is not None and not blocker.incident_id.startswith(f"{task_id}:delivery:"):
+            continue
+        reconcile_direct_report_blockage(parent, child, root=root, incident_id=blocker.incident_id)
+        parent = read_doc(child.meta.parent, root=root)

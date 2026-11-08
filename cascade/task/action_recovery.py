@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Literal, Mapping
 
 from cascade.board.context import resolve_root
-from cascade.watchdog.lock import process_lock
+from cascade.task.lifecycle_lock import task_lifecycle_lock
 
 FailureClassification = Literal[
     "deterministic_repair",
@@ -45,7 +45,7 @@ RecoveryState = Literal[
 ]
 AttemptOutcome = Literal["succeeded", "failed", "cancelled"]
 PreconditionState = Literal["pending", "repaired", "unrepairable"]
-DecisionOwner = Literal["feature_team", "epic_team"]
+DecisionOwner = Literal["task_team", "feature_team", "epic_team"]
 ReconciliationOutcome = Literal["resume", "safe_retry", "already_completed", "blocker"]
 RepairOperation = Literal[
     "validate_checkout",
@@ -331,7 +331,7 @@ def create_or_load_action(
         human_blocker=human_blocker,
     )
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         existing = actions.get(action_id)
@@ -409,7 +409,7 @@ def update_recovery_record(
         "human_blocker": _validate_human_blocker(human_blocker),
     }
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -458,7 +458,7 @@ def replace_action_metadata(
     _validate_identity(action_id)
     replacement = _validate_metadata(metadata, field="metadata")
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -476,7 +476,7 @@ def load_action(action_id: str, *, root: Path) -> dict[str, Any] | None:
 
     _validate_identity(action_id)
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         action = _actions(_read_payload(repo)).get(action_id)
     return _copy(action) if action is not None else None
 
@@ -590,7 +590,7 @@ def capture_and_route_action_failure(
     }
     failure_provenance = _validate_metadata(provenance, field="provenance")
 
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -753,7 +753,7 @@ def pending_recovery_team_ids(*, root: Path) -> set[str]:
     """Return teams that still own an enqueued semantic recovery decision."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         actions = _actions(_read_payload(repo))
     pending: set[str] = set()
     for action in actions.values():
@@ -805,7 +805,7 @@ def record_action_checkpoint(
     if not isinstance(resume_instructions, str) or not resume_instructions:
         raise ActionRecoveryError("checkpoint resume instructions must be a nonempty string")
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -865,7 +865,7 @@ def reconcile_action(
         raise ActionRecoveryError("remote head must be a nonempty SHA or None")
     paths = _paths(dirty_paths)
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -947,7 +947,7 @@ def recovery_actions(*, root: Path) -> list[dict[str, Any]]:
     """Return copies of durable actions for read-only board projections."""
 
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         actions = _actions(_read_payload(repo))
     return [_copy(action) for action in actions.values()]
 
@@ -968,7 +968,7 @@ def record_repair_precondition(
     _validate_choice(state, _PRECONDITION_STATES, field="precondition state")
     details = _validate_metadata(metadata, field="precondition metadata")
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -1019,7 +1019,7 @@ def record_owner_decision(
     _validate_choice(owner, _DECISION_OWNERS, field="decision owner")
     details = _validate_metadata(metadata, field="decision metadata")
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -1079,7 +1079,7 @@ def record_owner_resolution(
     _validate_identity(resolution_id)
     details = _validate_metadata(metadata, field="resolution metadata")
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -1153,7 +1153,7 @@ def start_attempt(
         raise ActionRecoveryError(f"unknown recovery state: {recovery_state}")
     start = _validate_metadata(start_metadata, field="start metadata")
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -1214,7 +1214,7 @@ def finalize_attempt(
         raise ActionRecoveryError(f"unknown recovery state: {recovery_state}")
     completion = _validate_metadata(completion_metadata, field="completion metadata")
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -1269,7 +1269,7 @@ def repair_action(
     _validate_identity(action_id)
     _validate_choice(operation, _REPAIR_OPERATIONS, field="repair operation")
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -1392,7 +1392,7 @@ def _claim_resume_attempt(
 
     _validate_identity(action_id)
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         action = actions.get(action_id)
@@ -1515,7 +1515,7 @@ def resume_action(
     # against a replacement action.  Lifecycle executors themselves acquire
     # the same lock around their mutation.
     repo = resolve_root(root)
-    with process_lock:
+    with task_lifecycle_lock(root=repo):
         claimed = _claim_resume_attempt(
             action_id, root=repo, reclaim_running=reclaim_running, now=now
         )
@@ -1560,3 +1560,66 @@ def resume_action(
         classification=classification, recovery_state=state,
         completion_metadata=metadata, now=now,
     )
+
+
+def reconcile_completed_task_delivery(task_id: str, *, root: Path) -> None:
+    """Canonical completion supersedes an obsolete blocker, retaining attempts."""
+    from cascade.board.store import read_doc
+    repo = resolve_root(root)
+    with task_lifecycle_lock(root=repo):
+        if read_doc(task_id, root=repo).meta.status != "completed":
+            return
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(f"{task_id}:queued_merge")
+        if action is None or action.get("recovery_state") == "completed":
+            return
+        action["recovery_state"] = "completed"
+        action["completion_reconciliation"] = {"reason": "canonical_task_completed", "at": _iso(None)}
+        action["updated_at"] = _iso(None)
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+
+
+def acknowledge_team_recovery(work_id: str, *, root: Path) -> None:
+    """Record that the concrete owner has entered its supervised turn."""
+    repo = resolve_root(root)
+    with task_lifecycle_lock(root=repo):
+        payload = _read_payload(repo)
+        changed = False
+        for action in _actions(payload).values():
+            recovery = action.get("recovery") or {}
+            if (recovery.get("owning_team") or {}).get("work_id") != work_id:
+                continue
+            marker = recovery.get("routing_marker") or {}
+            if marker.get("status") == "enqueued" and not marker.get("acknowledged_at"):
+                marker["acknowledged_at"] = _iso(None)
+                changed = True
+        if changed:
+            _write_payload(repo, payload)
+
+
+def rearm_validated_task_action(task_id: str, evidence: Mapping[str, str], *, root: Path) -> dict[str, Any]:
+    """A newly validated head pair may rearm the same action without erasing history."""
+    from cascade.task_rollup import delivery_evidence_is_current
+    repo = resolve_root(root)
+    action_id = f"{task_id}:queued_merge"
+    with task_lifecycle_lock(root=repo):
+        if not delivery_evidence_is_current(task_id, dict(evidence), root=repo):
+            raise ActionRecoveryError("stale delivery generation")
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions[action_id]
+        generations = action.setdefault("delivery_generations", [])
+        identity = dict(evidence)
+        if any(g.get("validation") == identity for g in generations):
+            return _copy(action)
+        generations.append({"validation": identity, "at": _iso(None),
+                            "previous_state": action["recovery_state"]})
+        if action["recovery_state"] == "blocked" and action.get("failure_classification") != "human_gate":
+            action["recovery_state"] = "retryable"
+            action["failure_classification"] = None
+            action["attempt_bound"] = max(int(action.get("attempt_bound") or 1), int(action.get("attempt_count") or 0) + 1)
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action)

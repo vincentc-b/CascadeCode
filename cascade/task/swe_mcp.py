@@ -13,6 +13,7 @@ from cursor_sdk import CustomTool, CustomToolContext
 MCP_SERVER_NAME = "cascade_task"
 
 SWE_TOOL_NAMES = (
+    "message_team",
     "swe_read",
     "swe_write",
     "read_doc",
@@ -22,6 +23,7 @@ SWE_TOOL_NAMES = (
 )
 
 _SWE_TOOL_DESCRIPTIONS = {
+    "message_team": "Send a durable message to the owning Feature; use a stable request_id for retries.",
     "swe_read": "Read a UTF-8 file from the active task worktree.",
     "swe_write": "Write the complete UTF-8 contents of a file in the active task worktree.",
     "read_doc": "Read this Task plan or its pinned parent Feature plan.",
@@ -31,6 +33,9 @@ _SWE_TOOL_DESCRIPTIONS = {
 }
 
 _SWE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "message_team": {"type": "object", "properties": {
+        "recipient_id": {"type": "string"}, "body": {"type": "string"},
+        "request_id": {"type": "string"}}, "required": ["recipient_id", "body", "request_id"]},
     "swe_read": {
         "type": "object",
         "properties": {"path": {"type": "string"}},

@@ -80,8 +80,18 @@ def dispatch_task(
     """
 
     repo = resolve_root(root)
-    with process_lock:
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+    with task_lifecycle_lock(root=repo):
         result = _dispatch_task(work_id, by, skills, repo)
+        if result.ok:
+            from cascade.task.execution import _read, _write
+            records = _read(repo)
+            row = records.get(work_id, {})
+            for revision in row.get("contract_revisions", []):
+                revision["consumed"] = True
+            if row:
+                records[work_id] = row
+                _write(repo, records)
     return _boot_after(result, "task", work_id, by, repo)
 
 
@@ -289,6 +299,15 @@ def _dispatch_task(
         return _fail("not_found")
     if not _task_can_start(meta):
         return _fail("bad_state")
+    from cascade.task.execution import execution_lease_is_live
+    if execution_lease_is_live(work_id, root=root):
+        return _fail("execution_owner_live")
+    from cascade.task.guard import contract_scope_blocker
+    from cascade.workspace.doc_root import read_doc_resolved
+    scope_blocker = contract_scope_blocker(read_doc_resolved(work_id, root=root).body)
+    if scope_blocker:
+        _emit(root, meta.parent or work_id, "TaskScopeBlocked", {"task_id": work_id, **scope_blocker})
+        return _fail("task_scope_denied")
     if not meta.parent:
         return _fail("bad_state")
     parent = board.by_id.get(meta.parent)
@@ -301,7 +320,7 @@ def _dispatch_task(
         return _fail(dependency_evidence.outcome)
     if _dependency_review_pending(board, meta, root=root):
         return _fail("feature_awaiting_merge")
-    if _active_task_count(board) >= task_parallelism(root):
+    if _active_task_count(board, root=root) >= task_parallelism(root):
         return _fail("cap")
     from cascade.comments.gate import refusal_if_blocked
 
@@ -473,10 +492,15 @@ def _dependency_review_pending(board: BoardIndex, meta: WorkMeta, *, root: Path)
     return False
 
 
-def _active_task_count(board: BoardIndex) -> int:
+def _active_task_count(board: BoardIndex, *, root: Path | None = None) -> int:
     count = 0
     for meta in board.by_id.values():
         if meta.tier == "task" and meta.status == "active" and meta.path.parent.name == "2_active":
+            if root is not None:
+                from cascade.task.execution import execution_view
+                execution = execution_view(meta.id, root=root) or {}
+                if execution.get("phase") in {"awaiting_merge", "merge_blocked", "terminal"}:
+                    continue
             count += 1
     return count
 
