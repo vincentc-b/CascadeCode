@@ -566,6 +566,7 @@ def capture_and_route_action_failure(
     attempt_bound: int = 100,
     cross_feature: bool = False,
     owning_team: Mapping[str, Any] | None = None,
+    review_id: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Durably capture a first failure and enqueue one owning-team inquiry.
@@ -585,6 +586,8 @@ def capture_and_route_action_failure(
         raise ActionRecoveryError("safe summary must be a nonempty string")
     if any(not isinstance(path, str) or not path for path in conflicting_paths):
         raise ActionRecoveryError("conflicting paths must be nonempty strings")
+    if review_id is not None:
+        _validate_identity(review_id)
 
     repo = resolve_root(root)
     create_or_load_action(
@@ -616,6 +619,7 @@ def capture_and_route_action_failure(
         "conflicting_paths": list(conflicting_paths),
         "affected_work_id": affected_work_id,
         "intended_target_ref": intended_target_ref,
+        "review_id": review_id,
     }
     failure_provenance = _validate_metadata(provenance, field="provenance")
 
@@ -658,9 +662,30 @@ def capture_and_route_action_failure(
                     intended_target_ref=stored.get(
                         "intended_target_ref", intended_target_ref
                     ),
+                    owner_kind=str(durable_owner["kind"]),
+                    review_id=str(stored.get("review_id") or review_id or "") or None,
                     root=repo,
                     now=now,
                 )
+                if review_id is not None and marker.get("review_id") is None:
+                    action_recovery["routing_marker"] = {
+                        **dict(marker),
+                        "review_id": review_id,
+                        "request": {
+                            "action_id": action_id,
+                            "review_id": review_id,
+                            "owner_kind": durable_owner["kind"],
+                            "owner_work_id": durable_owner["work_id"],
+                        },
+                    }
+                    action_recovery["evidence"] = {
+                        **dict(stored),
+                        "review_id": review_id,
+                    }
+                    action["recovery"] = action_recovery
+                    actions[action_id] = action
+                    payload["actions"] = actions
+                    _write_payload(repo, payload)
             return _copy(action)
 
         stamped = _iso(now)
@@ -705,6 +730,8 @@ def capture_and_route_action_failure(
                 safe_summary=safe_summary,
                 conflicting_paths=tuple(conflicting_paths),
                 intended_target_ref=intended_target_ref,
+                owner_kind=owner["kind"],
+                review_id=review_id,
                 root=repo,
                 now=now,
             )
@@ -726,6 +753,13 @@ def capture_and_route_action_failure(
                     "status": "enqueued",
                     "queue_item_id": investigation_id,
                     "first_enqueued_at": stamped,
+                    "review_id": review_id,
+                    "request": {
+                        "action_id": action_id,
+                        "review_id": review_id,
+                        "owner_kind": owner["kind"],
+                        "owner_work_id": owner["work_id"],
+                    },
                 },
             )
             action.update(
@@ -752,6 +786,8 @@ def _enqueue_recovery_request_if_missing(
     safe_summary: str,
     conflicting_paths: tuple[str, ...],
     intended_target_ref: object,
+    owner_kind: str,
+    review_id: str | None,
     root: Path,
     now: datetime | None,
 ) -> None:
@@ -782,6 +818,9 @@ def _enqueue_recovery_request_if_missing(
                 "safe_summary": safe_summary,
                 "conflicting_paths": list(conflicting_paths),
                 "intended_target_ref": intended_target_ref,
+                "owner_kind": owner_kind,
+                "owner_work_id": work_id,
+                "review_id": review_id,
             },
             dest=work_id,
         ),
@@ -1310,10 +1349,29 @@ def record_owner_resolution(
             "resolved_at": stamped,
         }
         unresolved = any(item.get("state") != "resolved" for item in decisions)
+        recovery = (
+            dict(action.get("recovery"))
+            if isinstance(action.get("recovery"), Mapping)
+            else {}
+        )
+        marker = recovery.get("routing_marker")
+        if isinstance(marker, Mapping) and marker.get("review_id") == decision_id:
+            recovery["routing_marker"] = {
+                **dict(marker),
+                "status": "resolved",
+                "result": {
+                    "action_id": action_id,
+                    "review_id": decision_id,
+                    "resolution_id": resolution_id,
+                    "metadata": details,
+                    "resolved_at": stamped,
+                },
+            }
         action.update(
             owner_decisions=decisions,
             failure_classification="owner_decision" if unresolved else None,
             recovery_state="awaiting_owner_decision" if unresolved else "retryable",
+            recovery=recovery,
             updated_at=stamped,
         )
         actions[action_id] = action
@@ -1813,7 +1871,14 @@ def acknowledge_team_recovery(work_id: str, *, root: Path) -> None:
                 continue
             marker = recovery.get("routing_marker") or {}
             if marker.get("status") == "enqueued" and not marker.get("acknowledged_at"):
-                marker["acknowledged_at"] = _iso(None)
+                stamped = _iso(None)
+                marker["acknowledged_at"] = stamped
+                marker["acknowledgement"] = {
+                    "action_id": action.get("action_id"),
+                    "review_id": marker.get("review_id"),
+                    "owner_work_id": work_id,
+                    "acknowledged_at": stamped,
+                }
                 changed = True
         if changed:
             payload["actions"] = actions

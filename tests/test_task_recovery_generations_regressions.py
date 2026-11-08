@@ -365,6 +365,25 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             "work_id": "task_001",
         }
         assert action["recovery"]["evidence"]["supervisor"] == "feat_001"
+        marker = action["recovery"]["routing_marker"]
+        review_id = action["owner_decisions"][0]["decision_id"]
+        assert marker["review_id"] == review_id
+        assert marker["request"] == {
+            "action_id": "task_001:queued_merge",
+            "review_id": review_id,
+            "owner_kind": "task_team",
+            "owner_work_id": "task_001",
+        }
+        from cascade.watchdog.events import read_events
+
+        requests = [
+            event
+            for event in read_events("task_001", 0, root=root)[0]
+            if event.type == "BranchActionRecoveryRequested"
+        ]
+        assert len(requests) == 1
+        assert requests[0].payload["owner_work_id"] == "task_001"
+        assert requests[0].payload["review_id"] == review_id
         from cascade.watchdog.blockage import propagate_direct_report_blockage
 
         propagate_direct_report_blockage(
@@ -372,7 +391,7 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             read_doc("task_001", root=root),
             "semantic merge conflict",
             root=root,
-            incident_id="task_001:delivery:conflict",
+            incident_id=f"task_001:delivery:{review_id}",
         )
         assert read_doc("feat_001", root=root).meta.status == "blocked"
         if semantic:
@@ -391,12 +410,19 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
                 root=root,
                 incident_id="task_002:delivery:conflict",
             )
-            from cascade.task.action_recovery import acknowledge_team_recovery
-
-            acknowledge_team_recovery("task_001", root=root)
-            assert load_action("task_001:queued_merge", root=root)["recovery"][
-                "routing_marker"
-            ]["acknowledged_at"]
+            propagate_direct_report_blockage(
+                read_doc("feat_001", root=root),
+                read_doc("task_001", root=root),
+                "Independent Task delivery incident",
+                root=root,
+                incident_id="task_001:delivery:other",
+            )
+            propagate_direct_report_blockage(
+                read_doc("feat_001", root=root),
+                read_doc("task_001", root=root),
+                "Manual owner hold",
+                root=root,
+            )
     else:
         assert retry_pending_task_merges(root) == []
         from cascade.task_rollup import pending_task_merges
@@ -586,9 +612,34 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
                 decision["state"] == "resolved"
                 for decision in completed_action["owner_decisions"]
             )
+            marker = completed_action["recovery"]["routing_marker"]
+            assert marker["acknowledgement"] == {
+                "action_id": "task_001:queued_merge",
+                "review_id": review_id,
+                "owner_work_id": "task_001",
+                "acknowledged_at": marker["acknowledged_at"],
+            }
+            assert marker["result"]["action_id"] == "task_001:queued_merge"
+            assert marker["result"]["review_id"] == review_id
+            assert marker["result"]["resolution_id"].startswith("validated:")
             blockers = read_doc("feat_001", root=root).meta.monitoring_blockers
             if semantic:
-                assert [item.child_id for item in blockers] == ["task_002"]
+                assert {
+                    (item.child_id, item.incident_id, item.reason)
+                    for item in blockers
+                } == {
+                    (
+                        "task_002",
+                        "task_002:delivery:conflict",
+                        "Independent sibling incident",
+                    ),
+                    (
+                        "task_001",
+                        "task_001:delivery:other",
+                        "Independent Task delivery incident",
+                    ),
+                    ("task_001", None, "Manual owner hold"),
+                }
                 assert read_doc("feat_001", root=root).meta.status == "blocked"
             else:
                 assert not blockers
