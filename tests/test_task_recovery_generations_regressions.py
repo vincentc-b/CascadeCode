@@ -17,7 +17,7 @@ from cascade.task.execution import (
     mark_terminal,
 )
 from cascade.task.supervisor_recovery import recover_orphan_delivery
-from cascade.task_rollup import invalidate_task_merge, queue_task_merge
+from cascade.task_rollup import queue_task_merge
 from tests.feature.test_recovery import _board as dispatched_blocked_board
 from tests.support import add_doc, make_repo
 
@@ -113,7 +113,7 @@ def _git(root, *args):
     "claim_owner_immediately", [True, False, "real", "restart", "conflict"]
 )
 def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
-    tmp_path: Path, claim_owner_immediately: bool | str
+    tmp_path: Path, claim_owner_immediately: bool | str, monkeypatch
 ) -> None:
     from cascade.task.graph import ensure_task_graph
     from cascade.task.checkpoint import thread_config
@@ -183,6 +183,19 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
     )
     assert recover_orphan_delivery("task_001", root=root) == first
 
+    # Preserve the real delivery queue through two transient target refusals,
+    # then let ordinary periodic maintenance invalidate it when the base moves.
+    from cascade.task_rollup import retry_pending_task_merges
+    from cascade.boss.merge import MergeResult
+
+    with monkeypatch.context() as busy_target:
+        busy_target.setattr(
+            "cascade.boss.merge.merge_task_branch",
+            lambda *a, **k: MergeResult(ok=False, reason="busy"),
+        )
+        assert retry_pending_task_merges(root) == []
+        assert retry_pending_task_merges(root) == []
+
     (feature.path / "feature_progress.py").write_text("progress = True\n")
     if claim_owner_immediately == "conflict":
         (feature.path / "implementation.py").write_text("value = 2\n")
@@ -218,7 +231,10 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         )
         assert read_doc("feat_001", root=root).meta.status == "blocked"
     else:
-        invalidate_task_merge("task_001", root=root)
+        assert retry_pending_task_merges(root) == []
+        from cascade.task_rollup import pending_task_merges
+
+        assert "task_001" not in pending_task_merges(root)
     starts = []
 
     def kickoff(task_id, repo, feature_id):

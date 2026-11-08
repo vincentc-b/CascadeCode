@@ -1207,11 +1207,13 @@ def _require_mutation_authority(
         raise DependencyEvidenceError(
             "dependency mutation does not match the reviewed bootstrap scope"
         )
+    from cascade.epic.dependency_manifests import InstallationBinding
+
     require_installation_approval(
         epic_id,
         entry.dependency_id,
         approval_reference,
-        entry.operation,
+        InstallationBinding.from_entry(entry),
         root=root,
     )
     _require_policy_allows(entry, execution_policy)
