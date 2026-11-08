@@ -166,6 +166,14 @@ No product-scope questions remain for this revision.
 - Task lost-queue and stale-delivery, Feature owner/publication, and Epic owner/closeout adapters must pass actual mutation acceptance before default-on release.
 - The Epic Architect must review the shared interfaces, lock/cancellation design and executable adapter coverage and sign off on the resulting current revision. Technical refinements must retain the operational and acceptance contract above.
 
+## Operator recovery follow-up — 2026-11-08
+
+For operator request `codex-epic13-unblock-2f0746e1`, verified the owned Epic branch already contains fetched `origin/main` at `2f0746e1` and Feature 001 source ancestry, with no product source/test differences from main and no unresolved index entries. The existing merge `d6ffc071` preserves the active approved plan instead of replacing it with the trunk brief. Published the owned branch through `a3e34781` to `origin/epic/epic_013`; forge review [#206](https://github.com/vincentc-b/CascadeCode/pull/206) now reports MERGED at 2026-11-08T04:22:48Z, targeting `epic/epic_013`.
+
+Retried the original `epic_013:integration_branch_update` action as requested. Attempt 2 remains `awaiting_owner_decision`, classification `owner_decision`, with completion reason `busy` and no conflict paths. Publishing the corrected target and merging the Feature review do not imply this durable action completed. Resume the same action at a quiescent lifecycle boundary; do not bypass live-owner guards or repeatedly consume attempts during the active planning turn.
+
+Canonical children show Feature 001 completed, Feature 002 active with five tasks, and Features 003–005 in the approved sequential backlog. Child inspection reports no incidents for Features 001 or 002. Continue Feature 002 through its owning team, then Features 003–005 through normal dependency/approval gates. All 24 criteria, provider/dependency policy, existing approval provenance and Feature 005 default-on release acceptance remain unchanged. Product tests were not repeated for this publication/documentation follow-up; recorded merge validation remains 51 passed and 12 provider-preflight fixture failures.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
