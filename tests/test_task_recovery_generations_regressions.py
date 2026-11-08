@@ -240,7 +240,16 @@ def test_audit_requeues_lost_validated_delivery_through_original_action(
 
 @pytest.mark.parametrize(
     "claim_owner_immediately",
-    [True, False, "real", "audit", "restart", "conflict", "semantic_restart"],
+    [
+        True,
+        False,
+        "real",
+        "audit",
+        "restart",
+        "converge",
+        "conflict",
+        "semantic_restart",
+    ],
 )
 def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
     tmp_path: Path, claim_owner_immediately: bool | str, monkeypatch
@@ -444,6 +453,7 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         "real",
         "audit",
         "restart",
+        "converge",
         "conflict",
         "semantic_restart",
     ):
@@ -566,6 +576,33 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             assert resume_interrupted_task_runs(root) == [("task_001", "feat_001")]
             assert wait_for_background_kickoffs()
             assert resume_interrupted_task_runs(root) == []
+        elif claim_owner_immediately == "converge":
+            from cascade.feature.recovery import recover_task
+            from cascade.watchdog.audit_recovery import dispatch_audit_recovery
+            from cascade.workspace.kickoff import wait_for_background_kickoffs
+            from cascade.workspace.up import resume_interrupted_task_runs
+
+            # Crash/restart, the parent-owned tool, and two independent audits
+            # all enter through their real adapters. The shared lifecycle state
+            # must admit only one resumed worker and one supervised validation.
+            def enter_recovery(route):
+                if route == "parent":
+                    return recover_task(
+                        "task_001", feature_id="feat_001", root=root
+                    )
+                if route == "restart":
+                    return resume_interrupted_task_runs(root)
+                return dispatch_audit_recovery(root, "task_001")
+
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                outcomes = list(
+                    pool.map(
+                        enter_recovery,
+                        ("parent", "restart", "audit", "audit"),
+                    )
+                )
+            assert outcomes[0]["ok"]
+            assert wait_for_background_kickoffs()
         else:
             recovered = recover_orphan_delivery(
                 "task_001", root=root, observed_incident=first.incident_id
