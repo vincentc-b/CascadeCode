@@ -116,3 +116,8 @@ None.
   Chose Start a supervisor-owned lane before blocking workspace recovery and reconciliation; serialize passes with a canonical-workspace claim, persist only an atomic compact receipt after a completed bounded pass, and route incidents through the existing generation-aware reservation contract.
   Rationale: The current worker runs workspace recovery before watchdog startup, and watchdog startup reconciles completion before polling. The audit candidate selector already provides an opaque fair cursor, while reservation already provides locked fresh rechecks. This arrangement gives the audit its own scheduling progress without creating another lifecycle owner or dispatch database.
   Honors: Feature criteria 2–7 and epic criteria 1–3, 7–8, 12, 14–15, 18; preserves the 100-item/60-second bound, finite I/O, manual coalescing, restart safety, and existing repair authority.
+
+- `dec_002` · 2026-11-08 · Feature Lead · **Candidate timeout continuation and evidence**
+  Chose Treat an individual observation Git timeout as unavailable evidence, advance that candidate's opaque selector continuation, and retain its work ID in the existing untracked auditor failure evidence while the completed bounded pass writes its compact receipt..
+  Rationale: A repeatedly slow first candidate otherwise pins the cursor and starves later tiers. Advancing the exact candidate position preserves fair rotation and retries the candidate on a later cycle without classifying it healthy or recovered. Whole-pass discovery, cancellation, and observer failures remain distinct and do not commit a completed receipt.
+  Honors: Feature criteria 4, 6, and 7; bounded 100-item/60-second passes, fair continuation, actionable timeout evidence, and healthy read-only semantics..

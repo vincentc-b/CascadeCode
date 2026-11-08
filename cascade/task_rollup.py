@@ -107,7 +107,9 @@ def _queued_merge_action(
                     f"validated:{delivery_evidence['deliverable_sha']}:{delivery_evidence['feature_base_sha']}",
                     root=root, metadata={"final_validation": delivery_evidence},
                 )
-        _clear_delivery_blockers(task_id, root)
+        # Queue publication must not commit parent metadata: moving the Feature
+        # head here invalidates the exact pair that just passed validation.
+        # Reconcile derived blockers only after the canonical merge succeeds.
     return action
 
 
@@ -277,6 +279,7 @@ def _resume_queued_merge(task_id: str, root: Path) -> ActionResult:
     result = merge_task_branch(task_id, root=root)
     metadata = _merge_outcome_metadata(task_id, result, root)
     if result.ok or _already_completed_equivalent(task_id, root):
+        _clear_delivery_blockers(task_id, root)
         if result.ok:
             from cascade.boss.rollup import on_task_merged
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -19,11 +20,17 @@ from cascade.task.lifecycle_lock import (
     task_lifecycle_read_lock,
 )
 
-ExecutionPhase = Literal["queued", "running", "awaiting_merge", "merge_blocked", "terminal"]
+ExecutionPhase = Literal[
+    "queued", "running", "awaiting_merge", "merge_blocked", "terminal"
+]
 ExecutionOutcome = Literal["succeeded", "failed"]
 DEFAULT_STALE_AFTER = timedelta(minutes=2)
 # A validation miss gets two corrective turns before the third miss fails.
 MAX_VALIDATION_FAILURES = 3
+
+
+class ExecutionStoreUnavailable(RuntimeError):
+    """The canonical execution ledger exists but cannot be read safely."""
 
 
 def _path(root: Path) -> Path:
@@ -68,13 +75,25 @@ def _read(root: Path) -> dict[str, dict[str, Any]]:
     if not path.exists():
         return {}
     try:
+        if not stat.S_ISREG(path.stat().st_mode):
+            raise ExecutionStoreUnavailable(
+                "canonical execution ledger is not a regular file"
+            )
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
+    except ExecutionStoreUnavailable:
+        raise
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ExecutionStoreUnavailable(
+            "canonical execution ledger is unreadable"
+        ) from exc
     records = raw.get("executions") if isinstance(raw, dict) else None
     if not isinstance(records, dict):
         return {}
-    return {str(key): dict(value) for key, value in records.items() if isinstance(value, dict)}
+    return {
+        str(key): dict(value)
+        for key, value in records.items()
+        if isinstance(value, dict)
+    }
 
 
 def _write(root: Path, records: dict[str, dict[str, Any]]) -> None:
@@ -100,7 +119,9 @@ def _write(root: Path, records: dict[str, dict[str, Any]]) -> None:
         temp.unlink(missing_ok=True)
 
 
-def mark_queued(task_id: str, *, root: Path, now: datetime | None = None) -> dict[str, Any]:
+def mark_queued(
+    task_id: str, *, root: Path, now: datetime | None = None
+) -> dict[str, Any]:
     repo = resolve_root(root)
     current = now or _now()
     with task_lifecycle_lock(root=repo):
@@ -108,7 +129,9 @@ def mark_queued(task_id: str, *, root: Path, now: datetime | None = None) -> dic
         previous = records.get(task_id, {})
         history = list(previous.get("attempt_history", []))
         if previous:
-            history.append({k: v for k, v in previous.items() if k != "attempt_history"})
+            history.append(
+                {k: v for k, v in previous.items() if k != "attempt_history"}
+            )
         record = {
             "attempt_history": history,
             "contract_revisions": previous.get("contract_revisions", []),
@@ -130,7 +153,9 @@ def mark_queued(task_id: str, *, root: Path, now: datetime | None = None) -> dic
         return dict(record)
 
 
-def mark_running(task_id: str, *, root: Path, now: datetime | None = None) -> dict[str, Any]:
+def mark_running(
+    task_id: str, *, root: Path, now: datetime | None = None
+) -> dict[str, Any]:
     repo = resolve_root(root)
     current = now or _now()
     with task_lifecycle_lock(root=repo):
@@ -158,7 +183,9 @@ def mark_running(task_id: str, *, root: Path, now: datetime | None = None) -> di
         return dict(record)
 
 
-def mark_awaiting_merge(task_id: str, *, root: Path, now: datetime | None = None) -> None:
+def mark_awaiting_merge(
+    task_id: str, *, root: Path, now: datetime | None = None
+) -> None:
     """The SWE turn has ended and its validated commit is waiting to land."""
 
     repo = resolve_root(root)
@@ -205,7 +232,10 @@ def mark_merge_blocked(
         record = records.get(task_id)
         if record is None or record.get("phase") == "terminal":
             return False
-        changed = record.get("phase") != "merge_blocked" or record.get("merge_blocker") != blocker
+        changed = (
+            record.get("phase") != "merge_blocked"
+            or record.get("merge_blocker") != blocker
+        )
         if not changed:
             return False
         record.update(
@@ -369,7 +399,9 @@ def execution_views(
     current = now or _now()
     return {
         task_id: (
-            _execution_view_from_record(records[task_id], now=current, stale_after=stale_after)
+            _execution_view_from_record(
+                records[task_id], now=current, stale_after=stale_after
+            )
             if task_id in records
             else None
         )
@@ -554,6 +586,10 @@ def execution_lease_is_live(
     """
 
     view = execution_view(task_id, root=root, now=now, stale_after=stale_after)
-    if view is None or view.get("phase") != "running" or view.get("health") != "healthy":
+    if (
+        view is None
+        or view.get("phase") != "running"
+        or view.get("health") != "healthy"
+    ):
         return False
     return True

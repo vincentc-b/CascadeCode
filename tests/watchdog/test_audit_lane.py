@@ -4,6 +4,7 @@ import errno
 import json
 import multiprocessing
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -22,6 +23,7 @@ from cascade.watchdog.audit_lane import (
     HealthAuditLane,
     _WorkspaceClaim,
     _run_bounded_audit_pass_inline,
+    audit_failure_path,
     audit_receipt_path,
     canonical_audit_root,
     read_audit_failure,
@@ -87,6 +89,116 @@ def test_completed_pass_persists_compact_receipt_and_bounded_jitter(
     }
     assert lane.deadline == pytest.approx(207.5)
     assert audit_receipt_path(tmp_path).is_relative_to(tmp_path / ".cascade")
+
+
+@pytest.mark.parametrize("runtime_path", [audit_receipt_path, audit_failure_path])
+def test_nonregular_runtime_state_cannot_block_or_be_replaced(
+    tmp_path: Path, runtime_path
+) -> None:
+    path = runtime_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    os.mkfifo(path)
+    clock = Clock()
+    calls = 0
+
+    def run(*_args) -> AuditPassResult:
+        nonlocal calls
+        calls += 1
+        return AuditPassResult(next_cursor="done", counts={"healthy": 1})
+
+    if runtime_path is audit_receipt_path:
+        with pytest.raises(OSError, match="not a regular file"):
+            _lane(tmp_path, clock, run)
+    else:
+        lane = _lane(tmp_path, clock, run)
+        with pytest.raises(OSError, match="not a regular file"):
+            lane.run_due_pass()
+        assert calls == 0
+        with _WorkspaceClaim(tmp_path):
+            pass
+        assert path.is_fifo()
+
+
+def test_timed_out_candidate_evidence_survives_other_pages_and_restart(
+    tmp_path: Path,
+) -> None:
+    clock = Clock()
+    results = iter(
+        (
+            AuditPassResult(
+                next_cursor="after:task_001",
+                counts={"observed": 0, "unavailable_evidence": 1},
+                timed_out_candidates=("task_001",),
+            ),
+            AuditPassResult(
+                next_cursor="after:feat_001",
+                counts={"healthy": 1},
+                reassessed_candidates=("feat_001",),
+            ),
+            AuditPassResult(
+                next_cursor="after:task_002",
+                counts={"unavailable_evidence": 1},
+                timed_out_candidates=("task_002",),
+            ),
+            AuditPassResult(
+                next_cursor="after:task_001-unavailable",
+                counts={"unavailable_evidence": 1},
+            ),
+            AuditPassResult(
+                next_cursor="after:task_001-again",
+                counts={"healthy": 1},
+                reassessed_candidates=("task_001",),
+            ),
+            AuditPassResult(
+                next_cursor="after:task_002-again",
+                counts={"healthy": 1},
+                reassessed_candidates=("task_002",),
+            ),
+        )
+    )
+    cursors: list[str | None] = []
+
+    def run(cursor: str | None, _cancel: threading.Event) -> AuditPassResult:
+        cursors.append(cursor)
+        return next(results)
+
+    lane = _lane(tmp_path, clock, run)
+    assert lane.run_due_pass() is True
+    assert read_audit_receipt(tmp_path)["next_cursor"] == "after:task_001"
+    evidence = read_audit_failure(tmp_path)
+    assert evidence is not None
+    assert evidence["code"] == "candidate_observation_timeout"
+    assert evidence["work_ids"] == ["task_001"]
+    assert "retry" in evidence["next_action"]
+
+    clock.tick(lane.deadline - clock.monotonic)
+    assert lane.run_due_pass() is True
+    assert read_audit_failure(tmp_path)["work_ids"] == ["task_001"]
+
+    lane = _lane(tmp_path, clock, run)
+    clock.tick(lane.deadline - clock.monotonic)
+    assert lane.run_due_pass() is True
+    assert read_audit_failure(tmp_path)["work_ids"] == ["task_001", "task_002"]
+
+    clock.tick(lane.deadline - clock.monotonic)
+    assert lane.run_due_pass() is True
+    assert read_audit_failure(tmp_path)["work_ids"] == ["task_001", "task_002"]
+
+    clock.tick(lane.deadline - clock.monotonic)
+    assert lane.run_due_pass() is True
+    assert read_audit_failure(tmp_path)["work_ids"] == ["task_002"]
+
+    clock.tick(lane.deadline - clock.monotonic)
+    assert lane.run_due_pass() is True
+    assert read_audit_failure(tmp_path) is None
+    assert cursors == [
+        None,
+        "after:task_001",
+        "after:feat_001",
+        "after:task_002",
+        "after:task_001-unavailable",
+        "after:task_001-again",
+    ]
 
 
 def test_restart_clamps_overdue_and_future_wall_schedule_to_one_interval(
@@ -284,9 +396,10 @@ def test_unresolved_candidate_advances_without_projection(
     assert result.counts["observed"] == 2
     assert result.counts["healthy"] == 1
     assert result.counts["unavailable_evidence"] == 1
+    assert result.reassessed_candidates == ("task_001",)
 
 
-def test_candidate_timeout_preserves_completed_prefix_without_skipping(
+def test_candidate_timeout_advances_unavailable_candidate_without_stalling_prefix(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     work_ids = ("task_001", "task_002", "feat_001")
@@ -332,10 +445,89 @@ def test_candidate_timeout_preserves_completed_prefix_without_skipping(
         monotonic=time.monotonic,
     )
 
-    assert first.next_cursor == "after:1"
-    assert first.counts["observed"] == 1
+    assert first.next_cursor == "after:3"
+    assert first.counts["observed"] == 2
+    assert first.counts["unavailable_evidence"] == 1
+    assert first.reassessed_candidates == ("task_001", "feat_001")
     assert second.next_cursor == "after:3"
-    assert attempts == ["task_001", "task_002", "task_002", "feat_001"]
+    assert attempts == ["task_001", "task_002", "feat_001"]
+
+
+def test_repeated_first_candidate_timeout_still_reaches_later_tiers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work_ids = ("task_001", "feat_001", "epic_001")
+
+    def select(cursor, *_args, **_kwargs):
+        offset = 0 if cursor is None else int(cursor.removeprefix("after:"))
+        return SimpleNamespace(
+            candidates=(
+                SimpleNamespace(work_id=work_ids[offset], evidence_available=True),
+            ),
+            next_cursor=f"after:{(offset + 1) % len(work_ids)}",
+            unavailable_evidence=(),
+            continuation_cursors=(f"after:{(offset + 1) % len(work_ids)}",),
+        )
+
+    attempted: list[str] = []
+
+    def observe(work_id, **_kwargs):
+        attempted.append(work_id)
+        if work_id == "task_001":
+            raise subprocess.TimeoutExpired(["git", "log"], 0.1)
+        return SimpleNamespace(classification="healthy")
+
+    monkeypatch.setattr(audit_lane_module, "select_audit_candidates", select)
+    monkeypatch.setattr(audit_lane_module, "project_audit_observation", observe)
+    first = _run_bounded_audit_pass_inline(
+        tmp_path,
+        None,
+        threading.Event(),
+        max_items=1,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+    second = _run_bounded_audit_pass_inline(
+        tmp_path,
+        first.next_cursor,
+        threading.Event(),
+        max_items=1,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+    third = _run_bounded_audit_pass_inline(
+        tmp_path,
+        second.next_cursor,
+        threading.Event(),
+        max_items=1,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+    fourth = _run_bounded_audit_pass_inline(
+        tmp_path,
+        third.next_cursor,
+        threading.Event(),
+        max_items=1,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+
+    assert [
+        first.next_cursor,
+        second.next_cursor,
+        third.next_cursor,
+        fourth.next_cursor,
+    ] == [
+        "after:1",
+        "after:2",
+        "after:0",
+        "after:1",
+    ]
+    assert first.counts["unavailable_evidence"] == 1
+    assert first.counts["observed"] == 0
+    assert second.counts["healthy"] == third.counts["healthy"] == 1
+    assert fourth.counts["unavailable_evidence"] == 1
+    assert attempted == [*work_ids, "task_001"]
 
 
 def test_fifo_timeout_reaps_observer_before_workspace_claim_is_released(
@@ -441,11 +633,10 @@ def test_timeout_kills_term_ignoring_git_descendant_before_return(
     monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
 
     started = time.monotonic()
-    with pytest.raises(AuditPassTimedOut):
-        run_bounded_audit_pass(
-            root, None, threading.Event(), max_seconds=8.0
-        )
+    result = run_bounded_audit_pass(root, None, threading.Event(), max_seconds=8.0)
     assert time.monotonic() - started < 9.0
+    assert result.counts["unavailable_evidence"] >= 1
+    assert result.counts["healthy"] == 0
     helper_pid = int(pid_file.read_text(encoding="utf-8"))
     deadline = time.monotonic() + 1.0
     while Path(f"/proc/{helper_pid}").exists() and time.monotonic() < deadline:
@@ -455,6 +646,93 @@ def test_timeout_kills_term_ignoring_git_descendant_before_return(
         time.sleep(0.01)
     status = Path(f"/proc/{helper_pid}/status")
     assert not status.exists() or "State:\tZ" in status.read_text(encoding="utf-8")
+
+
+def _exit_observer_with_helper(sender, helper_file: Path) -> None:
+    os.setsid()
+    pid = os.fork()
+    if pid == 0:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        helper_file.write_text(str(os.getpid()), encoding="utf-8")
+        while True:
+            time.sleep(1)
+    while not helper_file.exists():
+        time.sleep(0.01)
+    os._exit(1)
+
+
+def test_process_startup_counts_against_pass_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    context = multiprocessing.get_context("spawn")
+
+    class SlowStartProcess:
+        pid = None
+
+        def start(self) -> None:
+            time.sleep(0.06)
+
+        def is_alive(self) -> bool:
+            return False
+
+        def join(self, timeout=None) -> None:
+            pass
+
+    class SlowStartContext:
+        Event = context.Event
+        Pipe = context.Pipe
+
+        def Process(self, **_kwargs):
+            return SlowStartProcess()
+
+    monkeypatch.setattr(
+        audit_lane_module.multiprocessing,
+        "get_context",
+        lambda *_: SlowStartContext(),
+    )
+    with pytest.raises(AuditPassTimedOut):
+        run_bounded_audit_pass(tmp_path, None, threading.Event(), max_seconds=0.05)
+
+
+def test_exited_observer_reaps_surviving_helper_before_return(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    helper_file = tmp_path / "helper.pid"
+    context = multiprocessing.get_context("spawn")
+
+    class ExitContext:
+        Event = context.Event
+        Pipe = context.Pipe
+
+        def Process(self, *, args, **kwargs):
+            return context.Process(
+                target=_exit_observer_with_helper,
+                args=(args[0], helper_file),
+                name=kwargs["name"],
+                daemon=kwargs["daemon"],
+            )
+
+    monkeypatch.setattr(
+        audit_lane_module.multiprocessing, "get_context", lambda *_: ExitContext()
+    )
+
+    try:
+        with pytest.raises(RuntimeError, match="observer exited without a result"):
+            run_bounded_audit_pass(root, None, threading.Event(), max_seconds=10.0)
+        helper_pid = int(helper_file.read_text(encoding="utf-8"))
+        status = Path(f"/proc/{helper_pid}/status")
+        deadline = time.monotonic() + 1.0
+        while status.exists() and "State:\tZ" not in status.read_text(encoding="utf-8"):
+            if time.monotonic() >= deadline:
+                raise AssertionError("observer helper survived claim release")
+            time.sleep(0.01)
+    finally:
+        if helper_file.exists():
+            try:
+                os.kill(int(helper_file.read_text(encoding="utf-8")), 9)
+            except ProcessLookupError:
+                pass
 
 
 def test_spawned_observer_does_not_inherit_parent_board_scan_lock(
@@ -480,9 +758,7 @@ def test_spawned_observer_does_not_inherit_parent_board_scan_lock(
     holder.start()
     assert entered.wait(2)
     try:
-        result = run_bounded_audit_pass(
-            root, None, threading.Event(), max_seconds=10.0
-        )
+        result = run_bounded_audit_pass(root, None, threading.Event(), max_seconds=10.0)
         assert result.counts["observed"] == 1
     finally:
         release.set()
@@ -631,6 +907,100 @@ def test_disabled_lane_creates_no_thread_or_runtime_files(tmp_path: Path) -> Non
     ).start()
     lane.stop()
     assert not (tmp_path / ".cascade").exists()
+
+
+def test_disabled_lane_accepts_manual_pass_without_moving_periodic_deadline(
+    tmp_path: Path,
+) -> None:
+    clock = Clock(monotonic=20.0)
+    entered = threading.Event()
+    release = threading.Event()
+    completed = threading.Event()
+
+    def run(*_args) -> AuditPassResult:
+        entered.set()
+        assert release.wait(2)
+        return AuditPassResult(counts={"manual": 1})
+
+    lane = HealthAuditLane(
+        root=tmp_path,
+        config=HealthAuditConfig(enabled=False, interval_seconds=60),
+        run_pass=run,
+        monotonic=lambda: clock.monotonic,
+        utc_now=lambda: clock.utc,
+        handoff=lambda _ids: completed.set(),
+    ).start()
+    deadline = lane.deadline
+    try:
+        assert lane.request_manual_pass() is True
+        assert entered.wait(2)
+        assert lane.request_manual_pass() is False
+        release.set()
+        assert completed.wait(2)
+        assert lane.deadline == deadline
+        assert read_audit_receipt(tmp_path)["counts"] == {"manual": 1}
+    finally:
+        release.set()
+        lane.stop(timeout=2)
+
+
+def test_disabled_manual_failure_retries_after_bounded_cooldown(
+    tmp_path: Path,
+) -> None:
+    attempts = 0
+    retried = threading.Event()
+
+    def run(*_args) -> AuditPassResult:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("temporary observer failure")
+        retried.set()
+        return AuditPassResult(counts={"manual": 1})
+
+    lane = HealthAuditLane(
+        root=tmp_path,
+        config=HealthAuditConfig(enabled=False, interval_seconds=60),
+        run_pass=run,
+    ).start()
+    deadline = lane.deadline
+    try:
+        assert lane.request_manual_pass() is True
+        assert retried.wait(2.5)
+        assert attempts == 2
+        assert lane.deadline == deadline
+        limit = time.monotonic() + 1
+        receipt = read_audit_receipt(tmp_path)
+        while receipt is None and time.monotonic() < limit:
+            time.sleep(0.01)
+            receipt = read_audit_receipt(tmp_path)
+        assert receipt is not None
+        assert receipt["counts"] == {"manual": 1}
+    finally:
+        lane.stop(timeout=2)
+
+
+def test_recovery_handoff_runs_after_workspace_claim_is_released(
+    tmp_path: Path,
+) -> None:
+    acquired = []
+
+    def handoff(_ids: tuple[str, ...]) -> None:
+        claim = _WorkspaceClaim(tmp_path)
+        acquired.append(claim.acquire())
+        claim.release()
+
+    lane = HealthAuditLane(
+        root=tmp_path,
+        config=HealthAuditConfig(enabled=True, interval_seconds=60),
+        run_pass=lambda *_args: AuditPassResult(
+            counts={"proven_incident": 1}, incident_work_ids=("task_001",)
+        ),
+        handoff=handoff,
+        jitter=lambda *_args: 0.0,
+    )
+    assert lane.run_due_pass() is True
+    assert acquired == [True]
 
 
 def test_lane_cleanup_does_not_set_caller_stop_but_observes_it(

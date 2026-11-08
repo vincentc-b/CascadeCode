@@ -292,12 +292,22 @@ def test_completed_work_with_unresolved_recovery_is_an_incident(
         "cascade.watchdog.audit._unresolved_references",
         lambda _work_id, _product: (("action_001",), None),
     )
+    monkeypatch.setattr(
+        "cascade.watchdog.audit.recovery_actions",
+        lambda **_kwargs: [
+            {
+                "action_id": "action_001",
+                "action_kind": "integration_branch_update",
+            }
+        ],
+    )
 
     observation = project_audit_observation("epic_001", root=root)
 
     assert observation.classification == "proven_incident"
     assert observation.reason == "unresolved_recovery_reference"
     assert observation.incident is not None
+    assert observation.incident.failure_class == "integration_branch_update"
 
 
 @pytest.mark.parametrize(

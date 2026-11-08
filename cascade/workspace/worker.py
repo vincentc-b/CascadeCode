@@ -278,8 +278,10 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     from cascade.war_room.human_auth import load_or_create_local_human_verifier
     from cascade.epic.local_dependency_executor import LocalBoundedDependencyExecutor
     from cascade.watchdog.audit_lane import HealthAuditLane, run_bounded_audit_pass
+    from cascade.watchdog.audit_recovery import AuditRecoveryWorker
     from cascade.watchdog.config import (
         ConfigError,
+        HealthAuditConfig,
         health_audit_periodic_opted_in,
         read_health_audit_config,
         worker_drain_seconds,
@@ -297,6 +299,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     abnormal_exit = False
     handlers_abandoned = False
     audit_lane: HealthAuditLane | None = None
+    audit_recovery: AuditRecoveryWorker | None = None
 
     def should_stop() -> bool:
         nonlocal next_source_check_at, source_changed, shutdown_reason, launcher_lost
@@ -378,17 +381,40 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     # a narrow seam: bounded observation and repair admission are added without
     # moving scheduling back into the ordinary watchdog chain.
     try:
-        if health_audit_periodic_opted_in(ws.path):
-            audit_lane = HealthAuditLane(
-                root=ws.path,
-                config=read_health_audit_config(ws.path),
-                run_pass=lambda cursor, cancel: run_bounded_audit_pass(
-                    ws.path, cursor, cancel
-                ),
-                stop_event=operator_stop,
-            ).start()
+        audit_config = read_health_audit_config(ws.path)
+        if not health_audit_periodic_opted_in(ws.path):
+            audit_config = type(audit_config)(
+                enabled=False,
+                interval_seconds=audit_config.interval_seconds,
+            )
+        audit_recovery = AuditRecoveryWorker(ws.path)
+        audit_lane = HealthAuditLane(
+            root=ws.path,
+            config=audit_config,
+            run_pass=lambda cursor, cancel: run_bounded_audit_pass(
+                ws.path, cursor, cancel
+            ),
+            handoff=audit_recovery.submit,
+            stop_event=operator_stop,
+        ).start()
+        server.health_audit_request = getattr(audit_lane, "request_manual_pass", None)
     except ConfigError as exc:
         print(f"health audit configuration error: {exc}", file=sys.stderr)
+        # Invalid periodic settings fail closed for scheduling, but the
+        # authenticated manual diagnostic remains available to the operator.
+        audit_recovery = AuditRecoveryWorker(ws.path)
+        audit_lane = HealthAuditLane(
+            root=ws.path,
+            config=HealthAuditConfig(enabled=False),
+            run_pass=lambda cursor, cancel: run_bounded_audit_pass(
+                ws.path, cursor, cancel
+            ),
+            handoff=audit_recovery.submit,
+            stop_event=operator_stop,
+        ).start()
+        server.health_audit_request = getattr(audit_lane, "request_manual_pass", None)
+    except OSError as exc:
+        print(f"health audit runtime state unavailable: {exc}", file=sys.stderr)
 
     try:
         repair_registered_worktrees(ws.path)
@@ -410,6 +436,8 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     finally:
         if audit_lane is not None:
             audit_lane.stop(timeout=5.0)
+        if audit_recovery is not None:
+            audit_recovery.stop(timeout=5.0)
         if abnormal_exit and not operator_stop.is_set() and not source_changed:
             shutdown_reason = "crash"
         elif launcher_lost:

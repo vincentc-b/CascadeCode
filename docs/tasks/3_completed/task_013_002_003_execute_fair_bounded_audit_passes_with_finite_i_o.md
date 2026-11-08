@@ -2,7 +2,7 @@
 id: task_013_002_003
 title: Execute fair bounded audit passes with finite I/O
 tier: task
-status: active
+status: completed
 parent: feat_013_002
 children: []
 depends_on:

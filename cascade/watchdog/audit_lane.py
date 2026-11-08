@@ -14,6 +14,7 @@ import multiprocessing
 import os
 import random
 import signal
+import stat
 import subprocess
 import threading
 import time
@@ -77,9 +78,13 @@ class AuditPassResult:
 
     next_cursor: str | None = None
     counts: Mapping[str, int] = field(default_factory=dict)
+    incident_work_ids: tuple[str, ...] = ()
+    timed_out_candidates: tuple[str, ...] = ()
+    reassessed_candidates: tuple[str, ...] = ()
 
 
 AuditPass = Callable[[str | None, threading.Event], AuditPassResult]
+AuditHandoff = Callable[[tuple[str, ...]], None]
 
 
 class AuditPassTimedOut(TimeoutError):
@@ -132,10 +137,12 @@ def audit_failure_path(root: Path) -> Path:
 def read_audit_receipt(root: Path) -> dict[str, Any] | None:
     """Read a completed-pass receipt; malformed or partial files are ignored."""
 
-    path = audit_receipt_path(root)
+    content = _read_runtime_json(audit_receipt_path(root))
+    if content is None:
+        return None
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        value = json.loads(content)
+    except (UnicodeDecodeError, json.JSONDecodeError):
         return None
     return value if isinstance(value, dict) else None
 
@@ -143,12 +150,46 @@ def read_audit_receipt(root: Path) -> dict[str, Any] | None:
 def read_audit_failure(root: Path) -> dict[str, Any] | None:
     """Read the active pass failure evidence, if any."""
 
-    path = audit_failure_path(root)
+    content = _read_runtime_json(audit_failure_path(root))
+    if content is None:
+        return None
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        value = json.loads(content)
+    except (UnicodeDecodeError, json.JSONDecodeError):
         return None
     return value if isinstance(value, dict) else None
+
+
+def _read_runtime_json(path: Path) -> bytes | None:
+    """Read only a small regular runtime file without opening a FIFO reader."""
+
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return None
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise OSError(f"audit runtime state is not a regular file: {path}")
+        if info.st_size > 65536:
+            raise OSError(f"audit runtime state is too large: {path}")
+        content = os.read(descriptor, 65537)
+        if len(content) > 65536:
+            raise OSError(f"audit runtime state is too large: {path}")
+        return content
+    finally:
+        os.close(descriptor)
+
+
+def _pending_timeout_ids(failure: Mapping[str, Any] | None) -> set[str]:
+    if failure is None:
+        return set()
+    value = failure.get("pending_timeout_work_ids")
+    if value is None and failure.get("code") == "candidate_observation_timeout":
+        value = failure.get("work_ids")  # Read older failure files.
+    if not isinstance(value, list):
+        return set()
+    return {work_id for work_id in value if isinstance(work_id, str)}
 
 
 def run_bounded_audit_pass(
@@ -171,6 +212,7 @@ def run_bounded_audit_pass(
 
     max_items = min(max_items, _PASS_MAX_ITEMS)
     max_seconds = min(max_seconds, _PASS_MAX_SECONDS)
+    real_deadline = time.monotonic() + max_seconds
     # ``spawn`` cannot inherit locks held by another supervisor thread.  In
     # particular, ordinary watchdog maintenance may be blocked while this
     # independent lane still needs to inspect the workspace.
@@ -181,7 +223,7 @@ def run_bounded_audit_pass(
         _OBSERVER_COORDINATION_RESERVE_SECONDS, max_seconds * 0.5
     )
     cleanup_grace = max(0.001, coordination_reserve / 3.0)
-    observer_seconds = max(0.001, max_seconds - coordination_reserve)
+    observer_deadline = real_deadline - coordination_reserve
     worker = context.Process(
         target=_audit_observer_process,
         args=(
@@ -190,7 +232,7 @@ def run_bounded_audit_pass(
             cursor,
             operation_cancel,
             max_items,
-            observer_seconds,
+            observer_deadline,
             project_context_payload(),
         ),
         name="health-audit-pass",
@@ -198,7 +240,6 @@ def run_bounded_audit_pass(
     )
     worker.start()
     sender.close()
-    real_deadline = time.monotonic() + max_seconds
     try:
         while True:
             if cancel_event.is_set():
@@ -228,9 +269,19 @@ def run_bounded_audit_pass(
                     return result
                 raise result
             if not worker.is_alive():
-                worker.join(timeout=0)
+                _reap_audit_observer(
+                    worker,
+                    operation_cancel,
+                    cancel_first=False,
+                    grace=cleanup_grace,
+                )
                 if receiver.poll(0):
-                    succeeded, result = receiver.recv()
+                    try:
+                        succeeded, result = receiver.recv()
+                    except EOFError as exc:
+                        raise RuntimeError(
+                            "health audit observer exited without a result"
+                        ) from exc
                     if succeeded:
                         return result
                     raise result
@@ -245,7 +296,7 @@ def _audit_observer_process(
     cursor: str | None,
     cancel_event: Any,
     max_items: int,
-    max_seconds: float,
+    deadline: float,
     context_payload: object,
 ) -> None:
     """Run observer work in a process that the claim owner can always reap."""
@@ -262,7 +313,7 @@ def _audit_observer_process(
                 cursor,
                 cancel_event,
                 max_items=max_items,
-                max_seconds=max_seconds,
+                max_seconds=max(0.0, deadline - time.monotonic()),
                 monotonic=time.monotonic,
             )
         payload = (True, result)
@@ -357,7 +408,20 @@ def _run_bounded_audit_pass_inline(
         "proven_incident": 0,
         "unavailable_evidence": len(page.unavailable_evidence),
     }
+    incident_work_ids: list[str] = []
     completed_cursor = cursor
+    timed_out_candidates: list[str] = []
+    reassessed_candidates: list[str] = []
+
+    def completed(next_cursor: str | None) -> AuditPassResult:
+        return AuditPassResult(
+            next_cursor=next_cursor,
+            counts=counts,
+            incident_work_ids=tuple(incident_work_ids),
+            timed_out_candidates=tuple(timed_out_candidates),
+            reassessed_candidates=tuple(reassessed_candidates),
+        )
+
     for index, candidate in enumerate(page.candidates):
         work_id = str(candidate.work_id)
         continuations = getattr(page, "continuation_cursors", ())
@@ -373,7 +437,7 @@ def _run_bounded_audit_pass_inline(
             counts["unavailable_evidence"] += 1
             completed_cursor = candidate_cursor
             if monotonic() - started >= max_seconds:
-                return AuditPassResult(next_cursor=completed_cursor, counts=counts)
+                return completed(completed_cursor)
             continue
         allowance = remaining(f"observation:{work_id}")
         try:
@@ -389,16 +453,22 @@ def _run_bounded_audit_pass_inline(
                 f"health audit cancelled while observing {work_id}"
             ) from exc
         except subprocess.TimeoutExpired as exc:
-            if completed_cursor != cursor:
-                # Routine exhaustion after a completed prefix is a successful
-                # bounded pass.  Resume at this same (unobserved) candidate on
-                # the next page instead of discarding or skipping the prefix.
-                return AuditPassResult(next_cursor=completed_cursor, counts=counts)
-            raise AuditPassTimedOut(
-                f"health audit timed out while observing {work_id}"
-            ) from exc
+            # A single slow candidate must not pin the cursor forever.  It is
+            # unavailable, never healthy or observed, and the selector's
+            # opaque continuation will revisit it on a later rotation.
+            counts["unavailable_evidence"] += 1
+            timed_out_candidates.append(work_id)
+            completed_cursor = candidate_cursor
+            _log.warning("health audit observation timed out for %s: %s", work_id, exc)
+            if monotonic() - started >= max_seconds:
+                return completed(completed_cursor)
+            continue
         counts["observed"] += 1
         counts[observation.classification] += 1
+        if observation.classification == "proven_incident":
+            incident_work_ids.append(work_id)
+        if observation.classification != "unavailable_evidence":
+            reassessed_candidates.append(work_id)
         completed_cursor = candidate_cursor
 
         if cancel_event.is_set():
@@ -408,8 +478,8 @@ def _run_bounded_audit_pass_inline(
         if monotonic() - started >= max_seconds:
             # The observation completed successfully. Persist its exact selector
             # continuation and leave the unobserved suffix for the next pass.
-            return AuditPassResult(next_cursor=completed_cursor, counts=counts)
-    return AuditPassResult(next_cursor=page.next_cursor, counts=counts)
+            return completed(completed_cursor)
+    return completed(page.next_cursor)
 
 
 class _WorkspaceClaim:
@@ -451,6 +521,7 @@ class HealthAuditLane:
         root: Path,
         config: HealthAuditConfig,
         run_pass: AuditPass,
+        handoff: AuditHandoff | None = None,
         stop_event: threading.Event | None = None,
         monotonic: Callable[[], float] = time.monotonic,
         utc_now: Callable[[], datetime] | None = None,
@@ -459,11 +530,17 @@ class HealthAuditLane:
         self.root = canonical_audit_root(root)
         self.config = config
         self._run_pass = run_pass
+        self._handoff = handoff
         self._stop = _LaneStop(stop_event)
         self._monotonic = monotonic
         self._utc_now = utc_now or (lambda: datetime.now(timezone.utc))
         self._jitter = jitter or random.SystemRandom().uniform
         self._thread: threading.Thread | None = None
+        self._state_lock = threading.Lock()
+        self._wake = threading.Event()
+        self._manual_pending = False
+        self._manual_retry_deadline: float | None = None
+        self._in_flight = False
         receipt = read_audit_receipt(self.root)
         self._receipt_marker = self._marker(receipt)
         self._deadline = self._restore_deadline(receipt)
@@ -475,18 +552,30 @@ class HealthAuditLane:
     def start(self) -> HealthAuditLane:
         """Start periodic work when enabled; disabled lanes allocate no thread."""
 
-        if not self.config.enabled or self._thread is not None:
+        if not self.config.enabled:
             return self
-        self._thread = threading.Thread(
-            target=self._run,
-            name="supervisor-health-audit",
-            daemon=True,
-        )
-        self._thread.start()
+        self._ensure_thread()
         return self
+
+    def request_manual_pass(self) -> bool:
+        """Admit one explicit pass, coalescing duplicates and active passes.
+
+        Manual admission is independent of periodic enablement.  It only wakes
+        this lane and never rewrites the monotonic periodic deadline.
+        """
+
+        with self._state_lock:
+            if self._stop.is_set() or self._manual_pending or self._in_flight:
+                return False
+            self._manual_pending = True
+            self._manual_retry_deadline = None
+            self._ensure_thread_locked()
+        self._wake.set()
+        return True
 
     def stop(self, timeout: float | None = None) -> None:
         self._stop.set()
+        self._wake.set()
         if self._thread is not None:
             self._thread.join(timeout)
 
@@ -495,13 +584,19 @@ class HealthAuditLane:
 
         if not self.config.enabled or self._monotonic() < self._deadline:
             return False
+        return self._run_pass_once(manual=False)
+
+    def _run_pass_once(self, *, manual: bool) -> bool:
+        periodic_deadline = self._deadline
         claim = _WorkspaceClaim(self.root)
         if not claim.acquire():
             # Keep the overdue request pending while avoiding a hot claim loop.
-            self._deadline = self._monotonic() + min(
-                _BUSY_RETRY_SECONDS, float(self.config.interval_seconds)
-            )
+            if not manual:
+                self._deadline = self._monotonic() + min(
+                    _BUSY_RETRY_SECONDS, float(self.config.interval_seconds)
+                )
             return False
+        completed: AuditPassResult | None = None
         try:
             if self._stop.is_set():
                 return False
@@ -515,6 +610,7 @@ class HealthAuditLane:
                 self._deadline = self._restore_deadline(previous)
                 return False
             previous = previous or {}
+            pending_timeouts = _pending_timeout_ids(read_audit_failure(self.root))
             cursor = previous.get("next_cursor")
             if not isinstance(cursor, str):
                 cursor = None
@@ -524,9 +620,10 @@ class HealthAuditLane:
             except AuditPassCancelled:
                 return False
             except Exception as exc:
-                self._deadline = self._monotonic() + min(
-                    _BUSY_RETRY_SECONDS, float(self.config.interval_seconds)
-                )
+                if not manual:
+                    self._deadline = self._monotonic() + min(
+                        _BUSY_RETRY_SECONDS, float(self.config.interval_seconds)
+                    )
                 _write_failure(
                     self.root,
                     {
@@ -542,6 +639,7 @@ class HealthAuditLane:
                             float(self.config.interval_seconds),
                         ),
                         "cursor": cursor,
+                        "pending_timeout_work_ids": sorted(pending_timeouts),
                     },
                 )
                 raise
@@ -549,39 +647,131 @@ class HealthAuditLane:
                 return False
             finished_mono = self._monotonic()
             finished_utc = self._aware_utc_now()
-            delay = self._next_delay()
-            self._deadline = finished_mono + delay
+            if manual:
+                self._deadline = periodic_deadline
+                next_scheduled = finished_utc + timedelta(
+                    seconds=max(0.0, periodic_deadline - finished_mono)
+                )
+            else:
+                delay = self._next_delay()
+                self._deadline = finished_mono + delay
+                next_scheduled = finished_utc + timedelta(seconds=delay)
             receipt = {
                 "last_completed_at": finished_utc.isoformat(),
-                "next_scheduled_at": (
-                    finished_utc + timedelta(seconds=delay)
-                ).isoformat(),
+                "next_scheduled_at": next_scheduled.isoformat(),
                 "interval_seconds": self.config.interval_seconds,
                 "duration_seconds": max(0.0, finished_mono - started_mono),
                 "counts": self._validated_counts(result.counts),
                 "next_cursor": result.next_cursor,
             }
             _write_receipt(self.root, receipt)
-            audit_failure_path(self.root).unlink(missing_ok=True)
+            pending_timeouts.difference_update(result.reassessed_candidates)
+            pending_timeouts.update(result.timed_out_candidates)
+            if pending_timeouts:
+                _write_failure(
+                    self.root,
+                    {
+                        "failed_at": finished_utc.isoformat(),
+                        "code": "candidate_observation_timeout",
+                        "work_ids": sorted(pending_timeouts),
+                        "pending_timeout_work_ids": sorted(pending_timeouts),
+                        "next_action": (
+                            "Inspect the timed-out candidate I/O; the next cursor "
+                            "rotation will retry these unavailable work items."
+                        ),
+                        "cursor": result.next_cursor,
+                    },
+                )
+            else:
+                audit_failure_path(self.root).unlink(missing_ok=True)
             self._receipt_marker = self._marker(receipt)
-            return True
+            completed = result
         finally:
             claim.release()
+        if completed is not None and self._handoff is not None:
+            try:
+                self._handoff(completed.incident_work_ids)
+            except Exception:
+                # Observation is complete even if a supervised repair worker
+                # cannot currently accept its durable handoff.
+                _log.exception("health-audit recovery handoff failed")
+        return completed is not None
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            wait = max(0.0, self._deadline - self._monotonic())
-            if self._stop.wait(wait):
+            with self._state_lock:
+                manual_wait = (
+                    max(0.0, self._manual_retry_deadline - self._monotonic())
+                    if self._manual_pending and self._manual_retry_deadline is not None
+                    else None
+                )
+            periodic_wait = (
+                max(0.0, self._deadline - self._monotonic())
+                if self.config.enabled
+                else None
+            )
+            waits = [
+                value for value in (manual_wait, periodic_wait) if value is not None
+            ]
+            wait = min(waits) if waits else None
+            self._wake.wait(wait)
+            self._wake.clear()
+            if self._stop.is_set():
                 return
+            with self._state_lock:
+                # A request arriving exactly when the periodic deadline is due
+                # joins that scheduled pass.  The scheduled completion advances
+                # its own deadline; no second manual pass follows it.
+                periodic_due = (
+                    self.config.enabled and self._monotonic() >= self._deadline
+                )
+                manual_ready = self._manual_pending and (
+                    self._manual_retry_deadline is None
+                    or self._monotonic() >= self._manual_retry_deadline
+                )
+                manual = manual_ready and not periodic_due
+                if not periodic_due and not manual:
+                    continue
+                self._manual_pending = False
+                self._manual_retry_deadline = None
+                self._in_flight = True
+            completed = False
             try:
-                self.run_due_pass()
+                if manual:
+                    completed = self._run_pass_once(manual=True)
+                else:
+                    completed = self.run_due_pass()
             except Exception:
                 # A failed pass is not completed and never advances the receipt.
                 # Keep unrelated delivery alive and retry after a bounded pause.
                 _log.exception("supervisor health-audit pass failed")
-                self._deadline = self._monotonic() + min(
-                    _BUSY_RETRY_SECONDS, float(self.config.interval_seconds)
-                )
+                if not manual:
+                    self._deadline = self._monotonic() + min(
+                        _BUSY_RETRY_SECONDS, float(self.config.interval_seconds)
+                    )
+            finally:
+                with self._state_lock:
+                    self._in_flight = False
+                    if manual and not completed and not self._stop.is_set():
+                        self._manual_pending = True
+                        self._manual_retry_deadline = self._monotonic() + min(
+                            _BUSY_RETRY_SECONDS,
+                            float(self.config.interval_seconds),
+                        )
+
+    def _ensure_thread(self) -> None:
+        with self._state_lock:
+            self._ensure_thread_locked()
+
+    def _ensure_thread_locked(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(
+            target=self._run,
+            name="supervisor-health-audit",
+            daemon=True,
+        )
+        self._thread.start()
 
     def _restore_deadline(self, receipt: Mapping[str, Any] | None) -> float:
         now_mono = self._monotonic()

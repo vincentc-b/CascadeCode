@@ -2,7 +2,7 @@
 id: task_013_002_004
 title: Unify manual and scheduled audit recovery through incident claims
 tier: task
-status: backlog
+status: completed
 parent: feat_013_002
 children: []
 depends_on:
@@ -10,7 +10,7 @@ depends_on:
 owners:
 - swe
 skills: []
-parent_rev: 20b90d6adbec9b20361ed4751aa1e8339cc8fa77
+parent_rev: 55a9d1a6f232f5f31d1d827df37fe2a681d4ec51
 created: '2026-11-08'
 updated: '2026-11-08'
 provider: codex

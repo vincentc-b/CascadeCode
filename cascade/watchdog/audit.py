@@ -1280,6 +1280,19 @@ def incident_failure_class(tier: WorkTier, reason: str, evidence: AuditEvidence)
             return "stalled_execution"
         if reason == "merge_blocked":
             return "delivery_reconciliation"
+    if reason == "unresolved_recovery_reference":
+        try:
+            referenced = set(evidence.unresolved_references)
+            if any(
+                row.get("action_kind") == "integration_branch_update"
+                and row.get("action_id") in referenced
+                for row in recovery_actions(root=evidence.product_repository)
+            ):
+                return "integration_branch_update"
+        except Exception:
+            # Observation already reports store reachability separately.  Do
+            # not infer executable authority from an unreadable recovery row.
+            pass
     return reason
 
 

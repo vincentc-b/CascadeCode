@@ -229,6 +229,7 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         authenticated_human: AuthenticatedHuman | None = None,
         human_identity_verifier: HumanIdentityVerifier | None = None,
         dependency_executor: BoundedOperationExecutor | None = None,
+        health_audit_request: Callable[[], bool] | None = None,
     ) -> None:
         host, _port = server_address
         if listen_socket is None:
@@ -241,6 +242,7 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         self.authenticated_human = authenticated_human
         self.human_identity_verifier = human_identity_verifier
         self.dependency_executor = dependency_executor
+        self.health_audit_request = health_audit_request
         self._listen_socket = listen_socket
         install_epic_boot_hook(self.root)
         install_feature_boot_hook(self.root)
@@ -1450,6 +1452,7 @@ def serve(
     authenticated_human: AuthenticatedHuman | None = None,
     human_identity_verifier: HumanIdentityVerifier | None = None,
     dependency_executor: BoundedOperationExecutor | None = None,
+    health_audit_request: Callable[[], bool] | None = None,
 ) -> WarRoomHTTPServer:
     """Create and return a configured server (caller runs serve_forever or thread).
 
@@ -1472,6 +1475,7 @@ def serve(
         authenticated_human=authenticated_human,
         human_identity_verifier=human_identity_verifier,
         dependency_executor=dependency_executor,
+        health_audit_request=health_audit_request,
     )
 
 
