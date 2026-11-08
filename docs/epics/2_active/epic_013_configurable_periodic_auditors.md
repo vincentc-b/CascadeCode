@@ -200,6 +200,18 @@ Feature 002 must preserve immediate operator cancellation during blocked startup
 
 All 24 criteria, operating bounds and Feature 005's real all-tier recovery/default-on gate remain unchanged. This is a correction under the approved cancellation and unrelated-delivery contract, not a scope amendment. The original integration-update action still awaits its guarded idle-boundary retry.
 
+## Feature 002 Task 003 retry API escalation — 2026-11-08
+
+In reply to TeamMessages `feat_013_002:feat_013_002:shutdown-cause-9994382f` and `feat_013_002:feat_013_002:task003-blocked-retry-api-20261108`: inspected feature commit `9994382f`, which combines lane-owned cancellation with observation of external operator stop without setting the caller's event during lane cleanup. The team reports 15 focused worker/lane checks passing, including source-update restart, crash classification, blocked-startup cancellation and the shared claim. This is evidence of a feature-base correction to dec_015, not final integrated acceptance. Preserve it alongside `06f4caff` and `da175ad3` through remaining task integration.
+
+The owning Feature reports Task `task_013_002_003` terminal `blocked_execution`, owner null, retryable true, `last_error=tests_not_run`, `validation_failures=3`, and latest clean commit `72e362a3` with no queued deliverable. Its scoped `retry_task` failed with `read_comments() got an unexpected keyword argument 'board'`; `recover_task` returned `task_not_recoverable` for blocked status. These are reported lifecycle/tool results, not independently refreshed Task state or a dependency/approval failure. Commit inspection confirms `72e362a3` contains whole-chain audit I/O budget changes and regression coverage; it does not establish passing validation or delivery.
+
+Operator resume request: repair the running retry API's comment-store signature mismatch, retaining normal comment, approval, dependency and ownership gates; then have the owning Feature invoke `retry_task(task_id="task_013_002_003")` and return the canonical execution/delivery result. Preserve the original Task, branch, commit and failed-attempt history. Do not manufacture a validated delivery, dispatch directly around the failed API, clear blockers manually, or use repeated unchanged retries as recovery evidence. Final integrated validation must retain shutdown-cause separation and demonstrate whole-chain remaining-budget Git cancellation plus fair continuation after a partial 60-second observation pass.
+
+The exposed epic tools provide no Task retry or operator/Boss messaging endpoint. Inspected `message_team` is restricted to direct parent/child work IDs, and the Epic has no parent. This artifact and the Epic Manager turn report are the operator escalation; operator receipt or repair is not claimed. The Feature retains ownership of its Task retry and may continue read-only review while awaiting an executable guarded path.
+
+All 24 criteria, five-feature sequence, approval and provider/dependency policy, and Feature 005's real all-tier recovery/default-on gate remain unchanged. The original integration-update action separately awaits its guarded idle-boundary retry and terminal receipt. This documentation handoff reruns no product tests; the 15-check result above is team-reported.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
