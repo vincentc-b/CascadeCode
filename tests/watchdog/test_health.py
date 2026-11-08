@@ -85,13 +85,15 @@ def test_health_sweep_retries_failed_blocked_task_once_through_dispatch(
         sweeps = list(pool.map(lambda _: sweep_supervisor_health(root), range(4)))
     repeated = sweep_supervisor_health(root)
 
-    assert [
+    # Concurrent read-only sweeps may observe the same blocked snapshot before
+    # admission finishes; the durable claim still permits exactly one retry.
+    assert {
         (item.child_id, item.classification)
         for observations in sweeps
         for item in observations
         if item.child_id == "task_001"
         and item.classification == "remediation_eligible"
-    ] == [("task_001", "remediation_eligible")]
+    } == {("task_001", "remediation_eligible")}
     assert calls == 1
     assert read_doc("task_001", root=root).meta.status == "active"
     assert execution_view("task_001", root=root)["health"] == "queued"

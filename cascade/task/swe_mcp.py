@@ -29,8 +29,8 @@ _SWE_TOOL_DESCRIPTIONS = {
     "swe_read": "Read a UTF-8 file from the active task worktree.",
     "swe_write": "Write the complete UTF-8 contents of a file in the active task worktree.",
     "read_doc": "Read this Task plan or its pinned parent Feature plan.",
-    "swe_run_tests": "Run pytest in the active task worktree.",
-    "swe_commit": "Commit all allowed task worktree changes on the task branch.",
+    "swe_run_tests": "Run pytest in the active task worktree. For delivery, commit first, then run on the clean tree and require a green result containing final_validation.",
+    "swe_commit": "Commit all allowed task worktree changes on the task branch. This invalidates prior validation; call swe_run_tests after committing before finishing.",
     "fail_task": "Block this task with a concrete reason when implementation cannot continue.",
 }
 
@@ -62,7 +62,7 @@ _SWE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "cmd": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Optional pytest argv for the scoped tests named by the Task plan.",
+                'description': 'Complete argv, for example ["pytest", "tests/test_example.py", "-q"]. Commit first and rerun after any edit or commit. Omit to use configured validation.',
             }
         },
     },
@@ -163,7 +163,7 @@ def mcp_tool_catalog(tool_names: list[str]) -> list[dict[str, Any]]:
         tools.append(
             {
                 "name": name,
-                "description": f"Cascade task tool {name}",
+                "description": _SWE_TOOL_DESCRIPTIONS.get(name, f"Cascade task tool {name}"),
                 "inputSchema": schema,
             }
         )

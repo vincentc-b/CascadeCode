@@ -21,9 +21,12 @@ from cascade.epic.guard import EpicToolDenied, tool_guard
 def epic_read_doc(work_id: str, *, epic_id: str, root: Path) -> WorkDoc:
     """Read a work doc if the Epic team is allowed to see it."""
 
-    checkout = epic_checkout_root(epic_id, trunk=Path(root).resolve())
     try:
-        doc = read_doc(work_id, root=checkout)
+        from cascade.board.context import resolve_tracking_root
+        from cascade.workspace.integration_worktree import doc_filesystem_root
+
+        owner_root = doc_filesystem_root(work_id, trunk=resolve_tracking_root(root))
+        doc = read_doc(work_id, root=owner_root)
     except NotFound:
         doc = read_doc(work_id, root=root)
     if doc.meta.tier == "task":

@@ -11,6 +11,8 @@ import base64
 import binascii
 import hashlib
 import json
+import subprocess
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, replace
@@ -24,9 +26,10 @@ from cascade.board.context import (
     resolve_root,
     resolve_tracking_root,
 )
-from cascade.board.gitutil import _run, head_sha
-from cascade.board.errors import SchemaError
-from cascade.board.store import _scan_meta, read_doc
+from cascade.board.errors import GitError, NotFound, SchemaError
+from cascade.board.gitutil import _run, bounded_git_io, head_sha, last_commit_touching
+from cascade.board.parse import parse_doc
+from cascade.board.store import _scan_meta
 from cascade.board.types import BoardIndex, WorkDoc, WorkMeta, WorkTier
 from cascade.board.work_ids import parse_work_id_parts
 from cascade.epic.plan_readiness import compute_epic_plan_readiness
@@ -35,7 +38,7 @@ from cascade.task.action_recovery import recovery_actions
 from cascade.task.execution import execution_views
 from cascade.watchdog.health import classify_child
 from cascade.watchdog.incidents import capability_authority_fingerprint
-from cascade.workspace.integration_worktree import merged_board_readonly
+from cascade.workspace.integration_worktree import git_root_for_path, merged_board_readonly
 
 AuditClassification = Literal[
     "healthy", "expected_wait", "proven_incident", "unavailable_evidence"
@@ -257,6 +260,7 @@ class CandidatePage:
     candidates: tuple[AuditCandidate, ...]
     next_cursor: str
     unavailable_evidence: tuple[str, ...] = ()
+    continuation_cursors: tuple[str, ...] = ()
 
 
 _CANDIDATE_CURSOR_VERSION = 1
@@ -433,6 +437,7 @@ def select_audit_candidates(
     root: Path | None = None,
     today: date | None = None,
     monotonic: Callable[[], float] = time.monotonic,
+    cancel_event: threading.Event | None = None,
 ) -> CandidatePage:
     """Return a bounded, fair, mutation-free page of canonical work refs.
 
@@ -443,6 +448,28 @@ def select_audit_candidates(
     """
 
     limit = budget or CandidateBudget()
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("audit candidate selection cancelled")
+    with bounded_git_io(limit.max_seconds, cancel_event):
+        return _select_audit_candidates(
+            cursor,
+            limit,
+            root=root,
+            today=today,
+            monotonic=monotonic,
+        )
+
+
+def _select_audit_candidates(
+    cursor: str | None,
+    limit: CandidateBudget,
+    *,
+    root: Path | None,
+    today: date | None,
+    monotonic: Callable[[], float],
+) -> CandidatePage:
+    """Implementation kept inside the caller's whole-chain Git budget."""
+
     started = monotonic()
     product, tracking = _canonical_repositories(root)
     # ``merged_board`` acquires the product registry's file lock.  Candidate
@@ -494,6 +521,7 @@ def select_audit_candidates(
         for tier in _CANDIDATE_TIERS
     }
     selected: list[AuditCandidate] = []
+    continuation_cursors: list[str] = []
     selected_keys: set[tuple[WorkTier, str]] = set()
     tier_index = next_tier
     empty_turns = 0
@@ -524,10 +552,12 @@ def select_audit_candidates(
                 evidence_errors=candidate_errors,
             )
         )
+        continuation_cursors.append(_encode_candidate_cursor(positions, tier_index))
     return CandidatePage(
         candidates=tuple(selected),
         next_cursor=_encode_candidate_cursor(positions, tier_index),
         unavailable_evidence=tuple(sorted(set(unavailable))),
+        continuation_cursors=tuple(continuation_cursors),
     )
 
 
@@ -1007,14 +1037,62 @@ def _require_optional_exact(value: object, expected: type, field: str) -> None:
 
 
 def project_audit_observation(
-    work_id: str, *, root: Path | None = None
+    work_id: str,
+    *,
+    root: Path | None = None,
+    timeout_seconds: float | None = None,
+    cancel_event: threading.Event | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
 ) -> AuditObservation:
     """Project one canonical work item without invoking any mutation path."""
 
+    if timeout_seconds is not None and timeout_seconds <= 0:
+        raise subprocess.TimeoutExpired("audit observation", timeout_seconds)
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("audit observation cancelled")
+    if timeout_seconds is not None:
+        with bounded_git_io(timeout_seconds, cancel_event):
+            return _project_audit_observation(
+                work_id,
+                root=root,
+                timeout_seconds=timeout_seconds,
+                cancel_event=cancel_event,
+                monotonic=monotonic,
+            )
+    return _project_audit_observation(
+        work_id,
+        root=root,
+        timeout_seconds=timeout_seconds,
+        cancel_event=cancel_event,
+        monotonic=monotonic,
+    )
+
+
+def _project_audit_observation(
+    work_id: str,
+    *,
+    root: Path | None,
+    timeout_seconds: float | None,
+    cancel_event: threading.Event | None,
+    monotonic: Callable[[], float],
+) -> AuditObservation:
+    """Implementation kept inside the caller's whole-chain Git budget."""
+
+    deadline = (
+        None if timeout_seconds is None else monotonic() + timeout_seconds
+    )
     product, tracking = _canonical_repositories(root)
     board = merged_board_readonly(tracking)
-    doc = read_doc(work_id, root=tracking)
-    return _project_doc(doc, board=board, product=product, tracking=tracking)
+    doc = _read_canonical_doc(work_id, board)
+    return _project_doc(
+        doc,
+        board=board,
+        product=product,
+        tracking=tracking,
+        deadline=deadline,
+        cancel_event=cancel_event,
+        monotonic=monotonic,
+    )
 
 
 def project_audit_observations(
@@ -1026,7 +1104,7 @@ def project_audit_observations(
     board = merged_board_readonly(tracking)
     order = {"epic": 0, "feature": 1, "task": 2}
     docs = (
-        read_doc(meta.id, root=tracking)
+        _read_canonical_doc(meta.id, board)
         for meta in sorted(
             board.by_id.values(), key=lambda row: (order[row.tier], row.id)
         )
@@ -1035,6 +1113,20 @@ def project_audit_observations(
         _project_doc(doc, board=board, product=product, tracking=tracking)
         for doc in docs
     )
+
+
+def _read_canonical_doc(work_id: str, board: BoardIndex) -> WorkDoc:
+    """Read the fresh canonical path without a second, mutable registry lookup."""
+    meta = board.by_id.get(work_id)
+    if meta is None:
+        raise NotFound(work_id)
+    doc = parse_doc(meta.path)
+    try:
+        checkout = git_root_for_path(meta.path)
+    except GitError:
+        return doc
+    doc.sha = last_commit_touching(checkout, meta.path.resolve().relative_to(checkout))
+    return doc
 
 
 def _canonical_repositories(root: Path | None) -> tuple[Path, Path]:
@@ -1053,7 +1145,14 @@ def _canonical_repositories(root: Path | None) -> tuple[Path, Path]:
 
 
 def _project_doc(
-    doc: WorkDoc, *, board: BoardIndex, product: Path, tracking: Path
+    doc: WorkDoc,
+    *,
+    board: BoardIndex,
+    product: Path,
+    tracking: Path,
+    deadline: float | None = None,
+    cancel_event: threading.Event | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
 ) -> AuditObservation:
     local_error = None
     try:
@@ -1064,8 +1163,24 @@ def _project_doc(
     worktrees, worktree_errors = _registered_worktrees(product)
     worktree = worktrees.get((doc.meta.tier, doc.meta.id))
     git_root = worktree if worktree is not None else product
-    git_head = head_sha(git_root) if git_root.is_dir() else None
-    branch = _branch(git_root) if git_root.is_dir() else None
+    git_head = (
+        head_sha(
+            git_root,
+            timeout=_remaining_audit_time(deadline, monotonic, cancel_event),
+            cancel_event=cancel_event,
+        )
+        if git_root.is_dir()
+        else None
+    )
+    branch = (
+        _branch(
+            git_root,
+            timeout=_remaining_audit_time(deadline, monotonic, cancel_event),
+            cancel_event=cancel_event,
+        )
+        if git_root.is_dir()
+        else None
+    )
     execution: Mapping[str, Any] | None = None
     gates: list[str] = []
     errors: list[str] = list(worktree_errors)
@@ -1080,7 +1195,9 @@ def _project_doc(
 
     if doc.meta.tier == "task":
         execution = execution_views({doc.meta.id}, root=product).get(doc.meta.id)
-    gates.extend(_dependency_gates(doc, board))
+    protected_gates, gate_errors = _protected_gates(doc, board, tracking=tracking, product=product)
+    gates.extend(protected_gates)
+    errors.extend(gate_errors)
     review_gate, review_error = _review_gate(doc.meta.id, product)
     if review_gate is not None:
         gates.append(review_gate)
@@ -1089,18 +1206,14 @@ def _project_doc(
     if doc.meta.tier == "feature":
         try:
             readiness = compute_feature_readiness(
-                doc.meta.id, root=tracking, board=board
+                doc.meta.id, root=tracking, board=board,
+                review_refusals={doc.meta.id: "blocking comments" if "review_threads_blocking" in gates else None},
             )
             if readiness is not None:
                 gates.extend(readiness.blockers)
-            if doc.meta.status not in {"backlog", "ready_to_plan"}:
-                from cascade.comments.gate import refusal_if_blocked
-
-                if refusal_if_blocked(doc.meta.id, root=tracking, board=board):
-                    gates.append("review_threads_blocking")
         except Exception as exc:
             errors.append(f"feature_readiness:{type(exc).__name__}")
-    elif doc.meta.tier == "epic" and doc.meta.plan_approved_at is None:
+    elif doc.meta.tier == "epic" and doc.meta.status not in {"completed", "cancelled"} and doc.meta.plan_approved_at is None:
         gates.append("plan_approval")
         if doc.meta.status == "active":
             try:
@@ -1182,19 +1295,30 @@ def local_audit_fingerprint(work_id: str, *, root: Path) -> str:
     board = merged_board_readonly(tracking)
     owner = board.by_id[work_id]
     ids = {work_id, *owner.children, *owner.depends_on}
-    if owner.parent:
-        ids.add(owner.parent)
+    # Ancestor comments (including an Epic thread affecting a Task through its
+    # Feature) are protected inputs even when no ancestor document changed.
+    parent_id = owner.parent
+    while parent_id and parent_id not in ids:
+        ids.add(parent_id)
+        parent = board.by_id.get(parent_id)
+        parent_id = parent.parent if parent is not None else None
     ids.update(meta.id for meta in board.by_id.values() if meta.parent == work_id)
+    ids.update(
+        dependency for meta in board.by_id.values() if meta.parent == work_id
+        for dependency in meta.depends_on
+    )
     documents = {}
     comments = {}
+    from cascade.comments.store import sidecar_path
+
     for related_id in sorted(ids):
         meta = board.by_id.get(related_id)
         documents[related_id] = (
             (str(meta.path), hashlib.sha256(meta.path.read_bytes()).hexdigest())
             if meta is not None else None
         )
-        path = tracking / "docs" / "_comments" / f"{related_id}.jsonl"
-        comments[related_id] = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+        path = sidecar_path(related_id, root=tracking, board=board, readonly=True)
+        comments[related_id] = (str(path), hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None)
     views = execution_views({key for key in ids if key.startswith("task_")}, root=product)
     executions = {
         key: ({name: value for name, value in view.items() if name != "heartbeat_age_seconds"} if view is not None else None)
@@ -1220,13 +1344,46 @@ def local_audit_fingerprint(work_id: str, *, root: Path) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
 
-def _dependency_gates(doc: WorkDoc, board: BoardIndex) -> list[str]:
-    return [
-        f"dependency:{dependency_id}"
-        for dependency_id in doc.meta.depends_on
-        if (dependency := board.by_id.get(dependency_id)) is None
-        or dependency.status not in {"completed", "cancelled"}
+def _dependency_gates(doc: WorkDoc, board: BoardIndex, *, root: Path) -> tuple[list[str], list[str]]:
+    from cascade.dependency_evaluation import evaluate_dependencies
+
+    evaluation = evaluate_dependencies(doc.meta, root=root, board=board)
+    gates = [f"dependency:{row.work_id}" for row in evaluation.dependencies if not row.complete]
+    errors = [
+        f"dependency_status_unavailable:{row.work_id}"
+        for row in evaluation.dependencies if row.outcome == "dependency_status_unavailable"
     ]
+    return gates, errors
+
+
+def _human_action_gates(work_id: str, *, root: Path) -> list[str]:
+    """An explicit human decision is a wait, not a failed repair attempt."""
+    return [
+        f"human_gate:{row['action_id']}"
+        for row in recovery_actions(root=root)
+        if row.get("action_id") and not _auditor_receipt(row)
+        and row.get("recovery_state") == "awaiting_human_gate"
+        and (row.get("affected_work_id") or ((row.get("recovery") or {}).get("evidence") or {}).get("affected_work_id")) == work_id
+    ]
+
+
+def _protected_gates(
+    doc: WorkDoc, board: BoardIndex, *, tracking: Path, product: Path
+) -> tuple[list[str], list[str]]:
+    """Shared hard waits for direct observations and derived child incidents."""
+    from cascade.comments.gate import blocking_threads_for
+
+    gates, errors = _dependency_gates(doc, board, root=tracking)
+    try:
+        if blocking_threads_for(doc.meta.id, root=tracking, board=board, readonly=True).blocked:
+            gates.append("review_threads_blocking")
+    except Exception as exc:
+        errors.append(f"comment_evidence:{type(exc).__name__}")
+    try:
+        gates.extend(_human_action_gates(doc.meta.id, root=product))
+    except Exception:
+        errors.append("action_recovery_unavailable")
+    return gates, errors
 
 
 def _unresolved_references(
@@ -1292,6 +1449,14 @@ def _classification(
 ) -> tuple[AuditClassification, str]:
     if evidence.errors:
         return "unavailable_evidence", evidence.errors[0]
+    hard_gates = tuple(gate for gate in evidence.gates if gate != "review_pending")
+    if hard_gates:
+        return "expected_wait", hard_gates[0]
+    if "review_pending" in evidence.gates and all(
+        reference.startswith("worktree:") for reference in evidence.unresolved_references
+    ):
+        # Retaining the source worktree until its review lands is intentional.
+        return "expected_wait", "review_pending"
     if evidence.unresolved_references:
         return "proven_incident", "unresolved_recovery_reference"
     if "review_pending" in evidence.gates:
@@ -1319,11 +1484,12 @@ def _classification(
             )
         return "healthy", "execution_succeeded"
 
+    child_wait = None
     for child_id in doc.meta.children:
         child = board.by_id.get(child_id)
         if child is None:
             return "unavailable_evidence", f"child_missing:{child_id}"
-        child_doc = read_doc(child_id, root=evidence.tracking_repository)
+        child_doc = _read_canonical_doc(child_id, board)
         child_execution = None
         if child.tier == "task":
             child_execution = execution_views(
@@ -1331,7 +1497,18 @@ def _classification(
             ).get(child_id)
         child_health = classify_child(doc, child_doc, child_execution)
         if child_health.classification in {"remediation_eligible", "unresolved"}:
+            child_gates, child_errors = _protected_gates(
+                child_doc, board, tracking=evidence.tracking_repository,
+                product=evidence.product_repository,
+            )
+            if child_errors:
+                return "unavailable_evidence", f"child:{child_id}:{child_errors[0]}"
+            if child_gates:
+                child_wait = child_wait or f"child:{child_id}:{child_gates[0]}"
+                continue
             return "proven_incident", f"child:{child_id}:{child_health.reason}"
+    if child_wait:
+        return "expected_wait", child_wait
     return "healthy", "authoritative_state_consistent"
 
 
@@ -1414,7 +1591,7 @@ def _direct_report_inputs(
         if meta is None:
             children.append({"work_id": child_id, "missing": True})
             continue
-        child = read_doc(child_id, root=evidence.tracking_repository)
+        child = _read_canonical_doc(child_id, board)
         item: dict[str, Any] = {
             "work_id": child_id,
             "status": child.meta.status,
@@ -1435,8 +1612,34 @@ def _direct_report_inputs(
     return tuple(children)
 
 
-def _branch(root: Path) -> str | None:
-    result = _run(["symbolic-ref", "--quiet", "--short", "HEAD"], root, check=False)
+def _branch(
+    root: Path,
+    *,
+    timeout: float | None = None,
+    cancel_event: threading.Event | None = None,
+) -> str | None:
+    result = _run(
+        ["symbolic-ref", "--quiet", "--short", "HEAD"],
+        root,
+        check=False,
+        timeout=timeout,
+        cancel_event=cancel_event,
+    )
     if result.returncode != 0:
         return None
     return result.stdout.strip() or None
+
+
+def _remaining_audit_time(
+    deadline: float | None,
+    monotonic: Callable[[], float],
+    cancel_event: threading.Event | None,
+) -> float | None:
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("audit observation cancelled")
+    if deadline is None:
+        return None
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired("audit observation", 0)
+    return remaining

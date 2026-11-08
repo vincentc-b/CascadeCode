@@ -22,10 +22,6 @@ enabled = true
 poll_seconds = 15
 remote = "origin"
 
-[automation.health_audit]
-enabled = true
-interval = "30m"
-
 [providers]
 default = "cursor"
 

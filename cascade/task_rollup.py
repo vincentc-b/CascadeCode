@@ -175,7 +175,7 @@ def pending_task_merges(root: Path) -> set[str]:
         return set(_read(repo))
 
 
-def retry_pending_task_merges(root: Path) -> list[str]:
+def retry_pending_task_merges(root: Path, *, feature_id: str | None = None) -> list[str]:
     """Retry durable task merges and return ids completed on this pass."""
 
     repo = resolve_root(root)
@@ -184,6 +184,8 @@ def retry_pending_task_merges(root: Path) -> list[str]:
         if historical.get("action_kind") != _QUEUED_MERGE_KIND or historical.get("recovery_state") == "completed":
             continue
         task_id = (historical.get("metadata") or {}).get("task_id")
+        if feature_id is not None and not _owned_by_feature(task_id, feature_id, repo):
+            continue
         if task_id and _already_completed_equivalent(task_id, repo):
             reconcile_completed_task_delivery(task_id, root=repo)
             _clear_delivery_blockers(task_id, repo)
@@ -192,6 +194,12 @@ def retry_pending_task_merges(root: Path) -> list[str]:
     with process_lock:
         pending = _read(repo)
     for task_id in pending:
+        if feature_id is not None and not _owned_by_feature(task_id, feature_id, repo):
+            continue
+        # A live parent/source turn is a scheduling wait, not a failed repair.
+        # Keep the queue and finite action-attempt budget intact until idle.
+        if _delivery_turn_busy(task_id, repo):
+            continue
         action = _queued_merge_action(task_id, repo)
         evidence = queued_delivery_evidence(task_id, root=repo)
         if (
@@ -239,6 +247,26 @@ def retry_pending_task_merges(root: Path) -> list[str]:
             removed = set(removable)
             _write(repo, [task_id for task_id in latest if task_id not in removed])
     return completed
+
+
+def _owned_by_feature(task_id: str, feature_id: str, root: Path) -> bool:
+    try:
+        return read_doc(task_id, root=root).meta.parent == feature_id
+    except NotFound:
+        return False
+
+
+def _delivery_turn_busy(task_id: str, root: Path) -> bool:
+    from cascade.workspace.kickoff import _graph_has_inflight_turn
+    try:
+        task = read_doc(task_id, root=root)
+    except NotFound:
+        return False
+    parent = task.meta.parent
+    return bool(parent) and (
+        _graph_has_inflight_turn(parent, "feature", root=root, feature_id=None)
+        or _graph_has_inflight_turn(task_id, "task", root=root, feature_id=parent)
+    )
 
 
 def _resume_queued_merge(task_id: str, root: Path) -> ActionResult:

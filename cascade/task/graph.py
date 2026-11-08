@@ -390,7 +390,11 @@ def _auto_merge_finished_task(task_id: str, root: Path) -> None:
         if not tests_passed:
             from cascade.task.wiring import last_test_passed
 
-            reason = "tests_red" if last_test_passed(task_id) is False else "tests_not_run"
+            durable_error = (execution or {}).get("last_error")
+            if durable_error in {"tests_red", "final_validation_required"}:
+                reason = durable_error
+            else:
+                reason = "tests_red" if last_test_passed(task_id) is False else "tests_not_run"
             if _schedule_validation_retry(task_id, reason, root=root):
                 return
             fail_task(task_id, reason, root=root)
@@ -438,8 +442,11 @@ def _schedule_validation_retry(task_id: str, reason: str, *, root: Path) -> bool
                 "validation_failure_limit": MAX_VALIDATION_FAILURES,
                 "instruction": (
                     "Validation is not yet green. Inspect the existing implementation, fix any "
-                    "failure, and call the Cascade swe_run_tests tool with the Task's scoped test "
-                    "command. Tests run only through a native shell do not satisfy the merge gate."
+                    "failure, commit the completed implementation, then call the Cascade swe_run_tests "
+                    "tool on the clean committed tree with the Task's scoped test "
+                    "command. Finish only after a green result includes final_validation. Any edit, "
+                    "commit or merge after testing requires another supervised run. Tests run "
+                    "only through a native shell do not satisfy the merge gate."
                 ),
             },
             dest=task_id,

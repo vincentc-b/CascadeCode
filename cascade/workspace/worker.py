@@ -277,7 +277,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     from cascade.war_room.server import serve
     from cascade.war_room.human_auth import load_or_create_local_human_verifier
     from cascade.epic.local_dependency_executor import LocalBoundedDependencyExecutor
-    from cascade.watchdog.audit_lane import AuditPassResult, HealthAuditLane
+    from cascade.watchdog.audit_lane import HealthAuditLane, run_bounded_audit_pass
     from cascade.watchdog.config import (
         ConfigError,
         health_audit_periodic_opted_in,
@@ -296,7 +296,6 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     launcher_lost = False
     abnormal_exit = False
     handlers_abandoned = False
-    audit_stop = threading.Event()
     audit_lane: HealthAuditLane | None = None
 
     def should_stop() -> bool:
@@ -383,23 +382,25 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
             audit_lane = HealthAuditLane(
                 root=ws.path,
                 config=read_health_audit_config(ws.path),
-                run_pass=lambda cursor, _cancel: AuditPassResult(next_cursor=cursor),
-                stop_event=audit_stop,
+                run_pass=lambda cursor, cancel: run_bounded_audit_pass(
+                    ws.path, cursor, cancel
+                ),
+                stop_event=operator_stop,
             ).start()
     except ConfigError as exc:
         print(f"health audit configuration error: {exc}", file=sys.stderr)
 
-    repair_registered_worktrees(ws.path)
-
-    def _submit_recovery() -> None:
-        submit_recovered_turns(ws.path)
-
-    threading.Thread(
-        target=_submit_recovery,
-        name="worker-recovery",
-        daemon=True,
-    ).start()
     try:
+        repair_registered_worktrees(ws.path)
+
+        def _submit_recovery() -> None:
+            submit_recovered_turns(ws.path)
+
+        threading.Thread(
+            target=_submit_recovery,
+            name="worker-recovery",
+            daemon=True,
+        ).start()
         run_watchdog(root=ws.path, stop_when=should_stop)
     except BaseException:
         abnormal_exit = True
@@ -407,7 +408,6 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
             shutdown_reason = "crash"
         raise
     finally:
-        audit_stop.set()
         if audit_lane is not None:
             audit_lane.stop(timeout=5.0)
         if abnormal_exit and not operator_stop.is_set() and not source_changed:

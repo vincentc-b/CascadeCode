@@ -1,19 +1,36 @@
 from __future__ import annotations
 
+import errno
 import json
+import multiprocessing
+import os
+import subprocess
+import sys
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+import cascade.board.store as board_store
+import cascade.watchdog.audit_lane as audit_lane_module
 from cascade.watchdog.audit_lane import (
+    AuditPassTimedOut,
     AuditPassResult,
     HealthAuditLane,
+    _WorkspaceClaim,
+    _run_bounded_audit_pass_inline,
     audit_receipt_path,
+    canonical_audit_root,
+    read_audit_failure,
     read_audit_receipt,
+    run_bounded_audit_pass,
 )
 from cascade.watchdog.config import HealthAuditConfig, health_audit_periodic_opted_in
+from cascade.workspace.types import ProjectContext
+from tests.support import add_doc, make_repo
 
 
 class Clock:
@@ -99,16 +116,378 @@ def test_restart_clamps_overdue_and_future_wall_schedule_to_one_interval(
     assert future.deadline == 80.0
 
 
-def test_failed_pass_does_not_advance_or_create_receipt(tmp_path: Path) -> None:
+def test_failed_pass_records_retry_without_advancing_then_clears_on_success(
+    tmp_path: Path,
+) -> None:
     clock = Clock()
+    calls = 0
 
     def fail(*_args) -> AuditPassResult:
-        raise RuntimeError("observer failed")
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("observer failed")
+        return AuditPassResult(next_cursor="after-retry", counts={"observed": 1})
 
     lane = _lane(tmp_path, clock, fail)
     with pytest.raises(RuntimeError, match="observer failed"):
         lane.run_due_pass()
     assert read_audit_receipt(tmp_path) is None
+    failure = read_audit_failure(tmp_path)
+    assert failure is not None
+    assert failure["code"] == "RuntimeError"
+    assert failure["message"] == "observer failed"
+    assert "retry without advancing" in failure["next_action"]
+    assert failure["retry_seconds"] == 1.0
+
+    clock.tick(1.0)
+    assert lane.run_due_pass() is True
+    assert read_audit_failure(tmp_path) is None
+    assert read_audit_receipt(tmp_path)["next_cursor"] == "after-retry"
+
+
+def test_bounded_pass_continues_from_opaque_cursor_without_exceeding_page_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def select(cursor, budget, **_kwargs):
+        assert budget.max_items == 100
+        assert 0 < budget.max_seconds <= 60
+        offset = 0 if cursor is None else 100
+        candidates = tuple(
+            SimpleNamespace(
+                work_id=f"task_{offset + index:03d}", evidence_available=True
+            )
+            for index in range(100)
+        )
+        return SimpleNamespace(
+            candidates=candidates,
+            next_cursor=f"opaque:{offset + 100}",
+            unavailable_evidence=(),
+        )
+
+    def observe(work_id, **_kwargs):
+        return SimpleNamespace(classification="healthy")
+
+    monkeypatch.setattr(audit_lane_module, "select_audit_candidates", select)
+    monkeypatch.setattr(audit_lane_module, "project_audit_observation", observe)
+    cancel = threading.Event()
+    first = _run_bounded_audit_pass_inline(
+        tmp_path,
+        None,
+        cancel,
+        max_items=100,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+    second = _run_bounded_audit_pass_inline(
+        tmp_path,
+        first.next_cursor,
+        cancel,
+        max_items=100,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+
+    assert first.counts["observed"] == second.counts["observed"] == 100
+    assert first.next_cursor == "opaque:100"
+    assert second.next_cursor == "opaque:200"
+
+
+def test_budget_exhaustion_persists_observed_prefix_and_continues_next_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = Clock(monotonic=0.0)
+    work_ids = ("task_001", "task_002", "task_003")
+
+    def select(cursor, *_args, **_kwargs):
+        offset = 0 if cursor is None else int(cursor.removeprefix("after:"))
+        remaining = work_ids[offset:]
+        return SimpleNamespace(
+            candidates=tuple(
+                SimpleNamespace(work_id=work_id, evidence_available=True)
+                for work_id in remaining
+            ),
+            next_cursor=f"after:{len(work_ids)}",
+            unavailable_evidence=(),
+            continuation_cursors=tuple(
+                f"after:{index}" for index in range(offset + 1, len(work_ids) + 1)
+            ),
+        )
+
+    monkeypatch.setattr(audit_lane_module, "select_audit_candidates", select)
+
+    def slow_observation(work_id, **_kwargs):
+        clock.tick(0.6)
+        return SimpleNamespace(classification="healthy")
+
+    monkeypatch.setattr(
+        audit_lane_module, "project_audit_observation", slow_observation
+    )
+    cursor = None
+    results = []
+    for _ in range(3):
+        result = _run_bounded_audit_pass_inline(
+            tmp_path,
+            cursor,
+            threading.Event(),
+            max_items=100,
+            max_seconds=0.5,
+            monotonic=lambda: clock.monotonic,
+        )
+        results.append(result)
+        cursor = result.next_cursor
+
+    assert [result.next_cursor for result in results] == [
+        "after:1",
+        "after:2",
+        "after:3",
+    ]
+    assert [result.counts["observed"] for result in results] == [1, 1, 1]
+
+
+def test_unresolved_candidate_advances_without_projection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    projected = multiprocessing.get_context("fork").Event()
+    monkeypatch.setattr(
+        audit_lane_module,
+        "select_audit_candidates",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            candidates=(
+                SimpleNamespace(work_id="task_999", evidence_available=False),
+                SimpleNamespace(work_id="task_001", evidence_available=True),
+            ),
+            next_cursor="after:task_001",
+            unavailable_evidence=(),
+            continuation_cursors=("after:task_999", "after:task_001"),
+        ),
+    )
+
+    def project(work_id, **_kwargs):
+        if work_id == "task_999":
+            projected.set()
+            raise AssertionError("missing candidate must not be projected")
+        return SimpleNamespace(classification="healthy")
+
+    monkeypatch.setattr(audit_lane_module, "project_audit_observation", project)
+    result = _run_bounded_audit_pass_inline(
+        tmp_path,
+        None,
+        threading.Event(),
+        max_items=100,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+
+    assert not projected.is_set()
+    assert result.next_cursor == "after:task_001"
+    assert result.counts["observed"] == 2
+    assert result.counts["healthy"] == 1
+    assert result.counts["unavailable_evidence"] == 1
+
+
+def test_candidate_timeout_preserves_completed_prefix_without_skipping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work_ids = ("task_001", "task_002", "feat_001")
+
+    def select(cursor, *_args, **_kwargs):
+        offset = 0 if cursor is None else int(cursor.removeprefix("after:"))
+        return SimpleNamespace(
+            candidates=tuple(
+                SimpleNamespace(work_id=value, evidence_available=True)
+                for value in work_ids[offset:]
+            ),
+            next_cursor=f"after:{len(work_ids)}",
+            unavailable_evidence=(),
+            continuation_cursors=tuple(
+                f"after:{index}" for index in range(offset + 1, len(work_ids) + 1)
+            ),
+        )
+
+    attempts: list[str] = []
+
+    def observe(work_id, **_kwargs):
+        attempts.append(work_id)
+        if work_id == "task_002" and attempts.count(work_id) == 1:
+            raise subprocess.TimeoutExpired(["git", "log"], 0.1)
+        return SimpleNamespace(classification="healthy")
+
+    monkeypatch.setattr(audit_lane_module, "select_audit_candidates", select)
+    monkeypatch.setattr(audit_lane_module, "project_audit_observation", observe)
+    first = _run_bounded_audit_pass_inline(
+        tmp_path,
+        None,
+        threading.Event(),
+        max_items=100,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+    second = _run_bounded_audit_pass_inline(
+        tmp_path,
+        first.next_cursor,
+        threading.Event(),
+        max_items=100,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+
+    assert first.next_cursor == "after:1"
+    assert first.counts["observed"] == 1
+    assert second.next_cursor == "after:3"
+    assert attempts == ["task_001", "task_002", "task_002", "feat_001"]
+
+
+def test_fifo_timeout_reaps_observer_before_workspace_claim_is_released(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    sidecars = root / ".cascade"
+    sidecars.mkdir(exist_ok=True)
+    fifo = sidecars / "executions.json"
+    os.mkfifo(fifo)
+
+    def bounded(cursor, cancel):
+        return run_bounded_audit_pass(root, cursor, cancel, max_seconds=0.05)
+
+    first = HealthAuditLane(
+        root=root,
+        config=HealthAuditConfig(enabled=True, interval_seconds=60),
+        run_pass=bounded,
+        jitter=lambda *_args: 0.0,
+    )
+    finished = threading.Event()
+    errors: list[BaseException] = []
+
+    def run_first() -> None:
+        try:
+            first.run_due_pass()
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            finished.set()
+
+    thread = threading.Thread(target=run_first)
+    thread.start()
+    competing_claim = _WorkspaceClaim(root)
+    deadline = time.monotonic() + 1.0
+    while competing_claim.acquire():
+        competing_claim.release()
+        if time.monotonic() >= deadline:
+            raise AssertionError("audit pass did not acquire the workspace claim")
+        time.sleep(0.005)
+    assert finished.wait(2)
+    thread.join(1)
+    assert not thread.is_alive()
+    assert len(errors) == 1
+    assert isinstance(errors[0], AuditPassTimedOut)
+
+    # A blocked FIFO reader would make this nonblocking writer open succeed.
+    with pytest.raises(OSError) as exc_info:
+        os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+    assert exc_info.value.errno == errno.ENXIO
+    assert competing_claim.acquire()
+    competing_claim.release()
+
+
+def test_timeout_kills_term_ignoring_git_descendant_before_return(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Audit Epic",
+        tier="epic",
+        status="active",
+        children=["feat_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001",
+        title="Audit Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Blocked Git",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    pid_file = tmp_path / "git-helper.pid"
+    fake_git = fake_bin / "git"
+    fake_git.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, signal, time\n"
+        "pid = os.fork()\n"
+        "if pid == 0:\n"
+        "    signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "    with open(os.environ['AUDIT_HELPER_PID'], 'w') as handle:\n"
+        "        handle.write(str(os.getpid()))\n"
+        "    while True: time.sleep(1)\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "while True: time.sleep(1)\n",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+    monkeypatch.setenv("AUDIT_HELPER_PID", str(pid_file))
+    monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
+
+    started = time.monotonic()
+    with pytest.raises(AuditPassTimedOut):
+        run_bounded_audit_pass(
+            root, None, threading.Event(), max_seconds=8.0
+        )
+    assert time.monotonic() - started < 9.0
+    helper_pid = int(pid_file.read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 1.0
+    while Path(f"/proc/{helper_pid}").exists() and time.monotonic() < deadline:
+        status = Path(f"/proc/{helper_pid}/status")
+        if status.exists() and "State:\tZ" in status.read_text(encoding="utf-8"):
+            break
+        time.sleep(0.01)
+    status = Path(f"/proc/{helper_pid}/status")
+    assert not status.exists() or "State:\tZ" in status.read_text(encoding="utf-8")
+
+
+def test_spawned_observer_does_not_inherit_parent_board_scan_lock(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Independent Audit",
+        tier="epic",
+        status="active",
+    )
+    entered = threading.Event()
+    release = threading.Event()
+
+    def hold_parent_lock() -> None:
+        with board_store._scan_meta_cache_lock:
+            entered.set()
+            assert release.wait(15)
+
+    holder = threading.Thread(target=hold_parent_lock)
+    holder.start()
+    assert entered.wait(2)
+    try:
+        result = run_bounded_audit_pass(
+            root, None, threading.Event(), max_seconds=10.0
+        )
+        assert result.counts["observed"] == 1
+    finally:
+        release.set()
+        holder.join(2)
+    assert not holder.is_alive()
 
 
 def test_workspace_claim_allows_only_one_concurrent_pass(tmp_path: Path) -> None:
@@ -148,6 +527,85 @@ def test_workspace_claim_allows_only_one_concurrent_pass(tmp_path: Path) -> None
     assert not thread.is_alive()
 
 
+def test_trunk_and_owned_worktree_share_cross_process_claim(tmp_path: Path) -> None:
+    trunk = tmp_path / "product"
+    trunk.mkdir()
+    subprocess.run(["git", "init", "-q", str(trunk)], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(trunk),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+        check=True,
+    )
+    child = trunk / ".cascade" / "worktrees" / "feat_feat_test"
+    child.parent.mkdir(parents=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(trunk),
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "feat/test",
+            str(child),
+        ],
+        check=True,
+    )
+    assert canonical_audit_root(child) == trunk
+    assert audit_receipt_path(child) == audit_receipt_path(trunk)
+
+    probe = (
+        "import sys; from pathlib import Path; "
+        "from cascade.watchdog.audit_lane import _WorkspaceClaim; "
+        "claim = _WorkspaceClaim(Path(sys.argv[1])); "
+        "acquired = claim.acquire(); print(int(acquired)); claim.release()"
+    )
+
+    def probe_child() -> str:
+        return subprocess.run(
+            [sys.executable, "-c", probe, str(child)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    claim = _WorkspaceClaim(trunk)
+    assert claim.acquire()
+    try:
+        assert probe_child() == "0"
+    finally:
+        claim.release()
+    assert probe_child() == "1"
+
+
+def test_tracking_owned_worktree_maps_to_product_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    product = tmp_path / "product"
+    tracking = tmp_path / "tracking"
+    child = tracking / ".cascade" / "worktrees" / "task_task_test"
+    child.mkdir(parents=True)
+    monkeypatch.setattr(
+        "cascade.watchdog.audit_lane.get_project_context",
+        lambda: ProjectContext.split(product, tracking),
+    )
+    assert canonical_audit_root(child) == product
+    assert audit_receipt_path(child) == audit_receipt_path(product)
+
+
 def test_lane_adopts_receipt_completed_by_another_process(tmp_path: Path) -> None:
     clock = Clock()
     calls = 0
@@ -173,6 +631,44 @@ def test_disabled_lane_creates_no_thread_or_runtime_files(tmp_path: Path) -> Non
     ).start()
     lane.stop()
     assert not (tmp_path / ".cascade").exists()
+
+
+def test_lane_cleanup_does_not_set_caller_stop_but_observes_it(
+    tmp_path: Path,
+) -> None:
+    operator_stop = threading.Event()
+    observed = threading.Event()
+    cancelled = threading.Event()
+
+    def run(_cursor: str | None, cancel: threading.Event) -> AuditPassResult:
+        observed.set()
+        assert cancel.wait(2)
+        cancelled.set()
+        return AuditPassResult()
+
+    lane = HealthAuditLane(
+        root=tmp_path,
+        config=HealthAuditConfig(enabled=True, interval_seconds=60),
+        run_pass=run,
+        stop_event=operator_stop,
+    ).start()
+    try:
+        assert observed.wait(2)
+        operator_stop.set()
+        assert cancelled.wait(1)
+    finally:
+        lane.stop(timeout=2)
+    assert not (lane._thread and lane._thread.is_alive())
+
+    fresh_stop = threading.Event()
+    idle_lane = HealthAuditLane(
+        root=tmp_path,
+        config=HealthAuditConfig(enabled=False, interval_seconds=60),
+        run_pass=run,
+        stop_event=fresh_stop,
+    )
+    idle_lane.stop()
+    assert not fresh_stop.is_set()
 
 
 def test_periodic_startup_requires_explicit_health_audit_table(tmp_path: Path) -> None:

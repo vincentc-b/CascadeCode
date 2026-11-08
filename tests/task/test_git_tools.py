@@ -326,6 +326,10 @@ def test_swe_run_tests_uses_worktree_cwd(board, monkeypatch: pytest.MonkeyPatch)
     assert seen and all(cwd == wt for cwd in seen)
     assert result["exit_code"] == 0
     assert "passed" in str(result["output"])
+    assert result["delivery_ready"] is False
+    assert result["reason"] == "final_validation_required"
+    assert "Commit" in result["next_step"]
+    assert "final_validation" not in result
 
 
 def test_no_git_push(monkeypatch: pytest.MonkeyPatch, board) -> None:
@@ -368,3 +372,17 @@ def test_register_task_git_tools_idempotent() -> None:
     assert "swe_commit" in names
     register_task_git_tools()
     assert len([n for n in task_tools() if n.startswith("swe_")]) == 2
+
+
+def test_commit_then_validate_produces_exact_head_evidence(board) -> None:
+    root, run = board["root"], board["run"]
+    (run.worktree / "test_ok.py").write_text("def test_ok():\n    assert True\n")
+    subprocess.run(["git", "branch", "feat/feat_001", run.base_sha], cwd=root, check=True)
+    sha = swe_commit("implement", task_id="task_034", task_run=run, root=root)
+    result = swe_run_tests(
+        task_id="task_034", task_run=run, root=root,
+        cmd=["python3", "-m", "pytest", "-q", "test_ok.py"],
+    )
+    assert result["exit_code"] == 0
+    assert result["final_validation"]["deliverable_sha"] == sha
+    assert "next_step" not in result
