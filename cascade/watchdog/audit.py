@@ -7,11 +7,15 @@ canonical board and lifecycle projections and are safe to use for auditing.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
+import time
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Literal, Mapping, TypeAlias
+from typing import Any, Callable, Literal, Mapping, TypeAlias
 
 from cascade.board.context import (
     get_project_context,
@@ -19,7 +23,7 @@ from cascade.board.context import (
     resolve_tracking_root,
 )
 from cascade.board.gitutil import _run, head_sha
-from cascade.board.store import read_doc
+from cascade.board.store import list_board, read_doc
 from cascade.board.types import BoardIndex, WorkDoc, WorkTier
 from cascade.board.work_ids import parse_work_id_parts
 from cascade.epic.plan_readiness import compute_epic_plan_readiness
@@ -203,6 +207,409 @@ class EpicAuditIdentity(_AuditIdentity):
 
 
 AuditIdentity: TypeAlias = TaskAuditIdentity | FeatureAuditIdentity | EpicAuditIdentity
+AuditWorkId: TypeAlias = TaskId | FeatureId | EpicId
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateBudget:
+    """Hard bounds for one inventory pass.
+
+    The coordinator's limits are part of the contract rather than trusted
+    caller input.  Smaller limits are useful for tests and incremental work.
+    """
+
+    max_items: int = 100
+    max_seconds: float = 60.0
+
+    def __post_init__(self) -> None:
+        if type(self.max_items) is not int or not 1 <= self.max_items <= 100:
+            raise ValueError("candidate budget must contain 1 to 100 items")
+        if not isinstance(self.max_seconds, (int, float)) or not 0 < self.max_seconds <= 60:
+            raise ValueError("candidate budget must contain at most 60 seconds")
+
+
+@dataclass(frozen=True, slots=True)
+class AuditCandidate:
+    """One coalesced typed work reference selected for observation."""
+
+    work_id: AuditWorkId
+    tier: WorkTier
+    reasons: tuple[str, ...]
+    tracking_repository: Path
+    product_repository: Path
+    registered_worktree: Path | None = None
+    evidence_available: bool = True
+    evidence_errors: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CandidatePage:
+    candidates: tuple[AuditCandidate, ...]
+    next_cursor: str
+    unavailable_evidence: tuple[str, ...] = ()
+
+
+_CANDIDATE_CURSOR_VERSION = 1
+_CANDIDATE_TIERS: tuple[WorkTier, ...] = ("task", "feature", "epic")
+_UNRESOLVED_SOURCES = (
+    ("action", "executions.json"),
+    ("review", "reviews.json"),
+    ("reconciliation", "resolution_actions.json"),
+    ("cleanup", "orphan_delivery_recoveries.json"),
+)
+_TERMINAL_MARKERS = {
+    "completed",
+    "succeeded",
+    "merged",
+    "closed",
+    "repaired",
+    "already_delivered",
+    "requeue_commit",
+    "resume_workspace",
+    "no_op_live_owner",
+}
+
+
+def select_audit_candidates(
+    cursor: str | None = None,
+    budget: CandidateBudget | None = None,
+    *,
+    root: Path | None = None,
+    today: date | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> CandidatePage:
+    """Return a bounded, fair, mutation-free page of canonical work refs.
+
+    Cursor positions are independent per tier.  Selection rotates tiers and
+    wraps each typed keyspace, so newly eligible lower IDs and older unresolved
+    completed work are eventually admitted without a completed-document read.
+    The caller owns persistence of the returned opaque cursor.
+    """
+
+    limit = budget or CandidateBudget()
+    started = monotonic()
+    product, tracking = _canonical_repositories(root)
+    # ``merged_board`` acquires the product registry's file lock.  Candidate
+    # selection needs lifecycle truth from tracking and reads product-worktree
+    # provenance separately, so avoid even that incidental lock-file write.
+    board = list_board(tracking)
+    positions, next_tier = _decode_candidate_cursor(cursor)
+    cutoff = (today or date.today()) - timedelta(days=7)
+    reasons: dict[tuple[WorkTier, str], set[str]] = {}
+    errors: dict[tuple[WorkTier, str], set[str]] = {}
+
+    for meta in board.by_id.values():
+        key = (meta.tier, meta.id)
+        if meta.status not in {"completed", "cancelled"}:
+            reasons.setdefault(key, set()).add("nonterminal")
+        elif meta.status == "completed" and meta.updated >= cutoff:
+            reasons.setdefault(key, set()).add("recently_completed")
+
+    unresolved, unavailable = _unresolved_candidate_references(product)
+    for source, work_id in unresolved:
+        try:
+            typed_id, tier = _typed_work_id(work_id)
+        except AuditIdentityError:
+            unavailable.append(f"{source}:invalid_work_id:{work_id}")
+            continue
+        key = (tier, str(typed_id))
+        reasons.setdefault(key, set()).add(f"unresolved_{source}")
+        meta = board.by_id.get(str(typed_id))
+        if meta is None or meta.tier != tier:
+            errors.setdefault(key, set()).add("canonical_document_unavailable")
+
+    worktrees, worktree_errors = _registered_worktrees(product)
+    unavailable.extend(worktree_errors)
+    for key, path in worktrees.items():
+        if not path.is_dir():
+            errors.setdefault(key, set()).add("registered_worktree_unavailable")
+            unavailable.append(f"worktree:{key[1]}:unavailable")
+        meta = board.by_id.get(key[1])
+        if meta is None or meta.tier != key[0]:
+            reasons.setdefault(key, set()).add("unresolved_cleanup")
+            errors.setdefault(key, set()).add("canonical_document_unavailable")
+        elif meta.status in {"completed", "cancelled"}:
+            reasons.setdefault(key, set()).add("unresolved_cleanup")
+    lanes: dict[WorkTier, list[str]] = {
+        tier: sorted(work_id for candidate_tier, work_id in reasons if candidate_tier == tier)
+        for tier in _CANDIDATE_TIERS
+    }
+    selected: list[AuditCandidate] = []
+    selected_keys: set[tuple[WorkTier, str]] = set()
+    tier_index = next_tier
+    empty_turns = 0
+    while len(selected) < limit.max_items and empty_turns < len(_CANDIDATE_TIERS):
+        if monotonic() - started >= limit.max_seconds:
+            break
+        tier = _CANDIDATE_TIERS[tier_index]
+        tier_index = (tier_index + 1) % len(_CANDIDATE_TIERS)
+        work_id = _next_candidate_id(
+            lanes[tier], positions[tier], selected_keys, tier
+        )
+        if work_id is None:
+            empty_turns += 1
+            continue
+        empty_turns = 0
+        positions[tier] = work_id
+        key = (tier, work_id)
+        selected_keys.add(key)
+        typed_id, _ = _typed_work_id(work_id)
+        candidate_errors = tuple(sorted(errors.get(key, ())))
+        selected.append(
+            AuditCandidate(
+                work_id=typed_id,
+                tier=tier,
+                reasons=tuple(sorted(reasons[key])),
+                tracking_repository=tracking,
+                product_repository=product,
+                registered_worktree=worktrees.get(key),
+                evidence_available=not candidate_errors,
+                evidence_errors=candidate_errors,
+            )
+        )
+    return CandidatePage(
+        candidates=tuple(selected),
+        next_cursor=_encode_candidate_cursor(positions, tier_index),
+        unavailable_evidence=tuple(sorted(set(unavailable))),
+    )
+
+
+def select_candidates(
+    cursor: str | None = None,
+    budget: CandidateBudget | None = None,
+    *,
+    root: Path | None = None,
+    today: date | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> tuple[tuple[AuditCandidate, ...], str]:
+    """Feature-contract spelling returning ``(work_refs, next_cursor)``."""
+
+    page = select_audit_candidates(
+        cursor, budget, root=root, today=today, monotonic=monotonic
+    )
+    return page.candidates, page.next_cursor
+
+
+def _typed_work_id(value: str) -> tuple[AuditWorkId, WorkTier]:
+    try:
+        tier = parse_work_id_parts(value).tier
+    except Exception as exc:
+        raise AuditIdentityError(f"invalid work ID: {value!r}") from exc
+    if tier == "task":
+        return TaskId(value), tier
+    if tier == "feature":
+        return FeatureId(value), tier
+    return EpicId(value), tier
+
+
+def _next_candidate_id(
+    lane: list[str],
+    after: str | None,
+    selected: set[tuple[WorkTier, str]],
+    tier: WorkTier,
+) -> str | None:
+    if not lane:
+        return None
+    ordered = [item for item in lane if after is None or item > after]
+    ordered.extend(item for item in lane if after is not None and item <= after)
+    return next((item for item in ordered if (tier, item) not in selected), None)
+
+
+def _encode_candidate_cursor(
+    positions: Mapping[WorkTier, str | None], next_tier: int
+) -> str:
+    payload = {
+        "v": _CANDIDATE_CURSOR_VERSION,
+        "after": {tier: positions[tier] for tier in _CANDIDATE_TIERS},
+        "next_tier": next_tier,
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _decode_candidate_cursor(
+    cursor: str | None,
+) -> tuple[dict[WorkTier, str | None], int]:
+    empty: dict[WorkTier, str | None] = {tier: None for tier in _CANDIDATE_TIERS}
+    if cursor is None:
+        return empty, 0
+    if not isinstance(cursor, str) or not cursor:
+        raise ValueError("candidate cursor must be a nonempty opaque string")
+    if len(cursor) > 4096:
+        raise ValueError("invalid candidate continuation cursor")
+    try:
+        padding = "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(cursor + padding))
+        after = payload["after"]
+        next_tier = payload["next_tier"]
+        if payload["v"] != _CANDIDATE_CURSOR_VERSION:
+            raise ValueError
+        if type(next_tier) is not int or not 0 <= next_tier < len(_CANDIDATE_TIERS):
+            raise ValueError
+        positions = {
+            tier: after[tier]
+            if after[tier] is None or isinstance(after[tier], str)
+            else (_raise_invalid_cursor())
+            for tier in _CANDIDATE_TIERS
+        }
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        UnicodeDecodeError,
+        binascii.Error,
+        json.JSONDecodeError,
+    ) as exc:
+        raise ValueError("invalid candidate continuation cursor") from exc
+    return positions, next_tier
+
+
+def _raise_invalid_cursor() -> None:
+    raise ValueError("invalid cursor position")
+
+
+def _read_json_source(path: Path, label: str) -> tuple[Any | None, str | None]:
+    if not path.exists():
+        return None, None
+    try:
+        return json.loads(path.read_text(encoding="utf-8")), None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None, f"{label}:unavailable"
+
+
+def _unresolved_candidate_references(
+    product: Path,
+) -> tuple[list[tuple[str, str]], list[str]]:
+    references: list[tuple[str, str]] = []
+    unavailable: list[str] = []
+    for label, filename in _UNRESOLVED_SOURCES:
+        payload, error = _read_json_source(product / ".cascade" / filename, label)
+        if error:
+            unavailable.append(error)
+            continue
+        if payload is None:
+            continue
+        if not isinstance(payload, Mapping):
+            unavailable.append(f"{label}:unavailable")
+            continue
+        _collect_unresolved_references(payload, label, references)
+    return references, unavailable
+
+
+def _collect_unresolved_references(
+    value: Any,
+    source: str,
+    references: list[tuple[str, str]],
+    *,
+    inherited_id: str | None = None,
+) -> None:
+    if isinstance(value, list):
+        for item in value:
+            _collect_unresolved_references(item, source, references)
+        return
+    if not isinstance(value, Mapping):
+        return
+    states = {
+        str(value.get(field)).lower()
+        for field in (
+            "status",
+            "state",
+            "stage",
+            "outcome",
+            "recovery_state",
+            "result",
+            "decision",
+        )
+        if value.get(field) is not None
+    }
+    terminal = bool(states) and states.issubset(_TERMINAL_MARKERS)
+    if value.get("closed") is True:
+        terminal = True
+    if terminal:
+        return
+    identity_fields = {
+        "work_id",
+        "affected_work_id",
+        "task_id",
+        "feature_id",
+        "epic_id",
+        "review_owner_id",
+    }
+    ids = {
+        item
+        for key, item in value.items()
+        if (
+            key in identity_fields
+            or key.endswith("_work_id")
+            or key == "owner_id" and isinstance(item, str) and _looks_like_work_id(item)
+        )
+        and isinstance(item, str)
+    }
+    if inherited_id is not None:
+        ids.add(inherited_id)
+    references.extend((source, item) for item in ids)
+    for key, item in value.items():
+        child_id = None
+        if isinstance(key, str):
+            if _looks_like_work_id(key):
+                child_id = key
+            else:
+                prefix = key.partition(":")[0]
+                child_id = prefix if _looks_like_work_id(prefix) else None
+        if isinstance(item, (Mapping, list)):
+            _collect_unresolved_references(
+                item, source, references, inherited_id=child_id
+            )
+
+
+def _looks_like_work_id(value: str) -> bool:
+    try:
+        parse_work_id_parts(value)
+    except Exception:
+        return False
+    return True
+
+
+def _registered_worktrees(
+    product: Path,
+) -> tuple[dict[tuple[WorkTier, str], Path], list[str]]:
+    payload, error = _read_json_source(
+        product / ".cascade" / "worktrees.json", "worktree_registry"
+    )
+    if error:
+        return {}, [error]
+    if payload is None:
+        return {}, []
+    entries = payload.get("entries") if isinstance(payload, Mapping) else None
+    if not isinstance(entries, list):
+        return {}, ["worktree_registry:unavailable"]
+    result: dict[tuple[WorkTier, str], Path] = {}
+    unavailable: list[str] = []
+    for row in entries:
+        if not isinstance(row, Mapping):
+            unavailable.append("worktree_registry:invalid_entry")
+            continue
+        work_id, tier, raw_path = row.get("work_id"), row.get("kind"), row.get("path")
+        if (
+            not isinstance(work_id, str)
+            or tier not in _CANDIDATE_TIERS
+            or not isinstance(raw_path, str)
+        ):
+            unavailable.append("worktree_registry:invalid_entry")
+            continue
+        try:
+            _, actual_tier = _typed_work_id(work_id)
+        except AuditIdentityError:
+            unavailable.append(f"worktree_registry:invalid_work_id:{work_id}")
+            continue
+        if actual_tier != tier:
+            unavailable.append(f"worktree_registry:tier_mismatch:{work_id}")
+            continue
+        path = Path(raw_path)
+        result[(actual_tier, work_id)] = (
+            path.resolve() if path.is_absolute() else (product / path).resolve()
+        )
+    return result, unavailable
 
 
 @dataclass(frozen=True, slots=True)
