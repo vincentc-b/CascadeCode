@@ -2,7 +2,7 @@
 id: feat_013_001
 title: Define canonical audit observations, incidents, and recovery authority
 tier: feature
-status: active
+status: completed
 parent: epic_013
 children:
 - task_013_001_001
