@@ -11,6 +11,8 @@ import base64
 import binascii
 import hashlib
 import json
+import subprocess
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, replace
@@ -24,8 +26,8 @@ from cascade.board.context import (
     resolve_root,
     resolve_tracking_root,
 )
-from cascade.board.gitutil import _run, head_sha, last_commit_touching
 from cascade.board.errors import GitError, NotFound, SchemaError
+from cascade.board.gitutil import _run, bounded_git_io, head_sha, last_commit_touching
 from cascade.board.parse import parse_doc
 from cascade.board.store import _scan_meta
 from cascade.board.types import BoardIndex, WorkDoc, WorkMeta, WorkTier
@@ -258,6 +260,7 @@ class CandidatePage:
     candidates: tuple[AuditCandidate, ...]
     next_cursor: str
     unavailable_evidence: tuple[str, ...] = ()
+    continuation_cursors: tuple[str, ...] = ()
 
 
 _CANDIDATE_CURSOR_VERSION = 1
@@ -434,6 +437,7 @@ def select_audit_candidates(
     root: Path | None = None,
     today: date | None = None,
     monotonic: Callable[[], float] = time.monotonic,
+    cancel_event: threading.Event | None = None,
 ) -> CandidatePage:
     """Return a bounded, fair, mutation-free page of canonical work refs.
 
@@ -444,6 +448,28 @@ def select_audit_candidates(
     """
 
     limit = budget or CandidateBudget()
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("audit candidate selection cancelled")
+    with bounded_git_io(limit.max_seconds, cancel_event):
+        return _select_audit_candidates(
+            cursor,
+            limit,
+            root=root,
+            today=today,
+            monotonic=monotonic,
+        )
+
+
+def _select_audit_candidates(
+    cursor: str | None,
+    limit: CandidateBudget,
+    *,
+    root: Path | None,
+    today: date | None,
+    monotonic: Callable[[], float],
+) -> CandidatePage:
+    """Implementation kept inside the caller's whole-chain Git budget."""
+
     started = monotonic()
     product, tracking = _canonical_repositories(root)
     # ``merged_board`` acquires the product registry's file lock.  Candidate
@@ -495,6 +521,7 @@ def select_audit_candidates(
         for tier in _CANDIDATE_TIERS
     }
     selected: list[AuditCandidate] = []
+    continuation_cursors: list[str] = []
     selected_keys: set[tuple[WorkTier, str]] = set()
     tier_index = next_tier
     empty_turns = 0
@@ -525,10 +552,12 @@ def select_audit_candidates(
                 evidence_errors=candidate_errors,
             )
         )
+        continuation_cursors.append(_encode_candidate_cursor(positions, tier_index))
     return CandidatePage(
         candidates=tuple(selected),
         next_cursor=_encode_candidate_cursor(positions, tier_index),
         unavailable_evidence=tuple(sorted(set(unavailable))),
+        continuation_cursors=tuple(continuation_cursors),
     )
 
 
@@ -1008,14 +1037,62 @@ def _require_optional_exact(value: object, expected: type, field: str) -> None:
 
 
 def project_audit_observation(
-    work_id: str, *, root: Path | None = None
+    work_id: str,
+    *,
+    root: Path | None = None,
+    timeout_seconds: float | None = None,
+    cancel_event: threading.Event | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
 ) -> AuditObservation:
     """Project one canonical work item without invoking any mutation path."""
 
+    if timeout_seconds is not None and timeout_seconds <= 0:
+        raise subprocess.TimeoutExpired("audit observation", timeout_seconds)
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("audit observation cancelled")
+    if timeout_seconds is not None:
+        with bounded_git_io(timeout_seconds, cancel_event):
+            return _project_audit_observation(
+                work_id,
+                root=root,
+                timeout_seconds=timeout_seconds,
+                cancel_event=cancel_event,
+                monotonic=monotonic,
+            )
+    return _project_audit_observation(
+        work_id,
+        root=root,
+        timeout_seconds=timeout_seconds,
+        cancel_event=cancel_event,
+        monotonic=monotonic,
+    )
+
+
+def _project_audit_observation(
+    work_id: str,
+    *,
+    root: Path | None,
+    timeout_seconds: float | None,
+    cancel_event: threading.Event | None,
+    monotonic: Callable[[], float],
+) -> AuditObservation:
+    """Implementation kept inside the caller's whole-chain Git budget."""
+
+    deadline = (
+        None if timeout_seconds is None else monotonic() + timeout_seconds
+    )
     product, tracking = _canonical_repositories(root)
     board = merged_board_readonly(tracking)
     doc = _read_canonical_doc(work_id, board)
-    return _project_doc(doc, board=board, product=product, tracking=tracking)
+    return _project_doc(
+        doc,
+        board=board,
+        product=product,
+        tracking=tracking,
+        deadline=deadline,
+        cancel_event=cancel_event,
+        monotonic=monotonic,
+    )
 
 
 def project_audit_observations(
@@ -1068,7 +1145,14 @@ def _canonical_repositories(root: Path | None) -> tuple[Path, Path]:
 
 
 def _project_doc(
-    doc: WorkDoc, *, board: BoardIndex, product: Path, tracking: Path
+    doc: WorkDoc,
+    *,
+    board: BoardIndex,
+    product: Path,
+    tracking: Path,
+    deadline: float | None = None,
+    cancel_event: threading.Event | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
 ) -> AuditObservation:
     local_error = None
     try:
@@ -1079,8 +1163,24 @@ def _project_doc(
     worktrees, worktree_errors = _registered_worktrees(product)
     worktree = worktrees.get((doc.meta.tier, doc.meta.id))
     git_root = worktree if worktree is not None else product
-    git_head = head_sha(git_root) if git_root.is_dir() else None
-    branch = _branch(git_root) if git_root.is_dir() else None
+    git_head = (
+        head_sha(
+            git_root,
+            timeout=_remaining_audit_time(deadline, monotonic, cancel_event),
+            cancel_event=cancel_event,
+        )
+        if git_root.is_dir()
+        else None
+    )
+    branch = (
+        _branch(
+            git_root,
+            timeout=_remaining_audit_time(deadline, monotonic, cancel_event),
+            cancel_event=cancel_event,
+        )
+        if git_root.is_dir()
+        else None
+    )
     execution: Mapping[str, Any] | None = None
     gates: list[str] = []
     errors: list[str] = list(worktree_errors)
@@ -1180,6 +1280,19 @@ def incident_failure_class(tier: WorkTier, reason: str, evidence: AuditEvidence)
             return "stalled_execution"
         if reason == "merge_blocked":
             return "delivery_reconciliation"
+    if reason == "unresolved_recovery_reference":
+        try:
+            referenced = set(evidence.unresolved_references)
+            if any(
+                row.get("action_kind") == "integration_branch_update"
+                and row.get("action_id") in referenced
+                for row in recovery_actions(root=evidence.product_repository)
+            ):
+                return "integration_branch_update"
+        except Exception:
+            # Observation already reports store reachability separately.  Do
+            # not infer executable authority from an unreadable recovery row.
+            pass
     return reason
 
 
@@ -1512,8 +1625,34 @@ def _direct_report_inputs(
     return tuple(children)
 
 
-def _branch(root: Path) -> str | None:
-    result = _run(["symbolic-ref", "--quiet", "--short", "HEAD"], root, check=False)
+def _branch(
+    root: Path,
+    *,
+    timeout: float | None = None,
+    cancel_event: threading.Event | None = None,
+) -> str | None:
+    result = _run(
+        ["symbolic-ref", "--quiet", "--short", "HEAD"],
+        root,
+        check=False,
+        timeout=timeout,
+        cancel_event=cancel_event,
+    )
     if result.returncode != 0:
         return None
     return result.stdout.strip() or None
+
+
+def _remaining_audit_time(
+    deadline: float | None,
+    monotonic: Callable[[], float],
+    cancel_event: threading.Event | None,
+) -> float | None:
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("audit observation cancelled")
+    if deadline is None:
+        return None
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired("audit observation", 0)
+    return remaining

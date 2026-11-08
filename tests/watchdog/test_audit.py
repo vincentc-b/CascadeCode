@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from datetime import date
 from pathlib import Path
 
 import pytest
 
+import cascade.board.gitutil as gitutil
 from cascade.board.context import set_project_context
 from cascade.task.execution import mark_queued
 from cascade.watchdog.audit import (
@@ -190,6 +192,45 @@ def test_projection_resolves_tracking_docs_and_product_git_without_mutation(
         set_project_context(None)
 
 
+def test_projection_bounds_document_revision_git_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
+    _commit(root)
+    real_popen = gitutil.subprocess.Popen
+    hung_commands: list[list[str]] = []
+
+    class HungLog:
+        returncode = None
+        terminated = False
+
+        def communicate(self, *, timeout=None):
+            if not self.terminated:
+                time.sleep(timeout or 0)
+                raise subprocess.TimeoutExpired(hung_commands[-1], timeout)
+            self.returncode = -15
+            return "", ""
+
+        def terminate(self):
+            self.terminated = True
+
+    def popen(command, *args, **kwargs):
+        if command[1:2] == ["log"]:
+            hung_commands.append(command)
+            return HungLog()
+        return real_popen(command, *args, **kwargs)
+
+    monkeypatch.setattr(gitutil.subprocess, "Popen", popen)
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        project_audit_observation(
+            "epic_001", root=root, timeout_seconds=0.2
+        )
+
+    assert hung_commands
+
+
 def test_healthy_candidate_and_observation_are_byte_silent(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
@@ -251,12 +292,22 @@ def test_completed_work_with_unresolved_recovery_is_an_incident(
         "cascade.watchdog.audit._unresolved_references",
         lambda _work_id, _product: (("action_001",), None),
     )
+    monkeypatch.setattr(
+        "cascade.watchdog.audit.recovery_actions",
+        lambda **_kwargs: [
+            {
+                "action_id": "action_001",
+                "action_kind": "integration_branch_update",
+            }
+        ],
+    )
 
     observation = project_audit_observation("epic_001", root=root)
 
     assert observation.classification == "proven_incident"
     assert observation.reason == "unresolved_recovery_reference"
     assert observation.incident is not None
+    assert observation.incident.failure_class == "integration_branch_update"
 
 
 @pytest.mark.parametrize(

@@ -19,6 +19,7 @@ from cascade.board.context import resolve_root
 from cascade.board.store import read_doc
 from cascade.board.types import WorkTier
 from cascade.task.action_recovery import (
+    ActionRecoveryUnavailable,
     create_or_load_action,
     load_action,
     recovery_actions,
@@ -31,9 +32,7 @@ HEALTH_AUDITOR_ROLE = "health_auditor"
 
 OwnerKind = Literal["task_team", "feature_team", "epic_team"]
 ProbeState = Literal["available", "missing", "denied"]
-DurableStore = Literal[
-    "action_recovery", "orphan_delivery", "remediation_dispositions"
-]
+DurableStore = Literal["action_recovery", "orphan_delivery", "remediation_dispositions"]
 
 _GATE_TOKENS = frozenset(
     {
@@ -84,7 +83,11 @@ class CapabilityDescriptor:
             raise ValueError("capability scope must be explicit")
         if self.attempt_bound < 1:
             raise ValueError("capability attempt bound must be positive")
-        if not self.lock_protocol or not self.recheck_protocol or not self.resume_action:
+        if (
+            not self.lock_protocol
+            or not self.recheck_protocol
+            or not self.resume_action
+        ):
             raise ValueError("capability recovery protocol must be explicit")
         if self.requires_action and not self.action_kind:
             raise ValueError("an action-backed capability needs an action kind")
@@ -153,7 +156,9 @@ class CapabilityRegistry:
     ) -> CapabilityDescriptor | None:
         direct = self._descriptors.get(operation)
         candidates = (
-            (direct,) if direct is not None else tuple(
+            (direct,)
+            if direct is not None
+            else tuple(
                 row
                 for row in self._descriptors.values()
                 if row.operation == operation or row.action_kind == operation
@@ -356,7 +361,9 @@ def startup_capability_probes(
                 )
             )
         else:
-            probes.append(CapabilityProbe("available", descriptor.name, "registered", None))
+            probes.append(
+                CapabilityProbe("available", descriptor.name, "registered", None)
+            )
     return tuple(probes)
 
 
@@ -406,7 +413,9 @@ def probe_capability(
     descriptor = selected.resolve(operation, tier=tier, owner_kind=owner_kind)
     if descriptor is None:
         return _finish_probe(
-            CapabilityProbe("missing", operation, "operation_not_registered", fallback_resume),
+            CapabilityProbe(
+                "missing", operation, "operation_not_registered", fallback_resume
+            ),
             incident=incident,
             owner=(owner_kind, owner_id),
             root=repo,
@@ -424,6 +433,20 @@ def probe_capability(
             selected,
             persist,
         )
+
+    # Every persisted probe appends its receipt to action recovery, regardless
+    # of the selected adapter's eventual result store. Unknown authority must
+    # therefore stop the probe before it can create or replace that ledger.
+    if persist:
+        try:
+            recovery_actions(root=repo)
+        except ActionRecoveryUnavailable:
+            return CapabilityProbe(
+                "missing",
+                descriptor.name,
+                "durable_store_unavailable",
+                descriptor.resume_action,
+            )
 
     denied = _denied_gate(failure, evidence)
     if denied is not None:
@@ -456,7 +479,10 @@ def probe_capability(
             attempt_bound=descriptor.attempt_bound,
             persist=persist,
         )
-    missing = next((field for field in descriptor.required_evidence if not evidence.get(field)), None)
+    missing = next(
+        (field for field in descriptor.required_evidence if not evidence.get(field)),
+        None,
+    )
     if missing is not None:
         return _missing_probe(
             descriptor,
@@ -576,7 +602,9 @@ def _finish_probe(
 ) -> CapabilityProbe:
     if not persist:
         return probe
-    work_id, _tier, _failure, operation, evidence, generation = _incident_fields(incident)
+    work_id, _tier, _failure, operation, evidence, generation = _incident_fields(
+        incident
+    )
     identity = json.dumps(
         {
             "work_id": work_id,
@@ -713,9 +741,13 @@ def _incident_fields(
     if not isinstance(work_id, str) or tier not in {"task", "feature", "epic"}:
         raise ValueError("capability incident needs a typed work reference")
     if not isinstance(failure, str) or not isinstance(operation, str):
-        raise ValueError("capability incident needs failure class and selected capability")
+        raise ValueError(
+            "capability incident needs failure class and selected capability"
+        )
     if not isinstance(evidence, Mapping) or not isinstance(generation, str):
-        raise ValueError("capability incident needs evidence and authoritative generation")
+        raise ValueError(
+            "capability incident needs evidence and authoritative generation"
+        )
     return work_id, tier, failure, operation, evidence, generation  # type: ignore[return-value]
 
 
@@ -779,9 +811,7 @@ def _denied_gate(failure: str, evidence: Mapping[str, Any]) -> str | None:
     return next((token for token in sorted(_GATE_TOKENS) if token in normalized), None)
 
 
-def _owner_worktree_reachable(
-    owner_kind: OwnerKind, owner_id: str, root: Path
-) -> bool:
+def _owner_worktree_reachable(owner_kind: OwnerKind, owner_id: str, root: Path) -> bool:
     expected = {"task_team": "task", "feature_team": "feature", "epic_team": "epic"}[
         owner_kind
     ]

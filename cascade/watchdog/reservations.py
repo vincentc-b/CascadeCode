@@ -12,7 +12,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import tempfile
+import threading
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -25,7 +27,11 @@ from cascade.board.store import read_doc
 from cascade.board.work_ids import parse_work_id_parts
 from cascade.task.execution import execution_views
 from cascade.task.lifecycle_lock import lifecycle_root, task_lifecycle_lock
-from cascade.watchdog.audit import AuditObservation, local_audit_fingerprint, project_audit_observation
+from cascade.watchdog.audit import (
+    AuditObservation,
+    local_audit_fingerprint,
+    project_audit_observation,
+)
 from cascade.watchdog.capabilities import CapabilityDescriptor
 from cascade.watchdog.incidents import incident_record
 
@@ -33,7 +39,9 @@ ReservationState = Literal["reserved", "stale", "gated", "unavailable"]
 ResultOutcome = Literal["success", "error", "refused", "deferred", "unsafe", "no_op"]
 FreshRecheck = Callable[[str, Path], AuditObservation | Mapping[str, Any]]
 
-_RESULT_OUTCOMES = frozenset({"success", "error", "refused", "deferred", "unsafe", "no_op"})
+_RESULT_OUTCOMES = frozenset(
+    {"success", "error", "refused", "deferred", "unsafe", "no_op"}
+)
 _GATE_WORDS = (
     "approval",
     "comment",
@@ -85,6 +93,10 @@ def reserve_after_recheck(
     now: datetime | None = None,
     claim_seconds: int | None = None,
     fresh_recheck: FreshRecheck | None = None,
+    timeout_seconds: float | None = None,
+    cancel_event: threading.Event | None = None,
+    claim_token: str | None = None,
+    handoff_pending: bool = False,
 ) -> ReservationDecision:
     """Freshly validate and atomically reserve one incident generation.
 
@@ -113,7 +125,12 @@ def reserve_after_recheck(
     prepared: AuditObservation | Mapping[str, Any] | None = None
     if fresh_recheck is None:
         try:
-            prepared = project_audit_observation(work_id, root=repo)
+            prepared = project_audit_observation(
+                work_id,
+                root=repo,
+                timeout_seconds=timeout_seconds,
+                cancel_event=cancel_event,
+            )
         except Exception:
             return ReservationDecision("stale", "incident_disappeared")
 
@@ -146,18 +163,42 @@ def reserve_after_recheck(
             )
             deadline = _parse_time(previous.get(deadline_field))
             if deadline is not None and stamped < deadline:
-                reason = "active_claim" if prior_outcome == "claimed" else "reassessment_cooldown"
+                reason = (
+                    "active_claim"
+                    if prior_outcome == "claimed"
+                    else "reassessment_cooldown"
+                )
                 return ReservationDecision("unavailable", reason)
 
         prior_attempts = list(previous.get("attempts") or []) if previous else []
-        if len(prior_attempts) >= capability.attempt_bound:
+        executed_attempts = sum(
+            not isinstance(attempt, Mapping)
+            or attempt.get("adapter_executed") is not False
+            for attempt in prior_attempts
+        )
+        if executed_attempts >= capability.attempt_bound:
             return ReservationDecision("unavailable", "attempt_bound_exhausted")
-        claim_token = uuid.uuid4().hex
+        if claim_token is None:
+            claim_token = uuid.uuid4().hex
+        if not isinstance(claim_token, str) or not claim_token:
+            raise ValueError("claim token must be a non-empty string")
         request = {
             "reservation_id": reservation_id,
             "claim_token": claim_token,
             "operation": capability.operation,
         }
+        attempt = {
+            "attempt": len(prior_attempts) + 1,
+            "reservation_id": reservation_id,
+            "claim_token": claim_token,
+            "started_at": stamped.isoformat(),
+            "outcome": None,
+        }
+        if handoff_pending:
+            # A spawned admission child cannot execute the adapter. The parent
+            # durably accepts this token before invoking the adapter, making a
+            # crash on either side of that boundary unambiguous on restart.
+            attempt["adapter_executed"] = False
         contract = incident_record(
             work_id=work_id,
             tier=tier,  # type: ignore[arg-type]
@@ -167,16 +208,7 @@ def reserve_after_recheck(
             evidence=evidence,
             selected_capability=operation,
             request=request,
-            attempts=[
-                *prior_attempts,
-                {
-                    "attempt": len(prior_attempts) + 1,
-                    "reservation_id": reservation_id,
-                    "claim_token": claim_token,
-                    "started_at": stamped.isoformat(),
-                    "outcome": None,
-                },
-            ],
+            attempts=[*prior_attempts, attempt],
             outcome="claimed",
             now=stamped,
             claim_seconds=seconds,
@@ -205,6 +237,144 @@ def reserve_after_recheck(
         return ReservationDecision("reserved", "fresh_generation_claimed", reservation)
 
 
+def accept_claim(
+    reservation: IncidentReservation,
+    *,
+    root: Path,
+    now: datetime | None = None,
+) -> bool:
+    """Durably transfer a pending admission claim to its adapter owner.
+
+    Once accepted, an ambiguous parent crash consumes the attempt rather than
+    risking duplicate adapter execution. A parent crash before this write
+    leaves the attempt explicitly unexecuted and recoverable after lease expiry.
+    """
+
+    repo = resolve_root(root)
+    with task_lifecycle_lock(root=repo):
+        ledger = _read_store(reservation.durable_store, repo)
+        # A contended lock may outlive the lease.  Read the clock only after
+        # acquiring the lock so an expired token cannot be accepted using a
+        # timestamp captured while it was still waiting for authority.
+        stamped = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        row = ledger.rows.get(reservation.reservation_id)
+        current = _row_incident(row)
+        if current is None or current.get("outcome") != "claimed":
+            return False
+        request = current.get("request")
+        token = request.get("claim_token") if isinstance(request, Mapping) else None
+        if token != reservation.claim_token:
+            return False
+        if (
+            current.get("work_id") != reservation.work_id
+            or current.get("tier") != reservation.tier
+            or current.get("authoritative_generation") != reservation.generation
+        ):
+            return False
+        claim_expires_at = _parse_time(current.get("claim_expires_at"))
+        if claim_expires_at is None or stamped >= claim_expires_at:
+            return False
+        attempts = list(current.get("attempts") or [])
+        if not attempts or attempts[-1].get("claim_token") != reservation.claim_token:
+            return False
+        if attempts[-1].get("adapter_executed") is not False:
+            return False
+        attempts[-1] = {
+            **attempts[-1],
+            "adapter_executed": True,
+            "accepted_at": stamped.isoformat(),
+        }
+        current["attempts"] = attempts
+        assert row is not None
+        row["incident"] = current
+        row["updated_at"] = stamped.isoformat()
+        ledger.rows[reservation.reservation_id] = row
+        _write_store(ledger)
+        return True
+
+
+def record_interrupted_claim(
+    claim_token: str,
+    durable_stores: tuple[str, ...],
+    *,
+    root: Path,
+) -> bool:
+    """Finish the exact admission claim whose parent handoff was interrupted."""
+
+    return _record_unstarted_claim(
+        claim_token,
+        durable_stores,
+        root=root,
+        accepted_handoff=False,
+    )
+
+
+def _record_unstarted_claim(
+    claim_token: str,
+    durable_stores: tuple[str, ...],
+    *,
+    root: Path,
+    accepted_handoff: bool,
+) -> bool:
+    """Finish an exact token that the live parent proves never reached an adapter.
+
+    ``accepted_handoff`` is private to the bounded parent/child handoff.  Public
+    result recording and crash recovery remain conservative once acceptance is
+    ambiguous.
+    """
+
+    if not claim_token:
+        return False
+    repo = resolve_root(root)
+    reservation: IncidentReservation | None = None
+    with task_lifecycle_lock(root=repo):
+        for store_name in dict.fromkeys(durable_stores):
+            try:
+                ledger = _read_store(store_name, repo)
+            except (ReservationConflict, ValueError):
+                continue
+            for row in ledger.rows.values():
+                current = _row_incident(row)
+                request = current.get("request") if current is not None else None
+                token = request.get("claim_token") if isinstance(request, Mapping) else None
+                if (
+                    token != claim_token
+                    or current is None
+                    or current.get("outcome") != "claimed"
+                ):
+                    continue
+                reservation = IncidentReservation(
+                    reservation_id=str(request["reservation_id"]),
+                    claim_token=claim_token,
+                    work_id=str(current["work_id"]),
+                    tier=str(current["tier"]),
+                    generation=str(current["authoritative_generation"]),
+                    failure_class=str(current["failure_class"]),
+                    capability=str(current["selected_capability"]),
+                    durable_store=store_name,
+                    claimed_at=str(current["recorded_at"]),
+                    claim_expires_at=str(current["claim_expires_at"]),
+                )
+                break
+            if reservation is not None:
+                break
+    if reservation is None:
+        return False
+    try:
+        _record_result(
+            reservation,
+            {"worker": "health-audit-admission", "accepted": False},
+            {"outcome": "refused", "reason": "admission_handoff_interrupted"},
+            root=repo,
+            adapter_executed=False,
+            refund_accepted_handoff=accepted_handoff,
+        )
+    except ReservationConflict:
+        # Exact-token result recording refuses to overwrite a successor claim.
+        return False
+    return True
+
+
 def record_result(
     reservation: IncidentReservation,
     acknowledgement: Mapping[str, Any] | None,
@@ -219,6 +389,27 @@ def record_result(
     overwrite a newer claim after its lease was reassessed.
     """
 
+    return _record_result(
+        reservation,
+        acknowledgement,
+        result,
+        root=root,
+        now=now,
+        adapter_executed=True,
+        refund_accepted_handoff=False,
+    )
+
+
+def _record_result(
+    reservation: IncidentReservation,
+    acknowledgement: Mapping[str, Any] | None,
+    result: Mapping[str, Any],
+    *,
+    root: Path,
+    now: datetime | None = None,
+    adapter_executed: bool,
+    refund_accepted_handoff: bool,
+) -> Mapping[str, Any]:
     outcome = result.get("outcome")
     if outcome not in _RESULT_OUTCOMES:
         raise ValueError("result outcome must be a supported incident outcome")
@@ -246,10 +437,19 @@ def record_result(
         attempts = list(current.get("attempts") or [])
         if not attempts or attempts[-1].get("claim_token") != reservation.claim_token:
             raise ReservationConflict("reservation attempt history is inconsistent")
+        if (
+            not adapter_executed
+            and attempts[-1].get("adapter_executed") is not False
+            and not refund_accepted_handoff
+        ):
+            raise ReservationConflict("reservation handoff was already accepted")
         attempts[-1] = {
             **attempts[-1],
             "finished_at": stamped.isoformat(),
             "outcome": outcome,
+            # False is reserved for a child reaped before any adapter owner
+            # accepted the token; public results always charge the attempt.
+            "adapter_executed": adapter_executed,
         }
         policy = dict(current.get("retry_policy") or {})
         final = incident_record(
@@ -308,7 +508,10 @@ def _incident_fields(
     operation = incident.get("selected_capability")
     evidence = incident.get("evidence")
     owner = incident.get("accountable_owner")
-    if not all(isinstance(value, str) and value for value in (failure, generation, operation, owner)):
+    if not all(
+        isinstance(value, str) and value
+        for value in (failure, generation, operation, owner)
+    ):
         raise ValueError("incident identity fields are incomplete")
     if not isinstance(evidence, Mapping):
         raise ValueError("incident evidence must be a mapping")
@@ -336,14 +539,21 @@ def _locked_local_recheck(
 ) -> AuditObservation | Mapping[str, Any]:
     if prepared is None:
         raise ValueError("fresh audit projection is unavailable")
-    work_id, _tier, _generation, _classification, _reason, evidence = _fresh_fields(prepared)
+    work_id, _tier, _generation, _classification, _reason, evidence = _fresh_fields(
+        prepared
+    )
     if isinstance(prepared, AuditObservation):
-        if evidence.local_fingerprint is None or local_audit_fingerprint(work_id, root=root) != evidence.local_fingerprint:
+        if (
+            evidence.local_fingerprint is None
+            or local_audit_fingerprint(work_id, root=root) != evidence.local_fingerprint
+        ):
             raise ValueError("local lifecycle authority changed")
         return prepared
     tracking = getattr(getattr(prepared, "evidence", None), "tracking_repository", root)
     doc = read_doc(work_id, root=tracking)
-    expected_revision = getattr(getattr(prepared, "document_revision", None), "value", None)
+    expected_revision = getattr(
+        getattr(prepared, "document_revision", None), "value", None
+    )
     if expected_revision is not None and doc.sha != expected_revision:
         raise ValueError("document revision changed")
     expected_status = getattr(evidence, "status", None)
@@ -353,7 +563,10 @@ def _locked_local_recheck(
     if doc.meta.parent != expected_parent:
         raise ValueError("document owner changed")
     expected_execution = getattr(evidence, "execution", None)
-    if doc.meta.tier == "task" and execution_views({work_id}, root=root).get(work_id) != expected_execution:
+    if (
+        doc.meta.tier == "task"
+        and execution_views({work_id}, root=root).get(work_id) != expected_execution
+    ):
         raise ValueError("task execution changed")
     return prepared
 
@@ -362,7 +575,11 @@ def _fresh_fields(
     fresh: AuditObservation | Mapping[str, Any],
 ) -> tuple[str, str, str, str, str, object]:
     if isinstance(fresh, Mapping):
-        identity = fresh.get("identity") if isinstance(fresh.get("identity"), Mapping) else fresh
+        identity = (
+            fresh.get("identity")
+            if isinstance(fresh.get("identity"), Mapping)
+            else fresh
+        )
         work = identity.get("work_id")
         work_id = getattr(work, "value", work)
         tier = identity.get("tier")
@@ -376,9 +593,18 @@ def _fresh_fields(
         tier = fresh.tier
         generation = fresh.generation.value
         classification = fresh.classification
-        reason = fresh.incident.failure_class if fresh.incident is not None else fresh.reason
+        reason = (
+            fresh.incident.failure_class if fresh.incident is not None else fresh.reason
+        )
         evidence = fresh.evidence
-    return str(work_id), str(tier), str(generation), str(classification), str(reason), evidence
+    return (
+        str(work_id),
+        str(tier),
+        str(generation),
+        str(classification),
+        str(reason),
+        evidence,
+    )
 
 
 def _compare_fresh(
@@ -388,7 +614,9 @@ def _compare_fresh(
     generation: str,
     failure: str,
 ) -> tuple[ReservationState, str]:
-    fresh_id, fresh_tier, fresh_generation, classification, reason, evidence = _fresh_fields(fresh)
+    fresh_id, fresh_tier, fresh_generation, classification, reason, evidence = (
+        _fresh_fields(fresh)
+    )
     if fresh_id != work_id or fresh_tier != tier:
         return "stale", "typed_identity_changed"
     if fresh_generation != generation:
@@ -397,7 +625,11 @@ def _compare_fresh(
     if gates is None and isinstance(evidence, Mapping):
         gates = evidence.get("gates") or ()
     hard_gates = tuple(gate for gate in (gates or ()) if gate != "review_pending")
-    if hard_gates or classification == "expected_wait" or any(word in reason for word in _GATE_WORDS):
+    if (
+        hard_gates
+        or classification == "expected_wait"
+        or any(word in reason for word in _GATE_WORDS)
+    ):
         return "gated", "protected_lifecycle_gate"
     if classification == "unavailable_evidence":
         return "unavailable", "fresh_evidence_unavailable"
@@ -428,9 +660,17 @@ def _read_store(name: str, root: Path) -> _Store:
     payload: dict[str, Any] = {}
     if path.exists():
         try:
+            if not stat.S_ISREG(path.stat().st_mode):
+                raise ReservationConflict(
+                    f"durable recovery store is not a regular file: {filename}"
+                )
             loaded = json.loads(path.read_text(encoding="utf-8"))
+        except ReservationConflict:
+            raise
         except (OSError, json.JSONDecodeError) as exc:
-            raise ReservationConflict(f"durable recovery store is unreadable: {filename}") from exc
+            raise ReservationConflict(
+                f"durable recovery store is unreadable: {filename}"
+            ) from exc
         if isinstance(loaded, dict):
             payload = loaded
     raw = payload.get(collection)
@@ -460,9 +700,13 @@ def _write_store(store: _Store) -> None:
         Path(temporary).unlink(missing_ok=True)
 
 
-def _reservation_id(work_id: str, failure: str, generation: str, capability: str) -> str:
+def _reservation_id(
+    work_id: str, failure: str, generation: str, capability: str
+) -> str:
     digest = hashlib.sha256(
-        json.dumps([work_id, failure, generation, capability], separators=(",", ":")).encode()
+        json.dumps(
+            [work_id, failure, generation, capability], separators=(",", ":")
+        ).encode()
     ).hexdigest()[:24]
     return f"{work_id}:health_reservation:{digest}"
 
@@ -521,13 +765,19 @@ def _parse_time(value: object) -> datetime | None:
         parsed = datetime.fromisoformat(value)
     except ValueError:
         return None
-    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+    return (
+        parsed.replace(tzinfo=timezone.utc)
+        if parsed.tzinfo is None
+        else parsed.astimezone(timezone.utc)
+    )
 
 
 __all__ = [
     "IncidentReservation",
     "ReservationConflict",
     "ReservationDecision",
+    "accept_claim",
+    "record_interrupted_claim",
     "record_result",
     "reserve_after_recheck",
 ]
