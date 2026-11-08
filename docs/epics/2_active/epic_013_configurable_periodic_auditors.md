@@ -141,6 +141,11 @@ No product-scope questions remain for this revision.
   Chose Use strict integer s/m/h/d intervals from 1m to 24h, default 30m; cap jitter at min(5%,60s), each observer pass at 100 items/60s, and retain fair continuation. Health-audit enablement is independent of ordinary automation; manual runs preserve periodic deadlines..
   Rationale: Explicit small bounds make scheduling and cancellation testable without slowing ordinary delivery. Long recovery stays in existing supervised actions. A compact untracked non-dispatching receipt/cursor is the only healthy-run write exception.
   Honors: Criteria 1–2, 7, 14–15 and 18; startup/restart and manual/periodic concurrency must coalesce..
+
+- `dec_003` · 2026-11-08 · Epic Manager · **Completed coverage and safe actionability**
+  Chose Inspect completed work updated within seven days plus unresolved action/review/publication/reconciliation/cleanup references of any age. Only proven incidents may repair; expected waits and unavailable evidence are distinguished. Capability and generation checks gate every adapter..
+  Rationale: A bounded recent window limits repeated history scans while durable references retain older incomplete delivery. Negative outcomes stay retryable under bounded policies, and missing capabilities remain actionable rather than falsely recovered.
+  Honors: Criteria 3–13, 17 and 19–24; approval/comment gates, live owners, dirty worktrees and typed work identity remain protected..
 ## Amendment log
 
 - 2026-11-06 · Reframed periodic auditors from advisory repository analysis into authoritative lifecycle health detection and bounded recovery. Added the lost merge-queue entry from `task_038_002_002` as a required regression scenario.
