@@ -396,7 +396,8 @@ def _compare_fresh(
     gates = getattr(evidence, "gates", None)
     if gates is None and isinstance(evidence, Mapping):
         gates = evidence.get("gates") or ()
-    if gates or classification == "expected_wait" or any(word in reason for word in _GATE_WORDS):
+    hard_gates = tuple(gate for gate in (gates or ()) if gate != "review_pending")
+    if hard_gates or classification == "expected_wait" or any(word in reason for word in _GATE_WORDS):
         return "gated", "protected_lifecycle_gate"
     if classification == "unavailable_evidence":
         return "unavailable", "fresh_evidence_unavailable"

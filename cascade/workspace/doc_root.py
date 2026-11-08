@@ -13,20 +13,22 @@ from cascade.workspace.integration_worktree import (
     git_root_for_path,
     is_trunk_pointer,
     merged_board,
+    merged_board_readonly,
+    load_registry_readonly,
     repair_missing_worktree,
 )
 
 BACKLOG_FEATURE_ATTACH_MESSAGE = "dispatch the feature to open its room"
 
 
-def resolve_doc_worktree(work_id: WorkId, *, root: Path) -> Path:
+def resolve_doc_worktree(work_id: WorkId, *, root: Path, board=None, readonly: bool = False) -> Path:
     """Return the checkout root for ``work_id`` specs (View plan / Attach reads).
 
     Does not create worktrees.
     """
 
     trunk = Path(root).resolve()
-    board = merged_board(trunk)
+    board = board if board is not None else (merged_board_readonly(trunk) if readonly else merged_board(trunk))
     if work_id not in board.by_id:
         raise NotFound(work_id)
     meta = board.by_id[work_id]
@@ -48,7 +50,7 @@ def resolve_doc_worktree(work_id: WorkId, *, root: Path) -> Path:
             except ValueError:
                 return trunk
             return snapshot
-        epic_root = _registered_worktree_path(trunk, "epic", work_id)
+        epic_root = _registered_worktree_path(trunk, "epic", work_id, readonly=readonly)
         if epic_root is not None:
             return epic_root
         if "/worktrees/epic_" in meta.path.as_posix():
@@ -56,19 +58,19 @@ def resolve_doc_worktree(work_id: WorkId, *, root: Path) -> Path:
         return trunk
 
     if tier == "feature":
-        feat_root = _registered_worktree_path(trunk, "feature", work_id)
+        feat_root = _registered_worktree_path(trunk, "feature", work_id, readonly=readonly)
         if feat_root is not None:
             return feat_root
         parent = meta.parent
         if not parent:
             return trunk
-        return resolve_doc_worktree(parent, root=trunk)
+        return resolve_doc_worktree(parent, root=trunk, board=board, readonly=readonly)
 
     if tier == "task":
         parent = meta.parent
         if not parent:
             raise NotFound(work_id)
-        return resolve_doc_worktree(parent, root=trunk)
+        return resolve_doc_worktree(parent, root=trunk, board=board, readonly=readonly)
 
     raise NotFound(work_id)
 
@@ -134,8 +136,13 @@ def _registered_worktree_path(
     trunk: Path,
     kind: IntegrationKind,
     work_id: str,
+    *,
+    readonly: bool = False,
 ) -> Path | None:
-    entry = get_integration_worktree(trunk, kind, work_id)
+    entry = (
+        next((row for row in load_registry_readonly(trunk) if row.kind == kind and row.work_id == work_id), None)
+        if readonly else get_integration_worktree(trunk, kind, work_id)
+    )
     if entry is not None:
         return entry.path.resolve()
     return None

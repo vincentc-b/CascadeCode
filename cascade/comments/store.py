@@ -210,20 +210,20 @@ def resolve_comment(
     )
 
 
-def read_comments(doc_id: str, *, root: Path) -> list[Comment]:
-    repo = _comment_repo(doc_id, root=root)
+def read_comments(doc_id: str, *, root: Path, board=None, readonly: bool = False) -> list[Comment]:
+    repo = _comment_repo(doc_id, root=root, board=board, readonly=readonly)
     return _load_sidecar(doc_id, repo)
 
 
-def sidecar_path(doc_id: str, *, root: Path) -> Path:
-    repo = _comment_repo(doc_id, root=root)
+def sidecar_path(doc_id: str, *, root: Path, board=None, readonly: bool = False) -> Path:
+    repo = _comment_repo(doc_id, root=root, board=board, readonly=readonly)
     return _sidecar_path(repo, doc_id)
 
 
-def _comment_repo(doc_id: str, *, root: Path) -> Path:
+def _comment_repo(doc_id: str, *, root: Path, board=None, readonly: bool = False) -> Path:
     trunk = locate_trunk(resolve_root(root))
     try:
-        preferred = resolve_doc_worktree(doc_id, root=trunk)
+        preferred = resolve_doc_worktree(doc_id, root=trunk, board=board, readonly=readonly)
     except NotFound:
         return trunk
     # Comments posted before activation live on trunk. Keep using that sidecar

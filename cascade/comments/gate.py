@@ -32,12 +32,17 @@ class GateResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def is_section_thread(doc_id: str, section: str, *, root: Path) -> bool:
+def is_section_thread(doc_id: str, section: str, *, root: Path, board: BoardIndex | None = None) -> bool:
     """True when ``section`` matches a current ``##`` or deeper heading slug on the doc."""
 
     if not section.strip():
         return False
-    doc = read_doc(doc_id, root=resolve_root(root))
+    if board is not None and doc_id in board.by_id:
+        from cascade.board.parse import parse_doc
+
+        doc = parse_doc(board.by_id[doc_id].path)
+    else:
+        doc = read_doc(doc_id, root=resolve_root(root))
     for match in _HEADING_RE.finditer(doc.body):
         if section == section_slug(match.group(2)):
             return True
@@ -45,7 +50,7 @@ def is_section_thread(doc_id: str, section: str, *, root: Path) -> bool:
 
 
 def blocking_threads_for(
-    work_id: str, *, root: Path, board: BoardIndex | None = None
+    work_id: str, *, root: Path, board: BoardIndex | None = None, readonly: bool = False
 ) -> GateResult:
     """Return open blocking roots on this work and ancestors that still block ``work_id``."""
 
@@ -53,7 +58,7 @@ def blocking_threads_for(
     trunk = locate_trunk(repo)
     board = board if board is not None else merged_board(trunk)
     warnings = _unmatched_cite_warnings(board, root=repo)
-    blocking_roots = _load_blocking_roots(work_id, board, root=repo)
+    blocking_roots = _load_blocking_roots(work_id, board, root=repo, readonly=readonly)
     hits: list[GateThread] = []
     for row in blocking_roots:
         if _blocks_work(row, work_id, board, root=repo):
@@ -157,11 +162,11 @@ def refusal_if_blocked(
     return None
 
 
-def _load_blocking_roots(work_id: str, board, *, root: Path) -> list[Comment]:
+def _load_blocking_roots(work_id: str, board, *, root: Path, readonly: bool = False) -> list[Comment]:
     seen: set[str] = set()
     roots: list[Comment] = []
     for doc_id in _comment_scan_doc_ids(work_id, board):
-        for row in read_comments(doc_id, root=root):
+        for row in read_comments(doc_id, root=root, board=board, readonly=readonly):
             if row.parent is not None:
                 continue
             if row.state != "open" or not row.blocking:
@@ -208,7 +213,7 @@ def _affected_work_ids(row: Comment, board, *, root: Path) -> set[str]:
 
     if (
         tier == "epic"
-        and is_section_thread(doc_id, row.section, root=root)
+        and is_section_thread(doc_id, row.section, root=root, board=board)
     ):
         cite_key = f"{doc_id}#{row.section}"
         affected: set[str] = {doc_id}
@@ -250,7 +255,7 @@ def _unmatched_cite_warnings(board, *, root: Path) -> list[str]:
                 message = f"unmatched cite {cite!r} (no current heading on cited doc)"
                 warnings.append(message)
                 continue
-            if not is_section_thread(doc_id, section, root=root):
+            if not is_section_thread(doc_id, section, root=root, board=board):
                 message = f"unmatched cite {cite!r} (no current heading on cited doc)"
                 warnings.append(message)
     return warnings
