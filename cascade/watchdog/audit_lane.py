@@ -557,7 +557,7 @@ class HealthAuditLane:
         self._ensure_thread()
         return self
 
-    def request_manual_pass(self) -> bool:
+    def request_manual_pass(self) -> bool | None:
         """Admit one explicit pass, coalescing duplicates and active passes.
 
         Manual admission is independent of periodic enablement.  It only wakes
@@ -565,7 +565,9 @@ class HealthAuditLane:
         """
 
         with self._state_lock:
-            if self._stop.is_set() or self._manual_pending or self._in_flight:
+            if self._stop.is_set():
+                return None
+            if self._manual_pending or self._in_flight:
                 return False
             self._manual_pending = True
             self._manual_retry_deadline = None

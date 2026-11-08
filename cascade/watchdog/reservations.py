@@ -95,6 +95,8 @@ def reserve_after_recheck(
     fresh_recheck: FreshRecheck | None = None,
     timeout_seconds: float | None = None,
     cancel_event: threading.Event | None = None,
+    claim_token: str | None = None,
+    handoff_pending: bool = False,
 ) -> ReservationDecision:
     """Freshly validate and atomically reserve one incident generation.
 
@@ -169,14 +171,34 @@ def reserve_after_recheck(
                 return ReservationDecision("unavailable", reason)
 
         prior_attempts = list(previous.get("attempts") or []) if previous else []
-        if len(prior_attempts) >= capability.attempt_bound:
+        executed_attempts = sum(
+            not isinstance(attempt, Mapping)
+            or attempt.get("adapter_executed") is not False
+            for attempt in prior_attempts
+        )
+        if executed_attempts >= capability.attempt_bound:
             return ReservationDecision("unavailable", "attempt_bound_exhausted")
-        claim_token = uuid.uuid4().hex
+        if claim_token is None:
+            claim_token = uuid.uuid4().hex
+        if not isinstance(claim_token, str) or not claim_token:
+            raise ValueError("claim token must be a non-empty string")
         request = {
             "reservation_id": reservation_id,
             "claim_token": claim_token,
             "operation": capability.operation,
         }
+        attempt = {
+            "attempt": len(prior_attempts) + 1,
+            "reservation_id": reservation_id,
+            "claim_token": claim_token,
+            "started_at": stamped.isoformat(),
+            "outcome": None,
+        }
+        if handoff_pending:
+            # A spawned admission child cannot execute the adapter. The parent
+            # durably accepts this token before invoking the adapter, making a
+            # crash on either side of that boundary unambiguous on restart.
+            attempt["adapter_executed"] = False
         contract = incident_record(
             work_id=work_id,
             tier=tier,  # type: ignore[arg-type]
@@ -186,16 +208,7 @@ def reserve_after_recheck(
             evidence=evidence,
             selected_capability=operation,
             request=request,
-            attempts=[
-                *prior_attempts,
-                {
-                    "attempt": len(prior_attempts) + 1,
-                    "reservation_id": reservation_id,
-                    "claim_token": claim_token,
-                    "started_at": stamped.isoformat(),
-                    "outcome": None,
-                },
-            ],
+            attempts=[*prior_attempts, attempt],
             outcome="claimed",
             now=stamped,
             claim_seconds=seconds,
@@ -224,6 +237,144 @@ def reserve_after_recheck(
         return ReservationDecision("reserved", "fresh_generation_claimed", reservation)
 
 
+def accept_claim(
+    reservation: IncidentReservation,
+    *,
+    root: Path,
+    now: datetime | None = None,
+) -> bool:
+    """Durably transfer a pending admission claim to its adapter owner.
+
+    Once accepted, an ambiguous parent crash consumes the attempt rather than
+    risking duplicate adapter execution. A parent crash before this write
+    leaves the attempt explicitly unexecuted and recoverable after lease expiry.
+    """
+
+    repo = resolve_root(root)
+    with task_lifecycle_lock(root=repo):
+        ledger = _read_store(reservation.durable_store, repo)
+        # A contended lock may outlive the lease.  Read the clock only after
+        # acquiring the lock so an expired token cannot be accepted using a
+        # timestamp captured while it was still waiting for authority.
+        stamped = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        row = ledger.rows.get(reservation.reservation_id)
+        current = _row_incident(row)
+        if current is None or current.get("outcome") != "claimed":
+            return False
+        request = current.get("request")
+        token = request.get("claim_token") if isinstance(request, Mapping) else None
+        if token != reservation.claim_token:
+            return False
+        if (
+            current.get("work_id") != reservation.work_id
+            or current.get("tier") != reservation.tier
+            or current.get("authoritative_generation") != reservation.generation
+        ):
+            return False
+        claim_expires_at = _parse_time(current.get("claim_expires_at"))
+        if claim_expires_at is None or stamped >= claim_expires_at:
+            return False
+        attempts = list(current.get("attempts") or [])
+        if not attempts or attempts[-1].get("claim_token") != reservation.claim_token:
+            return False
+        if attempts[-1].get("adapter_executed") is not False:
+            return False
+        attempts[-1] = {
+            **attempts[-1],
+            "adapter_executed": True,
+            "accepted_at": stamped.isoformat(),
+        }
+        current["attempts"] = attempts
+        assert row is not None
+        row["incident"] = current
+        row["updated_at"] = stamped.isoformat()
+        ledger.rows[reservation.reservation_id] = row
+        _write_store(ledger)
+        return True
+
+
+def record_interrupted_claim(
+    claim_token: str,
+    durable_stores: tuple[str, ...],
+    *,
+    root: Path,
+) -> bool:
+    """Finish the exact admission claim whose parent handoff was interrupted."""
+
+    return _record_unstarted_claim(
+        claim_token,
+        durable_stores,
+        root=root,
+        accepted_handoff=False,
+    )
+
+
+def _record_unstarted_claim(
+    claim_token: str,
+    durable_stores: tuple[str, ...],
+    *,
+    root: Path,
+    accepted_handoff: bool,
+) -> bool:
+    """Finish an exact token that the live parent proves never reached an adapter.
+
+    ``accepted_handoff`` is private to the bounded parent/child handoff.  Public
+    result recording and crash recovery remain conservative once acceptance is
+    ambiguous.
+    """
+
+    if not claim_token:
+        return False
+    repo = resolve_root(root)
+    reservation: IncidentReservation | None = None
+    with task_lifecycle_lock(root=repo):
+        for store_name in dict.fromkeys(durable_stores):
+            try:
+                ledger = _read_store(store_name, repo)
+            except (ReservationConflict, ValueError):
+                continue
+            for row in ledger.rows.values():
+                current = _row_incident(row)
+                request = current.get("request") if current is not None else None
+                token = request.get("claim_token") if isinstance(request, Mapping) else None
+                if (
+                    token != claim_token
+                    or current is None
+                    or current.get("outcome") != "claimed"
+                ):
+                    continue
+                reservation = IncidentReservation(
+                    reservation_id=str(request["reservation_id"]),
+                    claim_token=claim_token,
+                    work_id=str(current["work_id"]),
+                    tier=str(current["tier"]),
+                    generation=str(current["authoritative_generation"]),
+                    failure_class=str(current["failure_class"]),
+                    capability=str(current["selected_capability"]),
+                    durable_store=store_name,
+                    claimed_at=str(current["recorded_at"]),
+                    claim_expires_at=str(current["claim_expires_at"]),
+                )
+                break
+            if reservation is not None:
+                break
+    if reservation is None:
+        return False
+    try:
+        _record_result(
+            reservation,
+            {"worker": "health-audit-admission", "accepted": False},
+            {"outcome": "refused", "reason": "admission_handoff_interrupted"},
+            root=repo,
+            adapter_executed=False,
+            refund_accepted_handoff=accepted_handoff,
+        )
+    except ReservationConflict:
+        # Exact-token result recording refuses to overwrite a successor claim.
+        return False
+    return True
+
+
 def record_result(
     reservation: IncidentReservation,
     acknowledgement: Mapping[str, Any] | None,
@@ -238,6 +389,27 @@ def record_result(
     overwrite a newer claim after its lease was reassessed.
     """
 
+    return _record_result(
+        reservation,
+        acknowledgement,
+        result,
+        root=root,
+        now=now,
+        adapter_executed=True,
+        refund_accepted_handoff=False,
+    )
+
+
+def _record_result(
+    reservation: IncidentReservation,
+    acknowledgement: Mapping[str, Any] | None,
+    result: Mapping[str, Any],
+    *,
+    root: Path,
+    now: datetime | None = None,
+    adapter_executed: bool,
+    refund_accepted_handoff: bool,
+) -> Mapping[str, Any]:
     outcome = result.get("outcome")
     if outcome not in _RESULT_OUTCOMES:
         raise ValueError("result outcome must be a supported incident outcome")
@@ -265,10 +437,19 @@ def record_result(
         attempts = list(current.get("attempts") or [])
         if not attempts or attempts[-1].get("claim_token") != reservation.claim_token:
             raise ReservationConflict("reservation attempt history is inconsistent")
+        if (
+            not adapter_executed
+            and attempts[-1].get("adapter_executed") is not False
+            and not refund_accepted_handoff
+        ):
+            raise ReservationConflict("reservation handoff was already accepted")
         attempts[-1] = {
             **attempts[-1],
             "finished_at": stamped.isoformat(),
             "outcome": outcome,
+            # False is reserved for a child reaped before any adapter owner
+            # accepted the token; public results always charge the attempt.
+            "adapter_executed": adapter_executed,
         }
         policy = dict(current.get("retry_policy") or {})
         final = incident_record(
@@ -595,6 +776,8 @@ __all__ = [
     "IncidentReservation",
     "ReservationConflict",
     "ReservationDecision",
+    "accept_claim",
+    "record_interrupted_claim",
     "record_result",
     "reserve_after_recheck",
 ]

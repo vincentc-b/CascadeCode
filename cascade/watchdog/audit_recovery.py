@@ -9,6 +9,7 @@ import queue
 import signal
 import threading
 import time
+import uuid
 from dataclasses import asdict, is_dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
@@ -17,7 +18,9 @@ from cascade.agent.mcp_project_context import (
     project_context_payload,
     restore_project_context,
 )
+from cascade.board.gitutil import inherited_git_process_group
 from cascade.task.action_recovery import recovery_actions
+from cascade.task.lifecycle_lock import lifecycle_root
 from cascade.watchdog.audit import AuditObservation, project_audit_observation
 from cascade.watchdog.capabilities import (
     CapabilityDescriptor,
@@ -28,14 +31,18 @@ from cascade.watchdog.capabilities import (
 from cascade.watchdog.incidents import incident_record, project_incident
 from cascade.watchdog.reservations import (
     IncidentReservation,
+    _record_unstarted_claim,
+    accept_claim,
+    record_interrupted_claim,
     record_result,
     reserve_after_recheck,
 )
 
 _log = logging.getLogger(__name__)
 _STOP = object()
-_ADMISSION_TIMEOUT_SECONDS = 5.0
+_ADMISSION_TIMEOUT_SECONDS = 15.0
 _ADMISSION_CANCEL_GRACE_SECONDS = 0.1
+_ADMISSION_RECONCILE_SECONDS = 5.0
 
 
 class AuditRecoveryWorker:
@@ -103,11 +110,12 @@ def dispatch_audit_recovery(
     """Claim and execute the currently proven incident, if one remains."""
 
     selected = registry or default_capability_registry()
+    deadline = time.monotonic() + max(0.001, timeout_seconds)
     admitted = _bounded_admission(
         root,
         work_id,
         selected,
-        timeout_seconds=max(0.001, timeout_seconds),
+        deadline=deadline,
         cancel_event=cancel_event,
     )
     if admitted is None:
@@ -126,6 +134,22 @@ def dispatch_audit_recovery(
         or descriptor.name != descriptor_name
         or selected.fingerprint() != registry_fingerprint
     ):
+        _reconcile_interrupted_claim(
+            root, reservation.claim_token, (reservation.durable_store,)
+        )
+        return False
+    if not _bounded_accept_claim(
+        root,
+        reservation,
+        deadline=deadline,
+        cancel_event=cancel_event,
+    ):
+        _reconcile_interrupted_claim(
+            root,
+            reservation.claim_token,
+            (reservation.durable_store,),
+            accepted_handoff=True,
+        )
         return False
     _execute_reservation(reservation, descriptor, contract, root=root)
     return True
@@ -140,7 +164,7 @@ def _bounded_admission(
     work_id: str,
     registry: CapabilityRegistry,
     *,
-    timeout_seconds: float,
+    deadline: float,
     cancel_event: threading.Event | None,
 ) -> tuple[IncidentReservation, str, dict[str, Any], str] | None:
     """Run observation, probe and locked reservation in a killable process."""
@@ -148,8 +172,17 @@ def _bounded_admission(
     context = multiprocessing.get_context("spawn")
     operation_cancel = context.Event()
     receiver, sender = context.Pipe(duplex=False)
+    claim_token = uuid.uuid4().hex
+    durable_stores = tuple(
+        dict.fromkeys(descriptor.durable_store for descriptor in registry.descriptors())
+    )
     descriptors = tuple(
-        replace(descriptor, executor=_admission_executor_marker)
+        replace(
+            descriptor,
+            executor=(
+                _admission_executor_marker if callable(descriptor.executor) else None
+            ),
+        )
         for descriptor in registry.descriptors()
     )
     worker = context.Process(
@@ -160,43 +193,121 @@ def _bounded_admission(
             work_id,
             descriptors,
             operation_cancel,
-            timeout_seconds,
+            deadline,
             project_context_payload(),
+            claim_token,
         ),
         name="health-audit-admission",
         daemon=True,
     )
-    deadline = time.monotonic() + timeout_seconds
     worker.start()
     sender.close()
     try:
         while True:
             if cancel_event is not None and cancel_event.is_set():
                 _reap_admission(worker, operation_cancel)
+                _reconcile_interrupted_claim(root, claim_token, durable_stores)
                 return None
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 _reap_admission(worker, operation_cancel)
+                _reconcile_interrupted_claim(root, claim_token, durable_stores)
                 return None
             if receiver.poll(min(0.02, remaining)):
                 try:
                     succeeded, payload = receiver.recv()
                 except EOFError:
                     _reap_admission(worker, operation_cancel, cancel_first=False)
+                    _reconcile_interrupted_claim(root, claim_token, durable_stores)
                     return None
                 _reap_admission(worker, operation_cancel, cancel_first=False)
-                return payload if succeeded else None
+                if not succeeded:
+                    _reconcile_interrupted_claim(root, claim_token, durable_stores)
+                    return None
+                return payload
             if not worker.is_alive():
                 _reap_admission(worker, operation_cancel, cancel_first=False)
                 if not receiver.poll(0):
+                    _reconcile_interrupted_claim(root, claim_token, durable_stores)
                     return None
                 try:
                     succeeded, payload = receiver.recv()
                 except EOFError:
+                    _reconcile_interrupted_claim(root, claim_token, durable_stores)
                     return None
-                return payload if succeeded else None
+                if not succeeded:
+                    _reconcile_interrupted_claim(root, claim_token, durable_stores)
+                    return None
+                return payload
     finally:
         receiver.close()
+
+
+def _bounded_accept_claim(
+    root: Path,
+    reservation: IncidentReservation,
+    *,
+    deadline: float,
+    cancel_event: threading.Event | None,
+) -> bool:
+    """Accept a child reservation without blocking the supervisor worker."""
+
+    context = multiprocessing.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    worker = context.Process(
+        target=_accept_claim_process,
+        args=(
+            sender,
+            Path(root).resolve(),
+            reservation,
+            project_context_payload(),
+        ),
+        name="health-audit-admission-accept",
+        daemon=True,
+    )
+    worker.start()
+    sender.close()
+    try:
+        while True:
+            if cancel_event is not None and cancel_event.is_set():
+                _reap_admission(worker, context.Event())
+                return False
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                _reap_admission(worker, context.Event())
+                return False
+            if receiver.poll(min(0.02, remaining)):
+                try:
+                    accepted = receiver.recv()
+                except EOFError:
+                    accepted = False
+                _reap_admission(worker, context.Event(), cancel_first=False)
+                return accepted is True
+            if not worker.is_alive():
+                _reap_admission(worker, context.Event(), cancel_first=False)
+                try:
+                    return receiver.poll(0) and receiver.recv() is True
+                except EOFError:
+                    return False
+    finally:
+        receiver.close()
+
+
+def _accept_claim_process(
+    sender: Any,
+    root: Path,
+    reservation: IncidentReservation,
+    context_payload: object,
+) -> None:
+    try:
+        os.setsid()
+        restore_project_context(context_payload)
+        accepted = accept_claim(reservation, root=root)
+        sender.send(accepted)
+    except BaseException:
+        pass
+    finally:
+        sender.close()
 
 
 def _admission_process(
@@ -205,19 +316,22 @@ def _admission_process(
     work_id: str,
     descriptors: tuple[CapabilityDescriptor, ...],
     cancel_event: Any,
-    timeout_seconds: float,
+    deadline: float,
     context_payload: object,
+    claim_token: str,
 ) -> None:
     try:
         os.setsid()
         restore_project_context(context_payload)
-        payload = _admit_inline(
-            root,
-            work_id,
-            CapabilityRegistry(descriptors),
-            deadline=time.monotonic() + timeout_seconds,
-            cancel_event=cancel_event,
-        )
+        with inherited_git_process_group():
+            payload = _admit_inline(
+                root,
+                work_id,
+                CapabilityRegistry(descriptors),
+                deadline=deadline,
+                cancel_event=cancel_event,
+                claim_token=claim_token,
+            )
         message = (True, payload)
     except BaseException as exc:
         message = (False, (type(exc).__name__, str(exc)))
@@ -227,6 +341,71 @@ def _admission_process(
         pass
     finally:
         sender.close()
+
+
+def _reconcile_interrupted_claim(
+    root: Path,
+    claim_token: str,
+    durable_stores: tuple[str, ...],
+    *,
+    accepted_handoff: bool = False,
+) -> None:
+    """Bound exact-token cleanup after the admission child has been reaped."""
+
+    if not durable_stores:
+        return
+    filenames = {
+        "action_recovery": "executions.json",
+        "orphan_delivery": "orphan_delivery_recoveries.json",
+        "remediation_dispositions": "remediation_dispositions.json",
+    }
+    lifecycle_repo = lifecycle_root(root)
+    sidecars = lifecycle_repo / ".cascade"
+    if not any(
+        (sidecars / filenames[store]).exists()
+        for store in durable_stores
+        if store in filenames
+    ):
+        return
+    context = multiprocessing.get_context("spawn")
+    worker = context.Process(
+        target=_reconcile_claim_process,
+        args=(
+            lifecycle_repo,
+            claim_token,
+            durable_stores,
+            project_context_payload(),
+            accepted_handoff,
+        ),
+        name="health-audit-admission-reconcile",
+        daemon=True,
+    )
+    worker.start()
+    worker.join(timeout=_ADMISSION_RECONCILE_SECONDS)
+    # A timed join alone leaves a blocked thread/process behind. Reap before
+    # the recovery worker advances to another item, even on a local lock/FIFO.
+    _reap_admission(worker, context.Event(), cancel_first=False)
+    worker.close()
+
+
+def _reconcile_claim_process(
+    root: Path,
+    claim_token: str,
+    durable_stores: tuple[str, ...],
+    context_payload: object,
+    accepted_handoff: bool,
+) -> None:
+    os.setsid()
+    restore_project_context(context_payload)
+    if accepted_handoff:
+        _record_unstarted_claim(
+            claim_token,
+            durable_stores,
+            root=root,
+            accepted_handoff=True,
+        )
+    else:
+        record_interrupted_claim(claim_token, durable_stores, root=root)
 
 
 def _reap_admission(
@@ -271,6 +450,7 @@ def _admit_inline(
     *,
     deadline: float,
     cancel_event: threading.Event | Any,
+    claim_token: str | None = None,
 ) -> tuple[IncidentReservation, str, dict[str, Any], str] | None:
     observation = _bounded_observation(
         work_id, root=root, deadline=deadline, cancel_event=cancel_event
@@ -316,6 +496,8 @@ def _admit_inline(
         root=root,
         timeout_seconds=max(0.001, deadline - time.monotonic()),
         cancel_event=cancel_event,
+        claim_token=claim_token,
+        handoff_pending=True,
     )
     if decision.reservation is None:
         return None

@@ -229,7 +229,7 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         authenticated_human: AuthenticatedHuman | None = None,
         human_identity_verifier: HumanIdentityVerifier | None = None,
         dependency_executor: BoundedOperationExecutor | None = None,
-        health_audit_request: Callable[[], bool] | None = None,
+        health_audit_request: Callable[[], bool | None] | None = None,
     ) -> None:
         host, _port = server_address
         if listen_socket is None:
@@ -1452,7 +1452,7 @@ def serve(
     authenticated_human: AuthenticatedHuman | None = None,
     human_identity_verifier: HumanIdentityVerifier | None = None,
     dependency_executor: BoundedOperationExecutor | None = None,
-    health_audit_request: Callable[[], bool] | None = None,
+    health_audit_request: Callable[[], bool | None] | None = None,
 ) -> WarRoomHTTPServer:
     """Create and return a configured server (caller runs serve_forever or thread).
 

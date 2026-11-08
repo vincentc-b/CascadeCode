@@ -42,6 +42,8 @@ def _delivery(tmp_path, *, gate="none", green=True):
     # Keep the parent open so its remaining gates can be checked after the
     # normal Task merge and completion reconciliation.
     add_doc(root, id="task_002", title="Independent sibling", tier="task", status="backlog", parent="feat_001")
+    _git(root, "add", ".gitignore", "cascade.toml")
+    _git(root, "commit", "-m", "Configure isolated validation workspace")
     feature = create_integration_worktree("feature", "feat_001", branch="feat/feat_001", base_ref="HEAD", trunk=root)
     task = create_integration_worktree("task", "task_001", branch="task/task_001", base_ref=feature.branch, trunk=root)
     if gate == "manual":

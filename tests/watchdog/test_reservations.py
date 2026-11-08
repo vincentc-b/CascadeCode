@@ -1,7 +1,11 @@
 """Locked fresh-recheck and crash-safe reservation contracts."""
 
+import json
+import multiprocessing
 import os
+import threading
 import time
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -12,6 +16,8 @@ from cascade.watchdog.capabilities import CapabilityDescriptor
 from cascade.watchdog.incidents import authoritative_generation, incident_record
 from cascade.watchdog.reservations import (
     ReservationConflict,
+    accept_claim,
+    record_interrupted_claim,
     record_result,
     reserve_after_recheck,
 )
@@ -208,6 +214,24 @@ def _fresh(incident: dict[str, object], **changes: object):
     return lambda _work_id, _root: row
 
 
+def _persist_pending_claim_then_exit(root: Path, now: datetime) -> None:
+    """Emulate an admission parent dying after its child persisted a claim."""
+
+    incident = _incident()
+    descriptor = replace(_descriptor(), attempt_bound=1)
+    decision = reserve_after_recheck(
+        incident,
+        descriptor,
+        root=root,
+        now=now,
+        claim_seconds=1,
+        claim_token="crashed-parent-token",
+        handoff_pending=True,
+        fresh_recheck=_fresh(incident),
+    )
+    assert decision.reservation is not None
+
+
 def test_changed_disappeared_and_gated_incidents_do_not_write(tmp_path: Path) -> None:
     root = _root(tmp_path)
     incident = _incident()
@@ -347,6 +371,246 @@ def test_expired_interrupted_claim_replays_and_rejects_late_result(
         )["result"]["detail"]
         == "replayed safely"
     )
+
+
+def test_lost_admission_handoff_does_not_consume_adapter_attempt(
+    tmp_path: Path,
+) -> None:
+    root = _root(tmp_path)
+    incident = _incident()
+    executions: list[str] = []
+    descriptor = replace(
+        _descriptor(),
+        attempt_bound=1,
+        executor=lambda: executions.append("executed"),
+    )
+    token = "admission-token"
+    decision = reserve_after_recheck(
+        incident,
+        descriptor,
+        root=root,
+        claim_token=token,
+        handoff_pending=True,
+        fresh_recheck=_fresh(incident),
+    )
+    assert decision.reservation is not None
+
+    assert record_interrupted_claim(token, ("action_recovery",), root=root)
+    receipt = load_action(decision.reservation.reservation_id, root=root)
+    assert receipt is not None
+    assert receipt["incident"]["outcome"] == "refused"
+    assert receipt["incident"]["result"]["reason"] == "admission_handoff_interrupted"
+    assert receipt["incident"]["attempts"][-1]["claim_token"] == token
+    assert receipt["incident"]["attempts"][-1]["adapter_executed"] is False
+    assert not record_interrupted_claim(token, ("action_recovery",), root=root)
+
+    retry_at = datetime.fromisoformat(
+        str(receipt["incident"]["next_reassessment_at"])
+    ) + timedelta(seconds=1)
+    successor = reserve_after_recheck(
+        incident,
+        descriptor,
+        root=root,
+        now=retry_at,
+        claim_token="successor-token",
+        fresh_recheck=_fresh(incident),
+    )
+    assert successor.reservation is not None
+    assert descriptor.executor is not None
+    descriptor.executor()
+    record_result(
+        successor.reservation,
+        {"accepted": True},
+        {"outcome": "success"},
+        root=root,
+        now=retry_at + timedelta(seconds=1),
+    )
+    assert executions == ["executed"]
+    assert not record_interrupted_claim(token, ("action_recovery",), root=root)
+    current = load_action(successor.reservation.reservation_id, root=root)
+    assert current is not None
+    assert current["incident"]["outcome"] == "success"
+    assert current["incident"]["request"]["claim_token"] == "successor-token"
+
+
+def test_restart_reclaims_parent_crash_before_handoff_and_executes_once(
+    tmp_path: Path,
+) -> None:
+    root = _root(tmp_path)
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    context = multiprocessing.get_context("spawn")
+    crashed_parent = context.Process(
+        target=_persist_pending_claim_then_exit,
+        args=(root, now),
+    )
+    crashed_parent.start()
+    crashed_parent.join(10)
+    assert crashed_parent.exitcode == 0
+
+    incident = _incident()
+    descriptor = replace(_descriptor(), attempt_bound=1)
+    rows = json.loads(
+        (root / ".cascade" / "executions.json").read_text(encoding="utf-8")
+    )["actions"]
+    crashed = next(iter(rows.values()))["incident"]
+    assert crashed["outcome"] == "claimed"
+    assert crashed["attempts"][-1]["adapter_executed"] is False
+
+    executions: list[str] = []
+    descriptor = replace(
+        descriptor,
+        executor=lambda: executions.append("restarted-parent-token"),
+    )
+    retry = reserve_after_recheck(
+        incident,
+        descriptor,
+        root=root,
+        now=now + timedelta(seconds=2),
+        claim_seconds=1,
+        claim_token="restarted-parent-token",
+        handoff_pending=True,
+        fresh_recheck=_fresh(incident),
+    )
+    assert retry.reservation is not None
+    assert accept_claim(
+        retry.reservation, root=root, now=now + timedelta(seconds=2, milliseconds=500)
+    )
+    assert descriptor.executor is not None
+    descriptor.executor()
+    record_result(
+        retry.reservation,
+        {"worker": "health-audit-recovery", "accepted": True},
+        {"outcome": "success"},
+        root=root,
+        now=now + timedelta(seconds=3),
+    )
+    assert executions == ["restarted-parent-token"]
+    assert (
+        reserve_after_recheck(
+            incident,
+            descriptor,
+            root=root,
+            now=now + timedelta(seconds=5),
+            fresh_recheck=_fresh(incident),
+        ).reason
+        == "terminal_success"
+    )
+
+
+def test_accepted_handoff_crash_is_not_refunded_or_executed_twice(
+    tmp_path: Path,
+) -> None:
+    root = _root(tmp_path)
+    incident = _incident()
+    descriptor = replace(_descriptor(), attempt_bound=1)
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    decision = reserve_after_recheck(
+        incident,
+        descriptor,
+        root=root,
+        now=now,
+        claim_seconds=1,
+        handoff_pending=True,
+        fresh_recheck=_fresh(incident),
+    )
+    assert decision.reservation is not None
+    assert accept_claim(decision.reservation, root=root, now=now)
+
+    # A crash after durable acceptance is ambiguous: charge the attempt and
+    # never risk a second adapter invocation for an attempt_bound=1 operation.
+    assert not record_interrupted_claim(
+        decision.reservation.claim_token, ("action_recovery",), root=root
+    )
+    assert (
+        reserve_after_recheck(
+            incident,
+            descriptor,
+            root=root,
+            now=now + timedelta(seconds=2),
+            fresh_recheck=_fresh(incident),
+        ).reason
+        == "attempt_bound_exhausted"
+    )
+
+
+def test_expired_pending_claim_cannot_accept_beside_successor(
+    tmp_path: Path,
+) -> None:
+    root = _root(tmp_path)
+    incident = _incident()
+    descriptor = replace(_descriptor(), attempt_bound=1)
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    first = reserve_after_recheck(
+        incident,
+        descriptor,
+        root=root,
+        now=now,
+        claim_seconds=1,
+        claim_token="expired-token",
+        handoff_pending=True,
+        fresh_recheck=_fresh(incident),
+    )
+    assert first.reservation is not None
+
+    expired_at = now + timedelta(seconds=2)
+    assert not accept_claim(first.reservation, root=root, now=expired_at)
+    successor = reserve_after_recheck(
+        incident,
+        descriptor,
+        root=root,
+        now=expired_at,
+        claim_seconds=2,
+        claim_token="successor-token",
+        handoff_pending=True,
+        fresh_recheck=_fresh(incident),
+    )
+    assert successor.reservation is not None
+    assert accept_claim(successor.reservation, root=root, now=expired_at)
+    assert not accept_claim(first.reservation, root=root, now=expired_at)
+
+
+def test_accept_claim_checks_expiry_after_waiting_for_lifecycle_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.watchdog import reservations
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    root = _root(tmp_path)
+    incident = _incident()
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    decision = reserve_after_recheck(
+        incident,
+        _descriptor(),
+        root=root,
+        now=now,
+        claim_seconds=1,
+        handoff_pending=True,
+        fresh_recheck=_fresh(incident),
+    )
+    assert decision.reservation is not None
+    clock = [now + timedelta(milliseconds=500)]
+
+    class ClockDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock[0]
+
+    monkeypatch.setattr(reservations, "datetime", ClockDateTime)
+    entered = threading.Event()
+    accepted: list[bool] = []
+
+    def wait_to_accept() -> None:
+        entered.set()
+        accepted.append(accept_claim(decision.reservation, root=root))
+
+    with task_lifecycle_lock(root=root):
+        waiter = threading.Thread(target=wait_to_accept)
+        waiter.start()
+        assert entered.wait(1)
+        time.sleep(0.05)
+        clock[0] = now + timedelta(seconds=2)
+    waiter.join(1)
+    assert accepted == [False]
 
 
 def test_parent_revision_cannot_substitute_for_typed_feature_identity(

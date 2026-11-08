@@ -121,3 +121,14 @@ None.
   Chose Treat an individual observation Git timeout as unavailable evidence, advance that candidate's opaque selector continuation, and retain its work ID in the existing untracked auditor failure evidence while the completed bounded pass writes its compact receipt..
   Rationale: A repeatedly slow first candidate otherwise pins the cursor and starves later tiers. Advancing the exact candidate position preserves fair rotation and retries the candidate on a later cycle without classifying it healthy or recovered. Whole-pass discovery, cancellation, and observer failures remain distinct and do not commit a completed receipt.
   Honors: Feature criteria 4, 6, and 7; bounded 100-item/60-second passes, fair continuation, actionable timeout evidence, and healthy read-only semantics..
+
+## Closeout
+
+Completed child work: `task_013_002_001` (Parse health-audit configuration independently of automation), `task_013_002_002` (Start a restart-safe independent supervisor audit lane), `task_013_002_003` (Execute fair bounded audit passes with finite I/O), `task_013_002_004` (Unify manual and scheduled audit recovery through incident claims), `task_013_002_005` (Validate audit lane behavior in an isolated workspace).
+
+## Integrated validation
+
+- Integrated the published Epic base `6f6b77948b12e1e5ba1329fba4f776ca9f3d56cd` at Feature commit `74e50350` after all five Tasks merged. The worktree was clean before and after validation.
+- On that committed product revision, `python -m pytest -q tests/watchdog/test_audit.py tests/watchdog/test_audit_candidates.py tests/watchdog/test_audit_lane.py tests/watchdog/test_audit_protected_waits.py tests/watchdog/test_audit_recovery.py tests/watchdog/test_audit_admission_cleanup.py tests/watchdog/test_reservations.py tests/war_room/test_health_audit_routes.py tests/workspace/test_worker_startup_recovery.py tests/feature/test_delivery_yield_guidance.py tests/task/test_delivery_blocker_validation.py tests/task/test_post_validation_edits.py` passed: 124 tests in 215.66 seconds.
+- Ruff passed for the changed audit, reservation, route, worker, and imported framework files. The integrated regression suite covers the late Task 004 admission and manual-route findings, including claim handoff, split tracking authority, Git descendant cleanup, and stopped-lane rejection.
+- Production periodic default activation remains gated to `feat_013_005` after its all-tier recovery acceptance.

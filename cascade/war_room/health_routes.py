@@ -52,6 +52,9 @@ def handle_post_health_audit(
         handler._json_error(HTTPStatus.SERVICE_UNAVAILABLE, "health audit unavailable")
         return
     admitted = request()
+    if admitted is None:
+        handler._json_error(HTTPStatus.SERVICE_UNAVAILABLE, "health audit unavailable")
+        return
     handler._json_response(
         HTTPStatus.ACCEPTED,
         {

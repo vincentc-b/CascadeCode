@@ -1253,10 +1253,14 @@ def _graph_has_inflight_turn(
 
         graph = ensure_task_graph(work_id, root=root, feature_id=feature_id)
         config = thread_config(work_id)
-        role_names = frozenset({"swe"})
+        role_names = frozenset({"swe", "task_swe"})
     snapshot = graph.get_state(config)
     if not snapshot.next:
         return False
+    if tier == "task" and "task_swe" in snapshot.next:
+        # The first SWE turn has no prior role message. Its pending graph node
+        # still owns the source checkout until the graph checkpoint completes.
+        return True
     messages = (snapshot.values or {}).get("messages") or []
     return any(m.get("role") in role_names for m in messages)
 

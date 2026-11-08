@@ -151,14 +151,63 @@ def queued_delivery_evidence(task_id: str, *, root: Path) -> dict[str, str] | No
 def delivery_evidence_is_current(
     task_id: str, evidence: dict[str, str], *, root: Path
 ) -> bool:
-    """Whether evidence still names the current task and Feature branch tips."""
+    """Whether evidence still names the current, unmodified delivery snapshot."""
+
+    from cascade.task.worktree import task_worktree_has_changes
 
     heads = _merge_head_pair(task_id, resolve_root(root))
-    return heads is not None and evidence == {
-        "task_id": task_id,
-        "deliverable_sha": heads[0],
-        "feature_base_sha": heads[1],
-    }
+    return (
+        heads is not None
+        and not task_worktree_has_changes(task_id, root=root)
+        and evidence == {
+            "task_id": task_id,
+            "deliverable_sha": heads[0],
+            "feature_base_sha": heads[1],
+        }
+    )
+
+
+def defer_uncommitted_delivery(task_id: str, *, root: Path) -> None:
+    """Return later source edits to the same Task without spending merge attempts."""
+
+    from cascade.task.execution import (
+        execution_view,
+        mark_stall_recovery_queued,
+        record_running_error,
+    )
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+    from cascade.task.wiring import invalidate_validated_delivery
+
+    with task_lifecycle_lock(root=root):
+        invalidate_validated_delivery(task_id, root=root)
+        execution = execution_view(task_id, root=root) or {}
+        if (
+            execution.get("phase") == "queued"
+            and execution.get("last_error") == "uncommitted_delivery"
+        ):
+            return
+        # Append before the queued marker so an interrupted transition remains
+        # discoverable through the ordinary durable Task input path.
+        append_event(
+            task_id,
+            Event(
+                type="TaskValidationRetryRequested",
+                ts=datetime.now(timezone.utc),
+                payload={
+                    "task_id": task_id,
+                    "reason": "uncommitted_delivery",
+                    "instruction": (
+                        "Later edits remain outside the validated commit. Preserve them, "
+                        "finish the existing Task, commit, then rerun supervised tests "
+                        "on the clean committed tree before delivery."
+                    ),
+                },
+                dest=task_id,
+            ),
+            root=root,
+        )
+        mark_stall_recovery_queued(task_id, root=root)
+        record_running_error(task_id, "uncommitted_delivery", root=root)
 
 
 def invalidate_task_merge(task_id: str, *, root: Path) -> None:
@@ -201,6 +250,10 @@ def retry_pending_task_merges(root: Path, *, feature_id: str | None = None) -> l
         # A live parent/source turn is a scheduling wait, not a failed repair.
         # Keep the queue and finite action-attempt budget intact until idle.
         if _delivery_turn_busy(task_id, repo):
+            continue
+        from cascade.task.worktree import task_worktree_has_changes
+        if task_worktree_has_changes(task_id, root=repo):
+            defer_uncommitted_delivery(task_id, root=repo)
             continue
         action = _queued_merge_action(task_id, repo)
         evidence = queued_delivery_evidence(task_id, root=repo)
@@ -293,6 +346,11 @@ def _resume_queued_merge(task_id: str, root: Path) -> ActionResult:
         return ActionResult(metadata=metadata)
 
     reason = result.reason or "merge_refused"
+    if reason == "source_dirty":
+        # A writer can arrive after the queue's preflight. Preserve the later
+        # edits and return to the original Task instead of terminally blocking.
+        defer_uncommitted_delivery(task_id, root=root)
+        return ActionResult("failed", "transient_retry", metadata)
     if reason == "branch_conflict":
         _record_merge_refusal(task_id, result, root)
         handoff_semantic_conflict(

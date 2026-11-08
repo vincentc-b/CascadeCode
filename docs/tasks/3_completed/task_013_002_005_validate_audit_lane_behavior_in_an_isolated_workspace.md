@@ -2,7 +2,7 @@
 id: task_013_002_005
 title: Validate audit lane behavior in an isolated workspace
 tier: task
-status: active
+status: completed
 parent: feat_013_002
 children: []
 depends_on:
