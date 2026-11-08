@@ -24,7 +24,11 @@ def dependency_state_lock(*, root: Path) -> Iterator[None]:
     Nested calls on the same thread are deliberately re-entrant.
     """
 
-    repo = resolve_tracking_root(root)
+    from cascade.workspace.integration_worktree import locate_trunk
+
+    # Authors write from owned Epic worktrees; approvals arrive through trunk.
+    # Both must contend on the same OS lock, including split repositories.
+    repo = locate_trunk(resolve_tracking_root(root))
     path = repo / ".cascade" / _LOCK_NAME
     key = str(path.resolve())
     with process_lock:

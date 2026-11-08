@@ -256,4 +256,20 @@ assert.ok(planPanel, "plan view mounts the shared canonical panel");
 assert.equal(planHost.hidden, false);
 assert.equal(planHost.getAttribute("aria-label"), "Software dependency review for epic_001");
 
+const missingDeclaration = enhancedElement("section");
+DependencyReviewUi.renderInto(document, missingDeclaration, {
+  epic_id: "epic_001", status: "blocked", manifest: null,
+  errors: [{ code: "missing_manifest", detail: "Declaration required" }],
+  dependencies: [],
+  // Even a stale bootstrap projection must not expose controls before declaration.
+  bootstrap: projection.bootstrap,
+});
+assert.ok(descendants(missingDeclaration).some((node) =>
+  String(node.textContent).includes("Epic Manager or Architect must declare dependencies first")
+));
+assert.ok(descendants(missingDeclaration).some((node) =>
+  String(node.textContent).includes("read_dependency_manifest and write_dependency_manifest")
+));
+assert.equal(descendants(missingDeclaration).filter((node) => node.tagName === "BUTTON").length, 0);
+
 console.log("dependency_review_ui_cases: ok");
