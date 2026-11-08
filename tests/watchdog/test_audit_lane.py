@@ -301,6 +301,8 @@ def test_bounded_pass_continues_from_opaque_cursor_without_exceeding_page_limit(
     )
 
     assert first.counts["observed"] == second.counts["observed"] == 100
+    assert first.counts["tier.task.healthy"] == 100
+    assert second.counts["tier.task.healthy"] == 100
     assert first.next_cursor == "opaque:100"
     assert second.next_cursor == "opaque:200"
 

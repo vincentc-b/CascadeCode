@@ -408,6 +408,14 @@ def _run_bounded_audit_pass_inline(
         "proven_incident": 0,
         "unavailable_evidence": len(page.unavailable_evidence),
     }
+    for tier in ("task", "feature", "epic"):
+        for outcome in (
+            "healthy",
+            "expected_wait",
+            "proven_incident",
+            "unavailable_evidence",
+        ):
+            counts[f"tier.{tier}.{outcome}"] = 0
     incident_work_ids: list[str] = []
     completed_cursor = cursor
     timed_out_candidates: list[str] = []
@@ -424,6 +432,7 @@ def _run_bounded_audit_pass_inline(
 
     for index, candidate in enumerate(page.candidates):
         work_id = str(candidate.work_id)
+        tier = str(getattr(candidate, "tier", work_id.split("_", 1)[0]))
         continuations = getattr(page, "continuation_cursors", ())
         candidate_cursor = (
             continuations[index] if index < len(continuations) else page.next_cursor
@@ -435,6 +444,8 @@ def _run_bounded_audit_pass_inline(
             # page ahead of later healthy candidates.
             counts["observed"] += 1
             counts["unavailable_evidence"] += 1
+            if tier in {"task", "feature", "epic"}:
+                counts[f"tier.{tier}.unavailable_evidence"] += 1
             completed_cursor = candidate_cursor
             if monotonic() - started >= max_seconds:
                 return completed(completed_cursor)
@@ -457,6 +468,8 @@ def _run_bounded_audit_pass_inline(
             # unavailable, never healthy or observed, and the selector's
             # opaque continuation will revisit it on a later rotation.
             counts["unavailable_evidence"] += 1
+            if tier in {"task", "feature", "epic"}:
+                counts[f"tier.{tier}.unavailable_evidence"] += 1
             timed_out_candidates.append(work_id)
             completed_cursor = candidate_cursor
             _log.warning("health audit observation timed out for %s: %s", work_id, exc)
@@ -465,6 +478,8 @@ def _run_bounded_audit_pass_inline(
             continue
         counts["observed"] += 1
         counts[observation.classification] += 1
+        if tier in {"task", "feature", "epic"}:
+            counts[f"tier.{tier}.{observation.classification}"] += 1
         if observation.classification == "proven_incident":
             incident_work_ids.append(work_id)
         if observation.classification != "unavailable_evidence":

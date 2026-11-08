@@ -21,6 +21,7 @@
   const DependencyStatusUi = globalThis.DependencyStatusUi;
   const BriefDefaultsUi = globalThis.BriefDefaultsUi;
   const ProviderRecoveryDialogUi = globalThis.ProviderRecoveryDialogUi;
+  const AuditStatusUi = globalThis.AuditStatusUi;
   let boardFocus = BoardFocusApi ? BoardFocusApi.defaultBoardFocus() : null;
   let lastBoardView = null;
   let branchSyncRowHelpers = null;
@@ -118,6 +119,7 @@
     btnCancelProviderRecovery: document.getElementById("btn-cancel-provider-recovery"),
     btnSubmitProviderRecovery: document.getElementById("btn-submit-provider-recovery"),
     supervisorBanner: document.getElementById("supervisor-status-banner"),
+    auditStatus: document.getElementById("audit-status"),
   };
 
   const AGENT_CHAT_AUTHORS = {
@@ -305,6 +307,18 @@
       updateSupervisorBanner(health);
     } catch (_err) {
       /* ignore transient health poll errors */
+    }
+  }
+
+  async function pollAuditStatus() {
+    if (!el.auditStatus || !AuditStatusUi) return;
+    try {
+      AuditStatusUi.render(el.auditStatus, await apiGet("/api/health/audit"));
+    } catch (err) {
+      AuditStatusUi.render(el.auditStatus, {
+        unavailable_evidence: [{ source: "audit_status", reason: err.message || "Unavailable" }],
+        incidents: []
+      });
     }
   }
 
@@ -3200,6 +3214,7 @@
       refreshOpenReviews({ userInitiated: false }),
       pollToasts(),
       pollSupervisorHealth(),
+      pollAuditStatus(),
     ]);
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -3207,6 +3222,9 @@
     setInterval(function () {
       if (!document.hidden) pollSupervisorHealth();
     }, 3000);
+    setInterval(function () {
+      if (!document.hidden) pollAuditStatus();
+    }, 5000);
     setInterval(function () {
       if (!document.hidden) pollToasts();
     }, 2000);

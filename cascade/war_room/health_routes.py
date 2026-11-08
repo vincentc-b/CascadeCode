@@ -6,6 +6,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from cascade.epic.dependency_approvals import AuthenticatedHuman
+from cascade.war_room.audit_status import health_audit_status
 from cascade.workspace.supervisor_readiness import supervisor_health_http_payload
 
 if TYPE_CHECKING:
@@ -14,12 +15,19 @@ if TYPE_CHECKING:
 
 def register_health_routes(handler_cls: type[WarRoomRequestHandler]) -> None:
     handler_cls.register_get_route("/api/health", handle_get_health)
+    handler_cls.register_get_route("/api/health/audit", handle_get_health_audit)
     handler_cls.register_post_route("/api/health/audit", handle_post_health_audit)
 
 
 def handle_get_health(handler: WarRoomRequestHandler) -> None:
     payload = supervisor_health_http_payload(handler.server.root, http_serving=True)
     handler._json_response(HTTPStatus.OK, payload)
+
+
+def handle_get_health_audit(handler: WarRoomRequestHandler) -> None:
+    handler._json_response(
+        HTTPStatus.OK, health_audit_status(root=handler.server.root)
+    )
 
 
 def handle_post_health_audit(

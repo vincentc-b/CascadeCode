@@ -350,6 +350,13 @@
         ></div>
 
         <aside class="side-panels" aria-label="Utilities">
+          <details id="audit-status-pane" class="audit-status-panel" open>
+            <summary>Health audit</summary>
+            <div id="audit-status" aria-live="polite">
+              <p class="status-line">Loading…</p>
+            </div>
+          </details>
+
           <section id="toast-stream" class="toast-panel" aria-label="Toasts">
             <h2>Toasts</h2>
             <ul id="toast-list"></ul>
@@ -433,7 +440,8 @@
     <script src="/static/dependency_status_ui.js"></script>
     <script src="/static/brief_defaults_ui.js?v=20261025"></script>
     <script src="/static/provider_recovery_dialog_ui.js?v=20261103"></script>
+    <script src="/static/audit_status_ui.js?v=20261108"></script>
     <script src="/static/panel_resizing.js?v=20261105"></script>
-    <script src="/static/war_room.js?v=20261107-dependencies"></script>
+    <script src="/static/war_room.js?v=20261108-audit-status"></script>
   </body>
 </html>
