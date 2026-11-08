@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_013_001
+- feat_013_002
 depends_on: []
 owners:
 - epic_manager
@@ -73,6 +74,7 @@ Extend the existing supervisor health projection, direct-report health sweep, du
 Build on the existing supervisor health projection, direct-report health sweep, orphan-delivery recovery, durable action recovery, lifecycle locks, board reconciliation, War Room recovery surfaces, and `cascade.toml` automation configuration. Consume the executable capabilities delivered by the stale Task delivery and parent-owned child recovery epics.
 
 ## Feature breakdown
+- feat_013_002
 - feat_013_001
 
 The Epic Team will create and sequence feature plans here. Treat the task/feature/epic health model, independent scheduler, generation-aware incident ledger, and capability boundary as shared foundations before adding repair adapters or UI controls.
