@@ -190,6 +190,16 @@ Preserve this commit and scaffold correction `da175ad3` when integrating the rem
 
 The team reports a fresh satisfied dependency projection for completed Feature 001. Epic child projection independently confirms Feature 001 completed and Feature 002 active, with no incidents reported by child inspection. All 24 criteria and Feature 005's real all-tier recovery/default-on release gate remain unchanged. The original integration-update action still awaits its guarded idle-boundary retry and terminal receipt; current active work does not establish that the busy precondition has cleared.
 
+## Feature 002 shutdown review follow-up — 2026-11-08
+
+Epic Architect inspection of `06f4caff` found a shutdown regression that must be corrected before Feature 002 publication. The worker passes its `operator_stop` event directly into `HealthAuditLane`; `HealthAuditLane.stop()` sets that same event during cleanup. On a source-update exit, cleanup therefore causes the worker to select shutdown reason `stop` and return `0` before the `source_changed` / `EXIT_UPDATE` branch. It also overwrites crash classification during cleanup. This finding concerns the inspected feature-base revision, not an assertion about unreviewed subsequent task changes.
+
+A focused executable probe extracted the actual lane `stop` method and worker return branches from that Git revision: lane cleanup changed the caller-owned event from unset to set, and the worker returned `(0, False)` with `source_changed=True`. This isolates the control-flow regression; it is not a full worker integration test or a rerun of the team's 12 focused checks.
+
+Feature 002 must preserve immediate operator cancellation during blocked startup while preventing lane-local cleanup from synthesizing an operator stop. Keep cancellation propagation distinct from shutdown-cause ownership, preserve source-update restart and crash outcomes, and add focused worker regression evidence on the final integrated revision. Retain the shared claim correction, startup cleanup and scaffold release gate. The owning Feature team remains responsible for implementation in its branch; this epic review makes no product changes.
+
+All 24 criteria, operating bounds and Feature 005's real all-tier recovery/default-on gate remain unchanged. This is a correction under the approved cancellation and unrelated-delivery contract, not a scope amendment. The original integration-update action still awaits its guarded idle-boundary retry.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
