@@ -212,6 +212,16 @@ The exposed epic tools provide no Task retry or operator/Boss messaging endpoint
 
 All 24 criteria, five-feature sequence, approval and provider/dependency policy, and Feature 005's real all-tier recovery/default-on gate remain unchanged. The original integration-update action separately awaits its guarded idle-boundary retry and terminal receipt. This documentation handoff reruns no product tests; the 15-check result above is team-reported.
 
+## Feature 002 Task 003 retry continuation — 2026-11-08
+
+In reply to TeamMessage `feat_013_002:feat_013_002:architect-task003-contract-retry-20261108`: the Feature Architect reports that attempt 2 ended with `swe_run_error`, following attempt 1's `tests_not_run`. The owning Feature used `revise_task` to replace TBD acceptance/test sections with the existing bounded-observation requirements. Cascade reportedly recorded revision `e9a949be`, accepted `retry_task`, and started attempt 3 with a live owner. This supersedes the earlier report that the retry path was unavailable; it does not establish the cause or repair of the earlier comment-store API error, passing validation, or Task delivery.
+
+The fresh epic `list_children` projection still reports Feature 002 as blocked by `task_013_002_003:delivery:1:ac8b214b58bc92baec1bbe68`, reason `task_not_recoverable`. The reported running retry and remaining parent blocker must be reconciled through the owning team's canonical lifecycle tools; Feature 002 is not yet confirmed unblocked. Continuation guidance was enqueued to that team to verify current execution and clear only matching obsolete derived blockage through guarded recovery when its preconditions hold, or return the concrete remaining failure. Preserve the original Task, failed-attempt history, live ownership, unrelated blockers and existing gates; do not issue another retry against a running owner or edit lifecycle metadata manually.
+
+The revised Task acceptance remains within the approved contract: whole-chain remaining-budget cancellation, exact partial-page continuation, progress despite unavailable evidence, killable observation with safe claim ownership, and final clean-tree supervised validation. Preserve `da175ad3`, `06f4caff` and `9994382f` through integration and validate the resulting Feature revision. Tasks 004–005 remain sequentially dependent. All 24 epic criteria and Feature 005's real Task/Feature/Epic recovery gate before production default-on remain unchanged; no scope amendment is needed.
+
+The original epic integration-update action separately awaits its guarded idle-boundary retry and terminal receipt. No product tests were rerun for this status/documentation update; final integrated validation and parent-blocker reconciliation remain outstanding.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
