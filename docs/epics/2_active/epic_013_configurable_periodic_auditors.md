@@ -286,6 +286,16 @@ Publish the updated Epic branch and send its exact head to Feature 002. Its owne
 
 All 24 criteria, existing approvals/provider/dependency policy, the five-feature sequence and Feature 005's real Task/Feature/Epic recovery gate before default-on remain unchanged. When only child progress or external review remains, finish the planning turn so the supervisor can deliver between turns; do not poll or sleep waiting for child integration.
 
+## Feature 003 activation handoff — 2026-11-08
+
+In reply to FeaturePlanningStarted for `feat_013_003`: fresh canonical child projection confirms Features 001 and 002 completed, Feature 003 active without monitoring blockers, and Features 004–005 still sequential backlog dependents. This supersedes earlier pending Feature 002 acceptance/publication status. Feature 002's team recorded 124 scoped tests and Ruff passing on product revision `74e50350`, followed by documentation closeout `f33d4dfe`; those tests were not rerun in this planning turn. The Feature 003 spec is readable and its existing acceptance remains within the approved epic.
+
+Apply the Feature 003 adapter preparation and `dec_022` above. Prioritize the smallest executable slice: audit detection of a validated Task missing its pending merge entry, fresh locked reservation, canonical delivery recovery outside broad locks, exactly one original-action merge/rollup, and dependent release in an isolated repository. Then cover stale evidence/pinned resume, concrete owner conflict routing and scoped diagnosis, and crash/restart/manual concurrency through the same adapters. Populate the Feature's data/API/task contracts before dispatch; include the existing provider-preflight fixture correction in its validation work.
+
+Preserve Feature 002's bounded coordinator and durable pending/accepted claim protocol, split tracking authority, exact token/generation guards, unavailable-evidence retention, and shutdown-cause separation. Long Git repair, supervised validation and model turns must remain deferred to existing supervised owners. Admission or acknowledgement alone is not terminal recovery. Prove one-attempt interrupted handoffs and changed-input retry eligibility without weakening deduplication or allowing unlimited unchanged failures. Consume the delivered framework protections rather than reimplementing queue publication, source cleanliness or teardown.
+
+Keep Feature/Epic repair adapters in Feature 004 and UI plus production default activation in Feature 005. The latter still requires real Task/Feature/Epic recovery acceptance and passing release validation. All 24 criteria, existing approvals, operating bounds and provider/dependency policy are unchanged. Any proposed contract change uses the epic amendment protocol. No additional feature, dependency installation or live historical-incident mutation is authorized by this handoff.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
