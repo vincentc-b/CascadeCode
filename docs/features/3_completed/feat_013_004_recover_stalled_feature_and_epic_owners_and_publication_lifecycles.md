@@ -2,7 +2,7 @@
 id: feat_013_004
 title: Recover stalled Feature and Epic owners and publication lifecycles
 tier: feature
-status: active
+status: completed
 parent: epic_013
 children:
 - task_013_004_001
