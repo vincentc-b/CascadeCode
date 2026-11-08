@@ -22,7 +22,12 @@ from cascade.board.gitutil import inherited_git_process_group
 from cascade.board.store import read_doc
 from cascade.task.action_recovery import recovery_actions
 from cascade.task.lifecycle_lock import lifecycle_root
-from cascade.watchdog.audit import AuditObservation, project_audit_observation
+from cascade.watchdog.audit import (
+    AuditObservation,
+    _restore_parent_observation_episodes,
+    _snapshot_parent_observation_episodes,
+    project_audit_observation,
+)
 from cascade.watchdog.capabilities import (
     CapabilityDescriptor,
     CapabilityRegistry,
@@ -197,6 +202,7 @@ def _bounded_admission(
             deadline,
             project_context_payload(),
             claim_token,
+            _snapshot_parent_observation_episodes(),
         ),
         name="health-audit-admission",
         daemon=True,
@@ -320,10 +326,14 @@ def _admission_process(
     deadline: float,
     context_payload: object,
     claim_token: str,
+    parent_observation_episodes: tuple[
+        tuple[str, str, str, str, float, int], ...
+    ],
 ) -> None:
     try:
         os.setsid()
         restore_project_context(context_payload)
+        _restore_parent_observation_episodes(parent_observation_episodes)
         with inherited_git_process_group():
             payload = _admit_inline(
                 root,

@@ -191,6 +191,41 @@ _parent_observation_episodes: dict[tuple[Path, str], _ParentObservationEpisode] 
 _parent_observation_lock = RLock()
 
 
+def _snapshot_parent_observation_episodes(
+) -> tuple[tuple[str, str, str, str, float, int], ...]:
+    """Copy earned no-progress evidence for a bounded admission process."""
+
+    with _parent_observation_lock:
+        return tuple(
+            (
+                str(product),
+                work_id,
+                episode.generation_inputs,
+                episode.action,
+                episode.first_seen,
+                episode.count,
+            )
+            for (product, work_id), episode in _parent_observation_episodes.items()
+        )
+
+
+def _restore_parent_observation_episodes(
+    snapshot: tuple[tuple[str, str, str, str, float, int], ...],
+) -> None:
+    """Restore a supervisor snapshot before the child rereads authority."""
+
+    with _parent_observation_lock:
+        for product, work_id, generation_inputs, action, first_seen, count in snapshot:
+            _parent_observation_episodes[(Path(product).resolve(), work_id)] = (
+                _ParentObservationEpisode(
+                    generation_inputs=generation_inputs,
+                    action=action,
+                    first_seen=first_seen,
+                    count=count,
+                )
+            )
+
+
 @dataclass(frozen=True, slots=True)
 class _AuditIdentity:
     document_revision: DocumentRevision | None
