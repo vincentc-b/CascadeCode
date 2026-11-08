@@ -110,4 +110,4 @@ def test_preflight_marks_provider_discovery_failure_as_retryable() -> None:
     assert result.outcome == "unavailable"
     assert result.reason == "provider_unavailable"
     assert result.retryable
-    assert result.message == "sign in required"
+    assert result.message == "Provider is not authenticated"

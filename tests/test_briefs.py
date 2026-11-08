@@ -52,11 +52,17 @@ def _request() -> dict[str, object]:
 def _brief_inventory(monkeypatch) -> None:
     clear_provider_inventory_cache()
     models = (
-        DiscoveredModel(id="gpt-manager", display_name="Manager"),
-        DiscoveredModel(id="gpt-architect", display_name="Architect"),
-        DiscoveredModel(id="gpt-feature-lead", display_name="Feature lead"),
-        DiscoveredModel(id="gpt-feature-architect", display_name="Feature architect"),
-        DiscoveredModel(id="gpt-swe", display_name="SWE"),
+        DiscoveredModel(id="gpt-manager", display_name="Manager", supports_flex_mode=True),
+        DiscoveredModel(id="gpt-architect", display_name="Architect", supports_flex_mode=True),
+        DiscoveredModel(
+            id="gpt-feature-lead", display_name="Feature lead", supports_flex_mode=True
+        ),
+        DiscoveredModel(
+            id="gpt-feature-architect",
+            display_name="Feature architect",
+            supports_flex_mode=True,
+        ),
+        DiscoveredModel(id="gpt-swe", display_name="SWE", supports_flex_mode=True),
     )
     mapping = {
         "cursor": _unavailable("cursor", failure="not_installed"),
@@ -78,6 +84,7 @@ def _brief_inventory(monkeypatch) -> None:
         )
 
     monkeypatch.setattr("cascade.briefs.get_provider_inventory", _get_inventory)
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", _get_inventory)
     yield
     clear_provider_inventory_cache()
 
@@ -230,6 +237,16 @@ def test_epic_plan_approval_requires_feature_plan_and_persists(tmp_path: Path) -
     with pytest.raises(ValueError, match="no feature plans"):
         approve_epic_plan("epic_001", root=root)
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    from cascade.board.store import read_doc, write_doc
+
+    feature = read_doc("feat_001", root=root)
+    feature.meta.provider = "codex"
+    feature.meta.models = {
+        "feature_lead": "gpt-feature-lead",
+        "feature_architect": "gpt-feature-architect",
+        "swe": "gpt-swe",
+    }
+    write_doc(feature, root=root)
 
     result = approve_epic_plan_when_ready("epic_001", root=root)
 

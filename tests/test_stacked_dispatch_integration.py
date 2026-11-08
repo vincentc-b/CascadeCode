@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
 
-from cascade.board.store import move_doc, read_doc
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
+from cascade.board.store import move_doc, read_doc, write_doc
 from cascade.stacked_dispatch import (
     FeatureDispatchSelection,
     persist_feature_dispatch_selection,
@@ -16,8 +23,43 @@ from cascade.stacked_dispatch import (
 )
 from cascade.war_room.room_settings import write_stacked_pr_enabled
 from cascade.watchdog.dispatch import dispatch_feature
+from cascade.watchdog.hooks import clear_hooks
 from cascade.workspace.integration_worktree import integration_branch
-from tests.support import add_doc, approve_board_feature, make_repo
+from tests.support import add_doc as _add_doc, approve_board_feature, make_repo
+
+
+@pytest.fixture(autouse=True)
+def supported_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    clear_hooks()
+    now = time.time()
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(DiscoveredModel(id="offered", display_name="Offered"),),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, now, now + 300, 300),
+    )
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
+    yield
+    clear_hooks()
+
+
+def add_doc(root: Path, **kwargs):
+    doc = _add_doc(root, **kwargs)
+    roles = {
+        "epic": ("epic_manager", "epic_architect", "feature_lead", "feature_architect", "swe"),
+        "feature": ("feature_lead", "feature_architect", "swe"),
+        "task": ("swe",),
+    }[doc.meta.tier]
+    doc.meta.provider = "codex"
+    doc.meta.models = {role: "offered" for role in roles}
+    write_doc(doc, root=root)
+    return read_doc(doc.meta.id, root=root)
 
 
 def _activate_and_open_epic(root: Path, epic_id: str = "epic_001") -> None:

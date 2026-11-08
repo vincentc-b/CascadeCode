@@ -9,6 +9,7 @@ import pytest
 from cascade.agent.discovery.inventory import clear_provider_inventory_cache, get_provider_inventory
 from cascade.agent.discovery.types import DiscoveredModel, ProviderDiscoverySnapshot, ReasoningCapability
 from cascade.briefs import build_brief_doc, brief_template, validate_brief
+from cascade.agent.selection_admission import SelectionAdmissionError
 from cascade.brief_stack import brief_selection_from_meta
 from tests.agent.test_provider_inventory import _available, _fake_discover, _unavailable
 from tests.support import make_repo
@@ -88,6 +89,24 @@ def test_validate_brief_rejects_unknown_model(
     raw = _request(models=_stack_models(swe="missing-model"))
     with pytest.raises(ValueError, match="not offered"):
         validate_brief(raw, root=tmp_path)
+
+
+def test_validate_brief_rejects_invalid_future_feature_role_with_safe_batch(
+    tmp_path: Path, patch_codex_inventory: None
+) -> None:
+    raw = _request(models=_stack_models(feature_architect="future-model"))
+    with pytest.raises(SelectionAdmissionError) as caught:
+        validate_brief(raw, root=tmp_path)
+
+    assert caught.value.result.reason_code == "model_not_offered"
+    assert caught.value.result.affected_roles == ("feature_architect",)
+    assert tuple(item.role for item in caught.value.selections.roles) == (
+        "epic_manager",
+        "epic_architect",
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    )
 
 
 def test_validate_brief_rejects_unsupported_reasoning_override(

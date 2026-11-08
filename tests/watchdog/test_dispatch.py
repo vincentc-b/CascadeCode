@@ -1,9 +1,16 @@
 """Dispatch law: principal, dependencies, cap, and skills."""
 
 from pathlib import Path
+import time
 
 import pytest
 
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
 from cascade.board import move_doc, pin_parent, read_doc, write_doc
 from cascade.war_room.room_settings import write_stacked_pr_enabled
 from cascade.watchdog import (
@@ -16,7 +23,38 @@ from cascade.watchdog import (
     watchdog_tick,
 )
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
-from tests.support import add_doc, approve_board_feature, make_repo
+from tests.support import add_doc as _add_doc, approve_board_feature, make_repo
+
+
+@pytest.fixture(autouse=True)
+def supported_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = time.time()
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(DiscoveredModel(id="offered", display_name="Offered"),),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, now, now + 300, 300),
+    )
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
+
+
+def add_doc(root: Path, **kwargs):
+    doc = _add_doc(root, **kwargs)
+    roles = {
+        "epic": ("epic_manager", "epic_architect", "feature_lead", "feature_architect", "swe"),
+        "feature": ("feature_lead", "feature_architect", "swe"),
+        "task": ("swe",),
+    }[doc.meta.tier]
+    doc.meta.provider = "codex"
+    doc.meta.models = {role: "offered" for role in roles}
+    write_doc(doc, root=root)
+    return read_doc(doc.meta.id, root=root)
 
 
 def _activate_epic(root: Path, epic_id: str = "epic_001") -> None:

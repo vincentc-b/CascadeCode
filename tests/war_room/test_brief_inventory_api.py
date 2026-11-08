@@ -38,7 +38,10 @@ def _post(url: str) -> tuple[int, dict]:
         return resp.status, json.loads(resp.read().decode())
 
 
-def _inventory_get(monkeypatch: pytest.MonkeyPatch, mapping: dict[ProviderId, ProviderDiscoverySnapshot]) -> None:
+def _inventory_get(
+    monkeypatch: pytest.MonkeyPatch,
+    mapping: dict[ProviderId, ProviderDiscoverySnapshot],
+) -> None:
     discover = _fake_discover(mapping)
 
     def _get_inventory(**kwargs: object) -> object:
@@ -59,9 +62,13 @@ def _clear_inventory_cache() -> None:
     clear_provider_inventory_cache()
 
 
-def test_brief_inventory_success_contract(war_room_server, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_brief_inventory_success_contract(
+    war_room_server, monkeypatch: pytest.MonkeyPatch
+) -> None:
     base, _root, _server = war_room_server
-    reasoning = ReasoningCapability(default_level="medium", override_levels=("low", "high"))
+    reasoning = ReasoningCapability(
+        default_level="medium", override_levels=("low", "high")
+    )
     cursor_model = DiscoveredModel(
         id="composer-2.5",
         display_name="Composer 2.5",
@@ -114,10 +121,13 @@ def test_brief_inventory_partial_failure_keeps_healthy_providers(
     assert {item["id"] for item in payload["providers"]} == {"cursor", "claude"}
     assert len(payload["failures"]) == 1
     assert payload["failures"][0]["id"] == "codex"
-    assert payload["failures"][0]["message"] == "upstream timeout"
+    assert payload["failures"][0]["message"] == "Provider discovery is unavailable"
+    assert payload["failures"][0]["failure_kind"] == "discovery_unavailable"
 
 
-def test_brief_inventory_refresh_bypasses_cache(war_room_server, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_brief_inventory_refresh_bypasses_cache(
+    war_room_server, monkeypatch: pytest.MonkeyPatch
+) -> None:
     base, _root, _server = war_room_server
     mapping = {
         "cursor": _available("cursor", "auto"),
@@ -164,4 +174,3 @@ def test_brief_inventory_refresh_failure_is_sanitized(
     assert payload["refresh"]["failed"] is True
     assert payload["refresh"]["error"] == "RuntimeError"
     assert "secret" not in json.dumps(payload).lower()
-

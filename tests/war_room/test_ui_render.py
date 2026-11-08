@@ -288,8 +288,11 @@ def test_war_room_js_renders_only_eligible_provider_recovery_controls():
     assert 'providerRecoveryAction(providerRecovery, "change_provider")' in source
     assert 'providerRecoveryAction(providerRecovery, "retry")' in source
     assert 'providerRecoveryAction(providerRecovery, "provider_setup")' in source
+    assert 'providerRecoveryAction(providerRecovery, "continue_without_flex")' in source
+    assert 'actionButton("Continue without Flex"' in source
     assert '"/api/provider-recovery/" + encodeURIComponent(item.id) + "/change"' in source
     assert '"/api/provider-recovery/" + encodeURIComponent(item.id) + "/retry"' in source
+    assert '"/continue-without-flex"' in source
     assert "await refreshBoard();" in source
 
 

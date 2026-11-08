@@ -7,6 +7,13 @@ from pathlib import Path
 import pytest
 
 from cascade.agent import CursorAgentError, RoleResult
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
+from cascade.agent.execution_preflight import provider_blocker
 from cascade.board.store import read_doc, write_doc
 from cascade.task.registry import clear_task_tools
 from cascade.task.swe_mcp import MCP_SERVER_NAME, build_swe_mcp_servers
@@ -74,6 +81,20 @@ def _board_with_worktree(tmp_path: Path) -> tuple[Path, str, object]:
     )
     install_task_wiring(root)
     return root, task_id, run
+
+
+def _inventory(model_id: str) -> ProviderInventoryResult:
+    return ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(DiscoveredModel(id=model_id, display_name=model_id),),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, 1.0, 2.0, 1.0),
+    )
 
 
 def test_build_swe_role_turn_uses_worktree_cwd(tmp_path: Path) -> None:
@@ -157,6 +178,60 @@ def test_happy_path_commits_on_task_branch(tmp_path: Path) -> None:
         text=True,
     ).stdout.strip()
     assert branch == f"task/{task_id}"
+
+
+def test_task_provider_launch_blocks_drift_and_recovers_after_fresh_recheck(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, task_id, _run = _board_with_worktree(tmp_path)
+    task = read_doc(task_id, root=root)
+    task.meta.provider = "codex"
+    task.meta.models = {"swe": "reviewed-model"}
+    write_doc(task, root=root)
+    launched: list[str] = []
+
+    async def fake_process(_turn: object) -> RoleResult:
+        launched.append("swe")
+        return RoleResult(text="launched", status="finished")
+
+    monkeypatch.setattr("cascade.task.swe_turn.run_role", fake_process)
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.refresh_provider_inventory",
+        lambda: _inventory("replacement-model"),
+    )
+
+    blocked = run_swe_turn_sync(
+        task_id,
+        provider="codex",
+        model_id="reviewed-model",
+        prompt="continue",
+        root=root,
+    )
+
+    assert blocked.failed_closed is True
+    assert blocked.failure_reason == "provider_blocked:model_not_offered"
+    assert launched == []
+    restarted = provider_blocker(task_id, root=root)
+    assert restarted is not None
+    assert restarted["affected_roles"] == ["swe"]
+
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.refresh_provider_inventory",
+        lambda: _inventory("reviewed-model"),
+    )
+    recovered = run_swe_turn_sync(
+        task_id,
+        provider="codex",
+        model_id="reviewed-model",
+        prompt="continue",
+        root=root,
+    )
+
+    assert recovered.failed_closed is False
+    assert recovered.role_result is not None
+    assert recovered.role_result.text == "launched"
+    assert launched == ["swe"]
+    assert provider_blocker(task_id, root=root) is None
 
 
 @pytest.mark.parametrize("doc_id", ["epic_001", "feat_001"])

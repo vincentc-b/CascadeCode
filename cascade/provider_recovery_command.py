@@ -13,11 +13,28 @@ import hashlib
 import json
 import os
 import tempfile
+from datetime import datetime, timezone
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable, Literal
 
-from cascade.agent.discovery.inventory import ProviderInventoryResult
+from cascade.agent.discovery.inventory import (
+    ProviderInventoryResult,
+    refresh_provider_inventory,
+)
+from cascade.agent.discovery.types import ProviderCompatibilityEvidence
+from cascade.agent.execution_preflight import provider_blocker
+from cascade.agent.flex_continuation import (
+    FlexContinuationEligibility,
+    evaluate_flex_continuation_eligibility,
+)
+from cascade.agent.flex_continuation_contract import (
+    FlexWaiver,
+    InventoryFreshnessAudit,
+    OriginalActionIdentity,
+    WaiverScopeMember,
+)
+from cascade.agent.selection_preflight import evaluate_work_selection
 from cascade.board.context import resolve_root
 from cascade.board.errors import BoardError, NotFound
 from cascade.workspace.doc_root import read_doc_resolved
@@ -27,11 +44,61 @@ from cascade.provider_recovery import (
     ProviderRecoveryResult,
     recover_active_item_provider,
 )
+from cascade.provider_recovery_receipt import (
+    claim_continuation_handoff,
+    persist_authorized_continuation,
+    read_continuation_receipt,
+    read_failed_action_attempt,
+    update_continuation_receipt,
+)
+from cascade.provider_recovery_ledger_lock import recovery_ledger_lock
 from cascade.watchdog.lock import process_lock
 from cascade.workspace.types import KickoffReason
 
-Actor = Literal["human", "agent", "system"]
+Actor = Literal[
+    "human", "agent", "system", "scheduler", "refresh", "automatic_retry"
+]
 Kickoff = Callable[[KickoffReason], None]
+
+
+@dataclass(frozen=True, slots=True)
+class AuthenticatedHumanPrincipal:
+    """Server-authenticated identity accepted by the authorization boundary."""
+
+    subject: str
+    authenticated: bool = True
+    kind: Literal["human", "agent", "scheduler", "system"] = "human"
+
+    @property
+    def authorized(self) -> bool:
+        return (
+            self.authenticated
+            and self.kind == "human"
+            and bool(self.subject)
+            and self.subject.strip() == self.subject
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class FlexContinuationCommandResult:
+    """Safe authorization/receipt response without provider payloads."""
+
+    ok: bool
+    work_id: str
+    action_id: str | None = None
+    receipt_id: str | None = None
+    waiver_id: str | None = None
+    state: str | None = None
+    reason: str | None = None
+    error_code: str | None = None
+    idempotent: bool = False
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            key: value
+            for key, value in asdict(self).items()
+            if value is not None
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +115,294 @@ class ProviderRecoveryCommandResult:
     def to_dict(self) -> dict[str, object]:
         result = asdict(self)
         return {key: value for key, value in result.items() if value is not None}
+
+
+def continue_without_flex_eligibility(
+    work_id: str,
+    *,
+    root: Path | None = None,
+    inventory: ProviderInventoryResult | None = None,
+    compatibility_cache: dict[str, ProviderCompatibilityEvidence] | None = None,
+) -> FlexContinuationEligibility:
+    """Compute a fresh action-bound projection without authorizing anything."""
+
+    repo = resolve_root(root)
+    blocker = provider_blocker(work_id, root=repo)
+    failed_action = blocker.get("failed_action") if blocker else None
+    failed_preflight = blocker.get("failed_preflight") if blocker else None
+    if not isinstance(failed_action, dict) or not isinstance(failed_preflight, dict):
+        return evaluate_flex_continuation_eligibility(
+            failed_action=failed_action if isinstance(failed_action, dict) else None,
+            failed_preflight=(
+                failed_preflight if isinstance(failed_preflight, dict) else None
+            ),
+            disabled_preflight=None,
+        )
+    identity = _attempt_identity({"failed_action": failed_action})
+    try:
+        doc = read_doc_resolved(work_id, root=repo)
+        lifecycle_eligible, approval_eligible = _current_action_gates(
+            identity, doc, root=repo
+        )
+    except (BoardError, OSError, ValueError, TypeError, KeyError):
+        lifecycle_eligible, approval_eligible = False, False
+    preliminary = evaluate_flex_continuation_eligibility(
+        failed_action=failed_action,
+        failed_preflight=failed_preflight,
+        disabled_preflight=None,
+        lifecycle_eligible=lifecycle_eligible,
+        approval_eligible=approval_eligible,
+    )
+    if preliminary.reason_code != "inventory_not_fresh":
+        return preliminary
+    try:
+        doc = read_doc_resolved(work_id, root=repo)
+        current = evaluate_work_selection(
+            doc,
+            root=repo,
+            inventory=inventory or refresh_provider_inventory(),
+            action=str(failed_action.get("action_kind") or "continuation"),
+            disable_flex=True,
+            compatibility_cache=compatibility_cache,
+        ).result
+    except (BoardError, OSError, ValueError):
+        current = None
+    return evaluate_flex_continuation_eligibility(
+        failed_action=failed_action,
+        failed_preflight=failed_preflight,
+        disabled_preflight=current,
+        lifecycle_eligible=lifecycle_eligible,
+        approval_eligible=approval_eligible,
+    )
+
+
+def continue_without_flex_eligibility_command(
+    work_id: str,
+    *,
+    actor: Actor = "system",
+    root: Path | None = None,
+    inventory: ProviderInventoryResult | None = None,
+) -> FlexContinuationEligibility:
+    """Human-only command boundary used by the eventual authorization route.
+
+    This task remains read-only: a successful response says that a later
+    authorization command may proceed, not that a waiver has been created.
+    """
+
+    if actor != "human":
+        return FlexContinuationEligibility(
+            False,
+            "unauthorized",
+            "An explicit human authorization is required.",
+            work_id=work_id or None,
+        )
+    return continue_without_flex_eligibility(
+        work_id,
+        root=root,
+        inventory=inventory,
+    )
+
+
+def authorize_continue_without_flex_command(
+    work_id: str,
+    *,
+    failed_action_id: str,
+    expected_document_revision: str,
+    expected_selection_fingerprint: str,
+    principal: AuthenticatedHumanPrincipal | None,
+    actor: Actor = "system",
+    root: Path | None = None,
+    inventory: ProviderInventoryResult | None = None,
+    gate: LifecycleGate | None = None,
+    quiesce_timeout: float = 0.0,
+) -> FlexContinuationCommandResult:
+    """Authorize exactly one failed action and atomically persist its waiver.
+
+    This task intentionally stops at ``authorized``.  The replay adapter must
+    separately claim ``handoff_pending`` before invoking the ordinary action.
+    """
+
+    if actor != "human" or principal is None or not principal.authorized:
+        return _continuation_error(
+            work_id, "unauthorized", "A server-authenticated human authorization is required."
+        )
+    if not all(
+        isinstance(value, str) and value and value.strip() == value
+        for value in (
+            work_id,
+            failed_action_id,
+            expected_document_revision,
+            expected_selection_fingerprint,
+        )
+    ):
+        return _continuation_error(
+            work_id, "invalid_request", "The complete failed-action identity is required."
+        )
+
+    repo = resolve_root(root)
+    try:
+        with process_lock:
+            attempt = read_failed_action_attempt(failed_action_id, root=repo)
+            identity = _attempt_identity(attempt)
+            mismatch = _identity_mismatch(
+                identity,
+                work_id=work_id,
+                action_id=failed_action_id,
+                document_revision=expected_document_revision,
+                selection_fingerprint=expected_selection_fingerprint,
+            )
+            if mismatch is not None:
+                return _continuation_error(work_id, mismatch, _identity_message(mismatch))
+            assert identity is not None
+            previous = read_continuation_receipt(identity.receipt_id, root=repo)
+            if previous is not None:
+                return _receipt_result(previous, idempotent=True)
+            doc = read_doc_resolved(work_id, root=repo)
+            epic_id = _owning_epic(doc.meta.id, doc.meta.tier, doc.meta.parent, repo)
+    except (BoardError, OSError, ValueError, TypeError, KeyError):
+        return _continuation_error(
+            work_id, "unavailable", "The failed action could not be read safely."
+        )
+
+    with (gate or lifecycle_gate()).transition(
+        epic_id, tuple(dict.fromkeys((epic_id, work_id))), timeout=quiesce_timeout
+    ) as quiesced:
+        if not quiesced:
+            return _continuation_error(
+                work_id,
+                "lifecycle_busy",
+                "The active lifecycle turn did not quiesce; nothing was authorized.",
+            )
+        try:
+            with process_lock:
+                # The durable attempt, owning document, lifecycle state, full
+                # selection and inventory are all re-read after admission closes.
+                attempt = read_failed_action_attempt(failed_action_id, root=repo)
+                identity = _attempt_identity(attempt)
+                mismatch = _identity_mismatch(
+                    identity,
+                    work_id=work_id,
+                    action_id=failed_action_id,
+                    document_revision=expected_document_revision,
+                    selection_fingerprint=expected_selection_fingerprint,
+                )
+                if mismatch is not None:
+                    return _continuation_error(
+                        work_id, mismatch, _identity_message(mismatch)
+                    )
+                assert identity is not None and attempt is not None
+                previous = read_continuation_receipt(identity.receipt_id, root=repo)
+                if previous is not None:
+                    return _receipt_result(previous, idempotent=True)
+
+                doc = read_doc_resolved(work_id, root=repo)
+                lifecycle_eligible, approval_eligible = _current_action_gates(
+                    identity, doc, root=repo
+                )
+                if (
+                    _owning_epic(doc.meta.id, doc.meta.tier, doc.meta.parent, repo)
+                    != epic_id
+                    or not lifecycle_eligible
+                ):
+                    return _continuation_error(
+                        work_id,
+                        "lifecycle_blocker",
+                        "The original lifecycle action is no longer eligible.",
+                        action_id=identity.action_id,
+                        receipt_id=identity.receipt_id,
+                    )
+                if not approval_eligible:
+                    return _continuation_error(
+                        work_id,
+                        "approval_blocker",
+                        "The approval required by the original action is no longer valid.",
+                        action_id=identity.action_id,
+                        receipt_id=identity.receipt_id,
+                    )
+
+                checked = evaluate_work_selection(
+                    doc,
+                    root=repo,
+                    inventory=inventory or refresh_provider_inventory(),
+                    action=identity.action_kind,
+                    disable_flex=True,
+                )
+                failed_preflight = attempt.get("failed_preflight")
+                eligibility = evaluate_flex_continuation_eligibility(
+                    failed_action=attempt.get("failed_action"),
+                    failed_preflight=(
+                        failed_preflight
+                        if isinstance(failed_preflight, dict)
+                        else None
+                    ),
+                    disabled_preflight=checked.result,
+                    lifecycle_eligible=lifecycle_eligible,
+                    approval_eligible=approval_eligible,
+                )
+                if not eligibility.eligible:
+                    return _continuation_error(
+                        work_id,
+                        eligibility.reason_code,
+                        eligibility.reason,
+                        action_id=identity.action_id,
+                        receipt_id=identity.receipt_id,
+                    )
+                if not checked.selections.complete:
+                    return _continuation_error(
+                        work_id,
+                        "selection_changed",
+                        "The reviewed selection changed after the failed action.",
+                        action_id=identity.action_id,
+                        receipt_id=identity.receipt_id,
+                    )
+
+                from cascade.watchdog.model_resolve import selection_member_fingerprint
+
+                scope = tuple(
+                    WaiverScopeMember(
+                        work_id=item.work_id,
+                        role=item.role,
+                        document_revision=item.document_revision,
+                        selection_member_fingerprint=selection_member_fingerprint(item),
+                    )
+                    for item in checked.selections.selections
+                )
+                freshness = checked.result.inventory_freshness
+                if freshness is None:
+                    return _continuation_error(
+                        work_id,
+                        "inventory_not_fresh",
+                        "Fresh provider capability evidence is required.",
+                        action_id=identity.action_id,
+                        receipt_id=identity.receipt_id,
+                    )
+                authorized_at = datetime.now(timezone.utc).isoformat()
+                waiver = FlexWaiver(
+                    waiver_id=hashlib.sha256(
+                        f"flex-waiver:{identity.receipt_id}".encode("utf-8")
+                    ).hexdigest(),
+                    receipt_id=identity.receipt_id,
+                    scope=scope,
+                    authorized_subject=principal.subject,
+                    authorized_at=authorized_at,
+                    inventory_freshness=InventoryFreshnessAudit(
+                        fetched_at=freshness.fetched_at,
+                        expires_at=freshness.expires_at,
+                        age_seconds=freshness.age_seconds,
+                        stale=freshness.stale,
+                    ),
+                )
+                receipt, created = persist_authorized_continuation(
+                    identity, waiver, root=repo
+                )
+                return _receipt_result(receipt, idempotent=not created)
+        except (BoardError, OSError, ValueError, TypeError, KeyError):
+            return _continuation_error(
+                work_id,
+                "authorization_failed",
+                "Continuation authorization could not be committed safely.",
+                action_id=failed_action_id,
+            )
 
 
 def recover_active_item_provider_command(
@@ -156,6 +511,183 @@ def recover_active_provider(*args, **kwargs) -> ProviderRecoveryCommandResult:
     return recover_active_item_provider_command(*args, **kwargs)
 
 
+def continue_without_flex_command(
+    *args, **kwargs
+) -> FlexContinuationCommandResult:
+    """Authorize and replay the concrete original action at most once."""
+
+    authorized = authorize_continue_without_flex_command(*args, **kwargs)
+    if not authorized.ok or authorized.receipt_id is None:
+        return authorized
+    root = kwargs.get("root")
+    return replay_authorized_continuation_command(
+        authorized.receipt_id, root=root
+    )
+
+
+def replay_authorized_continuation_command(
+    receipt_id: str,
+    *,
+    root: Path | None = None,
+) -> FlexContinuationCommandResult:
+    """Claim and invoke only the persisted original action through its gate."""
+
+    repo = resolve_root(root)
+    receipt = read_continuation_receipt(receipt_id, root=repo)
+    if receipt is None:
+        return _continuation_error(
+            "", "missing_receipt", "The continuation receipt does not exist."
+        )
+    work_id = str(receipt.get("work_id") or "")
+    action_id = str(receipt.get("action_id") or "")
+    attempt = read_failed_action_attempt(action_id, root=repo)
+    if attempt is None:
+        return _continuation_error(
+            work_id,
+            "missing_failed_action",
+            "The original failed action is unavailable.",
+            action_id=action_id,
+            receipt_id=receipt_id,
+        )
+    claim = claim_continuation_handoff(receipt_id, root=repo)
+    if not claim.claimed:
+        current = read_continuation_receipt(receipt_id, root=repo) or receipt
+        # Another caller may still be inside the ordinary action.  A duplicate
+        # request cannot infer a crash from the pending claim and must not
+        # replace the first caller's eventual blocked or completed outcome.
+        return _receipt_result(current, idempotent=True)
+    assert claim.handoff_id is not None
+
+    from cascade.provider_recovery_replay import (
+        ReplayContext,
+        continuation_replay_context,
+        selection_snapshot,
+    )
+
+    try:
+        before = selection_snapshot(work_id, root=repo)
+        if (
+            before.get("document_revision") != receipt.get("document_revision")
+            or before.get("selection_fingerprint")
+            != receipt.get("selection_fingerprint")
+        ):
+            update_continuation_receipt(
+                receipt_id,
+                "blocked",
+                root=repo,
+                handoff_id=claim.handoff_id,
+                evidence={
+                    "reason_code": "selection_changed",
+                    "blocker": {"reason": "selection_changed"},
+                    "retry_outcome": {"ok": False, "reason": "selection_changed"},
+                },
+            )
+            current = read_continuation_receipt(receipt_id, root=repo) or receipt
+            return _receipt_result(current, idempotent=False)
+        context = ReplayContext(
+            receipt_id=receipt_id,
+            handoff_id=claim.handoff_id,
+            waiver_id=str(receipt.get("waiver_id") or ""),
+            work_id=work_id,
+            before=before,
+            root=repo,
+        )
+        with continuation_replay_context(context):
+            accepted, reason = _invoke_original_action(attempt, root=repo)
+    except Exception:
+        update_continuation_receipt(
+            receipt_id,
+            "ambiguous",
+            root=repo,
+            handoff_id=claim.handoff_id,
+            evidence={
+                "reason_code": "handoff_uncertain",
+                "retry_outcome": {"ok": False, "reason": "handoff_uncertain"},
+            },
+        )
+        current = read_continuation_receipt(receipt_id, root=repo) or receipt
+        return _receipt_result(current, idempotent=False)
+
+    if not accepted:
+        update_continuation_receipt(
+            receipt_id,
+            "blocked",
+            root=repo,
+            handoff_id=claim.handoff_id,
+            evidence={
+                "reason_code": reason or "ordinary_gate_refused",
+                "blocker": {"reason": reason or "ordinary_gate_refused"},
+                "retry_outcome": {"ok": False, "reason": reason},
+            },
+        )
+    else:
+        current = read_continuation_receipt(receipt_id, root=repo)
+        if current is not None and current.get("state") != "completed":
+            update_continuation_receipt(
+                receipt_id,
+                "ambiguous",
+                root=repo,
+                handoff_id=claim.handoff_id,
+                evidence={
+                    "reason_code": "turn_handoff_unproven",
+                    "retry_outcome": {"ok": True, "reason": reason},
+                },
+            )
+    current = read_continuation_receipt(receipt_id, root=repo) or receipt
+    return _receipt_result(current, idempotent=False)
+
+
+def _invoke_original_action(
+    attempt: dict[str, object], *, root: Path
+) -> tuple[bool, str | None]:
+    action = attempt.get("failed_action")
+    arguments = attempt.get("replay_arguments")
+    if not isinstance(action, dict) or not isinstance(arguments, dict):
+        return False, "invalid_failed_action"
+    kind = action.get("action_kind")
+    work_id = action.get("work_id")
+    actor = arguments.get("by")
+    if not isinstance(work_id, str) or actor not in ("human", "boss"):
+        return False, "invalid_replay_arguments"
+
+    if kind == "epic_activation":
+        if actor != "human":
+            return False, "invalid_replay_arguments"
+        from cascade.watchdog.dispatch import activate_epic
+
+        result = activate_epic(work_id, actor, root=root)
+        return result.ok, result.reason
+    if kind == "feature_dispatch":
+        from cascade.watchdog.dispatch import dispatch_feature
+
+        result = dispatch_feature(work_id, actor, root=root)
+        return result.ok, result.reason
+    if kind == "approval_dispatch":
+        target_tier = action.get("target_tier")
+        if actor != "boss":
+            return False, "invalid_replay_arguments"
+        if target_tier == "feature":
+            from cascade.watchdog.dispatch import dispatch_feature
+
+            result = dispatch_feature(work_id, actor, root=root)
+        elif target_tier == "task":
+            from cascade.watchdog.dispatch import dispatch_task
+
+            result = dispatch_task(work_id, actor, root=root)
+        else:
+            return False, "invalid_replay_target"
+        return result.ok, result.reason
+    if kind == "task_retry":
+        feature_id = arguments.get("feature_id")
+        if not isinstance(feature_id, str):
+            return False, "invalid_replay_arguments"
+        from cascade.feature.recovery import retry_task
+
+        result = retry_task(work_id, feature_id=feature_id, root=root)
+        return bool(result.get("ok")), str(result.get("reason") or "") or None
+    return False, "unsupported_action"
+
+
 def _is_active(doc) -> bool:
     return doc.meta.status == "active" and doc.meta.path.parent.name == "2_active"
 
@@ -235,6 +767,11 @@ def _read_completed(root: Path, work_id: str, fingerprint: str) -> dict[str, str
 
 
 def _write_completed(root: Path, work_id: str, fingerprint: str, result: ProviderRecoveryResult) -> None:
+    with recovery_ledger_lock(root):
+        _write_completed_locked(root, work_id, fingerprint, result)
+
+
+def _write_completed_locked(root: Path, work_id: str, fingerprint: str, result: ProviderRecoveryResult) -> None:
     path = _ledger_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     existing: dict[str, object] = {}
@@ -247,7 +784,12 @@ def _write_completed(root: Path, work_id: str, fingerprint: str, result: Provide
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump({"version": 1, "recoveries": rows}, handle, indent=2, sort_keys=True)
+            # Flex continuation waivers and descendant stamps share this
+            # ledger.  Provider replacement must preserve those independent
+            # rows instead of rebuilding the file around legacy recoveries.
+            payload = dict(existing) if isinstance(existing, dict) else {}
+            payload.update({"version": 2, "recoveries": rows})
+            json.dump(payload, handle, indent=2, sort_keys=True)
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
@@ -273,8 +815,186 @@ def _kickoff(reason: KickoffReason) -> None:
     kickoff_turn(reason)
 
 
+def _attempt_identity(
+    attempt: dict[str, object] | None,
+) -> OriginalActionIdentity | None:
+    if not isinstance(attempt, dict):
+        return None
+    value = attempt.get("failed_action")
+    if not isinstance(value, dict):
+        return None
+    try:
+        return OriginalActionIdentity(**value)  # type: ignore[arg-type]
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
+def _identity_mismatch(
+    identity: OriginalActionIdentity | None,
+    *,
+    work_id: str,
+    action_id: str,
+    document_revision: str,
+    selection_fingerprint: str,
+) -> str | None:
+    if identity is None:
+        return "missing_failed_action"
+    if identity.action_id != action_id or identity.work_id != work_id:
+        return "action_mismatch"
+    if identity.document_revision != document_revision:
+        return "selection_changed"
+    if identity.selection_fingerprint != selection_fingerprint:
+        return "selection_changed"
+    return None
+
+
+def _identity_message(code: str) -> str:
+    return {
+        "missing_failed_action": "No concrete failed action is available for continuation.",
+        "action_mismatch": "The failed-action reference does not match this work item.",
+        "selection_changed": "The expected revision or complete selection fingerprint does not match.",
+    }.get(code, "The failed-action identity is invalid.")
+
+
+def _current_action_gates(
+    identity: OriginalActionIdentity | None, doc, *, root: Path
+) -> tuple[bool, bool]:
+    """Read current lifecycle and approval facts for the original action."""
+
+    if (
+        identity is None
+        or doc.meta.id != identity.work_id
+        or doc.meta.tier != identity.target_tier
+    ):
+        return False, False
+    status = doc.meta.status
+    if identity.action_kind == "epic_activation":
+        lifecycle = identity.target_tier == "epic" and status in (
+            "backlog",
+            "ready_to_plan",
+        )
+    elif identity.action_kind == "feature_dispatch":
+        lifecycle = identity.target_tier == "feature" and status in (
+            "backlog",
+            "ready_to_plan",
+        )
+    elif identity.action_kind == "task_retry":
+        lifecycle = (
+            identity.target_tier == "task"
+            and status == "blocked"
+            and doc.meta.path.parent.name == "2_active"
+        )
+    elif identity.action_kind == "approval_dispatch":
+        lifecycle = identity.target_tier in ("feature", "task") and status in (
+            "backlog",
+            "ready_to_plan",
+        )
+    else:
+        return False, False
+    if not lifecycle:
+        return False, False
+
+    from cascade.planning_action_dependencies import evaluate_action_dependencies
+
+    dependencies = evaluate_action_dependencies(identity.work_id, root=root)
+    if dependencies.owner is None or dependencies.outcome != "satisfied":
+        return False, False
+
+    if identity.target_tier == "feature":
+        from cascade.feature.readiness import (
+            compute_feature_readiness,
+            dispatch_refusal_from_readiness,
+        )
+
+        readiness = compute_feature_readiness(
+            identity.work_id, root=root, board=dependencies.board
+        )
+        if readiness is None:
+            return False, False
+        if not readiness.approved:
+            return True, False
+        if dispatch_refusal_from_readiness(readiness):
+            return False, True
+
+    if identity.action_kind == "approval_dispatch":
+        from cascade.boss.view import compute_boss_view
+
+        view = compute_boss_view(root=root)
+        candidates = (
+            view.dispatchable_features
+            if identity.target_tier == "feature"
+            else view.dispatchable_tasks
+        )
+        if identity.work_id not in candidates:
+            return False, True
+    return True, True
+
+
+def _receipt_result(
+    receipt: dict[str, object], *, idempotent: bool
+) -> FlexContinuationCommandResult:
+    state = receipt.get("state") if isinstance(receipt.get("state"), str) else None
+    reason_code = (
+        receipt.get("reason_code")
+        if isinstance(receipt.get("reason_code"), str)
+        else None
+    )
+    return FlexContinuationCommandResult(
+        ok=state not in ("blocked", "ambiguous"),
+        work_id=str(receipt.get("work_id") or ""),
+        action_id=(
+            receipt.get("action_id")
+            if isinstance(receipt.get("action_id"), str)
+            else None
+        ),
+        receipt_id=(
+            receipt.get("receipt_id")
+            if isinstance(receipt.get("receipt_id"), str)
+            else None
+        ),
+        waiver_id=(
+            receipt.get("waiver_id")
+            if isinstance(receipt.get("waiver_id"), str)
+            else None
+        ),
+        state=state,
+        reason=(
+            "Continuation authorization is durable."
+            if reason_code is None
+            else reason_code.replace("_", " ").capitalize() + "."
+        ),
+        error_code=reason_code if state in ("blocked", "ambiguous") else None,
+        idempotent=idempotent,
+    )
+
+
+def _continuation_error(
+    work_id: str,
+    code: str,
+    reason: str,
+    *,
+    action_id: str | None = None,
+    receipt_id: str | None = None,
+) -> FlexContinuationCommandResult:
+    return FlexContinuationCommandResult(
+        False,
+        work_id,
+        action_id=action_id,
+        receipt_id=receipt_id,
+        reason=reason,
+        error_code=code,
+    )
+
+
 __all__ = [
+    "AuthenticatedHumanPrincipal",
+    "FlexContinuationCommandResult",
     "ProviderRecoveryCommandResult",
+    "authorize_continue_without_flex_command",
+    "continue_without_flex_command",
+    "continue_without_flex_eligibility",
+    "continue_without_flex_eligibility_command",
+    "replay_authorized_continuation_command",
     "recover_active_item_provider_command",
     "recover_active_provider",
 ]

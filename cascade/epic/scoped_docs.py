@@ -8,6 +8,12 @@ from cascade.board.errors import NotFound
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import WorkDoc
 
+from cascade.agent.selection_admission import (
+    SelectionAdmissionError,
+    admit_work_selection,
+    selection_configuration_changed,
+)
+
 from cascade.epic.checkout import epic_checkout_root
 from cascade.epic.guard import EpicToolDenied, tool_guard
 
@@ -59,6 +65,25 @@ def epic_write_doc(doc: WorkDoc, *, epic_id: str, root: Path) -> str | None:
                 raise EpicToolDenied(
                     f"column move denied for {doc.meta.id}: {parts[2]!r}"
                 )
+        checkout = epic_checkout_root(epic_id, trunk=Path(root).resolve())
+        try:
+            current_doc = read_doc(work_id, root=checkout)
+        except NotFound:
+            current_doc = None
+        if current_doc is not None and selection_configuration_changed(current_doc, doc):
+            try:
+                admit_work_selection(
+                    doc,
+                    root=checkout,
+                    action="feature_configuration_write",
+                    expected_revision=current_doc.sha,
+                )
+            except SelectionAdmissionError as exc:
+                denied = EpicToolDenied(str(exc))
+                denied.preflight = exc.preflight  # type: ignore[attr-defined]
+                denied.selections = exc.selections  # type: ignore[attr-defined]
+                denied.result = exc.result  # type: ignore[attr-defined]
+                raise denied from exc
     if not tool_guard(doc.meta.path, "write", epic_id=epic_id, root=root):
         raise EpicToolDenied(f"write denied for {doc.meta.path}")
     trunk = Path(root).resolve()

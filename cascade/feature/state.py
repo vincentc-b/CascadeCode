@@ -18,3 +18,6 @@ class FeatureGraphState(TypedDict):
     reasoning_ids: NotRequired[dict[str, str]]
     reasoning_sources: NotRequired[dict[str, str]]
     flex_modes: NotRequired[dict[str, bool | None]]
+    flex_waiver_ids: NotRequired[dict[str, str]]
+    flex_waiver_receipt_ids: NotRequired[dict[str, str]]
+    flex_waiver_source_work_ids: NotRequired[dict[str, str]]

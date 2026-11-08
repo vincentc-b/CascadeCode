@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -86,7 +87,10 @@ def test_mint_feature_copies_reasoning_from_epic(tmp_path: Path) -> None:
     assert child.meta.reasoning == {
         "feature_lead": "high",
         "feature_architect": "low",
+        "swe": "high",
     }
+    assert child.meta.models is not None
+    assert child.meta.models["swe"] == "swe-model"
 
 
 def test_mint_task_stamps_swe_defaults_from_epic_stack(tmp_path: Path) -> None:
@@ -171,5 +175,9 @@ def test_planning_turn_prompt_includes_saved_reasoning(
         return RoleResult(text=f"{role}:ok", status="finished")
 
     monkeypatch.setattr("cascade.agent.planning_turn.run_epic_planning_turn", fake)
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.recheck_provider_capability",
+        lambda *_args, **_kwargs: SimpleNamespace(supported=True),
+    )
     ingest_human("epic_001", {"role": "human", "content": "Plan"}, root=root)
     assert any("Assigned reasoning: high (source: document-role)" in p for p in prompts)

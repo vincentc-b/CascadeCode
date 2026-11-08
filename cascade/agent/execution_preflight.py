@@ -9,39 +9,28 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
 
 from cascade.agent.discovery.inventory import refresh_provider_inventory
-from cascade.agent.preflight import ProviderCapabilityPreflight, preflight_provider_capability
+from cascade.agent.preflight import (
+    ProviderCapabilityBatchPreflight,
+    ProviderCapabilityPreflight,
+)
+from cascade.agent.capability_contract import role_scope
+from cascade.agent.flex_continuation_contract import (
+    ActionKind,
+    OriginalActionIdentity,
+    contract_projection as continuation_contract_projection,
+)
+from cascade.agent.selection_preflight import RuntimeSelection, evaluate_work_selection
 from cascade.board.context import resolve_root
-from cascade.provider_recovery_state import safe_provider_reason
+from cascade.board.store import read_doc
 from cascade.watchdog.lock import process_lock
 
-BlockerClassification = Literal["deterministic", "transient"]
-
-
-@dataclass(frozen=True)
-class ProviderSelection:
-    """The non-secret backend selection for one role about to start."""
-
-    role: str
-    provider: str
-    model_id: str
-    reasoning_level: str | None = None
-    flex_mode: bool | None = None
-
-
-@dataclass(frozen=True)
-class ExecutionPreflightResult:
-    """Result of checking all affected roles immediately before a turn."""
-
-    supported: bool
-    checks: tuple[ProviderCapabilityPreflight, ...]
-    affected_roles: tuple[str, ...]
-    classification: BlockerClassification | None = None
+# Compatibility name for callers constructing non-secret launch arguments.
+ProviderSelection = RuntimeSelection
 
 
 def recheck_provider_capability(
@@ -50,48 +39,36 @@ def recheck_provider_capability(
     tier: str,
     selections: tuple[ProviderSelection, ...],
     root: Path,
-) -> ExecutionPreflightResult:
+) -> ProviderCapabilityBatchPreflight:
     """Refresh capability immediately before execution and upsert its blocker.
 
     Discovery failures are represented by the existing safe capability contract;
     provider exception text and raw payloads never reach persistence.
     """
 
-    inventory = refresh_provider_inventory()
-    checks = tuple(
-        preflight_provider_capability(
-            provider=selection.provider,  # validated when the selection was seeded
-            model_id=selection.model_id,
-            tier=tier,
-            inventory=inventory,
-            reasoning_level=selection.reasoning_level,
-            flex_mode=selection.flex_mode,
-        )
-        for selection in selections
-    )
-    failed = tuple(
-        (selection, check)
-        for selection, check in zip(selections, checks, strict=True)
-        if not check.supported
-    )
+    repo = resolve_root(root)
+    doc = read_doc(work_id, root=repo)
+    if doc.meta.tier != tier:
+        raise ValueError(f"work tier mismatch for {work_id}")
+    result = evaluate_work_selection(
+        doc,
+        root=repo,
+        inventory=refresh_provider_inventory(),
+        action="execution",
+        runtime_selections=selections,
+    ).result
+    failed = tuple(check for check in result.checks if not check.result.supported)
     if not failed:
-        clear_provider_blocker(work_id, root=root)
-        return ExecutionPreflightResult(True, checks, ())
+        clear_provider_blocker(work_id, result=result, root=repo)
+        return result
 
-    # A bad requested configuration is deterministic.  A discovery/setup
-    # failure is transient unless there is also a deterministic rejection.
-    classification: BlockerClassification = (
-        "deterministic" if any(check.outcome == "unsupported" for _, check in failed) else "transient"
-    )
-    affected_roles = tuple(selection.role for selection, _ in failed)
     upsert_provider_blocker(
         work_id,
         tier=tier,
-        failed=failed,
-        classification=classification,
-        root=root,
+        result=result,
+        root=repo,
     )
-    return ExecutionPreflightResult(False, checks, affected_roles, classification)
+    return result
 
 
 def provider_blocker(work_id: str, *, root: Path) -> dict[str, object] | None:
@@ -109,29 +86,46 @@ def upsert_provider_blocker(
     work_id: str,
     *,
     tier: str,
-    failed: tuple[tuple[ProviderSelection, ProviderCapabilityPreflight], ...],
-    classification: BlockerClassification,
+    result: ProviderCapabilityBatchPreflight,
     root: Path,
+    failed_action: OriginalActionIdentity | None = None,
 ) -> dict[str, object]:
-    """Refresh one safe blocker per work ID rather than appending incidents."""
+    """Refresh one complete safe blocker per work ID instead of appending."""
 
     repo = resolve_root(root)
     now = datetime.now(timezone.utc).isoformat()
-    first_selection, first_check = failed[0]
+    failed = tuple(check for check in result.checks if not check.result.supported)
+    if not failed or result.classification is None:
+        raise ValueError("provider blocker requires a failed batch")
+    primary = next(
+        (check for check in failed if check.result.reason == result.reason_code),
+        failed[0],
+    )
+    primary_check = primary.result
     row: dict[str, object] = {
         "work_id": work_id,
         "tier": tier,
-        "affected_roles": sorted(selection.role for selection, _ in failed),
-        "provider": first_selection.provider,
-        "reason_code": first_check.reason,
+        "action": result.action,
+        "selection_fingerprint": result.selection_fingerprint,
+        # Persist the complete scope, including successful sibling roles.  A
+        # later start must prove this same whole scope healthy before the
+        # incident can be resolved.
+        "checks": [check.to_dict() for check in result.checks],
+        "inventory_freshness": result.to_dict()["inventory_freshness"],
+        "affected_roles": sorted(check.role for check in failed),
+        "provider": primary_check.provider,
+        "reason_code": primary_check.reason,
         # Never retain provider-provided exception text.  This stable message
         # is safe to render after restart and shared by board/War Room.
-        "reason": safe_provider_reason(first_check.reason),
-        "classification": classification,
-        "recommended_remedy": _recommended_remedy(first_check),
+        "reason": primary_check.message,
+        "classification": result.classification,
+        "recommended_remedy": _recommended_remedy(primary_check),
         "last_attempt": now,
         "active": True,
     }
+    if failed_action is not None:
+        row["failed_action"] = continuation_contract_projection(failed_action)
+        row["failed_preflight"] = result.to_dict()
     with process_lock:
         records = _read(repo)
         previous = records.get(work_id)
@@ -141,25 +135,142 @@ def upsert_provider_blocker(
             row["first_attempt"] = previous["first_attempt"]
         else:
             row["first_attempt"] = now
+        if failed_action is None and isinstance(previous, dict):
+            # An execution recheck may observe a newer failure without being a
+            # new recoverable action. Keep the original action and its safe
+            # diagnostics available to the recovery view until a fresh check
+            # succeeds or a new canonical failed action replaces them.
+            for key in ("failed_action", "failed_preflight"):
+                if isinstance(previous.get(key), dict):
+                    row[key] = previous[key]
         records[work_id] = row
         _write(repo, records)
     return dict(row)
 
 
-def clear_provider_blocker(work_id: str, *, root: Path) -> None:
-    """Mark the one incident resolved while retaining its small audit record."""
+def record_failed_provider_action(
+    work_id: str,
+    *,
+    tier: str,
+    action_kind: ActionKind,
+    result: ProviderCapabilityBatchPreflight,
+    root: Path,
+    trigger_id: str | None = None,
+    original_actor: str = "system",
+    document_path: str | None = None,
+    replay_arguments: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Persist one concrete canonical action failure for read-only recovery.
+
+    A new canonical attempt receives a new opaque identity even when it targets
+    the same work item.  The mutable per-work blocker remains only the current
+    presentation projection.
+    """
+
+    revisions = {
+        check.result.document_revision
+        for check in result.checks
+        if check.result.document_revision is not None
+    }
+    if (
+        result.action != action_kind
+        or result.work_id != work_id
+        or result.selection_fingerprint is None
+        or len(revisions) != 1
+        or tier not in ("epic", "feature", "task")
+    ):
+        raise ValueError("failed action requires one complete reviewed selection")
+    identity = OriginalActionIdentity(
+        action_id=uuid.uuid4().hex,
+        action_kind=action_kind,
+        work_id=work_id,
+        target_tier=tier,  # type: ignore[arg-type]
+        document_revision=next(iter(revisions)),
+        selection_fingerprint=result.selection_fingerprint,
+        trigger_id=trigger_id,
+    )
+    from cascade.provider_recovery_receipt import persist_failed_action_attempt
+
+    primary = result.checks[0].result
+    persist_failed_action_attempt(
+        identity,
+        failed_preflight=result.to_dict(),
+        original_actor=original_actor,
+        document_path=document_path or primary.document_path or "unavailable",
+        replay_arguments=replay_arguments or {},
+        root=root,
+    )
+    return upsert_provider_blocker(
+        work_id,
+        tier=tier,
+        result=result,
+        root=root,
+        failed_action=identity,
+    )
+
+
+def clear_provider_blocker(
+    work_id: str,
+    *,
+    result: ProviderCapabilityBatchPreflight | None = None,
+    root: Path,
+) -> bool:
+    """Resolve only after a fresh successful check of the blocked full scope.
+
+    ``result`` is deliberately mandatory in practice.  Keeping the optional
+    default makes older recovery callers fail safe: configuration mutation or
+    cached readiness alone cannot erase an execution incident.
+    """
 
     repo = resolve_root(root)
     with process_lock:
         records = _read(repo)
         row = records.get(work_id)
         if not isinstance(row, dict) or not row.get("active"):
-            return
+            return False
+        if result is None or not _successful_fresh_scope(row, result):
+            return False
         row = dict(row)
         row["active"] = False
         row["resolved_at"] = datetime.now(timezone.utc).isoformat()
+        row["resolution_fingerprint"] = result.selection_fingerprint
+        row["resolution_inventory_freshness"] = result.to_dict()["inventory_freshness"]
         records[work_id] = row
         _write(repo, records)
+        return True
+
+
+def _successful_fresh_scope(
+    row: dict[str, object], result: ProviderCapabilityBatchPreflight
+) -> bool:
+    if (
+        not result.supported
+        or result.action != "execution"
+        or result.work_id != row.get("work_id")
+    ):
+        return False
+    freshness = result.inventory_freshness
+    if freshness is None or freshness.from_cache:
+        return False
+    previous_checks = row.get("checks")
+    previous_roles = (
+        {
+            str(check.get("role"))
+            for check in previous_checks
+            if isinstance(check, dict) and isinstance(check.get("role"), str)
+        }
+        if isinstance(previous_checks, list)
+        else set()
+    )
+    if not previous_roles:
+        tier = row.get("tier")
+        if tier not in ("epic", "feature", "task"):
+            return False
+        previous_roles = set(role_scope(tier))
+    current_roles = {check.role for check in result.checks}
+    return current_roles == previous_roles and all(
+        check.result.supported for check in result.checks
+    )
 
 
 def _recommended_remedy(check: ProviderCapabilityPreflight) -> str:
@@ -191,7 +302,7 @@ def _read(root: Path) -> dict[str, dict[str, object]]:
 def _write(root: Path, records: dict[str, dict[str, object]]) -> None:
     path = _path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"version": 1, "blockers": records}
+    payload = {"version": 2, "blockers": records}
     temp = path.with_suffix(".tmp")
     try:
         with temp.open("w", encoding="utf-8") as handle:

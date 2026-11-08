@@ -109,16 +109,28 @@
         </form>
       </dialog>
 
-      <dialog id="provider-recovery-dialog" class="brief-dialog">
+      <dialog id="provider-recovery-dialog" class="brief-dialog" aria-labelledby="provider-recovery-title" aria-describedby="provider-recovery-summary">
         <form id="provider-recovery-form" method="dialog">
           <div class="dialog-heading">
             <div>
               <h2 id="provider-recovery-title">Change provider</h2>
-              <p>Choose a currently available provider and model for each role owned by this work item.</p>
+              <p id="provider-recovery-summary">Review what failed and the current configuration observation.</p>
             </div>
             <button type="button" id="btn-close-provider-recovery" class="btn-secondary" aria-label="Close">×</button>
           </div>
-          <div class="brief-model-stack">
+          <p id="provider-recovery-partial" class="provider-recovery-partial" hidden></p>
+          <section id="provider-recovery-failure" class="provider-diagnostics" aria-labelledby="provider-recovery-failure-title" hidden>
+            <h3 id="provider-recovery-failure-title">Failed action</h3>
+            <p id="provider-recovery-failure-summary"></p>
+            <p id="provider-recovery-failure-meta" class="provider-diagnostics-meta"></p>
+            <ul id="provider-recovery-failure-checks" class="provider-diagnostic-checks"></ul>
+          </section>
+          <section id="provider-recovery-readiness" class="provider-diagnostics" aria-labelledby="provider-recovery-readiness-title">
+            <h3 id="provider-recovery-readiness-title">Current configuration readiness</h3>
+            <p id="provider-recovery-readiness-summary"></p>
+            <p id="provider-recovery-readiness-freshness" class="provider-diagnostics-meta"></p>
+          </section>
+          <div id="provider-recovery-selection" class="brief-model-stack">
             <label>Provider
               <select id="provider-recovery-provider" required></select>
             </label>
@@ -130,6 +142,7 @@
           </div>
           <p id="provider-recovery-status" class="status-line" aria-live="polite"></p>
           <button type="button" id="btn-provider-recovery-inventory-retry" class="btn-secondary brief-inventory-retry" hidden>Retry model inventory</button>
+          <div id="provider-recovery-remedies" class="provider-recovery-remedies" aria-label="Available provider remedies"></div>
           <div class="dialog-actions">
             <button type="button" id="btn-cancel-provider-recovery" class="btn-secondary">Cancel</button>
             <button type="submit" id="btn-submit-provider-recovery" disabled>Change provider</button>

@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from cascade.board.errors import GitError
 from cascade.board.paths import column_for_status
@@ -12,7 +13,7 @@ from cascade.boss.view import compute_boss_view
 from cascade.watchdog.config import read_automation_config
 from cascade.watchdog.dispatch import dispatch_feature, dispatch_task
 from cascade.watchdog.events import append_event, read_events
-from cascade.watchdog.types import Event
+from cascade.watchdog.types import DispatchResult, Event
 from cascade.workspace.integration_worktree import merged_board
 from cascade.workspace.trunk import resolve_product_trunk
 from cascade.workspace.errors import WorkspaceError
@@ -151,7 +152,11 @@ def advance_work(root: Path) -> dict[str, list[str]]:
     return result
 
 
-def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
+def reconcile_approval_dispatch(
+    root: Path,
+    *,
+    on_refusal: Callable[[str, DispatchResult], None] | None = None,
+) -> dict[str, list[str]]:
     """Re-evaluate durable approval and dependency gates through canonical dispatch.
 
     Restart-safe: already-dispatched work is skipped by dispatch law; idempotent
@@ -193,6 +198,8 @@ def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
                     ),
                     root=repo,
                 )
+        elif dispatched.preflight is not None and on_refusal is not None:
+            on_refusal(feature_id, dispatched)
 
     # Recompute after feature activation because its integration worktree may
     # change the merged board and expose task specs.
@@ -201,6 +208,8 @@ def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
         dispatched = dispatch_task(task_id, "boss", root=repo)
         if dispatched.ok:
             result["tasks"].append(task_id)
+        elif dispatched.preflight is not None and on_refusal is not None:
+            on_refusal(task_id, dispatched)
         elif dispatched.reason == "cap":
             break
 
@@ -209,6 +218,8 @@ def reconcile_approval_dispatch(root: Path) -> dict[str, list[str]]:
         dispatched = dispatch_task(task_id, "boss", root=repo)
         if dispatched.ok:
             result["tasks"].append(task_id)
+        elif dispatched.preflight is not None and on_refusal is not None:
+            on_refusal(task_id, dispatched)
         elif dispatched.reason == "cap":
             break
     return result

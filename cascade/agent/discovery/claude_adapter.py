@@ -39,7 +39,9 @@ def _fetch_claude_model_pages(api_key: str) -> list[Mapping[str, Any]]:
         url = _ANTHROPIC_MODELS_URL
         if after:
             url = f"{url}?after={after}"
-        request = urllib.request.Request(url, headers=_anthropic_headers(api_key), method="GET")
+        request = urllib.request.Request(
+            url, headers=_anthropic_headers(api_key), method="GET"
+        )
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
                 payload = json.loads(response.read().decode("utf-8"))
@@ -87,7 +89,7 @@ def discover_claude_models() -> ProviderDiscoverySnapshot:
     except Exception as exc:
         return unavailable_snapshot(
             provider_id,
-            failure="api_error",
+            failure="discovery_unavailable",
             message=sanitize_provider_error(exc),
         )
 
@@ -109,7 +111,7 @@ def discover_claude_models() -> ProviderDiscoverySnapshot:
     if not models:
         return unavailable_snapshot(
             provider_id,
-            failure="api_error",
+            failure="empty",
             message="empty model catalog",
         )
 

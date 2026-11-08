@@ -13,12 +13,14 @@ from cascade.board.store import move_doc, read_doc, save_doc, write_doc
 from cascade.board.types import BoardIndex, WorkMeta
 from cascade.dependency_evaluation import evaluate_dependencies
 from cascade.agent.discovery.inventory import get_provider_inventory
+from cascade.agent.capability_contract import EffectiveSelectionBatch
 from cascade.agent.preflight import (
     ProviderCapabilityBatchPreflight,
-    RoleCapabilityPreflight,
-    batch_provider_capability_preflight,
-    preflight_provider_capability,
 )
+from cascade.agent.execution_preflight import record_failed_provider_action
+from cascade.agent.flex_continuation_contract import ActionKind
+from cascade.agent.selection_preflight import RuntimeSelection, evaluate_work_selection
+from cascade.board.parse import parse_doc
 from cascade.epic.activation import _drop_stale_copies, activate_epic_on_worktree
 from cascade.planning_action_dependencies import evaluate_action_dependencies
 from cascade.watchdog.config import task_parallelism
@@ -93,6 +95,12 @@ def _boot_after(
     """Boot runs after the process lock is released so a hook can tick without deadlock."""
 
     if result.ok:
+        from cascade.provider_recovery_replay import record_canonical_replay_transition
+
+        if not record_canonical_replay_transition(
+            result, work_id=work_id, root=root
+        ):
+            return result
         if tier == "task":
             from cascade.task.execution import mark_queued
 
@@ -100,14 +108,18 @@ def _boot_after(
         invoke_boot(tier, work_id)
         from cascade.workspace.kickoff import kickoff_turn
         from cascade.workspace.types import KickoffReason
+        from cascade.provider_recovery_replay import kickoff_receipt
 
         kind = "activate" if tier == "epic" else "dispatch"
+        continuation = kickoff_receipt(work_id, root)
         kickoff_turn(
             KickoffReason(
                 kind=kind,  # type: ignore[arg-type]
                 work_id=work_id,
                 by=by,  # type: ignore[arg-type]
                 root=root,
+                continuation_receipt_id=(continuation[0] if continuation else None),
+                continuation_handoff_id=(continuation[1] if continuation else None),
             )
         )
     return result
@@ -133,7 +145,7 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("existing_activation_run")
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
-    if refusal := _provider_preflight_refusal(meta, root=root):
+    if refusal := _provider_preflight_refusal(meta, by=by, root=root):
         return refusal
     if not has_git(root):
         move_doc(work_id, "active", root=root)
@@ -205,7 +217,7 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("not_found")
     if reason := dispatch_refusal_from_readiness(readiness):
         return _fail(reason)
-    if refusal := _provider_preflight_refusal(meta, root=root):
+    if refusal := _provider_preflight_refusal(meta, by=by, root=root):
         return refusal
 
     from cascade.stacked_dispatch import ensure_feature_dispatch_selection
@@ -295,7 +307,7 @@ def _dispatch_task(
 
     if blocked := refusal_if_blocked(work_id, root=root):
         return _fail(blocked)
-    if refusal := _provider_preflight_refusal(meta, root=root):
+    if refusal := _provider_preflight_refusal(meta, by=by, root=root):
         return refusal
 
     if not has_git(root):
@@ -483,65 +495,128 @@ def _emit(root: Path, dest: str, event_type: str, payload: dict[str, object]) ->
 def _provider_preflight_refusal(
     meta: WorkMeta,
     *,
+    by: str,
     root: Path,
 ) -> DispatchResult | None:
     """Check every role the dispatch will start before any durable work begins.
 
-    Older boards without a complete model selection retain their existing
-    dispatch behavior; their launcher already handles the missing selection.
-    Once a selection resolves, however, capability is a hard pre-dispatch
-    gate and the returned payload remains safe to expose to operators.
+    Resolution is fail closed: incomplete legacy documents are represented as
+    safe selection issues rather than silently skipping the gate.
     """
 
-    from cascade.agent.errors import ProviderConfigError
-    from cascade.watchdog.config import ConfigError
-    from cascade.watchdog.model_resolve import ModelConfigError, resolve_backend
-
-    roles_by_tier = {
-        "epic": ("epic_manager", "epic_architect"),
-        "feature": ("feature_lead", "feature_architect"),
-        "task": ("swe",),
-    }
-    roles = roles_by_tier.get(meta.tier)
-    if roles is None:
+    if meta.tier not in ("epic", "feature", "task"):
         return None
-    try:
-        backends = tuple(resolve_backend(role, meta, root=root) for role in roles)
-    except (ModelConfigError, ProviderConfigError, ConfigError):
-        return None
-
     inventory = get_provider_inventory()
-    checks = tuple(
-        RoleCapabilityPreflight(
-            role=role,
-            result=preflight_provider_capability(
-                provider=backend.provider,
-                model_id=backend.model.model_id,
-                tier=meta.tier,
-                inventory=inventory,
-                reasoning_level=backend.reasoning,
-                flex_mode=backend.flex_mode,
+    action_kind = _failed_action_kind(meta, by)
+    action = action_kind or f"{meta.tier}_dispatch"
+    try:
+        doc = parse_doc(meta.path)
+        if not _same_dispatch_selection(meta, doc.meta):
+            raise ValueError("owning document provenance changed")
+    except Exception:
+        # The merged board is only an index.  If its selected owning document
+        # disappeared or changed before admission, project every resolved role
+        # through the shared stale-selection path instead of trusting the copy.
+        base = evaluate_work_selection(
+            meta,
+            root=root,
+            inventory=inventory,
+            action=action,
+        )
+        evaluated = evaluate_work_selection(
+            meta,
+            root=root,
+            inventory=inventory,
+            action=action,
+            runtime_selections=(
+                RuntimeSelection(
+                    role=item.role,
+                    provider="__stale__",
+                    model_id="__stale__",
+                )
+                for item in base.selections.selections
             ),
         )
-        for role, backend in zip(roles, backends, strict=True)
-    )
-    result = batch_provider_capability_preflight(checks)
+    else:
+        evaluated = evaluate_work_selection(
+            doc,
+            root=root,
+            inventory=inventory,
+            action=action,
+        )
+    result = evaluated.result
     if result.supported:
         return None
+    if action_kind is not None:
+        try:
+            record_failed_provider_action(
+                meta.id,
+                tier=meta.tier,
+                action_kind=action_kind,
+                result=result,
+                root=root,
+                original_actor=by,
+                replay_arguments={
+                    "by": by,
+                    **({"feature_id": meta.parent} if meta.parent else {}),
+                },
+            )
+        except ValueError:
+            # An incomplete/stale selection is still refused, but cannot mint
+            # the concrete identity required by Flex continuation.
+            pass
     reason = (
         "provider_preflight_blocked"
         if result.outcome == "blocked"
         else "provider_preflight_unavailable"
     )
-    return _fail(reason, preflight=result)
+    return _fail(reason, preflight=result, selections=evaluated.selections)
+
+
+def _failed_action_kind(meta: WorkMeta, by: str) -> ActionKind | None:
+    """Map only the four continuation adapters; ordinary Task dispatch is out."""
+
+    if meta.tier == "epic":
+        return "epic_activation"
+    if meta.tier == "feature":
+        return "approval_dispatch" if by == "boss" else "feature_dispatch"
+    if meta.tier == "task" and meta.status == "blocked":
+        return "task_retry"
+    if meta.tier == "task" and by == "boss":
+        return "approval_dispatch"
+    return None
+
+
+def _same_dispatch_selection(indexed: WorkMeta, owning: WorkMeta) -> bool:
+    """Confirm the board snapshot still names the reviewed owning selection."""
+
+    return (
+        owning.id == indexed.id
+        and owning.tier == indexed.tier
+        and owning.path.resolve() == indexed.path.resolve()
+        and owning.parent == indexed.parent
+        and owning.parent_rev == indexed.parent_rev
+        and owning.provider == indexed.provider
+        and owning.model == indexed.model
+        and owning.models == indexed.models
+        and owning.reasoning == indexed.reasoning
+        and owning.flex_mode == indexed.flex_mode
+    )
 
 
 def _fail(
     reason: str,
     *,
     preflight: ProviderCapabilityBatchPreflight | None = None,
+    selections: EffectiveSelectionBatch | None = None,
 ) -> DispatchResult:
-    return DispatchResult(ok=False, reason=reason, event=None, preflight=preflight)
+    return DispatchResult(
+        ok=False,
+        reason=reason,
+        event=None,
+        preflight=preflight,
+        selections=selections,
+    )
 
 
 def _relocate_active(work_id: str, *, dest_root: Path, trunk: Path) -> None:

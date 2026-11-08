@@ -132,6 +132,15 @@ def flex_mode_for_role(state: dict, role: RoleId) -> bool | None:
     return value if isinstance(value, bool) else None
 
 
+def flex_waiver_for_role(state: dict, role: RoleId) -> tuple[str | None, str | None]:
+    waiver_id = (state.get("flex_waiver_ids") or {}).get(role)
+    receipt_id = (state.get("flex_waiver_receipt_ids") or {}).get(role)
+    return (
+        waiver_id if isinstance(waiver_id, str) else None,
+        receipt_id if isinstance(receipt_id, str) else None,
+    )
+
+
 def format_role_skill_paths(playbooks: list[dict]) -> str:
     paths = [str(entry.get("path", "")) for entry in playbooks]
     return "Role skill paths: " + ", ".join(paths)
@@ -254,30 +263,58 @@ async def run_planning_role_turn(
         return no_input_message(role)
 
     model_id, model_source = model_for_role(state, role)
-    if model_id is None:
-        return missing_model_message(role)
-
     provider_id, provider_source = provider_for_role(state, role)
-    if provider_id is None:
-        return missing_provider_message(role)
-
     scope_id = turn_kwargs.get("feature_id") or turn_kwargs.get("epic_id")
-    if isinstance(scope_id, str) and scope_id:
-        from cascade.agent.execution_preflight import ProviderSelection, recheck_provider_capability
+    # Like the SWE runner seam, injected planning runners are deterministic
+    # unit-test adapters rather than provider processes. Production runners are
+    # defined in planning_turn and always pass through the fresh execution gate.
+    production_runner = run_turn.__module__ == "cascade.agent.planning_turn"
+    if isinstance(scope_id, str) and scope_id and production_runner:
+        from cascade.agent.execution_preflight import (
+            ProviderSelection,
+            recheck_provider_capability,
+        )
 
         tier = "feature" if turn_kwargs.get("feature_id") else "epic"
-        selections = _provider_selections(state)
+        # The current role may carry a one-turn model override.  Compare the
+        # actual launch arguments with the authorized document, rather than
+        # checking the older pinned values from the graph checkpoint.
+        waiver_id, waiver_receipt_id = flex_waiver_for_role(state, role)
+        selections = (
+            *(
+                selection
+                for selection in _provider_selections(state)
+                if selection.role != role
+            ),
+            ProviderSelection(
+                role,
+                provider_id or "",
+                model_id or "",
+                reasoning_level=reasoning_for_role(state, role)[0],
+                flex_mode=flex_mode_for_role(state, role),
+                flex_waiver_id=waiver_id,
+                flex_waiver_receipt_id=waiver_receipt_id,
+            ),
+        )
         # Check every pinned role on this work item, not just the role whose
-        # process happens to start first.
+        # process happens to start first. A missing current-role pin becomes
+        # structured ``stale_selection`` evidence instead of bypassing the
+        # incident path; non-launch roles are still checked from the document.
         preflight = recheck_provider_capability(
             scope_id,
             tier=tier,
-            selections=selections or (ProviderSelection(role, provider_id, model_id),),
+            selections=selections,
             root=Path(root).resolve(),
         )
         if not preflight.supported:
-            reason = next((check.reason for check in preflight.checks if not check.supported), "provider_unavailable")
+            reason = preflight.reason_code or "provider_unavailable"
             return f"{role}: provider blocked — {reason} ({preflight.classification})"
+
+    if model_id is None:
+        return missing_model_message(role)
+
+    if provider_id is None:
+        return missing_provider_message(role)
 
     reasoning_level, reasoning_source = reasoning_for_role(state, role)
     flex_mode = flex_mode_for_role(state, role)
@@ -364,6 +401,8 @@ def _provider_selections(state: dict):
     models = state.get("model_ids") or {}
     reasoning = state.get("reasoning_ids") or {}
     flex = state.get("flex_modes") or {}
+    waiver_ids = state.get("flex_waiver_ids") or {}
+    waiver_receipts = state.get("flex_waiver_receipt_ids") or {}
     selections: list[ProviderSelection] = []
     for role in sorted(set(providers) & set(models)):
         provider = str(providers[role]).strip()
@@ -376,6 +415,8 @@ def _provider_selections(state: dict):
                     model_id=model_id,
                     reasoning_level=str(reasoning[role]).strip() if reasoning.get(role) else None,
                     flex_mode=flex.get(role) if isinstance(flex.get(role), bool) else None,
+                    flex_waiver_id=waiver_ids.get(role) if isinstance(waiver_ids.get(role), str) else None,
+                    flex_waiver_receipt_id=waiver_receipts.get(role) if isinstance(waiver_receipts.get(role), str) else None,
                 )
             )
     return tuple(selections)

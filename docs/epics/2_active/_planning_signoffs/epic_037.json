@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "sign_offs": [
+    {
+      "role": "epic_manager",
+      "plan_revision": "2ea236c49e3bbda8bd7cf7fb4e38a6d369793f88",
+      "signed_at": "2026-11-07T01:32:11.380178+00:00",
+      "evidence_snapshot_id": null
+    },
+    {
+      "role": "epic_architect",
+      "plan_revision": "2ea236c49e3bbda8bd7cf7fb4e38a6d369793f88",
+      "signed_at": "2026-11-07T01:33:29.259662+00:00",
+      "evidence_snapshot_id": null
+    },
+    {
+      "role": "epic_manager",
+      "plan_revision": "2ea236c49e3bbda8bd7cf7fb4e38a6d369793f88",
+      "signed_at": "2026-11-07T22:02:55.747786+00:00",
+      "evidence_snapshot_id": "evidence_33b35ef504d94e12bbcf23d3530c3999"
+    },
+    {
+      "role": "epic_architect",
+      "plan_revision": "2ea236c49e3bbda8bd7cf7fb4e38a6d369793f88",
+      "signed_at": "2026-11-07T22:03:35.404984+00:00",
+      "evidence_snapshot_id": "evidence_fd9188921a1c422695744f5f44dce9b8"
+    }
+  ]
+}

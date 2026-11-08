@@ -96,6 +96,16 @@
     providerRecoveryDialog: document.getElementById("provider-recovery-dialog"),
     providerRecoveryForm: document.getElementById("provider-recovery-form"),
     providerRecoveryTitle: document.getElementById("provider-recovery-title"),
+    providerRecoverySummary: document.getElementById("provider-recovery-summary"),
+    providerRecoveryPartial: document.getElementById("provider-recovery-partial"),
+    providerRecoveryFailure: document.getElementById("provider-recovery-failure"),
+    providerRecoveryFailureSummary: document.getElementById("provider-recovery-failure-summary"),
+    providerRecoveryFailureMeta: document.getElementById("provider-recovery-failure-meta"),
+    providerRecoveryFailureChecks: document.getElementById("provider-recovery-failure-checks"),
+    providerRecoveryReadinessSummary: document.getElementById("provider-recovery-readiness-summary"),
+    providerRecoveryReadinessFreshness: document.getElementById("provider-recovery-readiness-freshness"),
+    providerRecoverySelection: document.getElementById("provider-recovery-selection"),
+    providerRecoveryRemedies: document.getElementById("provider-recovery-remedies"),
     providerRecoveryStatus: document.getElementById("provider-recovery-status"),
     providerRecoveryProvider: document.getElementById("provider-recovery-provider"),
     providerRecoveryFlexMode: document.getElementById("provider-recovery-flex-mode"),
@@ -350,6 +360,9 @@
   let providerRecoverySubmitInFlight = false;
   let providerRecoveryError = "";
   let providerRecoveryLoadToken = 0;
+  let providerRecoveryFailureContext = null;
+  let providerRecoveryReturnFocus = null;
+  let lastInvokedBoardAction = null;
   let pendingBriefCancels = Object.create(null);
   let pendingBriefCancelLookupOk = false;
   let pendingBriefCancelRefreshAt = 0;
@@ -959,6 +972,22 @@
     return actions && actions[name] && actions[name].eligible === true;
   }
 
+  function readinessAction(readiness, name) {
+    const actions = readiness && readiness.actions;
+    return actions && actions[name] && actions[name].eligible === true;
+  }
+
+  function appendProviderReadinessUi(row, item) {
+    if (!ProviderRecoveryDialogUi || !item.provider_readiness) return;
+    const summary = ProviderRecoveryDialogUi.readinessSummary(item.provider_readiness);
+    const status = document.createElement("span");
+    status.className = "provider-readiness-status provider-readiness-" + summary.kind;
+    status.textContent = summary.label;
+    status.title = summary.detail + " " + summary.freshness;
+    status.setAttribute("aria-label", summary.label + ". " + summary.detail + " " + summary.freshness);
+    row.appendChild(status);
+  }
+
   function appendProviderRecoveryFeedback(row, recovery) {
     if (!recovery) return;
     const feedback = document.createElement("div");
@@ -969,6 +998,9 @@
   }
 
   function openProviderSetup() {
+    if (el.providerRecoveryDialog && el.providerRecoveryDialog.open) {
+      closeProviderRecoveryDialog();
+    }
     if (el.providersPane) {
       el.providersPane.open = true;
       el.providersPane.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -978,8 +1010,10 @@
   }
 
   async function retryProviderRecovery(item) {
+    let succeeded = false;
     try {
       const { body } = await apiPost("/api/provider-recovery/" + encodeURIComponent(item.id) + "/retry", {});
+      succeeded = body.ok === true;
       setStatus(body.ok ? "Provider recovery resumed for " + item.id + "." : (body.reason || "Provider recovery was refused."), !body.ok);
       return body;
     } catch (err) {
@@ -987,6 +1021,145 @@
       throw err;
     } finally {
       await refreshBoard();
+      if (succeeded && el.providerRecoveryDialog.open && providerRecoveryTarget && providerRecoveryTarget.id === item.id) {
+        closeProviderRecoveryDialog();
+      }
+    }
+  }
+
+  async function continueProviderRecoveryWithoutFlex(item) {
+    const action = item.provider_recovery &&
+      item.provider_recovery.actions &&
+      item.provider_recovery.actions.continue_without_flex;
+    if (!action || action.eligible !== true) return null;
+    let succeeded = false;
+    try {
+      const { body } = await apiPost(
+        "/api/provider-recovery/" + encodeURIComponent(item.id) + "/continue-without-flex",
+        {
+          failed_action_id: action.action_id,
+          expected_document_revision: action.document_revision,
+          expected_selection_fingerprint: action.selection_fingerprint,
+        }
+      );
+      succeeded = body.ok === true;
+      setStatus(
+        body.ok
+          ? "Continuation without Flex accepted for " + item.id + "."
+          : (body.reason || "Continuation without Flex was refused."),
+        !body.ok
+      );
+      return body;
+    } catch (err) {
+      setStatus(
+        (err.body && (err.body.reason || err.body.error)) ||
+          err.message ||
+          "Continuation without Flex was refused.",
+        true
+      );
+      throw err;
+    } finally {
+      await refreshBoard();
+      if (succeeded && el.providerRecoveryDialog.open && providerRecoveryTarget && providerRecoveryTarget.id === item.id) {
+        closeProviderRecoveryDialog();
+      }
+    }
+  }
+
+  function findBoardItem(workId) {
+    if (!lastBoardView) return null;
+    for (const tier of ["epics", "features", "tasks"]) {
+      const columns = lastBoardView[tier] || {};
+      for (const rows of Object.values(columns)) {
+        const match = (rows || []).find(function (item) { return item.id === workId; });
+        if (match) return match;
+      }
+    }
+    return null;
+  }
+
+  function diagnosticElement(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    node.textContent = text;
+    return node;
+  }
+
+  function renderProviderRecoveryDiagnostics() {
+    if (!ProviderRecoveryDialogUi || !providerRecoveryTarget) return;
+    const recovery = providerRecoveryTarget.provider_recovery || {};
+    const batch = ProviderRecoveryDialogUi.failureBatch(providerRecoveryFailureContext, recovery);
+    const diagnostic = ProviderRecoveryDialogUi.diagnosticView(batch);
+    el.providerRecoveryFailure.hidden = !diagnostic;
+    el.providerRecoveryFailureChecks.replaceChildren();
+    if (diagnostic) {
+      el.providerRecoveryFailureSummary.textContent = diagnostic.summary;
+      el.providerRecoveryFailureMeta.textContent =
+        "Action: " + diagnostic.action + " · " + diagnostic.freshness +
+        " · Selection fingerprint: " + diagnostic.fingerprint;
+      diagnostic.checks.forEach(function (check) {
+        const li = document.createElement("li");
+        li.appendChild(diagnosticElement("span", "provider-diagnostic-role", check.role + (check.supported ? " — supported" : " — blocked")));
+        li.appendChild(diagnosticElement("span", "provider-diagnostic-selection", check.selection));
+        li.appendChild(diagnosticElement("span", "provider-diagnostic-reason", check.reason));
+        li.appendChild(diagnosticElement("span", "provider-diagnostic-provenance", "Source: " + check.provenance));
+        el.providerRecoveryFailureChecks.appendChild(li);
+      });
+    }
+    const partial = ProviderRecoveryDialogUi.partialOutcome(providerRecoveryFailureContext);
+    el.providerRecoveryPartial.hidden = !partial;
+    el.providerRecoveryPartial.textContent = partial;
+
+    const readiness = ProviderRecoveryDialogUi.readinessSummary(providerRecoveryTarget.provider_readiness);
+    el.providerRecoveryReadinessSummary.textContent = readiness.label + ". " + readiness.detail;
+    el.providerRecoveryReadinessFreshness.textContent = readiness.freshness;
+  }
+
+  function remedyButton(label, handler) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn-secondary";
+    button.textContent = label;
+    button.addEventListener("click", function () {
+      button.disabled = true;
+      Promise.resolve(handler()).catch(function (err) {
+        providerRecoveryError = (err.body && (err.body.reason || err.body.error)) || err.message || String(err);
+        updateProviderRecoveryDialogState();
+      }).finally(function () {
+        if (button.isConnected) button.disabled = false;
+      });
+    });
+    return button;
+  }
+
+  function renderProviderRecoveryRemedies() {
+    if (!providerRecoveryTarget || !el.providerRecoveryRemedies) return;
+    const recovery = providerRecoveryTarget.provider_recovery;
+    const readiness = providerRecoveryTarget.provider_readiness;
+    el.providerRecoveryRemedies.replaceChildren();
+    if (readinessAction(readiness, "refresh")) {
+      el.providerRecoveryRemedies.appendChild(remedyButton("Refresh provider inventory", retryProviderRecoveryInventory));
+    }
+    if (providerRecoveryAction(recovery, "retry")) {
+      el.providerRecoveryRemedies.appendChild(remedyButton("Retry provider", function () {
+        return retryProviderRecovery(providerRecoveryTarget);
+      }));
+    }
+    if (readinessAction(readiness, "provider_setup") || providerRecoveryAction(recovery, "provider_setup")) {
+      el.providerRecoveryRemedies.appendChild(remedyButton("Provider setup", openProviderSetup));
+    }
+    if (providerRecoveryAction(recovery, "continue_without_flex")) {
+      el.providerRecoveryRemedies.appendChild(remedyButton("Continue without Flex", function () {
+        return continueProviderRecoveryWithoutFlex(providerRecoveryTarget);
+      }));
+    }
+    if (!providerRecoveryAction(recovery, "change_provider") &&
+        readinessAction(readiness, "change_provider") && providerRecoveryTarget.tier === "epic" &&
+        providerRecoveryTarget.status !== "active") {
+      el.providerRecoveryRemedies.appendChild(remedyButton("Change configuration", function () {
+        closeProviderRecoveryDialog();
+        return openBriefEdit(providerRecoveryTarget);
+      }));
     }
   }
 
@@ -1041,20 +1214,26 @@
       return;
     }
     const status = ProviderRecoveryDialogUi.statusMessage(providerRecoveryInventory);
-    let statusText = providerRecoveryError || status.text;
+    const canChange = providerRecoveryAction(
+      providerRecoveryTarget && providerRecoveryTarget.provider_recovery,
+      "change_provider"
+    );
+    let statusText = providerRecoveryError || (canChange ? status.text : "");
     const valid = ProviderRecoveryDialogUi.canSubmit(
       providerRecoveryInventory,
       providerRecoverySelection,
       providerRecoveryTarget && providerRecoveryTarget.tier
     );
-    if (!statusText && !valid) {
+    if (canChange && !statusText && !valid) {
       statusText = "The saved selection is shown, but it is not a currently supported replacement.";
     }
     el.providerRecoveryStatus.textContent = statusText;
-    el.providerRecoveryStatus.classList.toggle("error", !!providerRecoveryError || !!status.error || (!status.text && !valid));
-    el.btnProviderRecoveryInventoryRetry.hidden = !status.recoverable;
+    el.providerRecoveryStatus.classList.toggle("error", !!providerRecoveryError || (canChange && (!!status.error || (!status.text && !valid))));
+    el.btnProviderRecoveryInventoryRetry.hidden = true;
     el.btnProviderRecoveryInventoryRetry.disabled = providerRecoverySubmitInFlight;
-    el.btnSubmitProviderRecovery.disabled = providerRecoverySubmitInFlight || !valid;
+    el.providerRecoverySelection.hidden = !canChange;
+    el.btnSubmitProviderRecovery.hidden = !canChange;
+    el.btnSubmitProviderRecovery.disabled = providerRecoverySubmitInFlight || !canChange || !valid;
     el.btnSubmitProviderRecovery.textContent = providerRecoverySubmitInFlight
       ? "Changing provider…"
       : "Change provider";
@@ -1065,6 +1244,8 @@
     el.providerRecoveryRoleSelectors.querySelectorAll("select").forEach(function (select) {
       select.disabled = providerRecoverySubmitInFlight || select.disabled;
     });
+    renderProviderRecoveryDiagnostics();
+    renderProviderRecoveryRemedies();
   }
 
   function renderProviderRecoverySelectors() {
@@ -1121,12 +1302,16 @@
     return true;
   }
 
-  async function changeProviderRecovery(item) {
+  async function changeProviderRecovery(item, failureContext) {
     if (!ProviderRecoveryDialogUi || !BriefDefaultsUi || !el.providerRecoveryDialog) {
       throw new Error("Provider selection controls are unavailable in this browser.");
     }
     const loadToken = ++providerRecoveryLoadToken;
     providerRecoveryTarget = item;
+    providerRecoveryFailureContext = failureContext || null;
+    if (!el.providerRecoveryDialog.open) {
+      providerRecoveryReturnFocus = lastInvokedBoardAction || { element: document.activeElement };
+    }
     providerRecoveryInventory = { loading: true, providers: [] };
     providerRecoverySelection = ProviderRecoveryDialogUi.initialSelection(
       providerRecoveryInventory,
@@ -1135,10 +1320,13 @@
     );
     providerRecoverySubmitInFlight = false;
     providerRecoveryError = "";
-    el.providerRecoveryTitle.textContent = "Change provider for " + item.id;
+    el.providerRecoveryTitle.textContent = "Provider diagnostics for " + item.id;
     renderProviderRecoverySelectors();
     updateProviderRecoveryDialogState();
-    el.providerRecoveryDialog.showModal();
+    if (!el.providerRecoveryDialog.open) el.providerRecoveryDialog.showModal();
+    if (el.btnCloseProviderRecovery && typeof el.btnCloseProviderRecovery.focus === "function") {
+      el.btnCloseProviderRecovery.focus();
+    }
     try {
       await loadProviderRecoveryInventory(false, loadToken);
     } catch (_err) {
@@ -1159,6 +1347,11 @@
     el.btnSubmitProviderRecovery.disabled = true;
     try {
       await loadProviderRecoveryInventory(true, loadToken);
+      await refreshBoard();
+      const refreshed = findBoardItem(providerRecoveryTarget.id);
+      if (refreshed) providerRecoveryTarget = refreshed;
+      renderProviderRecoveryDiagnostics();
+      renderProviderRecoveryRemedies();
     } catch (_err) {
       if (loadToken !== providerRecoveryLoadToken) return;
       providerRecoveryInventory = { loading: false, providers: [], refresh: { failed: true } };
@@ -1186,8 +1379,8 @@
         payload
       );
       setStatus("Provider changed and recovery resumed for " + item.id + ".", false);
-      el.providerRecoveryDialog.close();
       await refreshBoard();
+      el.providerRecoveryDialog.close();
       return body;
     } catch (err) {
       providerRecoveryError =
@@ -1204,6 +1397,25 @@
     if (providerRecoverySubmitInFlight) return;
     providerRecoveryLoadToken += 1;
     el.providerRecoveryDialog.close();
+  }
+
+  function restoreProviderRecoveryFocus() {
+    const target = providerRecoveryReturnFocus;
+    providerRecoveryReturnFocus = null;
+    if (!target) return;
+    if (target.element && target.element.isConnected !== false && typeof target.element.focus === "function") {
+      target.element.focus();
+      return;
+    }
+    if (!target.workId || !el.board) return;
+    const row = Array.from(el.board.querySelectorAll(".board-row")).find(function (candidate) {
+      return candidate.dataset.id === target.workId;
+    });
+    if (!row) return;
+    const replacement = Array.from(row.querySelectorAll("button")).find(function (button) {
+      return button.textContent === target.label;
+    });
+    if (replacement && typeof replacement.focus === "function") replacement.focus();
   }
 
   function buildRow(item, tier, column) {
@@ -1235,6 +1447,10 @@
     title.className = "board-row-title";
     title.textContent = item.id + " — " + item.title;
     row.appendChild(title);
+
+    if (typeof appendProviderReadinessUi === "function") {
+      appendProviderReadinessUi(row, item);
+    }
 
     if (typeof appendProviderRecoveryFeedback === "function") {
       appendProviderRecoveryFeedback(row, item.provider_recovery);
@@ -1332,6 +1548,11 @@
     }
     if (typeof providerRecoveryAction === "function" && providerRecoveryAction(providerRecovery, "provider_setup")) {
       actions.appendChild(actionButton("Provider setup", openProviderSetup));
+    }
+    if (typeof providerRecoveryAction === "function" && providerRecoveryAction(providerRecovery, "continue_without_flex")) {
+      actions.appendChild(actionButton("Continue without Flex", function () {
+        return continueProviderRecoveryWithoutFlex(item);
+      }));
     }
 
     const startable = OPEN_STATUSES[item.status] === true;
@@ -1705,12 +1926,19 @@
       ev.stopPropagation();
       if (btn.disabled) return;
       btn.disabled = true;
+      const row = typeof btn.closest === "function" ? btn.closest(".board-row") : null;
+      lastInvokedBoardAction = {
+        element: btn,
+        workId: row && row.dataset ? row.dataset.id : null,
+        label: label,
+      };
       handler()
         .catch(function (err) {
           setStatus(err.message || String(err), true);
         })
         .finally(function () {
           if (btn.isConnected && !disabledReason) btn.disabled = false;
+          lastInvokedBoardAction = null;
         });
     });
     return btn;
@@ -1757,21 +1985,33 @@
   }
 
   async function dispatch(path, payload) {
+    let failureContext = null;
     try {
       const { body } = await apiPost(path, payload);
       if (body.dispatch_pending) {
-        dispatchBanner = "Approval saved; dispatch pending: " + (body.dispatch_error || "retrying");
+        dispatchBanner = body.message || ("Approval saved; dispatch pending: " + (body.dispatch_error || "retrying"));
         setStatus(dispatchBanner, true);
       } else if (!body.ok) {
-        dispatchBanner = body.reason ? "Dispatch failed: " + body.reason : "Dispatch failed";
+        dispatchBanner = body.message || body.error || (body.reason ? "Dispatch failed: " + body.reason : "Dispatch failed");
         setStatus(dispatchBanner, true);
       } else {
         dispatchBanner = "";
         setStatus("");
       }
+      if (body.preflight || body.dispatch_refusals) failureContext = body;
       return body;
+    } catch (err) {
+      if (err.body && (err.body.preflight || err.body.dispatch_refusals)) {
+        failureContext = err.body;
+        setStatus(err.body.message || err.body.error || err.message, true);
+      }
+      throw err;
     } finally {
       await refreshBoard();
+      if (failureContext && payload && payload.id) {
+        const item = findBoardItem(payload.id);
+        if (item) await changeProviderRecovery(item, failureContext);
+      }
     }
   }
 
@@ -1796,21 +2036,28 @@
 
   async function retryTask(id) {
     setStatus("Retrying " + id + " through its original execution path…", false);
+    let failureContext = null;
     try {
       const { body } = await apiPost("/api/retry_task", { id: id });
       if (body.ok) {
         setStatus("Retry started for " + id + ".", false);
       } else {
         const step = body.recovery && body.recovery.next_safe_step;
-        setStatus("Retry was not started: " + (step || body.reason || "not retryable"), true);
+        setStatus(body.message || body.error || ("Retry was not started: " + (step || body.reason || "not retryable")), true);
       }
+      if (body.preflight || body.dispatch_refusals) failureContext = body;
       return body;
     } catch (err) {
       const step = err.body && err.body.recovery && err.body.recovery.next_safe_step;
-      setStatus("Retry failed: " + (step || err.message || String(err)), true);
+      if (err.body && (err.body.preflight || err.body.dispatch_refusals)) failureContext = err.body;
+      setStatus((err.body && (err.body.message || err.body.error)) || "Retry failed: " + (step || err.message || String(err)), true);
       throw err;
     } finally {
       await refreshBoard();
+      if (failureContext) {
+        const item = findBoardItem(id);
+        if (item) await changeProviderRecovery(item, failureContext);
+      }
     }
   }
 
@@ -2897,6 +3144,7 @@
     }
     providerRecoveryLoadToken += 1;
   });
+  if (el.providerRecoveryDialog) el.providerRecoveryDialog.addEventListener("close", restoreProviderRecoveryFocus);
   if (el.btnProviderRecoveryInventoryRetry) el.btnProviderRecoveryInventoryRetry.addEventListener("click", retryProviderRecoveryInventory);
   if (el.providerRecoveryForm) el.providerRecoveryForm.addEventListener("submit", submitProviderRecovery);
   if (el.btnPullMain) el.btnPullMain.addEventListener("click", pullMain);
