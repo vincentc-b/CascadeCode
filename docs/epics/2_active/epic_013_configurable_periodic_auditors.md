@@ -152,6 +152,11 @@ No product-scope questions remain for this revision.
   Chose Inspect completed work updated within seven days plus unresolved action/review/publication/reconciliation/cleanup references of any age. Only proven incidents may repair; expected waits and unavailable evidence are distinguished. Capability and generation checks gate every adapter..
   Rationale: A bounded recent window limits repeated history scans while durable references retain older incomplete delivery. Negative outcomes stay retryable under bounded policies, and missing capabilities remain actionable rather than falsely recovered.
   Honors: Criteria 3–13, 17 and 19–24; approval/comment gates, live owners, dirty worktrees and typed work identity remain protected..
+
+- `dec_004` · 2026-11-08 · Epic Manager · **Acceptance evidence**
+  Chose Retain the observed 22-pass/2-provider-preflight-failure baseline; require deterministic provider-inventory isolation and passing real recovery acceptance in the Task and final acceptance features..
+  Rationale: Both failing legacy tests stop before recovery at fixture Epic activation. Recording the exact limit avoids confusing an environment-sensitive baseline with proof of the new audit or changing production provider authority to make a test pass.
+  Honors: Frugal engineering, criteria 16–17 and 22–24; no redundant test suite or unauthorized provider/dependency change..
 ## Amendment log
 
 - 2026-11-06 · Reframed periodic auditors from advisory repository analysis into authoritative lifecycle health detection and bounded recovery. Added the lost merge-queue entry from `task_038_002_002` as a required regression scenario.
