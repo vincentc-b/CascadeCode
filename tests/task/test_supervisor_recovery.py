@@ -102,6 +102,26 @@ def test_draining_defers_before_any_recovery_mutation(
     )
 
 
+def test_pinned_feature_owner_change_is_refused_before_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _board(tmp_path)
+    monkeypatch.setattr(
+        "cascade.task.supervisor_recovery.snapshot_orphan_delivery_state",
+        lambda *args, **kwargs: pytest.fail("owner mismatch reached recovery"),
+    )
+
+    result = recover_orphan_delivery(
+        "task_001", root=root, feature_id="feat_999"
+    )
+
+    assert (result.decision, result.reason, result.mutated) == (
+        "unsafe",
+        "task_feature_owner_changed",
+        False,
+    )
+
+
 def test_cancellation_defers_before_any_recovery_mutation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

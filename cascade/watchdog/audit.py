@@ -36,6 +36,7 @@ from cascade.epic.plan_readiness import compute_epic_plan_readiness
 from cascade.feature.readiness import compute_feature_readiness
 from cascade.task.action_recovery import recovery_actions
 from cascade.task.execution import execution_views
+from cascade.task.lifecycle_lock import lifecycle_root
 from cascade.watchdog.health import classify_child
 from cascade.watchdog.incidents import capability_authority_fingerprint
 from cascade.workspace.integration_worktree import git_root_for_path, merged_board_readonly
@@ -1195,6 +1196,14 @@ def _project_doc(
 
     if doc.meta.tier == "task":
         execution = execution_views({doc.meta.id}, root=product).get(doc.meta.id)
+        if execution is not None and execution.get("phase") in {
+            "awaiting_merge",
+            "merge_blocked",
+        }:
+            queued, queue_error = _task_delivery_queue_state(doc.meta.id, product)
+            execution = {**execution, "delivery_queued": queued}
+            if queue_error is not None:
+                errors.append(queue_error)
     protected_gates, gate_errors = _protected_gates(doc, board, tracking=tracking, product=product)
     gates.extend(protected_gates)
     errors.extend(gate_errors)
@@ -1280,6 +1289,8 @@ def incident_failure_class(tier: WorkTier, reason: str, evidence: AuditEvidence)
             return "stalled_execution"
         if reason == "merge_blocked":
             return "delivery_reconciliation"
+        if reason == "validated_delivery_missing":
+            return "validated_delivery_missing"
     if reason == "unresolved_recovery_reference":
         try:
             referenced = set(evidence.unresolved_references)
@@ -1337,6 +1348,9 @@ def local_audit_fingerprint(work_id: str, *, root: Path) -> str:
         key: ({name: value for name, value in view.items() if name != "heartbeat_age_seconds"} if view is not None else None)
         for key, view in views.items()
     }
+    delivery_queue, delivery_queue_error = _task_delivery_queue_membership(ids, product)
+    if delivery_queue_error is not None:
+        raise ValueError(delivery_queue_error)
     actions = [
         row for row in recovery_actions(root=product)
         if (row.get("affected_work_id") or ((row.get("recovery") or {}).get("evidence") or {}).get("affected_work_id")) in ids
@@ -1353,6 +1367,7 @@ def local_audit_fingerprint(work_id: str, *, root: Path) -> str:
         "reviews": {key: reviews.get(key) for key in sorted(ids)} if isinstance(reviews, Mapping) else None,
         "worktrees": [(key, str(path), path.is_dir()) for key, path in sorted(worktrees.items()) if key[1] in ids],
         "registry_errors": errors,
+        "delivery_queue": delivery_queue,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -1470,6 +1485,14 @@ def _classification(
     ):
         # Retaining the source worktree until its review lands is intentional.
         return "expected_wait", "review_pending"
+    if doc.meta.tier == "task" and evidence.execution is not None:
+        phase = evidence.execution.get("phase")
+        if phase == "awaiting_merge":
+            if evidence.execution.get("delivery_queued") is True:
+                return "expected_wait", "delivery_queued"
+            return "proven_incident", "validated_delivery_missing"
+        if phase == "merge_blocked":
+            return "proven_incident", "merge_blocked"
     if evidence.unresolved_references:
         return "proven_incident", "unresolved_recovery_reference"
     if "review_pending" in evidence.gates:
@@ -1523,6 +1546,31 @@ def _classification(
     if child_wait:
         return "expected_wait", child_wait
     return "healthy", "authoritative_state_consistent"
+
+
+def _task_delivery_queue_state(
+    task_id: str, product: Path
+) -> tuple[bool | None, str | None]:
+    queued, error = _task_delivery_queue_membership({task_id}, product)
+    return (task_id in queued if error is None else None), error
+
+
+def _task_delivery_queue_membership(
+    work_ids: set[str], product: Path
+) -> tuple[tuple[str, ...], str | None]:
+    """Read the canonical scheduling index without treating corruption as empty."""
+
+    payload, error = _read_json_source(
+        lifecycle_root(product) / ".cascade" / "pending-task-merges.json",
+        "task_delivery_queue",
+    )
+    if error is not None:
+        return (), error
+    if payload is None:
+        return (), None
+    if not isinstance(payload, list) or any(not isinstance(item, str) for item in payload):
+        return (), "task_delivery_queue:unavailable"
+    return tuple(sorted(set(payload).intersection(work_ids))), None
 
 
 def _identity(

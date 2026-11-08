@@ -560,7 +560,11 @@ def _incident_contract(
         owner = f"feature_team:{parent_id}"
         if failure == "blocked_task_failed":
             operation = "retry_task"
-        elif failure in {"stalled_execution", "delivery_reconciliation"}:
+        elif failure in {
+            "stalled_execution",
+            "delivery_reconciliation",
+            "validated_delivery_missing",
+        }:
             operation = "supervisor_recover_task_delivery"
 
     if operation is None and failure == "integration_branch_update":
@@ -648,6 +652,7 @@ def _execute_reservation(
                     reservation.work_id,
                     root=root,
                     observed_incident=reservation.reservation_id,
+                    feature_id=owner_id,
                 )
             elif descriptor.operation in {"retry_task", "recover_task"}:
                 value = executor(reservation.work_id, feature_id=owner_id, root=root)
