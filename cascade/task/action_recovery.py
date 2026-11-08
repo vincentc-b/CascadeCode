@@ -18,7 +18,11 @@ from pathlib import Path
 from typing import Any, Literal, Mapping
 
 from cascade.board.context import resolve_root
-from cascade.task.lifecycle_lock import lifecycle_root, task_lifecycle_lock
+from cascade.task.lifecycle_lock import (
+    lifecycle_root,
+    task_lifecycle_lock,
+    task_lifecycle_read_lock,
+)
 
 FailureClassification = Literal[
     "deterministic_repair",
@@ -947,7 +951,7 @@ def recovery_actions(*, root: Path) -> list[dict[str, Any]]:
     """Return copies of durable actions for read-only board projections."""
 
     repo = resolve_root(root)
-    with task_lifecycle_lock(root=repo):
+    with task_lifecycle_read_lock(root=repo):
         actions = _actions(_read_payload(repo))
     return [_copy(action) for action in actions.values()]
 

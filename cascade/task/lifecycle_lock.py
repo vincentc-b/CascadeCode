@@ -49,3 +49,30 @@ def task_lifecycle_lock(*, root: Path) -> Iterator[None]:
             finally:
                 _held.paths = held
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+@contextmanager
+def task_lifecycle_read_lock(*, root: Path) -> Iterator[None]:
+    """Synchronize a projection without creating lifecycle state.
+
+    Writers create the durable lock before any lifecycle sidecar.  A missing
+    lock therefore means there is no writer to coordinate with; importantly,
+    a healthy read must not make an otherwise clean repository dirty.
+    """
+
+    repo = lifecycle_root(root)
+    path = repo / ".cascade" / _LOCK_NAME
+    key = str(path.resolve())
+    with process_lock:
+        held = getattr(_held, "paths", set())
+        if key in held or not path.exists():
+            yield
+            return
+        with path.open("r", encoding="utf-8") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_SH)
+            _held.paths = {*held, key}
+            try:
+                yield
+            finally:
+                _held.paths = held
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
