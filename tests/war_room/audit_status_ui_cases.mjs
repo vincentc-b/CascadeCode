@@ -57,3 +57,54 @@ for (const expected of [
   "Unavailable evidence: orphan_delivery: unreadable"
 ]) assert.ok(visible.includes(expected), expected + " was not rendered\n" + visible);
 assert.ok(!visible.includes("investigating"));
+
+class Control {
+  constructor() {
+    this.disabled = false;
+    this.textContent = "";
+    this.classList = { toggle: (name, enabled) => { this.error = name === "error" && enabled; } };
+    this.listeners = {};
+  }
+  addEventListener(name, listener) { this.listeners[name] = listener; }
+}
+
+async function exerciseAdmission(admission, expected) {
+  const button = new Control();
+  const status = new Control();
+  let requests = 0;
+  let resolveRequest;
+  const request = new Promise((resolve) => { resolveRequest = resolve; });
+  let refreshes = 0;
+  const control = ui.bindRunControl({
+    button,
+    status,
+    request() { requests += 1; return request; },
+    refresh() { refreshes += 1; },
+  });
+  const first = control.submit();
+  const duplicate = control.submit();
+  assert.equal(button.disabled, true);
+  assert.equal(requests, 1, "duplicate submission must be suppressed while pending");
+  resolveRequest({ status: 202, body: { ok: true, status: admission } });
+  await Promise.all([first, duplicate]);
+  assert.ok(status.textContent.includes(expected), status.textContent);
+  assert.ok(status.textContent.includes("pending"), "admission must not claim recovery");
+  assert.equal(status.error, false);
+  assert.equal(button.disabled, false);
+  assert.equal(refreshes, 1);
+}
+
+await exerciseAdmission("admitted", "admitted");
+await exerciseAdmission("coalesced", "already pending or running");
+
+const unavailableButton = new Control();
+const unavailableStatus = new Control();
+const unavailable = ui.bindRunControl({
+  button: unavailableButton,
+  status: unavailableStatus,
+  request() { return Promise.reject(new Error("health audit unavailable")); },
+});
+await unavailable.submit();
+assert.equal(unavailableStatus.textContent, "health audit unavailable");
+assert.equal(unavailableStatus.error, true);
+assert.equal(unavailableButton.disabled, false);

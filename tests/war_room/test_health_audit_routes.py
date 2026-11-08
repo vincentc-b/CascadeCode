@@ -18,10 +18,15 @@ from cascade.war_room.server import serve
 from tests.support import make_repo
 
 
-def _post(url: str, *, token: str | None = None) -> tuple[int, dict[str, object]]:
+def _post(
+    url: str,
+    *,
+    token: str | None = None,
+    body: bytes = b"",
+) -> tuple[int, dict[str, object]]:
     request = urllib.request.Request(
         url,
-        data=b"{}",
+        data=body,
         method="POST",
         headers={
             "Content-Type": "application/json",
@@ -70,6 +75,10 @@ def test_manual_audit_requires_human_and_coalesces_duplicate_request(tmp_path) -
             HTTPStatus.ACCEPTED,
             {"ok": True, "status": "coalesced"},
         )
+        assert _post(url, token=token, body=b'{"unexpected":true}') == (
+            HTTPStatus.BAD_REQUEST,
+            {"error": "manual audit accepts no body"},
+        )
     finally:
         server.shutdown()
         server.server_close()
@@ -107,6 +116,85 @@ def test_stopped_lane_rejects_manual_audit(tmp_path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(2)
+
+
+def test_missing_lane_rejects_manual_audit(tmp_path) -> None:
+    root = make_repo(tmp_path, git=False)
+    token = "manual-audit-secret"
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = serve(
+        root=root,
+        host="127.0.0.1",
+        port=port,
+        human_identity_verifier=LocalHumanIdentityVerifier("local:test", token),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        status, payload = _post(
+            f"http://127.0.0.1:{port}/api/health/audit", token=token
+        )
+        assert status == HTTPStatus.SERVICE_UNAVAILABLE
+        assert payload == {"error": "health audit unavailable"}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(2)
+
+
+def test_route_runs_disabled_lane_without_moving_periodic_deadline(tmp_path) -> None:
+    root = make_repo(tmp_path, git=False)
+    entered = threading.Event()
+    release = threading.Event()
+    completed = threading.Event()
+
+    def run_pass(*_args) -> AuditPassResult:
+        entered.set()
+        assert release.wait(2)
+        return AuditPassResult(counts={"manual": 1})
+
+    lane = HealthAuditLane(
+        root=root,
+        config=HealthAuditConfig(enabled=False, interval_seconds=60),
+        run_pass=run_pass,
+        handoff=lambda _ids: completed.set(),
+    ).start()
+    deadline = lane.deadline
+    token = "manual-audit-secret"
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = serve(
+        root=root,
+        host="127.0.0.1",
+        port=port,
+        human_identity_verifier=LocalHumanIdentityVerifier("local:test", token),
+        health_audit_request=lane.request_manual_pass,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{port}/api/health/audit"
+    try:
+        assert _post(url, token=token) == (
+            HTTPStatus.ACCEPTED,
+            {"ok": True, "status": "admitted"},
+        )
+        assert entered.wait(2)
+        assert _post(url, token=token) == (
+            HTTPStatus.ACCEPTED,
+            {"ok": True, "status": "coalesced"},
+        )
+        release.set()
+        assert completed.wait(2)
+        assert lane.deadline == deadline
+    finally:
+        release.set()
+        server.shutdown()
+        server.server_close()
+        thread.join(2)
+        lane.stop(timeout=2)
 
 
 def test_get_audit_projects_receipt_and_truthful_durable_incident(tmp_path) -> None:

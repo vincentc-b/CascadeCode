@@ -946,6 +946,37 @@ def test_disabled_lane_accepts_manual_pass_without_moving_periodic_deadline(
         lane.stop(timeout=2)
 
 
+def test_manual_request_coalesces_with_running_periodic_pass(tmp_path: Path) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    completed = threading.Event()
+    calls = 0
+
+    def run(*_args) -> AuditPassResult:
+        nonlocal calls
+        calls += 1
+        entered.set()
+        assert release.wait(2)
+        return AuditPassResult(counts={"periodic": 1})
+
+    lane = HealthAuditLane(
+        root=tmp_path,
+        config=HealthAuditConfig(enabled=True, interval_seconds=60),
+        run_pass=run,
+        handoff=lambda _ids: completed.set(),
+        jitter=lambda *_args: 0.0,
+    ).start()
+    try:
+        assert entered.wait(2)
+        assert lane.request_manual_pass() is False
+        release.set()
+        assert completed.wait(2)
+        assert calls == 1
+    finally:
+        release.set()
+        lane.stop(timeout=2)
+
+
 def test_disabled_manual_failure_retries_after_bounded_cooldown(
     tmp_path: Path,
 ) -> None:

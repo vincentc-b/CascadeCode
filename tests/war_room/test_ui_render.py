@@ -540,6 +540,14 @@ def test_open_reviews_pane_markup_in_html(ui_server):
     assert "Open merge requests" in html
 
 
+def test_health_audit_run_control_markup_in_html(ui_server):
+    base, _root = ui_server
+    _status, html, _headers = _get_html(f"{base}/")
+    assert 'id="btn-run-health-audit"' in html
+    assert 'id="audit-run-status"' in html
+    assert "Run health audit now" in html
+
+
 def test_open_reviews_js_queries_authoritative_api_only():
     static = Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static"
     pane_source = (static / "open_reviews_pane.js").read_text(encoding="utf-8")

@@ -448,6 +448,14 @@ body {
   font-weight: 700;
 }
 
+.audit-status-toolbar {
+  margin-top: 0.5rem;
+}
+
+.audit-status-toolbar .status-line {
+  margin: 0.35rem 0 0;
+}
+
 #audit-status {
   margin-top: 0.5rem;
   font-size: 0.75rem;

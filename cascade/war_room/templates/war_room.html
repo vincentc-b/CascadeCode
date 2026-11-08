@@ -352,6 +352,12 @@
         <aside class="side-panels" aria-label="Utilities">
           <details id="audit-status-pane" class="audit-status-panel" open>
             <summary>Health audit</summary>
+            <div class="audit-status-toolbar">
+              <button type="button" id="btn-run-health-audit" class="btn-secondary">
+                Run health audit now
+              </button>
+              <p id="audit-run-status" class="status-line" role="status" aria-live="polite"></p>
+            </div>
             <div id="audit-status" aria-live="polite">
               <p class="status-line">Loading…</p>
             </div>
@@ -440,8 +446,8 @@
     <script src="/static/dependency_status_ui.js"></script>
     <script src="/static/brief_defaults_ui.js?v=20261025"></script>
     <script src="/static/provider_recovery_dialog_ui.js?v=20261103"></script>
-    <script src="/static/audit_status_ui.js?v=20261108"></script>
+    <script src="/static/audit_status_ui.js?v=20261108-run-now"></script>
     <script src="/static/panel_resizing.js?v=20261105"></script>
-    <script src="/static/war_room.js?v=20261108-audit-status"></script>
+    <script src="/static/war_room.js?v=20261108-audit-run-now"></script>
   </body>
 </html>

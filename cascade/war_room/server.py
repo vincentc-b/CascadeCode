@@ -539,7 +539,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
             handle_post_chat(self, chat_id, body)
             return
-        body = self._read_json_object()
+        body = self._read_json_object(allow_empty=path == "/api/health/audit")
         if body is None:
             return
         if path == "/api/local_human_session":
@@ -1132,12 +1132,14 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             {"ok": True, "event": event_to_dict(event)},
         )
 
-    def _read_json_object(self) -> dict[str, Any] | None:
+    def _read_json_object(self, *, allow_empty: bool = False) -> dict[str, Any] | None:
         try:
             length = int(self.headers.get("Content-Length", "0") or "0")
         except ValueError:
             length = 0
         raw = self.rfile.read(length) if length else b""
+        if not raw and allow_empty:
+            return {}
         if not raw:
             self._json_error(HTTPStatus.BAD_REQUEST, "invalid json")
             return None

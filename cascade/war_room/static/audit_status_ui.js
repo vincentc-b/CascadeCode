@@ -120,5 +120,44 @@
     }
   }
 
-  return { render: render, renderIncident: renderIncident };
+  function bindRunControl(options) {
+    const button = options.button;
+    const status = options.status;
+    let submitting = false;
+
+    function show(message, isError) {
+      if (!status) return;
+      status.textContent = message;
+      status.classList.toggle("error", !!isError);
+    }
+
+    async function submit() {
+      if (submitting) return;
+      submitting = true;
+      button.disabled = true;
+      show("Requesting health audit…", false);
+      try {
+        const response = await options.request();
+        const admission = response && response.body && response.body.status;
+        if (admission === "admitted") {
+          show("Health audit admitted. Completion is pending; durable status will update below.", false);
+        } else if (admission === "coalesced") {
+          show("Health audit already pending or running. Completion is pending; durable status will update below.", false);
+        } else {
+          show("Health audit returned an unknown admission status.", true);
+        }
+        if (options.refresh) await options.refresh();
+      } catch (err) {
+        show(err && err.message ? err.message : "Health audit unavailable", true);
+      } finally {
+        submitting = false;
+        button.disabled = false;
+      }
+    }
+
+    if (button) button.addEventListener("click", submit);
+    return { submit: submit };
+  }
+
+  return { render: render, renderIncident: renderIncident, bindRunControl: bindRunControl };
 });

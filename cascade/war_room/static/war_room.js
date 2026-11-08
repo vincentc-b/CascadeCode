@@ -120,6 +120,8 @@
     btnSubmitProviderRecovery: document.getElementById("btn-submit-provider-recovery"),
     supervisorBanner: document.getElementById("supervisor-status-banner"),
     auditStatus: document.getElementById("audit-status"),
+    btnRunHealthAudit: document.getElementById("btn-run-health-audit"),
+    auditRunStatus: document.getElementById("audit-run-status"),
   };
 
   const AGENT_CHAT_AUTHORS = {
@@ -341,12 +343,15 @@
   }
 
   async function apiPost(path, payload, timeoutMs) {
-    const resp = await fetch(path, {
+    const options = {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
       signal: deadlineSignal(timeoutMs),
-    });
+    };
+    if (payload !== undefined) {
+      options.headers = { "Content-Type": "application/json" };
+      options.body = JSON.stringify(payload);
+    }
+    const resp = await fetch(path, options);
     const text = await resp.text();
     let body;
     try {
@@ -3195,6 +3200,14 @@
       refreshOpenReviews({ userInitiated: true }).catch(function (err) {
         setOpenReviewsStatus(err.message || "Refresh failed", true);
       });
+    });
+  }
+  if (el.btnRunHealthAudit && AuditStatusUi) {
+    AuditStatusUi.bindRunControl({
+      button: el.btnRunHealthAudit,
+      status: el.auditRunStatus,
+      request: function () { return apiPost("/api/health/audit"); },
+      refresh: pollAuditStatus,
     });
   }
 
