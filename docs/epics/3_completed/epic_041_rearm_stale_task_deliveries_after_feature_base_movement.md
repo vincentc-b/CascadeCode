@@ -2,7 +2,7 @@
 id: epic_041
 title: Rearm stale Task deliveries after Feature-base movement
 tier: epic
-status: backlog
+status: completed
 parent: null
 children: []
 depends_on: []
@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-07'
-updated: '2026-11-07'
+updated: '2026-11-08'
 provider: codex
 flex_mode: false
 models:
@@ -47,22 +47,22 @@ Ensure a Task delivery automatically recovers when its final validation becomes 
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+Implemented through the shared Task lifecycle lock, durable recovery-generation ledger, supervisor resume path, exact-SHA validation, and ordinary Task merge queue. See the closure evidence below.
 
 ## Cross-module constraints
 Build on Epic 027’s durable delivery boundary, orphan-delivery ledger, execution lease, pending merge queue, and direct-report health sweep. Preserve Task branches, worktrees, checkpoints, prior attempts, and action history; do not reset, clean, force-push, or create a replacement Task. Queue invalidation and recovery-generation publication must be atomic or restart-replayable. Do not weaken exact-SHA validation, automatically resolve semantic merge conflicts, add a second scheduler or status store, or require the owning Feature Team process to remain alive. A new generation is permitted only when durable delivery identity or authoritative branch/queue state has materially changed. Recovery tests must cross the real attach, checkpoint, graph, kickoff, supervised-validation, queue, and merge boundaries; mocked callback-only tests are insufficient for identity and liveness guarantees.
 
 ## Core dependencies
 
-To be identified during epic planning.
+Uses the existing Git worktree, checkpoint, validation, execution lease, and delivery queue infrastructure; no new external dependency.
 
 ## Feature breakdown
 
-The Epic Team will create and sequence feature plans here.
+Delivered directly on main under the operator's instruction. No child Feature plans were minted for this implementation.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+None outstanding for this brief. Remaining requirements from Epics 40, 42, and 43 are tracked in their own implementation audits.
 
 ## Decision log
 
@@ -71,3 +71,14 @@ The Epic Team will create and sequence feature plans here.
 ## Amendment log
 
 _(none)_
+
+## Implementation audit · 2026-11-08
+
+Status: completed. The operator requested direct implementation on main and subsequently requested closure of briefs whose implementation is verified. Implementation landed in `b55abca2`; `bc615b88` strengthens the historical-sequence regression. No acceptance criteria are waived. This was direct operator delivery, so no synthetic child Features or merge request are created to imply a team workflow that did not occur.
+
+- Criteria 1–3: durable recovery fingerprints include authoritative branch heads, queue membership, delivery evidence, Task status, and execution ownership. Identical observations are idempotent; stale cached queued decisions no longer suppress a changed generation.
+- Criteria 4–5: the lifecycle lock serializes parent and supervisor recovery. The existing worktree/checkpoint resumes through supervised validation, replaces exact-SHA evidence, and retries the original merge. Restart coverage exercises an interrupted reservation-to-kickoff handoff without duplicate execution.
+- Criterion 6: recovery diagnostics record stale/current heads, generation and result; active Task delivery serialization exposes the action and validation state. An invalidated queue is not reported as queued by a cached old result.
+- Criteria 7–9: `test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement` now includes two busy merge refusals, Feature advancement, ordinary periodic queue invalidation, and real resume/graph/kickoff/tool/validation/merge boundaries. The real and restart variants assert fresh evidence and exactly one merge. Only the model response is substituted for deterministic testing. The graph is pinned to the Task's actual Feature ID and rejects a revision-token identity.
+
+Validation: 35 tests passed on 2026-11-08 across `tests/test_task_recovery_generations_regressions.py`, `tests/task/test_supervisor_recovery.py`, `tests/task/test_orphan_delivery.py`, `tests/task/test_rollup_queue.py`, `tests/task/test_lifecycle_lock.py`, and `tests/epic/test_dependency_operation_authority.py`. This is targeted closure evidence, not a claim that the entire repository test suite passes.

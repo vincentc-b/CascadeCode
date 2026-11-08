@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-07'
-updated: '2026-11-07'
+updated: '2026-11-08'
 provider: codex
 flex_mode: false
 models:
@@ -71,3 +71,12 @@ The Epic Team will create and sequence feature plans here.
 ## Amendment log
 
 _(none)_
+
+## Implementation audit · 2026-11-08
+
+Status: open; partial implementation in `b55abca2`. The prior blanket completion claim is withdrawn. No acceptance criteria are waived.
+
+- Revision history, guarded-path classification, lifecycle serialization, and one-generation dispatch are implemented.
+- A changed body hash currently counts as material revision. Criterion 3 and the cross-module constraint still require proving that the revised contract addresses the blocker; cosmetic edits must not independently authorize recovery.
+- Criterion 5 still needs an explicit safe-worktree dispatch check and negative coverage.
+- Criterion 7 still needs the complete scope-blocker → authorized revision → successful delivery acceptance sequence; the current regression proves dispatch and preserved history only.

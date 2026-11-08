@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-07'
-updated: '2026-11-07'
+updated: '2026-11-08'
 provider: codex
 flex_mode: false
 models:
@@ -70,3 +70,11 @@ The Epic Team will create and sequence feature plans here.
 ## Amendment log
 
 _(none)_
+
+## Implementation audit · 2026-11-08
+
+Status: open; partial implementation in `999f79ef`, `b55abca2`, and `bc615b88`. The prior blanket completion claim is withdrawn. Preserve the active Epic plan and its child work; no acceptance criteria are waived.
+
+- Scoped manifest authoring and the none-required → role sign-off → approval → Feature-dispatch path are implemented.
+- The closure audit found an in-scope real-dependency defect: operation authority passed an operation string to an approval boundary requiring an InstallationBinding. `bc615b88` fixes this with `InstallationBinding.from_entry`, preserving exact approval and policy checks. All 11 dependency-operation authority tests now pass.
+- Criterion 6 still needs complete acceptance evidence for real-dependency authoring through approved execution, concurrent public writes, both planning roles, target/tracking worktree separation, and guidance/activation/restart behavior. Passing the isolated authority suite does not establish that full lifecycle.

@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-07'
-updated: '2026-11-07'
+updated: '2026-11-08'
 provider: codex
 flex_mode: false
 models:
@@ -78,3 +78,12 @@ The Epic Team will create and sequence feature plans here.
 ## Amendment log
 
 _(none)_
+
+## Implementation audit · 2026-11-08
+
+Status: open; partial implementation in `b55abca2`. The prior blanket completion claim is withdrawn. No acceptance criteria are waived.
+
+- Task conflict recovery now crosses real resume, scoped validation, parent-blocker reconciliation, and the original merge action; local delivery evidence and concrete routing are implemented.
+- Criterion 14 remains incomplete: routed `review_health` incidents do not themselves provide the admitted mutation action required by review-resolution publication. A review becoming healthy while still open also needs reconciliation of the prior health incident.
+- Criteria 1 and 11 remain incomplete: completed Task serialization omits delivery action/validation details, so the evidence is not visible through terminal completion.
+- Criteria 9 and 10 need the exact semantic-lock-mismatch scenario, multiple sibling blockers, and restart between acknowledgement and validation. Existing narrower successful recovery tests are not substitutes for these cases.
