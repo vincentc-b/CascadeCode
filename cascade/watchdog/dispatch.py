@@ -27,7 +27,11 @@ from cascade.watchdog.config import task_parallelism
 from cascade.watchdog.events import append_event
 from cascade.watchdog.hooks import invoke_boot
 from cascade.watchdog.lock import process_lock
-from cascade.watchdog.skills import SkillPathError, effective_skill_paths, rewrite_skills_section
+from cascade.watchdog.skills import (
+    SkillPathError,
+    effective_skill_paths,
+    rewrite_skills_section,
+)
 from cascade.watchdog.types import DispatchResult, Event, Principal
 from cascade.workspace.backlog_snapshot import resolve_validated_epic_activation_sha
 from cascade.workspace.integration_worktree import (
@@ -42,7 +46,9 @@ from cascade.workspace.integration_worktree import (
 _OPEN = {"backlog", "ready_to_plan"}
 
 
-def activate_epic(work_id: str, by: Principal, *, root: Path | None = None) -> DispatchResult:
+def activate_epic(
+    work_id: str, by: Principal, *, root: Path | None = None
+) -> DispatchResult:
     """Human-only epic activation. Success lands the file in 2_active with status active."""
 
     repo = resolve_root(root)
@@ -81,10 +87,12 @@ def dispatch_task(
 
     repo = resolve_root(root)
     from cascade.task.lifecycle_lock import task_lifecycle_lock
+
     with task_lifecycle_lock(root=repo):
         result = _dispatch_task(work_id, by, skills, repo)
         if result.ok:
             from cascade.task.execution import _read, _write
+
             records = _read(repo)
             row = records.get(work_id, {})
             for revision in row.get("contract_revisions", []):
@@ -107,9 +115,7 @@ def _boot_after(
     if result.ok:
         from cascade.provider_recovery_replay import record_canonical_replay_transition
 
-        if not record_canonical_replay_transition(
-            result, work_id=work_id, root=root
-        ):
+        if not record_canonical_replay_transition(result, work_id=work_id, root=root):
             return result
         if tier == "task":
             from cascade.task.execution import mark_queued
@@ -232,9 +238,7 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
 
     from cascade.stacked_dispatch import ensure_feature_dispatch_selection
 
-    dispatch_plan = ensure_feature_dispatch_selection(
-        work_id, meta, board, root=root
-    )
+    dispatch_plan = ensure_feature_dispatch_selection(work_id, meta, board, root=root)
     if not dispatch_plan.ok:
         return _fail(dispatch_plan.reason or "bad_state")
     assert dispatch_plan.selection is not None
@@ -300,13 +304,31 @@ def _dispatch_task(
     if not _task_can_start(meta):
         return _fail("bad_state")
     from cascade.task.execution import execution_lease_is_live
+
     if execution_lease_is_live(work_id, root=root):
         return _fail("execution_owner_live")
+    if meta.status == "blocked":
+        from cascade.task.execution import execution_view
+        from cascade.feature.recovery import recovery_status
+
+        execution = execution_view(work_id, root=root) or {}
+        if (
+            execution.get("phase") == "terminal"
+            and recovery_status(work_id, feature_id=meta.parent, root=root)["action"]
+            != "retry"
+        ):
+            return _fail("task_contract_revision_required")
     from cascade.task.guard import contract_scope_blocker
     from cascade.workspace.doc_root import read_doc_resolved
+
     scope_blocker = contract_scope_blocker(read_doc_resolved(work_id, root=root).body)
     if scope_blocker:
-        _emit(root, meta.parent or work_id, "TaskScopeBlocked", {"task_id": work_id, **scope_blocker})
+        _emit(
+            root,
+            meta.parent or work_id,
+            "TaskScopeBlocked",
+            {"task_id": work_id, **scope_blocker},
+        )
         return _fail("task_scope_denied")
     if not meta.parent:
         return _fail("bad_state")
@@ -314,6 +336,7 @@ def _dispatch_task(
     if parent is None:
         return _fail("bad_state")
     from cascade.cancellation_feedback import cancellation_dispatch_gated
+
     if cancellation_dispatch_gated(parent):
         return _fail("parent_cancellation_pending")
     if dependency_evidence.outcome != "satisfied":
@@ -349,6 +372,57 @@ def _dispatch_task(
     feat_wt = get_integration_worktree(root, "feature", feat_id)
     if feat_wt is None:
         return _fail("bad_state")
+
+    # A new contract cannot authorize overwriting evidence from an old run.
+    # Preserve dirty work for the owning team's scoped recovery operation.
+    task_wt = get_integration_worktree(root, "task", work_id)
+    if task_wt is not None and task_wt.path.is_dir():
+        import subprocess
+
+        branch = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=task_wt.path,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        if branch != integration_branch("task", work_id):
+            return _fail("task_worktree_branch_mismatch")
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=task_wt.path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if status.stdout.strip():
+            from cascade.task.git_tools import _assert_commit_paths_allowed
+            from cascade.task.guard import TaskToolDenied
+
+            try:
+                _assert_commit_paths_allowed(work_id, task_wt.path, board_root=root)
+            except TaskToolDenied as exc:
+                _emit(
+                    root,
+                    meta.parent,
+                    "TaskScopeBlocked",
+                    {
+                        "task_id": work_id,
+                        "reason": "task_worktree_scope_denied",
+                        "detail": str(exc),
+                        "next_step": "Preserved work includes protected paths. The owning planning team must resolve those paths before Task retry.",
+                    },
+                )
+                return _fail("task_worktree_scope_denied")
+            _emit(
+                root,
+                work_id,
+                "TaskWorkspacePreserved",
+                {
+                    "task_id": work_id,
+                    "instruction": "Resume the existing scoped changes; commit them before final validation. No work was discarded.",
+                },
+            )
 
     chosen = list(meta.skills) if skills is None else [Path(item) for item in skills]
     try:
@@ -449,7 +523,9 @@ def _place_task_active(
         doc.meta.skills = [Path(item) for item in skill_paths]
         doc.body = rewrite_skills_section(doc.body, skill_paths)
     doc.meta.status = "active"
-    doc.meta.path = (board_root / column_dir("task", "active") / previous.name).resolve()
+    doc.meta.path = (
+        board_root / column_dir("task", "active") / previous.name
+    ).resolve()
     if source_root.resolve() == board_root.resolve():
         save_doc(doc, previous_path=previous, root=board_root)
         return
@@ -479,7 +555,9 @@ def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
     return True
 
 
-def _dependency_review_pending(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
+def _dependency_review_pending(
+    board: BoardIndex, meta: WorkMeta, *, root: Path
+) -> bool:
     """Keep review delivery separate from lifecycle dependency readiness."""
 
     for dep_id in meta.depends_on:
@@ -495,11 +573,20 @@ def _dependency_review_pending(board: BoardIndex, meta: WorkMeta, *, root: Path)
 def _active_task_count(board: BoardIndex, *, root: Path | None = None) -> int:
     count = 0
     for meta in board.by_id.values():
-        if meta.tier == "task" and meta.status == "active" and meta.path.parent.name == "2_active":
+        if (
+            meta.tier == "task"
+            and meta.status == "active"
+            and meta.path.parent.name == "2_active"
+        ):
             if root is not None:
                 from cascade.task.execution import execution_view
+
                 execution = execution_view(meta.id, root=root) or {}
-                if execution.get("phase") in {"awaiting_merge", "merge_blocked", "terminal"}:
+                if execution.get("phase") in {
+                    "awaiting_merge",
+                    "merge_blocked",
+                    "terminal",
+                }:
                     continue
             count += 1
     return count

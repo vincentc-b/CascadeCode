@@ -110,7 +110,8 @@ def _git(root, *args):
 
 
 @pytest.mark.parametrize(
-    "claim_owner_immediately", [True, False, "real", "restart", "conflict"]
+    "claim_owner_immediately",
+    [True, False, "real", "restart", "conflict", "semantic_restart"],
 )
 def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
     tmp_path: Path, claim_owner_immediately: bool | str, monkeypatch
@@ -119,6 +120,8 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
     from cascade.task.checkpoint import thread_config
     from cascade.workspace.integration_worktree import create_integration_worktree
 
+    semantic = claim_owner_immediately == "semantic_restart"
+    conflict = claim_owner_immediately in {"conflict", "semantic_restart"}
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(
@@ -153,6 +156,13 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         "from pathlib import Path\ndef test_current_feature():\n    assert Path('feature_progress.py').read_text() == 'progress = True\\n'\n"
     )
     (task.path / ".gitignore").write_text("__pycache__/\n.pytest_cache/\n")
+    if semantic:
+        (task.path / "implementation.py").write_text(
+            "from threading import RLock\nprocess_lock = RLock()\ndef guarded(value):\n    with process_lock:\n        return value\n"
+        )
+        (task.path / "test_delivery.py").write_text(
+            "import pytest\nfrom implementation import guarded\n@pytest.mark.parametrize('value', range(11))\ndef test_guarded(value):\n    assert guarded(value) == value\n"
+        )
     _git(task.path, "add", "implementation.py", "test_delivery.py", ".gitignore")
     _git(task.path, "commit", "-m", "Task deliverable")
     graph = ensure_task_graph("task_001", root=root, feature_id="feat_001")
@@ -197,11 +207,15 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         assert retry_pending_task_merges(root) == []
 
     (feature.path / "feature_progress.py").write_text("progress = True\n")
-    if claim_owner_immediately == "conflict":
-        (feature.path / "implementation.py").write_text("value = 2\n")
+    if conflict:
+        (feature.path / "implementation.py").write_text(
+            "from threading import RLock\nrecovery_ledger_lock = RLock()\ndef guarded(value):\n    with recovery_ledger_lock:\n        return value\n"
+            if semantic
+            else "value = 2\n"
+        )
     _git(feature.path, "add", "feature_progress.py", ".")
     _git(feature.path, "commit", "-m", "Feature advanced")
-    if claim_owner_immediately == "conflict":
+    if conflict:
         from cascade.task_rollup import retry_pending_task_merges
         from cascade.task.action_recovery import load_action
 
@@ -230,6 +244,28 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             incident_id="task_001:delivery:conflict",
         )
         assert read_doc("feat_001", root=root).meta.status == "blocked"
+        if semantic:
+            add_doc(
+                root,
+                id="task_002",
+                title="Sibling blocker",
+                tier="task",
+                status="blocked",
+                parent="feat_001",
+            )
+            propagate_direct_report_blockage(
+                read_doc("feat_001", root=root),
+                read_doc("task_002", root=root),
+                "Independent sibling incident",
+                root=root,
+                incident_id="task_002:delivery:conflict",
+            )
+            from cascade.task.action_recovery import acknowledge_team_recovery
+
+            acknowledge_team_recovery("task_001", root=root)
+            assert load_action("task_001:queued_merge", root=root)["recovery"][
+                "routing_marker"
+            ]["acknowledged_at"]
     else:
         assert retry_pending_task_merges(root) == []
         from cascade.task_rollup import pending_task_merges
@@ -247,7 +283,7 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         if claim_owner_immediately:
             mark_running(task_id, root=repo)
 
-    if claim_owner_immediately in ("real", "restart", "conflict"):
+    if claim_owner_immediately in ("real", "restart", "conflict", "semantic_restart"):
         from cascade.task.graph import set_task_run_role_fn, clear_task_graph_sessions
         from cascade.task.wiring import load_task_tools
         from cascade.task.worktree import clear_task_runs
@@ -273,7 +309,7 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         async def provider(turn):
             starts.append(("task_001", "feat_001"))
             assert turn.cwd == task.path
-            if claim_owner_immediately == "conflict":
+            if conflict:
                 refused = invoke_tool(
                     "task_001",
                     "swe_run_tests",
@@ -289,7 +325,11 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
                     "swe_write",
                     {
                         "path": "implementation.py",
-                        "content": "task_value = 1\nfeature_value = 2\n",
+                        "content": (
+                            "from threading import RLock\nrecovery_ledger_lock = RLock()\ndef guarded(value):\n    with process_lock:\n        return value\n"
+                            if semantic
+                            else "task_value = 1\nfeature_value = 2\n"
+                        ),
                     },
                     root=root,
                     feature_id="feat_001",
@@ -301,6 +341,37 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
                     root=root,
                     feature_id="feat_001",
                 )
+                if semantic:
+                    failed = invoke_tool(
+                        "task_001",
+                        "swe_run_tests",
+                        {"cmd": ["python3", "-m", "pytest", "-q", "test_delivery.py"]},
+                        root=root,
+                        feature_id="feat_001",
+                    )
+                    assert failed["exit_code"] != 0
+                    assert (
+                        "process_lock" in failed["output"]
+                        and "11 failed" in failed["output"]
+                    )
+                    assert "task_001" not in pending_task_merges(root)
+                    invoke_tool(
+                        "task_001",
+                        "swe_write",
+                        {
+                            "path": "implementation.py",
+                            "content": "from threading import RLock\nrecovery_ledger_lock = RLock()\ndef guarded(value):\n    with recovery_ledger_lock:\n        return value\n",
+                        },
+                        root=root,
+                        feature_id="feat_001",
+                    )
+                    invoke_tool(
+                        "task_001",
+                        "swe_commit",
+                        {"message": "Use the canonical recovery ledger lock"},
+                        root=root,
+                        feature_id="feat_001",
+                    )
             # Only the provider is stubbed: use real scoped test/tool/queue boundaries.
             result = invoke_tool(
                 "task_001",
@@ -313,7 +384,7 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             return RoleResult(text="Validated the resumed delivery.", status="finished")
 
         set_task_run_role_fn(provider)
-        if claim_owner_immediately == "conflict":
+        if conflict:
             from cascade.workspace.kickoff import kickoff_graph_queue_event
 
             kickoff_graph_queue_event("task_001", root=root, by="watchdog")
@@ -358,16 +429,24 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         assert read_doc("task_001", root=root).meta.status == "completed"
         completed_action = load_action("task_001:queued_merge", root=root)
         assert completed_action["recovery_state"] == "completed"
-        if claim_owner_immediately == "conflict":
-            assert (
-                feature.path / "implementation.py"
-            ).read_text() == "task_value = 1\nfeature_value = 2\n"
+        if conflict:
+            delivered = (feature.path / "implementation.py").read_text()
+            if semantic:
+                assert "with recovery_ledger_lock:" in delivered
+                assert "11 passed" in validations[0]["output"]
+            else:
+                assert delivered == "task_value = 1\nfeature_value = 2\n"
             assert completed_action["attempt_count"] >= 2
             assert all(
                 decision["state"] == "resolved"
                 for decision in completed_action["owner_decisions"]
             )
-            assert not read_doc("feat_001", root=root).meta.monitoring_blockers
+            blockers = read_doc("feat_001", root=root).meta.monitoring_blockers
+            if semantic:
+                assert [item.child_id for item in blockers] == ["task_002"]
+                assert read_doc("feat_001", root=root).meta.status == "blocked"
+            else:
+                assert not blockers
         assert "task_001" not in recovery_incidents_by_work_id(root=root)
         assert pending_task_merges(root) == set()
         feature_head = _git(feature.path, "rev-parse", "HEAD")
@@ -393,3 +472,183 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
     )
     with pytest.raises(ValueError, match="Feature identity"):
         ensure_task_graph("task_001", root=root, feature_id=revision)
+
+
+@pytest.mark.parametrize("edit", ["cosmetic", "same_scope", "external_permission"])
+def test_contract_edit_cannot_buy_an_unchanged_or_unauthorized_retry(tmp_path, edit):
+    root = dispatched_blocked_board(tmp_path)
+    error = (
+        "permission denied by forge"
+        if edit == "external_permission"
+        else "forbidden_commit_paths"
+    )
+    mark_terminal("task_001", "failed", root=root, error=error)
+    original = read_doc("task_001", root=root).body
+    if edit == "external_permission":
+        revised = original.replace("- cascade/", "- app.py")
+    elif edit == "same_scope":
+        revised = original.replace(
+            "Notes for the implementer.", "Please try the same paths again."
+        )
+    else:
+        revised = original.replace(
+            "Notes for the implementer.", "Notes  for the implementer.\n"
+        )
+    assert revise_task("task_001", revised, feature_id="feat_001", root=root)
+    from cascade.watchdog.dispatch import dispatch_task
+
+    assert not retry_task("task_001", feature_id="feat_001", root=root)["ok"]
+    assert (
+        dispatch_task("task_001", "boss", root=root).reason
+        == "task_contract_revision_required"
+    )
+    assert execution_view("task_001", root=root)["attempt"] == 1
+
+
+def test_revised_task_preserves_scoped_dirty_work_but_rejects_protected_paths(tmp_path):
+    from cascade.task.worktree import get_task_run
+
+    root = dispatched_blocked_board(tmp_path)
+    run = get_task_run("task_001")
+    mark_terminal("task_001", "failed", root=root, error="forbidden_commit_paths")
+    original = read_doc("task_001", root=root).body
+    revise_task(
+        "task_001",
+        original.replace("- cascade/", "- app.py"),
+        feature_id="feat_001",
+        root=root,
+    )
+    protected = run.worktree / "docs/features/unauthorized.md"
+    protected.write_text("preserved evidence\n")
+    assert (
+        retry_task("task_001", feature_id="feat_001", root=root)["reason"]
+        == "task_worktree_scope_denied"
+    )
+    assert protected.read_text() == "preserved evidence\n"
+    # Simulate the owning planning team preserving its prose in an allowed
+    # project note; the Task must never be allowed to commit planning files.
+    protected.rename(run.worktree / "planning-evidence.md")
+    (run.worktree / "app.py").write_text("value = 1\n")
+    assert retry_task("task_001", feature_id="feat_001", root=root)["ok"]
+    assert (run.worktree / "app.py").read_text() == "value = 1\n"
+
+
+def test_scope_blocked_contract_revised_to_source_completes_real_delivery(tmp_path):
+    from cascade.task import invoke_tool
+    from cascade.task.guard import TaskToolDenied
+    from cascade.task.wiring import load_task_tools, route_swe_turn_failure
+    from cascade.task.graph import ensure_task_graph, set_task_run_role_fn
+    from cascade.task.checkpoint import thread_config
+    from cascade.agent.types import RoleResult
+    from cascade.task_rollup import retry_pending_task_merges
+    from cascade.watchdog.events import read_events
+
+    root = dispatched_blocked_board(tmp_path)
+    task = read_doc("task_001", root=root)
+    task.body = task.body.replace("- cascade/", "- docs/features/contract.md")
+    task.meta.status = "active"
+    write_doc(task, root=task.meta.path.parents[3])
+    load_task_tools()
+    with pytest.raises(TaskToolDenied) as refused:
+        invoke_tool(
+            "task_001",
+            "swe_write",
+            {"path": "docs/features/contract.md", "content": "contract"},
+            root=root,
+        )
+    assert not route_swe_turn_failure("task_001", refused.value, root=root)
+    assert execution_view("task_001", root=root)["last_error"] == "task_scope_denied"
+    feature = read_doc("feat_001", root=root)
+    feature.body += (
+        "\nThe Feature owns the prose contract; its Task implements app.py.\n"
+    )
+    write_doc(feature, root=feature.meta.path.parents[3])
+    revised = read_doc("task_001", root=root).body.replace(
+        "- docs/features/contract.md", "- app.py\n- test_app.py"
+    )
+    revise_task("task_001", revised, feature_id="feat_001", root=root)
+    graph = ensure_task_graph("task_001", root=root, feature_id="feat_001")
+    graph.update_state(
+        thread_config("task_001"),
+        {
+            "task_id": "task_001",
+            "feature_id": "feat_001",
+            "provider_ids": {"swe": "codex"},
+            "model_ids": {"swe": "offered"},
+        },
+    )
+    starts = []
+
+    async def provider(turn):
+        starts.append(turn.cwd)
+        for path, content in {
+            "app.py": "value = 42\n",
+            "test_app.py": "from app import value\ndef test_value():\n    assert value == 42\n",
+            ".gitignore": "__pycache__/\n.pytest_cache/\n",
+        }.items():
+            invoke_tool(
+                "task_001", "swe_write", {"path": path, "content": content}, root=root
+            )
+        invoke_tool(
+            "task_001",
+            "swe_commit",
+            {"message": "Implement authorized contract"},
+            root=root,
+        )
+        result = invoke_tool(
+            "task_001",
+            "swe_run_tests",
+            {"cmd": ["python3", "-m", "pytest", "-q", "test_app.py"]},
+            root=root,
+        )
+        assert result["exit_code"] == 0
+        return RoleResult(text="Implemented and validated.", status="finished")
+
+    set_task_run_role_fn(provider)
+    assert retry_task("task_001", feature_id="feat_001", root=root)["ok"]
+    assert len(starts) == 1
+    assert retry_pending_task_merges(root) == ["task_001"]
+    assert read_doc("task_001", root=root).meta.status == "completed"
+    assert retry_pending_task_merges(root) == []
+    history = execution_view("task_001", root=root)["attempt_history"]
+    assert any(row.get("last_error") == "task_scope_denied" for row in history)
+    events, _ = read_events("feat_001", 0, root=root)
+    assert sum(event.type == "TaskMerged" for event in events) == 1
+
+
+def test_revision_intent_survives_crash_after_document_commit(tmp_path, monkeypatch):
+    import cascade.task.execution as execution
+
+    root = dispatched_blocked_board(tmp_path)
+    mark_terminal("task_001", "failed", root=root, error="forbidden_commit_paths")
+    original = read_doc("task_001", root=root).body
+    revised = original.replace("- cascade/", "- app.py")
+    write = execution._write
+    writes = []
+
+    def interrupted(repo, records):
+        writes.append(1)
+        if len(writes) == 2:
+            raise OSError("interrupted after document commit")
+        return write(repo, records)
+
+    with monkeypatch.context() as crash:
+        crash.setattr(execution, "_write", interrupted)
+        with pytest.raises(OSError, match="interrupted"):
+            revise_task("task_001", revised, feature_id="feat_001", root=root)
+    # Durable state, not a process-local receipt, authorizes one fresh retry.
+    import sys
+
+    program = "from pathlib import Path; import json,sys; from cascade.feature.recovery import recovery_status; print(json.dumps(recovery_status('task_001',feature_id='feat_001',root=Path(sys.argv[1]))))"
+    import json
+
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(root)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert json.loads(result.stdout)["action"] == "retry"
+    assert revise_task("task_001", revised, feature_id="feat_001", root=root) is None
+    assert retry_task("task_001", feature_id="feat_001", root=root)["ok"]
+    assert not retry_task("task_001", feature_id="feat_001", root=root)["ok"]

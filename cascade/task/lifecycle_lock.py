@@ -15,6 +15,13 @@ _LOCK_NAME = "task-lifecycle.lock"
 _held = threading.local()
 
 
+def lifecycle_root(root: Path) -> Path:
+    """One tracking-trunk home for lifecycle state, independent of caller checkout."""
+    from cascade.workspace.integration_worktree import locate_trunk
+
+    return locate_trunk(resolve_tracking_root(root))
+
+
 @contextmanager
 def task_lifecycle_lock(*, root: Path) -> Iterator[None]:
     """Serialize execution leases, attempts, action history, and recovery generations.
@@ -24,7 +31,8 @@ def task_lifecycle_lock(*, root: Path) -> Iterator[None]:
     Nested calls on the same thread are deliberately re-entrant.
     """
 
-    repo = resolve_tracking_root(root)
+    # Task/Feature MCP callers and the trunk supervisor share one transaction.
+    repo = lifecycle_root(root)
     path = repo / ".cascade" / _LOCK_NAME
     key = str(path.resolve())
     with process_lock:

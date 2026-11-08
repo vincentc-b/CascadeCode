@@ -17,7 +17,7 @@ def summarize_diff(task_run: TaskRun, *, root: Path) -> str:
 
     from cascade.board.errors import NotFound
     from cascade.board.store import read_doc
-    from cascade.workspace.integration_worktree import doc_filesystem_root
+    from cascade.workspace.integration_worktree import get_integration_worktree
 
     repo = Path(root).resolve()
     branch = task_run.branch
@@ -25,7 +25,11 @@ def summarize_diff(task_run: TaskRun, *, root: Path) -> str:
     try:
         task = read_doc(task_run.task_id, root=repo)
         if task.meta.parent:
-            diff_root = doc_filesystem_root(task.meta.parent, trunk=repo)
+            # Planning documents may live in a separate tracking repository;
+            # the source/target branches belong to the product checkout.
+            feature = get_integration_worktree(repo, "feature", task.meta.parent)
+            if feature is not None:
+                diff_root = feature.path
     except NotFound:
         pass
     result = _run(["diff", "--stat", f"HEAD...{branch}"], diff_root, check=False)

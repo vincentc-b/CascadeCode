@@ -66,6 +66,8 @@ def work_meta_to_dict(
     branch_sync: dict[str, Any] | None = None,
     recovery_incident: dict[str, object] | None = None,
     sidecars_preloaded: bool = False,
+    delivery_actions: dict[str, dict] | None = None,
+    pending_deliveries: set[str] | None = None,
 ) -> dict:
     value = {
         "id": meta.id,
@@ -98,15 +100,32 @@ def work_meta_to_dict(
             from cascade.task.execution import execution_view
 
             value["execution"] = execution_view(meta.id, root=root)
-        from cascade.task_rollup import queued_delivery_evidence, pending_task_merges
+        from cascade.task_rollup import pending_task_merges
         from cascade.task.action_recovery import load_action
-        delivery_active = meta.status in {"active", "blocked"}
+
+        action_id = f"{meta.id}:queued_merge"
+        delivery_action = (
+            delivery_actions.get(action_id)
+            if delivery_actions is not None
+            else load_action(action_id, root=root)
+        )
+        pending = (
+            pending_deliveries
+            if pending_deliveries is not None
+            else pending_task_merges(root)
+        )
+        validation = ((delivery_action or {}).get("metadata") or {}).get(
+            "final_validation"
+        )
         value["delivery_review"] = {
-            "kind": "local_task_delivery", "owner": meta.id, "supervisor": meta.parent,
-            "source_branch": f"task/{meta.id}", "target_branch": f"feat/{meta.parent}",
-            "validation": queued_delivery_evidence(meta.id, root=root) if delivery_active else None,
-            "queued": delivery_active and meta.id in pending_task_merges(root),
-            "action": load_action(f"{meta.id}:queued_merge", root=root) if delivery_active else None,
+            "kind": "local_task_delivery",
+            "owner": meta.id,
+            "supervisor": meta.parent,
+            "source_branch": f"task/{meta.id}",
+            "target_branch": f"feat/{meta.parent}",
+            "validation": validation,
+            "queued": meta.id in pending,
+            "action": delivery_action,
         }
         # Recovery stays attached to the original action; its contract, rather
         # than broad board state, authorizes any safe retry control.
@@ -188,7 +207,9 @@ def _provider_recovery_view(
         from cascade.provider_recovery_command import continue_without_flex_eligibility
 
         continuation = continue_without_flex_eligibility(
-            meta.id, root=root, inventory=inventory,
+            meta.id,
+            root=root,
+            inventory=inventory,
             compatibility_cache=compatibility_cache,
         ).to_dict()
 
@@ -709,9 +730,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
         if review is not None
         and review.get("state") in {"preparing_review", "awaiting_review"}
     )
-    backlog_feature_ids = {
-        meta.id for meta in metas if _backlog_open_feature(meta)
-    }
+    backlog_feature_ids = {meta.id for meta in metas if _backlog_open_feature(meta)}
     from cascade.comments.gate import blocking_threads_for_many, gate_refusal_reason
 
     gate_results = blocking_threads_for_many(
@@ -723,6 +742,13 @@ def board_view_from_index(board, *, root: Path) -> dict:
     }
     sync_views = branch_sync_views(metas, root=root)
     incidents = recovery_incidents_by_work_id(root=root)
+    from cascade.task.action_recovery import recovery_actions
+    from cascade.task_rollup import pending_task_merges
+
+    delivery_actions = {
+        action["action_id"]: action for action in recovery_actions(root=root)
+    }
+    pending_deliveries = pending_task_merges(root)
 
     # A board render is one projection boundary.  Acquire the bounded cache
     # once and reuse that immutable evidence for every backlog/active row so a
@@ -754,6 +780,8 @@ def board_view_from_index(board, *, root: Path) -> dict:
             branch_sync=sync_views.get(meta.id),
             recovery_incident=incidents.get(meta.id),
             sidecars_preloaded=True,
+            delivery_actions=delivery_actions,
+            pending_deliveries=pending_deliveries,
         )
         if meta.tier in {"epic", "feature"}:
             readiness = item.get("plan_readiness")

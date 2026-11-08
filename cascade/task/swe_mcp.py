@@ -6,6 +6,8 @@ import json
 import sys
 from collections.abc import Mapping
 from pathlib import Path
+
+from cascade.agent.mcp_project_context import project_context_payload
 from typing import Any
 
 from cursor_sdk import CustomTool, CustomToolContext
@@ -100,6 +102,7 @@ def build_swe_mcp_servers(
             {
                 "task_id": task_id,
                 "repo_root": str(repo),
+                "project_context": project_context_payload(),
                 "tool_names": tool_names,
             }
         ),

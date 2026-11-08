@@ -7,6 +7,7 @@ from hashlib import sha256
 from datetime import datetime, timezone
 from pathlib import Path
 
+from cascade.task.lifecycle_lock import lifecycle_root
 from cascade.board.context import resolve_root
 from cascade.board.errors import NotFound
 from cascade.board.gitutil import _run
@@ -39,7 +40,7 @@ _SEMANTIC_CONFLICT_OWNERS = {
 
 
 def _path(root: Path) -> Path:
-    return root / ".cascade" / "pending-task-merges.json"
+    return lifecycle_root(root) / ".cascade" / "pending-task-merges.json"
 
 
 def _read(root: Path) -> list[str]:

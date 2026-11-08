@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from cascade.board.context import resolve_root
-from cascade.task.lifecycle_lock import task_lifecycle_lock
+from cascade.task.lifecycle_lock import lifecycle_root, task_lifecycle_lock
 
 ExecutionPhase = Literal["queued", "running", "awaiting_merge", "merge_blocked", "terminal"]
 ExecutionOutcome = Literal["succeeded", "failed"]
@@ -23,7 +23,7 @@ MAX_VALIDATION_FAILURES = 3
 
 
 def _path(root: Path) -> Path:
-    return root / ".cascade" / "executions.json"
+    return lifecycle_root(root) / ".cascade" / "executions.json"
 
 
 def _now() -> datetime:

@@ -7,6 +7,8 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from cascade.agent.mcp_project_context import project_context_payload
 from typing import Any, Literal
 
 from cursor_sdk import CustomTool, CustomToolContext
@@ -103,6 +105,7 @@ def build_planning_mcp_servers(
                 "tier": sandbox.tier,
                 "scope_id": sandbox.scope_id,
                 "repo_root": str(sandbox.repo_root),
+                "project_context": project_context_payload(),
                 "tool_names": tool_names,
                 "role": sandbox.role,
             }

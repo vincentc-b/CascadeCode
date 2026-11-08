@@ -253,13 +253,22 @@ def test_fail_task_does_not_dispatch(tmp_path: Path) -> None:
     mocked.assert_not_called()
 
 
-def test_fail_task_commits_blocked_state_in_owning_feature_worktree(tmp_path: Path) -> None:
+def test_fail_task_commits_blocked_state_in_owning_feature_worktree(tmp_path: Path, monkeypatch) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
 
     from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
+    from tests.feature.test_recovery import _select_roles
+    from tests.test_approval_selection_gate import _inventory
+
+    inventory = _inventory("offered")
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    _select_roles(root, "epic_001", "epic_manager", "epic_architect", "feature_lead", "feature_architect", "swe")
+    _select_roles(root, "feat_001", "feature_lead", "feature_architect", "swe")
+    _select_roles(root, "task_001", "swe")
 
     assert activate_epic("epic_001", "human", root=root).ok
     approve_board_feature(root, "feat_001")

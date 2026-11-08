@@ -16,6 +16,8 @@ def main() -> None:
     if not config_path:
         raise SystemExit("CASCADE_TASK_MCP_CONFIG is required")
     config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+    from cascade.agent.mcp_project_context import restore_project_context
+    restore_project_context(config.get("project_context"))
     task_id = config["task_id"]
     repo_root = Path(config["repo_root"])
     tool_names: list[str] = list(config.get("tool_names") or [])

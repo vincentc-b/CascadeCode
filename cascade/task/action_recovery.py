@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Literal, Mapping
 
 from cascade.board.context import resolve_root
-from cascade.task.lifecycle_lock import task_lifecycle_lock
+from cascade.task.lifecycle_lock import lifecycle_root, task_lifecycle_lock
 
 FailureClassification = Literal[
     "deterministic_repair",
@@ -139,7 +139,7 @@ class ActionReconciliation:
 
 
 def _path(root: Path) -> Path:
-    return root / ".cascade" / "executions.json"
+    return lifecycle_root(root) / ".cascade" / "executions.json"
 
 
 def _iso(now: datetime | None) -> str:
@@ -1586,8 +1586,9 @@ def acknowledge_team_recovery(work_id: str, *, root: Path) -> None:
     repo = resolve_root(root)
     with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
+        actions = _actions(payload)
         changed = False
-        for action in _actions(payload).values():
+        for action in actions.values():
             recovery = action.get("recovery") or {}
             if (recovery.get("owning_team") or {}).get("work_id") != work_id:
                 continue
@@ -1596,6 +1597,7 @@ def acknowledge_team_recovery(work_id: str, *, root: Path) -> None:
                 marker["acknowledged_at"] = _iso(None)
                 changed = True
         if changed:
+            payload["actions"] = actions
             _write_payload(repo, payload)
 
 

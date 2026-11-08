@@ -24,7 +24,7 @@ from cascade.task.orphan_delivery import (
     derive_orphan_delivery_incident,
     snapshot_orphan_delivery_state,
 )
-from cascade.task.lifecycle_lock import task_lifecycle_lock
+from cascade.task.lifecycle_lock import lifecycle_root, task_lifecycle_lock
 
 RecoveryDecision = Literal[
     "no_op_live_owner",
@@ -326,7 +326,7 @@ def _result(
 
 
 def _ledger_path(root: Path) -> Path:
-    return root / ".cascade" / "orphan_delivery_recoveries.json"
+    return lifecycle_root(root) / ".cascade" / "orphan_delivery_recoveries.json"
 
 
 def _read_ledger(root: Path) -> dict[str, dict[str, object]]:

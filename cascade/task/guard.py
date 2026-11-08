@@ -57,7 +57,9 @@ def task_tool_guard(
     return True
 
 
-def _under_denied_prefix(parts: tuple[str, ...], prefixes: tuple[tuple[str, ...], ...]) -> bool:
+def _under_denied_prefix(
+    parts: tuple[str, ...], prefixes: tuple[tuple[str, ...], ...]
+) -> bool:
     folded = tuple(p.casefold() for p in parts)
     for prefix in prefixes:
         plen = len(prefix)
@@ -141,16 +143,121 @@ def _resolve_under_root(path: Path | str, root: Path) -> Path | None:
     return resolved
 
 
-def contract_scope_blocker(body: str) -> dict[str, object] | None:
+def contract_paths(body: str) -> tuple[str, ...]:
+    """Declared deliverables, normalized independently of Markdown formatting."""
     import re
+
     sections = re.split(r"(?m)^##\s+", body)
     paths = []
     for section in sections[1:]:
         heading, _, content = section.partition("\n")
-        if heading.strip().casefold() not in {"deliverables", "files", "allowed paths", "expected deliverables", "scope", "files likely touched"}:
+        if heading.strip().casefold() not in {
+            "deliverables",
+            "files",
+            "allowed paths",
+            "expected deliverables",
+            "scope",
+            "files likely touched",
+        }:
             continue
-        paths.extend(re.findall(r"(?:`|^\s*[-*]\s+)([A-Za-z0-9_.-]+/[A-Za-z0-9_./*-]+)", content, re.M))
-    if paths and all(_under_denied_prefix(Path(path).parts, _WRITE_DENIED) for path in paths):
-        return {"reason": "task_scope_denied", "paths": sorted(set(paths)),
-                "next_step": "Feature team must record planning prose itself and revise the Task to an authorized deliverable."}
+        paths.extend(
+            re.findall(
+                r"(?:`|^\s*[-*]\s+)([A-Za-z0-9_.-]+/[A-Za-z0-9_./*-]*|[A-Za-z0-9_-]+\.[A-Za-z0-9_.-]+)",
+                content,
+                re.M,
+            )
+        )
+    return tuple(sorted({Path(path.rstrip("/")).as_posix() for path in paths}))
+
+
+def contract_scope_blocker(body: str) -> dict[str, object] | None:
+    paths = contract_paths(body)
+    if paths and all(
+        _under_denied_prefix(Path(path).parts, _WRITE_DENIED) for path in paths
+    ):
+        return {
+            "reason": "task_scope_denied",
+            "paths": sorted(set(paths)),
+            "next_step": "Feature team must record planning prose itself and revise the Task to an authorized deliverable.",
+        }
     return None
+
+
+def contract_revision_evidence(old: str, new: str, error: str) -> dict[str, object]:
+    """Prove a bounded contract change; prose cannot grant external permission."""
+    import re
+
+    old_paths, new_paths = contract_paths(old), contract_paths(new)
+    sandbox_refusal = any(
+        token in error.lower()
+        for token in (
+            "forbidden_commit_paths",
+            "task_scope_denied",
+            "write denied",
+            "commit refused",
+            "tasktooldenied",
+        )
+    )
+    permission_refusal = any(
+        token in error.lower()
+        for token in (
+            "permission",
+            "unauthorized",
+            "credential",
+            "forbidden",
+        )
+    )
+    if sandbox_refusal:
+        eligible = bool(
+            new_paths
+            and new_paths != old_paths
+            and all(
+                not _under_denied_prefix(Path(path).parts, _WRITE_DENIED)
+                and not Path(path).is_absolute()
+                and ".." not in Path(path).parts
+                for path in new_paths
+            )
+        )
+        reason = (
+            "authorized_deliverables_changed"
+            if eligible
+            else "scope_contract_unchanged"
+        )
+    elif permission_refusal:
+        eligible, reason = False, "external_permission_required"
+    else:
+
+        def contract(body):
+            sections = re.split(r"(?m)^##\s+", body)
+            return tuple(
+                (
+                    heading.strip().casefold(),
+                    re.sub(r"\s+", " ", content.replace("`", "")).strip(),
+                )
+                for section in sections[1:]
+                for heading, _, content in [section.partition("\n")]
+                if heading.strip().casefold()
+                in {
+                    "acceptance criteria",
+                    "files likely touched",
+                    "implementation notes",
+                    "test plan",
+                    "deliverables",
+                    "expected deliverables",
+                    "allowed paths",
+                    "scope",
+                }
+            )
+
+        eligible = (
+            contract(old) != contract(new) and contract_scope_blocker(new) is None
+        )
+        reason = (
+            "execution_contract_changed" if eligible else "execution_contract_unchanged"
+        )
+    return {
+        "eligible": eligible,
+        "reason": reason,
+        "old_paths": list(old_paths),
+        "new_paths": list(new_paths),
+    }

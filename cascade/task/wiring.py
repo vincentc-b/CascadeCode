@@ -33,6 +33,7 @@ def load_task_tools() -> None:
     """Register all task SWE tools idempotently."""
 
     from cascade.team_supervision import message_team
+
     register_task_tool("message_team", message_team)
     expected = (
         "swe_read",
@@ -158,10 +159,15 @@ def enqueue_validated_delivery(task_id: str, *, root: Path) -> bool:
     if run is None:
         return False
     repo = Path(root).resolve()
-    from cascade.task_rollup import delivery_evidence_is_current, queued_delivery_evidence
+    from cascade.task_rollup import (
+        delivery_evidence_is_current,
+        queued_delivery_evidence,
+    )
 
     evidence = queued_delivery_evidence(task_id, root=repo)
-    if evidence is None or not delivery_evidence_is_current(task_id, evidence, root=repo):
+    if evidence is None or not delivery_evidence_is_current(
+        task_id, evidence, root=repo
+    ):
         invalidate_validated_delivery(task_id, root=repo)
         return False
     _enqueue_validated_delivery(task_id, run, root=repo, evidence=evidence)
@@ -189,7 +195,9 @@ def _enqueue_validated_delivery(
     reuse stale evidence.
     """
 
-    deliverable_sha = _run(["rev-parse", "--verify", f"{run.branch}^{{commit}}"], root).stdout.strip()
+    deliverable_sha = _run(
+        ["rev-parse", "--verify", f"{run.branch}^{{commit}}"], root
+    ).stdout.strip()
     if not deliverable_sha:
         raise RuntimeError(f"cannot resolve deliverable commit for {task_id}")
     feature_base_sha = _current_feature_base(task_id, root=root)
@@ -219,8 +227,6 @@ def _current_feature_base(task_id: str, *, root: Path) -> str | None:
     ref = integration_branch("feature", task.meta.parent)
     result = _run(["rev-parse", "--verify", f"{ref}^{{commit}}"], root, check=False)
     return result.stdout.strip() if result.returncode == 0 else None
-
-
 
 
 def on_tool_error(task_id: str, exc: BaseException, *, root: Path) -> None:
@@ -288,7 +294,8 @@ def restore_active_task_runs(root: Path) -> list[tuple[str, str]]:
             continue
         execution = execution_view(task_id, root=repo)
         if execution is not None and execution.get("phase") in {
-            "awaiting_merge", "merge_blocked"
+            "awaiting_merge",
+            "merge_blocked",
         }:
             # A finished SWE turn needs merge reconciliation, not another model
             # turn after restart.
@@ -368,6 +375,10 @@ def _teardown_task_graph(work_id: str) -> None:
 
 
 def _failure_reason(kind: str, exc_or_result: object) -> str:
+    from cascade.task.guard import TaskToolDenied
+
+    if isinstance(exc_or_result, TaskToolDenied):
+        return "task_scope_denied"
     if isinstance(exc_or_result, dict) and exc_or_result.get("exit_code") not in (
         None,
         0,

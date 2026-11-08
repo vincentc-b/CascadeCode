@@ -61,16 +61,32 @@ def revise_task(task_id: str, body: str, *, feature_id: str, root: Path) -> str 
         normalized = body.strip() + "\n"
         if normalized == task.body.strip() + "\n":
             return None
-        old = sha256(task.body.strip().encode()).hexdigest()
-        new = sha256(normalized.strip().encode()).hexdigest()
-        task.body = normalized
-        revision = write_doc(task, root=task.meta.path.parents[3])
         records = _read(trunk)
         row = records.setdefault(task_id, {})
+        from cascade.task.guard import contract_revision_evidence
+
+        evidence = contract_revision_evidence(
+            task.body, normalized, str(row.get("last_error") or "")
+        )
+        old = sha256(task.body.strip().encode()).hexdigest()
+        new = sha256(normalized.strip().encode()).hexdigest()
         revisions = row.setdefault("contract_revisions", [])
-        if not any(r.get("new_revision") == new for r in revisions):
-            revisions.append({"old_revision": old, "new_revision": new,
-                              "commit": revision, "consumed": False})
+        # Persist intent first. A crash after the document commit can replay
+        # the prepared generation only when its exact body is authoritative.
+        record = next((r for r in revisions if r.get("new_revision") == new), None)
+        if record is None:
+            record = {
+                "old_revision": old,
+                "new_revision": new,
+                "commit": None,
+                "consumed": False,
+                "evidence": evidence,
+            }
+            revisions.append(record)
+        _write(trunk, records)
+        task.body = normalized
+        revision = write_doc(task, root=task.meta.path.parents[3])
+        record["commit"] = revision
         _write(trunk, records)
         return revision
 
@@ -81,7 +97,15 @@ def _typed_reason(error: object, *, blocked: bool) -> str:
     value = str(error or "").strip().lower()
     if any(
         token in value
-        for token in ("permission", "unauthorized", "forbidden", "credential", "write denied", "commit refused")
+        for token in (
+            "permission",
+            "unauthorized",
+            "forbidden",
+            "credential",
+            "write denied",
+            "commit refused",
+            "task_scope_denied",
+        )
     ):
         return "permission_refused"
     if any(
@@ -146,13 +170,21 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
     # than becoming a second orchestration path through the same control.
     attempt_count = int(execution.get("attempt") or 0)
     from hashlib import sha256
+
     current_revision = sha256(task.body.strip().encode()).hexdigest()
     revisions = execution.get("contract_revisions", [])
-    revised = any(r.get("new_revision") == current_revision and not r.get("consumed") for r in revisions)
-    retryable = (
-        terminal
-        and (revised or (attempt_count <= 1
-        and typed_reason in {"transient_forge_failure", "blocked_execution"}))
+    revised = any(
+        r.get("new_revision") == current_revision
+        and not r.get("consumed")
+        and (r.get("evidence") or {}).get("eligible")
+        for r in revisions
+    )
+    retryable = terminal and (
+        revised
+        or (
+            attempt_count <= 1
+            and typed_reason in {"transient_forge_failure", "blocked_execution"}
+        )
     )
     checkout = get_integration_worktree(trunk, "task", task_id)
     affected: dict[str, object] = {"branch": integration_branch("task", task_id)}
@@ -183,6 +215,7 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
         "phase": phase,
         "reason": typed_reason,
         "attempt_count": attempt_count,
+        "attempt_history": execution.get("attempt_history", []),
         "contract_revisions": revisions,
         "owner": execution.get("owner_pid"),
         "affected": affected,
