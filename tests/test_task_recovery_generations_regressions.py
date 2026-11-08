@@ -37,6 +37,15 @@ def isolate_hooks_and_inventory(monkeypatch):
     inventory = ProviderInventoryResult(
         providers=(
             ProviderInventoryItem(
+                provider_id="cursor",
+                display_name="Cursor",
+                models=(
+                    DiscoveredModel(id="proj-epic", display_name="Project Epic"),
+                    DiscoveredModel(id="proj-feature", display_name="Project Feature"),
+                    DiscoveredModel(id="proj-task", display_name="Project Task"),
+                ),
+            ),
+            ProviderInventoryItem(
                 provider_id="codex",
                 display_name="Codex",
                 models=(DiscoveredModel(id="offered", display_name="Offered"),),
@@ -107,6 +116,126 @@ def _git(root, *args):
     return subprocess.run(
         ["git", *args], cwd=root, check=True, capture_output=True, text=True
     ).stdout.strip()
+
+
+def test_audit_requeues_lost_validated_delivery_through_original_action(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from cascade.boss.merge import MergeResult
+    from cascade.task.action_recovery import load_action
+    from cascade.task_rollup import (
+        invalidate_task_merge,
+        pending_task_merges,
+        retry_pending_task_merges,
+    )
+    from cascade.watchdog.audit import project_audit_observation
+    from cascade.watchdog.audit_recovery import dispatch_audit_recovery
+    from cascade.watchdog.dispatch import dispatch_task
+    from cascade.watchdog.events import read_events
+    from cascade.workspace.integration_worktree import create_integration_worktree
+
+    root = make_repo(tmp_path, models=True)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Epic",
+        tier="epic",
+        status="active",
+        children=["feat_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+        children=["task_001", "task_002"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Delivered task",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    add_doc(
+        root,
+        id="task_002",
+        title="Dependent task",
+        tier="task",
+        parent="feat_001",
+        depends_on=["task_001"],
+    )
+    _git(root, "add", ".")
+    _git(root, "commit", "-m", "Create recovery board")
+    feature = create_integration_worktree(
+        "feature", "feat_001", branch="feat/feat_001", base_ref="HEAD", trunk=root
+    )
+    task = create_integration_worktree(
+        "task", "task_001", branch="task/task_001", base_ref=feature.branch, trunk=root
+    )
+    (task.path / "delivery.py").write_text("delivered = True\n")
+    _git(task.path, "add", "delivery.py")
+    _git(task.path, "commit", "-m", "Validated task delivery")
+    mark_queued("task_001", root=root)
+    mark_awaiting_merge("task_001", root=root)
+    evidence = {
+        "task_id": "task_001",
+        "deliverable_sha": _git(task.path, "rev-parse", "HEAD"),
+        "feature_base_sha": _git(feature.path, "rev-parse", "HEAD"),
+    }
+    queue_task_merge("task_001", root=root, delivery_evidence=evidence)
+
+    # Reproduce the original delivery incident: one transient canonical merge
+    # refusal followed by loss of only the scheduling index. The durable action
+    # and exact validation evidence remain authoritative.
+    with monkeypatch.context() as busy:
+        busy.setattr(
+            "cascade.boss.merge.merge_task_branch",
+            lambda *_a, **_k: MergeResult(ok=False, reason="busy"),
+        )
+        assert retry_pending_task_merges(root) == []
+    original = load_action("task_001:queued_merge", root=root)
+    assert original is not None
+    assert original["recovery_state"] == "retryable"
+    assert original["attempt_count"] == 1
+    invalidate_task_merge("task_001", root=root)
+    assert pending_task_merges(root) == set()
+
+    user_work = root / "user-notes.txt"
+    user_work.write_text("keep this work exactly as written\n")
+    observation = project_audit_observation("task_001", root=root)
+    assert (observation.classification, observation.reason) == (
+        "proven_incident",
+        "validated_delivery_missing",
+    )
+
+    assert dispatch_audit_recovery(root, "task_001")
+    assert pending_task_merges(root) == {"task_001"}
+    requeued = load_action("task_001:queued_merge", root=root)
+    assert requeued is not None
+    assert requeued["action_id"] == original["action_id"]
+    assert requeued["attempt_count"] == 1
+    assert requeued["metadata"]["final_validation"] == evidence
+
+    assert retry_pending_task_merges(root) == ["task_001"]
+    assert read_doc("task_001", root=root).meta.status == "completed"
+    completed = load_action("task_001:queued_merge", root=root)
+    assert completed is not None
+    assert completed["action_id"] == original["action_id"]
+    assert completed["recovery_state"] == "completed"
+    assert completed["attempt_count"] == 2
+    assert pending_task_merges(root) == set()
+    assert retry_pending_task_merges(root) == []
+    events, _ = read_events("feat_001", 0, root=root)
+    assert sum(event.type == "TaskMerged" for event in events) == 1
+
+    released = dispatch_task("task_002", "human", root=root)
+    assert released.ok
+    assert read_doc("task_002", root=feature.path).meta.status == "active"
+    assert user_work.read_text() == "keep this work exactly as written\n"
 
 
 @pytest.mark.parametrize(
@@ -606,6 +735,9 @@ def test_scope_blocked_contract_revised_to_source_completes_real_delivery(tmp_pa
 
     set_task_run_role_fn(provider)
     assert retry_task("task_001", feature_id="feat_001", root=root)["ok"]
+    from cascade.workspace.kickoff import wait_for_background_kickoffs
+
+    assert wait_for_background_kickoffs()
     assert len(starts) == 1
     assert retry_pending_task_merges(root) == ["task_001"]
     assert read_doc("task_001", root=root).meta.status == "completed"
