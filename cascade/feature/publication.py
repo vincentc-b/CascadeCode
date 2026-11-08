@@ -259,6 +259,8 @@ def _task_deliverable_commit(root: Path, task_id: str) -> str:
             return receipt_commit
     if not candidates:
         receipt_commit = _validated_receipt_deliverable(root, task_id, branch)
+        if receipt_commit is None:
+            receipt_commit = _validated_receipt_deliverable(root, task_id, branch, aggregate=True)
         if receipt_commit is not None:
             return receipt_commit
     if len(candidates) != 1:

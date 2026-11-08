@@ -146,8 +146,9 @@ def test_legacy_task_commit_uses_durable_validation_receipt(
     assert _task_deliverable_commit(root, "task_001") == delivery
 
 
+@pytest.mark.parametrize("merge_shaped_task", [False, True])
 def test_legacy_validation_merge_uses_task_side_parent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, merge_shaped_task: bool
 ) -> None:
     root = make_repo(tmp_path)
     product = root / "product.py"
@@ -163,6 +164,13 @@ def test_legacy_validation_merge_uses_task_side_parent(
     _git(root, "checkout", "-b", "task/task_001", base)
     product.write_text("VALUE = 1\n", encoding="utf-8")
     _git(root, "commit", "-am", "legacy task delivery")
+    if merge_shaped_task:
+        _git(root, "checkout", "-b", "legacy-repair", base)
+        (root / "repair.txt").write_text("preserved repair\n", encoding="utf-8")
+        _git(root, "add", "repair.txt")
+        _git(root, "commit", "-m", "legacy repair")
+        _git(root, "checkout", "task/task_001")
+        _git(root, "merge", "--no-ff", "legacy-repair", "-m", "integrate repair")
     task_parent = _git(root, "rev-parse", "HEAD")
     _git(root, "merge", "--no-ff", "feat/feat_001", "-m", "validate current feature")
     validated = _git(root, "rev-parse", "HEAD")
@@ -181,7 +189,9 @@ def test_legacy_validation_merge_uses_task_side_parent(
         },
     )
 
-    assert _task_deliverable_commit(root, "task_001") == task_parent
+    assert _task_deliverable_commit(root, "task_001") == (
+        validated if merge_shaped_task else task_parent
+    )
 
 
 def test_publication_reuses_integration_resolution_for_conflicting_task_patch(
