@@ -427,3 +427,36 @@ def test_missing_operation_is_not_persisted_for_unauthorized_owner(
     assert denied.reason == "concrete_owner_not_authorized"
     assert denied.receipt_action_id is None
     assert recovery_actions(root=root) == []
+
+
+def test_real_observations_do_not_hash_probe_receipts_and_arrival_retires_old_generation(tmp_path, monkeypatch):
+    from cascade.watchdog.audit import project_audit_observation
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001", status="active")
+    add_doc(root, id="task_001", title="Blocked", tier="task", parent="feat_001", status="blocked")
+    missing_registry = CapabilityRegistry()
+    monkeypatch.setattr("cascade.watchdog.capabilities.default_capability_registry", lambda: missing_registry)
+    initial = project_audit_observation("task_001", root=root)
+    receipt_ids = set()
+    for _ in range(3):
+        observed = project_audit_observation("task_001", root=root)
+        assert observed.generation == initial.generation
+        assert observed.reason == initial.reason
+        incident = _incident()
+        incident["authoritative_generation"] = observed.generation.value
+        missing = probe_capability(incident, "feature_team:feat_001", root=root)
+        assert missing.state == "missing"
+        receipt_ids.add(missing.receipt_action_id)
+    assert len(receipt_ids) == 1
+
+    monkeypatch.setattr("cascade.watchdog.capabilities.default_capability_registry", _registry)
+    arrived_observation = project_audit_observation("task_001", root=root)
+    assert arrived_observation.generation != initial.generation
+    incident = _incident()
+    incident["authoritative_generation"] = arrived_observation.generation.value
+    available = probe_capability(incident, "feature_team:feat_001", root=root)
+    assert available.available
+    assert load_action(str(next(iter(receipt_ids))), root=root)["recovery_state"] == "completed"
+    assert project_audit_observation("task_001", root=root).generation == arrived_observation.generation

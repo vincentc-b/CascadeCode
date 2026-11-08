@@ -16,6 +16,85 @@ from cascade.watchdog.reservations import (
 from tests.support import add_doc, make_repo
 
 
+def _real_stale_task(tmp_path):
+    from tests.watchdog.test_audit import _commit
+    from cascade.task.execution import mark_queued, mark_running
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", status="active", parent="epic_001", children=["task_001"])
+    add_doc(root, id="task_001", title="Task", tier="task", status="active", parent="feat_001")
+    _commit(root)
+    old = datetime.now(timezone.utc) - timedelta(hours=1)
+    mark_queued("task_001", root=root, now=old)
+    mark_running("task_001", root=root, now=old)
+    return root
+
+
+def _observed_incident(observation, operation):
+    return incident_record(
+        work_id=observation.work_id.value, tier=observation.tier,
+        accountable_owner="feature_team:feat_001",
+        failure_class=observation.incident.failure_class,
+        generation=observation.generation.value,
+        evidence={"document_revision": observation.document_revision.value},
+        selected_capability=operation, outcome="deferred",
+    )
+
+
+def test_real_observation_probe_and_reservation_survive_elapsed_heartbeat_age(tmp_path, monkeypatch):
+    from cascade.watchdog.audit import project_audit_observation
+    from cascade.watchdog.capabilities import default_capability_registry, probe_capability
+    import cascade.watchdog.reservations as reservations
+    root = _real_stale_task(tmp_path)
+    observed = project_audit_observation("task_001", root=root)
+    assert observed.reason == "stale"
+    assert observed.incident.failure_class == "stalled_execution"
+    capability = next(row for row in default_capability_registry().descriptors() if row.name == "task.supervisor_recover_task_delivery")
+    incident = _observed_incident(observed, capability.name)
+    assert probe_capability(incident, "feature_team:feat_001", root=root).available
+    # Any Git invocation inside the locked recheck violates admission's contract.
+    original_recheck = reservations._locked_local_recheck
+    def recheck(*args, **kwargs):
+        with monkeypatch.context() as patch:
+            patch.setattr("subprocess.run", lambda *a, **k: pytest.fail("Git or subprocess inside lifecycle lock"))
+            return original_recheck(*args, **kwargs)
+    monkeypatch.setattr(reservations, "_locked_local_recheck", recheck)
+    decision = reserve_after_recheck(incident, capability, root=root)
+    assert decision.reserved, decision
+    assert reserve_after_recheck(incident, capability, root=root).reason == "active_claim"
+
+
+def test_locked_recheck_refuses_changed_child_authority(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from dataclasses import replace
+    from cascade.board.store import read_doc
+    from cascade.watchdog.audit import project_audit_observation
+    import cascade.watchdog.reservations as reservations
+    root = _real_stale_task(tmp_path)
+    from cascade.board.store import write_doc
+    from cascade.task.execution import mark_terminal
+    mark_terminal("task_001", "failed", root=root)
+    task = read_doc("task_001", root=root)
+    task.meta.status = "blocked"
+    write_doc(task, root=root)
+    observed = project_audit_observation("feat_001", root=root)
+    assert observed.classification == "proven_incident"
+    capability = replace(_descriptor(), tiers=frozenset({"feature"}),
+                         failure_classes=frozenset({observed.incident.failure_class}))
+    incident = _observed_incident(observed, capability.name)
+    child = read_doc("task_001", root=root).meta.path
+    original_lock = reservations.task_lifecycle_lock
+    @contextmanager
+    def race(*, root):
+        # A canonical plan change lands after projection, before lock admission.
+        child.write_text(child.read_text() + "\nNew owner constraint.\n")
+        with original_lock(root=root):
+            yield
+    monkeypatch.setattr(reservations, "task_lifecycle_lock", race)
+    decision = reserve_after_recheck(incident, capability, root=root)
+    assert decision.state == "stale"
+
+
 def _root(tmp_path: Path) -> Path:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")

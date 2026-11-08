@@ -13,7 +13,7 @@ import hashlib
 import json
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 from threading import RLock
@@ -158,6 +158,7 @@ class AuditEvidence:
     gates: tuple[str, ...]
     unresolved_references: tuple[str, ...]
     errors: tuple[str, ...] = ()
+    local_fingerprint: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,7 +276,9 @@ _TERMINAL_MARKERS = {
     "repaired",
     "requeue_commit",
 }
-_COMPLETED_CACHE_LIMIT = 16
+# A workspace can retain dozens of owned checkouts. Keep their inventories in
+# the bounded cache together instead of evicting every checkout each pass.
+_COMPLETED_CACHE_LIMIT = 128
 _completed_cache_lock = RLock()
 _completed_cache: OrderedDict[
     Path,
@@ -368,6 +371,61 @@ def _scan_candidate_directory(directory: Path, output: dict[str, WorkMeta]) -> N
         output[meta.id] = meta
 
 
+def _canonical_candidate_board(
+    tracking: Path, cutoff: date
+) -> tuple[dict[str, WorkMeta], dict[str, WorkMeta], dict[str, WorkMeta]]:
+    """Apply canonical checkout precedence while caching completed inventories.
+
+    Only tracking checkouts own lifecycle documents in a split workspace.
+    Product worktrees supply Git provenance separately, never stale plan copies.
+    """
+    from cascade.workspace.integration_worktree import (
+        _meta_preference, is_trunk_pointer, load_registry_readonly,
+    )
+    from cascade.workspace.backlog_snapshot import read_provenance, snapshot_board
+
+    live, completed, _recent = _candidate_board(tracking, cutoff)
+    by_id = {**completed, **live}
+    closed_epics = {
+        work_id for work_id, meta in completed.items()
+        if meta.tier == "epic" and meta.status == "completed"
+        and not is_trunk_pointer(meta)
+    }
+    seen = {tracking.resolve()}
+    for entry in load_registry_readonly(tracking):
+        checkout = entry.path.resolve()
+        if checkout in seen or not checkout.is_dir():
+            continue
+        seen.add(checkout)
+        child_live, child_completed, _ = _candidate_board(checkout, cutoff)
+        for work_id, meta in {**child_completed, **child_live}.items():
+            current = by_id.get(work_id)
+            if work_id not in closed_epics and (
+                current is None or _meta_preference(meta) > _meta_preference(current)
+            ):
+                by_id[work_id] = meta
+    if read_provenance(tracking) is not None:
+        for work_id, meta in snapshot_board(tracking).by_id.items():
+            if meta.tier != "epic":
+                continue
+            current = by_id.get(work_id)
+            if current is None or (
+                current.status == "backlog" and current.path.parent.name == "1_backlog"
+            ):
+                if meta.path.parent.name == "1_backlog" or meta.status == "cancelled":
+                    by_id[work_id] = meta
+    completed = {
+        work_id: meta for work_id, meta in by_id.items()
+        if meta.path.parent.name == "3_completed"
+    }
+    live = {work_id: meta for work_id, meta in by_id.items() if work_id not in completed}
+    recent = {
+        work_id: meta for work_id, meta in completed.items()
+        if meta.status == "completed" and meta.updated >= cutoff
+    }
+    return live, completed, recent
+
+
 def select_audit_candidates(
     cursor: str | None = None,
     budget: CandidateBudget | None = None,
@@ -392,7 +450,7 @@ def select_audit_candidates(
     # provenance separately, so avoid even that incidental lock-file write.
     positions, next_tier = _decode_candidate_cursor(cursor)
     cutoff = (today or date.today()) - timedelta(days=7)
-    live, completed, recent = _candidate_board(tracking, cutoff)
+    live, completed, recent = _canonical_candidate_board(tracking, cutoff)
     reasons: dict[tuple[WorkTier, str], set[str]] = {}
     errors: dict[tuple[WorkTier, str], set[str]] = {}
 
@@ -579,11 +637,16 @@ def _read_json_source(path: Path, label: str) -> tuple[Any | None, str | None]:
 def _unresolved_candidate_references(
     product: Path,
     sources: tuple[tuple[str, str], ...] = _UNRESOLVED_SOURCES,
+    *,
+    include_auditor_receipts: bool = True,
 ) -> tuple[list[tuple[str, str]], list[str]]:
     references: list[tuple[str, str]] = []
     unavailable: list[str] = []
     for label, filename in sources:
-        payload, error = _read_json_source(product / ".cascade" / filename, label)
+        from cascade.task.lifecycle_lock import lifecycle_root
+
+        store_root = lifecycle_root(product) if label in {"action", "cleanup"} else product
+        payload, error = _read_json_source(store_root / ".cascade" / filename, label)
         if error:
             unavailable.append(error)
             continue
@@ -592,7 +655,9 @@ def _unresolved_candidate_references(
         if not isinstance(payload, Mapping):
             unavailable.append(f"{label}:unavailable")
             continue
-        _collect_unresolved_references(payload, label, references)
+        _collect_unresolved_references(
+            payload, label, references, include_auditor_receipts=include_auditor_receipts
+        )
         if label == "reconciliation":
             reviews, review_error = _read_json_source(
                 product / ".cascade" / "reviews.json", "review"
@@ -731,12 +796,17 @@ def _collect_unresolved_references(
     references: list[tuple[str, str]],
     *,
     inherited_id: str | None = None,
+    include_auditor_receipts: bool = True,
 ) -> None:
     if isinstance(value, list):
         for item in value:
-            _collect_unresolved_references(item, source, references)
+            _collect_unresolved_references(
+                item, source, references, include_auditor_receipts=include_auditor_receipts
+            )
         return
     if not isinstance(value, Mapping):
+        return
+    if not include_auditor_receipts and _auditor_receipt(value):
         return
     if _reference_is_terminal(value):
         return
@@ -773,8 +843,16 @@ def _collect_unresolved_references(
                 child_id = prefix if _looks_like_work_id(prefix) else None
         if isinstance(item, (Mapping, list)):
             _collect_unresolved_references(
-                item, source, references, inherited_id=child_id
+                item, source, references, inherited_id=child_id,
+                include_auditor_receipts=include_auditor_receipts,
             )
+
+
+def _auditor_receipt(row: Mapping[str, Any]) -> bool:
+    """Audit bookkeeping is not a new authoritative lifecycle failure."""
+    return row.get("action_kind") in {
+        "health_auditor_capability_probe", "health_auditor_reservation"
+    } or bool(row.get("reservation_id") and row.get("durable_store"))
 
 
 def _looks_like_work_id(value: str) -> bool:
@@ -977,6 +1055,12 @@ def _canonical_repositories(root: Path | None) -> tuple[Path, Path]:
 def _project_doc(
     doc: WorkDoc, *, board: BoardIndex, product: Path, tracking: Path
 ) -> AuditObservation:
+    local_error = None
+    try:
+        local_fingerprint = local_audit_fingerprint(doc.meta.id, root=product)
+    except Exception as exc:
+        local_fingerprint = None
+        local_error = f"local_evidence:{type(exc).__name__}"
     worktrees, worktree_errors = _registered_worktrees(product)
     worktree = worktrees.get((doc.meta.tier, doc.meta.id))
     git_root = worktree if worktree is not None else product
@@ -1031,6 +1115,8 @@ def _project_doc(
     unresolved, recovery_error = _unresolved_references(doc.meta.id, product)
     if recovery_error is not None:
         errors.append(recovery_error)
+    if local_error is not None:
+        errors.append(local_error)
     if worktree is not None and doc.meta.status in {"completed", "cancelled"}:
         unresolved = (*unresolved, f"worktree:{doc.meta.id}")
     evidence = AuditEvidence(
@@ -1045,16 +1131,93 @@ def _project_doc(
         gates=tuple(dict.fromkeys(gates)),
         unresolved_references=unresolved,
         errors=tuple(errors),
+        local_fingerprint=local_fingerprint,
     )
     generation = _generation(doc, git_head, branch, evidence, board=board)
     identity = _identity(doc, git_head, branch, generation)
     classification, reason = _classification(doc, board, evidence)
     incident = (
-        AuditIncidentIdentity(identity, reason, evidence)
+        AuditIncidentIdentity(identity, incident_failure_class(doc.meta.tier, reason, evidence), evidence)
         if classification == "proven_incident"
         else None
     )
+    try:
+        unchanged = local_fingerprint is not None and local_audit_fingerprint(doc.meta.id, root=product) == local_fingerprint
+    except Exception:
+        unchanged = False
+    if not unchanged and local_error is None:
+        return AuditObservation(
+            identity, "unavailable_evidence", "local_evidence_changed",
+            replace(evidence, errors=(*evidence.errors, "local_evidence_changed")), None,
+        )
     return AuditObservation(identity, classification, reason, evidence, incident)
+
+
+def incident_failure_class(tier: WorkTier, reason: str, evidence: AuditEvidence) -> str:
+    """Map observed symptoms to the existing owning recovery contract.
+
+    Keep manual blockage and unknown evidence unclassified: neither authorizes
+    a retry. Later adapters may register additional concrete incident classes.
+    """
+    if tier == "task":
+        execution = evidence.execution or {}
+        if reason == "blocked" and execution.get("outcome") == "failed":
+            return "blocked_task_failed"
+        if reason == "stale":
+            return "stalled_execution"
+        if reason == "merge_blocked":
+            return "delivery_reconciliation"
+    return reason
+
+
+def local_audit_fingerprint(work_id: str, *, root: Path) -> str:
+    """Fingerprint scoped local authority without subprocess or network I/O.
+
+    Reservation compares this under the lifecycle lock. Include related plan
+    content, comments, leases, review and action records, so a gate or child
+    change between projection and admission invalidates the prepared evidence.
+    Auditor receipts and clock-derived lease age are not authority changes.
+    """
+    product, tracking = _canonical_repositories(root)
+    board = merged_board_readonly(tracking)
+    owner = board.by_id[work_id]
+    ids = {work_id, *owner.children, *owner.depends_on}
+    if owner.parent:
+        ids.add(owner.parent)
+    ids.update(meta.id for meta in board.by_id.values() if meta.parent == work_id)
+    documents = {}
+    comments = {}
+    for related_id in sorted(ids):
+        meta = board.by_id.get(related_id)
+        documents[related_id] = (
+            (str(meta.path), hashlib.sha256(meta.path.read_bytes()).hexdigest())
+            if meta is not None else None
+        )
+        path = tracking / "docs" / "_comments" / f"{related_id}.jsonl"
+        comments[related_id] = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+    views = execution_views({key for key in ids if key.startswith("task_")}, root=product)
+    executions = {
+        key: ({name: value for name, value in view.items() if name != "heartbeat_age_seconds"} if view is not None else None)
+        for key, view in views.items()
+    }
+    actions = [
+        row for row in recovery_actions(root=product)
+        if (row.get("affected_work_id") or ((row.get("recovery") or {}).get("evidence") or {}).get("affected_work_id")) in ids
+        and row.get("action_kind") not in {"health_auditor_capability_probe", "health_auditor_reservation"}
+        and ":health_" not in str(row.get("action_id", ""))
+    ]
+    reviews, review_error = _read_json_source(product / ".cascade" / "reviews.json", "review")
+    if review_error:
+        raise ValueError(review_error)
+    worktrees, errors = _registered_worktrees(product)
+    payload = {
+        "documents": documents, "comments": comments, "executions": executions,
+        "actions": sorted(actions, key=lambda row: str(row.get("action_id"))),
+        "reviews": {key: reviews.get(key) for key in sorted(ids)} if isinstance(reviews, Mapping) else None,
+        "worktrees": [(key, str(path), path.is_dir()) for key, path in sorted(worktrees.items()) if key[1] in ids],
+        "registry_errors": errors,
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
 
 def _dependency_gates(doc: WorkDoc, board: BoardIndex) -> list[str]:
@@ -1077,6 +1240,7 @@ def _unresolved_references(
         str(row.get("action_id"))
         for row in actions
         if row.get("recovery_state") != "completed"
+        and not _auditor_receipt(row)
         and (
             row.get("affected_work_id") == work_id
             or ((row.get("recovery") or {}).get("evidence") or {}).get(
@@ -1087,7 +1251,7 @@ def _unresolved_references(
         and row.get("action_id")
     }
     unresolved, errors = _unresolved_candidate_references(
-        product, _UNRESOLVED_SOURCES[2:]
+        product, _UNRESOLVED_SOURCES[2:], include_auditor_receipts=False
     )
     references.update(
         f"{source}:{work_id}"
@@ -1221,6 +1385,7 @@ def _generation(
         ),
         "unresolved_references": evidence.unresolved_references,
         "errors": evidence.errors,
+        "local_fingerprint": evidence.local_fingerprint,
         "capability_fingerprint": capability_authority_fingerprint(),
         "direct_reports": _direct_report_inputs(doc, board, evidence),
     }

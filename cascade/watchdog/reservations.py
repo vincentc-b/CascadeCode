@@ -25,7 +25,7 @@ from cascade.board.store import read_doc
 from cascade.board.work_ids import parse_work_id_parts
 from cascade.task.execution import execution_views
 from cascade.task.lifecycle_lock import lifecycle_root, task_lifecycle_lock
-from cascade.watchdog.audit import AuditObservation, project_audit_observation
+from cascade.watchdog.audit import AuditObservation, local_audit_fingerprint, project_audit_observation
 from cascade.watchdog.capabilities import CapabilityDescriptor
 from cascade.watchdog.incidents import incident_record
 
@@ -89,9 +89,9 @@ def reserve_after_recheck(
     """Freshly validate and atomically reserve one incident generation.
 
     The default audit projection is prepared before taking the lifecycle lock
-    because it may inspect Git.  Under the lock we re-read the owning document
-    and Task execution state, which are the local authority protected by that
-    lock.  A custom ``fresh_recheck`` is for local projections only and is run
+    because it may inspect Git. Under the lock we recheck the fingerprint of
+    scoped local plans, comments, leases, actions and reviews, without Git I/O.
+    A custom ``fresh_recheck`` is for local projections only and is run
     under the lock; it must not perform provider, network, Git, or test I/O.
     """
 
@@ -337,6 +337,10 @@ def _locked_local_recheck(
     if prepared is None:
         raise ValueError("fresh audit projection is unavailable")
     work_id, _tier, _generation, _classification, _reason, evidence = _fresh_fields(prepared)
+    if isinstance(prepared, AuditObservation):
+        if evidence.local_fingerprint is None or local_audit_fingerprint(work_id, root=root) != evidence.local_fingerprint:
+            raise ValueError("local lifecycle authority changed")
+        return prepared
     tracking = getattr(getattr(prepared, "evidence", None), "tracking_repository", root)
     doc = read_doc(work_id, root=tracking)
     expected_revision = getattr(getattr(prepared, "document_revision", None), "value", None)
@@ -372,7 +376,7 @@ def _fresh_fields(
         tier = fresh.tier
         generation = fresh.generation.value
         classification = fresh.classification
-        reason = fresh.reason
+        reason = fresh.incident.failure_class if fresh.incident is not None else fresh.reason
         evidence = fresh.evidence
     return str(work_id), str(tier), str(generation), str(classification), str(reason), evidence
 

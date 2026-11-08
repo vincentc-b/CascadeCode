@@ -630,7 +630,6 @@ def _finish_probe(
             current_action_id=action_id,
             work_id=work_id,
             operation=operation,
-            generation=generation,
             root=root,
         )
         resume_action(
@@ -657,11 +656,17 @@ def _finalize_superseded_missing_receipts(
     current_action_id: str,
     work_id: str,
     operation: str,
-    generation: str,
     root: Path,
 ) -> None:
-    """Resolve prior capability-loss receipts after the same probe succeeds."""
+    """Resolve capability loss across generations for the same concrete owner.
 
+    Installing a capability changes its registry fingerprint and therefore the
+    observation generation. Older missing receipts remain historical evidence,
+    but must stop blocking once that owner's operation is executable again.
+    """
+
+    current = load_action(current_action_id, root=root) or {}
+    current_owner = dict(current.get("recovery") or {}).get("owning_team")
     for action in recovery_actions(root=root):
         if action.get("action_id") == current_action_id:
             continue
@@ -674,7 +679,7 @@ def _finalize_superseded_missing_receipts(
             or metadata.get("probe_state") != "missing"
             or metadata.get("affected_work_id") != work_id
             or metadata.get("requested_operation") != operation
-            or metadata.get("incident_generation") != generation
+            or dict(action.get("recovery") or {}).get("owning_team") != current_owner
         ):
             continue
         prior_action_id = str(action["action_id"])

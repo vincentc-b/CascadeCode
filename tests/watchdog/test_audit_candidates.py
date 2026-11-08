@@ -228,3 +228,95 @@ def test_unchanged_passes_reuse_completed_inventory_and_new_completion_is_seen(
     assert "epic_003" in _ids(page)
     assert any("3_completed" in path.parts for path in scanned)
 
+
+def test_owned_worktree_inventory_uses_canonical_status_and_discovers_unstarted_children(tmp_path, monkeypatch):
+    from cascade.board.store import move_doc
+    from cascade.workspace.integration_worktree import (
+        IntegrationWorktree, merged_board_readonly, save_registry,
+    )
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _commit(root)
+    path = root / ".cascade/worktrees/feat_feat_001"
+    subprocess.run(["git", "worktree", "add", "-b", "feat/feat_001", str(path)], cwd=root, check=True, capture_output=True)
+    move_doc("feat_001", "active", root=path)
+    add_doc(path, id="task_001", title="Unstarted", tier="task", parent="feat_001")
+    add_doc(path, id="task_002", title="Delivered", tier="task", parent="feat_001", status="completed")
+    _commit(path)
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    save_registry(root, [IntegrationWorktree("feature", "feat_001", "feat/feat_001", path, sha)])
+    (root / ".cascade/worktrees.lock").unlink()
+    board = merged_board_readonly(root)
+    page = select_audit_candidates(root=root)
+    rows = {str(row.work_id): row for row in page.candidates}
+
+    assert set(rows) == set(board.by_id)
+    assert all(row.evidence_available for row in rows.values())
+    assert "nonterminal" in rows["feat_001"].reasons
+    assert "nonterminal" in rows["task_001"].reasons
+    assert "recently_completed" in rows["task_002"].reasons
+    assert not (root / ".cascade/worktrees.lock").exists()
+    # Pagination remains fair after worktree-only rows enter the inventory.
+    cursor = None
+    found = set()
+    for _ in range(4):
+        page = select_audit_candidates(cursor, CandidateBudget(max_items=1), root=root)
+        assert len(page.candidates) == 1
+        found.update(_ids(page))
+        cursor = page.next_cursor
+    assert found == set(rows)
+    scanned = []
+    original = audit._scan_meta
+
+    def record_scan(path):
+        scanned.append(path)
+        return original(path)
+
+    monkeypatch.setattr(audit, "_scan_meta", record_scan)
+    select_audit_candidates(root=root)
+    assert all("3_completed" not in path.parts for path in scanned)
+    # Retained worktrees cannot resurrect an Epic accepted on trunk.
+    move_doc("epic_001", "completed", root=root)
+    page = select_audit_candidates(root=root)
+    epic = next(row for row in page.candidates if str(row.work_id) == "epic_001")
+    assert "nonterminal" not in epic.reasons
+    assert merged_board_readonly(root).by_id["epic_001"].status == "completed"
+
+
+def test_split_inventory_reads_tracking_worktree_and_tracking_recovery_store(tmp_path):
+    from cascade.workspace.integration_worktree import IntegrationWorktree, save_registry
+    from cascade.task.action_recovery import create_or_load_action
+
+    product = make_repo(tmp_path / "product")
+    tracking = make_repo(tmp_path / "tracking")
+    add_doc(tracking, id="epic_001", title="Epic", tier="epic", status="active")
+    _commit(tracking)
+    path = tracking / ".cascade/worktrees/feat_feat_001"
+    subprocess.run(["git", "worktree", "add", "-b", "feat/feat_001", str(path)], cwd=tracking, check=True, capture_output=True)
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=tracking, text=True).strip()
+    save_registry(tracking, [IntegrationWorktree("feature", "feat_001", "feat/feat_001", path, sha)])
+    add_doc(path, id="feat_001", title="Feature", tier="feature", parent="epic_001", status="active")
+    add_doc(path, id="task_001", title="Delivered", tier="task", parent="feat_001", status="completed")
+    _commit(path)
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=tracking, text=True).strip()
+    save_registry(tracking, [IntegrationWorktree("feature", "feat_001", "feat/feat_001", path, sha)])
+    # Product plan copies must never become authoritative lifecycle inventory.
+    add_doc(product, id="epic_001", title="Stale Epic", tier="epic", status="active")
+    add_doc(product, id="feat_001", title="Stale Feature", tier="feature", parent="epic_001", status="active")
+    add_doc(product, id="task_999", title="Stale product copy", tier="task", parent="feat_001")
+    set_project_context(ProjectContext.split(product, tracking))
+    try:
+        create_or_load_action("task_001:repair", "queued_task_merge", root=product,
+                              evidence={"affected_work_id": "task_001"}, recovery_state="retryable", attempt_bound=3)
+        page = select_audit_candidates(root=product, today=date(2099, 1, 1))
+    finally:
+        set_project_context(None)
+    rows = {str(row.work_id): row for row in page.candidates}
+    assert set(rows) == {"epic_001", "feat_001", "task_001"}
+    assert rows["task_001"].evidence_available
+    assert "unresolved_action" in rows["task_001"].reasons
+    assert "task_999" not in rows
+    assert not (product / ".cascade/executions.json").exists()
+

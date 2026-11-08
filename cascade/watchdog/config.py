@@ -290,6 +290,19 @@ def read_health_audit_config(root: Path) -> HealthAuditConfig:
     return HealthAuditConfig(enabled=enabled, interval_seconds=seconds)
 
 
+def health_audit_periodic_opted_in(root: Path) -> bool:
+    """Whether this release may start the periodic lane automatically.
+
+    Parsing intentionally retains default-on semantics, while runtime activation
+    remains an explicit compatibility seam until the Epic 13 acceptance feature
+    releases default-on production scheduling.
+    """
+
+    data = _load_cascade_toml(root)
+    automation = data.get("automation")
+    return isinstance(automation, dict) and "health_audit" in automation
+
+
 def _require_non_blank_string(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError(f"{label} must be a non-blank string, got {value!r}")

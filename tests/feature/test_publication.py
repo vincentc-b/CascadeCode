@@ -9,6 +9,7 @@ import pytest
 from cascade.board.errors import GitError
 from cascade.board.store import move_doc, read_doc
 from cascade.boss.merge import merge_task_branch
+from cascade.boss.rollup import write_closeout
 from cascade.feature.publication import prepare_feature_publication, validate_feature_publication
 from cascade.feature.publication import _build_publication_tail, _task_deliverable_commit
 from cascade.review import ensure_feature_review
@@ -18,6 +19,16 @@ from cascade.tracking import MergeRequest
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 from cascade.workspace.integration_worktree import IntegrationWorktree, get_integration_worktree
 from tests.support import add_doc, make_repo, approve_board_feature
+from tests.feature.test_recovery import _select_roles
+from tests.test_approval_selection_gate import _inventory
+
+
+@pytest.fixture(autouse=True)
+def _provider_inventory(monkeypatch):
+    inventory = _inventory("offered")
+    monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr("cascade.review.find_merge_request", lambda *args, **kwargs: None)
 
 
 @pytest.fixture(autouse=True)
@@ -43,6 +54,9 @@ def _completed_feature(
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     add_doc(root, id="task_001", title="Deliver value", tier="task", parent="feat_001")
+    _select_roles(root, "epic_001", "epic_manager", "epic_architect", "feature_lead", "feature_architect", "swe")
+    _select_roles(root, "feat_001", "feature_lead", "feature_architect", "swe")
+    _select_roles(root, "task_001", "swe")
     assert activate_epic("epic_001", "human", root=root).ok
     approve_board_feature(root, "feat_001")
     assert dispatch_feature("feat_001", "human", root=root).ok
@@ -82,7 +96,8 @@ def _completed_feature(
     swe_commit("implement value", task_id="task_001", task_run=run, root=root)
     assert merge_task_branch("task_001", root=root).ok
 
-    move_doc("feat_001", "completed", root=feature_entry.path)
+    write_closeout("feat_001", "Implemented and validated product.py.", root=feature_entry.path)
+    # Publication is valid while active; terminal completion waits for review.
     return root, feature_entry
 
 
@@ -96,9 +111,10 @@ def test_prepare_feature_publication_folds_history_to_one_commit_per_task(
     assert len(history.commits) == 1
     assert (feature_entry.path / "product.py").read_text(encoding="utf-8") == "VALUE = 1\n"
     feature = read_doc("feat_001", root=feature_entry.path)
-    assert feature.meta.status == "completed"
-    assert feature.meta.path.parent.name == "3_completed"
+    assert feature.meta.status == "active"
+    assert feature.meta.path.parent.name == "2_active"
     assert _git(feature_entry.path, "status", "--porcelain", "--untracked-files=no") == ""
+    assert prepare_feature_publication("feat_001", root=root).tip_sha == history.tip_sha
 
 
 def test_legacy_task_commit_uses_durable_validation_receipt(
@@ -342,3 +358,75 @@ def test_validate_feature_publication_rejects_lifecycle_only_commit(tmp_path: Pa
             base_ref=base,
             expected_task_ids=["task_001"],
         )
+
+
+def test_additive_task_repairs_publish_validated_aggregate_without_rewriting_task(tmp_path, monkeypatch):
+    root = make_repo(tmp_path)
+    (root / "README.md").write_text("base\n")
+    _git(root, "add", "README.md")
+    _git(root, "commit", "-m", "base")
+    _git(root, 'checkout', '-b', 'feat/feat_001')
+    base = _git(root, 'rev-parse', 'HEAD')
+    _git(root, 'checkout', '-b', 'task/task_001')
+    for name in ('first.py', 'repair.py', 'additional.py', 'last.py'):
+        (root / name).write_text(f'# {name}\n')
+        _git(root, 'add', name)
+        _git(root, 'commit', '-m', f'Implement {name}', '-m', 'Cascade-Task: task_001')
+    validated = _git(root, 'rev-parse', 'HEAD')
+    _git(root, 'checkout', 'feat/feat_001')
+    _git(root, 'merge', '--ff-only', 'task/task_001')
+    _git(root, 'checkout', '-b', 'task/task_002')
+    (root / 'next.py').write_text('# Next Task\n')
+    _git(root, 'add', 'next.py')
+    _git(root, 'commit', '-m', 'Next Task', '-m', 'Cascade-Task: task_002')
+    next_tip = _git(root, 'rev-parse', 'HEAD')
+    _git(root, 'checkout', 'feat/feat_001')
+    _git(root, 'merge', '--ff-only', 'task/task_002')
+    action = {'action_kind':'queued_task_merge', 'recovery_state':'completed',
+              'metadata':{'final_validation':{'task_id':'task_001','deliverable_sha':validated,'feature_base_sha':base}}}
+    monkeypatch.setattr('cascade.feature.publication.load_action', lambda action_id, **kw: action if action_id.startswith('task_001:') else None)
+    monkeypatch.setattr('cascade.feature.publication.read_doc', lambda task_id, **kw: SimpleNamespace(meta=SimpleNamespace(title=task_id)))
+    delivery = _task_deliverable_commit(root, 'task_001')
+    assert delivery == validated
+    published = _build_publication_tail(root, base_sha=base, final_tree_ref='HEAD', task_ids=['task_001','task_002'], task_commits=[delivery,next_tip])
+    history = validate_feature_publication('feat_001',source_root=root,source_ref=published,base_ref=base,expected_task_ids=['task_001','task_002'])
+    assert len(history.commits) == 2
+    for name in ('first.py','repair.py','additional.py','last.py'):
+        assert _git(root, 'show', f'{history.commits[0]}:{name}') == f'# {name}'
+    assert _git(root,'rev-parse','task/task_001') == validated
+    assert _git(root,'rev-parse',f'{published}^{{tree}}') == _git(root,'rev-parse','HEAD^{tree}')
+    # Neither an unintegrated source nor a forged base may authorize folding.
+    action['metadata']['final_validation']['feature_base_sha'] = next_tip
+    with pytest.raises(GitError, match='exactly one'):
+        _task_deliverable_commit(root,'task_001')
+
+
+def test_review_recovers_remote_creation_before_local_registry_write(tmp_path, monkeypatch):
+    import cascade.review as review
+
+    root, entry = _completed_feature(tmp_path)
+    monkeypatch.setattr(review, "review_enabled", lambda _: True)
+    monkeypatch.setattr(review, "push_branch", lambda *args, **kwargs: None)
+    created = []
+    save_record = review._update_record
+
+    def create(_root, **kwargs):
+        mr = MergeRequest(url="https://example.test/review/1", number="1", forge="github",
+                          source_branch=kwargs["source_branch"], target_branch=kwargs["target_branch"], draft=False)
+        created.append(mr)
+        return mr
+
+    def fail_write(*args, **kwargs):
+        raise OSError("simulated registry write failure")
+
+    monkeypatch.setattr(review, "create_merge_request", create)
+    monkeypatch.setattr(review, "find_merge_request", lambda *args, **kwargs: created[0] if created else None)
+    monkeypatch.setattr(review, "_update_record", fail_write)
+    with pytest.raises(OSError, match="registry write failure"):
+        ensure_feature_review("feat_001", root=root)
+    normalized = _git(entry.path, "rev-parse", "HEAD")
+    monkeypatch.setattr(review, "_update_record", save_record)
+    assert ensure_feature_review("feat_001", root=root) == created[0]
+    assert ensure_feature_review("feat_001", root=root) == created[0]
+    assert len(created) == 1
+    assert _git(entry.path, "rev-parse", "HEAD") == normalized

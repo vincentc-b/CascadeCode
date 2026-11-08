@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from cascade.board.context import resolve_root
+from cascade.board.errors import GitError
 from cascade.boss.epic_complete import epic_completed_recorded, try_complete_epic
 from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
 from cascade.review import (
@@ -13,6 +15,8 @@ from cascade.review import (
     reconcile_feature_review_completions,
 )
 from cascade.workspace.integration_worktree import locate_trunk, merged_board
+
+_LOG = logging.getLogger(__name__)
 
 
 def reconcile_completion(root: Path | None = None) -> dict[str, list[str]]:
@@ -39,7 +43,13 @@ def reconcile_completion(root: Path | None = None) -> dict[str, list[str]]:
             continue
         epic_id = meta.parent or ""
         before = feature_completed_recorded(meta.id, epic_id, root=repo) if epic_id else False
-        try_complete_feature(meta.id, root=repo)
+        try:
+            try_complete_feature(meta.id, root=repo)
+        except (GitError, OSError):
+            # Publication failures remain retryable on the next pass; they
+            # must not prevent other teams from completing or dispatching.
+            _LOG.exception("Feature completion failed for %s; will retry", meta.id)
+            continue
         if epic_id and not before and feature_completed_recorded(meta.id, epic_id, root=repo):
             features.append(meta.id)
 
@@ -56,7 +66,11 @@ def reconcile_completion(root: Path | None = None) -> dict[str, list[str]]:
         elif meta.path.parent.name != "2_active":
             continue
         before = epic_completed_recorded(meta.id, root=repo)
-        try_complete_epic(meta.id, root=repo)
+        try:
+            try_complete_epic(meta.id, root=repo)
+        except (GitError, OSError):
+            _LOG.exception("Epic completion failed for %s; will retry", meta.id)
+            continue
         if not before and epic_completed_recorded(meta.id, root=repo):
             epics.append(meta.id)
 

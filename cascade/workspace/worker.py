@@ -277,7 +277,13 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     from cascade.war_room.server import serve
     from cascade.war_room.human_auth import load_or_create_local_human_verifier
     from cascade.epic.local_dependency_executor import LocalBoundedDependencyExecutor
-    from cascade.watchdog.config import worker_drain_seconds
+    from cascade.watchdog.audit_lane import AuditPassResult, HealthAuditLane
+    from cascade.watchdog.config import (
+        ConfigError,
+        health_audit_periodic_opted_in,
+        read_health_audit_config,
+        worker_drain_seconds,
+    )
     from cascade.watchdog.loop import run_watchdog
 
     ws = prepare_up()
@@ -290,6 +296,8 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     launcher_lost = False
     abnormal_exit = False
     handlers_abandoned = False
+    audit_stop = threading.Event()
+    audit_lane: HealthAuditLane | None = None
 
     def should_stop() -> bool:
         nonlocal next_source_check_at, source_changed, shutdown_reason, launcher_lost
@@ -365,6 +373,22 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     observe_http_live(live=True)
     _write_readiness(handshake.readiness_fd)
     observe_startup_phase("recovery")
+
+    # This supervisor-owned lane must be live before any startup maintenance
+    # that can block on Git or worktree state.  The pass callback is deliberately
+    # a narrow seam: bounded observation and repair admission are added without
+    # moving scheduling back into the ordinary watchdog chain.
+    try:
+        if health_audit_periodic_opted_in(ws.path):
+            audit_lane = HealthAuditLane(
+                root=ws.path,
+                config=read_health_audit_config(ws.path),
+                run_pass=lambda cursor, _cancel: AuditPassResult(next_cursor=cursor),
+                stop_event=audit_stop,
+            ).start()
+    except ConfigError as exc:
+        print(f"health audit configuration error: {exc}", file=sys.stderr)
+
     repair_registered_worktrees(ws.path)
 
     def _submit_recovery() -> None:
@@ -383,6 +407,9 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
             shutdown_reason = "crash"
         raise
     finally:
+        audit_stop.set()
+        if audit_lane is not None:
+            audit_lane.stop(timeout=5.0)
         if abnormal_exit and not operator_stop.is_set() and not source_changed:
             shutdown_reason = "crash"
         elif launcher_lost:
