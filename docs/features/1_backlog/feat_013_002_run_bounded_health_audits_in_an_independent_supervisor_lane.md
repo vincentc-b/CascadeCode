@@ -24,6 +24,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-08T01:57:14.108854+00:00'
 ---
 # Run bounded health audits in an independent supervisor lane
 
