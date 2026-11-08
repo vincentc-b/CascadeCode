@@ -66,7 +66,24 @@ Run a periodic, configurable health audit across Cascade Tasks, Features, and Ep
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+The implementation extends the existing supervisor and recovery machinery in five ordered slices. Observation is pure; the audit coordinator selects a proven incident; the existing owning lifecycle capability performs any mutation after a locked fresh recheck. The auditor never becomes a second owner of lifecycle truth.
+
+1. **Canonical observation and incidents.** Extend `cascade/watchdog/health.py`, execution/lease projections, `merged_board`, supervisor readiness, and durable recovery projections. Produce typed observations for Tasks, Features and Epics, including expected waits and unavailable evidence. Canonical tracking repositories own documents, queues, leases and recovery ledgers; registered product worktrees own Git operations. Do not infer identity or authority from path names, parent revisions, cached status or document age.
+2. **Independent supervisor lane.** Start an audit coordinator from the supervisor/worker lifecycle before slow ordinary maintenance. It shares existing workspace ownership and shutdown handling but is not called synchronously from `advance_work`, review polling or the watchdog maintenance chain. There is no separate daemon, external scheduler or second dispatch queue. One canonical workspace claim serializes periodic and manual passes across processes. Monotonic deadlines, persisted last-run scheduling data and coalescing avoid duplicate/catch-up execution.
+3. **Generation-aware recovery contract.** Extend existing action/orphan/remediation ledgers rather than persisting another board/status database. Each incident carries typed work ID, tier, failure class, concrete accountable owner, relevant authoritative generation, evidence, capability, request/acknowledgement/result, attempt history, cooldown and outcome. Claim leases expire. Only successful completion for the unchanged generation suppresses permanently; claimed/error/refused/deferred/unsafe/no-op rows remain eligible for bounded reassessment. A changed lease, head, queue, validation/checkpoint, document revision, blocker or capability invalidates relevant cached decisions.
+4. **Executable adapters.** Reuse `supervisor_recover_task_delivery`, Feature Task recovery, durable action resume/rearm, canonical merge and rollup, team supervision, review-health retry, owned review publication, integration-branch recovery and completion/stacked-review reconciliation. Registration includes allowed failure classes, concrete ownership checks, required evidence, lock/precondition protocol, bounded invocation and durable result path. Startup and per-incident checks verify availability; a missing operation becomes an owned system incident with an exact resume action. An event-only route is not a repair.
+5. **Scoped diagnosis and operator view.** Deterministic checks/repairs require no model. A named `health_auditor` role may receive only incident evidence, bounded diagnosis/recovery tools and owned paths needed for an authorized repair. Existing owner teams perform scoped mutation and supervised validation. The War Room consumes the same projection/receipts and sends guarded manual requests to the same coordinator.
+
+### Operational contract
+
+- Configuration: `[automation.health_audit]` with `enabled = true` and `interval = "30m"` when omitted. Duration grammar is a positive integer followed by `s`, `m`, `h` or `d`; supported bounds are 60 through 86,400 seconds inclusive. Reject invalid types/values with an actionable configuration error; isolate audit failure from unrelated delivery. The new switch controls health audits independently of `automation.enabled` and the existing supervisor-health maintenance setting.
+- Jitter adds at most the smaller of 5% of the configured interval and 60 seconds. Restarts reconstruct the next deadline from durable scheduling state and admit at most one overdue pass. Wall-clock changes cannot cause a catch-up storm. Manual runs coalesce with an in-flight audit and preserve the periodic deadline; disabling scheduled audits still permits an explicit guarded human run.
+- Each pass inspects at most 100 work items and spends at most 60 seconds in observer/coordinator work. A fair continuation cursor covers all tiers and resumes incomplete scans. Every subprocess/network call on the path has an explicit timeout/cancellation bounded by its remaining budget. Long validation, Git repair or model work is handed to existing supervised workers/actions and never blocks the scheduling lane or runs under a global lock.
+- Candidate set: all nonterminal work, completed work updated within seven days, and any work referenced by unresolved action, review, publication, reconciliation or cleanup state regardless of age. Pending references cannot age out. A bounded incremental inventory/cursor must avoid repeatedly scanning the entire completed history; restart resumes incomplete coverage.
+- No-progress classification requires repeated authoritative observations across at least one configured interval or an existing expired canonical lease/action deadline. A live owner, pending legitimate input/review, human gate or dependency wait is not proof of failure. Unknown evidence is reported as unavailable, never silently healthy.
+- Repairs recheck current authority and generation under the appropriate lifecycle lock. Reserve idempotently, release broad locks before I/O, and recheck the relevant heads/evidence before publication. Use existing adapter retry limits; any adapter without a finite policy must declare one before registration. Reaching an attempt cap routes an actionable incident and a bounded future reassessment, not permanent suppression or unlimited model retries.
+- Healthy runs have no lifecycle/document mutation, event, model turn, toast, chat, Git commit or success-only external API call. The sole documented observability exception is one compact, untracked supervisor receipt/cursor per completed pass containing schedule recovery state, last/next time, duration and counts. Its storage is outside watched board/queue inputs and cannot dispatch work or notify anyone. Active incidents use existing durable recovery storage.
+- Default-on release requires demonstrated Task lost-queue/stale-delivery recovery, Feature owner/publication recovery and Epic owner/closeout recovery through real lifecycle mutations. Foundations may land before adapters, but production default activation is the final integrated slice. Missing capabilities fail closed and re-evaluate later; this does not waive required adapter delivery.
 
 ## Cross-module constraints
 
@@ -74,22 +91,40 @@ Extend the existing supervisor health projection, direct-report health sweep, du
 
 ## Core dependencies
 
-Build on the existing supervisor health projection, direct-report health sweep, orphan-delivery recovery, durable action recovery, lifecycle locks, board reconciliation, War Room recovery surfaces, and `cascade.toml` automation configuration. Consume the executable capabilities delivered by the stale Task delivery and parent-owned child recovery epics.
+Use the installed project runtime and existing supervisor health projection, direct-report sweep, orphan-delivery recovery, durable actions, lifecycle locks, board reconciliation, War Room request protections and `cascade.toml` configuration. The current checkout includes the completed stale-delivery recovery work from `epic_041` and parent-owned child recovery from `epic_042`; consume their executable implementations and regression fixtures, not duplicate algorithms or rely solely on their status labels.
+
+The software dependency manifest declares no additional software or installation requirements for this epic. The owned integration environment already has Python 3.12.8, Git 2.34.1, Node 20.20.2, the declared project libraries and pytest. No dependency installation, upgrade, new service, credentials or provider change is authorized by this plan.
+
+Primary code seams: `cascade/watchdog/health.py`, `cascade/watchdog/config.py`, `cascade/workspace/worker.py`, supervisor readiness/status, `cascade/task/orphan_delivery.py`, `cascade/task/supervisor_recovery.py`, `cascade/task/action_recovery.py`, `cascade/team_supervision.py`, `cascade/review_health.py`, `cascade/team_review_recovery.py`, `cascade/team_branch_recovery.py`, completion reconciliation and War Room routes/static UI.
 
 ## Feature breakdown
-- feat_013_005
-- feat_013_004
-- feat_013_003
-- feat_013_002
-- feat_013_001
 
-The Epic Team will create and sequence feature plans here. Treat the task/feature/epic health model, independent scheduler, generation-aware incident ledger, and capability boundary as shared foundations before adding repair adapters or UI controls.
+| Feature | Shippable result | Depends on | Epic criteria primarily owned |
+| --- | --- | --- | --- |
+| `feat_013_001` — Define canonical audit observations, incidents, and recovery authority | Pure all-tier observation, typed identities, generation-aware incident lifecycle, named scoped role and executable capability contract | None | 3–8, 10–13, 19–21, 23–24 |
+| `feat_013_002` — Run bounded health audits in an independent supervisor lane | Strict configuration, independent bounded scheduling, workspace serialization, restart/coalescing, silent receipt and manual-run coordinator | `feat_013_001` | 1–3, 7–8, 12, 14–15, 18 |
+| `feat_013_003` — Recover Task delivery incidents through canonical guarded adapters | Lost-queue recovery, lease/pinned resume, stale-evidence revalidation, owner routing and exactly-once merge/rollup | `feat_013_002` | 4, 8–13, 16–17, 19–20, 22–24 |
+| `feat_013_004` — Recover stalled Feature and Epic owners and publication lifecycles | Concrete parent owner/dispatch/publication/closeout adapters, gates, escalation and real recovery results | `feat_013_003` | 5–6, 8–13, 17, 19–24 |
+| `feat_013_005` — Expose audit controls and prove default-on recovery acceptance | War Room status and guarded run-now, operator documentation, integrated acceptance and final default-on release | `feat_013_004` | 7, 14 and integrated proof of all 24 |
+
+This is a sequential delivery chain, with shared foundations before repair adapters and UI. Each backlog feature contains its own outcome, acceptance boundaries and validation obligations. Feature teams decompose implementation tasks after approval; this epic planning turn does not dispatch implementation.
+
+### Acceptance and scope control
+
+Reuse existing isolated-repository recovery fixtures and the War Room route/JavaScript harness. Validate the new audit entry point through real owner routing, wakeup, acknowledgement, owned-branch mutation, work-defined supervised checks, replacement evidence, matching-blocker clearing and the original merge/review action reaching terminal completion exactly once. Substitute deterministic external model/forge responses where needed; do not mock away recovery callbacks or count queued events as successful repair.
+
+The release evidence must cover the `task_038_002_002` missing pending-index regression, Feature ID versus parent revision, stale-but-live ownership, missing checkpoints, dirty worktrees, conflicts, busy targets, stale evidence, approval/comment gates, orphaned parent planning, split repositories, concurrent manual recovery, crash/restart, invalid/disabled intervals, bounded full candidate coverage, blocked maintenance and a wholly healthy silent pass. Keep existing unrelated sibling/manual blockers and failed attempt history. Targeted integrated tests earn their keep; do not add redundant unit coverage for already exercised adapters.
+
+Excluded: a new scheduler service, status database, notification channel, generic repair console, analytics dashboard, blanket repository permissions, new forge workflow, arbitrary dependency setup or destructive Git automation. None of these exclusions reduces the 24 success criteria.
 
 ## Open questions
 
-- Which existing recovery capabilities are complete enough to expose directly to the auditor, and which require a fail-closed human escalation until repaired?
-- What bounded recent-completion window best catches incomplete rollups without rescanning the full completed board every pass?
-- Which repair adapters must land before the auditor can be enabled by default without producing non-actionable incidents?
+No product-scope questions remain for this revision.
+
+- Existing recovery capabilities are candidates for thin registered adapters; only operations proven executable for the concrete owner may run. Missing or unsafe capability yields precise durable escalation and later reassessment.
+- The completion window is seven days, extended without age limit by unresolved durable action/review/publication/reconciliation/cleanup references.
+- Task lost-queue and stale-delivery, Feature owner/publication, and Epic owner/closeout adapters must pass actual mutation acceptance before default-on release.
+- The Epic Architect must review the shared interfaces, lock/cancellation design and executable adapter coverage and sign off on the resulting current revision. Technical refinements must retain the operational and acceptance contract above.
 
 ## Decision log
 
