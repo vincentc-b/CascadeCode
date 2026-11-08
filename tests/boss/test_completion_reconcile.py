@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from cascade.board.store import list_board, move_doc, read_doc, write_doc
+from cascade.board.errors import GitError
 from cascade.boss.epic_complete import try_complete_epic
 from cascade.boss.rollup import try_complete_feature, write_closeout
 from cascade.completion_reconcile import reconcile_completion
@@ -19,6 +20,28 @@ from cascade.review import (
 from cascade.war_room.serialize import board_view_from_index
 from cascade.watchdog.events import read_events
 from tests.support import add_doc, make_repo
+
+
+def test_completion_failure_does_not_block_other_teams(tmp_path, monkeypatch, caplog):
+    root = make_repo(tmp_path, git=False)
+    for number in (1, 2):
+        add_doc(root, id=f"epic_{number:03}", title="Epic", tier="epic", status="active")
+        add_doc(root, id=f"feat_{number:03}", title="Feature", tier="feature",
+                status="active", parent=f"epic_{number:03}")
+    attempted = []
+
+    def complete(work_id, **kwargs):
+        attempted.append(work_id)
+        if work_id.endswith("001"):
+            raise GitError("publication temporarily unavailable")
+
+    monkeypatch.setattr("cascade.completion_reconcile.try_complete_feature", complete)
+    monkeypatch.setattr("cascade.completion_reconcile.try_complete_epic", complete)
+    for _ in range(2):
+        reconcile_completion(root)
+    assert attempted == ["feat_001", "feat_002", "epic_001", "epic_002"] * 2
+    assert "Feature completion failed for feat_001; will retry" in caplog.text
+    assert "Epic completion failed for epic_001; will retry" in caplog.text
 
 
 def _feature_with_tasks(root: Path) -> None:

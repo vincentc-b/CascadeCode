@@ -126,6 +126,19 @@ def prepare_feature_publication(feature_id: str, *, root: Path) -> PublicationHi
                     expected_task_ids=task_ids,
                 )
     else:
+        # Normalization can succeed before either push does. Reuse the exact
+        # validated local history: its original Task SHAs are intentionally no
+        # longer ancestors after folding, so receipt resolution cannot repeat.
+        try:
+            return validate_feature_publication(
+                feature_id,
+                source_root=entry.path,
+                source_ref=source,
+                base_ref=entry.base_sha,
+                expected_task_ids=task_ids,
+            )
+        except GitError:
+            pass
         base_sha = entry.base_sha
         new_task_ids = list(task_ids)
 
@@ -228,7 +241,8 @@ def _completed_task_ids(feature_id: str, feature_root: Path) -> list[str]:
 def _task_deliverable_commit(root: Path, task_id: str) -> str:
     branch = integration_branch("task", task_id)
     candidates: list[str] = []
-    result = _git(root, "rev-list", branch, check=False)
+    result = _git(root, "log", "--format=%H", "--fixed-strings",
+                  f"--grep={_TRAILER} {task_id}", branch, check=False)
     if result.returncode != 0:
         raise GitError(f"task branch missing: {branch}")
     for sha in result.stdout.splitlines():
@@ -237,6 +251,12 @@ def _task_deliverable_commit(root: Path, task_id: str) -> str:
             candidates.append(sha)
     if len(candidates) == 1:
         return candidates[0]
+    if len(candidates) > 1:
+        # Recovery is additive: preserve the original Task history, and fold
+        # only the exact validated range into the Feature's publication commit.
+        receipt_commit = _validated_receipt_deliverable(root, task_id, branch, aggregate=True)
+        if receipt_commit is not None:
+            return receipt_commit
     if not candidates:
         receipt_commit = _validated_receipt_deliverable(root, task_id, branch)
         if receipt_commit is not None:
@@ -249,7 +269,7 @@ def _task_deliverable_commit(root: Path, task_id: str) -> str:
     raise AssertionError("unreachable")
 
 
-def _validated_receipt_deliverable(root: Path, task_id: str, branch: str) -> str | None:
+def _validated_receipt_deliverable(root: Path, task_id: str, branch: str, *, aggregate: bool = False) -> str | None:
     """Recover one legacy deliverable from durable final-validation evidence."""
 
     action = load_action(f"{task_id}:queued_merge", root=locate_trunk(root))
@@ -267,6 +287,14 @@ def _validated_receipt_deliverable(root: Path, task_id: str, branch: str) -> str
         return None
     if not _is_ancestor(root, validated_sha, branch) or not _is_ancestor(root, validated_sha, "HEAD"):
         return None
+
+    if aggregate:
+        if not _is_ancestor(root, feature_base_sha, validated_sha):
+            return None
+        paths = _git(root, "diff", "--name-only", feature_base_sha, validated_sha).stdout.splitlines()
+        if not paths or all(path.startswith(_LIFECYCLE_PREFIXES) for path in paths):
+            return None
+        return validated_sha
 
     parents = _git(root, "show", "-s", "--format=%P", validated_sha).stdout.split()
     if len(parents) == 1:
@@ -309,11 +337,19 @@ def _build_publication_tail(
             if position == len(task_ids) - 1:
                 _git_env(root, env, "read-tree", final_tree_ref)
             else:
-                source_parent = _git(root, "show", "-s", "--format=%P", source_sha).stdout.split()
-                if len(source_parent) != 1:
-                    raise GitError(f"task deliverable {source_sha[:12]} is not linear")
+                action = load_action(f"{task_id}:queued_merge", root=locate_trunk(root)) or {}
+                evidence = (action.get("metadata") or {}).get("final_validation") or {}
+                if evidence.get("deliverable_sha") == source_sha and evidence.get("task_id") == task_id:
+                    patch_base = evidence.get("feature_base_sha")
+                    if not isinstance(patch_base, str) or not _is_ancestor(root, patch_base, source_sha):
+                        raise GitError(f"task deliverable {source_sha[:12]} lacks its validated Feature base")
+                else:
+                    source_parent = _git(root, "show", "-s", "--format=%P", source_sha).stdout.split()
+                    if len(source_parent) != 1:
+                        raise GitError(f"task deliverable {source_sha[:12]} is not linear")
+                    patch_base = source_parent[0]
                 patch = subprocess.run(
-                    ["git", "diff", "--binary", source_parent[0], source_sha],
+                    ["git", "diff", "--binary", patch_base, source_sha],
                     cwd=root,
                     capture_output=True,
                 )

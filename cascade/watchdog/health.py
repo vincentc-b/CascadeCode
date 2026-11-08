@@ -25,6 +25,11 @@ from cascade.watchdog.blockage import (
 )
 from cascade.watchdog.config import supervisor_health_sweep_seconds
 from cascade.watchdog.lock import process_lock
+from cascade.watchdog.incidents import (
+    authoritative_generation,
+    incident_record,
+    project_incident,
+)
 from cascade.workspace.integration_worktree import merged_board
 
 Classification = Literal["no_action", "remediation_eligible", "unresolved"]
@@ -51,11 +56,13 @@ class ChildHealthObservation:
 class RemediationIncidentKey:
     supervisor_id: str
     child_id: str
-    observed_child_sha: str
+    authoritative_generation: str
 
     @property
     def storage_key(self) -> str:
-        return "\0".join((self.supervisor_id, self.child_id, self.observed_child_sha))
+        return "\0".join(
+            (self.supervisor_id, self.child_id, self.authoritative_generation)
+        )
 
 
 def classify_child(
@@ -83,7 +90,10 @@ def classify_child(
         if health == "failed":
             classification, reason = "remediation_eligible", "blocked_task_failed"
         else:
-            classification, reason = "unresolved", "blocked_task_without_terminal_failure"
+            classification, reason = (
+                "unresolved",
+                "blocked_task_without_terminal_failure",
+            )
     elif status == "blocked" and child.meta.tier == "feature":
         classification, reason = "unresolved", "blocked_feature_has_no_safe_retry"
     elif status != "active":
@@ -131,7 +141,9 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
             try:
                 supervisor = read_doc(supervisor_meta.id, root=repo)
             except Exception as exc:
-                _log.warning("health inspection failed for %s: %s", supervisor_meta.id, exc)
+                _log.warning(
+                    "health inspection failed for %s: %s", supervisor_meta.id, exc
+                )
                 continue
             if supervisor.meta.status not in {"active", "blocked"}:
                 continue
@@ -191,9 +203,7 @@ def _orphan_delivery_candidate(observation: ChildHealthObservation) -> bool:
     )
 
 
-def _recover_orphan_delivery(
-    repo: Path, observation: ChildHealthObservation
-) -> None:
+def _recover_orphan_delivery(repo: Path, observation: ChildHealthObservation) -> None:
     attempt = observation.execution_attempt
     incident_id = (
         f"{observation.child_id}:delivery:{attempt}"
@@ -213,17 +223,23 @@ def _recover_orphan_delivery(
     except Exception as exc:
         # Health reporting remains best-effort: an unsafe or transient
         # recovery failure must not prevent inspection of other direct reports.
-        _log.warning("orphan delivery recovery failed for %s: %s", observation.child_id, exc)
+        _log.warning(
+            "orphan delivery recovery failed for %s: %s", observation.child_id, exc
+        )
 
 
-def maybe_sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObservation]:
+def maybe_sweep_supervisor_health(
+    root: Path | None = None,
+) -> list[ChildHealthObservation]:
     """Run a health sweep when the configured cadence is due."""
 
     repo = resolve_root(root)
     now = time.monotonic()
     with process_lock:
         previous = _last_sweep_at.get(repo)
-        if previous is not None and now - previous < supervisor_health_sweep_seconds(repo):
+        if previous is not None and now - previous < supervisor_health_sweep_seconds(
+            repo
+        ):
             return []
         _last_sweep_at[repo] = now
     return sweep_supervisor_health(repo)
@@ -241,16 +257,45 @@ def _remediate_if_unchanged(
     observation: ChildHealthObservation,
 ) -> None:
     if child.sha is None:
-        _log.warning("cannot remediate %s without a persisted document SHA", child.meta.id)
+        _log.warning(
+            "cannot remediate %s without a persisted document SHA", child.meta.id
+        )
         return
-    key = RemediationIncidentKey(supervisor.meta.id, child.meta.id, child.sha)
+    evidence = {
+        "document_revision": child.sha,
+        "supervisor_revision": supervisor.sha,
+        "supervisor_status": supervisor.meta.status,
+        "child_status": child.meta.status,
+        "execution_attempt": observation.execution_attempt,
+        "execution_phase": observation.execution_phase,
+        "execution_outcome": observation.execution_outcome,
+        "parent_blockage": [
+            asdict(blocker) for blocker in supervisor.meta.monitoring_blockers
+        ],
+    }
+    generation = authoritative_generation(
+        work_id=child.meta.id,
+        tier=child.meta.tier,
+        evidence=evidence,
+        capability="retry_task",
+    )
+    key = RemediationIncidentKey(supervisor.meta.id, child.meta.id, generation)
     try:
         ledger = _read_ledger(repo)
     except (OSError, ValueError) as exc:
         _log.warning("cannot read remediation ledger for %s: %s", child.meta.id, exc)
         return
-    if key.storage_key in ledger:
+    eligibility = project_incident(
+        generation, ledger, failure_class=observation.reason
+    )
+    if not eligibility.eligible:
         return
+    prior_attempts = (
+        list(eligibility.prior.get("attempts") or [])
+        if eligibility.prior is not None
+        else []
+    )
+    attempt_number = len(prior_attempts) + 1
     try:
         current = read_doc(child.meta.id, root=repo)
     except Exception as exc:
@@ -272,6 +317,24 @@ def _remediate_if_unchanged(
         "result": "claimed",
         "reason": observation.reason,
     }
+    contract = incident_record(
+        work_id=child.meta.id,
+        tier=child.meta.tier,
+        accountable_owner=f"{supervisor.meta.tier}:{supervisor.meta.id}",
+        failure_class=observation.reason,
+        generation=generation,
+        evidence=evidence,
+        selected_capability="retry_task",
+        request={"action": "retry_task", "feature_id": supervisor.meta.id},
+        attempts=[
+            *prior_attempts,
+            {"attempt": attempt_number, "outcome": None},
+        ],
+        outcome="claimed",
+    )
+    # Preserve the historical identity keys while extending that same row
+    # with the shared contract (rather than creating another status store).
+    disposition["incident"] = {**disposition["incident"], **contract}
     ledger[key.storage_key] = disposition
     _write_ledger(repo, ledger)
     try:
@@ -283,6 +346,39 @@ def _remediate_if_unchanged(
         disposition["reason"] = f"{type(exc).__name__}: {exc}"
         _log.warning("health remediation failed for %s: %s", child.meta.id, exc)
     finally:
+        outcome = {
+            "accepted": "success",
+            "refused": "refused",
+            "error": "error",
+        }.get(disposition["result"], "deferred")
+        final_contract = incident_record(
+            work_id=child.meta.id,
+            tier=child.meta.tier,
+            accountable_owner=f"{supervisor.meta.tier}:{supervisor.meta.id}",
+            failure_class=observation.reason,
+            generation=generation,
+            evidence=evidence,
+            selected_capability="retry_task",
+            request={"action": "retry_task", "feature_id": supervisor.meta.id},
+            acknowledgement={"claimed_at": contract["recorded_at"]},
+            result={
+                "result": disposition["result"],
+                "reason": disposition["reason"],
+            },
+            attempts=[
+                *prior_attempts,
+                {
+                    "attempt": attempt_number,
+                    "started_at": contract["recorded_at"],
+                    "outcome": disposition["result"],
+                },
+            ],
+            outcome=outcome,
+        )
+        disposition["incident"] = {
+            **disposition["incident"],
+            **final_contract,
+        }
         ledger = _read_ledger(repo)
         ledger[key.storage_key] = disposition
         _write_ledger(repo, ledger)
@@ -304,9 +400,7 @@ def _read_ledger(repo: Path) -> dict[str, dict[str, Any]]:
     if not isinstance(rows, dict):
         return {}
     return {
-        str(key): dict(value)
-        for key, value in rows.items()
-        if isinstance(value, dict)
+        str(key): dict(value) for key, value in rows.items() if isinstance(value, dict)
     }
 
 
@@ -323,7 +417,9 @@ def _write_ledger(repo: Path, ledger: dict[str, dict[str, Any]]) -> None:
             delete=False,
         ) as handle:
             temp_name = handle.name
-            json.dump({"version": 1, "dispositions": ledger}, handle, indent=2, sort_keys=True)
+            json.dump(
+                {"version": 1, "dispositions": ledger}, handle, indent=2, sort_keys=True
+            )
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
