@@ -2,7 +2,7 @@
 id: feat_013_003
 title: Recover Task delivery incidents through canonical guarded adapters
 tier: feature
-status: active
+status: completed
 parent: epic_013
 children:
 - task_013_003_001
