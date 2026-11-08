@@ -4,13 +4,72 @@ from __future__ import annotations
 
 import os
 import re
+import signal
 import subprocess
 import tempfile
+import threading
+import time
+from contextlib import contextmanager, suppress
+from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
 
 from cascade.board.errors import GitError
 from cascade.board.lock import process_lock
+
+
+_git_io_budget: ContextVar[tuple[float, threading.Event | None] | None] = ContextVar(
+    "git_io_budget", default=None
+)
+_git_new_session: ContextVar[bool] = ContextVar("git_new_session", default=True)
+
+
+@contextmanager
+def bounded_git_io(
+    timeout: float, cancel_event: threading.Event | None = None
+):
+    """Apply one finite budget to all Git calls in the current call chain."""
+
+    if timeout <= 0:
+        raise subprocess.TimeoutExpired("git audit I/O", timeout)
+    deadline = time.monotonic() + timeout
+    current = _git_io_budget.get()
+    if current is not None:
+        deadline = min(deadline, current[0])
+        cancel_event = cancel_event or current[1]
+    token = _git_io_budget.set((deadline, cancel_event))
+    try:
+        yield
+    finally:
+        _git_io_budget.reset(token)
+
+
+@contextmanager
+def inherited_git_process_group():
+    """Keep audit Git descendants in their killable observer process group.
+
+    Ordinary callers continue to isolate each Git invocation in its own session.
+    A bounded audit observer is itself a session leader, however, so retaining
+    its group lets the coordinating parent reap helpers even if the observer is
+    forcibly killed during cooperative Git cleanup.
+    """
+
+    token = _git_new_session.set(False)
+    try:
+        yield
+    finally:
+        _git_new_session.reset(token)
+
+
+def _effective_io_limits(
+    timeout: float | None, cancel_event: threading.Event | None
+) -> tuple[float | None, threading.Event | None]:
+    budget = _git_io_budget.get()
+    if budget is None:
+        return timeout, cancel_event
+    remaining = budget[0] - time.monotonic()
+    timeout = remaining if timeout is None else min(timeout, remaining)
+    return timeout, cancel_event or budget[1]
 
 
 def _env(root: Path, *, index_file: str | None = None) -> dict[str, str]:
@@ -29,29 +88,127 @@ def _run(
     *,
     index_file: str | None = None,
     check: bool = True,
+    timeout: float | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        ["git", *args],
-        cwd=root,
-        env=_env(root, index_file=index_file),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
+    command = ["git", *args]
+    timeout, cancel_event = _effective_io_limits(timeout, cancel_event)
+    if timeout is None and cancel_event is None:
+        result = subprocess.run(
+            command,
+            cwd=root,
+            env=_env(root, index_file=index_file),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+    else:
+        if timeout is not None and timeout <= 0:
+            raise subprocess.TimeoutExpired(command, timeout)
+        process = subprocess.Popen(
+            command,
+            cwd=root,
+            env=_env(root, index_file=index_file),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            start_new_session=_git_new_session.get(),
+        )
+        started = time.monotonic()
+        try:
+            while True:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise InterruptedError(f"git {' '.join(args)} cancelled")
+                remaining = (
+                    None if timeout is None else timeout - (time.monotonic() - started)
+                )
+                if remaining is not None and remaining <= 0:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                try:
+                    stdout, stderr = process.communicate(
+                        timeout=0.1 if remaining is None else min(0.1, remaining)
+                    )
+                    result = subprocess.CompletedProcess(
+                        command, process.returncode, stdout, stderr
+                    )
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+        except (InterruptedError, subprocess.TimeoutExpired):
+            _stop_process_group(process, isolated=_git_new_session.get())
+            raise
     if check and result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
         raise GitError(detail or f"git {' '.join(args)} failed")
     return result
 
 
+def _stop_process_group(
+    process: subprocess.Popen[str], *, isolated: bool = True
+) -> None:
+    """Best-effort finite cleanup that never masks the triggering exception.
+
+    Git hooks and credential helpers may leave descendants holding captured
+    stdout/stderr open after the Git parent exits.  Signal the whole session,
+    bound both cleanup waits, and finally close our pipe handles so such a
+    descendant cannot keep ``communicate`` blocked indefinitely.
+    """
+
+    def signal_group(sig: signal.Signals, fallback: str) -> None:
+        if isolated:
+            try:
+                os.killpg(process.pid, sig)
+                return
+            except (AttributeError, ProcessLookupError, PermissionError, OSError):
+                pass
+        with suppress(AttributeError, ProcessLookupError, PermissionError, OSError):
+            getattr(process, fallback)()
+
+    signal_group(signal.SIGTERM, "terminate")
+    try:
+        process.communicate(timeout=0.25)
+        return
+    except (subprocess.TimeoutExpired, ProcessLookupError, OSError):
+        pass
+
+    signal_group(signal.SIGKILL, "kill")
+    try:
+        process.communicate(timeout=0.25)
+    except (subprocess.TimeoutExpired, ProcessLookupError, OSError):
+        for pipe_name in ("stdout", "stderr", "stdin"):
+            pipe = getattr(process, pipe_name, None)
+            if pipe is not None:
+                with suppress(OSError, ValueError):
+                    pipe.close()
+        with suppress(
+            AttributeError,
+            subprocess.TimeoutExpired,
+            ProcessLookupError,
+            OSError,
+        ):
+            process.wait(timeout=0.05)
+
+
 def has_git(root: Path) -> bool:
     return (root / ".git").exists()
 
 
-def head_sha(root: Path) -> str | None:
+def head_sha(
+    root: Path,
+    *,
+    timeout: float | None = None,
+    cancel_event: threading.Event | None = None,
+) -> str | None:
     if not has_git(root):
         return None
-    result = _run(["rev-parse", "--verify", "-q", "HEAD"], root, check=False)
+    result = _run(
+        ["rev-parse", "--verify", "-q", "HEAD"],
+        root,
+        check=False,
+        timeout=timeout,
+        cancel_event=cancel_event,
+    )
     if result.returncode != 0:
         return None
     sha = result.stdout.strip()

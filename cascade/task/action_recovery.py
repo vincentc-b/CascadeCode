@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import tempfile
 import uuid
 from collections.abc import Callable
@@ -74,6 +75,10 @@ _REPAIR_OPERATIONS = frozenset(RepairOperation.__args__)
 
 class ActionRecoveryError(ValueError):
     """An action recovery transition cannot be recorded."""
+
+
+class ActionRecoveryUnavailable(ActionRecoveryError):
+    """The canonical action ledger exists but cannot be read safely."""
 
 
 class ActionNotFound(ActionRecoveryError):
@@ -161,9 +166,20 @@ def _read_payload(root: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
+        # Lifecycle sidecars are atomically-written regular files.  Refuse
+        # devices/FIFOs instead of letting an observer or recovery worker
+        # block forever while merely projecting local authority.
+        if not stat.S_ISREG(path.stat().st_mode):
+            raise ActionRecoveryUnavailable(
+                "canonical action ledger is not a regular file"
+            )
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
+    except ActionRecoveryUnavailable:
+        raise
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ActionRecoveryUnavailable(
+            "canonical action ledger is unreadable"
+        ) from exc
     return dict(value) if isinstance(value, dict) else {}
 
 

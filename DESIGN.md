@@ -75,9 +75,22 @@ Configuration:
 enabled = true
 poll_seconds = 15
 remote = "origin"
+
+[automation.health_audit]
+enabled = true
+interval = "30m"
 ```
 
 `cascade init` enables automation for new workspaces. Existing workspaces without an `[automation]` table retain their manual lifecycle until they opt in. Setting `automation.enabled = false` restores manual dispatch and task-merge controls for recovery or debugging.
+
+Health audits are enabled by default, including in existing manual workspaces, and
+`automation.health_audit.enabled` controls them independently of
+`automation.enabled`. The interval is a positive integer plus `s`, `m`, `h`, or
+`d`, bounded from `1m` through `24h` inclusive. This audit schedule is also
+independent of the legacy `[supervisor_health].sweep_seconds` direct-report sweep.
+Both paths may observe the same unhealthy work, but repair converges through the
+existing generation-aware incident reservations and claims rather than starting
+duplicate recovery.
 
 ---
 
