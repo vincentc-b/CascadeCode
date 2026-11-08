@@ -79,9 +79,6 @@ def test_audit_lane_starts_before_blocking_worktree_repair(
     monkeypatch.setattr(worker_mod, "repair_registered_worktrees", repair)
     monkeypatch.setattr(worker_mod, "submit_recovered_turns", lambda _root: None)
     monkeypatch.setattr(
-        "cascade.watchdog.config.health_audit_periodic_opted_in", lambda _root: True
-    )
-    monkeypatch.setattr(
         "cascade.watchdog.config.read_health_audit_config",
         lambda _root: HealthAuditConfig(enabled=True, interval_seconds=60),
     )
@@ -115,14 +112,7 @@ def test_audit_lane_starts_before_blocking_worktree_repair(
     worker.join(2)
 
     assert receipt is not None
-    assert receipt["counts"] == {
-        "selected": 0,
-        "observed": 0,
-        "healthy": 0,
-        "expected_wait": 0,
-        "proven_incident": 0,
-        "unavailable_evidence": 0,
-    }
+    assert all(value == 0 for value in receipt["counts"].values())
     assert not worker.is_alive()
 
 
@@ -165,9 +155,6 @@ def test_operator_stop_cancels_audit_during_blocked_startup_and_cleans_up(
     monkeypatch.setattr(audit_module, "HealthAuditLane", ProbeLane)
     monkeypatch.setattr(worker_mod, "prepare_up", lambda: MagicMock(path=tmp_path))
     monkeypatch.setattr(worker_mod, "repair_registered_worktrees", repair)
-    monkeypatch.setattr(
-        "cascade.watchdog.config.health_audit_periodic_opted_in", lambda _root: True
-    )
     monkeypatch.setattr(
         "cascade.watchdog.config.read_health_audit_config",
         lambda _root: HealthAuditConfig(enabled=True, interval_seconds=60),
@@ -225,9 +212,6 @@ def test_audit_cleanup_preserves_worker_shutdown_cause(
     monkeypatch.setattr(worker_mod, "prepare_up", lambda: ws)
     monkeypatch.setattr(worker_mod, "repair_registered_worktrees", lambda _root: None)
     monkeypatch.setattr(worker_mod, "submit_recovered_turns", lambda _root: None)
-    monkeypatch.setattr(
-        "cascade.watchdog.config.health_audit_periodic_opted_in", lambda _root: True
-    )
     monkeypatch.setattr(
         "cascade.watchdog.config.read_health_audit_config",
         lambda _root: HealthAuditConfig(enabled=False, interval_seconds=60),

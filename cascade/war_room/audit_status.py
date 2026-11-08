@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import time
 from collections import defaultdict
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -20,6 +21,16 @@ _STORES = (
 )
 _OUTCOMES = ("healthy", "expected_wait", "proven_incident", "unavailable_evidence")
 _TIERS = ("task", "feature", "epic")
+_MAX_INCIDENT_ROWS = 100
+_INCIDENT_RECHECK_BUDGET_SECONDS = 2.0
+_RECEIPT_FIELDS = (
+    "last_completed_at",
+    "next_scheduled_at",
+    "interval_seconds",
+    "duration_seconds",
+    "counts",
+    "next_cursor",
+)
 
 
 def health_audit_status(*, root: Path) -> dict[str, object]:
@@ -27,7 +38,11 @@ def health_audit_status(*, root: Path) -> dict[str, object]:
 
     # Keep the route importable while audit_lane is importing audit -> health ->
     # feature recovery -> the War Room package during supervisor startup.
-    from cascade.watchdog.audit_lane import read_audit_failure, read_audit_receipt
+    from cascade.watchdog.audit_lane import (
+        audit_receipt_path,
+        read_audit_failure,
+        read_audit_receipt,
+    )
 
     unavailable: list[dict[str, str]] = []
     try:
@@ -35,6 +50,27 @@ def health_audit_status(*, root: Path) -> dict[str, object]:
     except OSError as exc:
         receipt = None
         unavailable.append({"source": "audit_receipt", "reason": str(exc)})
+    else:
+        receipt_path = audit_receipt_path(root)
+        if receipt is None:
+            unavailable.append(
+                {
+                    "source": "audit_receipt",
+                    "reason": (
+                        "no completed audit receipt"
+                        if not receipt_path.exists()
+                        else "audit receipt is malformed or incomplete"
+                    ),
+                }
+            )
+        elif not _valid_receipt(receipt):
+            receipt = None
+            unavailable.append(
+                {
+                    "source": "audit_receipt",
+                    "reason": "audit receipt is malformed or incomplete",
+                }
+            )
     try:
         failure = read_audit_failure(root)
     except OSError as exc:
@@ -62,6 +98,7 @@ def _active_incidents(
 ) -> tuple[list[dict[str, object]], list[dict[str, str]]]:
     projected: list[dict[str, object]] = []
     errors: list[dict[str, str]] = []
+    candidates: list[tuple[str, str, Mapping[str, Any]]] = []
     home = lifecycle_root(root) / ".cascade"
     with task_lifecycle_read_lock(root=root):
         for store_name, filename, collection in _STORES:
@@ -79,6 +116,14 @@ def _active_incidents(
                 )
                 continue
             for row_id, row in rows.items():
+                if len(candidates) >= _MAX_INCIDENT_ROWS:
+                    errors.append(
+                        {
+                            "source": "incident_ledgers",
+                            "reason": f"active incident read is limited to {_MAX_INCIDENT_ROWS} rows",
+                        }
+                    )
+                    break
                 if not isinstance(row, Mapping):
                     continue
                 incident = row.get("incident")
@@ -86,20 +131,106 @@ def _active_incidents(
                     continue
                 if incident.get("outcome") == "success":
                     continue
-                item = _project_incident(str(row_id), store_name, incident)
-                if item is None:
-                    errors.append(
-                        {
-                            "source": f"{store_name}:{row_id}",
-                            "reason": "incident identity is unavailable",
-                        }
-                    )
-                else:
-                    projected.append(item)
+                candidates.append((str(row_id), store_name, incident))
+
+    deadline = time.monotonic() + _INCIDENT_RECHECK_BUDGET_SECONDS
+    for row_id, store_name, incident in candidates:
+        current, reason = _incident_is_current(root, incident, deadline=deadline)
+        if not current:
+            if reason is not None:
+                errors.append(
+                    {"source": f"{store_name}:{row_id}", "reason": reason}
+                )
+            continue
+        item = _project_incident(row_id, store_name, incident)
+        if item is None:
+            errors.append(
+                {
+                    "source": f"{store_name}:{row_id}",
+                    "reason": "incident identity is unavailable",
+                }
+            )
+        else:
+            projected.append(item)
     projected.sort(
         key=lambda item: (str(item["tier"]), str(item["work_id"]), str(item["incident_id"]))
     )
     return projected, errors
+
+
+def _incident_is_current(
+    root: Path, incident: Mapping[str, Any], *, deadline: float
+) -> tuple[bool, str | None]:
+    """Require fresh authoritative generation before calling a ledger row active."""
+
+    work_id = incident.get("work_id")
+    generation = incident.get("authoritative_generation")
+    failure_class = incident.get("failure_class")
+    if not all(
+        isinstance(value, str) and value
+        for value in (work_id, generation, failure_class)
+    ):
+        return False, "incident identity is unavailable"
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return False, "current lifecycle recheck exceeded its bounded budget"
+    try:
+        from cascade.watchdog.audit import project_audit_observation
+
+        observation = project_audit_observation(
+            work_id,
+            root=root,
+            timeout_seconds=remaining,
+        )
+    except Exception as exc:
+        return False, f"current lifecycle state is unavailable ({type(exc).__name__})"
+    if observation.classification != "proven_incident" or observation.incident is None:
+        return False, None
+    if (
+        str(observation.generation) != generation
+        or observation.incident.failure_class != failure_class
+    ):
+        return False, None
+    return True, None
+
+
+def _valid_receipt(receipt: Mapping[str, Any]) -> bool:
+    if any(field not in receipt for field in _RECEIPT_FIELDS):
+        return False
+    if not _aware_timestamp(receipt["last_completed_at"]) or not _aware_timestamp(
+        receipt["next_scheduled_at"]
+    ):
+        return False
+    if (
+        not isinstance(receipt["interval_seconds"], int)
+        or isinstance(receipt["interval_seconds"], bool)
+        or receipt["interval_seconds"] <= 0
+    ):
+        return False
+    duration = receipt["duration_seconds"]
+    if (
+        not isinstance(duration, (int, float))
+        or isinstance(duration, bool)
+        or duration < 0
+    ):
+        return False
+    counts = receipt["counts"]
+    if not isinstance(counts, Mapping) or any(
+        not isinstance(key, str) or type(value) is not int or value < 0
+        for key, value in counts.items()
+    ):
+        return False
+    return receipt["next_cursor"] is None or isinstance(receipt["next_cursor"], str)
+
+
+def _aware_timestamp(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
 
 
 def _project_incident(
@@ -117,11 +248,18 @@ def _project_incident(
     result = dict(result) if isinstance(result, Mapping) else {}
     attempts = incident.get("attempts")
     attempts = [dict(item) for item in attempts if isinstance(item, Mapping)] if isinstance(attempts, list) else []
-    acknowledged = bool(acknowledgement) or any(item.get("accepted_at") for item in attempts)
+    claim_token = request.get("claim_token")
+    accepted_attempt = next(
+        (
+            item
+            for item in reversed(attempts)
+            if item.get("accepted_at")
+            and (not claim_token or item.get("claim_token") == claim_token)
+        ),
+        {},
+    )
+    acknowledged = bool(acknowledgement) or bool(accepted_attempt)
     if acknowledged and not acknowledgement:
-        accepted_attempt = next(
-            (item for item in reversed(attempts) if item.get("accepted_at")), {}
-        )
         acknowledgement = {
             "accepted_at": accepted_attempt.get("accepted_at"),
             "attempt": accepted_attempt.get("attempt"),
@@ -131,7 +269,11 @@ def _project_incident(
         if result
         else "acknowledged"
         if acknowledged
+        else "reserved"
+        if request.get("claim_token")
         else "pending"
+        if request.get("delivered_at")
+        else "recorded"
         if request
         else "unavailable"
     )

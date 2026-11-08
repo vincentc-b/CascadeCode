@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import socket
+import subprocess
 import threading
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from http import HTTPStatus
+from types import SimpleNamespace
 
 from cascade.watchdog.audit_lane import AuditPassResult, HealthAuditLane
 from cascade.watchdog.audit_lane import audit_receipt_path
@@ -15,7 +17,7 @@ from cascade.watchdog.incidents import authoritative_generation, incident_record
 from cascade.war_room.audit_status import health_audit_status
 from cascade.war_room.human_auth import LocalHumanIdentityVerifier
 from cascade.war_room.server import serve
-from tests.support import make_repo
+from tests.support import add_doc, make_repo
 
 
 def _post(
@@ -197,7 +199,9 @@ def test_route_runs_disabled_lane_without_moving_periodic_deadline(tmp_path) -> 
         lane.stop(timeout=2)
 
 
-def test_get_audit_projects_receipt_and_truthful_durable_incident(tmp_path) -> None:
+def test_get_audit_projects_receipt_and_truthful_durable_incident(
+    tmp_path, monkeypatch
+) -> None:
     root = make_repo(tmp_path, git=False)
     receipt = audit_receipt_path(root)
     receipt.parent.mkdir(parents=True, exist_ok=True)
@@ -214,6 +218,7 @@ def test_get_audit_projects_receipt_and_truthful_durable_incident(tmp_path) -> N
                     "tier.task.healthy": 2,
                     "tier.feature.proven_incident": 1,
                 },
+                "next_cursor": None,
             }
         ),
         encoding="utf-8",
@@ -237,9 +242,17 @@ def test_get_audit_projects_receipt_and_truthful_durable_incident(tmp_path) -> N
             "claim_token": "token",
             "operation": "resume_planning_owner",
         },
-        attempts=[{"attempt": 1, "accepted_at": "2026-11-08T12:00:01+00:00"}],
+        attempts=[{"attempt": 1, "claim_token": "token", "accepted_at": "2026-11-08T12:00:01+00:00"}],
         outcome="claimed",
         now=datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr(
+        "cascade.watchdog.audit.project_audit_observation",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            classification="proven_incident",
+            incident=SimpleNamespace(failure_class="stalled_owner"),
+            generation=generation,
+        ),
     )
     ledger = root / ".cascade" / "executions.json"
     ledger.write_text(
@@ -285,7 +298,9 @@ def test_get_audit_projects_receipt_and_truthful_durable_incident(tmp_path) -> N
         thread.join(2)
 
 
-def test_get_audit_exposes_unavailable_evidence_without_inventing_state(tmp_path) -> None:
+def test_get_audit_exposes_unavailable_evidence_without_inventing_state(
+    tmp_path, monkeypatch
+) -> None:
     root = make_repo(tmp_path, git=False)
     generation = authoritative_generation(
         work_id="task_001",
@@ -303,6 +318,14 @@ def test_get_audit_exposes_unavailable_evidence_without_inventing_state(tmp_path
         selected_capability="retry_task",
         outcome="deferred",
     )
+    monkeypatch.setattr(
+        "cascade.watchdog.audit.project_audit_observation",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            classification="proven_incident",
+            incident=SimpleNamespace(failure_class="blocked_task_failed"),
+            generation=generation,
+        ),
+    )
     ledger = root / ".cascade" / "executions.json"
     ledger.parent.mkdir(parents=True, exist_ok=True)
     ledger.write_text(
@@ -314,3 +337,117 @@ def test_get_audit_exposes_unavailable_evidence_without_inventing_state(tmp_path
     assert projected["evidence"] == {"available": False, "value": None}
     assert projected["request"]["state"] == "unavailable"
     assert "investigating" not in json.dumps(projected)
+
+
+def test_reserved_claim_is_not_reported_as_delivered_pending_request(
+    tmp_path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    generation = authoritative_generation(
+        work_id="task_001", tier="task", evidence={}, capability="retry_task"
+    )
+    incident = incident_record(
+        work_id="task_001",
+        tier="task",
+        accountable_owner="feature_team:feat_001",
+        failure_class="blocked_task_failed",
+        generation=generation,
+        evidence={},
+        selected_capability="retry_task",
+        request={"reservation_id": "reservation", "claim_token": "token", "operation": "retry_task"},
+        attempts=[
+            {"attempt": 1, "claim_token": "previous", "accepted_at": "2026-11-08T12:00:00+00:00"},
+            {"attempt": 2, "claim_token": "token", "started_at": "2026-11-08T12:01:00+00:00"},
+        ],
+        outcome="claimed",
+    )
+    monkeypatch.setattr(
+        "cascade.watchdog.audit.project_audit_observation",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            classification="proven_incident",
+            incident=SimpleNamespace(failure_class="blocked_task_failed"),
+            generation=generation,
+        ),
+    )
+    ledger = root / ".cascade" / "executions.json"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(
+        json.dumps({"actions": {"reservation": {"incident": incident}}}),
+        encoding="utf-8",
+    )
+    projected = health_audit_status(root=root)["incidents"][0]
+    assert projected["request"]["state"] == "reserved"
+    assert projected["acknowledgement"]["available"] is False
+
+
+def test_stale_or_superseded_incident_is_not_reported_active(
+    tmp_path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="completed",
+        parent="feat_001",
+    )
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "terminal lifecycle"], cwd=root, check=True)
+    generation = authoritative_generation(
+        work_id="task_001", tier="task", evidence={}, capability="retry_task"
+    )
+    incident = incident_record(
+        work_id="task_001",
+        tier="task",
+        accountable_owner="feature_team:feat_001",
+        failure_class="blocked_task_failed",
+        generation=generation,
+        evidence={"status": "blocked"},
+        selected_capability="retry_task",
+        outcome="deferred",
+    )
+    ledger = root / ".cascade" / "remediation_dispositions.json"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(
+        json.dumps({"dispositions": {"historical": {"incident": incident}}}),
+        encoding="utf-8",
+    )
+
+    payload = health_audit_status(root=root)
+
+    assert payload["incidents"] == []
+    assert ledger.exists()
+
+
+def test_malformed_and_missing_receipts_are_distinct_unavailable_evidence(
+    tmp_path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+
+    missing = health_audit_status(root=root)
+    receipt = audit_receipt_path(root)
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    receipt.write_text("{broken", encoding="utf-8")
+    malformed = health_audit_status(root=root)
+
+    assert missing["last_run"] is None
+    assert missing["unavailable_evidence"][0] == {
+        "source": "audit_receipt",
+        "reason": "no completed audit receipt",
+    }
+    assert malformed["last_run"] is None
+    assert malformed["counts"]["by_outcome"]["healthy"] == 0
+    assert malformed["unavailable_evidence"][0] == {
+        "source": "audit_receipt",
+        "reason": "audit receipt is malformed or incomplete",
+    }

@@ -282,7 +282,6 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     from cascade.watchdog.config import (
         ConfigError,
         HealthAuditConfig,
-        health_audit_periodic_opted_in,
         read_health_audit_config,
         worker_drain_seconds,
     )
@@ -382,11 +381,6 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     # moving scheduling back into the ordinary watchdog chain.
     try:
         audit_config = read_health_audit_config(ws.path)
-        if not health_audit_periodic_opted_in(ws.path):
-            audit_config = type(audit_config)(
-                enabled=False,
-                interval_seconds=audit_config.interval_seconds,
-            )
         audit_recovery = AuditRecoveryWorker(ws.path)
         audit_lane = HealthAuditLane(
             root=ws.path,

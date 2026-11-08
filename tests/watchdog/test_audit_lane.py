@@ -30,7 +30,7 @@ from cascade.watchdog.audit_lane import (
     read_audit_receipt,
     run_bounded_audit_pass,
 )
-from cascade.watchdog.config import HealthAuditConfig, health_audit_periodic_opted_in
+from cascade.watchdog.config import HealthAuditConfig, read_health_audit_config
 from cascade.workspace.types import ProjectContext
 from tests.support import add_doc, make_repo
 
@@ -45,6 +45,14 @@ class Clock:
     def tick(self, seconds: float) -> None:
         self.monotonic += seconds
         self.utc += timedelta(seconds=seconds)
+
+
+def _process_gone_or_zombie(pid: int) -> bool:
+    status = Path(f"/proc/{pid}/status")
+    try:
+        return not status.exists() or "State:\tZ" in status.read_text(encoding="utf-8")
+    except (FileNotFoundError, ProcessLookupError):
+        return True
 
 
 def _lane(
@@ -641,13 +649,9 @@ def test_timeout_kills_term_ignoring_git_descendant_before_return(
     assert result.counts["healthy"] == 0
     helper_pid = int(pid_file.read_text(encoding="utf-8"))
     deadline = time.monotonic() + 1.0
-    while Path(f"/proc/{helper_pid}").exists() and time.monotonic() < deadline:
-        status = Path(f"/proc/{helper_pid}/status")
-        if status.exists() and "State:\tZ" in status.read_text(encoding="utf-8"):
-            break
+    while not _process_gone_or_zombie(helper_pid) and time.monotonic() < deadline:
         time.sleep(0.01)
-    status = Path(f"/proc/{helper_pid}/status")
-    assert not status.exists() or "State:\tZ" in status.read_text(encoding="utf-8")
+    assert _process_gone_or_zombie(helper_pid)
 
 
 def _exit_observer_with_helper(sender, helper_file: Path) -> None:
@@ -723,9 +727,8 @@ def test_exited_observer_reaps_surviving_helper_before_return(
         with pytest.raises(RuntimeError, match="observer exited without a result"):
             run_bounded_audit_pass(root, None, threading.Event(), max_seconds=10.0)
         helper_pid = int(helper_file.read_text(encoding="utf-8"))
-        status = Path(f"/proc/{helper_pid}/status")
         deadline = time.monotonic() + 1.0
-        while status.exists() and "State:\tZ" not in status.read_text(encoding="utf-8"):
+        while not _process_gone_or_zombie(helper_pid):
             if time.monotonic() >= deadline:
                 raise AssertionError("observer helper survived claim release")
             time.sleep(0.01)
@@ -1074,12 +1077,10 @@ def test_lane_cleanup_does_not_set_caller_stop_but_observes_it(
     assert not fresh_stop.is_set()
 
 
-def test_periodic_startup_requires_explicit_health_audit_table(tmp_path: Path) -> None:
+def test_omitted_health_audit_table_keeps_default_on_configuration(tmp_path: Path) -> None:
     (tmp_path / "cascade.toml").write_text(
         "[automation]\nenabled = true\n", encoding="utf-8"
     )
-    assert health_audit_periodic_opted_in(tmp_path) is False
-    (tmp_path / "cascade.toml").write_text(
-        "[automation.health_audit]\nenabled = true\n", encoding="utf-8"
-    )
-    assert health_audit_periodic_opted_in(tmp_path) is True
+    config = read_health_audit_config(tmp_path)
+    assert config.enabled is True
+    assert config.interval_seconds == 1800

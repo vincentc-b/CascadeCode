@@ -32,6 +32,14 @@ from cascade.workspace.types import ProjectContext
 from tests.support import add_doc, make_repo, run_audit_recovery_entry
 
 
+def _process_gone_or_zombie(pid: int) -> bool:
+    status = Path(f"/proc/{pid}/status")
+    try:
+        return not status.exists() or "State:\tZ" in status.read_text(encoding="utf-8")
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+
+
 def test_spawned_audit_pass_retains_parent_stall_episode(tmp_path: Path) -> None:
     """A fresh observer process must advance, not reset, parent evidence."""
 
@@ -280,12 +288,9 @@ def test_admission_timeout_reaps_git_descendants(
     assert time.monotonic() - started < 6.5
     helper_pid = int(pid_file.read_text(encoding="utf-8"))
     deadline = time.monotonic() + 1
-    status = Path(f"/proc/{helper_pid}/status")
-    while status.exists() and time.monotonic() < deadline:
-        if "State:\tZ" in status.read_text(encoding="utf-8"):
-            break
+    while not _process_gone_or_zombie(helper_pid) and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert not status.exists() or "State:\tZ" in status.read_text(encoding="utf-8")
+    assert _process_gone_or_zombie(helper_pid)
 
 
 def test_probe_refuses_nonregular_authority_without_replacing_it(
