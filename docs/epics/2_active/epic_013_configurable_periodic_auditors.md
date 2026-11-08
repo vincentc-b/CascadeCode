@@ -117,6 +117,12 @@ The release evidence must cover the `task_038_002_002` missing pending-index reg
 
 Excluded: a new scheduler service, status database, notification channel, generic repair console, analytics dashboard, blanket repository permissions, new forge workflow, arbitrary dependency setup or destructive Git automation. None of these exclusions reduces the 24 success criteria.
 
+### Planning validation baseline · 2026-11-08
+
+Command: `python -m pytest -q tests/watchdog/test_health.py tests/task/test_supervisor_recovery.py tests/test_review_health.py`.
+
+Result: 22 passed, 2 failed in 14.13 seconds. The failures were `test_health_sweep_retries_failed_blocked_task_once_through_dispatch` and `test_recovery_failure_is_recorded_once_for_concurrent_and_repeated_sweeps`; both stopped while activating their fixture Epic with `provider_preflight_blocked`, before exercising recovery. This planning change modifies no product code and does not claim a green baseline or completion of new audit acceptance. `feat_013_003` must use deterministic provider-inventory fixtures without weakening production admission and demonstrate both recovery cases; `feat_013_005` must record a passing integrated release suite. No provider change or installation is authorized to work around the fixture failures.
+
 ## Open questions
 
 No product-scope questions remain for this revision.
