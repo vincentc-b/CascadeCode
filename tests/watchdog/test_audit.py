@@ -460,7 +460,7 @@ def test_real_resolution_action_maps_review_identity_to_old_feature(
                     "request": {
                         "review_id": "147",
                         "review_url": "https://forge.example/repo/pull/147",
-                    }
+                    },
                 }
             }
         ),
@@ -964,8 +964,10 @@ def test_registered_worktree_head_changes_authoritative_generation(
     )
 
     first = project_audit_observation("epic_001", root=root)
-    assert first.classification == "proven_incident"
-    assert "worktree:epic_001" in first.evidence.unresolved_references
+    assert first.classification == "expected_wait"
+    assert first.reason == "observing:local_integration_unpublished"
+    assert first.evidence.parent_action is not None
+    assert first.evidence.parent_action.candidate_action == "publish_integration_review"
     (worktree / "change.txt").write_text("new head", encoding="utf-8")
     _commit(worktree, "advance owned branch")
     second = project_audit_observation("epic_001", root=root)
@@ -973,3 +975,97 @@ def test_registered_worktree_head_changes_authoritative_generation(
     assert first.git_head != second.git_head
     assert first.generation != second.generation
     assert second.branch == BranchName("epic/epic_001")
+
+
+@pytest.mark.parametrize(
+    ("tier", "work_id", "parent_id"),
+    (
+        ("feature", "feat_001", "epic_001"),
+        ("epic", "epic_001", None),
+    ),
+)
+def test_parent_owner_absence_requires_unchanged_configured_interval(
+    tmp_path: Path,
+    tier: str,
+    work_id: str,
+    parent_id: str | None,
+) -> None:
+    from datetime import datetime, timezone
+
+    from cascade.board.store import read_doc, write_doc
+
+    root = make_repo(tmp_path)
+    (root / "cascade.toml").write_text(
+        '[automation.health_audit]\ninterval = "1m"\n', encoding="utf-8"
+    )
+    if parent_id is not None:
+        add_doc(root, id=parent_id, title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id=work_id,
+        title="Owner",
+        tier=tier,  # type: ignore[arg-type]
+        status="active",
+        parent=parent_id,
+    )
+    if tier == "epic":
+        epic = read_doc(work_id, root=root)
+        epic.meta.plan_approved_at = datetime(2026, 11, 8, tzinfo=timezone.utc)
+        write_doc(epic, root=root)
+    _commit(root)
+    now = {"value": 10.0}
+
+    first = project_audit_observation(
+        work_id, root=root, monotonic=lambda: now["value"]
+    )
+    now["value"] = 69.0
+    early = project_audit_observation(
+        work_id, root=root, monotonic=lambda: now["value"]
+    )
+    now["value"] = 70.0
+    proven = project_audit_observation(
+        work_id, root=root, monotonic=lambda: now["value"]
+    )
+
+    assert first.classification == early.classification == "expected_wait"
+    assert first.reason == early.reason == "observing:planning_owner_absent"
+    assert proven.classification == "proven_incident"
+    assert proven.reason == "resume_planning_owner"
+    assert first.generation == early.generation == proven.generation
+    action = proven.evidence.parent_action
+    assert action is not None
+    assert action.responsible_work_id == work_id
+    assert action.candidate_action == "resume_planning_owner"
+    assert action.state == "executable"
+    assert action.observation_count == 3
+    assert action.unchanged_for_seconds == 60.0
+    assert action.required_interval_seconds == 60.0
+
+
+def test_live_parent_owner_never_becomes_a_stall(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+    )
+    _commit(root)
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.graph_turn_owner_is_live", lambda _work_id: True
+    )
+
+    first = project_audit_observation("feat_001", root=root, monotonic=lambda: 0.0)
+    later = project_audit_observation(
+        "feat_001", root=root, monotonic=lambda: 100_000.0
+    )
+
+    assert first.classification == later.classification == "expected_wait"
+    assert first.reason == later.reason == "live_owner"
+    assert later.evidence.parent_action is not None
+    assert later.evidence.parent_action.state == "gated"

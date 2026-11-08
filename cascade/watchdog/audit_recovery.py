@@ -598,7 +598,7 @@ def _incident_contract(
 def _evidence(observation: AuditObservation) -> dict[str, Any]:
     identity = observation.identity
     source = observation.evidence
-    return {
+    evidence = {
         "document_revision": (
             str(identity.document_revision) if identity.document_revision else None
         ),
@@ -612,6 +612,17 @@ def _evidence(observation: AuditObservation) -> dict[str, Any]:
         "local_fingerprint": source.local_fingerprint,
         "reason": observation.reason,
     }
+    if source.parent_action is not None:
+        evidence["parent_action"] = {
+            "responsible_work_id": source.parent_action.responsible_work_id,
+            "candidate_action": source.parent_action.candidate_action,
+            "state": source.parent_action.state,
+            "reason": source.parent_action.reason,
+            "observation_count": source.parent_action.observation_count,
+            "unchanged_for_seconds": source.parent_action.unchanged_for_seconds,
+            "required_interval_seconds": source.parent_action.required_interval_seconds,
+        }
+    return evidence
 
 
 def _integration_action(
