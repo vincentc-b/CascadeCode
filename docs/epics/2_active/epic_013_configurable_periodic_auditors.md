@@ -182,6 +182,14 @@ The Feature 002 team reports 42/42 focused configuration, lane and initializatio
 
 All 24 criteria, five-feature sequencing, approval and provider/dependency policy remain unchanged. The same integration-update action still requires its guarded idle-boundary retry and terminal receipt; this active-team status does not establish that the retry precondition has changed.
 
+## Feature 002 scheduler integration follow-up — 2026-11-08
+
+In reply to TeamMessages `feat_013_002:feat_013_002:dependency-and-scheduler-fix-20261108` and `feat_013_002:feat_013_002:scheduler-findings-fixed-06f4caff`: inspected feature-base commit `06f4caff`, which unifies the audit claim/receipt for product and owned worktree entry points, passes operator-stop cancellation directly into the lane, and includes startup repair in lane cleanup. The owning team reports 12 focused regressions passing, including real Git trunk/worktree cross-process contention and blocked-startup cancellation/cleanup. These are feature-branch results; the epic has not rerun those tests or accepted final feature integration.
+
+Preserve this commit and scaffold correction `da175ad3` when integrating the remaining Feature 002 tasks; validate the resulting integrated feature revision before publication. Workspace claim normalization does not confer lifecycle or repair authority: canonical registration, typed owner identity and fresh locked authority/generation checks remain required. Existing split-repository claim and storage contracts must remain consistent across periodic/manual entry points. Continue tasks 003–005 through the owning team and existing gates; no additional feature or scope amendment is needed.
+
+The team reports a fresh satisfied dependency projection for completed Feature 001. Epic child projection independently confirms Feature 001 completed and Feature 002 active, with no incidents reported by child inspection. All 24 criteria and Feature 005's real all-tier recovery/default-on release gate remain unchanged. The original integration-update action still awaits its guarded idle-boundary retry and terminal receipt; current active work does not establish that the busy precondition has cleared.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
