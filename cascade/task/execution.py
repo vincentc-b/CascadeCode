@@ -13,7 +13,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 from cascade.board.context import resolve_root
-from cascade.task.lifecycle_lock import lifecycle_root, task_lifecycle_lock
+from cascade.task.lifecycle_lock import (
+    lifecycle_root,
+    task_lifecycle_lock,
+    task_lifecycle_read_lock,
+)
 
 ExecutionPhase = Literal["queued", "running", "awaiting_merge", "merge_blocked", "terminal"]
 ExecutionOutcome = Literal["succeeded", "failed"]
@@ -339,7 +343,7 @@ def execution_view(
     stale_after: timedelta = DEFAULT_STALE_AFTER,
 ) -> dict[str, Any] | None:
     repo = resolve_root(root)
-    with task_lifecycle_lock(root=repo):
+    with task_lifecycle_read_lock(root=repo):
         record = _read(repo).get(task_id)
     if record is None:
         return None
@@ -360,7 +364,7 @@ def execution_views(
     """Build multiple execution views from one sidecar read."""
 
     repo = resolve_root(root)
-    with task_lifecycle_lock(root=repo):
+    with task_lifecycle_read_lock(root=repo):
         records = _read(repo)
     current = now or _now()
     return {
