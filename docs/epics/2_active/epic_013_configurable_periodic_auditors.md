@@ -248,6 +248,16 @@ Fresh canonical child projection shows Feature 001 completed, Feature 002 active
 
 All 24 criteria, existing approval/provider/dependency policy, five-feature sequence and Feature 005's real Task/Feature/Epic recovery gate before default-on activation remain unchanged. Continue Task 005 acceptance and Features 003–005 through normal dependency gates. No dependency installation or scope amendment is needed.
 
+## Post-validation preservation synchronization — 2026-11-08
+
+In reply to OperatorReviewFinding `epic13-main-preserve-post-validation-6e32c7f4`: verified local `origin/main` points to `6e32c7f4` and reviewed its source-cleanliness, actual `task_swe` checkpoint fencing, same-attempt corrective input and clean-only worktree teardown changes. The operator reports 49 distinct targeted passing regressions; these are operator-reported framework evidence, not Epic-run checks or final Feature 002 acceptance.
+
+The operator explicitly requests integration after the current Task 005 handoff at the next safe parent synchronization point. That handoff is not yet confirmed. The owned Epic product base remains `ef71bd57`; `6e32c7f4` is not yet imported. At that boundary, integrate current main into the owned Epic branch, preserve the approved plan and accepted Feature 001 completion records, run focused imported-fix checks, publish the updated Epic base, then require Feature 002 to consume it before final clean-head supervised validation and publication. Do not rearm the already-completed integration recovery action or disturb a live Task to manufacture an idle boundary.
+
+Preserve the late Task 004 draft until its concrete review fixes are covered by owned replacement commits and integrated acceptance. Feature 002 reports Task 004 merged and Task 005 live, with stopped-manual correction `e4868fda` and admission-bounds correction `51e35f2d`; positive real reservation-to-adapter execution/result remains unresolved in the latest handoff. Existing acceptance requires successful adapter invocation through canonical reservation plus safe reconciliation of undelivered tokens, cancellation, child errors and attempt-bound retries. Keep the prior deadline, process-group cleanup, shutdown-cause, timeout-evidence and runtime-read corrections through integration. No new acceptance scope is added.
+
+Fresh canonical child projection shows Feature 001 completed, Feature 002 active without monitoring blockers and approved Features 003–005 sequentially dependent. Task 005 content access was denied, so its handoff and final validation were not independently verified. Synchronization guidance and a request for the safe handoff boundary were enqueued to the owning Feature; receipt is not yet confirmed. All 24 criteria, existing approvals/provider/dependency policy and Feature 005's real all-tier recovery gate before default-on activation remain unchanged.
+
 ## Decision log
 
 - 2026-10-22 · Human · Brief approved through merge request review.
