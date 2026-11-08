@@ -230,18 +230,21 @@ def retry_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object
     """Atomically claim one eligible retry through the normal dispatch gates."""
 
     trunk = locate_trunk(Path(root).resolve())
-    # dispatch_task takes this same re-entrant lock while it changes the board.
-    # The check and transition are therefore one atomic retry claim.
-    with task_lifecycle_lock(root=trunk):
-        status = recovery_status(task_id, feature_id=feature_id, root=trunk)
-        if status["action"] != "retry":
-            return {
-                "ok": False,
-                "reason": "not_retryable",
-                "task_id": task_id,
-                "recovery": status,
-            }
-        result = dispatch_task(task_id, "boss", root=trunk)
+    status = recovery_status(task_id, feature_id=feature_id, root=trunk)
+    if status["action"] != "retry":
+        return {
+            "ok": False,
+            "reason": "not_retryable",
+            "task_id": task_id,
+            "recovery": status,
+        }
+    # Dispatch rechecks eligibility and ownership under its lifecycle lock.
+    # Its boot/model handoff must run after that lock is released, and recovery
+    # callers must not wait synchronously for the new SWE turn to finish.
+    from cascade.workspace.kickoff import deferred_kickoffs
+
+    with deferred_kickoffs():
+        result = dispatch_task(task_id, "boss", root=trunk, expected_parent=feature_id)
     response: dict[str, object] = {
         **dispatch_result_to_dict(result),
         "task_id": task_id,

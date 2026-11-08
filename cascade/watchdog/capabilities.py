@@ -39,6 +39,8 @@ _GATE_TOKENS = frozenset(
     {
         "approval",
         "comment",
+        "review_threads_blocking",
+        "not_approved",
         "dependency",
         "credential",
         "permission",
