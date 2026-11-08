@@ -132,6 +132,10 @@ No product-scope questions remain for this revision.
 - 2026-11-06 · Human amendment · Make the auditor a configurable health-and-recovery loop for Tasks, Features, and Epics; default to every 30 minutes, remain silent when healthy, and grant incident-scoped repair capabilities when unhealthy.
 - 2026-11-07 · Human amendment · Require independent bounded scheduling, executable owner-scoped capabilities, generation-aware retries, and end-to-end proof of actual recovery mutations.
 
+- `dec_001` · 2026-11-08 · Epic Manager · **Scope and delivery sequence**
+  Chose Deliver five sequential features: shared health/incident authority, independent scheduling, Task recovery, Feature/Epic recovery, and War Room plus default-on acceptance..
+  Rationale: Shared ownership and generation contracts precede executable adapters. Reuse completed Epic 041/042 recovery and existing tests; require actual mutation proof before enabling the integrated audit by default.
+  Honors: All 24 success criteria, especially 16, 19, 21–24; no new scheduler service, status database or software installation..
 ## Amendment log
 
 - 2026-11-06 · Reframed periodic auditors from advisory repository analysis into authoritative lifecycle health detection and bounded recovery. Added the lost merge-queue entry from `task_038_002_002` as a required regression scenario.
