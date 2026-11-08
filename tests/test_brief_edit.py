@@ -32,6 +32,7 @@ def test_edit_preserves_identity_metadata_and_unrelated_sections() -> None:
             updated=date(2026, 10, 2),
             path=path,
             provider="codex",
+            flex_mode=True,
             models={"epic_manager": "model-a"},
             reasoning={"epic_manager": "high"},
         ),
@@ -61,6 +62,7 @@ def test_edit_preserves_identity_metadata_and_unrelated_sections() -> None:
         cleared_reasoning=frozenset({"epic_manager"}),
         source=loaded["source"],
         original=original,
+        flex_mode=False,
     )
     changed = render_brief_edit(edit)
     assert changed.meta.id == original.meta.id
@@ -69,6 +71,10 @@ def test_edit_preserves_identity_metadata_and_unrelated_sections() -> None:
     assert changed.meta.status == "backlog"
     assert changed.meta.title == "Revised title"
     assert changed.meta.reasoning is None
+    assert loaded["flex_mode"] is True
+    assert changed.meta.flex_mode is False
+    from cascade.board.parse import parse_text, render_doc
+    assert parse_text(render_doc(changed), path).meta.flex_mode is False
     assert changed.body.startswith("# Revised title\n")
     assert "New intent." in changed.body
     assert "New criterion." in changed.body
@@ -87,6 +93,7 @@ def test_edit_preserves_identity_metadata_and_unrelated_sections() -> None:
         cleared_reasoning=frozenset(),
         source=loaded["source"],
         original=original,
+        flex_mode=True,
     )
     assert brief_edit_unchanged(same) is True
 

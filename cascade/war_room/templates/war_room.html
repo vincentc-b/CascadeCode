@@ -94,8 +94,9 @@
               <select id="brief-provider" required></select>
             </label>
             <label id="brief-flex-mode-wrap" class="brief-flex-mode" hidden>
-              <input id="brief-flex-mode" type="checkbox" /> Flex mode
+              <input id="brief-flex-mode" type="checkbox" aria-describedby="brief-flex-mode-help" /> Flex mode
             </label>
+            <p id="brief-flex-mode-help" class="hint" hidden></p>
             <div id="brief-role-selectors" class="brief-role-selectors" aria-live="polite"></div>
           </div>
           <p id="brief-status" class="status-line" aria-live="polite"></p>

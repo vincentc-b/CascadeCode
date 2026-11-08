@@ -39,24 +39,32 @@
     return typeof value === "boolean" ? value : !!defaultEnabled;
   }
 
-  function renderFlexModeControl(wrap, checkbox, inventory, selection) {
+  function renderFlexModeControl(wrap, checkbox, inventory, selection, options) {
     if (!selection) return;
+    options = options || {};
     const supported = providerSupportsFlexMode(inventory, selection.provider);
-    selection.flex_mode = normalizeFlexMode(
-      inventory,
-      selection.provider,
-      selection.flex_mode,
-      false
-    );
-    if (wrap) wrap.hidden = !supported;
+    if (!options.preserveSaved) {
+      selection.flex_mode = normalizeFlexMode(
+        inventory, selection.provider, selection.flex_mode, false
+      );
+    }
+    if (wrap) wrap.hidden = !supported && !options.preserveSaved;
+    if (options.help) {
+      options.help.hidden = !supported && !options.preserveSaved;
+      options.help.textContent = supported
+        ? "Applies to all roles in this brief."
+        : selection.flex_mode
+          ? "Saved as enabled, but unavailable for this provider. Turn Flex mode off to use a supported configuration."
+          : "Flex mode is unavailable for this provider.";
+    }
     if (!checkbox) return;
-    checkbox.disabled = !supported;
-    checkbox.checked = selection.flex_mode;
-    checkbox.onchange = supported
-      ? function () {
-          selection.flex_mode = checkbox.checked;
-        }
-      : null;
+    checkbox.disabled = !supported && !selection.flex_mode;
+    checkbox.checked = !!selection.flex_mode;
+    checkbox.onchange = function () {
+      selection.flex_mode = supported && checkbox.checked;
+      renderFlexModeControl(wrap, checkbox, inventory, selection, options);
+      if (options.onChange) options.onChange();
+    };
   }
 
   function modelById(provider, modelId) {
@@ -151,12 +159,9 @@
       );
     });
     const saved = template && template.saved;
-    const flexMode = normalizeFlexMode(
-      inventory,
-      providerId,
-      saved ? saved.flex_mode : undefined,
-      true
-    );
+    const flexMode = preserveSaved && saved && typeof saved.flex_mode === "boolean"
+      ? saved.flex_mode
+      : normalizeFlexMode(inventory, providerId, saved ? saved.flex_mode : undefined, true);
     return { provider: providerId, models: models, reasoning: reasoning, flex_mode: flexMode };
   }
 

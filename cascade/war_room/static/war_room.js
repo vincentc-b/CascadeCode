@@ -87,6 +87,7 @@
     briefProvider: document.getElementById("brief-provider"),
     briefFlexMode: document.getElementById("brief-flex-mode"),
     briefFlexModeWrap: document.getElementById("brief-flex-mode-wrap"),
+    briefFlexModeHelp: document.getElementById("brief-flex-mode-help"),
     briefRoleSelectors: document.getElementById("brief-role-selectors"),
     btnBriefInventoryRetry: document.getElementById("btn-brief-inventory-retry"),
     btnBriefReload: document.getElementById("btn-brief-reload"),
@@ -421,7 +422,12 @@
       el.briefFlexModeWrap,
       el.briefFlexMode,
       briefInventory,
-      briefSelection
+      briefSelection,
+      {
+        preserveSaved: briefMode === "edit",
+        help: el.briefFlexModeHelp,
+        onChange: updateBriefDialogState,
+      }
     );
     BriefDefaultsUi.renderRoleSelectors(
       el.briefRoleSelectors,
@@ -470,12 +476,7 @@
       briefSelection.provider = briefEditTarget.provider;
       briefSelection.models = Object.assign({}, briefEditTarget.models);
       briefSelection.reasoning = Object.assign({}, briefEditTarget.reasoning || {});
-      briefSelection.flex_mode = BriefDefaultsUi.normalizeFlexMode(
-        briefInventory,
-        briefSelection.provider,
-        briefEditTarget.flex_mode,
-        false
-      );
+      briefSelection.flex_mode = briefEditTarget.flex_mode === true;
     }
     populateBriefProviders();
     el.briefProvider.onchange = function () {

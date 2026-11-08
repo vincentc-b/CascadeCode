@@ -171,3 +171,37 @@ assert.match(emptyStatus.text, /No usable provider/);
 assert.equal(emptyStatus.error, true);
 
 console.log("brief_defaults_ui_cases: ok");
+
+// Editing an existing enabled setting must not hide or silently clear it when
+// current provider capabilities no longer offer Flex (epic_034 regression).
+const unsupportedInventory = Object.assign({}, inventory, {
+  providers: inventory.providers.map(function (provider) {
+    return Object.assign({}, provider, { supports_flex_mode: false });
+  }),
+});
+const enabledTemplate = Object.assign({}, template, {
+  saved: Object.assign({}, optedOutTemplate.saved, { flex_mode: true }),
+});
+const enabledEdit = initialSelection(unsupportedInventory, enabledTemplate, { preserveSaved: true });
+const flexWrap = { hidden: true };
+const flexCheckbox = { checked: false, disabled: true, onchange: null };
+const flexHelp = { hidden: true, textContent: "" };
+let flexChanges = 0;
+const editOptions = { preserveSaved: true, help: flexHelp, onChange: function () { flexChanges += 1; } };
+const { renderFlexModeControl, buildEditSubmitPayload } = require("../../cascade/war_room/static/brief_defaults_ui.js");
+renderFlexModeControl(flexWrap, flexCheckbox, unsupportedInventory, enabledEdit, editOptions);
+assert.equal(flexWrap.hidden, false);
+assert.equal(flexCheckbox.checked, true);
+assert.equal(flexCheckbox.disabled, false, "an unsupported saved value can still be turned off");
+assert.equal(enabledEdit.flex_mode, true, "opening Edit must preserve the stored choice");
+assert.match(flexHelp.textContent, /Saved as enabled.*unavailable/);
+flexCheckbox.checked = false;
+flexCheckbox.onchange();
+assert.equal(flexChanges, 1);
+assert.equal(flexWrap.hidden, false, "the setting remains discoverable after disabling it");
+assert.equal(flexCheckbox.disabled, true, "unsupported Flex cannot be newly enabled");
+const disabledEditPayload = buildEditSubmitPayload({ title: "Edited" }, enabledEdit, savedTarget);
+assert.equal(disabledEditPayload.flex_mode, false);
+assert.deepEqual(disabledEditPayload.models, enabledTemplate.saved.models);
+renderFlexModeControl(flexWrap, flexCheckbox, unsupportedInventory, enabledEdit, editOptions);
+assert.equal(enabledEdit.flex_mode, false, "rerendering preserves the explicit change");
