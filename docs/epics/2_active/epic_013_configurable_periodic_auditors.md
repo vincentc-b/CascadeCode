@@ -136,6 +136,11 @@ No product-scope questions remain for this revision.
   Chose Deliver five sequential features: shared health/incident authority, independent scheduling, Task recovery, Feature/Epic recovery, and War Room plus default-on acceptance..
   Rationale: Shared ownership and generation contracts precede executable adapters. Reuse completed Epic 041/042 recovery and existing tests; require actual mutation proof before enabling the integrated audit by default.
   Honors: All 24 success criteria, especially 16, 19, 21–24; no new scheduler service, status database or software installation..
+
+- `dec_002` · 2026-11-08 · Epic Manager · **Audit operating bounds**
+  Chose Use strict integer s/m/h/d intervals from 1m to 24h, default 30m; cap jitter at min(5%,60s), each observer pass at 100 items/60s, and retain fair continuation. Health-audit enablement is independent of ordinary automation; manual runs preserve periodic deadlines..
+  Rationale: Explicit small bounds make scheduling and cancellation testable without slowing ordinary delivery. Long recovery stays in existing supervised actions. A compact untracked non-dispatching receipt/cursor is the only healthy-run write exception.
+  Honors: Criteria 1–2, 7, 14–15 and 18; startup/restart and manual/periodic concurrency must coalesce..
 ## Amendment log
 
 - 2026-11-06 · Reframed periodic auditors from advisory repository analysis into authoritative lifecycle health detection and bounded recovery. Added the lost merge-queue entry from `task_038_002_002` as a required regression scenario.
