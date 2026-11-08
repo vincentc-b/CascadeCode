@@ -5,6 +5,7 @@ from __future__ import annotations
 from hashlib import sha256
 import json
 from pathlib import Path
+import subprocess
 
 from cascade.board.errors import GitError
 from cascade.epic.registry import register_epic_tool
@@ -24,10 +25,268 @@ from cascade.watchdog.lock import process_lock
 from cascade.workspace.integration_worktree import (
     get_integration_worktree,
     locate_trunk,
+    merged_board,
 )
 
 
 _ACTION_KIND = "stacked_review_integration_gap"
+
+
+def resume_owner(
+    request_id: str,
+    *,
+    epic_id: str,
+    root: Path,
+    expected_generation: str | None = None,
+) -> dict[str, object]:
+    """Wake an absent Epic planning owner through its durable graph queue."""
+
+    if not isinstance(request_id, str) or not request_id.strip():
+        raise ValueError("a stable recovery request_id is required")
+    trunk = locate_trunk(root)
+    from datetime import datetime, timezone
+    from cascade.watchdog.events import append_event, read_events
+    from cascade.watchdog.types import Event
+    from cascade.workspace.kickoff import (
+        graph_turn_owner_is_live,
+        kickoff_graph_queue_event,
+    )
+
+    events, _ = read_events(epic_id, 0, root=trunk)
+    existing = next(
+        (
+            event
+            for event in events
+            if event.type == "EpicRecoveryRequested"
+            and event.payload.get("request_id") == request_id
+            and event.payload.get("epic_id") == epic_id
+        ),
+        None,
+    )
+    if existing is not None:
+        scheduled = kickoff_graph_queue_event(epic_id, root=trunk)
+        return {
+            "ok": True,
+            "epic_id": epic_id,
+            "request_id": request_id,
+            "outcome": "pending_owner_result",
+            "acknowledged": scheduled,
+            "durable_result": False,
+        }
+
+    _admit_epic_action(
+        epic_id,
+        "resume_planning_owner",
+        root=trunk,
+        expected_generation=expected_generation,
+    )
+    if graph_turn_owner_is_live(epic_id):
+        return {
+            "ok": True,
+            "epic_id": epic_id,
+            "request_id": request_id,
+            "outcome": "already_running",
+            "durable_result": False,
+        }
+    with process_lock:
+        events, _ = read_events(epic_id, 0, root=trunk)
+        existing = next(
+            (
+                event
+                for event in events
+                if event.type == "EpicRecoveryRequested"
+                and event.payload.get("request_id") == request_id
+            ),
+            None,
+        )
+        if existing is None:
+            append_event(
+                epic_id,
+                Event(
+                    type="EpicRecoveryRequested",
+                    ts=datetime.now(timezone.utc),
+                    payload={
+                        "epic_id": epic_id,
+                        "request_id": request_id,
+                        "action": "resume_planning_owner",
+                    },
+                    dest=epic_id,
+                ),
+                root=trunk,
+            )
+    scheduled = kickoff_graph_queue_event(epic_id, root=trunk)
+    return {
+        "ok": True,
+        "epic_id": epic_id,
+        "request_id": request_id,
+        "outcome": "pending_owner_result",
+        "acknowledged": scheduled,
+        "durable_result": False,
+    }
+
+
+def restore_feature_dispatch(
+    feature_id: str,
+    *,
+    epic_id: str,
+    root: Path,
+    expected_generation: str | None = None,
+) -> dict[str, object]:
+    """Dispatch one proven direct Feature through canonical dispatch law."""
+
+    trunk = locate_trunk(root)
+    _admit_epic_action(
+        epic_id,
+        f"restore_child_dispatch:{feature_id}",
+        root=trunk,
+        expected_generation=expected_generation,
+    )
+    from cascade.watchdog.dispatch import dispatch_feature
+    from cascade.war_room.serialize import dispatch_result_to_dict
+    from cascade.workspace.kickoff import deferred_kickoffs
+
+    # dispatch_feature repeats the parent and every approval/comment/dependency
+    # check under the dispatch lock. Model work begins only after that lock.
+    with deferred_kickoffs():
+        result = dispatch_feature(
+            feature_id, "boss", root=trunk, expected_parent=epic_id
+        )
+    return {
+        **dispatch_result_to_dict(result),
+        "epic_id": epic_id,
+        "feature_id": feature_id,
+        "outcome": "pending_feature_result" if result.ok else "refused",
+        "durable_result": False,
+    }
+
+
+def recover_feature(feature_id: str, *, epic_id: str, root: Path) -> dict[str, object]:
+    """Ask one active direct Feature to reconcile its owned durable actions."""
+
+    trunk = locate_trunk(root)
+    board = merged_board(trunk)
+    epic = board.by_id.get(epic_id)
+    feature = board.by_id.get(feature_id)
+    if epic is None or epic.tier != "epic" or epic.status != "active":
+        raise PermissionError("Epic recovery owner is not active")
+    if feature is None or feature.tier != "feature" or feature.parent != epic_id:
+        raise PermissionError("recovery is scoped to a direct Feature")
+    from cascade.team_supervision import supervise_child
+
+    result = supervise_child(feature_id, "recover", root=trunk, epic_id=epic_id)
+    return {
+        **result,
+        "epic_id": epic_id,
+        "feature_id": feature_id,
+        "outcome": result.get("outcome", "pending_feature_result"),
+        "durable_result": False,
+    }
+
+
+def reconcile_completion_rollup(
+    *,
+    epic_id: str,
+    root: Path,
+    expected_generation: str | None = None,
+) -> dict[str, object]:
+    """Reconcile one Epic closeout and report its durable terminal state."""
+
+    trunk = locate_trunk(root)
+    from cascade.boss.epic_complete import (
+        epic_completed_recorded,
+        try_complete_epic_result,
+    )
+
+    if epic_completed_recorded(epic_id, root=trunk):
+        return {
+            "ok": True,
+            "epic_id": epic_id,
+            "generation": expected_generation,
+            "outcome": "completed",
+            "durable_result": True,
+            "reason": None,
+            "review_url": None,
+            "close_stage": "completed",
+            "forge_state": "unknown",
+            "blocker_ids": [],
+            "conflict_paths": [],
+        }
+    observation = _admit_epic_action(
+        epic_id,
+        "reconcile_completion_rollup",
+        root=trunk,
+        expected_generation=expected_generation,
+    )
+    _require_clean_epic_worktree(epic_id, root=trunk)
+    result = try_complete_epic_result(epic_id, root=trunk)
+    terminal = epic_completed_recorded(epic_id, root=trunk)
+    return {
+        "ok": result.ok,
+        "epic_id": epic_id,
+        "generation": str(observation.generation),
+        "outcome": "completed" if terminal else "pending_or_retryable",
+        "durable_result": terminal,
+        "reason": result.reason,
+        "review_url": result.review_url,
+        "close_stage": result.close_stage,
+        "forge_state": result.forge_state,
+        "blocker_ids": list(result.blocker_ids),
+        "conflict_paths": list(result.conflict_paths),
+    }
+
+
+def _admit_epic_action(
+    epic_id: str,
+    action: str,
+    *,
+    root: Path,
+    expected_generation: str | None,
+):
+    """Reread canonical gates and bind an effect to one Epic generation."""
+
+    from cascade.watchdog.audit import project_audit_observation
+
+    observation = project_audit_observation(epic_id, root=root)
+    if observation.tier != "epic":
+        raise PermissionError("recovery owner is not an Epic")
+    if expected_generation is not None and str(observation.generation) != str(
+        expected_generation
+    ):
+        raise RuntimeError("Epic recovery generation changed")
+    evidence = observation.evidence
+    if evidence.errors:
+        raise RuntimeError(f"Epic recovery evidence unavailable: {evidence.errors[0]}")
+    parent_action = evidence.parent_action
+    if (
+        parent_action is None
+        or parent_action.responsible_work_id != epic_id
+        or parent_action.candidate_action != action
+        or parent_action.state == "gated"
+    ):
+        raise PermissionError("Epic recovery action is no longer admitted")
+    return observation
+
+
+def _require_clean_epic_worktree(epic_id: str, *, root: Path) -> None:
+    entry = get_integration_worktree(root, "epic", epic_id)
+    if entry is None or not entry.path.is_dir():
+        raise GitError(f"epic worktree missing: {epic_id}")
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=entry.path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if status.returncode != 0:
+        raise GitError(status.stderr.strip() or "cannot inspect epic worktree")
+    dirty = [
+        line
+        for line in status.stdout.splitlines()
+        if len(line) < 4 or not line[3:].split(" -> ")[-1].startswith(".cascade/")
+    ]
+    if dirty:
+        raise PermissionError("dirty Epic worktree requires its owner")
 
 
 def reconcile_stacked_review_gap(
@@ -213,4 +472,7 @@ def _resolve_gap_decision(
 
 
 register_epic_tool("reconcile_stacked_review_gap", reconcile_stacked_review_gap)
-
+register_epic_tool("resume_owner", resume_owner)
+register_epic_tool("restore_feature_dispatch", restore_feature_dispatch)
+register_epic_tool("recover_feature", recover_feature)
+register_epic_tool("reconcile_completion_rollup", reconcile_completion_rollup)

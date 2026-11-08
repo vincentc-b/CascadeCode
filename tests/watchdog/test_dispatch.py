@@ -442,6 +442,25 @@ def test_feature_dispatch_rereads_dependencies_added_after_approval(
     assert events == []
 
 
+def test_feature_dispatch_rechecks_expected_epic_parent(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Expected", tier="epic", status="active")
+    add_doc(root, id="epic_002", title="Other", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Moved child",
+        tier="feature",
+        parent="epic_002",
+    )
+
+    result = dispatch_feature("feat_001", "boss", root=root, expected_parent="epic_001")
+
+    assert result.ok is False
+    assert result.reason == "feature_parent_changed"
+    assert read_doc("feat_001", root=root).meta.status == "backlog"
+
+
 def test_task_dispatch_observes_dependency_completion_despite_stale_snapshot(
     tmp_path: Path,
 ) -> None:
