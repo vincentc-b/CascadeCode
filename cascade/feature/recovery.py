@@ -278,7 +278,9 @@ def recover_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, obje
 
     trunk = locate_trunk(Path(root).resolve())
     task = _owned_task(task_id, feature_id=feature_id, root=trunk)
-    result = supervisor_recover_task_delivery(task_id, root=trunk)
+    result = supervisor_recover_task_delivery(
+        task_id, root=trunk, feature_id=feature_id
+    )
     outcome = _recovery_outcome(result.decision, result.reason, task.meta.status)
     _project_recovery_incident(
         task_id,

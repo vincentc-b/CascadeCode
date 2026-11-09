@@ -80,6 +80,17 @@ def supervise_child(
         return operation(child_id, feature_id=parent_id, root=root)
     if child.meta.tier != "feature":
         raise PermissionError("unsupported child tier")
+    if action == "recover":
+        from cascade.workspace.kickoff import graph_turn_owner_is_live
+
+        if graph_turn_owner_is_live(child_id):
+            return {
+                "child_id": child_id,
+                "status": child.meta.status,
+                "incidents": [],
+                "action": action,
+                "outcome": "already_running",
+            }
     from cascade.task.action_recovery import recovery_actions
 
     incidents = [

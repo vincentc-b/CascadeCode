@@ -224,14 +224,22 @@ def test_feature_recover_task_translates_shared_recovery_outcomes(
 ) -> None:
     root = _board(tmp_path)
 
-    monkeypatch.setattr(
-        "cascade.feature.recovery.supervisor_recover_task_delivery",
-        lambda *_args, **_kwargs: RecoveryResult(
+    expected_root = root.resolve()
+
+    def recover_through_supervisor(task_id, *, root, feature_id):
+        assert task_id == "task_001"
+        assert root == expected_root
+        assert feature_id == "feat_001"
+        return RecoveryResult(
             "task_001:delivery:1",
             decision,
             reason,
             decision in {"requeue_commit", "resume_workspace"},
-        ),
+        )
+
+    monkeypatch.setattr(
+        "cascade.feature.recovery.supervisor_recover_task_delivery",
+        recover_through_supervisor,
     )
 
     result = recover_task("task_001", feature_id="feat_001", root=root)

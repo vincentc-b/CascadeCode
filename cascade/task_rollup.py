@@ -424,6 +424,7 @@ def handoff_semantic_conflict(
             evidence={**identity_evidence, "supervisor": task.meta.parent},
             conflicting_paths=evidence["conflict_paths"],
             owning_team={"kind": owner, "work_id": recipient},
+            review_id=decision_id,
         )
     return record_owner_decision(
         action_id,
@@ -550,11 +551,35 @@ def _clear_delivery_blockers(task_id: str, root: Path) -> None:
     child = read_doc(task_id, root=root)
     if not child.meta.parent:
         return
+    matching_incidents = _matching_delivery_blocker_ids(task_id, root)
+    if not matching_incidents:
+        return
     parent = read_doc(child.meta.parent, root=root)
     for blocker in list(parent.meta.monitoring_blockers):
         if blocker.child_id != task_id:
             continue
-        if blocker.incident_id is not None and not blocker.incident_id.startswith(f"{task_id}:delivery:"):
+        if blocker.incident_id not in matching_incidents:
             continue
         reconcile_direct_report_blockage(parent, child, root=root, incident_id=blocker.incident_id)
         parent = read_doc(child.meta.parent, root=root)
+
+
+def _matching_delivery_blocker_ids(task_id: str, root: Path) -> set[str]:
+    """Return derived incidents belonging to this Task's original merge action."""
+
+    action = load_action(_queued_merge_action_id(task_id), root=root)
+    if action is None or (action.get("metadata") or {}).get("task_id") != task_id:
+        return set()
+    incidents: set[str] = set()
+    from cascade.task.execution import execution_view
+
+    attempt = (execution_view(task_id, root=root) or {}).get("attempt")
+    if isinstance(attempt, int):
+        incidents.add(f"{task_id}:delivery:{attempt}")
+    recovery = action.get("recovery")
+    marker = recovery.get("routing_marker") if isinstance(recovery, dict) else None
+    if isinstance(marker, dict):
+        review_id = marker.get("review_id")
+        if isinstance(review_id, str) and review_id:
+            incidents.add(f"{task_id}:delivery:{review_id}")
+    return incidents

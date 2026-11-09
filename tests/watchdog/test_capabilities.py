@@ -94,6 +94,10 @@ def test_startup_registry_contains_only_callable_bounded_recovery_seams() -> Non
         "recover_task",
         "retry_task",
         "retry_integration_branch_update",
+        "resume_planning_owner",
+        "restore_child_dispatch",
+        "publish_integration_review",
+        "reconcile_completion_rollup",
     }
     assert all(row.attempt_bound > 0 and callable(row.executor) for row in registry.descriptors())
 
@@ -407,6 +411,53 @@ def test_missing_capability_is_durable_and_arrival_is_reprobed(tmp_path: Path) -
     assert receipt["incident"]["request"]
     assert receipt["incident"]["acknowledgement"]
     assert receipt["incident"]["result"]
+
+
+def test_missing_parent_capability_escalates_with_exact_resume_identity(
+    tmp_path: Path,
+) -> None:
+    root = _board(tmp_path)
+    evidence = {
+        "document_revision": "a" * 40,
+        "parent_action": {
+            "responsible_work_id": "feat_001",
+            "candidate_action": "resume_planning_owner",
+        },
+    }
+    incident = incident_record(
+        work_id="feat_001",
+        tier="feature",
+        accountable_owner="feature_team:feat_001",
+        failure_class="parent_owner_stalled",
+        generation=authoritative_generation(
+            work_id="feat_001",
+            tier="feature",
+            evidence=evidence,
+            capability="resume_planning_owner",
+        ),
+        evidence=evidence,
+        selected_capability="resume_planning_owner",
+        outcome="deferred",
+    )
+
+    missing = probe_capability(
+        incident,
+        "feature_team:feat_001",
+        root=root,
+        registry=CapabilityRegistry(),
+    )
+
+    assert missing.state == "missing"
+    receipt = load_action(str(missing.receipt_action_id), root=root)
+    assert receipt is not None
+    assert receipt["recovery"]["owning_team"] == {
+        "kind": "epic_team",
+        "work_id": "epic_001",
+    }
+    assert receipt["metadata"]["responsible_work_id"] == "feat_001"
+    assert receipt["metadata"]["original_action_identity"] == "resume_planning_owner"
+    assert receipt["metadata"]["escalated_to"] == "epic_team:epic_001"
+    assert "resume_planning_owner" in receipt["metadata"]["resume_action"]
 
 
 def test_missing_operation_is_not_persisted_for_unauthorized_owner(

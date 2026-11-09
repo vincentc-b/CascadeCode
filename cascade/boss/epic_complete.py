@@ -184,7 +184,19 @@ def epic_completed_recorded(epic_id: WorkId, *, root: Path) -> bool:
 def try_complete_epic(epic_id: WorkId, *, root: Path | None = None) -> bool:
     """Complete the epic when every persisted child feature is terminal; idempotent."""
 
-    return _finish_epic_completion(epic_id, root=root)
+    return try_complete_epic_result(epic_id, root=root).ok
+
+
+def try_complete_epic_result(
+    epic_id: WorkId, *, root: Path | None = None
+) -> EpicCompleteResult:
+    """Reconcile one Epic while retaining its durable publication result."""
+
+    # Automatic recovery and a concurrent human Close share the same
+    # check/create boundary. The durable review/event stores provide
+    # idempotency after this in-process serialization point.
+    with process_lock:
+        return _finish_epic_completion_result(epic_id, root=root)
 
 
 def confirm_epic_complete(epic_id: WorkId, by: Principal, *, root: Path | None = None) -> bool:

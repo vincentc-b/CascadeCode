@@ -11,6 +11,8 @@ import base64
 import binascii
 import hashlib
 import json
+import subprocess
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, replace
@@ -24,8 +26,8 @@ from cascade.board.context import (
     resolve_root,
     resolve_tracking_root,
 )
-from cascade.board.gitutil import _run, head_sha, last_commit_touching
 from cascade.board.errors import GitError, NotFound, SchemaError
+from cascade.board.gitutil import _run, bounded_git_io, head_sha, last_commit_touching
 from cascade.board.parse import parse_doc
 from cascade.board.store import _scan_meta
 from cascade.board.types import BoardIndex, WorkDoc, WorkMeta, WorkTier
@@ -34,6 +36,7 @@ from cascade.epic.plan_readiness import compute_epic_plan_readiness
 from cascade.feature.readiness import compute_feature_readiness
 from cascade.task.action_recovery import recovery_actions
 from cascade.task.execution import execution_views
+from cascade.task.lifecycle_lock import lifecycle_root
 from cascade.watchdog.health import classify_child
 from cascade.watchdog.incidents import capability_authority_fingerprint
 from cascade.workspace.integration_worktree import git_root_for_path, merged_board_readonly
@@ -160,6 +163,67 @@ class AuditEvidence:
     unresolved_references: tuple[str, ...]
     errors: tuple[str, ...] = ()
     local_fingerprint: str | None = None
+    parent_action: ParentActionEvidence | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ParentActionEvidence:
+    """Exact parent-tier action considered by one authoritative observation."""
+
+    responsible_work_id: str
+    candidate_action: str
+    state: Literal["observing", "executable", "gated"]
+    reason: str
+    observation_count: int = 1
+    unchanged_for_seconds: float = 0.0
+    required_interval_seconds: float = 0.0
+
+
+@dataclass(slots=True)
+class _ParentObservationEpisode:
+    generation_inputs: str
+    action: str
+    first_seen: float
+    count: int
+
+
+_parent_observation_episodes: dict[tuple[Path, str], _ParentObservationEpisode] = {}
+_parent_observation_lock = RLock()
+
+
+def _snapshot_parent_observation_episodes(
+) -> tuple[tuple[str, str, str, str, float, int], ...]:
+    """Copy earned no-progress evidence for a bounded admission process."""
+
+    with _parent_observation_lock:
+        return tuple(
+            (
+                str(product),
+                work_id,
+                episode.generation_inputs,
+                episode.action,
+                episode.first_seen,
+                episode.count,
+            )
+            for (product, work_id), episode in _parent_observation_episodes.items()
+        )
+
+
+def _restore_parent_observation_episodes(
+    snapshot: tuple[tuple[str, str, str, str, float, int], ...],
+) -> None:
+    """Restore a supervisor snapshot before the child rereads authority."""
+
+    with _parent_observation_lock:
+        for product, work_id, generation_inputs, action, first_seen, count in snapshot:
+            _parent_observation_episodes[(Path(product).resolve(), work_id)] = (
+                _ParentObservationEpisode(
+                    generation_inputs=generation_inputs,
+                    action=action,
+                    first_seen=first_seen,
+                    count=count,
+                )
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,6 +322,7 @@ class CandidatePage:
     candidates: tuple[AuditCandidate, ...]
     next_cursor: str
     unavailable_evidence: tuple[str, ...] = ()
+    continuation_cursors: tuple[str, ...] = ()
 
 
 _CANDIDATE_CURSOR_VERSION = 1
@@ -434,6 +499,7 @@ def select_audit_candidates(
     root: Path | None = None,
     today: date | None = None,
     monotonic: Callable[[], float] = time.monotonic,
+    cancel_event: threading.Event | None = None,
 ) -> CandidatePage:
     """Return a bounded, fair, mutation-free page of canonical work refs.
 
@@ -444,6 +510,28 @@ def select_audit_candidates(
     """
 
     limit = budget or CandidateBudget()
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("audit candidate selection cancelled")
+    with bounded_git_io(limit.max_seconds, cancel_event):
+        return _select_audit_candidates(
+            cursor,
+            limit,
+            root=root,
+            today=today,
+            monotonic=monotonic,
+        )
+
+
+def _select_audit_candidates(
+    cursor: str | None,
+    limit: CandidateBudget,
+    *,
+    root: Path | None,
+    today: date | None,
+    monotonic: Callable[[], float],
+) -> CandidatePage:
+    """Implementation kept inside the caller's whole-chain Git budget."""
+
     started = monotonic()
     product, tracking = _canonical_repositories(root)
     # ``merged_board`` acquires the product registry's file lock.  Candidate
@@ -495,6 +583,7 @@ def select_audit_candidates(
         for tier in _CANDIDATE_TIERS
     }
     selected: list[AuditCandidate] = []
+    continuation_cursors: list[str] = []
     selected_keys: set[tuple[WorkTier, str]] = set()
     tier_index = next_tier
     empty_turns = 0
@@ -525,10 +614,12 @@ def select_audit_candidates(
                 evidence_errors=candidate_errors,
             )
         )
+        continuation_cursors.append(_encode_candidate_cursor(positions, tier_index))
     return CandidatePage(
         candidates=tuple(selected),
         next_cursor=_encode_candidate_cursor(positions, tier_index),
         unavailable_evidence=tuple(sorted(set(unavailable))),
+        continuation_cursors=tuple(continuation_cursors),
     )
 
 
@@ -1008,14 +1099,62 @@ def _require_optional_exact(value: object, expected: type, field: str) -> None:
 
 
 def project_audit_observation(
-    work_id: str, *, root: Path | None = None
+    work_id: str,
+    *,
+    root: Path | None = None,
+    timeout_seconds: float | None = None,
+    cancel_event: threading.Event | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
 ) -> AuditObservation:
     """Project one canonical work item without invoking any mutation path."""
 
+    if timeout_seconds is not None and timeout_seconds <= 0:
+        raise subprocess.TimeoutExpired("audit observation", timeout_seconds)
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("audit observation cancelled")
+    if timeout_seconds is not None:
+        with bounded_git_io(timeout_seconds, cancel_event):
+            return _project_audit_observation(
+                work_id,
+                root=root,
+                timeout_seconds=timeout_seconds,
+                cancel_event=cancel_event,
+                monotonic=monotonic,
+            )
+    return _project_audit_observation(
+        work_id,
+        root=root,
+        timeout_seconds=timeout_seconds,
+        cancel_event=cancel_event,
+        monotonic=monotonic,
+    )
+
+
+def _project_audit_observation(
+    work_id: str,
+    *,
+    root: Path | None,
+    timeout_seconds: float | None,
+    cancel_event: threading.Event | None,
+    monotonic: Callable[[], float],
+) -> AuditObservation:
+    """Implementation kept inside the caller's whole-chain Git budget."""
+
+    deadline = (
+        None if timeout_seconds is None else monotonic() + timeout_seconds
+    )
     product, tracking = _canonical_repositories(root)
     board = merged_board_readonly(tracking)
     doc = _read_canonical_doc(work_id, board)
-    return _project_doc(doc, board=board, product=product, tracking=tracking)
+    return _project_doc(
+        doc,
+        board=board,
+        product=product,
+        tracking=tracking,
+        deadline=deadline,
+        cancel_event=cancel_event,
+        monotonic=monotonic,
+    )
 
 
 def project_audit_observations(
@@ -1068,7 +1207,14 @@ def _canonical_repositories(root: Path | None) -> tuple[Path, Path]:
 
 
 def _project_doc(
-    doc: WorkDoc, *, board: BoardIndex, product: Path, tracking: Path
+    doc: WorkDoc,
+    *,
+    board: BoardIndex,
+    product: Path,
+    tracking: Path,
+    deadline: float | None = None,
+    cancel_event: threading.Event | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
 ) -> AuditObservation:
     local_error = None
     try:
@@ -1079,8 +1225,24 @@ def _project_doc(
     worktrees, worktree_errors = _registered_worktrees(product)
     worktree = worktrees.get((doc.meta.tier, doc.meta.id))
     git_root = worktree if worktree is not None else product
-    git_head = head_sha(git_root) if git_root.is_dir() else None
-    branch = _branch(git_root) if git_root.is_dir() else None
+    git_head = (
+        head_sha(
+            git_root,
+            timeout=_remaining_audit_time(deadline, monotonic, cancel_event),
+            cancel_event=cancel_event,
+        )
+        if git_root.is_dir()
+        else None
+    )
+    branch = (
+        _branch(
+            git_root,
+            timeout=_remaining_audit_time(deadline, monotonic, cancel_event),
+            cancel_event=cancel_event,
+        )
+        if git_root.is_dir()
+        else None
+    )
     execution: Mapping[str, Any] | None = None
     gates: list[str] = []
     errors: list[str] = list(worktree_errors)
@@ -1095,6 +1257,18 @@ def _project_doc(
 
     if doc.meta.tier == "task":
         execution = execution_views({doc.meta.id}, root=product).get(doc.meta.id)
+        if execution is not None and execution.get("phase") in {
+            "awaiting_merge",
+            "merge_blocked",
+        }:
+            queued, queue_error = _task_delivery_queue_state(doc.meta.id, product)
+            execution = {**execution, "delivery_queued": queued}
+            if queue_error is not None:
+                errors.append(queue_error)
+    else:
+        execution, runtime_error = _parent_runtime_evidence(doc, product=product)
+        if runtime_error is not None:
+            errors.append(runtime_error)
     protected_gates, gate_errors = _protected_gates(doc, board, tracking=tracking, product=product)
     gates.extend(protected_gates)
     errors.extend(gate_errors)
@@ -1130,7 +1304,11 @@ def _project_doc(
         errors.append(recovery_error)
     if local_error is not None:
         errors.append(local_error)
-    if worktree is not None and doc.meta.status in {"completed", "cancelled"}:
+    if (
+        worktree is not None
+        and doc.meta.tier == "task"
+        and doc.meta.status in {"completed", "cancelled"}
+    ):
         unresolved = (*unresolved, f"worktree:{doc.meta.id}")
     evidence = AuditEvidence(
         tracking_repository=tracking,
@@ -1146,6 +1324,18 @@ def _project_doc(
         errors=tuple(errors),
         local_fingerprint=local_fingerprint,
     )
+    if doc.meta.tier in {"feature", "epic"}:
+        evidence = replace(
+            evidence,
+            parent_action=_parent_action_evidence(
+                doc,
+                board=board,
+                evidence=evidence,
+                worktree_registered=worktree is not None,
+                actual_branch=branch,
+                monotonic=monotonic,
+            ),
+        )
     generation = _generation(doc, git_head, branch, evidence, board=board)
     identity = _identity(doc, git_head, branch, generation)
     classification, reason = _classification(doc, board, evidence)
@@ -1180,6 +1370,31 @@ def incident_failure_class(tier: WorkTier, reason: str, evidence: AuditEvidence)
             return "stalled_execution"
         if reason == "merge_blocked":
             return "delivery_reconciliation"
+        if reason == "validated_delivery_missing":
+            return "validated_delivery_missing"
+    if reason == "unresolved_recovery_reference":
+        try:
+            referenced = set(evidence.unresolved_references)
+            if any(
+                row.get("action_kind") == "integration_branch_update"
+                and row.get("action_id") in referenced
+                for row in recovery_actions(root=evidence.product_repository)
+            ):
+                return "integration_branch_update"
+        except Exception:
+            # Observation already reports store reachability separately.  Do
+            # not infer executable authority from an unreadable recovery row.
+            pass
+    if tier in {"feature", "epic"} and evidence.parent_action is not None:
+        action = evidence.parent_action.candidate_action
+        if action == "resume_planning_owner":
+            return "parent_owner_stalled"
+        if action.startswith("restore_child_dispatch:"):
+            return "child_dispatch_stalled"
+        if action == "publish_integration_review":
+            return "publication_stalled"
+        if action == "reconcile_completion_rollup":
+            return "completion_rollup_stalled"
     return reason
 
 
@@ -1224,6 +1439,9 @@ def local_audit_fingerprint(work_id: str, *, root: Path) -> str:
         key: ({name: value for name, value in view.items() if name != "heartbeat_age_seconds"} if view is not None else None)
         for key, view in views.items()
     }
+    delivery_queue, delivery_queue_error = _task_delivery_queue_membership(ids, product)
+    if delivery_queue_error is not None:
+        raise ValueError(delivery_queue_error)
     actions = [
         row for row in recovery_actions(root=product)
         if (row.get("affected_work_id") or ((row.get("recovery") or {}).get("evidence") or {}).get("affected_work_id")) in ids
@@ -1240,6 +1458,7 @@ def local_audit_fingerprint(work_id: str, *, root: Path) -> str:
         "reviews": {key: reviews.get(key) for key in sorted(ids)} if isinstance(reviews, Mapping) else None,
         "worktrees": [(key, str(path), path.is_dir()) for key, path in sorted(worktrees.items()) if key[1] in ids],
         "registry_errors": errors,
+        "delivery_queue": delivery_queue,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -1344,23 +1563,359 @@ def _review_gate(work_id: str, product: Path) -> tuple[str | None, str | None]:
     return ("review_pending", None) if not record.get("closed") else (None, None)
 
 
+def _parent_runtime_evidence(
+    doc: WorkDoc, *, product: Path
+) -> tuple[Mapping[str, Any], str | None]:
+    """Read parent owner/queue facts without creating a missing checkpoint."""
+
+    from cascade.watchdog.queue_cursor import queue_byte_size
+    from cascade.workspace.kickoff import graph_turn_owner_is_live
+
+    checkpoint = product / ".cascade" / "checkpoints" / f"{doc.meta.id}.sqlite"
+    owner_live = graph_turn_owner_is_live(doc.meta.id)
+    cursor = 0
+    durable_inflight = False
+    if checkpoint.is_file():
+        try:
+            from cascade.workspace.kickoff import (
+                _graph_has_inflight_turn,
+                _queue_offset,
+            )
+
+            cursor = _queue_offset(
+                doc.meta.id,
+                doc.meta.tier,
+                root=product,
+                feature_id=None,
+            )
+            durable_inflight = _graph_has_inflight_turn(
+                doc.meta.id,
+                doc.meta.tier,
+                root=product,
+                feature_id=None,
+            )
+        except Exception as exc:
+            return {}, f"parent_runtime:{type(exc).__name__}"
+    try:
+        queued_bytes = queue_byte_size(doc.meta.id, root=product)
+    except Exception as exc:
+        return {}, f"parent_queue:{type(exc).__name__}"
+    return {
+        "owner_live": owner_live,
+        "durable_inflight": durable_inflight,
+        "queue_cursor": cursor,
+        "queue_size": queued_bytes,
+        "pending_input": queued_bytes > cursor,
+    }, None
+
+
+def _parent_action_evidence(
+    doc: WorkDoc,
+    *,
+    board: BoardIndex,
+    evidence: AuditEvidence,
+    worktree_registered: bool,
+    actual_branch: str | None,
+    monotonic: Callable[[], float],
+) -> ParentActionEvidence | None:
+    """Classify a parent candidate, then require unchanged interval evidence."""
+
+    runtime = evidence.execution or {}
+    hard_gate = next(
+        (gate for gate in evidence.gates if gate != "review_pending"), None
+    )
+    if hard_gate is not None:
+        _clear_parent_episode(evidence.product_repository, doc.meta.id)
+        return ParentActionEvidence(
+            responsible_work_id=doc.meta.id,
+            candidate_action=_gate_action(hard_gate),
+            state="gated",
+            reason=hard_gate,
+        )
+    if runtime.get("owner_live"):
+        _clear_parent_episode(evidence.product_repository, doc.meta.id)
+        return ParentActionEvidence(
+            doc.meta.id, "resume_planning_owner", "gated", "live_owner"
+        )
+    if runtime.get("pending_input"):
+        _clear_parent_episode(evidence.product_repository, doc.meta.id)
+        return ParentActionEvidence(
+            doc.meta.id, "deliver_pending_input", "gated", "pending_input"
+        )
+    if "review_pending" in evidence.gates:
+        _clear_parent_episode(evidence.product_repository, doc.meta.id)
+        return ParentActionEvidence(
+            doc.meta.id, "await_review", "gated", "review_pending"
+        )
+
+    candidate: tuple[str, str] | None = None
+    expected_branch = (
+        f"{'feat' if doc.meta.tier == 'feature' else 'epic'}/{doc.meta.id}"
+    )
+    if worktree_registered and actual_branch != expected_branch:
+        candidate = ("reconcile_integration_branch", "branch_discrepancy")
+    elif doc.meta.status == "cancelling":
+        candidate = ("resume_cancellation", "cancellation_incomplete")
+    elif doc.meta.status == "cancelled" and worktree_registered:
+        candidate = ("reconcile_cancellation_cleanup", "cancelled_worktree_retained")
+    elif doc.meta.status == "completed" and worktree_registered:
+        candidate = ("publish_integration_review", "local_integration_unpublished")
+    elif doc.meta.status in {"backlog", "ready_to_plan"} and worktree_registered:
+        candidate = ("reconcile_return_transition", "returned_worktree_retained")
+    elif _parent_revision_is_stale(doc, board) and not any(
+        board.by_id.get(child_id) is not None
+        and board.by_id[child_id].status == "active"
+        for child_id in doc.meta.children
+    ):
+        candidate = ("resume_owner_with_fresh_parent", "stale_parent_revision")
+    else:
+        graph_problem = _child_graph_problem(doc, board)
+        if graph_problem is not None:
+            candidate = ("reconcile_child_graph", graph_problem)
+        elif doc.meta.status == "active":
+            gated_child = _gated_child_dispatch(doc, board, evidence)
+            if gated_child is not None:
+                action, gate = gated_child
+                _clear_parent_episode(evidence.product_repository, doc.meta.id)
+                return ParentActionEvidence(doc.meta.id, action, "gated", gate)
+            candidate = _active_parent_candidate(doc, board, evidence)
+
+    if candidate is None:
+        _clear_parent_episode(evidence.product_repository, doc.meta.id)
+        return None
+    action, reason = candidate
+    return _observe_parent_candidate(
+        doc,
+        evidence=evidence,
+        action=action,
+        reason=reason,
+        now=monotonic(),
+    )
+
+
+def _gate_action(gate: str) -> str:
+    if gate.startswith("dependency:") or gate.startswith("unmet_deps"):
+        return "await_dependency"
+    if gate in {"plan_approval", "not_approved"}:
+        return "await_approval"
+    if gate == "review_threads_blocking":
+        return "await_comment_resolution"
+    if gate.startswith("human_gate:"):
+        return "await_human_decision"
+    return "await_lifecycle_gate"
+
+
+def _parent_revision_is_stale(doc: WorkDoc, board: BoardIndex) -> bool:
+    if doc.meta.tier != "feature" or not doc.meta.parent or not doc.meta.parent_rev:
+        return False
+    parent = board.by_id.get(doc.meta.parent)
+    if parent is None:
+        return False
+    return _read_canonical_doc(parent.id, board).sha != doc.meta.parent_rev
+
+
+def _child_graph_problem(doc: WorkDoc, board: BoardIndex) -> str | None:
+    for child_id in doc.meta.children:
+        child = board.by_id.get(child_id)
+        if child is None:
+            return f"child_missing:{child_id}"
+        if child.parent != doc.meta.id:
+            return f"child_parent_mismatch:{child_id}"
+        expected_tier = "task" if doc.meta.tier == "feature" else "feature"
+        if child.tier != expected_tier:
+            return f"child_tier_mismatch:{child_id}"
+    return None
+
+
+def _active_parent_candidate(
+    doc: WorkDoc, board: BoardIndex, evidence: AuditEvidence
+) -> tuple[str, str] | None:
+    children = [board.by_id[child_id] for child_id in doc.meta.children]
+    if any(child.status == "active" for child in children):
+        return None
+    if children and all(
+        child.status in {"completed", "cancelled"} for child in children
+    ):
+        if any(child.status == "cancelled" for child in children):
+            return "reconcile_child_cancellation", "cancelled_child_unreconciled"
+        return "reconcile_completion_rollup", "completed_children_unrolled"
+    dispatchable = _dispatchable_child(doc, children, board, evidence)
+    if dispatchable is not None:
+        return (
+            f"restore_child_dispatch:{dispatchable}",
+            f"dispatchable_child:{dispatchable}",
+        )
+    if not children or (evidence.execution or {}).get("durable_inflight"):
+        return "resume_planning_owner", "planning_owner_absent"
+    return None
+
+
+def _dispatchable_child(
+    doc: WorkDoc,
+    children: list[WorkMeta],
+    board: BoardIndex,
+    evidence: AuditEvidence,
+) -> str | None:
+    for child in children:
+        if child.status not in {"backlog", "ready_to_plan"}:
+            continue
+        if any(
+            board.by_id.get(dependency) is None
+            or board.by_id[dependency].status != "completed"
+            for dependency in child.depends_on
+        ):
+            continue
+        if doc.meta.tier == "feature":
+            return child.id
+        try:
+            from cascade.feature.readiness import (
+                compute_feature_readiness,
+                feature_boss_dispatchable,
+            )
+
+            readiness = compute_feature_readiness(
+                child.id, root=evidence.tracking_repository, board=board
+            )
+        except Exception:
+            continue
+        if readiness is not None and feature_boss_dispatchable(readiness):
+            return child.id
+    return None
+
+
+def _gated_child_dispatch(
+    doc: WorkDoc, board: BoardIndex, evidence: AuditEvidence
+) -> tuple[str, str] | None:
+    """Explain why a backlog direct report is not currently executable."""
+
+    for child_id in doc.meta.children:
+        child = board.by_id.get(child_id)
+        if child is None or child.status not in {"backlog", "ready_to_plan"}:
+            continue
+        incomplete = next(
+            (
+                dependency
+                for dependency in child.depends_on
+                if board.by_id.get(dependency) is None
+                or board.by_id[dependency].status != "completed"
+            ),
+            None,
+        )
+        if incomplete is not None:
+            return f"restore_child_dispatch:{child_id}", f"dependency:{incomplete}"
+        if doc.meta.tier == "epic":
+            try:
+                readiness = compute_feature_readiness(
+                    child_id, root=evidence.tracking_repository, board=board
+                )
+            except Exception as exc:
+                return (
+                    f"restore_child_dispatch:{child_id}",
+                    f"feature_readiness:{type(exc).__name__}",
+                )
+            if readiness is not None and readiness.blockers:
+                return (
+                    f"restore_child_dispatch:{child_id}",
+                    readiness.blockers[0],
+                )
+    return None
+
+
+def _observe_parent_candidate(
+    doc: WorkDoc,
+    *,
+    evidence: AuditEvidence,
+    action: str,
+    reason: str,
+    now: float,
+) -> ParentActionEvidence:
+    from cascade.watchdog.config import read_health_audit_config
+
+    interval = float(
+        read_health_audit_config(evidence.product_repository).interval_seconds
+    )
+    signature_payload = {
+        "status": evidence.status,
+        "children": evidence.child_ids,
+        "dependencies": evidence.dependency_ids,
+        "execution": evidence.execution,
+        "gates": evidence.gates,
+        "references": evidence.unresolved_references,
+        "local": evidence.local_fingerprint,
+        "action": action,
+        "reason": reason,
+    }
+    signature = hashlib.sha256(
+        json.dumps(signature_payload, sort_keys=True, default=str).encode()
+    ).hexdigest()
+    key = (evidence.product_repository.resolve(), doc.meta.id)
+    with _parent_observation_lock:
+        episode = _parent_observation_episodes.get(key)
+        if (
+            episode is None
+            or episode.generation_inputs != signature
+            or episode.action != action
+        ):
+            episode = _ParentObservationEpisode(signature, action, now, 1)
+            _parent_observation_episodes[key] = episode
+        else:
+            episode.count += 1
+        unchanged = max(0.0, now - episode.first_seen)
+        executable = episode.count >= 2 and unchanged >= interval
+        count = episode.count
+    return ParentActionEvidence(
+        responsible_work_id=doc.meta.id,
+        candidate_action=action,
+        state="executable" if executable else "observing",
+        reason=reason if executable else f"observing:{reason}",
+        observation_count=count,
+        unchanged_for_seconds=unchanged,
+        required_interval_seconds=interval,
+    )
+
+
+def _clear_parent_episode(product: Path, work_id: str) -> None:
+    with _parent_observation_lock:
+        _parent_observation_episodes.pop((product.resolve(), work_id), None)
+
+
 def _classification(
     doc: WorkDoc, board: BoardIndex, evidence: AuditEvidence
 ) -> tuple[AuditClassification, str]:
     if evidence.errors:
         return "unavailable_evidence", evidence.errors[0]
+    parent_action = evidence.parent_action
     hard_gates = tuple(gate for gate in evidence.gates if gate != "review_pending")
     if hard_gates:
         return "expected_wait", hard_gates[0]
     if "review_pending" in evidence.gates and all(
-        reference.startswith("worktree:") for reference in evidence.unresolved_references
+        reference.startswith("worktree:")
+        for reference in evidence.unresolved_references
     ):
         # Retaining the source worktree until its review lands is intentional.
         return "expected_wait", "review_pending"
+    if doc.meta.tier == "task" and evidence.execution is not None:
+        phase = evidence.execution.get("phase")
+        if phase == "awaiting_merge":
+            if evidence.execution.get("delivery_queued") is True:
+                return "expected_wait", "delivery_queued"
+            return "proven_incident", "validated_delivery_missing"
+        if phase == "merge_blocked":
+            return "proven_incident", "merge_blocked"
     if evidence.unresolved_references:
         return "proven_incident", "unresolved_recovery_reference"
     if "review_pending" in evidence.gates:
         return "expected_wait", "review_pending"
+    if parent_action is not None and doc.meta.status in {
+        "completed",
+        "cancelled",
+        "cancelling",
+        "backlog",
+        "ready_to_plan",
+    }:
+        if parent_action.state == "executable":
+            return "proven_incident", parent_action.candidate_action
+        return "expected_wait", parent_action.reason
     if doc.meta.status in {"completed", "cancelled"}:
         return "healthy", "terminal"
     if evidence.gates:
@@ -1409,7 +1964,36 @@ def _classification(
             return "proven_incident", f"child:{child_id}:{child_health.reason}"
     if child_wait:
         return "expected_wait", child_wait
+    if parent_action is not None:
+        if parent_action.state == "executable":
+            return "proven_incident", parent_action.candidate_action
+        return "expected_wait", parent_action.reason
     return "healthy", "authoritative_state_consistent"
+
+
+def _task_delivery_queue_state(
+    task_id: str, product: Path
+) -> tuple[bool | None, str | None]:
+    queued, error = _task_delivery_queue_membership({task_id}, product)
+    return (task_id in queued if error is None else None), error
+
+
+def _task_delivery_queue_membership(
+    work_ids: set[str], product: Path
+) -> tuple[tuple[str, ...], str | None]:
+    """Read the canonical scheduling index without treating corruption as empty."""
+
+    payload, error = _read_json_source(
+        lifecycle_root(product) / ".cascade" / "pending-task-merges.json",
+        "task_delivery_queue",
+    )
+    if error is not None:
+        return (), error
+    if payload is None:
+        return (), None
+    if not isinstance(payload, list) or any(not isinstance(item, str) for item in payload):
+        return (), "task_delivery_queue:unavailable"
+    return tuple(sorted(set(payload).intersection(work_ids))), None
 
 
 def _identity(
@@ -1463,6 +2047,15 @@ def _generation(
         "unresolved_references": evidence.unresolved_references,
         "errors": evidence.errors,
         "local_fingerprint": evidence.local_fingerprint,
+        "parent_action": (
+            {
+                "responsible_work_id": evidence.parent_action.responsible_work_id,
+                "candidate_action": evidence.parent_action.candidate_action,
+                "reason": evidence.parent_action.reason.removeprefix("observing:"),
+            }
+            if evidence.parent_action is not None
+            else None
+        ),
         "capability_fingerprint": capability_authority_fingerprint(),
         "direct_reports": _direct_report_inputs(doc, board, evidence),
     }
@@ -1512,8 +2105,34 @@ def _direct_report_inputs(
     return tuple(children)
 
 
-def _branch(root: Path) -> str | None:
-    result = _run(["symbolic-ref", "--quiet", "--short", "HEAD"], root, check=False)
+def _branch(
+    root: Path,
+    *,
+    timeout: float | None = None,
+    cancel_event: threading.Event | None = None,
+) -> str | None:
+    result = _run(
+        ["symbolic-ref", "--quiet", "--short", "HEAD"],
+        root,
+        check=False,
+        timeout=timeout,
+        cancel_event=cancel_event,
+    )
     if result.returncode != 0:
         return None
     return result.stdout.strip() or None
+
+
+def _remaining_audit_time(
+    deadline: float | None,
+    monotonic: Callable[[], float],
+    cancel_event: threading.Event | None,
+) -> float | None:
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("audit observation cancelled")
+    if deadline is None:
+        return None
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired("audit observation", 0)
+    return remaining

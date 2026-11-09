@@ -229,6 +229,7 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         authenticated_human: AuthenticatedHuman | None = None,
         human_identity_verifier: HumanIdentityVerifier | None = None,
         dependency_executor: BoundedOperationExecutor | None = None,
+        health_audit_request: Callable[[], bool | None] | None = None,
     ) -> None:
         host, _port = server_address
         if listen_socket is None:
@@ -241,6 +242,7 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         self.authenticated_human = authenticated_human
         self.human_identity_verifier = human_identity_verifier
         self.dependency_executor = dependency_executor
+        self.health_audit_request = health_audit_request
         self._listen_socket = listen_socket
         install_epic_boot_hook(self.root)
         install_feature_boot_hook(self.root)
@@ -537,7 +539,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
             handle_post_chat(self, chat_id, body)
             return
-        body = self._read_json_object()
+        body = self._read_json_object(allow_empty=path == "/api/health/audit")
         if body is None:
             return
         if path == "/api/local_human_session":
@@ -1130,12 +1132,14 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             {"ok": True, "event": event_to_dict(event)},
         )
 
-    def _read_json_object(self) -> dict[str, Any] | None:
+    def _read_json_object(self, *, allow_empty: bool = False) -> dict[str, Any] | None:
         try:
             length = int(self.headers.get("Content-Length", "0") or "0")
         except ValueError:
             length = 0
         raw = self.rfile.read(length) if length else b""
+        if not raw and allow_empty:
+            return {}
         if not raw:
             self._json_error(HTTPStatus.BAD_REQUEST, "invalid json")
             return None
@@ -1450,6 +1454,7 @@ def serve(
     authenticated_human: AuthenticatedHuman | None = None,
     human_identity_verifier: HumanIdentityVerifier | None = None,
     dependency_executor: BoundedOperationExecutor | None = None,
+    health_audit_request: Callable[[], bool | None] | None = None,
 ) -> WarRoomHTTPServer:
     """Create and return a configured server (caller runs serve_forever or thread).
 
@@ -1472,6 +1477,7 @@ def serve(
         authenticated_human=authenticated_human,
         human_identity_verifier=human_identity_verifier,
         dependency_executor=dependency_executor,
+        health_audit_request=health_audit_request,
     )
 
 

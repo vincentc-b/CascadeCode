@@ -19,7 +19,7 @@ from cascade.task.execution import (
 from cascade.task.supervisor_recovery import recover_orphan_delivery
 from cascade.task_rollup import queue_task_merge
 from tests.feature.test_recovery import _board as dispatched_blocked_board
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, run_audit_recovery_entry
 
 
 @pytest.fixture(autouse=True)
@@ -36,6 +36,15 @@ def isolate_hooks_and_inventory(monkeypatch):
     now = time.time()
     inventory = ProviderInventoryResult(
         providers=(
+            ProviderInventoryItem(
+                provider_id="cursor",
+                display_name="Cursor",
+                models=(
+                    DiscoveredModel(id="proj-epic", display_name="Project Epic"),
+                    DiscoveredModel(id="proj-feature", display_name="Project Feature"),
+                    DiscoveredModel(id="proj-task", display_name="Project Task"),
+                ),
+            ),
             ProviderInventoryItem(
                 provider_id="codex",
                 display_name="Codex",
@@ -109,9 +118,132 @@ def _git(root, *args):
     ).stdout.strip()
 
 
+def test_audit_requeues_lost_validated_delivery_through_original_action(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from cascade.boss.merge import MergeResult
+    from cascade.task.action_recovery import load_action
+    from cascade.task_rollup import (
+        invalidate_task_merge,
+        pending_task_merges,
+        retry_pending_task_merges,
+    )
+    from cascade.watchdog.dispatch import dispatch_task
+    from cascade.watchdog.events import read_events
+    from cascade.workspace.integration_worktree import create_integration_worktree
+
+    root = make_repo(tmp_path, models=True)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Epic",
+        tier="epic",
+        status="active",
+        children=["feat_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+        children=["task_001", "task_002"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Delivered task",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    add_doc(
+        root,
+        id="task_002",
+        title="Dependent task",
+        tier="task",
+        parent="feat_001",
+        depends_on=["task_001"],
+    )
+    _git(root, "add", ".")
+    _git(root, "commit", "-m", "Create recovery board")
+    feature = create_integration_worktree(
+        "feature", "feat_001", branch="feat/feat_001", base_ref="HEAD", trunk=root
+    )
+    task = create_integration_worktree(
+        "task", "task_001", branch="task/task_001", base_ref=feature.branch, trunk=root
+    )
+    (task.path / "delivery.py").write_text("delivered = True\n")
+    _git(task.path, "add", "delivery.py")
+    _git(task.path, "commit", "-m", "Validated task delivery")
+    mark_queued("task_001", root=root)
+    mark_awaiting_merge("task_001", root=root)
+    evidence = {
+        "task_id": "task_001",
+        "deliverable_sha": _git(task.path, "rev-parse", "HEAD"),
+        "feature_base_sha": _git(feature.path, "rev-parse", "HEAD"),
+    }
+    queue_task_merge("task_001", root=root, delivery_evidence=evidence)
+
+    # Reproduce the original delivery incident: one transient canonical merge
+    # refusal followed by loss of only the scheduling index. The durable action
+    # and exact validation evidence remain authoritative.
+    with monkeypatch.context() as busy:
+        busy.setattr(
+            "cascade.boss.merge.merge_task_branch",
+            lambda *_a, **_k: MergeResult(ok=False, reason="busy"),
+        )
+        assert retry_pending_task_merges(root) == []
+    original = load_action("task_001:queued_merge", root=root)
+    assert original is not None
+    assert original["recovery_state"] == "retryable"
+    assert original["attempt_count"] == 1
+    invalidate_task_merge("task_001", root=root)
+    assert pending_task_merges(root) == set()
+
+    user_work = root / "user-notes.txt"
+    user_work.write_text("keep this work exactly as written\n")
+    audit = run_audit_recovery_entry(root)
+    assert audit.incident_work_ids == ("task_001",)
+    assert pending_task_merges(root) == {"task_001"}
+    requeued = load_action("task_001:queued_merge", root=root)
+    assert requeued is not None
+    assert requeued["action_id"] == original["action_id"]
+    assert requeued["attempt_count"] == 1
+    assert requeued["metadata"]["final_validation"] == evidence
+
+    assert retry_pending_task_merges(root) == ["task_001"]
+    assert read_doc("task_001", root=root).meta.status == "completed"
+    completed = load_action("task_001:queued_merge", root=root)
+    assert completed is not None
+    assert completed["action_id"] == original["action_id"]
+    assert completed["recovery_state"] == "completed"
+    assert completed["attempt_count"] == 2
+    assert pending_task_merges(root) == set()
+    assert retry_pending_task_merges(root) == []
+    run_audit_recovery_entry(root)
+    events, _ = read_events("feat_001", 0, root=root)
+    assert sum(event.type == "TaskMerged" for event in events) == 1
+
+    released = dispatch_task("task_002", "human", root=root)
+    assert released.ok
+    assert read_doc("task_002", root=feature.path).meta.status == "active"
+    assert user_work.read_text() == "keep this work exactly as written\n"
+
+
 @pytest.mark.parametrize(
     "claim_owner_immediately",
-    [True, False, "real", "restart", "conflict", "semantic_restart"],
+    [
+        True,
+        False,
+        "real",
+        "audit",
+        "restart",
+        "converge",
+        "conflict",
+        "semantic_restart",
+    ],
 )
 def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
     tmp_path: Path, claim_owner_immediately: bool | str, monkeypatch
@@ -176,6 +308,8 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             "feature_id": "feat_001",
             "provider_ids": {"swe": "codex"},
             "model_ids": {"swe": "offered"},
+            "reasoning_ids": {"swe": "medium"},
+            "flex_modes": {"swe": False},
         },
     )
     mark_queued("task_001", root=root)
@@ -234,6 +368,25 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             "work_id": "task_001",
         }
         assert action["recovery"]["evidence"]["supervisor"] == "feat_001"
+        marker = action["recovery"]["routing_marker"]
+        review_id = action["owner_decisions"][0]["decision_id"]
+        assert marker["review_id"] == review_id
+        assert marker["request"] == {
+            "action_id": "task_001:queued_merge",
+            "review_id": review_id,
+            "owner_kind": "task_team",
+            "owner_work_id": "task_001",
+        }
+        from cascade.watchdog.events import read_events
+
+        requests = [
+            event
+            for event in read_events("task_001", 0, root=root)[0]
+            if event.type == "BranchActionRecoveryRequested"
+        ]
+        assert len(requests) == 1
+        assert requests[0].payload["owner_work_id"] == "task_001"
+        assert requests[0].payload["review_id"] == review_id
         from cascade.watchdog.blockage import propagate_direct_report_blockage
 
         propagate_direct_report_blockage(
@@ -241,7 +394,7 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             read_doc("task_001", root=root),
             "semantic merge conflict",
             root=root,
-            incident_id="task_001:delivery:conflict",
+            incident_id=f"task_001:delivery:{review_id}",
         )
         assert read_doc("feat_001", root=root).meta.status == "blocked"
         if semantic:
@@ -260,12 +413,19 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
                 root=root,
                 incident_id="task_002:delivery:conflict",
             )
-            from cascade.task.action_recovery import acknowledge_team_recovery
-
-            acknowledge_team_recovery("task_001", root=root)
-            assert load_action("task_001:queued_merge", root=root)["recovery"][
-                "routing_marker"
-            ]["acknowledged_at"]
+            propagate_direct_report_blockage(
+                read_doc("feat_001", root=root),
+                read_doc("task_001", root=root),
+                "Independent Task delivery incident",
+                root=root,
+                incident_id="task_001:delivery:other",
+            )
+            propagate_direct_report_blockage(
+                read_doc("feat_001", root=root),
+                read_doc("task_001", root=root),
+                "Manual owner hold",
+                root=root,
+            )
     else:
         assert retry_pending_task_merges(root) == []
         from cascade.task_rollup import pending_task_merges
@@ -283,7 +443,14 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         if claim_owner_immediately:
             mark_running(task_id, root=repo)
 
-    if claim_owner_immediately in ("real", "restart", "conflict", "semantic_restart"):
+    if claim_owner_immediately in (
+        "real",
+        "audit",
+        "restart",
+        "converge",
+        "conflict",
+        "semantic_restart",
+    ):
         from cascade.task.graph import set_task_run_role_fn, clear_task_graph_sessions
         from cascade.task.wiring import load_task_tools
         from cascade.task.worktree import clear_task_runs
@@ -309,6 +476,8 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
         async def provider(turn):
             starts.append(("task_001", "feat_001"))
             assert turn.cwd == task.path
+            assert (turn.provider, turn.model_id) == ("codex", "offered")
+            assert (turn.reasoning_level, turn.flex_mode) == ("medium", False)
             if conflict:
                 refused = invoke_tool(
                     "task_001",
@@ -388,6 +557,12 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             from cascade.workspace.kickoff import kickoff_graph_queue_event
 
             kickoff_graph_queue_event("task_001", root=root, by="watchdog")
+        elif claim_owner_immediately == "audit":
+            from cascade.workspace.kickoff import wait_for_background_kickoffs
+
+            audit = run_audit_recovery_entry(root)
+            assert "task_001" in audit.incident_work_ids
+            assert wait_for_background_kickoffs()
         elif claim_owner_immediately == "restart":
             from cascade.workspace.up import resume_interrupted_task_runs
             from cascade.workspace.kickoff import wait_for_background_kickoffs
@@ -395,6 +570,33 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
             assert resume_interrupted_task_runs(root) == [("task_001", "feat_001")]
             assert wait_for_background_kickoffs()
             assert resume_interrupted_task_runs(root) == []
+        elif claim_owner_immediately == "converge":
+            from cascade.feature.recovery import recover_task
+            from cascade.watchdog.audit_recovery import dispatch_audit_recovery
+            from cascade.workspace.kickoff import wait_for_background_kickoffs
+            from cascade.workspace.up import resume_interrupted_task_runs
+
+            # Crash/restart, the parent-owned tool, and two independent audits
+            # all enter through their real adapters. The shared lifecycle state
+            # must admit only one resumed worker and one supervised validation.
+            def enter_recovery(route):
+                if route == "parent":
+                    return recover_task(
+                        "task_001", feature_id="feat_001", root=root
+                    )
+                if route == "restart":
+                    return resume_interrupted_task_runs(root)
+                return dispatch_audit_recovery(root, "task_001")
+
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                outcomes = list(
+                    pool.map(
+                        enter_recovery,
+                        ("parent", "restart", "audit", "audit"),
+                    )
+                )
+            assert outcomes[0]["ok"]
+            assert wait_for_background_kickoffs()
         else:
             recovered = recover_orphan_delivery(
                 "task_001", root=root, observed_incident=first.incident_id
@@ -441,9 +643,34 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
                 decision["state"] == "resolved"
                 for decision in completed_action["owner_decisions"]
             )
+            marker = completed_action["recovery"]["routing_marker"]
+            assert marker["acknowledgement"] == {
+                "action_id": "task_001:queued_merge",
+                "review_id": review_id,
+                "owner_work_id": "task_001",
+                "acknowledged_at": marker["acknowledged_at"],
+            }
+            assert marker["result"]["action_id"] == "task_001:queued_merge"
+            assert marker["result"]["review_id"] == review_id
+            assert marker["result"]["resolution_id"].startswith("validated:")
             blockers = read_doc("feat_001", root=root).meta.monitoring_blockers
             if semantic:
-                assert [item.child_id for item in blockers] == ["task_002"]
+                assert {
+                    (item.child_id, item.incident_id, item.reason)
+                    for item in blockers
+                } == {
+                    (
+                        "task_002",
+                        "task_002:delivery:conflict",
+                        "Independent sibling incident",
+                    ),
+                    (
+                        "task_001",
+                        "task_001:delivery:other",
+                        "Independent Task delivery incident",
+                    ),
+                    ("task_001", None, "Manual owner hold"),
+                }
                 assert read_doc("feat_001", root=root).meta.status == "blocked"
             else:
                 assert not blockers
@@ -606,6 +833,9 @@ def test_scope_blocked_contract_revised_to_source_completes_real_delivery(tmp_pa
 
     set_task_run_role_fn(provider)
     assert retry_task("task_001", feature_id="feat_001", root=root)["ok"]
+    from cascade.workspace.kickoff import wait_for_background_kickoffs
+
+    assert wait_for_background_kickoffs()
     assert len(starts) == 1
     assert retry_pending_task_merges(root) == ["task_001"]
     assert read_doc("task_001", root=root).meta.status == "completed"

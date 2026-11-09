@@ -109,6 +109,30 @@ def wait_for_background_kickoffs(timeout: float = 30.0) -> bool:
     return True
 
 
+def graph_turn_owner_is_live(work_id: str) -> bool:
+    """Return process-local proof that a graph turn currently owns ``work_id``.
+
+    A durable LangGraph ``next`` node survives a process crash, so it is not by
+    itself proof of a live (possibly slow) owner.  The serialized graph lock and
+    background queue are the process authority used by kickoff; observing them
+    here lets the health auditor protect a real owner without starting a graph,
+    opening a checkpoint, or taking ownership itself.
+    """
+
+    with _registry_lock:
+        pending = _graph_queues.get(work_id)
+        if pending is not None and pending.unfinished_tasks:
+            return True
+        lock = _graph_locks.get(work_id)
+    if lock is None:
+        return False
+    acquired = lock.acquire(blocking=False)
+    if acquired:
+        lock.release()
+        return False
+    return True
+
+
 def _graph_lock(work_id: str) -> threading.RLock:
     with _registry_lock:
         lock = _graph_locks.get(work_id)
@@ -640,6 +664,7 @@ def _service_child_deliveries_between_turns(work_id: str, tier: str, repo: Path)
     if tier != "feature":
         return
     from cascade.task_rollup import pending_task_merges, retry_pending_task_merges
+
     if not pending_task_merges(repo) or _graph_has_inflight_turn(work_id, tier, root=repo, feature_id=None):
         return
     try:

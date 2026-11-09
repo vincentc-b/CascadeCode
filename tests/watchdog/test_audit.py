@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from datetime import date
 from pathlib import Path
 
 import pytest
 
+import cascade.board.gitutil as gitutil
 from cascade.board.context import set_project_context
-from cascade.task.execution import mark_queued
+from cascade.task.execution import mark_awaiting_merge, mark_queued
+from cascade.task_rollup import invalidate_task_merge, queue_task_merge
 from cascade.watchdog.audit import (
     AuditGeneration,
     AuditIdentityError,
@@ -24,6 +27,7 @@ from cascade.watchdog.audit import (
     project_audit_observations,
     select_audit_candidates,
 )
+from cascade.watchdog.audit_recovery import _incident_contract
 from cascade.watchdog.incidents import incident_record, project_incident
 from cascade.workspace.types import ProjectContext
 from tests.support import add_doc, make_repo
@@ -135,6 +139,55 @@ def test_projection_covers_all_tiers_and_preserves_wait_gates(tmp_path: Path) ->
     assert "plan_approval" in epic.evidence.gates
 
 
+def test_task_delivery_queue_loss_is_a_pinned_recovery_incident(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    _commit(root)
+    mark_queued("task_001", root=root)
+    mark_awaiting_merge("task_001", root=root)
+    queue_task_merge("task_001", root=root)
+
+    queued = project_audit_observation("task_001", root=root)
+    assert (queued.classification, queued.reason) == (
+        "expected_wait",
+        "delivery_queued",
+    )
+
+    invalidate_task_merge("task_001", root=root)
+    missing = project_audit_observation("task_001", root=root)
+
+    assert missing.classification == "proven_incident"
+    assert missing.reason == "validated_delivery_missing"
+    assert missing.incident is not None
+    assert missing.incident.failure_class == "validated_delivery_missing"
+    assert missing.evidence.execution["delivery_queued"] is False
+    contract = _incident_contract(missing, root=root)
+    assert contract is not None
+    assert contract["accountable_owner"] == "feature_team:feat_001"
+    assert contract["authoritative_generation"] == missing.generation.value
+    assert contract["selected_capability"] == "supervisor_recover_task_delivery"
+    assert contract["evidence"]["parent_id"] == "feat_001"
+
+
 def test_projection_resolves_tracking_docs_and_product_git_without_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -188,6 +241,45 @@ def test_projection_resolves_tracking_docs_and_product_git_without_mutation(
         assert not registry_lock.exists()
     finally:
         set_project_context(None)
+
+
+def test_projection_bounds_document_revision_git_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
+    _commit(root)
+    real_popen = gitutil.subprocess.Popen
+    hung_commands: list[list[str]] = []
+
+    class HungLog:
+        returncode = None
+        terminated = False
+
+        def communicate(self, *, timeout=None):
+            if not self.terminated:
+                time.sleep(timeout or 0)
+                raise subprocess.TimeoutExpired(hung_commands[-1], timeout)
+            self.returncode = -15
+            return "", ""
+
+        def terminate(self):
+            self.terminated = True
+
+    def popen(command, *args, **kwargs):
+        if command[1:2] == ["log"]:
+            hung_commands.append(command)
+            return HungLog()
+        return real_popen(command, *args, **kwargs)
+
+    monkeypatch.setattr(gitutil.subprocess, "Popen", popen)
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        project_audit_observation(
+            "epic_001", root=root, timeout_seconds=0.2
+        )
+
+    assert hung_commands
 
 
 def test_healthy_candidate_and_observation_are_byte_silent(tmp_path: Path) -> None:
@@ -251,12 +343,22 @@ def test_completed_work_with_unresolved_recovery_is_an_incident(
         "cascade.watchdog.audit._unresolved_references",
         lambda _work_id, _product: (("action_001",), None),
     )
+    monkeypatch.setattr(
+        "cascade.watchdog.audit.recovery_actions",
+        lambda **_kwargs: [
+            {
+                "action_id": "action_001",
+                "action_kind": "integration_branch_update",
+            }
+        ],
+    )
 
     observation = project_audit_observation("epic_001", root=root)
 
     assert observation.classification == "proven_incident"
     assert observation.reason == "unresolved_recovery_reference"
     assert observation.incident is not None
+    assert observation.incident.failure_class == "integration_branch_update"
 
 
 @pytest.mark.parametrize(
@@ -358,7 +460,7 @@ def test_real_resolution_action_maps_review_identity_to_old_feature(
                     "request": {
                         "review_id": "147",
                         "review_url": "https://forge.example/repo/pull/147",
-                    }
+                    },
                 }
             }
         ),
@@ -862,8 +964,10 @@ def test_registered_worktree_head_changes_authoritative_generation(
     )
 
     first = project_audit_observation("epic_001", root=root)
-    assert first.classification == "proven_incident"
-    assert "worktree:epic_001" in first.evidence.unresolved_references
+    assert first.classification == "expected_wait"
+    assert first.reason == "observing:local_integration_unpublished"
+    assert first.evidence.parent_action is not None
+    assert first.evidence.parent_action.candidate_action == "publish_integration_review"
     (worktree / "change.txt").write_text("new head", encoding="utf-8")
     _commit(worktree, "advance owned branch")
     second = project_audit_observation("epic_001", root=root)
@@ -871,3 +975,97 @@ def test_registered_worktree_head_changes_authoritative_generation(
     assert first.git_head != second.git_head
     assert first.generation != second.generation
     assert second.branch == BranchName("epic/epic_001")
+
+
+@pytest.mark.parametrize(
+    ("tier", "work_id", "parent_id"),
+    (
+        ("feature", "feat_001", "epic_001"),
+        ("epic", "epic_001", None),
+    ),
+)
+def test_parent_owner_absence_requires_unchanged_configured_interval(
+    tmp_path: Path,
+    tier: str,
+    work_id: str,
+    parent_id: str | None,
+) -> None:
+    from datetime import datetime, timezone
+
+    from cascade.board.store import read_doc, write_doc
+
+    root = make_repo(tmp_path)
+    (root / "cascade.toml").write_text(
+        '[automation.health_audit]\ninterval = "1m"\n', encoding="utf-8"
+    )
+    if parent_id is not None:
+        add_doc(root, id=parent_id, title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id=work_id,
+        title="Owner",
+        tier=tier,  # type: ignore[arg-type]
+        status="active",
+        parent=parent_id,
+    )
+    if tier == "epic":
+        epic = read_doc(work_id, root=root)
+        epic.meta.plan_approved_at = datetime(2026, 11, 8, tzinfo=timezone.utc)
+        write_doc(epic, root=root)
+    _commit(root)
+    now = {"value": 10.0}
+
+    first = project_audit_observation(
+        work_id, root=root, monotonic=lambda: now["value"]
+    )
+    now["value"] = 69.0
+    early = project_audit_observation(
+        work_id, root=root, monotonic=lambda: now["value"]
+    )
+    now["value"] = 70.0
+    proven = project_audit_observation(
+        work_id, root=root, monotonic=lambda: now["value"]
+    )
+
+    assert first.classification == early.classification == "expected_wait"
+    assert first.reason == early.reason == "observing:planning_owner_absent"
+    assert proven.classification == "proven_incident"
+    assert proven.reason == "resume_planning_owner"
+    assert first.generation == early.generation == proven.generation
+    action = proven.evidence.parent_action
+    assert action is not None
+    assert action.responsible_work_id == work_id
+    assert action.candidate_action == "resume_planning_owner"
+    assert action.state == "executable"
+    assert action.observation_count == 3
+    assert action.unchanged_for_seconds == 60.0
+    assert action.required_interval_seconds == 60.0
+
+
+def test_live_parent_owner_never_becomes_a_stall(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+    )
+    _commit(root)
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.graph_turn_owner_is_live", lambda _work_id: True
+    )
+
+    first = project_audit_observation("feat_001", root=root, monotonic=lambda: 0.0)
+    later = project_audit_observation(
+        "feat_001", root=root, monotonic=lambda: 100_000.0
+    )
+
+    assert first.classification == later.classification == "expected_wait"
+    assert first.reason == later.reason == "live_owner"
+    assert later.evidence.parent_action is not None
+    assert later.evidence.parent_action.state == "gated"

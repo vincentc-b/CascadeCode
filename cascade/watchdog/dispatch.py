@@ -62,12 +62,13 @@ def dispatch_feature(
     by: Principal,
     *,
     root: Path | None = None,
+    expected_parent: str | None = None,
 ) -> DispatchResult:
     """Human or Boss starts feature planning. Success status is active, not ready_to_plan."""
 
     repo = resolve_root(root)
     with process_lock:
-        result = _dispatch_feature(work_id, by, repo)
+        result = _dispatch_feature(work_id, by, repo, expected_parent=expected_parent)
     return _boot_after(result, "feature", work_id, by, repo)
 
 
@@ -205,7 +206,13 @@ def _begin_epic_activation_run(work_id: str, root: Path) -> str:
     return begin_activation_run(work_id, root=root)
 
 
-def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
+def _dispatch_feature(
+    work_id: str,
+    by: str,
+    root: Path,
+    *,
+    expected_parent: str | None = None,
+) -> DispatchResult:
     if by not in ("human", "boss"):
         return _fail("unauthorized")
     dependency_evidence = evaluate_action_dependencies(work_id, root=root)
@@ -222,6 +229,8 @@ def _dispatch_feature(work_id: str, by: str, root: Path) -> DispatchResult:
         return _fail("bad_state")
     if not meta.parent:
         return _fail("bad_state")
+    if expected_parent is not None and meta.parent != expected_parent:
+        return _fail("feature_parent_changed")
     if dependency_evidence.outcome != "satisfied":
         return _fail(dependency_evidence.outcome)
     from cascade.feature.readiness import (
