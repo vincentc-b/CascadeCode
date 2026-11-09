@@ -19,7 +19,7 @@ from cascade.task.execution import (
 from cascade.task.supervisor_recovery import recover_orphan_delivery
 from cascade.task_rollup import queue_task_merge
 from tests.feature.test_recovery import _board as dispatched_blocked_board
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, run_audit_recovery_entry
 
 
 @pytest.fixture(autouse=True)
@@ -128,8 +128,6 @@ def test_audit_requeues_lost_validated_delivery_through_original_action(
         pending_task_merges,
         retry_pending_task_merges,
     )
-    from cascade.watchdog.audit import project_audit_observation
-    from cascade.watchdog.audit_recovery import dispatch_audit_recovery
     from cascade.watchdog.dispatch import dispatch_task
     from cascade.watchdog.events import read_events
     from cascade.workspace.integration_worktree import create_integration_worktree
@@ -206,13 +204,8 @@ def test_audit_requeues_lost_validated_delivery_through_original_action(
 
     user_work = root / "user-notes.txt"
     user_work.write_text("keep this work exactly as written\n")
-    observation = project_audit_observation("task_001", root=root)
-    assert (observation.classification, observation.reason) == (
-        "proven_incident",
-        "validated_delivery_missing",
-    )
-
-    assert dispatch_audit_recovery(root, "task_001")
+    audit = run_audit_recovery_entry(root)
+    assert audit.incident_work_ids == ("task_001",)
     assert pending_task_merges(root) == {"task_001"}
     requeued = load_action("task_001:queued_merge", root=root)
     assert requeued is not None
@@ -229,6 +222,7 @@ def test_audit_requeues_lost_validated_delivery_through_original_action(
     assert completed["attempt_count"] == 2
     assert pending_task_merges(root) == set()
     assert retry_pending_task_merges(root) == []
+    run_audit_recovery_entry(root)
     events, _ = read_events("feat_001", 0, root=root)
     assert sum(event.type == "TaskMerged" for event in events) == 1
 
@@ -564,10 +558,10 @@ def test_cached_queued_delivery_cannot_suppress_resume_after_feature_movement(
 
             kickoff_graph_queue_event("task_001", root=root, by="watchdog")
         elif claim_owner_immediately == "audit":
-            from cascade.watchdog.audit_recovery import dispatch_audit_recovery
             from cascade.workspace.kickoff import wait_for_background_kickoffs
 
-            assert dispatch_audit_recovery(root, "task_001")
+            audit = run_audit_recovery_entry(root)
+            assert "task_001" in audit.incident_work_ids
             assert wait_for_background_kickoffs()
         elif claim_owner_immediately == "restart":
             from cascade.workspace.up import resume_interrupted_task_runs

@@ -437,6 +437,62 @@ body {
   margin-top: 0.12rem;
 }
 
+.audit-status-panel {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.55rem;
+}
+
+.audit-status-panel summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.audit-status-toolbar {
+  margin-top: 0.5rem;
+}
+
+.audit-status-toolbar .status-line {
+  margin: 0.35rem 0 0;
+}
+
+#audit-status {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.audit-status-line {
+  margin: 0.2rem 0;
+  overflow-wrap: anywhere;
+}
+
+.audit-tier-count {
+  color: var(--muted);
+}
+
+.audit-incident-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.35rem 0;
+}
+
+.audit-incident {
+  border: 1px solid #7f1d1d;
+  background: #2a1512;
+  color: #fecaca;
+  border-radius: 4px;
+  padding: 0.45rem;
+  margin-top: 0.4rem;
+}
+
+.audit-incident-heading {
+  font-weight: 700;
+}
+
+.audit-unavailable {
+  color: #fbbf24;
+}
+
 .epic-cancellation-status {
   display: inline-block;
   margin: 0 0 0.35rem;

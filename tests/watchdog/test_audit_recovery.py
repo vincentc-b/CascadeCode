@@ -5,6 +5,8 @@ import os
 import subprocess
 import threading
 import time
+from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,7 @@ from cascade.task.action_recovery import (
 )
 from cascade.task.execution import ExecutionStoreUnavailable, execution_views
 from cascade.task.lifecycle_lock import task_lifecycle_lock
+from cascade.watchdog.audit import project_audit_observation
 from cascade.watchdog import audit_recovery
 from cascade.watchdog.capabilities import (
     CapabilityDescriptor,
@@ -26,7 +29,43 @@ from cascade.watchdog.capabilities import (
 from cascade.watchdog.incidents import incident_record
 from cascade.watchdog.reservations import IncidentReservation
 from cascade.workspace.types import ProjectContext
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, make_repo, run_audit_recovery_entry
+
+
+def _process_gone_or_zombie(pid: int) -> bool:
+    status = Path(f"/proc/{pid}/status")
+    try:
+        return not status.exists() or "State:\tZ" in status.read_text(encoding="utf-8")
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+
+
+def test_spawned_audit_pass_retains_parent_stall_episode(tmp_path: Path) -> None:
+    """A fresh observer process must advance, not reset, parent evidence."""
+
+    from cascade.board.store import read_doc, write_doc
+
+    root = make_repo(tmp_path)
+    (root / "cascade.toml").write_text(
+        '[automation.health_audit]\ninterval = "1m"\n', encoding="utf-8"
+    )
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    epic = read_doc("epic_001", root=root)
+    epic.meta.plan_approved_at = datetime(2026, 11, 8, tzinfo=timezone.utc)
+    write_doc(epic, root=root)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "audit parent"], cwd=root, check=True)
+
+    first = run_audit_recovery_entry(root)
+    assert first.incident_work_ids == ()
+    proven = project_audit_observation(
+        "epic_001", root=root, monotonic=lambda: time.monotonic() + 61
+    )
+
+    assert proven.classification == "proven_incident"
+    assert proven.reason == "resume_planning_owner"
+    assert proven.evidence.parent_action is not None
+    assert proven.evidence.parent_action.observation_count == 2
 
 
 def _hold_admission_handoff(sender, *args) -> None:
@@ -249,12 +288,9 @@ def test_admission_timeout_reaps_git_descendants(
     assert time.monotonic() - started < 6.5
     helper_pid = int(pid_file.read_text(encoding="utf-8"))
     deadline = time.monotonic() + 1
-    status = Path(f"/proc/{helper_pid}/status")
-    while status.exists() and time.monotonic() < deadline:
-        if "State:\tZ" in status.read_text(encoding="utf-8"):
-            break
+    while not _process_gone_or_zombie(helper_pid) and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert not status.exists() or "State:\tZ" in status.read_text(encoding="utf-8")
+    assert _process_gone_or_zombie(helper_pid)
 
 
 def test_probe_refuses_nonregular_authority_without_replacing_it(
@@ -615,16 +651,30 @@ def test_integration_action_keeps_authoritative_class_through_reservation(
         resume_action="install adapter",
     )
 
-    assert audit_recovery.dispatch_audit_recovery(
-        root,
-        "feat_001",
-        registry=CapabilityRegistry((descriptor, missing)),
+    unavailable = replace(descriptor, executor=None)
+    first = run_audit_recovery_entry(
+        root, registry=CapabilityRegistry((unavailable, missing))
     )
+    assert first.incident_work_ids == ("feat_001",)
+    assert executions == []
+    missing_receipt = next(
+        row
+        for row in recovery_actions(root=root)
+        if row.get("action_kind") == "health_auditor_capability_probe"
+        and row.get("metadata", {}).get("responsible_work_id") == "feat_001"
+    )
+    assert missing_receipt["metadata"]["original_action_identity"] == (
+        "retry_integration_branch_update"
+    )
+    assert missing_receipt["metadata"]["resume_action"] == "retry action"
+
+    second = run_audit_recovery_entry(
+        root, registry=CapabilityRegistry((descriptor, missing))
+    )
+    assert second.incident_work_ids == ("feat_001",)
     assert executions == [action_id]
-    assert not audit_recovery.dispatch_audit_recovery(
-        root,
-        "feat_001",
-        registry=CapabilityRegistry((descriptor, missing)),
+    run_audit_recovery_entry(
+        root, registry=CapabilityRegistry((descriptor, missing))
     )
     assert executions == [action_id]
 

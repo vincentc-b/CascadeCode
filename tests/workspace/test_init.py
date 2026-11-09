@@ -11,7 +11,7 @@ import tomllib
 
 from cascade.board.gitutil import has_git
 from cascade.watchdog import read_providers_config
-from cascade.watchdog.config import health_audit_periodic_opted_in, read_health_audit_config
+from cascade.watchdog.config import read_health_audit_config
 from cascade.watchdog.model_resolve import ModelConfigError, resolve_backend
 from cascade.workspace import WorkspaceError, WorkspaceRoot, init_workspace
 from tests.support import _WORKSPACE, make_git_repo
@@ -59,7 +59,6 @@ def test_init_creates_board_columns_gitignore_and_toml(tmp_path: Path) -> None:
     assert "health_audit" not in data["automation"]
     assert read_health_audit_config(root).enabled is True
     assert read_health_audit_config(root).interval_seconds == 1800
-    assert health_audit_periodic_opted_in(root) is False
     assert data["providers"]["default"] == "cursor"
     assert data["providers"]["cursor"]["epic"] == ""
     assert data["providers"]["claude"]["task"] == ""

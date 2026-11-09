@@ -463,3 +463,33 @@ def install_fake_planning_turns(monkeypatch) -> None:
     monkeypatch.setattr(
         "cascade.agent.planning_turn.run_feature_planning_turn", fake_feature
     )
+
+
+def run_audit_recovery_entry(
+    root: Path,
+    *,
+    cursor: str | None = None,
+    max_seconds: float = 15.0,
+    registry=None,
+):
+    """Run the production audit observer and recovery handoff to quiescence."""
+
+    import threading
+
+    from cascade.watchdog.audit_lane import run_bounded_audit_pass
+    from cascade.watchdog.audit_recovery import AuditRecoveryWorker
+
+    result = run_bounded_audit_pass(
+        root,
+        cursor,
+        threading.Event(),
+        max_seconds=max_seconds,
+    )
+    worker = AuditRecoveryWorker(root, registry=registry)
+    try:
+        worker.submit(result.incident_work_ids)
+        worker._pending.join()
+    finally:
+        worker.stop(timeout=2)
+    assert not worker._thread.is_alive()
+    return result

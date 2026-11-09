@@ -92,6 +92,124 @@ Both paths may observe the same unhealthy work, but repair converges through the
 existing generation-aware incident reservations and claims rather than starting
 duplicate recovery.
 
+### 2.2 Health audit operations
+
+The health audit is a supervisor safety net, not another lifecycle owner. It
+observes canonical board and recovery state, proves a concrete incident, and
+then hands an exact-generation request to an existing owner operation. It does
+not infer work from its cursor or from the passage of time.
+
+#### Configuration
+
+`[automation.health_audit]` accepts these keys:
+
+| Key | Type and default | Bounds and effect |
+|---|---|---|
+| `enabled` | Boolean, `true` | Controls periodic audit admission only. It is independent of `automation.enabled` and `[supervisor_health].sweep_seconds`. |
+| `interval` | Duration string, `"30m"` | One positive whole-number value followed immediately by `s`, `m`, `h`, or `d`; the converted value must be from 60 through 86,400 seconds inclusive. |
+
+Examples of valid intervals are `"60s"`, `"15m"`, `"2h"`, and `"1d"`.
+Values such as `"30"`, `"1.5h"`, `"0m"`, `"-5m"`, `"59s"`, and `"25h"`
+are rejected with an audit configuration error. An invalid audit setting keeps
+the periodic audit unavailable but does not bring down unrelated supervisor
+delivery.
+Set `enabled = false` to stop scheduled passes; authenticated manual passes
+remain available.
+
+#### Lane, coverage, and pass bounds
+
+The supervisor starts one health-audit lane per canonical product workspace,
+separate from fetch polling, review polling, the ordinary watchdog/maintenance
+chain, and model execution. A cross-process workspace claim prevents overlapping
+passes. Duplicate manual requests, concurrent scheduled admission, and parent
+recovery converge on that same claim and the same incident reservations.
+Restart restores the next deadline from the receipt, admits at most one overdue
+pass, and then schedules with a monotonic clock. A manual pass does not move the
+periodic deadline.
+
+Each pass fairly rotates among Task, Feature, and Epic candidates and covers:
+
+- every nonterminal work item;
+- completed work whose document update date is in the current seven-day window;
+- older completed work still named by an unresolved action, review,
+  reconciliation, cleanup, or registered-worktree reference.
+
+The selection cursor is opaque and only provides fair continuation. A pass may
+inspect at most 100 work items and may spend at most 60 seconds across selection,
+observation, and coordination. Git, subprocess, and network I/O on this path are
+bounded by the remaining pass time and support cancellation. A partial page
+that finishes within the bounds is a completed pass and advances the cursor;
+a failed, cancelled, busy, or timed-out pass does not falsely advance the last
+completed time. Long recovery or model work is handed to existing supervised
+workers after audit and lifecycle locks have been released.
+
+#### Authority, retry, and escalation
+
+Observation alone grants no mutation authority. The `health_auditor` role has
+an incident-scoped allowlist of existing lifecycle operations, not the tools of
+an owning Task, Feature, or Epic team. Before a repair is accepted, Cascade
+requires the expected tier and failure class, accountable owner, required
+evidence, reachable action/worktree and durable result path. It then re-reads
+canonical state under the lifecycle lock and binds the request to the exact
+authoritative generation and a finite claim token.
+
+The auditor cannot bypass approval, review/comment, dependency, credential,
+permission, installation, destructive-Git, force-push, or semantic-decision
+gates. It cannot broaden a repair beyond the registered capability. A missing
+or denied capability fails closed: the incident remains visible with its owner,
+evidence, reason, and precise resume action, and is automatically reconsidered
+later. Operators should satisfy the named gate or restore the named capability,
+not edit the audit receipt or force a lifecycle transition.
+
+Retries are generation-aware. Success suppresses another attempt only for the
+same authoritative generation. A claimed, failed, timed-out, or unavailable
+attempt remains subject to its finite attempt bound and claim/reassessment
+cooldown; it becomes eligible again only after that deadline. Changed canonical
+evidence produces a new generation and a fresh evaluation. If the displayed
+resume action requires a human decision or the attempt bound is exhausted,
+escalate to the concrete accountable owner shown in the War Room. An incident
+must show a delivered request, acknowledgement, or result; “investigating” by
+itself is not a recovery state.
+
+#### Healthy-run silence
+
+In an already healthy workspace, the only durable audit write is the atomic,
+compact receipt and continuation cursor at
+`.cascade/health_audit/receipt.json`. The entire `.cascade/` runtime directory is
+Git-ignored, and this receipt is outside board and queue inputs. It records only
+the last completed time, next scheduled time, interval, duration, aggregate
+counts, and opaque next cursor. The receipt cannot dispatch, merge, retry, or
+otherwise trigger work.
+
+Consequently, a healthy pass performs **no** lifecycle mutation or document
+timestamp rewrite, starts no model turn, emits no event, toast, chat message, or
+notification, makes no Git change, and makes no success-only external API call.
+It does not rewrite a Task, Feature, or Epic merely to say that it was checked.
+Incident reservations/results and `.cascade/health_audit/failure.json` are
+unhealthy-run evidence, not healthy receipts.
+
+#### Manual run and troubleshooting
+
+Use **Run health audit now** in the War Room to request an authenticated manual
+pass. The response is either admitted or coalesced with an already pending or
+running pass. This control works when periodic audits are disabled, does not
+change their configured interval or next deadline, and does not bypass any
+repair gate.
+
+For diagnosis, compare the War Room's last/next timestamps and active incidents
+with `.cascade/health_audit/receipt.json`. If the last completed time does not
+advance, inspect `.cascade/health_audit/failure.json`: its `code`, `message`,
+candidate/cursor context, `retry_seconds`, and `next_action` distinguish bounded
+I/O or unavailable evidence from another pass failure. If there is no failure
+record, another process may hold the workspace claim or the request may have
+coalesced with an in-flight pass. Check `cascade.toml` first for an invalid or
+disabled setting.
+Then follow the incident's exact resume action, confirm the accountable owner
+and human gates, and request one manual pass. Do not delete recovery ledgers,
+edit the opaque cursor, repeatedly click the control, or restart unrelated
+delivery to defeat a cooldown; the supervisor coalesces requests and
+automatically re-evaluates eligible generations.
+
 ---
 
 ## 3. The 3-Tier Directory Structure
