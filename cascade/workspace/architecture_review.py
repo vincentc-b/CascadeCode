@@ -1017,6 +1017,220 @@ class ArchitectureReviewStore:
             self._write(state)
             return journal
 
+    def promote_or_resume(self, operation_id: str) -> PromotionJournal:
+        """Land the exact journaled revisions and atomically accept both sides."""
+
+        _nonblank(operation_id, "promotion operation ID")
+        journal = self.get_promotion(operation_id)
+        if journal is None:
+            raise ArchitectureProposalError("promotion_conflict", "unknown promotion operation")
+        if journal.outcome in {"accepted", "conflict"}:
+            return journal
+        unit = self.get(journal.approved_review_unit_id)
+        if unit is None:
+            return self._conflict_promotion(operation_id, "review_required")
+        code_root = self.project.target.root
+        docs_root = _architecture_repository(
+            self.project,
+            journal.documentation_repository_role,
+            journal.documentation_repository_key,
+        ).root
+
+        if code_root.resolve() == docs_root.resolve():
+            current = _head(code_root)
+            incoming = (
+                journal.heads.incoming_implementation_commit,
+                journal.heads.incoming_documentation_commit,
+            )
+            if not all(_is_ancestor(code_root, revision, current) for revision in incoming):
+                if current != journal.heads.expected_code_head:
+                    return self._conflict_promotion(operation_id, "head_conflict")
+                if not self._promotion_is_current(journal, unit, current):
+                    return self.get_promotion(operation_id)  # type: ignore[return-value]
+                if not _merge_promotion_commits(code_root, incoming):
+                    return self._conflict_promotion(operation_id, "merge_conflict")
+                current = _head(code_root)
+            journal = self._record_promotion_sides(
+                operation_id, code_head=current, documentation_head=current
+            )
+        else:
+            if journal.code.state == "pending":
+                journal = self._land_promotion_side(
+                    journal, unit, "code", code_root,
+                    journal.heads.expected_code_head,
+                    journal.heads.incoming_implementation_commit,
+                )
+                if journal.outcome == "conflict":
+                    return journal
+            if journal.documentation.state == "pending":
+                journal = self._land_promotion_side(
+                    journal, unit, "documentation", docs_root,
+                    journal.heads.expected_documentation_head,
+                    journal.heads.incoming_documentation_commit,
+                )
+                if journal.outcome == "conflict":
+                    return journal
+
+        code_head = journal.code.observed_resulting_head
+        if code_head is None:
+            return journal
+        refreshed = self.refresh(unit.review_unit_id, lineage_revision=code_head)
+        if (refreshed.status != "approved" or
+                refreshed.reviewed_tuple_digest != journal.approved_tuple_digest):
+            return self._conflict_promotion(operation_id, "artifact_changed")
+        return self._finalize_promotion(operation_id)
+
+    def _land_promotion_side(
+        self,
+        journal: PromotionJournal,
+        unit: ArchitectureReviewUnit,
+        side: Literal["code", "documentation"],
+        repository: Path,
+        expected_head: str,
+        incoming_commit: str,
+    ) -> PromotionJournal:
+        current = _head(repository)
+        if not _is_ancestor(repository, incoming_commit, current):
+            if current != expected_head:
+                return self._conflict_promotion(journal.operation_id, "head_conflict")
+            code_head = current if side == "code" else _head(self.project.target.root)
+            if not self._promotion_is_current(journal, unit, code_head):
+                return self.get_promotion(journal.operation_id)  # type: ignore[return-value]
+            if not _merge_promotion_commits(repository, (incoming_commit,)):
+                return self._conflict_promotion(journal.operation_id, "merge_conflict")
+            current = _head(repository)
+        return self._record_promotion_sides(
+            journal.operation_id,
+            code_head=current if side == "code" else None,
+            documentation_head=current if side == "documentation" else None,
+        )
+
+    def _promotion_is_current(
+        self, journal: PromotionJournal, unit: ArchitectureReviewUnit, code_head: str
+    ) -> bool:
+        """Recheck tuple, reservation and generation immediately before Git work."""
+
+        refreshed = self.refresh(unit.review_unit_id, lineage_revision=code_head)
+        if (refreshed.status != "approved" or
+                refreshed.reviewed_tuple_digest != journal.approved_tuple_digest):
+            self._conflict_promotion(journal.operation_id, "artifact_changed")
+            return False
+        from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+        with task_lifecycle_lock(root=self.project.target.root):
+            state = self._read()
+            if state["promotion_reservations"].get(journal.lineage_key) != journal.operation_id:
+                self._set_promotion_conflict(state, journal, "reservation_lost")
+                self._write(state)
+                return False
+            current = self.resolve_current(journal.lineage_key, lineage_revision=code_head)
+            if (current.generation if current else None) != journal.reserved_generation:
+                self._set_promotion_conflict(state, journal, "reservation_lost")
+                self._write(state)
+                return False
+        return True
+
+    def _record_promotion_sides(
+        self,
+        operation_id: str,
+        *,
+        code_head: str | None = None,
+        documentation_head: str | None = None,
+    ) -> PromotionJournal:
+        """Persist post-Git evidence without assuming the reservation survived Git."""
+
+        from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+        with task_lifecycle_lock(root=self.project.target.root):
+            state = self._read()
+            journal = PromotionJournal.from_dict(state["promotions"][operation_id])
+            if journal.outcome in {"accepted", "conflict"}:
+                return journal
+            if state["promotion_reservations"].get(journal.lineage_key) != operation_id:
+                return self._set_promotion_conflict(state, journal, "reservation_lost", write=True)
+            current = self.resolve_current(
+                journal.lineage_key, lineage_revision=code_head or _head(self.project.target.root)
+            )
+            if (current.generation if current else None) != journal.reserved_generation:
+                return self._set_promotion_conflict(state, journal, "reservation_lost", write=True)
+            updated = replace(
+                journal,
+                code=(PromotionSide("landed", code_head) if code_head else journal.code),
+                documentation=(PromotionSide("landed", documentation_head)
+                               if documentation_head else journal.documentation),
+                outcome="acceptance_pending",
+            )
+            state["promotions"][operation_id] = updated.to_dict()
+            self._write(state)
+            return updated
+
+    def _finalize_promotion(self, operation_id: str) -> PromotionJournal:
+        from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+        with task_lifecycle_lock(root=self.project.target.root):
+            state = self._read()
+            journal = PromotionJournal.from_dict(state["promotions"][operation_id])
+            if journal.outcome in {"accepted", "conflict"}:
+                return journal
+            if journal.code.state != "landed" or journal.documentation.state != "landed":
+                return journal
+            if state["promotion_reservations"].get(journal.lineage_key) != operation_id:
+                return self._set_promotion_conflict(state, journal, "reservation_lost", write=True)
+            code_head = journal.code.observed_resulting_head
+            documentation_head = journal.documentation.observed_resulting_head
+            assert code_head is not None and documentation_head is not None
+            current = self.resolve_current(journal.lineage_key, lineage_revision=code_head)
+            if (current.generation if current else None) != journal.reserved_generation:
+                return self._set_promotion_conflict(state, journal, "reservation_lost", write=True)
+            unit = ArchitectureReviewUnit.from_dict(
+                state["review_units"][journal.approved_review_unit_id]
+            )
+            if (unit.status != "approved" or
+                    unit.reviewed_tuple_digest != journal.approved_tuple_digest):
+                return self._set_promotion_conflict(state, journal, "artifact_changed", write=True)
+            baseline = (ArchitectureBaseline("model", unit.proposed_model, unit.review_unit_id)
+                        if unit.architecture_impact == "diagram_change" else unit.accepted_baseline)
+            pointer = AcceptedLineage(
+                journal.lineage_key,
+                (journal.reserved_generation or 0) + 1,
+                unit.review_unit_id,
+                unit.reviewed_tuple_digest,
+                code_head,
+                documentation_head,
+                unit.design,
+                baseline,
+            )
+            accepted = replace(journal, outcome="accepted")
+            state["lineages"].setdefault(journal.lineage_key, []).append(pointer.to_dict())
+            state["promotions"][operation_id] = accepted.to_dict()
+            state["promotion_reservations"].pop(journal.lineage_key, None)
+            holds = state["gate_rollout"]["acceptance_holds"]
+            for work_id in unit.affected_work_ids:
+                if holds.get(work_id) == operation_id:
+                    holds.pop(work_id)
+            self._write(state)
+            return accepted
+
+    def _conflict_promotion(self, operation_id: str, code: str) -> PromotionJournal:
+        from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+        with task_lifecycle_lock(root=self.project.target.root):
+            state = self._read()
+            journal = PromotionJournal.from_dict(state["promotions"][operation_id])
+            return self._set_promotion_conflict(state, journal, code, write=True)
+
+    def _set_promotion_conflict(
+        self, state: dict[str, object], journal: PromotionJournal, code: str, *,
+        write: bool = False,
+    ) -> PromotionJournal:
+        conflicted = replace(journal, outcome="conflict", error_code=code)
+        state["promotions"][journal.operation_id] = conflicted.to_dict()
+        if state["promotion_reservations"].get(journal.lineage_key) == journal.operation_id:
+            state["promotion_reservations"].pop(journal.lineage_key)
+        if write:
+            self._write(state)
+        return conflicted
+
     def approve_review_unit(self, review_unit_id: str) -> ArchitectureReviewUnit:
         """Pin the human-reviewed tuple at the existing lifecycle approval boundary."""
 
@@ -1277,6 +1491,17 @@ def reserve_promotion(
         expected_generation,
         operation_id=operation_id,
     )
+
+
+def promote_or_resume(
+    project: ProjectContext,
+    operation_id: str,
+    *,
+    store: ArchitectureReviewStore | None = None,
+) -> PromotionJournal:
+    """Promote or recover only the missing side of a durable journal."""
+
+    return (store or ArchitectureReviewStore(project)).promote_or_resume(operation_id)
 
 
 def stage_architecture_proposal(
@@ -1953,6 +2178,32 @@ def _is_ancestor(repository: Path, ancestor: str, descendant: str) -> bool:
     return result.returncode == 0
 
 
+def _merge_promotion_commits(repository: Path, revisions: Sequence[str]) -> bool:
+    """Merge exact commits, leaving the checkout clean when Git reports a conflict."""
+
+    in_progress = subprocess.run(
+        ["git", "rev-parse", "--verify", "MERGE_HEAD"], cwd=repository,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    unmerged = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=U"], cwd=repository, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
+    )
+    if in_progress.returncode == 0 or unmerged.returncode != 0 or unmerged.stdout.strip():
+        return False
+    result = subprocess.run(
+        ["git", "merge", "--no-edit", "--no-ff", *revisions], cwd=repository,
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+    )
+    if result.returncode == 0:
+        return True
+    subprocess.run(
+        ["git", "merge", "--abort"], cwd=repository,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    return False
+
+
 def _promotion_heads(value: PromotionHeads | Mapping[str, str]) -> PromotionHeads:
     if isinstance(value, PromotionHeads):
         return value
@@ -2009,5 +2260,5 @@ __all__ = ["AcceptedArchitecturePointer", "AcceptedLineage", "ArchitectureBaseli
            "PromotionHeads", "PromotionJournal", "PromotionSide",
            "ReviewBaselineStatus", "ReviewGateBoundary", "ReviewGateResult",
            "enable_review_gate", "read_architecture_state",
-           "reserve_promotion", "review_architecture_proposal", "stage_architecture_proposal",
+           "promote_or_resume", "reserve_promotion", "review_architecture_proposal", "stage_architecture_proposal",
            "validate_review_gate"]

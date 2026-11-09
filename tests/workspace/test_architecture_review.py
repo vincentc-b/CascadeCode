@@ -32,6 +32,7 @@ from cascade.workspace import (
     create_architecture_model_ref,
     enable_review_gate,
     materialize_c4_source_closure,
+    promote_or_resume,
     resolve_design_ownership,
     read_architecture_state,
     reserve_promotion,
@@ -637,6 +638,170 @@ def test_competing_promotion_reservations_leave_one_visible_conflict(
     assert restarted.pending_promotion("epic:epic_034") == winner
     assert restarted.acceptance_hold("feat_034_003") == winner.operation_id
     assert restarted.resolve_current("epic:epic_034") is None
+
+
+def test_colocated_promotion_lands_both_revisions_before_advancing_lineage(
+    tmp_path: Path,
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    store = ArchitectureReviewStore(project)
+    proposal = _approve_no_diagram(store, _unit(project, plan, design, model))
+    expected = _git(project.target.root, "rev-parse", "HEAD")
+    implementation = _incoming_commit(project.target.root, expected, "implementation")
+    documentation = _incoming_commit(project.target.root, expected, "documentation")
+    journal = reserve_promotion(
+        project,
+        proposal.review_unit_id,
+        PromotionHeads(expected, expected, implementation, documentation),
+        None,
+        store=store,
+    )
+
+    accepted = promote_or_resume(project, journal.operation_id, store=store)
+
+    assert accepted.outcome == "accepted"
+    assert accepted.code.state == accepted.documentation.state == "landed"
+    assert accepted.code.observed_resulting_head == accepted.documentation.observed_resulting_head
+    resulting_head = accepted.code.observed_resulting_head
+    assert resulting_head is not None
+    assert _git(project.target.root, "merge-base", "--is-ancestor", implementation,
+                resulting_head) == ""
+    assert _git(project.target.root, "merge-base", "--is-ancestor", documentation,
+                resulting_head) == ""
+    pointer = store.resolve_current("epic:epic_034")
+    assert pointer and pointer.accepted_code_head == resulting_head
+    assert store.acceptance_hold("feat_034_003") is None
+    assert promote_or_resume(project, journal.operation_id, store=store) == accepted
+
+
+def test_promotion_retry_recovers_merge_that_landed_before_journal_update(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    store = ArchitectureReviewStore(project)
+    proposal = _approve_no_diagram(store, _unit(project, plan, design, model))
+    expected = _git(project.target.root, "rev-parse", "HEAD")
+    implementation = _incoming_commit(project.target.root, expected, "implementation")
+    documentation = _incoming_commit(project.target.root, expected, "documentation")
+    journal = reserve_promotion(
+        project,
+        proposal.review_unit_id,
+        PromotionHeads(expected, expected, implementation, documentation),
+        None,
+        store=store,
+    )
+    persist = store._record_promotion_sides
+
+    def crash_before_journal_update(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("simulated crash after Git")
+
+    monkeypatch.setattr(store, "_record_promotion_sides", crash_before_journal_update)
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        promote_or_resume(project, journal.operation_id, store=store)
+    landed_head = _git(project.target.root, "rev-parse", "HEAD")
+    assert store.get_promotion(journal.operation_id).outcome == "reserved"
+
+    monkeypatch.setattr(store, "_record_promotion_sides", persist)
+    recovered = promote_or_resume(project, journal.operation_id, store=store)
+
+    assert recovered.outcome == "accepted"
+    assert recovered.code.observed_resulting_head == landed_head
+    assert _git(project.target.root, "rev-parse", "HEAD") == landed_head
+
+
+def test_split_promotion_retries_only_documentation_after_code_lands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    colocated, plan, design, model = _review_repository(tmp_path)
+    tracking_root = _git_repository(tmp_path / "tracking")
+    tracking_root.joinpath("README.md").write_text("# Tracking\n", encoding="utf-8")
+    _git(tracking_root, "add", "README.md")
+    _git(tracking_root, "commit", "-m", "tracking baseline")
+    project = ProjectContext.split(
+        colocated.target.root, tracking_root, architecture_destination="tracking"
+    )
+    resolve_design_ownership(project, ".")
+    project.design_path().parent.mkdir(parents=True, exist_ok=True)
+    project.design_path().write_text("# Reviewed design\n", encoding="utf-8")
+    _git(tracking_root, "add", ".")
+    _git(tracking_root, "commit", "-m", "reviewed architecture")
+    split_design = PinnedArchitectureArtifact(
+        create_architecture_artifact_ref(project, ".", owning_work="feat_034_003"),
+        _digest(project.design_path().read_bytes()),
+    )
+    store = ArchitectureReviewStore(project)
+    proposal = replace(
+        _unit(colocated, plan, design, model),
+        documentation_repository_key=project.architecture_repository.repository_key,
+        documentation_repository_role="tracking",
+        design=split_design,
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        view_citations=(),
+    )
+    proposal = _approve_no_diagram(store, proposal)
+    expected_code = _git(project.target.root, "rev-parse", "HEAD")
+    expected_docs = _git(tracking_root, "rev-parse", "HEAD")
+    implementation = _incoming_commit(project.target.root, expected_code, "implementation")
+    documentation = _incoming_commit(tracking_root, expected_docs, "documentation")
+    journal = reserve_promotion(
+        project,
+        proposal.review_unit_id,
+        PromotionHeads(expected_code, expected_docs, implementation, documentation),
+        None,
+        store=store,
+    )
+    land = store._land_promotion_side
+
+    def crash_before_documentation(
+        current: object, unit: object, side: str, repository: Path,
+        expected_head: str, incoming_commit: str,
+    ) -> object:
+        if side == "documentation":
+            raise RuntimeError("documentation repository unavailable")
+        return land(current, unit, side, repository, expected_head, incoming_commit)
+
+    monkeypatch.setattr(store, "_land_promotion_side", crash_before_documentation)
+    with pytest.raises(RuntimeError, match="documentation repository unavailable"):
+        promote_or_resume(project, journal.operation_id, store=store)
+    pending = store.get_promotion(journal.operation_id)
+    assert pending and pending.outcome == "acceptance_pending"
+    assert pending.code.state == "landed"
+    assert pending.documentation.state == "pending"
+    code_head = _git(project.target.root, "rev-parse", "HEAD")
+
+    monkeypatch.setattr(store, "_land_promotion_side", land)
+    accepted = promote_or_resume(project, journal.operation_id, store=store)
+
+    assert accepted.outcome == "accepted"
+    assert _git(project.target.root, "rev-parse", "HEAD") == code_head
+    assert accepted.code.observed_resulting_head == code_head
+    assert accepted.documentation.state == "landed"
+
+
+def test_promotion_marks_changed_destination_head_for_rereview(tmp_path: Path) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    store = ArchitectureReviewStore(project)
+    proposal = _approve_no_diagram(store, _unit(project, plan, design, model))
+    expected = _git(project.target.root, "rev-parse", "HEAD")
+    incoming = _incoming_commit(project.target.root, expected, "implementation")
+    journal = reserve_promotion(
+        project,
+        proposal.review_unit_id,
+        PromotionHeads(expected, expected, incoming, incoming),
+        None,
+        store=store,
+    )
+    project.target.root.joinpath("competing.txt").write_text("changed\n", encoding="utf-8")
+    _git(project.target.root, "add", "competing.txt")
+    _git(project.target.root, "commit", "-m", "competing destination change")
+
+    conflicted = promote_or_resume(project, journal.operation_id, store=store)
+
+    assert conflicted.outcome == "conflict"
+    assert conflicted.error_code == "head_conflict"
+    assert store.resolve_current("epic:epic_034") is None
+    assert store.acceptance_hold("feat_034_003") == journal.operation_id
 
 
 def test_owner_scope_and_stale_generation_fail_before_persistence(tmp_path: Path) -> None:
