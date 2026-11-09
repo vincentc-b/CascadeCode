@@ -391,6 +391,67 @@ def test_recovery_executor_defers_model_kickoff_and_returns_promptly(
     assert kickoff.wait_for_background_kickoffs(2)
 
 
+def test_delivery_recovery_passes_pinned_feature_identity_without_model_turn(
+    tmp_path: Path, monkeypatch
+) -> None:
+    received: list[dict[str, object]] = []
+    model_started = threading.Event()
+
+    def execute(task_id: str, **kwargs: object) -> dict[str, object]:
+        received.append({"task_id": task_id, **kwargs})
+        return {"ok": True}
+
+    descriptor = CapabilityDescriptor(
+        name="task.supervisor_recover_task_delivery",
+        operation="supervisor_recover_task_delivery",
+        executor=execute,
+        tiers=frozenset({"task"}),
+        failure_classes=frozenset({"validated_delivery_missing"}),
+        owner_kinds=frozenset({"feature_team"}),
+        required_evidence=(),
+        durable_store="orphan_delivery",
+        attempt_bound=2,
+        lock_protocol="task_lifecycle_lock",
+        recheck_protocol="fresh_generation",
+        resume_action="retry",
+    )
+    reservation = IncidentReservation(
+        reservation_id="reservation",
+        claim_token="token",
+        work_id="task_001",
+        tier="task",
+        generation="generation",
+        failure_class="validated_delivery_missing",
+        capability=descriptor.name,
+        durable_store="orphan_delivery",
+        claimed_at="2026-01-01T00:00:00+00:00",
+        claim_expires_at="2026-01-01T00:05:00+00:00",
+    )
+    contract = {
+        "accountable_owner": "feature_team:feat_001",
+        "evidence": {"parent_id": "feat_001"},
+    }
+    monkeypatch.setattr(audit_recovery, "record_result", lambda *_a, **_k: {})
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.kickoff_turn",
+        lambda *_a, **_k: model_started.set(),
+    )
+
+    audit_recovery._execute_reservation(
+        reservation, descriptor, contract, root=tmp_path
+    )
+
+    assert received == [
+        {
+            "task_id": "task_001",
+            "root": tmp_path,
+            "observed_incident": "reservation",
+            "feature_id": "feat_001",
+        }
+    ]
+    assert not model_started.is_set()
+
+
 def test_integration_action_keeps_authoritative_class_through_reservation(
     tmp_path: Path,
 ) -> None:

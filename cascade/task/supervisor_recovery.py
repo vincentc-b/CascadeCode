@@ -60,6 +60,7 @@ def recover_orphan_delivery(
     *,
     root: Path,
     observed_incident: str | None = None,
+    feature_id: str | None = None,
     kickoff: Callable[[str, Path, str | None], None] | None = None,
 ) -> RecoveryResult:
     """Recover one abandoned Task delivery, or return its prior durable result.
@@ -83,10 +84,17 @@ def recover_orphan_delivery(
         }
         generation: str | None = None
 
+        # An audit admission pins the typed owning Feature. Recheck that exact
+        # identity under the same lock as every delivery mutation; a document
+        # revision or Git SHA is evidence, never a substitute for ownership.
+        if feature_id is not None and task.meta.parent != feature_id:
+            result = _result(
+                incident_id, "unsafe", "task_feature_owner_changed", attempt
+            )
         # Do not enqueue while the worker is draining, or while cancellation
         # owns the lifecycle transition.  Neither condition is recoverable by
         # retrying this operation in the same process.
-        if task.meta.status == "cancelling":
+        elif task.meta.status == "cancelling":
             result = _result(
                 incident_id, "defer_draining", "cancellation_in_progress", attempt
             )
@@ -232,12 +240,19 @@ def recover_orphan_delivery(
 
 
 def supervisor_recover_task_delivery(
-    task_id: str, *, root: Path, observed_incident: str | None = None
+    task_id: str,
+    *,
+    root: Path,
+    observed_incident: str | None = None,
+    feature_id: str | None = None,
 ) -> RecoveryResult:
     """Named shared-supervisor entry point (kept small for health callers)."""
 
     return recover_orphan_delivery(
-        task_id, root=root, observed_incident=observed_incident
+        task_id,
+        root=root,
+        observed_incident=observed_incident,
+        feature_id=feature_id,
     )
 
 

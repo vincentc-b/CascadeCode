@@ -21,16 +21,35 @@ from tests.support import add_doc, approve_board_feature, make_repo
 
 def _active_feature_with_blocked_task(tmp_path: Path, monkeypatch) -> Path:
     # Provider capability preflight is covered separately; these tests exercise
-    # remediation after the lifecycle has already reached a blocked task.
-    monkeypatch.setattr(
-        "cascade.watchdog.dispatch._provider_preflight_refusal",
-        lambda *_args, **_kwargs: None,
+    # remediation after the lifecycle has already reached a blocked task. Keep
+    # production admission intact while making provider discovery deterministic.
+    from cascade.agent.discovery.inventory import (
+        InventoryFreshness,
+        ProviderInventoryItem,
+        ProviderInventoryResult,
+    )
+    from cascade.agent.discovery.types import DiscoveredModel
+
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="cursor",
+                display_name="Cursor",
+                models=(
+                    DiscoveredModel(id="proj-epic", display_name="Project Epic"),
+                    DiscoveredModel(id="proj-feature", display_name="Project Feature"),
+                    DiscoveredModel(id="proj-task", display_name="Project Task"),
+                ),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, 1.0, 301.0, 300.0),
     )
     monkeypatch.setattr(
-        "cascade.approvals._require_approval_selections",
-        lambda *_args, **_kwargs: (),
+        "cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory
     )
-    root = make_repo(tmp_path)
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    root = make_repo(tmp_path, models=True)
     add_doc(
         root,
         id="epic_001",
@@ -66,7 +85,8 @@ def _active_feature_with_blocked_task(tmp_path: Path, monkeypatch) -> Path:
 
 
 def test_health_sweep_retries_failed_blocked_task_once_through_dispatch(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     root = _active_feature_with_blocked_task(tmp_path, monkeypatch)
     calls = 0
@@ -91,8 +111,7 @@ def test_health_sweep_retries_failed_blocked_task_once_through_dispatch(
         (item.child_id, item.classification)
         for observations in sweeps
         for item in observations
-        if item.child_id == "task_001"
-        and item.classification == "remediation_eligible"
+        if item.child_id == "task_001" and item.classification == "remediation_eligible"
     } == {("task_001", "remediation_eligible")}
     assert calls == 1
     assert read_doc("task_001", root=root).meta.status == "active"
@@ -169,7 +188,8 @@ def test_health_sweep_is_noop_for_healthy_and_terminal_work(tmp_path: Path) -> N
 
 
 def test_health_sweep_recovers_abandoned_awaiting_merge_delivery(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     root = make_repo(tmp_path)
     add_doc(
@@ -225,7 +245,8 @@ def test_health_sweep_recovers_abandoned_awaiting_merge_delivery(
 
 
 def test_health_sweep_does_not_nominate_live_task_owner(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     root = make_repo(tmp_path)
     add_doc(
@@ -278,7 +299,8 @@ def test_health_sweep_does_not_nominate_live_task_owner(
 
 
 def test_recovery_failure_is_recorded_once_for_concurrent_and_repeated_sweeps(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     root = _active_feature_with_blocked_task(tmp_path, monkeypatch)
     calls = 0
@@ -333,7 +355,9 @@ def test_classifier_excludes_terminal_and_exposes_blocked_feature(
 
     terminal = read_doc("feat_001", root=root)
     terminal.meta.status = "cancelled"
-    terminal.meta.path = root / "docs" / "features" / "3_completed" / terminal.meta.path.name
+    terminal.meta.path = (
+        root / "docs" / "features" / "3_completed" / terminal.meta.path.name
+    )
     observation = classify_child(supervisor, terminal)
     assert observation.classification == "no_action"
     assert observation.reason == "terminal_child"

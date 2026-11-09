@@ -12,7 +12,8 @@ import pytest
 
 import cascade.board.gitutil as gitutil
 from cascade.board.context import set_project_context
-from cascade.task.execution import mark_queued
+from cascade.task.execution import mark_awaiting_merge, mark_queued
+from cascade.task_rollup import invalidate_task_merge, queue_task_merge
 from cascade.watchdog.audit import (
     AuditGeneration,
     AuditIdentityError,
@@ -26,6 +27,7 @@ from cascade.watchdog.audit import (
     project_audit_observations,
     select_audit_candidates,
 )
+from cascade.watchdog.audit_recovery import _incident_contract
 from cascade.watchdog.incidents import incident_record, project_incident
 from cascade.workspace.types import ProjectContext
 from tests.support import add_doc, make_repo
@@ -135,6 +137,55 @@ def test_projection_covers_all_tiers_and_preserves_wait_gates(tmp_path: Path) ->
     assert task.evidence.execution["health"] == "queued"
     assert epic.classification == "expected_wait"
     assert "plan_approval" in epic.evidence.gates
+
+
+def test_task_delivery_queue_loss_is_a_pinned_recovery_incident(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    _commit(root)
+    mark_queued("task_001", root=root)
+    mark_awaiting_merge("task_001", root=root)
+    queue_task_merge("task_001", root=root)
+
+    queued = project_audit_observation("task_001", root=root)
+    assert (queued.classification, queued.reason) == (
+        "expected_wait",
+        "delivery_queued",
+    )
+
+    invalidate_task_merge("task_001", root=root)
+    missing = project_audit_observation("task_001", root=root)
+
+    assert missing.classification == "proven_incident"
+    assert missing.reason == "validated_delivery_missing"
+    assert missing.incident is not None
+    assert missing.incident.failure_class == "validated_delivery_missing"
+    assert missing.evidence.execution["delivery_queued"] is False
+    contract = _incident_contract(missing, root=root)
+    assert contract is not None
+    assert contract["accountable_owner"] == "feature_team:feat_001"
+    assert contract["authoritative_generation"] == missing.generation.value
+    assert contract["selected_capability"] == "supervisor_recover_task_delivery"
+    assert contract["evidence"]["parent_id"] == "feat_001"
 
 
 def test_projection_resolves_tracking_docs_and_product_git_without_mutation(
