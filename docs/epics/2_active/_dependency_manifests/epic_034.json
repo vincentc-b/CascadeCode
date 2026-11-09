@@ -68,6 +68,71 @@
           "integrity_reference": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c"
         }
       ]
+    },
+    {
+      "revision": 2,
+      "recorded_at": "2026-11-09T03:53:07.383937+00:00",
+      "target_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "none_required": false,
+      "dependencies": [
+        {
+          "dependency_id": "dep_structurizr",
+          "version": "2026.09.19-playwright",
+          "source": "docker.io/structurizr/structurizr:2026.09.19-playwright",
+          "digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Reuse existing host Docker image by immutable digest; ephemeral containers and temporary fixture/output directories only. No pull, install, upgrade, repository writes, or service.",
+          "operation": "docker image inspect structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "cleanup_plan": "Containers use --rm and fixture/output directories use Python TemporaryDirectory; remove only check-owned temporary artifacts. Retain the pre-existing shared image.",
+          "verification_recipe": "/opt/conda/bin/python3.12 - <<'PY'\nimport json, os, pathlib, subprocess, tempfile\nimage = 'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\ninspected = json.loads(subprocess.check_output(['docker','image','inspect',image], text=True, timeout=10))[0]\nassert image in inspected['RepoDigests']\nassert (inspected['Os'], inspected['Architecture']) == ('linux','amd64')\nwith tempfile.TemporaryDirectory(prefix='epic034-c4-check-') as directory:\n    root = pathlib.Path(directory)\n    root.chmod(0o755)\n    (root/'workspace.dsl').write_text('workspace {\\n model {\\n  reviewer = person \"Reviewer\"\\n  cascade = softwareSystem \"Cascade\"\\n  reviewer -> cascade \"Reviews plans\"\\n }\\n views {\\n  systemContext cascade \"context\" {\\n   include *\\n   autoLayout lr\\n  }\\n }\\n}\\n')\n    base = ['docker','run','--rm','--pull=never','--network=none','--read-only','--cap-drop=ALL','--security-opt=no-new-privileges','--pids-limit=256','--memory=1536m','--cpus=2','--tmpfs','/tmp:rw,size=512m','--user',f'{os.getuid()}:{os.getgid()}','-e','HOME=/tmp','-e','PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1','-v',f'{directory}:/usr/local/structurizr:rw',image]\n    for args in [['validate','-workspace','workspace.dsl'],['export','-workspace','workspace.dsl','-format','json','-output','out'],['export','-workspace','workspace.dsl','-format','svg','-output','out']]:\n        subprocess.run(base+args, check=True, timeout=55)\n    model = json.loads((root/'out/workspace.json').read_text())\n    assert model['views']['systemContextViews'][0]['key'] == 'context'\n    assert '<svg' in (root/'out/context.svg').read_text()\nprint('PASS structurizr 2026.09.19-playwright sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c: offline DSL validation, JSON export, SVG render')\nPY",
+          "requested_range": "2026.09.19-playwright",
+          "resolved_version": "2026.09.19-playwright",
+          "expected_verification_result": "Exit 0; pinned image is linux/amd64; DSL validates; exported JSON has context view; context.svg contains SVG; printed PASS. No network or dependency installation.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [
+            "2026-11-09 Epic Manager planning smoke: validate, JSON export, and SVG export all exited 0 using the declared digest, --pull=never and --network=none. Advisory evidence only; canonical dependency check still required."
+          ],
+          "install_destination": "Existing Docker image store on ip-172-31-37-14; no new installation requested",
+          "lock_references": [
+            "https://docs.structurizr.com/binaries"
+          ],
+          "integrity_reference": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c"
+        }
+      ]
     }
   ]
 }
