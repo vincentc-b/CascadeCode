@@ -1,0 +1,610 @@
+"""Bounded, offline Structurizr rendering for validated C4 source closures."""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import tempfile
+import threading
+import time
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Literal
+
+from cascade.workspace.c4_closure import C4SourceClosure
+
+
+STRUCTURIZR_IMAGE_DIGEST = (
+    "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c"
+)
+STRUCTURIZR_IMAGE = f"structurizr/structurizr@{STRUCTURIZR_IMAGE_DIGEST}"
+_WORKSPACE_JS = re.compile(r"const jsonAsString = '([A-Za-z0-9+/=]+)';\s*")
+_VIEW_COLLECTIONS = (
+    "customViews",
+    "systemLandscapeViews",
+    "systemContextViews",
+    "containerViews",
+    "componentViews",
+    "dynamicViews",
+    "deploymentViews",
+    "filteredViews",
+    "imageViews",
+)
+
+RenderStatus = Literal[
+    "first", "running", "empty", "ready", "render_error", "cancelled"
+]
+FailureCode = Literal[
+    "image_unavailable",
+    "validation_failed",
+    "export_failed",
+    "invalid_artifact",
+    "timeout",
+    "internal_error",
+]
+
+
+@dataclass(frozen=True)
+class C4RenderSettings:
+    """Artifact-affecting settings and hard execution bounds."""
+
+    timeout_seconds: float = 90.0
+    memory: str = "1536m"
+    cpus: str = "2"
+    pids_limit: int = 256
+    tmpfs_size: str = "512m"
+
+    def __post_init__(self) -> None:
+        if self.timeout_seconds <= 0:
+            raise ValueError("render timeout must be positive")
+        if self.pids_limit <= 0:
+            raise ValueError("render pids_limit must be positive")
+        for name in ("memory", "cpus", "tmpfs_size"):
+            if not getattr(self, name) or any(
+                character.isspace() for character in getattr(self, name)
+            ):
+                raise ValueError(f"render {name} must be a nonempty token")
+
+    def cache_payload(self) -> dict[str, object]:
+        return {
+            "timeout_seconds": self.timeout_seconds,
+            "memory": self.memory,
+            "cpus": self.cpus,
+            "pids_limit": self.pids_limit,
+            "tmpfs_size": self.tmpfs_size,
+        }
+
+
+@dataclass(frozen=True)
+class C4RenderFailure:
+    code: FailureCode
+    stage: str
+    message: str
+
+
+@dataclass(frozen=True)
+class C4RenderArtifact:
+    """Consumer-facing state and immutable paths for one render operation."""
+
+    status: RenderStatus
+    closure_digest: str
+    image_digest: str = STRUCTURIZR_IMAGE_DIGEST
+    cache_key: str | None = None
+    cache_hit: bool = False
+    artifact_directory: Path | None = None
+    semantic_workspace: Path | None = None
+    embedded_workspace: Path | None = None
+    static_directory: Path | None = None
+    svg_files: tuple[Path, ...] = ()
+    view_keys: tuple[str, ...] = ()
+    revision: str | None = None
+    source_files: tuple[str, ...] = ()
+    failure: C4RenderFailure | None = None
+
+    @classmethod
+    def first(cls, closure_digest: str = "") -> C4RenderArtifact:
+        return cls(status="first", closure_digest=closure_digest)
+
+
+class C4RenderOperation:
+    """A cancellable background artifact operation."""
+
+    def __init__(
+        self,
+        renderer: C4ArtifactRenderer,
+        closure: C4SourceClosure,
+        settings: C4RenderSettings,
+    ) -> None:
+        self._renderer = renderer
+        self._closure = closure
+        self._settings = settings
+        self._cancel = threading.Event()
+        self._done = threading.Event()
+        self._lock = threading.Lock()
+        self._result = replace(C4RenderArtifact.first(closure.digest), status="running")
+        self._thread = threading.Thread(
+            target=self._work,
+            name=f"c4-render-{closure.digest[:12]}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def snapshot(self) -> C4RenderArtifact:
+        with self._lock:
+            return self._result
+
+    def cancel(self) -> bool:
+        if self._done.is_set():
+            return False
+        self._cancel.set()
+        return True
+
+    def wait(self, timeout: float | None = None) -> C4RenderArtifact:
+        if not self._done.wait(timeout):
+            raise TimeoutError("C4 render operation is still running")
+        return self.snapshot()
+
+    def _work(self) -> None:
+        try:
+            result = self._renderer._render(self._closure, self._settings, self._cancel)
+        except Exception as exc:  # Keep background failures structured for consumers.
+            result = C4RenderArtifact(
+                status="render_error",
+                closure_digest=self._closure.digest,
+                revision=self._closure.revision,
+                failure=C4RenderFailure("internal_error", "renderer", str(exc)),
+            )
+        with self._lock:
+            self._result = result
+        self._done.set()
+
+
+class C4ArtifactRenderer:
+    """Render and atomically cache artifacts from an already-confined closure."""
+
+    def __init__(self, cache_directory: Path | str, *, runtime: str = "docker") -> None:
+        self.cache_directory = Path(cache_directory).resolve()
+        self.runtime = runtime
+
+    def submit(
+        self,
+        closure: C4SourceClosure,
+        settings: C4RenderSettings | None = None,
+    ) -> C4RenderOperation:
+        if not closure.input_directory.is_dir():
+            raise ValueError("C4 source closure input directory does not exist")
+        return C4RenderOperation(self, closure, settings or C4RenderSettings())
+
+    def _render(
+        self,
+        closure: C4SourceClosure,
+        settings: C4RenderSettings,
+        cancelled: threading.Event,
+    ) -> C4RenderArtifact:
+        cache_key = _cache_key(closure.digest, settings)
+        destination = self.cache_directory / cache_key
+        if destination.is_dir():
+            return _load_artifact(destination, closure, cache_key, cache_hit=True)
+        if cancelled.is_set():
+            return _cancelled(closure, cache_key)
+
+        self.cache_directory.mkdir(parents=True, exist_ok=True)
+        temporary = Path(
+            tempfile.mkdtemp(prefix=f".{cache_key}.", dir=self.cache_directory)
+        )
+        try:
+            output = temporary / "output"
+            output.mkdir()
+            for name in ("json", "static", "svg"):
+                (output / name).mkdir()
+            if os.getuid() == 0:
+                for directory in (output, *(output.iterdir())):
+                    directory.chmod(0o777)
+            deadline = time.monotonic() + settings.timeout_seconds
+            inspected = _run_process(
+                [self.runtime, "image", "inspect", STRUCTURIZR_IMAGE],
+                deadline,
+                cancelled,
+            )
+            if inspected.kind:
+                return _process_failure(closure, cache_key, "image", inspected)
+            try:
+                image = json.loads(inspected.stdout)[0]
+                if STRUCTURIZR_IMAGE not in image["RepoDigests"]:
+                    raise ValueError("immutable digest is absent from local image metadata")
+            except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                return _failed(
+                    closure,
+                    cache_key,
+                    "image_unavailable",
+                    "image",
+                    f"pinned Structurizr image cannot be verified: {exc}",
+                )
+
+            source = f"/workspace/{closure.source.as_posix()}"
+            stages = (
+                ("validation", ["validate", "-workspace", source]),
+                (
+                    "json_export",
+                    [
+                        "export",
+                        "-workspace",
+                        source,
+                        "-format",
+                        "json",
+                        "-output",
+                        "/output/json",
+                    ],
+                ),
+                (
+                    "static_export",
+                    [
+                        "export",
+                        "-workspace",
+                        source,
+                        "-format",
+                        "static",
+                        "-output",
+                        "/output/static",
+                    ],
+                ),
+                (
+                    "svg_export",
+                    [
+                        "export",
+                        "-workspace",
+                        source,
+                        "-format",
+                        "svg",
+                        "-output",
+                        "/output/svg",
+                    ],
+                ),
+            )
+            for stage, arguments in stages:
+                result = _run_process(
+                    self._container_command(closure, output, settings, arguments),
+                    deadline,
+                    cancelled,
+                )
+                if result.kind:
+                    return _process_failure(closure, cache_key, stage, result)
+
+            try:
+                view_keys = _validate_outputs(output)
+                embedded = _embedded_workspace(output / "static" / "workspace.js")
+                (output / "embedded-workspace.json").write_text(
+                    json.dumps(embedded, sort_keys=True, separators=(",", ":")),
+                    encoding="utf-8",
+                )
+                status: RenderStatus = "ready" if view_keys else "empty"
+                manifest = {
+                    "version": 1,
+                    "status": status,
+                    "cache_key": cache_key,
+                    "closure_digest": closure.digest,
+                    "image": STRUCTURIZR_IMAGE,
+                    "image_digest": STRUCTURIZR_IMAGE_DIGEST,
+                    "settings": settings.cache_payload(),
+                    "revision": closure.revision,
+                    "source": closure.source.as_posix(),
+                    "source_files": [
+                        {
+                            "path": item.path.as_posix(),
+                            "owner": item.owner,
+                            "revision": item.revision,
+                            "sha256": item.sha256,
+                        }
+                        for item in closure.files
+                    ],
+                    "view_keys": list(view_keys),
+                    "svg_files": [
+                        path.relative_to(output).as_posix()
+                        for path in sorted((output / "svg").glob("*.svg"))
+                    ],
+                }
+                (temporary / "manifest.json").write_text(
+                    json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+            except (OSError, ValueError, ET.ParseError, json.JSONDecodeError) as exc:
+                return _failed(
+                    closure,
+                    cache_key,
+                    "invalid_artifact",
+                    "publish",
+                    f"Structurizr produced invalid artifacts: {exc}",
+                )
+
+            published = True
+            try:
+                os.rename(temporary, destination)
+            except FileExistsError:
+                published = False
+            return _load_artifact(
+                destination, closure, cache_key, cache_hit=not published
+            )
+        finally:
+            if temporary.exists():
+                shutil.rmtree(temporary, ignore_errors=True)
+
+    def _container_command(
+        self,
+        closure: C4SourceClosure,
+        output: Path,
+        settings: C4RenderSettings,
+        arguments: list[str],
+    ) -> list[str]:
+        return [
+            self.runtime,
+            "run",
+            "--rm",
+            "--pull=never",
+            "--network=none",
+            "--read-only",
+            "--cap-drop=ALL",
+            "--security-opt=no-new-privileges",
+            f"--pids-limit={settings.pids_limit}",
+            f"--memory={settings.memory}",
+            f"--cpus={settings.cpus}",
+            "--tmpfs",
+            f"/tmp:rw,nosuid,nodev,size={settings.tmpfs_size}",
+            "--user",
+            _container_identity(),
+            "-e",
+            "HOME=/tmp",
+            "-e",
+            "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
+            "-e",
+            "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1",
+            "-v",
+            f"{closure.input_directory.resolve()}:/workspace:ro",
+            "-v",
+            f"{output.resolve()}:/output:rw",
+            STRUCTURIZR_IMAGE,
+            *arguments,
+        ]
+
+
+@dataclass(frozen=True)
+class _ProcessResult:
+    kind: Literal["", "cancelled", "timeout", "failed"]
+    returncode: int
+    stdout: str = ""
+    stderr: str = ""
+
+
+def _run_process(
+    command: list[str], deadline: float, cancelled: threading.Event
+) -> _ProcessResult:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return _ProcessResult("timeout", -1)
+    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as stdout_file:
+        with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as stderr_file:
+            try:
+                process = subprocess.Popen(
+                    command,
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    text=True,
+                    start_new_session=True,
+                )
+            except OSError as exc:
+                return _ProcessResult("failed", -1, stderr=str(exc))
+            while process.poll() is None:
+                wait = min(0.1, max(0.0, deadline - time.monotonic()))
+                if cancelled.wait(wait):
+                    _stop_process(process)
+                    return _ProcessResult("cancelled", process.returncode or -1)
+                if time.monotonic() >= deadline:
+                    _stop_process(process)
+                    return _ProcessResult("timeout", process.returncode or -1)
+            stdout_file.seek(0)
+            stderr_file.seek(0)
+            stdout = stdout_file.read()
+            stderr = stderr_file.read()
+            return _ProcessResult(
+                "" if process.returncode == 0 else "failed",
+                process.returncode,
+                stdout[-8192:],
+                stderr[-8192:],
+            )
+
+
+def _stop_process(process: subprocess.Popen[str]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+        process.wait(timeout=2)
+    except (ProcessLookupError, subprocess.TimeoutExpired):
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+
+
+def _container_identity() -> str:
+    """Return an explicit non-root identity even for root-run host services."""
+    if os.getuid() == 0:
+        return "65532:65532"
+    return f"{os.getuid()}:{os.getgid()}"
+
+
+def _process_failure(
+    closure: C4SourceClosure,
+    cache_key: str,
+    stage: str,
+    process: _ProcessResult,
+) -> C4RenderArtifact:
+    if process.kind == "cancelled":
+        return _cancelled(closure, cache_key)
+    if process.kind == "timeout":
+        return _failed(
+            closure, cache_key, "timeout", stage, "Structurizr render exceeded its deadline"
+        )
+    code = "image_unavailable" if stage == "image" else (
+        "validation_failed" if stage == "validation" else "export_failed"
+    )
+    detail = (process.stderr or process.stdout).strip()
+    message = f"Structurizr {stage} exited {process.returncode}"
+    if detail:
+        message = f"{message}: {detail}"
+    return _failed(closure, cache_key, code, stage, message)
+
+
+def _failed(
+    closure: C4SourceClosure,
+    cache_key: str,
+    code: FailureCode,
+    stage: str,
+    message: str,
+) -> C4RenderArtifact:
+    return C4RenderArtifact(
+        status="render_error",
+        closure_digest=closure.digest,
+        cache_key=cache_key,
+        revision=closure.revision,
+        source_files=tuple(item.path.as_posix() for item in closure.files),
+        failure=C4RenderFailure(code, stage, message),
+    )
+
+
+def _cancelled(closure: C4SourceClosure, cache_key: str) -> C4RenderArtifact:
+    return C4RenderArtifact(
+        status="cancelled",
+        closure_digest=closure.digest,
+        cache_key=cache_key,
+        revision=closure.revision,
+        source_files=tuple(item.path.as_posix() for item in closure.files),
+    )
+
+
+def _cache_key(closure_digest: str, settings: C4RenderSettings) -> str:
+    encoded = json.dumps(
+        {
+            "closure_digest": closure_digest,
+            "image_digest": STRUCTURIZR_IMAGE_DIGEST,
+            "settings": settings.cache_payload(),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _embedded_workspace(path: Path) -> dict[str, object]:
+    match = _WORKSPACE_JS.fullmatch(path.read_text(encoding="utf-8"))
+    if match is None:
+        raise ValueError("unexpected static workspace.js wrapper")
+    decoded = base64.b64decode(match.group(1), validate=True)
+    payload = json.loads(decoded)
+    if not isinstance(payload, dict):
+        raise ValueError("embedded workspace is not an object")
+    return payload
+
+
+def _view_keys(workspace: dict[str, object]) -> tuple[str, ...]:
+    views = workspace.get("views")
+    if not isinstance(views, dict):
+        raise ValueError("workspace JSON has no views object")
+    keys: list[str] = []
+    for collection_name in _VIEW_COLLECTIONS:
+        collection = views.get(collection_name, [])
+        if not isinstance(collection, list):
+            raise ValueError(f"workspace view collection {collection_name} is invalid")
+        for view in collection:
+            if not isinstance(view, dict) or not isinstance(view.get("key"), str):
+                raise ValueError(f"workspace view in {collection_name} has no key")
+            keys.append(view["key"])
+    if len(keys) != len(set(keys)):
+        raise ValueError("workspace JSON contains duplicate view keys")
+    return tuple(sorted(keys))
+
+
+def _validate_outputs(output: Path) -> tuple[str, ...]:
+    semantic = json.loads((output / "json" / "workspace.json").read_text(encoding="utf-8"))
+    embedded = _embedded_workspace(output / "static" / "workspace.js")
+    semantic_keys = _view_keys(semantic)
+    if semantic_keys != _view_keys(embedded):
+        raise ValueError("semantic and static exports disagree on view inventory")
+    svg_files = sorted((output / "svg").glob("*.svg"))
+    for svg in svg_files:
+        root = ET.parse(svg).getroot()
+        if root.tag.rsplit("}", 1)[-1] != "svg":
+            raise ValueError(f"export is not SVG: {svg.name}")
+    if semantic_keys and not svg_files:
+        raise ValueError("no SVG files were exported for nonempty views")
+    if not (output / "static" / "index.html").is_file():
+        raise ValueError("static export has no index.html")
+    return semantic_keys
+
+
+def _load_artifact(
+    directory: Path,
+    closure: C4SourceClosure,
+    cache_key: str,
+    *,
+    cache_hit: bool,
+) -> C4RenderArtifact:
+    try:
+        manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+        if (
+            manifest["version"] != 1
+            or manifest["cache_key"] != cache_key
+            or manifest["closure_digest"] != closure.digest
+            or manifest["image_digest"] != STRUCTURIZR_IMAGE_DIGEST
+            or manifest["revision"] != closure.revision
+        ):
+            raise ValueError("cache manifest provenance does not match request")
+        expected_sources = [
+            {
+                "path": item.path.as_posix(),
+                "owner": item.owner,
+                "revision": item.revision,
+                "sha256": item.sha256,
+            }
+            for item in closure.files
+        ]
+        if manifest["source_files"] != expected_sources:
+            raise ValueError("cache manifest source provenance does not match request")
+        output = directory / "output"
+        view_keys = _validate_outputs(output)
+        if list(view_keys) != manifest["view_keys"]:
+            raise ValueError("cache manifest view inventory is invalid")
+        status = manifest["status"]
+        if status not in ("ready", "empty"):
+            raise ValueError("cache manifest status is invalid")
+        svg_files = tuple(output / item for item in manifest["svg_files"])
+        if any(not path.is_file() for path in svg_files):
+            raise ValueError("cache manifest names a missing SVG")
+    except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError, ET.ParseError) as exc:
+        return _failed(
+            closure,
+            cache_key,
+            "invalid_artifact",
+            "cache",
+            f"cached Structurizr artifact is invalid: {exc}",
+        )
+    return C4RenderArtifact(
+        status=status,
+        closure_digest=closure.digest,
+        cache_key=cache_key,
+        cache_hit=cache_hit,
+        artifact_directory=directory,
+        semantic_workspace=output / "json" / "workspace.json",
+        embedded_workspace=output / "embedded-workspace.json",
+        static_directory=output / "static",
+        svg_files=svg_files,
+        view_keys=view_keys,
+        revision=closure.revision,
+        source_files=tuple(item["path"] for item in manifest["source_files"]),
+    )

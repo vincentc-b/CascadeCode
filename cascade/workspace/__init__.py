@@ -44,6 +44,15 @@ from cascade.workspace.c4_closure import (
     C4SourceFile,
     materialize_c4_source_closure,
 )
+from cascade.workspace.c4_render import (
+    STRUCTURIZR_IMAGE,
+    STRUCTURIZR_IMAGE_DIGEST,
+    C4ArtifactRenderer,
+    C4RenderArtifact,
+    C4RenderFailure,
+    C4RenderOperation,
+    C4RenderSettings,
+)
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -61,6 +70,11 @@ __all__ = [
     "C4SourceError",
     "C4SourceClosure",
     "C4SourceFile",
+    "C4ArtifactRenderer",
+    "C4RenderArtifact",
+    "C4RenderFailure",
+    "C4RenderOperation",
+    "C4RenderSettings",
     "C4View",
     "C4WorkspaceContract",
     "find_project_config",
@@ -84,5 +98,7 @@ __all__ = [
     "resolve_product_trunk",
     "validate_c4_workspace",
     "materialize_c4_source_closure",
+    "STRUCTURIZR_IMAGE",
+    "STRUCTURIZR_IMAGE_DIGEST",
     "up",
 ]

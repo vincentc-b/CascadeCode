@@ -165,6 +165,10 @@ def materialize_c4_source_closure(
     temporary = Path(
         tempfile.mkdtemp(prefix=f".{destination_path.name}.", dir=destination_path.parent)
     )
+    # The renderer is deliberately non-root.  Source remains read-only in the
+    # container, but its mount point must be traversable when the host runs as
+    # root and the container falls back to an unprivileged identity.
+    temporary.chmod(0o755)
     try:
         for entry in entries:
             output = temporary / entry.path
