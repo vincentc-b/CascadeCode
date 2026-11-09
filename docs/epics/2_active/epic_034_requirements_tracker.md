@@ -235,6 +235,11 @@ Pending planning work: canonical `run_dependency_check` for `dep_structurizr` ag
   Chose Correct the manifest's feasibility_proof_requirements to an empty artifact-ID list; retain the complete executable DSL validation, JSON export, and SVG rendering verification recipe and exact pinned image..
   Rationale: The now-available canonical check rejected manifest revision 1 before execution because feasibility_proof_requirements contains a prose description where the bootstrap contract expects separately declared artifact IDs. All described checks already run and assert results in verification_recipe; no separate feasibility artifact is required for this installation check. This schema correction removes no executable validation and grants no installation authority. Feature B still owns the semantic SVG mapping proof.
   Honors: dec_004–dec_005; canonical dependency verification before feature minting and sign-off; no fabricated evidence, installation, or reduced acceptance coverage..
+
+- `dec_010` · 2026-11-09 · Epic Manager · **Core dependencies**
+  Chose Keep advisory smoke narrative in the epic's history, not feasibility_proof_references; leave both separate-feasibility fields empty and require canonical execution of the unchanged full verification recipe..
+  Rationale: Manifest revision 2 ran the complete check successfully and printed PASS, but evidence acceptance rejected the old advisory prose because proof references must occur in executor lock references. The narrative was never a machine-verifiable artifact reference. Removing this incorrectly typed advisory entry makes the declaration match its intended no-separate-artifact check; canonical execution remains required and authoritative.
+  Honors: dec_004 and dec_009; preserve DSL/JSON/SVG assertions, exact digest and environment, and Feature B's semantic mapping acceptance checkpoint. No installation or fabricated proof..
 ## Amendment log
 
 _(none)_
