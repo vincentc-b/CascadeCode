@@ -13,7 +13,7 @@ from cascade.board.gitutil import _run, has_git
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.init import _BOARD_TIERS
 from cascade.workspace.lock import SupervisorLock
-from cascade.workspace.project_config import find_project_config, read_tracking_repository
+from cascade.workspace.project_config import find_project_config, read_project_configuration
 from cascade.workspace.repository_resolver import (
     prepare_tracking_repository,
     synchronize_tracking_repository,
@@ -169,8 +169,9 @@ def prepare_up(root: Path | None = None) -> WorkspaceRoot:
         )
 
     config = find_project_config(path)
+    settings = read_project_configuration(config)
     project = ProjectContext.colocated(path)
-    tracking_reference = read_tracking_repository(config)
+    tracking_reference = settings.tracking_repository
     if tracking_reference is not None:
         tracking = prepare_tracking_repository(
             tracking_reference,
@@ -183,7 +184,10 @@ def prepare_up(root: Path | None = None) -> WorkspaceRoot:
         project = ProjectContext(
             target=project.target,
             tracking=tracking,
+            architecture_destination=settings.architecture_destination,
         )
+    elif settings.architecture_destination != "target":  # parser guards this invariant
+        raise WorkspaceError("tracking architecture requires a tracking repository")
 
     set_project_context(project)
 
