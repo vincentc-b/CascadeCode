@@ -225,6 +225,11 @@ Pending planning work: canonical `run_dependency_check` for `dep_structurizr` ag
   Chose Deliver minimum owner-scoped staging and review in C alongside its gates; F extends tier-specific authoring, amendments, replay access, and closure..
   Rationale: Enabling mandatory proposal checks before any authorized proposal path exists would block delivery of F itself. Explicit versioned enablement preserves in-flight work while requiring exact artifact review for new or materially revised proposals and never admitting a claimed but missing model.
   Honors: Success criteria 4–6, 10 and 12; no new approval service or broadened board authority..
+
+- `dec_008` · 2026-11-09 · Epic Manager · **Manager review and planning readiness**
+  Chose Accept the Architect's refinements in dec_005–dec_007 within the existing seven delivery slices; retain the canonical dependency gate before feature minting and sign-off..
+  Rationale: Reliable SVG selection, lineage-safe acceptance recovery, and an authoring path available when gates activate are necessary to deliver the existing brief. The feature graph covers all 18 criteria, including non-Cascade commits and MR/PR descriptions, without widening release scope. Manager review is complete; manifest revision 1 still reports missing_check and no canonical check tool is exposed in this session.
+  Honors: Success criteria 1–18; frugal scope and existing approval boundaries; dec_002 and dec_004. Human replay request remains covered by dec_001..
 ## Amendment log
 
 _(none)_
