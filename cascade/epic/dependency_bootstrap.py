@@ -719,6 +719,39 @@ def create_bootstrap(
     return _append(epic_id, snapshot, root=root, expected_revision=expected_revision)
 
 
+def ensure_dependency_scope(epic_id: str, *, root: Path) -> BootstrapSnapshot:
+    """Derive ordinary check bounds from the manifest, without granting authority.
+
+    Separate feasibility artifacts, when explicitly configured, retain their
+    own authorization. Installation still requires an exact human binding.
+    """
+    from cascade.epic.dependency_lock import dependency_state_lock
+
+    with dependency_state_lock(root=root):
+        manifest = require_dependency_manifest(epic_id, root=root)
+        current = read_bootstrap(epic_id, root=root)
+        if current is not None and current.scope.manifest_revision == manifest.revision:
+            return current
+        scope = BootstrapScope(
+            manifest_revision=manifest.revision,
+            entries=tuple(BootstrapEntryScope(
+                dependency_id=entry.dependency_id, source=entry.source,
+                integrity_reference=entry.integrity_reference,
+                setup_operation=entry.operation, check_operation=entry.verification_recipe,
+                paths=(entry.install_destination,), destination=entry.install_destination,
+                cleanup=entry.cleanup_plan,
+            ) for entry in manifest.dependencies),
+            feasibility_artifacts=current.scope.feasibility_artifacts if current else (),
+            limits=current.scope.limits if current else BootstrapLimits(
+                timeout_seconds=180, max_attempts=5, max_output_bytes=32768,
+            ),
+        )
+        return create_bootstrap(
+            epic_id, scope, root=root,
+            expected_revision=current.revision if current else 0,
+        )
+
+
 def authorize_feasibility(
     epic_id: str,
     artifact_ids: Sequence[str],

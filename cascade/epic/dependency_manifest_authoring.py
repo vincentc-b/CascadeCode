@@ -1,7 +1,7 @@
 """Epic-scoped canonical dependency-manifest read and write operations.
 
-This service only declares dependency requirements.  It deliberately exposes
-no installation, approval, check, or execution capability.
+Declarations trigger bounded verification. They never grant installation
+authority; setup requires a separate, current human approval.
 """
 
 from __future__ import annotations
@@ -106,7 +106,23 @@ def write_dependency_manifest(
             root=repo,
             expected_revision=expected_revision,
         )
-        return _result(epic_id, snapshot, root=repo)
+    # Never hold the state lock across subprocess execution. Revalidation
+    # re-reads the manifest and checks installation authority at dispatch.
+    verification = None
+    if snapshot.dependencies:
+        from cascade.epic.dependency_checks import run_dependency_check
+        from cascade.epic.dependency_resume import DependencyResumeError
+
+        try:
+            verification = run_dependency_check(epic_id=epic_id, root=root)
+        except DependencyResumeError as exc:
+            # The manifest is already durable; a concurrent check must not
+            # make the successful write look like a revision-conflict retry.
+            verification = {"pending": True, "detail": str(exc)}
+    with dependency_state_lock(root=repo):
+        result = _result(epic_id, read_canonical_manifest(epic_id, root=repo), root=repo)
+    result["verification"] = verification
+    return result
 
 
 def _result(

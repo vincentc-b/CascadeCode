@@ -138,7 +138,8 @@
 
   function appendBootstrap(document, body, projection, runAction) {
     var bootstrap = projection.bootstrap;
-    if (!bootstrap) return;
+    // Ordinary dependency bounds are derived automatically, not another human gate.
+    if (!bootstrap || !bootstrap.scope || !(bootstrap.scope.feasibility_artifacts || []).length) return;
     var section = document.createElement("section");
     section.className = "dependency-review-bootstrap";
     appendText(document, section, "h4", "dependency-review-subheading", "Bootstrap review");
@@ -211,11 +212,12 @@
       heading,
       "span",
       "dependency-review-badge dependency-review-approval-" + String(approvalState || "missing"),
-      "Installation approval: " + stateLabel(approvalState)
+      "Installation approval: " + (row.status === "ready" && approvalState !== "current"
+        ? "not needed (already verified)" : stateLabel(approvalState))
     );
     card.appendChild(heading);
 
-    if (approvalState !== "current") {
+    if (approvalState !== "current" && row.status !== "ready") {
       var choice = document.createElement("label");
       choice.className = "dependency-review-select";
       var checkbox = document.createElement("input");
@@ -314,7 +316,7 @@
 
     var overview = document.createElement("dl");
     overview.className = "dependency-review-fields dependency-review-overview";
-    appendField(document, overview, "Bootstrap status", stateLabel(projection.status));
+    appendField(document, overview, "Verification status", stateLabel(projection.status));
     appendField(document, overview, "Responsible actor", projection.responsible_actor || "None");
     appendField(
       document,
@@ -382,7 +384,11 @@
         var next = bodyResult && bodyResult.dependency_status;
         var rendered = next ? applyProjection(next) : { feedback: feedback };
         rendered.feedback.hidden = false;
-        rendered.feedback.textContent = "Dependency state refreshed.";
+        var continuation = bodyResult && (bodyResult.continuation || bodyResult.ping);
+        rendered.feedback.textContent = continuation
+          ? (continuation.ready ? "Dependencies verified. Planning can continue."
+            : continuation.next_action || "Verification is still blocked. Review the failure details below; installation approval is separate from verification.")
+          : "Dependency state refreshed.";
         return bodyResult;
       }).catch(function (error) {
         var errorBody = error && error.body;
@@ -411,7 +417,7 @@
     var controls = document.createElement("div");
     controls.className = "dependency-review-controls";
     var approvable = (projection.dependencies || []).some(function (row) {
-      return !row.installation_approval || row.installation_approval.state !== "current";
+      return row.status !== "ready" && (!row.installation_approval || row.installation_approval.state !== "current");
     });
     if (approvable && projection.manifest) {
       var approve = appendText(document, controls, "button", "dependency-review-action", "Approve selected installations");
@@ -426,7 +432,7 @@
           feedback.textContent = "Select at least one dependency binding to approve.";
           return;
         }
-        runAction(approve, "Recording independent installation approvals…", "/api/approve_dependency_installations", {
+        runAction(approve, "Approving installation and verifying dependencies…", "/api/approve_dependency_installations", {
           epic_id: projection.epic_id,
           manifest_revision: projection.manifest.revision,
           entries: entries,
@@ -435,7 +441,8 @@
     }
 
     var pingId = requestId(projection.epic_id, projection);
-    var ping = appendText(document, controls, "button", "dependency-review-action", "Ping team after completion");
+    appendText(document, controls, "p", "dependency-review-guidance", "Existing installations are verified automatically. Human approval permits only the displayed installation; verification and planning continuation then run automatically.");
+    var ping = appendText(document, controls, "button", "dependency-review-action", "Retry verification");
     ping.type = "button";
     ping.addEventListener("click", function () {
       runAction(ping, "Requesting a same-run dependency recheck…", "/api/ping_dependency_team", {

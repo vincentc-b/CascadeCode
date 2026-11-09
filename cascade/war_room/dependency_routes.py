@@ -184,11 +184,36 @@ def handle_installation_approval(
         _refuse(handler, HTTPStatus.BAD_REQUEST, "installation_approval_refused", str(exc), epic_id)
         return
 
-    _accepted(
-        handler,
-        epic_id,
-        {"approvals": [row.to_dict() for row in approvals]},
-    )
+    continuation: dict[str, object]
+    try:
+        result = resume_dependency_bootstrap(
+            epic_id,
+            "installation-" + "-".join(row.approval_id for row in approvals),
+            executor=handler.server.dependency_executor,
+            root=handler.server.root,
+            approval_references={row.binding.dependency_id: row.approval_id for row in approvals},
+            requester=human,
+            coordinate_planning=False,
+        )
+        continuation = result.to_dict()
+        if result.ready:
+            from cascade.workspace.kickoff import kickoff_turn
+            from cascade.workspace.types import KickoffReason
+            kickoff_turn(KickoffReason(
+                kind="human_message", work_id=epic_id, by=human.subject,
+                root=handler.server.root,
+                message={"role": "human", "content": "Approved dependency setup was verified; continue planning."},
+            ))
+            continuation["planning_resumed"] = True
+    except Exception as exc:
+        # Approval is already durable. Report continuation failure separately
+        # so the UI does not imply either successful validation or lost approval.
+        continuation = {"ready": False, "error": type(exc).__name__,
+                        "next_action": "Installation approval saved. Retry verification or inspect the dependency failure."}
+    _accepted(handler, epic_id, {
+        "approvals": [row.to_dict() for row in approvals],
+        "continuation": continuation,
+    })
 
 
 def handle_ping_team(handler: WarRoomRequestHandler, body: dict[str, Any]) -> None:
@@ -283,7 +308,7 @@ def _authenticated_human(
             handler,
             HTTPStatus.UNAUTHORIZED,
             "human_authentication_required",
-            "this authority-granting action requires a trusted authenticated human boundary",
+            "Open the authenticated War Room launch URL on this forwarded address to establish your human session, then retry. The plain SSH-forwarded URL does not authorize installation.",
             epic_id,
         )
         return None

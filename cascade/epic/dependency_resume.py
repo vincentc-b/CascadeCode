@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import fcntl
+import time
+from contextlib import contextmanager
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +27,7 @@ from cascade.epic.dependency_bootstrap import (
     BootstrapBlocker,
     BootstrapState,
     clear_bootstrap_blockers,
+    ensure_dependency_scope,
     project_bootstrap,
     read_bootstrap,
     record_bootstrap_blockers,
@@ -83,7 +87,42 @@ class DependencyResumeResult:
         }
 
 
+@contextmanager
+def _dependency_operation_lock(epic_id: str, *, root: Path):
+    """Serialize team and UI execution without holding a metadata lock."""
+    from cascade.epic.dependency_manifests import dependency_manifest_repository
+    repo = dependency_manifest_repository(epic_id, root=root)
+    home = repo / ".cascade" / "dependency_operation_locks"
+    home.mkdir(parents=True, exist_ok=True)
+    path = home / (hashlib.sha256(epic_id.encode()).hexdigest() + ".lock")
+    with path.open("a") as handle:
+        deadline = time.monotonic() + 1.0
+        while True:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise DependencyResumeError("Dependency verification is already running; refresh its status shortly")
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def resume_dependency_bootstrap(
+    epic_id: str, request_id: str, *, executor: BoundedOperationExecutor,
+    root: Path, **kwargs,
+) -> DependencyResumeResult:
+    """Serialize every team's or human's check/install/verify sequence per Epic."""
+    with _dependency_operation_lock(epic_id, root=root):
+        return _resume_dependency_bootstrap(
+            epic_id, request_id, executor=executor, root=root, **kwargs,
+        )
+
+
+def _resume_dependency_bootstrap(
     epic_id: str,
     request_id: str,
     *,
@@ -96,6 +135,7 @@ def resume_dependency_bootstrap(
     quiesce_timeout: float = 0.0,
     kickoff: Callable[[KickoffReason], None] | None = None,
     requester: AuthenticatedHuman | None = None,
+    coordinate_planning: bool = True,
 ) -> DependencyResumeResult:
     """Revalidate one human ping without treating it as authority or evidence.
 
@@ -108,9 +148,7 @@ def resume_dependency_bootstrap(
         raise DependencyResumeError("request_id must be non-blank text")
     if not isinstance(epic_id, str) or not epic_id.strip():
         raise DependencyResumeError("epic_id must be non-blank text")
-    bootstrap = read_bootstrap(epic_id, root=root)
-    if bootstrap is None:
-        raise DependencyResumeError(f"{epic_id} has no reviewed bootstrap scope")
+    bootstrap = ensure_dependency_scope(epic_id, root=root)
     approvals = dict(approval_references or {})
     if any(
         not isinstance(key, str) or not isinstance(value, str)
@@ -122,7 +160,7 @@ def resume_dependency_bootstrap(
 
     if requester is not None and not isinstance(requester, AuthenticatedHuman):
         raise DependencyResumeError("requester must be an authenticated human")
-    requester_id = requester.subject if requester is not None else "human"
+    requester_id = requester.subject if requester is not None else ("epic_team" if not coordinate_planning else "human")
     action_id = _action_id(epic_id, request_id)
     action = create_or_load_action(
         action_id,
@@ -156,19 +194,25 @@ def resume_dependency_bootstrap(
             execution_policy=execution_policy,
         )
 
-    lifecycle = gate or lifecycle_gate()
-    with lifecycle.transition(epic_id, (epic_id,), timeout=quiesce_timeout) as quiesced:
-        if quiesced:
-            action = resume_action(
-                action_id,
-                root=root,
-                execute=execute,
-                reclaim_running=reclaim_running,
-            )
+    if not coordinate_planning:
+        # A tool cannot quiesce its own turn. Automatic HTTP continuation also
+        # verifies without stopping planning, then queues its own continuation.
+        # The outer operation lock serializes both paths, and mutation admission
+        # still rechecks current human installation authority.
+        action = resume_action(action_id, root=root, execute=execute,
+                               reclaim_running=reclaim_running)
+    else:
+        lifecycle = gate or lifecycle_gate()
+        with lifecycle.transition(epic_id, (epic_id,), timeout=quiesce_timeout) as quiesced:
+            if quiesced:
+                action = resume_action(
+                    action_id, root=root, execute=execute,
+                    reclaim_running=reclaim_running,
+                )
 
     projection = project_bootstrap(epic_id, root=root)
     ready = projection.state is BootstrapState.READY
-    if executed and action.get("recovery_state") == "completed" and ready:
+    if coordinate_planning and executed and action.get("recovery_state") == "completed" and ready:
         (kickoff or _kickoff_planning)(
             KickoffReason(
                 kind="human_message",
