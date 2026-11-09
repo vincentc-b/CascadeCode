@@ -194,6 +194,11 @@ Pending planning work: Epic Architect review of the macro-architecture and rende
   Chose Deliver seven bounded slices A–G; retain requirement, view, element, and relationship comments, split-repository acceptance recovery, and living-epic revision controls..
   Rationale: The brief requires these capabilities. Scope economy comes from reusing existing board, viewer, comments, approvals, and lifecycle gates; defer freehand annotations, hosted services, diagram editing, and automatic rename inference. Mint only after canonical dependency readiness.
   Honors: All 18 success criteria; frugal engineering; existing human approval and scoped-authority boundaries..
+
+- `dec_003` · 2026-11-09 · Epic Manager · **Proposal lifecycle**
+  Chose Pin later proposals to the latest accepted architecture on the epic integration lineage; preserve completed children and represent split merges as acceptance_pending until both reviewed sides land..
+  Rationale: An accepted child changes the real baseline before the epic reaches trunk. Pending proposal edits cannot advance current architecture. Exact revision binding and scoped holds prevent stale approvals from covering changed or corrective work.
+  Honors: Success criteria 4, 10–11 and 15–18; preserve accepted commits and review lineage..
 ## Amendment log
 
 _(none)_
