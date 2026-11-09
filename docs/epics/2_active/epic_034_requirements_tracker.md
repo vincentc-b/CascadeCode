@@ -189,6 +189,11 @@ Pending planning work: Epic Architect review of the macro-architecture and rende
   Chose Include uncovered target Git commits and linked MR/PR descriptions in design replay. In reply to: cmt_001..
   Rationale: Completed Cascade records omit direct fixes and other changes. Reconcile pinned Git history with work records, deduplicate evidence, verify narratives against current code/tests, and explicitly ledger missing review provenance.
   Honors: Success criteria 13–14; human comment cmt_001; evidence-based design without historical plans becoming current truth..
+
+- `dec_002` · 2026-11-09 · Epic Manager · **Feature breakdown**
+  Chose Deliver seven bounded slices A–G; retain requirement, view, element, and relationship comments, split-repository acceptance recovery, and living-epic revision controls..
+  Rationale: The brief requires these capabilities. Scope economy comes from reusing existing board, viewer, comments, approvals, and lifecycle gates; defer freehand annotations, hosted services, diagram editing, and automatic rename inference. Mint only after canonical dependency readiness.
+  Honors: All 18 success criteria; frugal engineering; existing human approval and scoped-authority boundaries..
 ## Amendment log
 
 _(none)_
