@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,9 +60,7 @@ _VIEW_LAYOUT_KEYS = frozenset(
         "defaultElementView",
     }
 )
-_VIEW_SCOPE_IDS = frozenset(
-    {"softwareSystemId", "containerId", "elementId", "deploymentEnvironmentId"}
-)
+_VIEW_MODEL_SCOPE_IDS = frozenset({"softwareSystemId", "containerId", "elementId"})
 
 
 @dataclass(frozen=True)
@@ -284,7 +283,13 @@ def _state_diff(
 def _load_model(artifact: C4SemanticModelArtifact | None) -> _Model:
     if artifact is None or artifact.render.semantic_workspace is None:
         raise _DiffInputError("ready artifact has no semantic workspace")
-    payload = json.loads(Path(artifact.render.semantic_workspace).read_text(encoding="utf-8"))
+    workspace_bytes = Path(artifact.render.semantic_workspace).read_bytes()
+    expected_hash = artifact.render.semantic_workspace_sha256
+    if not expected_hash:
+        raise _DiffInputError("ready artifact has no verified semantic workspace digest")
+    if hashlib.sha256(workspace_bytes).hexdigest() != expected_hash:
+        raise _DiffInputError("semantic workspace bytes changed after render validation")
+    payload = json.loads(workspace_bytes)
     if not isinstance(payload, dict) or not isinstance(payload.get("model"), dict):
         raise _DiffInputError("workspace JSON has no model object")
 
@@ -436,8 +441,19 @@ def _view_properties(
     for key, item in value.items():
         if key in _VIEW_MEMBER_KEYS or key in _VIEW_LAYOUT_KEYS or key == "key":
             continue
-        if key in _VIEW_SCOPE_IDS and isinstance(item, (str, int)):
-            result[key] = export_ids.get(str(item), str(item))
+        if key in _VIEW_MODEL_SCOPE_IDS:
+            if not isinstance(item, (str, int)) or str(item) not in export_ids:
+                raise _DiffInputError(
+                    f"view {value.get('key')!r} has unresolved {key}"
+                )
+            result[key] = export_ids[str(item)]
+        elif key == "deploymentEnvironmentId":
+            if not isinstance(item, str) or not item:
+                raise _DiffInputError(
+                    f"view {value.get('key')!r} has invalid deploymentEnvironmentId"
+                )
+            # Structurizr uses the deployment environment name here, not a model ID.
+            result[key] = item
         elif key != "id":
             result[key] = item
     return _canonical(result)

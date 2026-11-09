@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import subprocess
+import threading
 import time
+from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from cascade.workspace import (
     C4ArtifactRenderer,
     C4RenderArtifact,
     C4RenderSettings,
+    C4SemanticModelArtifact,
     C4SourceClosure,
     C4SourceFile,
     STRUCTURIZR_IMAGE,
+    compute_c4_semantic_diff,
     validate_c4_workspace,
 )
 
@@ -57,6 +64,90 @@ def test_real_pinned_renderer_publishes_one_validated_handoff_and_cache(
     assert cached.cache_hit is True
     assert cached.artifact_directory == result.artifact_directory
     assert cached.binding_manifest == result.binding_manifest
+
+    model = C4SemanticModelArtifact("render:self", cached, closure.contract)
+    diff = compute_c4_semantic_diff(
+        model, model, source_diff_reference="revision:self..self"
+    )
+    assert diff.state == "unchanged"
+    assert diff.changed_view_keys == ()
+
+    assert cached.semantic_workspace
+    original_workspace = cached.semantic_workspace.read_bytes()
+    cached.semantic_workspace.write_bytes(original_workspace + b"\n")
+    corrupt = renderer.submit(closure).wait(timeout=5)
+    assert corrupt.status == "render_error"
+    assert corrupt.failure and corrupt.failure.code == "invalid_artifact"
+    assert "artifact bytes" in corrupt.failure.message
+    cached.semantic_workspace.write_bytes(original_workspace)
+
+    assert cached.artifact_directory
+    manifest_path = cached.artifact_directory / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source_provenance"]["revision"] = "0" * 40
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    stale = renderer.submit(closure).wait(timeout=5)
+    assert stale.status == "render_error"
+    assert stale.failure and stale.failure.code == "invalid_artifact"
+    assert "provenance" in stale.failure.message
+
+
+@pytest.mark.parametrize("mutation", ["changed", "missing", "extra"])
+def test_source_inventory_and_hash_drift_fail_before_runtime(
+    tmp_path: Path, mutation: str
+) -> None:
+    closure = _closure(tmp_path)
+    if mutation == "changed":
+        (closure.input_directory / "workspace.dsl").write_text(
+            "workspace changed {}", encoding="utf-8"
+        )
+    elif mutation == "missing":
+        (closure.input_directory / closure.files[-1].path).unlink()
+    else:
+        (closure.input_directory / "unexpected.dsl").write_text(
+            "workspace {}", encoding="utf-8"
+        )
+
+    result = C4ArtifactRenderer(
+        tmp_path / "cache", runtime=str(tmp_path / "runtime-must-not-run")
+    ).submit(closure).wait(timeout=5)
+
+    assert result.status == "render_error"
+    assert result.failure and result.failure.code == "invalid_artifact"
+    assert result.failure.stage == "source"
+    assert "provenance" in result.failure.message
+
+
+def test_render_stages_use_verified_snapshot_after_source_mutation(
+    tmp_path: Path,
+) -> None:
+    closure = _closure(tmp_path)
+    original = (closure.input_directory / closure.source).read_bytes()
+
+    class SnapshotProbeRenderer(C4ArtifactRenderer):
+        snapshot_source: Path | None = None
+        observed: bytes | None = None
+
+        def _render_verified(
+            self,
+            verified: C4SourceClosure,
+            settings: C4RenderSettings,
+            cancelled: threading.Event,
+        ) -> C4RenderArtifact:
+            self.snapshot_source = verified.input_directory
+            (closure.input_directory / closure.source).write_text(
+                "workspace changed {}", encoding="utf-8"
+            )
+            self.observed = (verified.input_directory / verified.source).read_bytes()
+            return C4RenderArtifact(status="empty", closure_digest=verified.digest)
+
+    renderer = SnapshotProbeRenderer(tmp_path / "cache")
+    result = renderer.submit(closure).wait(timeout=5)
+
+    assert result.status == "empty"
+    assert renderer.observed == original
+    assert renderer.snapshot_source != closure.input_directory
+    assert renderer.snapshot_source and not renderer.snapshot_source.exists()
 
 
 def test_container_contract_is_immutable_offline_read_only_and_bounded(
@@ -157,10 +248,7 @@ def _closure(tmp_path: Path) -> C4SourceClosure:
         for path in sorted(root.iterdir())
         if path.is_file()
     )
-    digest = hashlib.sha256(
-        "".join(f"{item.path}:{item.sha256}" for item in files).encode()
-    ).hexdigest()
-    return C4SourceClosure(
+    closure = C4SourceClosure(
         target_repository_key=_VERSIONED_WORKSPACE.name,
         destination_repository_key=_VERSIONED_WORKSPACE.name,
         destination_repository_role="target",
@@ -170,10 +258,11 @@ def _closure(tmp_path: Path) -> C4SourceClosure:
         architecture_root=Path("architecture") / _VERSIONED_WORKSPACE.name,
         source=Path("workspace.dsl"),
         files=files,
-        digest=digest,
+        digest="",
         input_directory=root,
         contract=contract,
     )
+    return replace(closure, digest=closure.computed_digest())
 
 
 def revision_fragment(reference: str) -> bool:

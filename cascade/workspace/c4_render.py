@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 import threading
@@ -56,7 +57,7 @@ javac -cp '/tmp/cascade-binding-lib/WEB-INF/lib/*' \
 java -cp '/tmp/cascade-binding-classes:/tmp/cascade-binding-lib/WEB-INF/lib/*' \
   RendererBindingAdapter "$@"
 """
-_ARTIFACT_VERSION = 2
+_ARTIFACT_VERSION = 3
 
 RenderStatus = Literal[
     "first", "running", "empty", "ready", "binding_error", "render_error", "cancelled"
@@ -121,6 +122,7 @@ class C4RenderArtifact:
     cache_hit: bool = False
     artifact_directory: Path | None = None
     semantic_workspace: Path | None = None
+    semantic_workspace_sha256: str | None = None
     embedded_workspace: Path | None = None
     static_directory: Path | None = None
     svg_files: tuple[Path, ...] = ()
@@ -216,6 +218,33 @@ class C4ArtifactRenderer:
         settings: C4RenderSettings,
         cancelled: threading.Event,
     ) -> C4RenderArtifact:
+        self.cache_directory.mkdir(parents=True, exist_ok=True)
+        snapshot = Path(
+            tempfile.mkdtemp(prefix=".c4-source.", dir=self.cache_directory)
+        )
+        try:
+            try:
+                _snapshot_verified_closure(closure, snapshot)
+            except (OSError, ValueError) as exc:
+                return _failed(
+                    closure,
+                    _cache_key(closure.digest, settings),
+                    "invalid_artifact",
+                    "source",
+                    f"C4 source closure no longer matches its provenance: {exc}",
+                )
+            return self._render_verified(
+                replace(closure, input_directory=snapshot), settings, cancelled
+            )
+        finally:
+            shutil.rmtree(snapshot, ignore_errors=True)
+
+    def _render_verified(
+        self,
+        closure: C4SourceClosure,
+        settings: C4RenderSettings,
+        cancelled: threading.Event,
+    ) -> C4RenderArtifact:
         cache_key = _cache_key(closure.digest, settings)
         destination = self.cache_directory / cache_key
         if destination.is_dir():
@@ -223,7 +252,6 @@ class C4ArtifactRenderer:
         if cancelled.is_set():
             return _cancelled(closure, cache_key)
 
-        self.cache_directory.mkdir(parents=True, exist_ok=True)
         temporary = Path(
             tempfile.mkdtemp(prefix=f".{cache_key}.", dir=self.cache_directory)
         )
@@ -383,6 +411,7 @@ class C4ArtifactRenderer:
                 shutil.rmtree(output / transient)
             try:
                 status: RenderStatus = "ready" if view_keys else "empty"
+                artifact_sha256 = _directory_hashes(output)
                 manifest = {
                     "version": _ARTIFACT_VERSION,
                     "status": status,
@@ -393,6 +422,7 @@ class C4ArtifactRenderer:
                     "settings": settings.cache_payload(),
                     "revision": closure.revision,
                     "source": closure.source.as_posix(),
+                    "source_provenance": _source_provenance(closure),
                     "source_files": [
                         {
                             "path": item.path.as_posix(),
@@ -409,6 +439,7 @@ class C4ArtifactRenderer:
                     "svg_files": [
                         row["svg"] for row in binding_views
                     ],
+                    "artifact_sha256": artifact_sha256,
                 }
                 (temporary / "manifest.json").write_text(
                     json.dumps(manifest, indent=2, sort_keys=True) + "\n",
@@ -654,6 +685,91 @@ def _source_diff_reference(closure: C4SourceClosure) -> str:
     return f"revision:{closure.revision};paths:{paths}"
 
 
+def _source_provenance(closure: C4SourceClosure) -> dict[str, object]:
+    return {
+        "target_repository_key": closure.target_repository_key,
+        "destination_repository_key": closure.destination_repository_key,
+        "destination_repository_role": closure.destination_repository_role,
+        "architecture_root": closure.architecture_root.as_posix(),
+        "source": closure.source.as_posix(),
+        "revision": closure.revision,
+        "closure_digest": closure.digest,
+    }
+
+
+def _snapshot_verified_closure(closure: C4SourceClosure, snapshot: Path) -> None:
+    """Copy only hash-verified closure bytes into the renderer's private input."""
+
+    computed_digest = closure.computed_digest()
+    if computed_digest != closure.digest:
+        raise ValueError(
+            "closure provenance digest changed; "
+            f"expected={closure.digest}, actual={computed_digest}"
+        )
+    expected: dict[Path, str] = {}
+    for item in closure.files:
+        path = item.path
+        if path.is_absolute() or not path.parts or ".." in path.parts:
+            raise ValueError(f"invalid closure path {path.as_posix()!r}")
+        if path in expected:
+            raise ValueError(f"duplicate closure path {path.as_posix()!r}")
+        expected[path] = item.sha256
+    if closure.source not in expected:
+        raise ValueError("workspace source is absent from the closure")
+
+    actual: set[Path] = set()
+    for path in closure.input_directory.rglob("*"):
+        relative = path.relative_to(closure.input_directory)
+        if path.is_symlink():
+            raise ValueError(f"source closure contains symlink {relative.as_posix()!r}")
+        if path.is_file():
+            actual.add(relative)
+        elif not path.is_dir():
+            raise ValueError(f"source closure contains special file {relative.as_posix()!r}")
+    missing = sorted(path.as_posix() for path in set(expected) - actual)
+    extra = sorted(path.as_posix() for path in actual - set(expected))
+    if missing or extra:
+        raise ValueError(f"source file inventory changed; missing={missing}, extra={extra}")
+
+    snapshot.chmod(0o755)
+    for relative, expected_hash in expected.items():
+        source = closure.input_directory / relative
+        descriptor = os.open(
+            source,
+            os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0),
+        )
+        with os.fdopen(descriptor, "rb") as source_file:
+            if not stat.S_ISREG(os.fstat(source_file.fileno()).st_mode):
+                raise ValueError(
+                    f"source closure contains non-regular file {relative.as_posix()!r}"
+                )
+            content = source_file.read()
+        actual_hash = hashlib.sha256(content).hexdigest()
+        if actual_hash != expected_hash:
+            raise ValueError(
+                f"source file {relative.as_posix()!r} digest changed; "
+                f"expected={expected_hash}, actual={actual_hash}"
+            )
+        destination = snapshot / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.parent.chmod(0o755)
+        destination.write_bytes(content)
+        destination.chmod(0o444)
+
+
+def _directory_hashes(directory: Path) -> dict[str, str]:
+    hashes: dict[str, str] = {}
+    for path in sorted(directory.rglob("*")):
+        relative = path.relative_to(directory).as_posix()
+        if path.is_symlink():
+            raise ValueError(f"artifact contains symlink {relative!r}")
+        if path.is_file():
+            hashes[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+        elif not path.is_dir():
+            raise ValueError(f"artifact contains special file {relative!r}")
+    return hashes
+
+
 def _cache_key(closure_digest: str, settings: C4RenderSettings) -> str:
     encoded = json.dumps(
         {
@@ -732,7 +848,14 @@ def _load_artifact(
             or manifest["cache_key"] != cache_key
             or manifest["closure_digest"] != closure.digest
             or manifest["image_digest"] != STRUCTURIZR_IMAGE_DIGEST
+            or manifest["image"] != STRUCTURIZR_IMAGE
+            or _cache_key(
+                closure.digest, C4RenderSettings(**manifest["settings"])
+            )
+            != cache_key
             or manifest["revision"] != closure.revision
+            or manifest["source"] != closure.source.as_posix()
+            or manifest["source_provenance"] != _source_provenance(closure)
         ):
             raise ValueError("cache manifest provenance does not match request")
         expected_sources = [
@@ -747,6 +870,8 @@ def _load_artifact(
         if manifest["source_files"] != expected_sources:
             raise ValueError("cache manifest source provenance does not match request")
         output = directory / "output"
+        if manifest["artifact_sha256"] != _directory_hashes(output):
+            raise ValueError("cache artifact bytes do not match their manifest")
         view_keys = _validate_outputs(output, require_stock_svg=False)
         if list(view_keys) != manifest["view_keys"]:
             raise ValueError("cache manifest view inventory is invalid")
@@ -808,6 +933,7 @@ def _load_artifact(
         cache_hit=cache_hit,
         artifact_directory=directory,
         semantic_workspace=output / "json" / "workspace.json",
+        semantic_workspace_sha256=manifest["artifact_sha256"]["json/workspace.json"],
         embedded_workspace=output / "embedded-workspace.json",
         static_directory=output / "static",
         svg_files=svg_files,

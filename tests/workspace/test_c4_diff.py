@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -147,6 +148,42 @@ def test_contract_render_identity_mismatch_is_a_visible_error(tmp_path: Path) ->
     assert diff.changed_view_keys == ("main",)
 
 
+def test_view_model_scope_must_resolve_but_deployment_environment_is_named(
+    tmp_path: Path,
+) -> None:
+    current = _artifact(
+        tmp_path / "current",
+        view_scope={"softwareSystemId": "1", "deploymentEnvironmentId": "Live"},
+    )
+    proposed = _artifact(
+        tmp_path / "proposed",
+        view_scope={"softwareSystemId": "missing", "deploymentEnvironmentId": "Live"},
+    )
+
+    diff = compute_c4_semantic_diff(
+        current, proposed, source_diff_reference="git:base..proposal"
+    )
+
+    assert diff.state == "render_error"
+    assert "unresolved softwareSystemId" in (diff.error or "")
+
+
+def test_diff_rejects_semantic_bytes_changed_after_render_validation(
+    tmp_path: Path,
+) -> None:
+    current = _artifact(tmp_path / "current")
+    proposed = _artifact(tmp_path / "proposed")
+    assert proposed.render.semantic_workspace
+    proposed.render.semantic_workspace.write_text("{}", encoding="utf-8")
+
+    diff = compute_c4_semantic_diff(
+        current, proposed, source_diff_reference="git:base..proposal"
+    )
+
+    assert diff.state == "render_error"
+    assert "bytes changed" in (diff.error or "")
+
+
 def _artifact(
     directory: Path,
     *,
@@ -160,6 +197,7 @@ def _artifact(
     include_container: bool = True,
     renames: tuple[C4Rename, ...] = (),
     omit_semantic_id: str | None = None,
+    view_scope: dict[str, object] | None = None,
 ) -> C4SemanticModelArtifact:
     directory.mkdir(parents=True)
     ids = {
@@ -193,7 +231,7 @@ def _artifact(
     semantic_to_export = ids
 
     def view(key: str, members: tuple[str, ...]) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "key": key,
             "name": key.title(),
             "order": 99,
@@ -207,6 +245,8 @@ def _artifact(
                 [{"id": ids["relationship.uses"]}] if include_container else []
             ),
         }
+        result.update(view_scope or {})
+        return result
 
     views = [
         view(
@@ -257,6 +297,7 @@ def _artifact(
         status="ready",
         closure_digest=directory.name,
         semantic_workspace=workspace,
+        semantic_workspace_sha256=hashlib.sha256(workspace.read_bytes()).hexdigest(),
         view_keys=tuple(sorted(item["key"] for item in views)),
     )
     return C4SemanticModelArtifact(f"artifact:{directory.name}", render, contract)

@@ -58,6 +58,20 @@ class C4SourceClosure:
     input_directory: Path
     contract: C4WorkspaceContract
 
+    def computed_digest(self) -> str:
+        """Recompute the pinned provenance digest represented by this closure."""
+
+        return _closure_digest_values(
+            target_repository_key=self.target_repository_key,
+            destination_repository_key=self.destination_repository_key,
+            destination_repository_role=self.destination_repository_role,
+            code_directory=self.code_directory,
+            design_owner_directory=self.design_owner_directory,
+            revision=self.revision,
+            architecture_root=self.architecture_root,
+            entries=self.files,
+        )
+
 
 def materialize_c4_source_closure(
     project: ProjectContext,
@@ -424,14 +438,37 @@ def _closure_digest(
     architecture_root: Path,
     entries: tuple[C4SourceFile, ...],
 ) -> str:
+    return _closure_digest_values(
+        target_repository_key=contract.target_repository_key,
+        destination_repository_key=contract.destination_repository_key,
+        destination_repository_role=contract.destination_repository_role,
+        code_directory=contract.code_directory,
+        design_owner_directory=contract.design_owner_directory,
+        revision=contract.revision,
+        architecture_root=architecture_root,
+        entries=entries,
+    )
+
+
+def _closure_digest_values(
+    *,
+    target_repository_key: str,
+    destination_repository_key: str,
+    destination_repository_role: str,
+    code_directory: Path,
+    design_owner_directory: Path,
+    revision: str,
+    architecture_root: Path,
+    entries: tuple[C4SourceFile, ...],
+) -> str:
     manifest = {
         "version": 1,
-        "target_repository_key": contract.target_repository_key,
-        "destination_repository_key": contract.destination_repository_key,
-        "destination_repository_role": contract.destination_repository_role,
-        "code_directory": contract.code_directory.as_posix(),
-        "design_owner_directory": contract.design_owner_directory.as_posix(),
-        "revision": contract.revision,
+        "target_repository_key": target_repository_key,
+        "destination_repository_key": destination_repository_key,
+        "destination_repository_role": destination_repository_role,
+        "code_directory": code_directory.as_posix(),
+        "design_owner_directory": design_owner_directory.as_posix(),
+        "revision": revision,
         "architecture_root": architecture_root.as_posix(),
         "files": [
             {
