@@ -252,6 +252,11 @@ Planning readiness on 2026-11-09: canonical software verification is complete at
   Chose Normalize integrity_reference to the exact sha256 digest and expected_verification_result to the recipe's exact PASS line; preserve source, version, target environment, and every executable assertion..
   Rationale: Canonical evidence compares observed integrity_reference directly to digest and treats expected_verification_result as an output substring. The previous full image reference and prose result description did not satisfy those contracts even when the unchanged recipe passed. Use the identical immutable digest and the actual assertion-backed PASS text so the runner can accept real evidence.
   Honors: Canonical readiness with no bypass; exact installed-image identity and no install authority; unchanged offline DSL/JSON/SVG verification and Feature B semantic mapping proof..
+
+- `dec_012` · 2026-11-09 · Epic Manager · **Feature A acceptance and closeout**
+  Chose Keep the reviewed-byte gap reported in queued Task 004 commit be92f868 within Feature A's existing acceptance scope. Feature A closeout must await integration of the correction and a post-merge check; no new feature or epic contract amendment is needed..
+  Rationale: The queued _require_committed_artifact implementation only tests that the path exists at the captured commit. A tracked design or model with local edits can therefore create a reference to older bytes while claiming those edits are reviewed. Require focused acceptance evidence that new references reject staged or unstaged artifact changes relative to the pinned commit, clean committed artifacts can be pinned, and already-pinned reads remain stable after later edits. Limit checks to the referenced artifact rather than requiring the entire repository to be clean. The feature architect has already routed the issue to Task 004; preserve supervisor-owned integration and existing task work.
+  Honors: Epic success criteria 10 and 12; approved fixed-reference and exact-reviewed-revision contracts; Feature A API contract at 0958b777; smallest safe correction within the still-open feature..
 ## Amendment log
 
 _(none)_
