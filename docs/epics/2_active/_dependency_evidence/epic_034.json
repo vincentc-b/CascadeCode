@@ -133,6 +133,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_f3c2b255d65cb2d48129d51dc3552dd3a6bbc17442c67036b0932b4ffdc05335",
+      "dependency_id": "dep_structurizr",
+      "manifest_revision": 4,
+      "entry_revision": "sha256:19e92ba02495afa3320b7a2c4abf4f0c87c744c1dcb42a89aa94dfc3f9a7f249",
+      "recipe_revision": "sha256:6ef1905bb29ddf11858aab77b63af5235c053da7dcdf039ebfb9759f2aff1b09",
+      "exact_operation": "/opt/conda/bin/python3.12 - <<'PY'\nimport json, os, pathlib, subprocess, tempfile\nimage = 'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\ninspected = json.loads(subprocess.check_output(['docker','image','inspect',image], text=True, timeout=10))[0]\nassert image in inspected['RepoDigests']\nassert (inspected['Os'], inspected['Architecture']) == ('linux','amd64')\nwith tempfile.TemporaryDirectory(prefix='epic034-c4-check-') as directory:\n    root = pathlib.Path(directory)\n    root.chmod(0o755)\n    (root/'workspace.dsl').write_text('workspace {\\n model {\\n  reviewer = person \"Reviewer\"\\n  cascade = softwareSystem \"Cascade\"\\n  reviewer -> cascade \"Reviews plans\"\\n }\\n views {\\n  systemContext cascade \"context\" {\\n   include *\\n   autoLayout lr\\n  }\\n }\\n}\\n')\n    base = ['docker','run','--rm','--pull=never','--network=none','--read-only','--cap-drop=ALL','--security-opt=no-new-privileges','--pids-limit=256','--memory=1536m','--cpus=2','--tmpfs','/tmp:rw,size=512m','--user',f'{os.getuid()}:{os.getgid()}','-e','HOME=/tmp','-e','PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1','-v',f'{directory}:/usr/local/structurizr:rw',image]\n    for args in [['validate','-workspace','workspace.dsl'],['export','-workspace','workspace.dsl','-format','json','-output','out'],['export','-workspace','workspace.dsl','-format','svg','-output','out']]:\n        subprocess.run(base+args, check=True, timeout=55)\n    model = json.loads((root/'out/workspace.json').read_text())\n    assert model['views']['systemContextViews'][0]['key'] == 'context'\n    assert '<svg' in (root/'out/context.svg').read_text()\nprint('PASS structurizr 2026.09.19-playwright sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c: offline DSL validation, JSON export, SVG render')\nPY",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-09T03:54:51.673434+00:00",
+      "completed_at": "2026-11-09T03:55:11.316987+00:00",
+      "result": "succeeded",
+      "redacted_output": "03:54:59.541 [main] INFO com.structurizr.command.ExportCommand -- Exporting workspace from workspace.dsl\n03:54:59.928 [main] INFO com.structurizr.command.ExportCommand -- Exporting with JsonWorkspaceExporter\n03:55:01.625 [main] INFO com.structurizr.command.ExportCommand -- Writing /usr/local/structurizr/out/workspace.json\n03:55:01.627 [main] INFO com.structurizr.command.ExportCommand -- Finished\n03:55:05.237 [main] INFO com.structurizr.command.StaticSiteExporter -- Writing static site to /tmp/structurizr15564255816101407402\n03:55:06.878 [main] INFO com.structurizr.command.StaticSiteExporter -- Writing /tmp/structurizr15564255816101407402/workspace.js\n03:55:08.595 [main] INFO com.structurizr.command.PlaywrightExporterImpl -- Visiting file:///tmp/structurizr15564255816101407402/index.html\n03:55:10.718 [main] INFO com.structurizr.command.PlaywrightExporterImpl -- Writing /usr/local/structurizr/out/context.svg\n03:55:10.720 [main] INFO com.structurizr.command.PlaywrightExporterImpl -- Writing /usr/local/structurizr/out/context-key.svg\nPASS structurizr 2026.09.19-playwright sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c: offline DSL validation, JSON export, SVG render\n",
+      "selected_version": "2026.09.19-playwright",
+      "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "lock_references": [
+        "https://docs.structurizr.com/binaries"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
