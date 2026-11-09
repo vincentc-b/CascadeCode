@@ -346,7 +346,7 @@ Each requirement and decision has one owning design and a stable identifier. A p
 
 This root document is currently the owning design for the repository. Until focused changes introduce child designs, it covers the production packages under `cascade/`, executable verification under `tests/`, role and workflow guidance under `skills/` (including the trivial `skills/design/templates/` directory), and work-record infrastructure under `docs/`. Generated or runtime-only paths such as `cascade.egg-info/`, `__pycache__/`, and `.cascade/` do not own designs and are covered by this root. A new child `DESIGN.md` transfers only the boundary and identifiers it explicitly claims.
 
-The diagrams in [Product workflow](#21-product-workflow), [The 3-Tier Directory Structure](#3-the-3-tier-directory-structure), [Agent Lifecycles](#5-agent-lifecycles), [LangGraph Topology](#6-langgraph-topology), and [Workspace supervisor](#94-workspace-supervisor) are the current architecture views. No separate C4 model is authoritative yet; when one is accepted, this section will link its checkout-local source and rendered views rather than relying on a hosted account.
+The diagrams in [Product workflow](#21-product-workflow), [The 3-Tier Directory Structure](#3-the-3-tier-directory-structure), [Agent Lifecycles](#5-agent-lifecycles), [LangGraph Topology](#6-langgraph-topology), and [Workspace supervisor](#94-workspace-supervisor) are the current architecture views. The repository-owned C4 source and its semantic identity contract live under [`architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/`](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/README.md); rendered exports remain derived artifacts rather than an authority.
 
 ---
 

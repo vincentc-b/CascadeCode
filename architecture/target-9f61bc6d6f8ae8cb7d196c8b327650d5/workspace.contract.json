@@ -1,0 +1,25 @@
+{
+  "elements": [
+    {"dsl_identifier": "operator", "semantic_id": "element.person.operator", "fragment": "model.dsl"},
+    {"dsl_identifier": "cascade", "semantic_id": "element.system.cascade", "fragment": "model.dsl"},
+    {"dsl_identifier": "supervisor", "semantic_id": "element.container.cascade-supervisor", "fragment": "model.dsl"},
+    {"dsl_identifier": "structurizr", "semantic_id": "element.system.structurizr", "fragment": "model.dsl"},
+    {"dsl_identifier": "structurizr_cli", "semantic_id": "element.container.structurizr-cli", "fragment": "model.dsl"}
+  ],
+  "fragments": [
+    {"path": "model.dsl", "owner": "feat_034_002"},
+    {"path": "views.dsl", "owner": "feat_034_002"}
+  ],
+  "relationships": [
+    {"dsl_identifier": "reviews", "semantic_id": "relationship.operator-reviews-cascade", "source": "operator", "destination": "cascade", "fragment": "model.dsl"},
+    {"dsl_identifier": "validates", "semantic_id": "relationship.supervisor-validates-with-cli", "source": "supervisor", "destination": "structurizr_cli", "fragment": "model.dsl"},
+    {"dsl_identifier": "exports", "semantic_id": "relationship.supervisor-exports-with-cli", "source": "supervisor", "destination": "structurizr_cli", "fragment": "model.dsl"}
+  ],
+  "renames": [],
+  "version": 1,
+  "views": [
+    {"key": "cascade-landscape", "fragment": "views.dsl"},
+    {"key": "cascade-containers", "fragment": "views.dsl"}
+  ],
+  "workspace": {"source": "workspace.dsl", "owner": "feat_034_002"}
+}

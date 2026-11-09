@@ -30,6 +30,15 @@ from cascade.workspace.architecture import (
     resolve_artifact_ref_path,
     resolve_design_ownership,
 )
+from cascade.workspace.c4_source import (
+    C4Element,
+    C4Relationship,
+    C4Rename,
+    C4SourceError,
+    C4View,
+    C4WorkspaceContract,
+    validate_c4_workspace,
+)
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -41,6 +50,12 @@ __all__ = [
     "DesignOwnership",
     "TrackingRepositoryReference",
     "WorkspaceRoot",
+    "C4Element",
+    "C4Relationship",
+    "C4Rename",
+    "C4SourceError",
+    "C4View",
+    "C4WorkspaceContract",
     "find_project_config",
     "init_workspace",
     "parse_tracking_repository_reference",
@@ -60,5 +75,6 @@ __all__ = [
     "read_architecture_artifact",
     "replay_architecture_artifact",
     "resolve_product_trunk",
+    "validate_c4_workspace",
     "up",
 ]

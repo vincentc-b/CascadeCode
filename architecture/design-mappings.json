@@ -1,0 +1,11 @@
+{
+  "designs": {
+    ".": {
+      "artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.",
+      "code_directory": ".",
+      "design_owner_directory": "."
+    }
+  },
+  "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+  "version": 1
+}
