@@ -108,6 +108,9 @@ def approve_feature(
                     inventory=inventory,
                     action="feature_approval",
                 )
+                from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+
+                require_lifecycle_review_gate(feature_id, "approval", root=repo)
             newly = _set_feature_approved(feature_id, root=repo)
     result: dict[str, object] = {
         "ok": True, "feature_id": feature_id, "newly_approved": newly
@@ -175,6 +178,11 @@ def approve_epic_plan(
                 inventory=inventory,
                 action="epic_plan_approval",
             )
+            from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+
+            for feature_id in children:
+                if board.by_id[feature_id].approved_at is None:
+                    require_lifecycle_review_gate(feature_id, "approval", root=repo)
             for feature_id in children:
                 _set_feature_approved(feature_id, root=repo)
             # The epic timestamp durably indicates that the whole plan was approved.

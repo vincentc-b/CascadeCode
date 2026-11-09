@@ -300,6 +300,13 @@ def integrate_feature(*, task_id: str, task_run: TaskRun, root: Path) -> dict[st
     task = read_doc(task_id, root=root)
     if task.meta.status != "active" or not task.meta.parent:
         raise TaskToolDenied("integration requires an active Task and its parent")
+    from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    try:
+        require_lifecycle_review_gate(task_id, "integration", root=root)
+    except ArchitectureProposalError as exc:
+        raise TaskToolDenied(str(exc)) from exc
     if _git(wt, "status", "--porcelain").stdout.strip():
         return {"ok": False, "output": "Commit scoped edits or resolve the existing merge before integrating."}
     target = f"refs/heads/feat/{task.meta.parent}"
