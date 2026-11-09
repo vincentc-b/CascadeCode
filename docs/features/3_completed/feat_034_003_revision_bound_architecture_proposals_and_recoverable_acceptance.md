@@ -2,7 +2,7 @@
 id: feat_034_003
 title: Revision-bound architecture proposals and recoverable acceptance
 tier: feature
-status: active
+status: completed
 parent: epic_034
 children:
 - task_034_003_001
