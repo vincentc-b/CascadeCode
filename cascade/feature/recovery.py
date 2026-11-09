@@ -197,7 +197,13 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
         if task_id in pending_task_merges(trunk):
             delivery_wait = "parent_turn_boundary"
 
-    if typed_reason == "permission_refused" and not revised:
+    if task.meta.status == "completed":
+        phase = "completed"
+        typed_reason = "task_completed"
+        delivery_wait = None
+        next_safe_step = "Task delivery is complete; continue Feature planning."
+        action = "none"
+    elif typed_reason == "permission_refused" and not revised:
         next_safe_step = (
             "Resolve the required permission or credential; retry cannot bypass it."
         )

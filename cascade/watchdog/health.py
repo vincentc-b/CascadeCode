@@ -176,6 +176,18 @@ def sweep_supervisor_health(root: Path | None = None) -> list[ChildHealthObserva
                     )
                 else:
                     reconcile_direct_report_blockage(supervisor, child, root=repo)
+                    if (
+                        child.meta.tier == "task"
+                        and child.meta.status == "completed"
+                        and any(b.child_id == child_id and b.incident_id is not None
+                                for b in supervisor.meta.monitoring_blockers)
+                    ):
+                        # Replay cleanup after a crash or an earlier version
+                        # missed generation-qualified delivery incidents. The
+                        # merge queue may already be empty and action complete.
+                        from cascade.task_rollup import _clear_delivery_blockers
+
+                        _clear_delivery_blockers(child_id, repo)
                 # Writes use optimistic tokens. Refresh before considering a
                 # sibling so independent causes converge after our own update.
                 supervisor = read_doc(supervisor.meta.id, root=repo)
