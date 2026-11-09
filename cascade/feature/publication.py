@@ -330,6 +330,29 @@ def _build_publication_tail(
     task_ids: list[str],
     task_commits: list[str],
 ) -> str:
+    # Child numbering is planning order, not integration order. In particular,
+    # a repaired Task's validated merge can already contain a sibling that
+    # finished first. Replay ancestors first so its patch base is represented
+    # and snapshot fallback never mistakes that sibling for unpublished work.
+    deliveries = dict(zip(task_commits, task_ids, strict=True))
+    if len(deliveries) != len(task_ids):
+        raise GitError("publication tasks must have distinct deliverable commits")
+    if any(not _is_ancestor(root, sha, final_tree_ref) for sha in deliveries):
+        raise GitError("publication task deliverable is not integrated into the final Feature tree")
+    predecessors = {
+        sha: {other for other in deliveries if other != sha and _is_ancestor(root, other, sha)}
+        for sha in deliveries
+    }
+    remaining = list(task_commits)
+    ordered: list[str] = []
+    while remaining:
+        # Stable topological order: unrelated Tasks retain the existing replay
+        # order, including its already-reviewed conflict-resolution snapshots.
+        source = next(sha for sha in remaining if not predecessors[sha].intersection(remaining))
+        ordered.append(source)
+        remaining.remove(source)
+    task_commits = ordered
+    task_ids = [deliveries[sha] for sha in ordered]
     with tempfile.TemporaryDirectory(prefix="cascade-publish-") as tmp:
         index = str(Path(tmp) / "index")
         env = {**os.environ, "GIT_INDEX_FILE": index}
