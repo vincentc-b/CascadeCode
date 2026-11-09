@@ -240,6 +240,11 @@ Pending planning work: canonical `run_dependency_check` for `dep_structurizr` ag
   Chose Keep advisory smoke narrative in the epic's history, not feasibility_proof_references; leave both separate-feasibility fields empty and require canonical execution of the unchanged full verification recipe..
   Rationale: Manifest revision 2 ran the complete check successfully and printed PASS, but evidence acceptance rejected the old advisory prose because proof references must occur in executor lock references. The narrative was never a machine-verifiable artifact reference. Removing this incorrectly typed advisory entry makes the declaration match its intended no-separate-artifact check; canonical execution remains required and authoritative.
   Honors: dec_004 and dec_009; preserve DSL/JSON/SVG assertions, exact digest and environment, and Feature B's semantic mapping acceptance checkpoint. No installation or fabricated proof..
+
+- `dec_011` · 2026-11-09 · Epic Manager · **Core dependencies**
+  Chose Normalize integrity_reference to the exact sha256 digest and expected_verification_result to the recipe's exact PASS line; preserve source, version, target environment, and every executable assertion..
+  Rationale: Canonical evidence compares observed integrity_reference directly to digest and treats expected_verification_result as an output substring. The previous full image reference and prose result description did not satisfy those contracts even when the unchanged recipe passed. Use the identical immutable digest and the actual assertion-backed PASS text so the runner can accept real evidence.
+  Honors: Canonical readiness with no bypass; exact installed-image identity and no install authority; unchanged offline DSL/JSON/SVG verification and Feature B semantic mapping proof..
 ## Amendment log
 
 _(none)_
