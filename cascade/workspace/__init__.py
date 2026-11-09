@@ -30,6 +30,43 @@ from cascade.workspace.architecture import (
     resolve_artifact_ref_path,
     resolve_design_ownership,
 )
+from cascade.workspace.c4_source import (
+    C4Element,
+    C4Relationship,
+    C4Rename,
+    C4SourceError,
+    C4View,
+    C4WorkspaceContract,
+    validate_c4_workspace,
+)
+from cascade.workspace.c4_closure import (
+    C4SourceClosure,
+    C4SourceFile,
+    materialize_c4_source_closure,
+)
+from cascade.workspace.c4_bindings import (
+    C4BindingError,
+    C4HitTargetBinding,
+    validate_hit_target_manifest,
+    verify_and_sanitize_hit_targets,
+)
+from cascade.workspace.c4_render import (
+    STRUCTURIZR_IMAGE,
+    STRUCTURIZR_IMAGE_DIGEST,
+    C4ArtifactRenderer,
+    C4RenderArtifact,
+    C4RenderFailure,
+    C4RenderOperation,
+    C4RenderSettings,
+)
+from cascade.workspace.c4_diff import (
+    C4ContainmentChange,
+    C4IdentityChange,
+    C4SemanticDiff,
+    C4SemanticModelArtifact,
+    C4ViewDiff,
+    compute_c4_semantic_diff,
+)
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -41,6 +78,26 @@ __all__ = [
     "DesignOwnership",
     "TrackingRepositoryReference",
     "WorkspaceRoot",
+    "C4Element",
+    "C4Relationship",
+    "C4Rename",
+    "C4SourceError",
+    "C4SourceClosure",
+    "C4SourceFile",
+    "C4ArtifactRenderer",
+    "C4BindingError",
+    "C4HitTargetBinding",
+    "C4RenderArtifact",
+    "C4RenderFailure",
+    "C4RenderOperation",
+    "C4RenderSettings",
+    "C4ContainmentChange",
+    "C4IdentityChange",
+    "C4SemanticDiff",
+    "C4SemanticModelArtifact",
+    "C4ViewDiff",
+    "C4View",
+    "C4WorkspaceContract",
     "find_project_config",
     "init_workspace",
     "parse_tracking_repository_reference",
@@ -60,5 +117,12 @@ __all__ = [
     "read_architecture_artifact",
     "replay_architecture_artifact",
     "resolve_product_trunk",
+    "validate_c4_workspace",
+    "materialize_c4_source_closure",
+    "validate_hit_target_manifest",
+    "verify_and_sanitize_hit_targets",
+    "compute_c4_semantic_diff",
+    "STRUCTURIZR_IMAGE",
+    "STRUCTURIZR_IMAGE_DIGEST",
     "up",
 ]
