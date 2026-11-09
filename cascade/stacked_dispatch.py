@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -228,14 +229,26 @@ def plan_feature_dispatch(
 
     stacked = effective_stacked_pr_enabled(feature_id, epic_id, root=root)
     preds = direct_feature_predecessors(meta, board)
-    # A fan-in cannot stack on two open review heads. Once every predecessor
-    # review has closed, their accepted changes are on the epic branch and the
-    # epic is the unambiguous base for the next feature.
-    if stacked and len(preds) > 1 and any(
-        _stacked_predecessor_base(pred_id, board, root=root) is not None
+    bases = {
+        pred_id: _stacked_predecessor_base(pred_id, board, root=root)
         for pred_id in preds
-    ):
-        return FeatureDispatchPlan(ok=False, reason="unsupported_topology")
+    } if stacked else {}
+    if "missing_predecessor_pr_identity" in bases.values():
+        return FeatureDispatchPlan(ok=False, reason="missing_predecessor_pr_identity")
+    open_bases = {pred_id: branch for pred_id, branch in bases.items() if branch is not None}
+    if stacked and len(preds) > 1 and open_bases:
+        # Multiple declarations may describe one existing stack (A -> B,
+        # C depends on A and B). Only select a head that actually contains all
+        # required work; dependency declarations alone are not Git evidence.
+        covering = _covering_predecessor(
+            open_bases,
+            epic_branch=integration_branch("epic", epic_id),
+            require_epic=len(open_bases) < len(bases),
+            root=root,
+        )
+        if covering is None:
+            return FeatureDispatchPlan(ok=False, reason="unsupported_topology")
+        open_bases = {covering: open_bases[covering]}
 
     if not feature_dependency_ready(meta, board, root=root):
         return FeatureDispatchPlan(ok=False, reason="unmet_deps")
@@ -244,16 +257,8 @@ def plan_feature_dispatch(
     predecessor_id: str | None = None
     base_branch = epic_branch
 
-    if stacked and len(preds) == 1:
-        pred_id = preds[0]
-        stack_base = _stacked_predecessor_base(pred_id, board, root=root)
-        if stack_base == "missing_predecessor_pr_identity":
-            return FeatureDispatchPlan(
-                ok=False, reason="missing_predecessor_pr_identity"
-            )
-        if stack_base is not None:
-            predecessor_id = pred_id
-            base_branch = stack_base
+    if open_bases:
+        predecessor_id, base_branch = next(iter(open_bases.items()))
 
     return FeatureDispatchPlan(
         ok=True,
@@ -263,6 +268,39 @@ def plan_feature_dispatch(
             predecessor_id=predecessor_id,
         ),
     )
+
+
+def _covering_predecessor(
+    branches: dict[str, str], *, epic_branch: str, require_epic: bool, root: Path
+) -> str | None:
+    """Prove one local review head includes every required predecessor head."""
+    repo = locate_trunk(root)
+
+    def git(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args], cwd=repo, capture_output=True, text=True, timeout=5,
+        )
+
+    try:
+        heads: dict[str, str] = {}
+        required = list(branches.values())
+        if require_epic:
+            # Closed reviews live on the Epic. Do not pick an open stack that
+            # predates accepted work from another declared predecessor.
+            required.append(epic_branch)
+        for branch in required:
+            resolved = git("rev-parse", "--verify", f"refs/heads/{branch}^{{commit}}")
+            if resolved.returncode != 0:
+                return None
+            heads[branch] = resolved.stdout.strip()
+        candidates = [
+            pred_id for pred_id, branch in branches.items()
+            if all(git("merge-base", "--is-ancestor", sha, heads[branch]).returncode == 0
+                   for sha in heads.values())
+        ]
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def ensure_feature_dispatch_selection(
