@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -20,7 +21,7 @@ from pathlib import Path
 from typing import Literal
 
 from cascade.workspace.errors import WorkspaceError
-from cascade.workspace.types import ProjectContext
+from cascade.workspace.types import ProjectContext, RepositoryContext
 
 _SCHEMA_VERSION = 1
 
@@ -48,6 +49,21 @@ class ArchitectureArtifactRef:
     destination_repository_role: Literal["target", "tracking"]
     repository_path: Path
     revision: str
+
+    def __post_init__(self) -> None:
+        if not self.target_repository_key.startswith("target-"):
+            raise WorkspaceError("invalid architecture artifact target repository key")
+        if not self.owning_work.strip():
+            raise WorkspaceError("architecture artifact owning work must be non-blank")
+        if not self.destination_repository_key.strip():
+            raise WorkspaceError("invalid architecture artifact destination repository key")
+        if self.destination_repository_role not in {"target", "tracking"}:
+            raise WorkspaceError("invalid architecture artifact destination role")
+        _validate_stored_path(self.code_directory, allow_root=True)
+        _validate_stored_path(self.design_owner_directory, allow_root=True)
+        _validate_stored_path(self.repository_path)
+        if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", self.revision) is None:
+            raise WorkspaceError("invalid architecture artifact revision")
 
     def to_dict(self) -> dict[str, str]:
         return {
@@ -210,31 +226,99 @@ def create_architecture_artifact_ref(
     )
 
 
+def create_architecture_model_ref(
+    project: ProjectContext,
+    code_directory: Path | str,
+    model_path: Path | str,
+    *,
+    owning_work: str,
+) -> ArchitectureArtifactRef:
+    """Pin an editable model or owned fragment to today's destination once.
+
+    ``model_path`` is relative to ``architecture/<target-key>/``.  The code
+    directory still has to have a persisted design owner, preserving target
+    provenance and authorization context for model fragments.
+    """
+
+    if not owning_work.strip():
+        raise WorkspaceError("architecture artifact owning work must be non-blank")
+    ownership = require_design_ownership(project, code_directory)
+    relative_model_path = _relative_artifact_path(model_path)
+    repository = project.architecture_repository
+    assert repository.repository_key is not None
+    destination_path = project.editable_architecture_root / relative_model_path
+    try:
+        repository_path = destination_path.relative_to(repository.root)
+    except ValueError as exc:  # pragma: no cover - ProjectContext invariant
+        raise WorkspaceError("architecture model path escapes its repository") from exc
+    return ArchitectureArtifactRef(
+        target_repository_key=ownership.target_repository_key,
+        code_directory=ownership.code_directory,
+        design_owner_directory=ownership.design_owner_directory,
+        owning_work=owning_work,
+        destination_repository_key=(
+            project.target_repository_key
+            if project.architecture_destination == "target"
+            else repository.repository_key
+        ),
+        destination_repository_role=project.architecture_destination,
+        repository_path=repository_path,
+        revision=_head_revision(repository.root),
+    )
+
+
 def resolve_artifact_ref_path(
     project: ProjectContext, reference: ArchitectureArtifactRef
 ) -> Path:
-    """Resolve a persisted ref without consulting today's destination setting."""
+    """Route a proposed edit using the reference's recorded destination."""
 
-    if reference.target_repository_key != project.target_repository_key:
-        raise WorkspaceError("architecture artifact reference belongs to another target")
-    repository = (
-        project.target
-        if reference.destination_repository_role == "target"
-        else project.tracking
-    )
-    expected_repository_key = (
-        project.target_repository_key
-        if reference.destination_repository_role == "target"
-        else repository.repository_key
-    )
-    if expected_repository_key != reference.destination_repository_key:
-        raise WorkspaceError("architecture artifact destination repository has changed")
+    repository = _repository_for_artifact_ref(project, reference)
     path = (repository.root / reference.repository_path).resolve()
     try:
         path.relative_to(repository.root)
     except ValueError as exc:
         raise WorkspaceError("architecture artifact reference escapes its repository") from exc
     return path
+
+
+def read_architecture_artifact(
+    project: ProjectContext, reference: ArchitectureArtifactRef
+) -> str:
+    """Read the exact reviewed source from the reference's pinned Git commit."""
+
+    repository = _repository_for_artifact_ref(project, reference)
+    object_name = f"{reference.revision}:{reference.repository_path.as_posix()}"
+    result = subprocess.run(
+        ["git", "show", object_name],
+        cwd=repository.root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise WorkspaceError(
+            "cannot read pinned architecture artifact "
+            f"{reference.repository_path.as_posix()} at {reference.revision}"
+        )
+    return result.stdout
+
+
+def replay_architecture_artifact(
+    project: ProjectContext, reference: ArchitectureArtifactRef
+) -> str:
+    """Replay an architecture source from the same fixed read used by review."""
+
+    return read_architecture_artifact(project, reference)
+
+
+def architecture_artifact_link(reference: ArchitectureArtifactRef) -> str:
+    """Return a stable source link containing only recorded reference fields."""
+
+    return (
+        f"architecture:{reference.destination_repository_key}"
+        f"@{reference.revision}:{reference.repository_path.as_posix()}"
+    )
 
 
 def require_design_ownership(
@@ -275,6 +359,55 @@ def _target_relative(project: ProjectContext, code_directory: Path | str) -> Pat
         )
     parts = [part for part in candidate.parts if part not in {"", "."}]
     return Path(*parts) if parts else Path(".")
+
+
+def _relative_artifact_path(path: Path | str) -> Path:
+    candidate = Path(path)
+    if candidate.is_absolute() or any(
+        part in {"", ".", ".."} for part in candidate.parts
+    ):
+        raise WorkspaceError("architecture model path must be repository-relative")
+    return candidate
+
+
+def _validate_stored_path(path: Path, *, allow_root: bool = False) -> None:
+    if path == Path(".") and allow_root:
+        return
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise WorkspaceError(f"invalid repository-relative architecture path: {path!s}")
+
+
+def _repository_for_artifact_ref(
+    project: ProjectContext, reference: ArchitectureArtifactRef
+) -> RepositoryContext:
+    if reference.target_repository_key != project.target_repository_key:
+        raise WorkspaceError("architecture artifact reference belongs to another target")
+    repository = (
+        project.target
+        if reference.destination_repository_role == "target"
+        else project.tracking
+    )
+    expected_repository_key = (
+        project.target_repository_key
+        if reference.destination_repository_role == "target"
+        else repository.repository_key
+    )
+    if expected_repository_key != reference.destination_repository_key:
+        raise WorkspaceError("architecture artifact destination repository has changed")
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{reference.revision}^{{commit}}"],
+        cwd=repository.root,
+        text=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise WorkspaceError(
+            "architecture artifact pinned revision is unavailable in its "
+            "recorded destination repository"
+        )
+    return repository
 
 
 def _portable_directory(path: Path) -> str:

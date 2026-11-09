@@ -12,9 +12,13 @@ from cascade.workspace import (
     ArchitectureArtifactRef,
     ProjectContext,
     WorkspaceError,
+    architecture_artifact_link,
     create_architecture_artifact_ref,
+    create_architecture_model_ref,
     load_design_ownerships,
+    read_architecture_artifact,
     read_project_configuration,
+    replay_architecture_artifact,
     resolve_artifact_ref_path,
     resolve_design_ownership,
 )
@@ -232,6 +236,84 @@ def test_artifact_ref_requires_persisted_owner_and_committed_key_is_immutable(
 
     with pytest.raises(WorkspaceError, match="differs from the committed"):
         _ = project.target_repository_key
+
+
+def test_reads_links_proposals_and_replay_use_the_fixed_reference(
+    tmp_path: Path,
+) -> None:
+    target = _committed_repo(tmp_path / "target")
+    tracking = _committed_repo(tmp_path / "tracking")
+    tracking_mode = ProjectContext.split(
+        target, tracking, architecture_destination="tracking"
+    )
+    resolve_design_ownership(tracking_mode, "cascade/workspace")
+    _git(target=target, args=("add", "architecture/design-mappings.json"))
+    _git(target=target, args=("commit", "-m", "record design mapping"))
+    design = tracking_mode.design_path("cascade/workspace")
+    design.parent.mkdir(parents=True)
+    design.write_text("# Reviewed design\n", encoding="utf-8")
+    _git(target=tracking, args=("add", "."))
+    _git(target=tracking, args=("commit", "-m", "add reviewed design"))
+
+    reference = create_architecture_artifact_ref(
+        tracking_mode, "cascade/workspace", owning_work="feat_034_001"
+    )
+    expected_link = (
+        f"architecture:{reference.destination_repository_key}"
+        f"@{reference.revision}:{reference.repository_path.as_posix()}"
+    )
+
+    design.write_text("# Later design\n", encoding="utf-8")
+    _git(target=tracking, args=("add", "."))
+    _git(target=tracking, args=("commit", "-m", "change design"))
+    target_mode = ProjectContext.split(target, tracking)
+
+    assert resolve_artifact_ref_path(target_mode, reference) == design
+    assert read_architecture_artifact(target_mode, reference) == "# Reviewed design\n"
+    assert replay_architecture_artifact(target_mode, reference) == "# Reviewed design\n"
+    assert architecture_artifact_link(reference) == expected_link
+    assert target_mode.design_path("cascade/workspace") != design
+
+
+def test_model_reference_routes_under_fixed_editable_architecture_root(
+    tmp_path: Path,
+) -> None:
+    target = _committed_repo(tmp_path / "target")
+    tracking = _committed_repo(tmp_path / "tracking")
+    project = ProjectContext.split(
+        target, tracking, architecture_destination="tracking"
+    )
+    resolve_design_ownership(project, "cascade/workspace")
+    model = project.editable_architecture_root / "workspace.dsl"
+    model.parent.mkdir(parents=True)
+    model.write_text("workspace model\n", encoding="utf-8")
+    _git(target=tracking, args=("add", "."))
+    _git(target=tracking, args=("commit", "-m", "add architecture model"))
+
+    reference = create_architecture_model_ref(
+        project,
+        "cascade/workspace",
+        "workspace.dsl",
+        owning_work="feat_034_001",
+    )
+    reconfigured = ProjectContext.split(target, tracking)
+
+    assert resolve_artifact_ref_path(reconfigured, reference) == model
+    assert read_architecture_artifact(reconfigured, reference) == "workspace model\n"
+
+
+def test_artifact_reference_rejects_untrusted_revision() -> None:
+    with pytest.raises(WorkspaceError, match="revision"):
+        ArchitectureArtifactRef(
+            target_repository_key=f"target-{'0' * 32}",
+            code_directory=Path("."),
+            design_owner_directory=Path("."),
+            owning_work="feat_034_001",
+            destination_repository_key="repository-key",
+            destination_repository_role="target",
+            repository_path=Path("DESIGN.md"),
+            revision="--help",
+        )
 
 
 def _committed_repo(parent: Path) -> Path:
