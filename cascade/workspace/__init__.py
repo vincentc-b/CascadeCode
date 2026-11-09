@@ -39,6 +39,11 @@ from cascade.workspace.c4_source import (
     C4WorkspaceContract,
     validate_c4_workspace,
 )
+from cascade.workspace.c4_closure import (
+    C4SourceClosure,
+    C4SourceFile,
+    materialize_c4_source_closure,
+)
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -54,6 +59,8 @@ __all__ = [
     "C4Relationship",
     "C4Rename",
     "C4SourceError",
+    "C4SourceClosure",
+    "C4SourceFile",
     "C4View",
     "C4WorkspaceContract",
     "find_project_config",
@@ -76,5 +83,6 @@ __all__ = [
     "replay_architecture_artifact",
     "resolve_product_trunk",
     "validate_c4_workspace",
+    "materialize_c4_source_closure",
     "up",
 ]
