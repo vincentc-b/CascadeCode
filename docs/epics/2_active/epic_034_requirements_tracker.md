@@ -53,7 +53,7 @@ An epic remains a living plan while its children are being delivered. A change r
 10. **Revision-bound review.** Epic and feature approval covers the exact plan, requirement-document, and proposed-model revisions shown to the reviewer. Editing any reviewed artifact invalidates the affected sign-offs or approval until it is reviewed again. Open blocking requirement or diagram threads prevent approval or downstream work in their defined scope. A missing or invalid proposed model prevents approval when the proposal claims a diagram change.
 11. **Split-repository review.** When plans and architecture live in different repositories, present their changes as one linked review unit with explicit revision pairs. Define merge ordering and a recoverable partial-merge state; neither approval nor dispatch may claim the proposed architecture is accepted when only one side has landed. A later `cascade.toml` destination change must not silently retarget an existing review.
 12. **Design review at closure.** Before a Task, Feature, or Epic closes, its team checks affected directory designs, ancestor summaries, and architecture views against the implemented change. The workflow provides an authorized way to propose and merge required documentation and DSL edits. Closure records the accepted update or a short reason none was needed; unresolved material mismatches prevent closure.
-13. **Historical coverage.** Populate eligible `DESIGN.md` files and the initial C4 model in the configured documentation destination by replaying every completed, non-cancelled epic, feature, and task, then checking claims against current target code and tests. Every excluded target-code directory names the parent design that covers it. A replay ledger accounts for each work item, including those with no durable design or diagram impact.
+13. **Historical coverage.** Populate eligible `DESIGN.md` files and the initial C4 model in the configured documentation destination by replaying every completed, non-cancelled epic, feature, and task, then checking claims against current target code and tests. Every excluded target-code directory names the parent design that covers it. A replay ledger accounts for each work item, including those with no durable design or diagram impact. Also reconcile the target repository's reachable Git history to identify fixes and other commits outside Cascade work records. Use commit messages and, for linked merge requests or pull requests, their descriptions as historical evidence; deduplicate overlapping work-item and commit evidence. Check every inferred claim against current code and tests, and record unavailable review descriptions or ambiguous provenance explicitly.
 14. **Reconciliation and validation.** A final pass checks parent–child consistency, cross-directory interfaces, requirement and decision references, view links, table-of-contents headings, Structurizr parse/render results, and claims against current code. Report unresolved gaps explicitly instead of silently accepting stale diagrams or historical plans.
 15. **Continue after partial delivery.** An active epic can revise its remaining plan after a child feature merges. Preserve completed feature IDs, commits, review history, decisions, and accepted architecture; do not reset the epic branch or replay completed work. The “current” C4 side for a later proposal is pinned to the latest accepted architecture on the relevant epic integration branch, including merged child work, even if the epic has not yet merged to target trunk.
 16. **Route and escalate change requests.** A comment on an active feature first reaches its Feature Team, which replies in the originating thread. A comment on a backlog or otherwise unstaffed feature under an active epic reaches the Epic Team, with the feature and comment context; it must not disappear because that Feature Team has not started. After any sibling has merged, a material feature-plan change request is escalated to the Epic Team for impact triage even if it first appears local. The Feature Team also escalates requests affecting epic constraints, another feature, accepted work, or sequencing. The Epic Team records a decision, and the responsible team posts or relays the outcome in the originating thread. Deliver one accountable handoff rather than silently starting multiple team turns.
@@ -71,13 +71,66 @@ An epic remains a living plan while its children are being delivered. A change r
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+### Repository and document contract
+
+Extend the existing `RepositoryContext`, project configuration, scoped document tools, plan viewer, comment store, and lifecycle gates. Do not add a second board or approval service. Proposed implementation boundaries are a small shared architecture/document service, adapters in existing epic/feature/task tools, and plan-viewer additions; Feature Teams choose concrete module splits within these contracts.
+
+Use `[architecture] destination = "target" | "tracking"` in the target repository's `cascade.toml`; omission means `target`. Resolve `tracking` only through epic_036's configured tracking repository. Store target-mode directory designs at `<code-directory>/DESIGN.md`. In tracking mode mirror them at `design/<target-repository-key>/<code-directory>/DESIGN.md`, with the root at `design/<target-repository-key>/DESIGN.md`. The repository key is an immutable identity recorded with the mapping, not a basename inferred anew on each load. A mapping index binds each design to its target repository and code-relative directory. Keep the editable workspace and owned fragments at `architecture/<target-repository-key>/` in the selected destination. Preserve and reconcile the existing root design rather than replacing it wholesale.
+
+Each requirement and decision has a stable, unique identifier with one owning design. Parent designs own cross-directory contracts and link to child detail. Each model element and relationship carries a durable semantic ID in its properties; view keys are explicit. Exporter-assigned numeric IDs are local to one artifact and must not be used as cross-revision identity. Rename continuity requires an explicit, reviewed old-to-new mapping; do not infer it from a similar label. A small ownership index maps design directories and model fragments to their editing owner; shared-fragment edits use the owning team's amendment path.
+
+### Model processing and paired review
+
+Use the pinned local Structurizr distribution to validate DSL and export workspace JSON and SVG. The semantic JSON drives comparison and synchronized selection; generated SVG supplies the visual layout. Feature B must prove an adapter from rendered element/relationship nodes to semantic IDs before Feature D relies on it. Do not replace required diagram interaction with static screenshots.
+
+The processing boundary materializes only the pinned source closure and explicitly allowed local includes, inside the configured documentation tree at the same revision. Reject path escapes, symlinks out of scope, remote includes/extensions/themes/assets, plugins, scripts, and executable/custom exporters before invoking the parser. No arbitrary project content or exported HTML runs in the plan page. Run the pinned image without network or image pulls, with resource/time limits and isolated output; sanitize rendered SVG and serve only approved local viewer assets. Rendering is a background artifact operation, not code execution on a browser page request. Cache keys include source closure, tool digest, and renderer settings.
+
+The paired view uses one state containing view key/level, selected semantic target, and navigation history. Each side resolves that state independently against its pinned model. Missing counterparts have an explicit absent state while the changed object remains visible on its own side. Enumerate the union of changed views. Semantic comparisons cover model properties, relationships, containment, and view membership; layout coordinates and automatic routing are not architecture changes. A parse/render/mapping failure shows an error and source diff, and cannot be presented as matching diagrams.
+
+### Revision-bound proposal and acceptance
+
+A review unit records owner work ID, target repository identity, fixed documentation destination, plan repository/path/revision, design paths and revisions, accepted baseline model revision, proposed model revision, source-closure digest, impacted requirement/decision IDs, affected work IDs, tool digest, and architecture impact (`changed` or justified `no_diagram_change`). An initial model uses an explicit empty baseline. Even a no-diagram-change proposal binds its design changes and reason to the reviewed revision.
+
+For the first epic proposal, current means the last accepted model reachable from the epic's starting target revision, or an explicit empty model. After accepted child delivery, current means the latest accepted architecture on that epic integration lineage, including merged children. A feature pins that accepted epic baseline when its proposal is prepared. Planning-only ancestor proposals are never mislabeled as accepted. If a feature requires an unaccepted predecessor's architecture, record the dependency and stage it as proposed context; refresh against the predecessor's accepted result before affected dispatch.
+
+Use explicit review states: draft, reviewable, approved, implementing, acceptance_pending, accepted; invalidated or stale states retain prior evidence and identify the required review/rebase action. Pin proposals on owned review branches or immutable patches before approval. Any edit to a bound artifact invalidates affected sign-offs and approval. Recheck revisions, baseline freshness, blocking threads, and affected scope under existing lifecycle locks at approval, dispatch, integration, merge, and closeout boundaries. A changed model that cannot validate/render cannot become reviewable. Revalidation alone does not substitute for human review of a changed proposal.
+
+In a single repository, merge code and corresponding accepted documentation together where possible. With split repositories, persist a linked review unit and promotion journal before either merge. Merge the normally approved implementation into the owned integration branch first, then the exact reviewed documentation change into its configured destination, and only then advance the accepted architecture pointer and finalize completion. Either half alone is `acceptance_pending`: retain both refs, show the missing operation, and hold dependent dispatch/integration. Retry only the missing side idempotently; conflicts or changed revision pairs require re-review. Do not roll back accepted unrelated work or pretend Git provides a cross-repository transaction. A destination configuration edit cannot retarget an existing review; migration is an explicit new reviewed operation.
+
+### Semantic comments and material change requests
+
+Extend existing epic/feature threads with typed anchors: requirement, view, element, relationship. Bind the anchor to semantic ID/view key, current/proposed side, repository, and revision, independent of Markdown heading slugs. Preserve threads and source-diff links after revisions; missing or explicitly renamed anchors become outdated until reviewed/reanchored. An outdated blocking thread remains blocking until the authorized human resolves it.
+
+Blocking scope is the owning proposal plus explicit affected work IDs and dependents, inferred from requirement/model ownership and proposal citations. If the owner cannot establish a safe narrower scope, hold the owning proposal's subtree and surface that reason; never silently broaden a local thread to unrelated epics. Enforce holds at minting, dispatch, task integration, feature merge, and closeout safe boundaries. Running tasks may retain and finish their branches, but held results cannot integrate.
+
+Deliver a feature comment once to the live Feature Team, or to the Epic Team when the feature is backlog/unstaffed. Durable handoff identity includes originating comment, feature, affected work, and receiving owner. Following any accepted sibling merge, material feature-plan changes require Epic Team impact triage even if initially local. The decision chooses amendment of remaining work, a separately approved corrective feature, or a visible human decision on replacement. Preserve accepted feature IDs, commits, decisions, review history, and architecture. Reply or relay the outcome in the originating thread; do not resolve it on the human's behalf.
+
+### Authoring, closure, and historical reconstruction
+
+Planning context contains the relevant pinned ancestor/owned designs and model fragments. Scoped tools authorize reads and staged proposals by ownership, including feature-to-epic amendments and Task closeout changes; parent summaries and shared fragments require their owners. Grant a bounded historical replay reader for completed, non-cancelled records and associated Git/review evidence, rather than giving all teams arbitrary board access.
+
+At every closure tier, record the inspected change and design/model revisions, affected designs and ancestors, and either the accepted documentation update or a short justified no-change result. Material mismatches block closure. For split repositories, a pending promotion cannot satisfy this receipt.
+
+Replay uses a pinned inventory of completed non-cancelled work records and target Git history reachable from the agreed current baseline. Account for implementation and fix commits outside Cascade records, including direct commits, merges and available squash/rebase provenance; consult linked MR/PR descriptions through existing authorized forge access. Do not require one MR per commit or count the same evidence twice. Unreachable/deleted history and unavailable review bodies are explicit coverage limitations, not invented evidence. Cancelled plans are excluded as requirements sources, but surviving code is still checked against actual implementation and reachable commits.
+
+Assign one owner per directory and shared fragment, reconcile leaves to root, then validate downward and across interfaces. The ledger records each work item and uncovered commit, relevant MR/PR references, evidence revisions, affected requirement/decision IDs, outcome (durable impact, superseded, no durable impact, or unresolved), and excluded-directory coverage. Commit/MR narratives are leads, not proof of current behavior. Reconcile new accepted work since the inventory pin before final closeout.
+
+### Delivery validation
+
+Prefer a few high-signal integration and browser scenarios over broad mock-based unit coverage:
+
+- Config defaults and target/tracking routing; invalid tracking selection; stable mappings after a destination edit.
+- Real pinned-tool DSL/JSON/SVG processing, stable-ID semantic diffs, layout-only changes, first model, removed targets, parse failure, and rejected executable/escaping source.
+- Review then mutate each artifact type; stale-baseline rebase; exact revision gates; crash/retry after either split merge without duplicate acceptance.
+- Paired element and relationship focus, drill/view/back navigation in both directions, all changed views, added/removed states, and accessible text/diff fallback.
+- Anchored comments on requirement/view/element/relationship; outdated targets; active versus unstaffed routing; one accountable escalation; scoped holds with active tasks and an already merged sibling.
+- Closeout mismatch/no-change receipts and replay ledger reconciliation, including a direct fix commit, an MR-described change without a work item, superseded/cancelled work, and unavailable review provenance.
 
 ## Cross-module constraints
 
 - Define “trivial” and the document boundary. A target-code directory gets a `DESIGN.md` in the configured documentation tree when it owns distinct behavior, state, interfaces, or decisions. Generated files, lifecycle folders such as `docs/tasks/3_completed`, and simple leaf directories are covered by the nearest meaningful parent.
 - Give each requirement one home. A parent records system goals, cross-module constraints, and interfaces between children. A child records the requirements and decisions it owns. Parents link to child designs instead of repeating them.
-- Make replay evidence based. Use completed, non-cancelled Epic, Feature, and Task records as leads, then check their claims against current code and tests. Mark unresolved gaps; do not present an old plan or unimplemented decision as current behavior.
+- Make replay evidence based. Use completed, non-cancelled Epic, Feature, and Task records, uncovered target-code commits, and linked MR/PR descriptions as leads, then check their claims against current code and tests. Account for fixes outside Cascade, deduplicate overlapping evidence, and name inaccessible history or review descriptions. Mark unresolved gaps; do not present an old plan, commit narrative, or unimplemented decision as current behavior.
 - Preserve the existing root `DESIGN.md`. Reconcile or migrate it into the configured design-document destination through focused, reviewable edits. Keep work-item history in the work-item records rather than copying it into design docs.
 - Keep documents concise and durable. Record functional and non-functional requirements, key decisions and rationale, interfaces, and important flows. Use Structurizr C4 views for architecture; retain small Mermaid diagrams for flows or state changes when they add clarity. Avoid task plans and line-by-line code descriptions.
 - Keep the architecture model independent of a hosted Structurizr account. A checkout and documented local tooling must be enough to validate and render the committed views for review.
@@ -92,20 +145,37 @@ To be developed by the Epic Manager and Epic Architect after activation.
 
 ## Core dependencies
 
-- The C4 model for architecture views and Structurizr DSL for the versioned model. Select and pin local validation/rendering tooling during epic planning.
+- C4 views use Structurizr DSL and the existing `structurizr/structurizr:2026.09.19-playwright` image pinned to `sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c`. The canonical dependency manifest declares the host runner and exact no-install verification recipe. A planning smoke on 2026-11-09 successfully validated DSL, exported JSON, and rendered SVG with image pulls and networking disabled. This is advisory evidence; it does not replace Cascade's canonical dependency check.
+- Tool sources: [Structurizr binaries](https://docs.structurizr.com/binaries) documents the pinned distribution family; [export commands](https://docs.structurizr.com/export) documents JSON/SVG export. Reuse the installed Docker/runtime and repository Python/JavaScript test tools. No hosted Structurizr account, new UI framework, or dependency installation is authorized by this plan.
+- Dependency readiness currently requires `run_dependency_check` for `dep_structurizr` against manifest revision 1. The Epic Team's exposed tools can declare dependencies but cannot run or attest the canonical check; the existing dependency-check workflow must record it before feature minting and plan sign-off. No `none_required` workaround or fabricated evidence.
 - The existing plan viewer, plan comments, proposal review, and Git revision paths; extend those surfaces rather than creating a separate approval channel.
 - [Epic 36](epic_036_split_target_and_tracking_repos.md) (`depends_on: epic_036`) supplies the optional tracking repository and plan routing before this epic starts. This epic adds design/C4 destination selection on that foundation.
 
 ## Feature breakdown
 
-After epic_036 is completed, the Epic Team will create and sequence feature plans here.
+The following seven bounded slices cover all success criteria. These are planning keys, not minted feature IDs. After canonical software readiness passes, mint them in this order with the listed dependency edges and preserve this scope in their feature specs. Human plan approval remains the dispatch boundary.
+
+| Key | Feature | Depends on | Owned result and acceptance coverage |
+| --- | --- | --- | --- |
+| A | Design guidance and configurable documentation destinations | epic_036 complete | Design skill/template informed by automatik; target/tracking resolver and stable code-directory mapping; root preservation; one-home requirements and ownership. Criteria 1–2 and document-boundary constraints. |
+| B | Versioned C4 model and controlled local rendering | A | Stable IDs/view keys, fragment ownership, pinned source closure, DSL validation and JSON/SVG pipeline, semantic diff and render-node mapping proof. Criteria 3, 9 and controlled execution. |
+| C | Revision-bound architecture proposals and recoverable acceptance | A, B | Review-unit schema, pinned accepted/proposed revisions, stale status, approval/dispatch checks, single/split repository staging and acceptance journal. Criteria 4, 6, 10–11 and baseline portion of 15. |
+| D | Paired C4 review and semantic comment threads | B, C | Synchronized comparisons and all changed views; requirement/view/element/relationship anchors; semantic change summaries; outdated targets; approval and downstream scope gates using existing threads. Criteria 7–10. |
+| E | Living epic revisions and accountable change-request routing | C, D | Active/unstaffed comment routing, one accountable escalation, Epic impact triage, scoped holds, separately reviewed corrective work, preserved accepted siblings. Criteria 15–18. |
+| F | Scoped design authoring and closure reconciliation | A, C, D | Pinned planning context, narrow write/proposal capabilities, ancestor/shared-fragment amendments, bounded replay evidence access, closure receipts and material-mismatch gates at all tiers. Criteria 5 and 12. |
+| G | Historical design reconstruction and final validation | B, E, F | Completed-work plus uncovered-commit/MR inventory; exclusive directory ownership; evidence-backed designs and initial model; complete replay/exclusion ledger; final consistency/render/revision checks. Criteria 13–14 and final end-to-end acceptance. |
+
+E and F may proceed independently after their dependencies, subject to shared-file ownership. G reconciles accepted delivery through the final inventory cut. Each feature includes its relevant automated acceptance scenarios and documentation closeout; do not defer all integration tests to G.
+
+First release excludes freehand/pixel annotations, hosted architecture services, a general-purpose diagram editor, automatic rename inference, full support for executable DSL, and exhaustive function-level diagrams. It retains all semantic comment target types, split-repository recovery, and post-merge change handling required by the brief.
 
 ## Open questions
 
-- Which Structurizr rendering path best supports local, revision-pinned plan review while keeping the editable DSL in Git?
-- For epic and feature proposals, which approved or parent revision is the architecture baseline?
-- Should legacy work receive a temporary grace period for missing C4 views while the initial model is backfilled?
-- Should the proposed first-release comment scope be reduced to view-level comments with global plan threads as a fallback?
+The product choices are specified above: pinned local Structurizr processing; latest accepted epic integration architecture as the later-proposal baseline; and all four semantic comment target types.
+
+Legacy records remain readable and are not retroactively reopened. Missing architecture is an explicit empty/unmodeled state. New or materially revised proposals after the workflow is enabled must satisfy the new gates; no grace period may authorize a claimed but missing diagram change. Replay fills historical coverage and records unresolved gaps.
+
+Pending planning work: Epic Architect review of the macro-architecture and renderer-to-semantic-ID contract; canonical dependency verification; then feature minting and both roles' sign-off on the final revision. These are readiness actions, not permission to omit acceptance criteria.
 
 ## Decision log
 
