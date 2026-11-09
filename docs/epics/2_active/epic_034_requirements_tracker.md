@@ -218,6 +218,11 @@ Pending planning work: canonical `run_dependency_check` for `dep_structurizr` (t
   Chose Bind promotion journals to exact approved revision tuples and expected heads; scope accepted architecture pointers to integration lineages..
   Rationale: An accepted child must advance its epic baseline without claiming target trunk has changed. Concurrent promotions and crashes must recheck recorded heads, generation, and merge results, resume only the missing operation, and never overwrite newer accepted architecture.
   Honors: Success criteria 4, 10–11 and 15; recoverable split-repository acceptance and preservation of accepted siblings..
+
+- `dec_007` · 2026-11-09 · Epic Architect · **Feature breakdown**
+  Chose Deliver minimum owner-scoped staging and review in C alongside its gates; F extends tier-specific authoring, amendments, replay access, and closure..
+  Rationale: Enabling mandatory proposal checks before any authorized proposal path exists would block delivery of F itself. Explicit versioned enablement preserves in-flight work while requiring exact artifact review for new or materially revised proposals and never admitting a claimed but missing model.
+  Honors: Success criteria 4–6, 10 and 12; no new approval service or broadened board authority..
 ## Amendment log
 
 _(none)_
