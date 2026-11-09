@@ -254,6 +254,208 @@ def test_review_unit_id_stays_stable_across_status_transition(tmp_path: Path) ->
     )
 
 
+@pytest.mark.parametrize(
+    "changed_path",
+    (
+        Path("plans/feat_034_003.md"),
+        Path("DESIGN.md"),
+        Path("architecture/target-PLACEHOLDER/workspace.contract.json"),
+        Path("architecture/target-PLACEHOLDER/model.dsl"),
+    ),
+    ids=("plan", "design", "model-contract", "closure-source"),
+)
+def test_committed_review_artifact_mutation_persists_stale_without_losing_evidence(
+    tmp_path: Path, changed_path: Path
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    unit = _unit(project, plan, design, model)
+    store = ArchitectureReviewStore(project)
+    store.save(unit)
+    reviewed = store.record_review(
+        unit.review_unit_id,
+        reviewer="feature-team",
+        decision="reviewed",
+        reviewed_at="2026-11-09T12:00:00+00:00",
+    )
+    original_review = store.get_review(unit.review_unit_id)
+    original_diff = store.get_diff(unit.review_unit_id)
+    if "PLACEHOLDER" in changed_path.as_posix():
+        changed_path = Path(
+            changed_path.as_posix().replace(
+                "target-PLACEHOLDER", project.editable_architecture_root.name
+            )
+        )
+    artifact = project.target.root / changed_path
+    artifact.write_text(artifact.read_text(encoding="utf-8") + "changed\n", encoding="utf-8")
+    _git(project.target.root, "add", changed_path.as_posix())
+    _git(project.target.root, "commit", "-m", f"change reviewed {changed_path.name}")
+
+    state = read_architecture_state(
+        project,
+        owner="feature-team",
+        work_id="feat_034_003",
+        lineage="epic:epic_034",
+    )
+
+    assert reviewed.status == "reviewed"
+    assert state.status == "stale"
+    assert state.invalidation_reasons == ("artifact_changed",)
+    assert state.review == original_review
+    assert state.semantic_diff == original_diff
+
+    _git(project.target.root, "revert", "--no-edit", "HEAD")
+    restored = read_architecture_state(
+        project,
+        owner="feature-team",
+        work_id="feat_034_003",
+        lineage="epic:epic_034",
+    )
+    assert restored.status == "stale"
+    assert restored.review == original_review
+
+
+@pytest.mark.parametrize("mutation", ("edit", "delete"))
+def test_uncommitted_review_artifact_mutation_invalidates_active_checkout(
+    tmp_path: Path, mutation: str
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    unit = _unit(project, plan, design, model)
+    store = ArchitectureReviewStore(project)
+    store.save(unit)
+    store.record_review(
+        unit.review_unit_id,
+        reviewer="feature-team",
+        decision="reviewed",
+        reviewed_at="2026-11-09T12:00:00+00:00",
+    )
+    source = project.target.root / model.sources[0].reference.repository_path
+    if mutation == "edit":
+        source.write_text(source.read_text(encoding="utf-8") + "changed\n", encoding="utf-8")
+    else:
+        source.unlink()
+
+    state = read_architecture_state(
+        project,
+        owner="feature-team",
+        work_id="feat_034_003",
+        lineage="epic:epic_034",
+    )
+
+    assert state.status == "stale"
+    assert state.invalidation_reasons == ("artifact_changed",)
+    assert state.review is not None
+
+
+def test_destination_change_invalidates_review_with_stable_reason(tmp_path: Path) -> None:
+    target = _git_repository(tmp_path / "target")
+    tracking = _git_repository(tmp_path / "tracking")
+    original = ProjectContext.split(target, tracking, architecture_destination="target")
+    resolve_design_ownership(original, ".")
+    target.joinpath("DESIGN.md").write_text("# Design\n", encoding="utf-8")
+    plan_path = target / "plan.md"
+    plan_path.write_text("# Plan\n", encoding="utf-8")
+    _git(target, "add", ".")
+    _git(target, "commit", "-m", "review inputs")
+    revision = _git(target, "rev-parse", "HEAD")
+    design = PinnedArchitectureArtifact(
+        create_architecture_artifact_ref(original, ".", owning_work="feat_034_003"),
+        _digest(target.joinpath("DESIGN.md").read_bytes()),
+    )
+    plan = PinnedDocumentRef(
+        original.target.repository_key, "target", Path("plan.md"), revision,
+        _digest(plan_path.read_bytes()),
+    )
+    proposal = ArchitectureReviewUnit(
+        owner_work_id="feat_034_003",
+        authorized_owner="feature-team",
+        target_repository_key=original.target_repository_key,
+        code_directory=Path("."),
+        design_owner_directory=Path("."),
+        code_repository_key=original.target.repository_key,
+        integration_lineage="epic:epic_034",
+        documentation_repository_key=original.target_repository_key,
+        documentation_repository_role="target",
+        documentation_destination_path=Path("."),
+        proposed_ancestor_context=None,
+        accepted_baseline=ArchitectureBaseline.empty(),
+        baseline_pointer_id=None,
+        baseline_generation=None,
+        rollout_version=1,
+        status="staged",
+        plan=plan,
+        design=design,
+        proposed_model=None,
+        requirement_citations=("REQ-ROOT-001",),
+        decision_citations=("dec_001",),
+        view_citations=(),
+        affected_work_ids=("feat_034_003",),
+        architecture_impact="no_diagram_change",
+        impact_reason="No diagram change",
+    )
+    store = ArchitectureReviewStore(original)
+    store.save(proposal)
+    store.record_review(
+        proposal.review_unit_id, reviewer="feature-team", decision="reviewed",
+        reviewed_at="2026-11-09T12:00:00+00:00",
+    )
+    changed = ProjectContext(original.target, original.tracking, architecture_destination="tracking")
+
+    state = read_architecture_state(
+        changed, owner="feature-team", work_id="feat_034_003", lineage="epic:epic_034"
+    )
+
+    assert state.status == "stale"
+    assert state.invalidation_reasons == ("destination_changed",)
+    assert state.review is not None
+
+
+def test_new_accepted_lineage_generation_requires_rebase_and_fresh_review(
+    tmp_path: Path,
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    store = ArchitectureReviewStore(project)
+    revision = _git(project.target.root, "rev-parse", "HEAD")
+    first = replace(
+        _unit(project, plan, design, model),
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        impact_reason="Establish the initial accepted lineage",
+    )
+    store.save(first)
+    accepted = store.accept(first.review_unit_id, integration_revision=revision, expected_generation=None)
+    proposal = replace(
+        first,
+        accepted_baseline=accepted.baseline,
+        baseline_pointer_id=accepted.pointer_id,
+        baseline_generation=accepted.generation,
+        proposed_ancestor_context=ProposedAncestorContext(
+            first.review_unit_id, accepted.pointer_id, accepted.generation
+        ),
+        impact_reason="Reviewed follow-up proposal",
+    )
+    store.save(proposal)
+    store.record_review(
+        proposal.review_unit_id, reviewer="feature-team", decision="reviewed",
+        reviewed_at="2026-11-09T12:00:00+00:00",
+    )
+    competing = replace(
+        proposal,
+        owner_work_id="feat_034_004",
+        authorized_owner="other-team",
+        affected_work_ids=("feat_034_004",),
+        impact_reason="Competing accepted proposal",
+    )
+    store.save(competing)
+    store.accept(competing.review_unit_id, integration_revision=revision, expected_generation=1)
+
+    refreshed = store.refresh(proposal.review_unit_id)
+
+    assert refreshed.status == "stale"
+    assert store.get_invalidation_reasons(proposal.review_unit_id) == ("stale_baseline",)
+    review = store.get_review(proposal.review_unit_id)
+    assert review and review.tuple_digest == proposal.reviewed_tuple_digest
+
+
 def test_owner_scope_and_stale_generation_fail_before_persistence(tmp_path: Path) -> None:
     project, plan, design, model = _review_repository(tmp_path)
     proposal = replace(

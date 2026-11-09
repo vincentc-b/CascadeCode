@@ -499,6 +499,7 @@ class ArchitectureProposalState:
     accepted: AcceptedLineage | None
     review: ArchitectureReviewRecord | None
     semantic_diff: C4SemanticDiff | None
+    invalidation_reasons: tuple[str, ...] = ()
 
     @property
     def status(self) -> ReviewStatus | None:
@@ -537,6 +538,42 @@ class ArchitectureReviewStore:
     def get_diff(self, review_unit_id: str) -> C4SemanticDiff | None:
         value = self._read()["diffs"].get(review_unit_id)
         return _semantic_diff_from_dict(value) if value is not None else None
+
+    def get_invalidation_reasons(self, review_unit_id: str) -> tuple[str, ...]:
+        values = self._read()["invalidations"].get(review_unit_id, [])
+        if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+            raise WorkspaceError("invalid architecture review invalidation record")
+        return tuple(values)
+
+    def mark_stale(self, review_unit_id: str, reason: str) -> ArchitectureReviewUnit:
+        """Invalidate a unit without discarding its human review evidence or diff."""
+
+        if reason not in {"artifact_changed", "destination_changed", "stale_baseline"}:
+            raise WorkspaceError("invalid architecture review invalidation reason")
+        state = self._read()
+        value = state["review_units"].get(review_unit_id)
+        if value is None:
+            raise ArchitectureProposalError("review_required", "unknown architecture review unit")
+        unit = ArchitectureReviewUnit.from_dict(value)
+        if unit.status == "rejected":
+            return unit
+        updated = replace(unit, status="stale")
+        reasons = state["invalidations"].setdefault(review_unit_id, [])
+        if reason not in reasons:
+            reasons.append(reason)
+        state["review_units"][review_unit_id] = updated.to_dict()
+        self._write(state)
+        return updated
+
+    def refresh(
+        self, review_unit_id: str, *, lineage_revision: str | None = None
+    ) -> ArchitectureReviewUnit:
+        """Recheck a unit at a lifecycle boundary without renewing its review."""
+
+        unit = self.get(review_unit_id)
+        if unit is None:
+            raise ArchitectureProposalError("review_required", "unknown architecture review unit")
+        return _refresh_review_unit(self, unit, lineage_revision=lineage_revision)
 
     def save_diff(self, review_unit_id: str, diff: C4SemanticDiff) -> None:
         state = self._read()
@@ -712,6 +749,7 @@ class ArchitectureReviewStore:
                 "lineages": {},
                 "reviews": {},
                 "diffs": {},
+                "invalidations": {},
             }
         try:
             state = json.loads(self.path.read_text(encoding="utf-8"))
@@ -720,13 +758,17 @@ class ArchitectureReviewStore:
         if (not isinstance(state, dict) or
                 set(state) not in ({"version", "review_units", "lineages"},
                                    {"version", "review_units", "lineages", "reviews"},
-                                   {"version", "review_units", "lineages", "reviews", "diffs"}) or
+                                   {"version", "review_units", "lineages", "reviews", "diffs"},
+                                   {"version", "review_units", "lineages", "reviews", "diffs",
+                                    "invalidations"}) or
                 state["version"] != _SCHEMA_VERSION or not isinstance(state["review_units"], dict) or
                 not isinstance(state["lineages"], dict)):
             raise WorkspaceError(f"unsupported architecture review store: {self.path}")
         state.setdefault("reviews", {})
         state.setdefault("diffs", {})
-        if not isinstance(state["reviews"], dict) or not isinstance(state["diffs"], dict):
+        state.setdefault("invalidations", {})
+        if (not isinstance(state["reviews"], dict) or not isinstance(state["diffs"], dict) or
+                not isinstance(state["invalidations"], dict)):
             raise WorkspaceError(f"unsupported architecture review store: {self.path}")
         return state
 
@@ -757,12 +799,15 @@ def read_architecture_state(
 
     review_store = store or ArchitectureReviewStore(project)
     unit = review_store.find_for_owner(owner, work_id, lineage)
+    if unit is not None:
+        unit = review_store.refresh(unit.review_unit_id, lineage_revision=lineage_revision)
     accepted = review_store.resolve_current(lineage, lineage_revision=lineage_revision)
     return ArchitectureProposalState(
         unit,
         accepted,
         review_store.get_review(unit.review_unit_id) if unit else None,
         review_store.get_diff(unit.review_unit_id) if unit else None,
+        review_store.get_invalidation_reasons(unit.review_unit_id) if unit else (),
     )
 
 
@@ -809,7 +854,7 @@ def stage_architecture_proposal(
         raise ArchitectureProposalError(
             "stale_baseline", "proposal is not based on the current accepted architecture"
         )
-    _validate_store_inputs(review_store, staged)
+    _validate_store_inputs(review_store, staged, lineage_revision=lineage_revision)
     semantic_diff = _validate_proposed_model(
         project,
         staged,
@@ -853,19 +898,26 @@ def review_architecture_proposal(
     if decision not in {"reviewed", "rejected"}:
         raise ArchitectureProposalError("review_required", "invalid review decision")
     if review_store.baseline_status(unit, lineage_revision=lineage_revision).stale:
+        review_store.mark_stale(unit_id, "stale_baseline")
         raise ArchitectureProposalError(
             "stale_baseline", "proposal is not based on the current accepted architecture"
         )
-    _validate_store_inputs(review_store, unit)
-    semantic_diff = _validate_proposed_model(
-        project,
-        unit,
-        renderer=renderer,
-        settings=render_settings,
-        baseline_artifact=baseline_artifact,
-    )
+    try:
+        _validate_store_inputs(review_store, unit, lineage_revision=lineage_revision)
+        semantic_diff = _validate_proposed_model(
+            project,
+            unit,
+            renderer=renderer,
+            settings=render_settings,
+            baseline_artifact=baseline_artifact,
+        )
+    except ArchitectureProposalError as exc:
+        reason = exc.code if exc.code in {"artifact_changed", "destination_changed"} else "artifact_changed"
+        review_store.mark_stale(unit_id, reason)
+        raise
     durable_diff = review_store.get_diff(unit_id)
     if durable_diff != semantic_diff:
+        review_store.mark_stale(unit_id, "artifact_changed")
         raise ArchitectureProposalError(
             "artifact_changed", "validated semantic diff no longer matches the staged proposal"
         )
@@ -877,7 +929,8 @@ def review_architecture_proposal(
         unit.integration_lineage, lineage_revision=lineage_revision
     )
     return ArchitectureProposalState(
-        reviewed, current, review_store.get_review(unit_id), semantic_diff
+        reviewed, current, review_store.get_review(unit_id), semantic_diff,
+        review_store.get_invalidation_reasons(unit_id),
     )
 
 
@@ -889,14 +942,37 @@ def _authorize(unit: ArchitectureReviewUnit, owner: str, work_id: str) -> None:
 
 
 def _validate_store_inputs(
-    store: ArchitectureReviewStore, unit: ArchitectureReviewUnit
+    store: ArchitectureReviewStore,
+    unit: ArchitectureReviewUnit,
+    *,
+    lineage_revision: str | None = None,
 ) -> None:
     try:
         store._validate_unit_inputs(unit)
+        _validate_current_artifacts(store.project, unit, lineage_revision=lineage_revision)
     except WorkspaceError as exc:
         detail = str(exc)
         code = "destination_changed" if "destination" in detail else "artifact_changed"
         raise ArchitectureProposalError(code, detail) from exc
+
+
+def _refresh_review_unit(
+    store: ArchitectureReviewStore,
+    unit: ArchitectureReviewUnit,
+    *,
+    lineage_revision: str | None,
+) -> ArchitectureReviewUnit:
+    """Persist the first freshness failure; a later recheck never restores review."""
+
+    if unit.status in {"stale", "rejected"}:
+        return unit
+    try:
+        _validate_store_inputs(store, unit, lineage_revision=lineage_revision)
+    except ArchitectureProposalError as exc:
+        return store.mark_stale(unit.review_unit_id, exc.code)
+    if store.baseline_status(unit, lineage_revision=lineage_revision).stale:
+        return store.mark_stale(unit.review_unit_id, "stale_baseline")
+    return unit
 
 
 def _validate_proposed_model(
@@ -1171,6 +1247,88 @@ def _read_architecture_bytes(project: ProjectContext, reference: ArchitectureArt
     )
     return _git_blob(repository, reference.revision, reference.repository_path,
                      "architecture artifact")
+
+
+def _validate_current_artifacts(
+    project: ProjectContext,
+    unit: ArchitectureReviewUnit,
+    *,
+    lineage_revision: str | None,
+) -> None:
+    """Ensure every reviewed path still has its pinned bytes at the active heads."""
+
+    plan_repository = _repository(
+        project, unit.plan.repository_role, unit.plan.repository_key
+    )
+    plan_head = (
+        lineage_revision
+        if lineage_revision is not None and unit.plan.repository_role == "target"
+        else _head(plan_repository.root)
+    )
+    _verify_current_blob(
+        plan_repository, unit.plan.revision, plan_head, unit.plan.path,
+        unit.plan.content_digest, "review plan",
+    )
+
+    artifacts = [unit.design]
+    if unit.proposed_model:
+        artifacts.extend((unit.proposed_model.contract, *unit.proposed_model.sources))
+    for artifact in artifacts:
+        reference = artifact.reference
+        repository = _architecture_repository(
+            project,
+            reference.destination_repository_role,
+            reference.destination_repository_key,
+        )
+        current_head = (
+            lineage_revision
+            if lineage_revision is not None and reference.destination_repository_role == "target"
+            else _head(repository.root)
+        )
+        _verify_current_blob(
+            repository, reference.revision, current_head, reference.repository_path,
+            artifact.content_digest, "architecture artifact",
+        )
+
+
+def _verify_current_blob(
+    repository: RepositoryContext,
+    pinned_revision: str,
+    current_revision: str,
+    path: Path,
+    content_digest: str,
+    field: str,
+) -> None:
+    _require_commit(repository.root, current_revision, f"current {field}")
+    if not _is_ancestor(repository.root, pinned_revision, current_revision):
+        raise WorkspaceError(f"pinned {field} revision is not in the current lineage")
+    changed = subprocess.run(
+        ["git", "log", "--format=%H", f"{pinned_revision}..{current_revision}", "--",
+         path.as_posix()],
+        cwd=repository.root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if changed.returncode != 0:
+        raise WorkspaceError(f"cannot inspect current {field} history")
+    if changed.stdout.strip():
+        raise WorkspaceError(f"pinned {field} changed after its recorded revision")
+    _verify_digest(
+        _git_blob(repository, current_revision, path, f"current {field}"),
+        content_digest,
+    )
+    # When the active lineage is this checkout's HEAD, its working bytes are
+    # also reviewable state.  This mirrors Feature A's pinning rule and catches
+    # an edit or deletion before it is committed.  A caller validating another
+    # lineage revision must only inspect that commit, not an unrelated checkout.
+    if current_revision == _head(repository.root):
+        try:
+            working_bytes = (repository.root / path).read_bytes()
+        except OSError as exc:
+            raise WorkspaceError(f"current {field} working bytes are not readable") from exc
+        _verify_digest(working_bytes, content_digest)
 
 
 def _head(repository: Path) -> str:
