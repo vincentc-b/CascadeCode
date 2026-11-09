@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "epic_id": "epic_034",
+  "snapshots": [
+    {
+      "revision": 1,
+      "recorded_at": "2026-11-09T03:53:08.497811+00:00",
+      "scope": {
+        "manifest_revision": 2,
+        "entries": [
+          {
+            "dependency_id": "dep_structurizr",
+            "source": "docker.io/structurizr/structurizr:2026.09.19-playwright",
+            "integrity_reference": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+            "setup_operation": "docker image inspect structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+            "check_operation": "/opt/conda/bin/python3.12 - <<'PY'\nimport json, os, pathlib, subprocess, tempfile\nimage = 'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\ninspected = json.loads(subprocess.check_output(['docker','image','inspect',image], text=True, timeout=10))[0]\nassert image in inspected['RepoDigests']\nassert (inspected['Os'], inspected['Architecture']) == ('linux','amd64')\nwith tempfile.TemporaryDirectory(prefix='epic034-c4-check-') as directory:\n    root = pathlib.Path(directory)\n    root.chmod(0o755)\n    (root/'workspace.dsl').write_text('workspace {\\n model {\\n  reviewer = person \"Reviewer\"\\n  cascade = softwareSystem \"Cascade\"\\n  reviewer -> cascade \"Reviews plans\"\\n }\\n views {\\n  systemContext cascade \"context\" {\\n   include *\\n   autoLayout lr\\n  }\\n }\\n}\\n')\n    base = ['docker','run','--rm','--pull=never','--network=none','--read-only','--cap-drop=ALL','--security-opt=no-new-privileges','--pids-limit=256','--memory=1536m','--cpus=2','--tmpfs','/tmp:rw,size=512m','--user',f'{os.getuid()}:{os.getgid()}','-e','HOME=/tmp','-e','PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1','-v',f'{directory}:/usr/local/structurizr:rw',image]\n    for args in [['validate','-workspace','workspace.dsl'],['export','-workspace','workspace.dsl','-format','json','-output','out'],['export','-workspace','workspace.dsl','-format','svg','-output','out']]:\n        subprocess.run(base+args, check=True, timeout=55)\n    model = json.loads((root/'out/workspace.json').read_text())\n    assert model['views']['systemContextViews'][0]['key'] == 'context'\n    assert '<svg' in (root/'out/context.svg').read_text()\nprint('PASS structurizr 2026.09.19-playwright sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c: offline DSL validation, JSON export, SVG render')\nPY",
+            "paths": [
+              "Existing Docker image store on ip-172-31-37-14; no new installation requested"
+            ],
+            "destination": "Existing Docker image store on ip-172-31-37-14; no new installation requested",
+            "cleanup": "Containers use --rm and fixture/output directories use Python TemporaryDirectory; remove only check-owned temporary artifacts. Retain the pre-existing shared image."
+          }
+        ],
+        "feasibility_artifacts": [],
+        "limits": {
+          "timeout_seconds": 180,
+          "max_attempts": 5,
+          "max_output_bytes": 32768,
+          "memory_bytes": null
+        }
+      },
+      "authorization": null,
+      "checking": false,
+      "feasibility_results": [],
+      "blockers": []
+    }
+  ]
+}
