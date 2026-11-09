@@ -2,7 +2,7 @@
 id: epic_013
 title: Configurable periodic health audits and recovery
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_013_001
@@ -17,7 +17,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-22'
-updated: '2026-11-08'
+updated: '2026-11-09'
 provider: codex
 flex_mode: false
 models:
