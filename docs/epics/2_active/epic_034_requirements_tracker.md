@@ -199,6 +199,11 @@ Pending planning work: Epic Architect review of the macro-architecture and rende
   Chose Pin later proposals to the latest accepted architecture on the epic integration lineage; preserve completed children and represent split merges as acceptance_pending until both reviewed sides land..
   Rationale: An accepted child changes the real baseline before the epic reaches trunk. Pending proposal edits cannot advance current architecture. Exact revision binding and scoped holds prevent stale approvals from covering changed or corrective work.
   Honors: Success criteria 4, 10–11 and 15–18; preserve accepted commits and review lineage..
+
+- `dec_004` · 2026-11-09 · Epic Manager · **Core dependencies**
+  Chose Declare the existing Structurizr 2026.09.19-playwright image by immutable digest; use offline DSL validation, semantic JSON, and SVG; require canonical verification before minting/sign-off..
+  Rationale: The installed image passed advisory validate/JSON/SVG smoke checks without downloads. Reusing it avoids a host Java upgrade or new renderer dependency. The smoke is not canonical readiness evidence; manifest revision 1 still requires run_dependency_check.
+  Honors: Local reproducible architecture tooling; no dependency installation without explicit authorization; no bypass of the software readiness gate..
 ## Amendment log
 
 _(none)_
