@@ -179,7 +179,9 @@ Legacy records remain readable and are not retroactively reopened. Missing archi
 
 Architect review completed on 2026-11-09 against the repository context, comment schema, approval/sign-off gates, and pinned renderer. The review strengthened semantic-ID validation and SVG binding acceptance, integration-lineage promotion/recovery, and the minimum authoring path required when gates become active. The renderer probe is advisory; implementation of the mapping adapter remains Feature B's first acceptance checkpoint.
 
-Pending planning work: canonical `run_dependency_check` for `dep_structurizr` (the current Epic Team tool registry exposes manifest authoring but no check execution); then feature minting, Epic Manager review of these changes, and both roles' sign-off on the final revision. Architect sign-off is not yet recorded because canonical dependency readiness is still `missing_check`. These are readiness actions, not permission to omit acceptance criteria.
+Epic Manager review completed on 2026-11-09: the Architect's semantic-ID/SVG binding checkpoint, lineage-safe promotion recovery, and minimum authoring path before gate activation are accepted within slices B, C, and F. The seven-slice dependency graph covers all 18 success criteria without adding a separate service or expanding first-release scope. Human comment `cmt_001` is covered by criterion 13, the replay contract, slice G, and `dec_001`; it remains open for human review.
+
+Pending planning work: canonical `run_dependency_check` for `dep_structurizr` against manifest revision 1, then mint slices A–G with their declared dependencies and obtain both roles' sign-off on the final revision. The current Epic Team tool registry still exposes manifest authoring but no canonical check execution; dependency readiness remains `missing_check`. Neither role has signed off. The next handoff is to the existing canonical dependency-check workflow; repeating the advisory smoke cannot clear this gate. These are readiness actions, not permission to omit acceptance criteria.
 
 ## Decision log
 
