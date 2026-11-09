@@ -210,7 +210,7 @@ def create_architecture_artifact_ref(
         relative_path = ownership.design_path.relative_to(repository.root)
     except ValueError as exc:  # pragma: no cover - ProjectContext invariant
         raise WorkspaceError("architecture artifact path escapes its repository") from exc
-    return ArchitectureArtifactRef(
+    reference = ArchitectureArtifactRef(
         target_repository_key=ownership.target_repository_key,
         code_directory=ownership.code_directory,
         design_owner_directory=ownership.design_owner_directory,
@@ -224,6 +224,8 @@ def create_architecture_artifact_ref(
         repository_path=relative_path,
         revision=_head_revision(repository.root),
     )
+    _require_committed_artifact(repository.root, reference)
+    return reference
 
 
 def create_architecture_model_ref(
@@ -251,7 +253,7 @@ def create_architecture_model_ref(
         repository_path = destination_path.relative_to(repository.root)
     except ValueError as exc:  # pragma: no cover - ProjectContext invariant
         raise WorkspaceError("architecture model path escapes its repository") from exc
-    return ArchitectureArtifactRef(
+    reference = ArchitectureArtifactRef(
         target_repository_key=ownership.target_repository_key,
         code_directory=ownership.code_directory,
         design_owner_directory=ownership.design_owner_directory,
@@ -265,6 +267,8 @@ def create_architecture_model_ref(
         repository_path=repository_path,
         revision=_head_revision(repository.root),
     )
+    _require_committed_artifact(repository.root, reference)
+    return reference
 
 
 def resolve_artifact_ref_path(
@@ -533,6 +537,37 @@ def _head_revision(repository: Path) -> str:
             f"cannot pin architecture artifact: repository has no readable HEAD: {repository}"
         )
     return revision
+
+
+def _require_committed_artifact(
+    repository: Path, reference: ArchitectureArtifactRef
+) -> None:
+    object_name = f"{reference.revision}:{reference.repository_path.as_posix()}"
+    result = subprocess.run(
+        ["git", "show", object_name],
+        cwd=repository,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise WorkspaceError(
+            "cannot pin architecture artifact: reviewed bytes are not committed at "
+            f"{reference.repository_path.as_posix()} in {reference.revision}"
+        )
+    artifact_path = repository / reference.repository_path
+    try:
+        reviewed_bytes = artifact_path.read_bytes()
+    except OSError as exc:
+        raise WorkspaceError(
+            "cannot pin architecture artifact: reviewed artifact is not readable at "
+            f"{reference.repository_path.as_posix()}"
+        ) from exc
+    if reviewed_bytes != result.stdout:
+        raise WorkspaceError(
+            "cannot pin architecture artifact: reviewed working bytes differ from "
+            f"{reference.repository_path.as_posix()} in {reference.revision}"
+        )
 
 
 def _committed_index_key(project: ProjectContext) -> str | None:

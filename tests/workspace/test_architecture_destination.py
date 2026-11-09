@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -188,6 +189,11 @@ def test_persisted_artifact_ref_ignores_later_destination_config(
         target, tracking, architecture_destination="tracking"
     )
     resolve_design_ownership(tracking_mode, "cascade/workspace")
+    design = tracking_mode.design_path("cascade/workspace")
+    design.parent.mkdir(parents=True)
+    design.write_text("# Reviewed design\n", encoding="utf-8")
+    _git(target=tracking, args=("add", "."))
+    _git(target=tracking, args=("commit", "-m", "add reviewed design"))
 
     created = create_architecture_artifact_ref(
         tracking_mode,
@@ -243,8 +249,17 @@ def test_reads_links_proposals_and_replay_use_the_fixed_reference(
 ) -> None:
     target = _committed_repo(tmp_path / "target")
     tracking = _committed_repo(tmp_path / "tracking")
+    config = target / "cascade.toml"
+    config.write_text(
+        f'tracking_repository = "{tracking}"\n\n'
+        '[architecture]\ndestination = "tracking"\n',
+        encoding="utf-8",
+    )
+    settings = read_project_configuration(config)
     tracking_mode = ProjectContext.split(
-        target, tracking, architecture_destination="tracking"
+        target,
+        tracking,
+        architecture_destination=settings.architecture_destination,
     )
     resolve_design_ownership(tracking_mode, "cascade/workspace")
     _git(target=target, args=("add", "architecture/design-mappings.json"))
@@ -266,13 +281,76 @@ def test_reads_links_proposals_and_replay_use_the_fixed_reference(
     design.write_text("# Later design\n", encoding="utf-8")
     _git(target=tracking, args=("add", "."))
     _git(target=tracking, args=("commit", "-m", "change design"))
-    target_mode = ProjectContext.split(target, tracking)
+    config.write_text(
+        f'tracking_repository = "{tracking}"\n\n'
+        '[architecture]\ndestination = "target"\n',
+        encoding="utf-8",
+    )
+    reconfigured = read_project_configuration(config)
+    target_mode = ProjectContext.split(
+        target,
+        tracking,
+        architecture_destination=reconfigured.architecture_destination,
+    )
 
     assert resolve_artifact_ref_path(target_mode, reference) == design
     assert read_architecture_artifact(target_mode, reference) == "# Reviewed design\n"
     assert replay_architecture_artifact(target_mode, reference) == "# Reviewed design\n"
     assert architecture_artifact_link(reference) == expected_link
     assert target_mode.design_path("cascade/workspace") != design
+    assert load_design_ownerships(target_mode)[0].artifact_id == (
+        f"design:{reference.target_repository_key}:cascade/workspace"
+    )
+
+    mismatched_repository = replace(
+        reference, destination_repository_key="repository-mismatch"
+    )
+    with pytest.raises(WorkspaceError, match="destination repository has changed"):
+        read_architecture_artifact(target_mode, mismatched_repository)
+
+    missing_blob = replace(reference, repository_path=Path("missing/DESIGN.md"))
+    with pytest.raises(WorkspaceError, match="cannot read pinned architecture artifact"):
+        read_architecture_artifact(target_mode, missing_blob)
+
+    replacement_tracking = _committed_repo(tmp_path / "replacement-tracking")
+    changed_tracking_repository = ProjectContext.split(
+        target, replacement_tracking, architecture_destination="tracking"
+    )
+    with pytest.raises(WorkspaceError, match="destination repository has changed"):
+        read_architecture_artifact(changed_tracking_repository, reference)
+
+
+def test_artifact_ref_requires_reviewed_bytes_to_be_committed(
+    tmp_path: Path,
+) -> None:
+    target = _committed_repo(tmp_path / "target")
+    project = ProjectContext.colocated(target)
+    resolve_design_ownership(project, ".")
+    design = project.design_path()
+    design.write_text("# Uncommitted design\n", encoding="utf-8")
+
+    with pytest.raises(WorkspaceError, match="reviewed bytes are not committed"):
+        create_architecture_artifact_ref(
+            project, ".", owning_work="feat_034_001"
+        )
+
+
+def test_artifact_ref_rejects_tracked_working_bytes_that_differ_from_head(
+    tmp_path: Path,
+) -> None:
+    target = _committed_repo(tmp_path / "target")
+    project = ProjectContext.colocated(target)
+    resolve_design_ownership(project, ".")
+    design = project.design_path()
+    design.write_text("# Committed design\n", encoding="utf-8")
+    _git(target=target, args=("add", "."))
+    _git(target=target, args=("commit", "-m", "add reviewed design"))
+    design.write_text("# Uncommitted replacement\n", encoding="utf-8")
+
+    with pytest.raises(WorkspaceError, match="working bytes differ"):
+        create_architecture_artifact_ref(
+            project, ".", owning_work="feat_034_001"
+        )
 
 
 def test_model_reference_routes_under_fixed_editable_architecture_root(
@@ -296,10 +374,16 @@ def test_model_reference_routes_under_fixed_editable_architecture_root(
         "workspace.dsl",
         owning_work="feat_034_001",
     )
+    pinned_revision = _git(target=tracking, args=("rev-parse", "HEAD"))
+    model.write_text("later workspace model\n", encoding="utf-8")
+    _git(target=tracking, args=("add", "."))
+    _git(target=tracking, args=("commit", "-m", "change architecture model"))
     reconfigured = ProjectContext.split(target, tracking)
 
+    assert reference.revision == pinned_revision
     assert resolve_artifact_ref_path(reconfigured, reference) == model
     assert read_architecture_artifact(reconfigured, reference) == "workspace model\n"
+    assert replay_architecture_artifact(reconfigured, reference) == "workspace model\n"
 
 
 def test_artifact_reference_rejects_untrusted_revision() -> None:
