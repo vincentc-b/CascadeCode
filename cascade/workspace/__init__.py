@@ -53,6 +53,14 @@ from cascade.workspace.c4_render import (
     C4RenderOperation,
     C4RenderSettings,
 )
+from cascade.workspace.c4_diff import (
+    C4ContainmentChange,
+    C4IdentityChange,
+    C4SemanticDiff,
+    C4SemanticModelArtifact,
+    C4ViewDiff,
+    compute_c4_semantic_diff,
+)
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -75,6 +83,11 @@ __all__ = [
     "C4RenderFailure",
     "C4RenderOperation",
     "C4RenderSettings",
+    "C4ContainmentChange",
+    "C4IdentityChange",
+    "C4SemanticDiff",
+    "C4SemanticModelArtifact",
+    "C4ViewDiff",
     "C4View",
     "C4WorkspaceContract",
     "find_project_config",
@@ -98,6 +111,7 @@ __all__ = [
     "resolve_product_trunk",
     "validate_c4_workspace",
     "materialize_c4_source_closure",
+    "compute_c4_semantic_diff",
     "STRUCTURIZR_IMAGE",
     "STRUCTURIZR_IMAGE_DIGEST",
     "up",
