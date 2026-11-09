@@ -35,9 +35,12 @@ from cascade.workspace.types import ProjectContext, RepositoryContext
 _SCHEMA_VERSION = 1
 _REVISION = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 _DIGEST = re.compile(r"(?:sha256:)?[0-9a-f]{64}")
+_REVIEW_GATE_NAME = "revision_bound_architecture"
 RepositoryRole = Literal["target", "tracking"]
 ReviewStatus = Literal["draft", "staged", "reviewed", "approved", "stale", "rejected"]
 ReviewDecision = Literal["reviewed", "rejected"]
+ReviewGateBoundary = Literal["approval", "dispatch", "integration", "merge", "closeout"]
+_REVIEW_GATE_BOUNDARIES = {"approval", "dispatch", "integration", "merge", "closeout"}
 
 
 class ArchitectureProposalError(WorkspaceError):
@@ -506,6 +509,18 @@ class ArchitectureProposalState:
         return self.unit.status if self.unit else None
 
 
+@dataclass(frozen=True)
+class ReviewGateResult:
+    """The exact policy and reviewed tuple admitted at a lifecycle boundary."""
+
+    work_id: str
+    boundary: ReviewGateBoundary
+    gate_name: str
+    rollout_version: int
+    review_unit_id: str | None
+    tuple_digest: str | None
+
+
 class ArchitectureReviewStore:
     def __init__(self, project: ProjectContext, path: Path | None = None) -> None:
         self.project = project
@@ -656,6 +671,111 @@ class ArchitectureReviewStore:
         self._write(state)
         return updated
 
+    def enable_gate_rollout(self, version: int) -> None:
+        """Explicitly activate a monotonic lifecycle gate version."""
+
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+            raise WorkspaceError("review gate rollout version must be a positive integer")
+        state = self._read()
+        rollout = state["gate_rollout"]
+        active = rollout["active_version"]
+        if active is not None and version < active:
+            raise WorkspaceError("review gate rollout version cannot move backwards")
+        rollout["active_version"] = version
+        self._write(state)
+
+    def gate_rollout_version(self) -> int | None:
+        return self._read()["gate_rollout"]["active_version"]
+
+    def gate_policy_version(self, work_id: str) -> int | None:
+        _nonblank(work_id, "review gate work ID")
+        return self._read()["gate_rollout"]["work_policies"].get(work_id)
+
+    def bind_gate_policy(self, work_id: str, version: int) -> int:
+        """Record policy once; zero is the durable pre-rollout policy."""
+
+        _nonblank(work_id, "review gate work ID")
+        if not isinstance(version, int) or isinstance(version, bool) or version < 0:
+            raise WorkspaceError("invalid review gate policy version")
+        state = self._read()
+        policies = state["gate_rollout"]["work_policies"]
+        existing = policies.get(work_id)
+        if existing is not None:
+            return existing
+        policies[work_id] = version
+        self._write(state)
+        return version
+
+    def rebind_gate_policy(self, work_id: str, version: int) -> int:
+        """Bind a materially revised proposal to the current rollout."""
+
+        _nonblank(work_id, "review gate work ID")
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+            raise WorkspaceError("invalid review gate policy version")
+        state = self._read()
+        existing = state["gate_rollout"]["work_policies"].get(work_id)
+        if existing is not None and existing > version:
+            raise WorkspaceError("review gate policy version cannot move backwards")
+        state["gate_rollout"]["work_policies"][work_id] = version
+        self._write(state)
+        return version
+
+    def set_acceptance_hold(self, work_ids: Sequence[str], operation_id: str | None) -> None:
+        """Hold or release exactly the work affected by a partial promotion."""
+
+        ids = tuple(work_ids)
+        _unique_nonblank(ids, "acceptance hold work IDs")
+        if operation_id is not None:
+            _nonblank(operation_id, "promotion operation ID")
+        state = self._read()
+        holds = state["gate_rollout"]["acceptance_holds"]
+        for work_id in ids:
+            if operation_id is None:
+                holds.pop(work_id, None)
+            else:
+                holds[work_id] = operation_id
+        self._write(state)
+
+    def acceptance_hold(self, work_id: str) -> str | None:
+        _nonblank(work_id, "acceptance hold work ID")
+        value = self._read()["gate_rollout"]["acceptance_holds"].get(work_id)
+        if value is not None and not isinstance(value, str):
+            raise WorkspaceError("invalid architecture acceptance hold")
+        return value
+
+    def approve_review_unit(self, review_unit_id: str) -> ArchitectureReviewUnit:
+        """Pin the human-reviewed tuple at the existing lifecycle approval boundary."""
+
+        state = self._read()
+        value = state["review_units"].get(review_unit_id)
+        if value is None:
+            raise ArchitectureProposalError("review_required", "unknown architecture review unit")
+        unit = ArchitectureReviewUnit.from_dict(value)
+        if unit.status == "approved":
+            return unit
+        review = self.get_review(review_unit_id)
+        if unit.status != "reviewed" or review is None or review.decision != "reviewed":
+            raise ArchitectureProposalError(
+                "review_required", "architecture proposal requires human review before approval"
+            )
+        if review.tuple_digest != unit.reviewed_tuple_digest:
+            raise ArchitectureProposalError("artifact_changed", "human review does not match tuple")
+        updated = replace(unit, status="approved")
+        state["review_units"][review_unit_id] = updated.to_dict()
+        self._write(state)
+        return updated
+
+    def units_affecting(self, work_id: str) -> tuple[ArchitectureReviewUnit, ...]:
+        _nonblank(work_id, "review gate work ID")
+        units = tuple(
+            ArchitectureReviewUnit.from_dict(value)
+            for value in self._read()["review_units"].values()
+        )
+        return tuple(
+            unit for unit in units
+            if unit.owner_work_id == work_id or work_id in unit.affected_work_ids
+        )
+
     def resolve_current(self, lineage: str, *, lineage_revision: str | None = None) -> AcceptedLineage | None:
         _nonblank(lineage, "integration lineage")
         revision = lineage_revision or _head(self.project.target.root)
@@ -750,6 +870,12 @@ class ArchitectureReviewStore:
                 "reviews": {},
                 "diffs": {},
                 "invalidations": {},
+                "gate_rollout": {
+                    "name": _REVIEW_GATE_NAME,
+                    "active_version": None,
+                    "work_policies": {},
+                    "acceptance_holds": {},
+                },
             }
         try:
             state = json.loads(self.path.read_text(encoding="utf-8"))
@@ -760,15 +886,38 @@ class ArchitectureReviewStore:
                                    {"version", "review_units", "lineages", "reviews"},
                                    {"version", "review_units", "lineages", "reviews", "diffs"},
                                    {"version", "review_units", "lineages", "reviews", "diffs",
-                                    "invalidations"}) or
+                                    "invalidations"},
+                                   {"version", "review_units", "lineages", "reviews", "diffs",
+                                    "invalidations", "gate_rollout"}) or
                 state["version"] != _SCHEMA_VERSION or not isinstance(state["review_units"], dict) or
                 not isinstance(state["lineages"], dict)):
             raise WorkspaceError(f"unsupported architecture review store: {self.path}")
         state.setdefault("reviews", {})
         state.setdefault("diffs", {})
         state.setdefault("invalidations", {})
+        state.setdefault(
+            "gate_rollout",
+            {"name": _REVIEW_GATE_NAME, "active_version": None,
+             "work_policies": {}, "acceptance_holds": {}},
+        )
+        if not isinstance(state["gate_rollout"], dict):
+            raise WorkspaceError(f"unsupported architecture review store: {self.path}")
+        state["gate_rollout"].setdefault("name", _REVIEW_GATE_NAME)
+        state["gate_rollout"].setdefault("acceptance_holds", {})
         if (not isinstance(state["reviews"], dict) or not isinstance(state["diffs"], dict) or
-                not isinstance(state["invalidations"], dict)):
+                not isinstance(state["invalidations"], dict) or
+                not isinstance(state["gate_rollout"], dict) or
+                set(state["gate_rollout"]) != {
+                    "name", "active_version", "work_policies", "acceptance_holds"
+                } or
+                state["gate_rollout"]["name"] != _REVIEW_GATE_NAME or
+                not isinstance(state["gate_rollout"]["work_policies"], dict) or
+                not isinstance(state["gate_rollout"]["acceptance_holds"], dict)):
+            raise WorkspaceError(f"unsupported architecture review store: {self.path}")
+        active = state["gate_rollout"]["active_version"]
+        if active is not None and (
+            not isinstance(active, int) or isinstance(active, bool) or active < 1
+        ):
             raise WorkspaceError(f"unsupported architecture review store: {self.path}")
         return state
 
@@ -934,6 +1083,115 @@ def review_architecture_proposal(
     )
 
 
+def enable_review_gate(
+    project: ProjectContext,
+    *,
+    version: int,
+    store: ArchitectureReviewStore | None = None,
+) -> None:
+    """Explicitly enable a named architecture lifecycle policy version."""
+
+    (store or ArchitectureReviewStore(project)).enable_gate_rollout(version)
+
+
+def validate_review_gate(
+    project: ProjectContext,
+    *,
+    work_id: str,
+    boundary: ReviewGateBoundary,
+    store: ArchitectureReviewStore | None = None,
+    lineage_revision: str | None = None,
+    blocking_work_ids: Sequence[str] = (),
+) -> ReviewGateResult:
+    """Apply one revision-bound policy at every safe lifecycle boundary.
+
+    Approval is the existing human boundary: it promotes an exact reviewed tuple
+    to ``approved``.  Dispatch binds new work to the active rollout.  Work first
+    observed later in its lifecycle is durably grandfathered at policy zero.
+    """
+
+    _nonblank(work_id, "review gate work ID")
+    if boundary not in _REVIEW_GATE_BOUNDARIES:
+        raise WorkspaceError("invalid architecture review gate boundary")
+    review_store = store or ArchitectureReviewStore(project)
+    active = review_store.gate_rollout_version()
+    policy = review_store.gate_policy_version(work_id)
+    hold = review_store.acceptance_hold(work_id)
+    if hold is not None:
+        raise ArchitectureProposalError(
+            "acceptance_pending",
+            f"promotion {hold} has not accepted both code and documentation",
+        )
+    if active is None and policy is None:
+        # Parsing the affected units is deliberate: even a legacy policy may
+        # not silently accept a persisted diagram claim with no valid model.
+        review_store.units_affecting(work_id)
+        return ReviewGateResult(
+            work_id, boundary, _REVIEW_GATE_NAME, 0, None, None
+        )
+    if policy is None:
+        policy = review_store.bind_gate_policy(
+            work_id, active if boundary in {"approval", "dispatch"} else 0
+        )
+    elif boundary == "approval" and active is not None and policy < active:
+        # A fresh approval is the explicit signal that a proposal was materially
+        # revised; already executing work never reaches this path implicitly.
+        policy = review_store.rebind_gate_policy(work_id, active)
+
+    blockers = tuple(dict.fromkeys(item for item in blocking_work_ids if item.strip()))
+    if blockers:
+        raise ArchitectureProposalError(
+            "review_required",
+            "open blocking review threads affect: " + ", ".join(blockers),
+        )
+
+    candidates = tuple(
+        unit for unit in review_store.units_affecting(work_id)
+        if unit.rollout_version == policy
+    )
+    if policy == 0:
+        # A rollout exception never legalizes a claimed diagram without a model.
+        for unit in review_store.units_affecting(work_id):
+            if unit.architecture_impact == "diagram_change" and unit.proposed_model is None:
+                raise ArchitectureProposalError(
+                    "model_required", "a diagram change requires a pinned model closure"
+                )
+        return ReviewGateResult(
+            work_id, boundary, _REVIEW_GATE_NAME, 0, None, None
+        )
+    if not candidates:
+        raise ArchitectureProposalError(
+            "review_required",
+            f"work is bound to architecture review rollout v{policy} but has no proposal",
+        )
+    unit = candidates[-1]
+    refreshed = review_store.refresh(unit.review_unit_id, lineage_revision=lineage_revision)
+    if refreshed.status == "stale":
+        reasons = review_store.get_invalidation_reasons(refreshed.review_unit_id)
+        code = reasons[-1] if reasons else "artifact_changed"
+        raise ArchitectureProposalError(code, "approved architecture review tuple is stale")
+    if refreshed.architecture_impact == "diagram_change" and refreshed.proposed_model is None:
+        raise ArchitectureProposalError(
+            "model_required", "a diagram change requires a pinned model closure"
+        )
+    if refreshed.proposed_model is not None:
+        _validate_model_binding(project, refreshed.proposed_model)
+    if boundary == "approval":
+        refreshed = review_store.approve_review_unit(refreshed.review_unit_id)
+    elif refreshed.status != "approved":
+        raise ArchitectureProposalError(
+            "review_required", "architecture proposal is not approved for this boundary"
+        )
+    return ReviewGateResult(
+        work_id,
+        boundary,
+        _REVIEW_GATE_NAME,
+        policy,
+        refreshed.review_unit_id,
+        refreshed.reviewed_tuple_digest,
+    )
+
+
 def _authorize(unit: ArchitectureReviewUnit, owner: str, work_id: str) -> None:
     if unit.authorized_owner != owner or unit.owner_work_id != work_id:
         raise ArchitectureProposalError(
@@ -1001,6 +1259,39 @@ def _validate_proposed_model(
             "model_required", "a diagram change requires a pinned model closure"
         )
     chosen_settings = settings or C4RenderSettings()
+    closure, render = _validate_model_binding(
+        project, binding, renderer=renderer, settings=chosen_settings
+    )
+    proposed = C4SemanticModelArtifact(unit.review_unit_id, render, closure.contract)
+    current = _validated_baseline_artifact(unit, baseline_artifact)
+    if unit.accepted_baseline.kind == "empty_baseline":
+        current = C4SemanticModelArtifact(
+            "empty_baseline",
+            C4RenderArtifact(status="empty", closure_digest="empty_baseline"),
+            closure.contract,
+        )
+    source_reference = render.source_diff_reference or f"revision:{closure.revision}"
+    diff = compute_c4_semantic_diff(
+        current, proposed, source_diff_reference=source_reference
+    )
+    if diff.state == "render_error":
+        raise ArchitectureProposalError("model_invalid", diff.error or diff.summary)
+    return diff
+
+
+def _validate_model_binding(
+    project: ProjectContext,
+    binding: ArchitectureModelBinding,
+    *,
+    renderer: C4ArtifactRenderer | None = None,
+    settings: C4RenderSettings | None = None,
+) -> tuple[C4SourceClosure, C4RenderArtifact]:
+    """Reproduce a pinned model binding without relying on cached review state."""
+
+    try:
+        chosen_settings = settings or C4RenderSettings(**dict(binding.renderer_settings))
+    except (TypeError, ValueError) as exc:
+        raise ArchitectureProposalError("model_invalid", str(exc)) from exc
     expected_settings = tuple(sorted(chosen_settings.cache_payload().items()))
     if binding.renderer_settings != expected_settings:
         raise ArchitectureProposalError(
@@ -1023,21 +1314,7 @@ def _validate_proposed_model(
     except (C4SourceError, OSError, ValueError, TimeoutError) as exc:
         raise ArchitectureProposalError("model_invalid", str(exc)) from exc
     _verify_render_binding(binding, closure, render)
-    proposed = C4SemanticModelArtifact(unit.review_unit_id, render, closure.contract)
-    current = _validated_baseline_artifact(unit, baseline_artifact)
-    if unit.accepted_baseline.kind == "empty_baseline":
-        current = C4SemanticModelArtifact(
-            "empty_baseline",
-            C4RenderArtifact(status="empty", closure_digest="empty_baseline"),
-            closure.contract,
-        )
-    source_reference = render.source_diff_reference or f"revision:{closure.revision}"
-    diff = compute_c4_semantic_diff(
-        current, proposed, source_diff_reference=source_reference
-    )
-    if diff.state == "render_error":
-        raise ArchitectureProposalError("model_invalid", diff.error or diff.summary)
-    return diff
+    return closure, render
 
 
 def _verify_render_binding(
@@ -1362,5 +1639,7 @@ __all__ = ["AcceptedArchitecturePointer", "AcceptedLineage", "ArchitectureBaseli
            "ArchitectureProposalState", "ArchitectureReviewRecord",
            "ArchitectureReviewStore", "ArchitectureReviewUnit",
            "PinnedArchitectureArtifact", "PinnedDocumentRef", "ProposedAncestorContext",
-           "ReviewBaselineStatus", "read_architecture_state",
-           "review_architecture_proposal", "stage_architecture_proposal"]
+           "ReviewBaselineStatus", "ReviewGateBoundary", "ReviewGateResult",
+           "enable_review_gate", "read_architecture_state",
+           "review_architecture_proposal", "stage_architecture_proposal",
+           "validate_review_gate"]

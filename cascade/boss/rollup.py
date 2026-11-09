@@ -61,6 +61,13 @@ def try_complete_feature(
     feature_meta = board.by_id[feature_id]
     if feature_meta.tier != "feature":
         return False
+    from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    try:
+        require_lifecycle_review_gate(feature_id, "closeout", root=repo)
+    except ArchitectureProposalError:
+        return False
     if (
         feature_meta.status == "completed"
         and feature_meta.path.parent.name == "3_completed"

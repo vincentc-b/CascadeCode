@@ -236,6 +236,13 @@ def _finish_epic_completion_result(
     epic_meta = board.by_id[epic_id]
     if epic_meta.tier != "epic":
         return EpicCompleteResult(ok=False, reason="wrong_tier")
+    from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    try:
+        require_lifecycle_review_gate(epic_id, "closeout", root=repo)
+    except ArchitectureProposalError as exc:
+        return EpicCompleteResult(ok=False, reason=str(exc))
     if epic_meta.status == "completed" and epic_meta.path.parent.name == "3_completed":
         if _completed_on_operator_trunk(epic_id, repo):
             review_state = epic_review_snapshot(epic_id, root=repo)

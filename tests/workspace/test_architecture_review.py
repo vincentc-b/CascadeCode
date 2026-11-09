@@ -28,11 +28,13 @@ from cascade.workspace import (
     WorkspaceError,
     create_architecture_artifact_ref,
     create_architecture_model_ref,
+    enable_review_gate,
     materialize_c4_source_closure,
     resolve_design_ownership,
     read_architecture_state,
     review_architecture_proposal,
     stage_architecture_proposal,
+    validate_review_gate,
 )
 
 
@@ -454,6 +456,112 @@ def test_new_accepted_lineage_generation_requires_rebase_and_fresh_review(
     assert store.get_invalidation_reasons(proposal.review_unit_id) == ("stale_baseline",)
     review = store.get_review(proposal.review_unit_id)
     assert review and review.tuple_digest == proposal.reviewed_tuple_digest
+
+
+def test_enabled_rollout_binds_new_dispatch_and_requires_review(tmp_path: Path) -> None:
+    project, _, _, _ = _review_repository(tmp_path)
+    store = ArchitectureReviewStore(project)
+    enable_review_gate(project, version=1, store=store)
+
+    with pytest.raises(ArchitectureProposalError, match="review_required"):
+        validate_review_gate(
+            project, work_id="feat_034_003", boundary="dispatch", store=store
+        )
+
+    assert store.gate_policy_version("feat_034_003") == 1
+
+
+def test_approval_pins_reviewed_tuple_for_all_lifecycle_boundaries(tmp_path: Path) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    proposal = replace(
+        _unit(project, plan, design, model),
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        impact_reason="The reviewed implementation does not alter diagrams",
+        affected_work_ids=("feat_034_003", "task_034_003_004"),
+    )
+    store = ArchitectureReviewStore(project)
+    store.save(proposal)
+    store.record_review(
+        proposal.review_unit_id,
+        reviewer="feature-team",
+        decision="reviewed",
+        reviewed_at="2026-11-09T12:00:00+00:00",
+    )
+    enable_review_gate(project, version=1, store=store)
+
+    approved = validate_review_gate(
+        project, work_id="feat_034_003", boundary="approval", store=store
+    )
+    dispatched = validate_review_gate(
+        project, work_id="task_034_003_004", boundary="dispatch", store=store
+    )
+    merged = validate_review_gate(
+        project, work_id="feat_034_003", boundary="merge", store=store
+    )
+
+    assert approved.review_unit_id == proposal.review_unit_id
+    assert dispatched.review_unit_id == proposal.review_unit_id
+    assert merged.tuple_digest == proposal.reviewed_tuple_digest
+    assert store.get(proposal.review_unit_id).status == "approved"
+
+
+def test_gate_revalidates_diagram_model_binding_before_approval(tmp_path: Path) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    proposal = _unit(project, plan, design, model)
+    store = ArchitectureReviewStore(project)
+    store.save(proposal)
+    store.record_review(
+        proposal.review_unit_id,
+        reviewer="feature-team",
+        decision="reviewed",
+        reviewed_at="2026-11-09T12:00:00+00:00",
+    )
+    enable_review_gate(project, version=1, store=store)
+
+    with pytest.raises(ArchitectureProposalError) as refusal:
+        validate_review_gate(
+            project, work_id="feat_034_003", boundary="approval", store=store
+        )
+
+    assert refusal.value.code == "model_invalid"
+    assert store.get(proposal.review_unit_id).status == "reviewed"
+
+
+def test_gate_reports_freshness_and_scoped_acceptance_holds(tmp_path: Path) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    proposal = replace(
+        _unit(project, plan, design, model),
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        impact_reason="No diagram change",
+        affected_work_ids=("feat_034_003", "task_034_003_004"),
+    )
+    store = ArchitectureReviewStore(project)
+    store.save(proposal)
+    store.record_review(
+        proposal.review_unit_id,
+        reviewer="feature-team",
+        decision="reviewed",
+        reviewed_at="2026-11-09T12:00:00+00:00",
+    )
+    enable_review_gate(project, version=1, store=store)
+    validate_review_gate(
+        project, work_id="feat_034_003", boundary="approval", store=store
+    )
+    store.set_acceptance_hold(("task_034_003_004",), "promotion-1")
+
+    with pytest.raises(ArchitectureProposalError, match="acceptance_pending"):
+        validate_review_gate(
+            project, work_id="task_034_003_004", boundary="dispatch", store=store
+        )
+
+    store.set_acceptance_hold(("task_034_003_004",), None)
+    project.target.root.joinpath("DESIGN.md").write_text("# Changed design\n", encoding="utf-8")
+    with pytest.raises(ArchitectureProposalError, match="artifact_changed"):
+        validate_review_gate(
+            project, work_id="feat_034_003", boundary="closeout", store=store
+        )
 
 
 def test_owner_scope_and_stale_generation_fail_before_persistence(tmp_path: Path) -> None:

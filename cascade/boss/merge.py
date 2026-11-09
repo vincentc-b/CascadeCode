@@ -29,6 +29,17 @@ class MergeResult:
     conflict_paths: tuple[str, ...] = ()
 
 
+def _architecture_gate_refusal(work_id: str, boundary: str, root: Path) -> str | None:
+    from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    try:
+        require_lifecycle_review_gate(work_id, boundary, root=root)  # type: ignore[arg-type]
+    except ArchitectureProposalError as exc:
+        return str(exc)
+    return None
+
+
 def _merge_result_from_sync(
     sync,
     *,
@@ -74,6 +85,8 @@ def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
 
     if blocked := refusal_if_blocked(task_id, root=trunk):
         return MergeResult(ok=False, reason=blocked, branch=branch)
+    if refusal := _architecture_gate_refusal(task_id, "merge", trunk):
+        return MergeResult(ok=False, reason=refusal, branch=branch)
 
     if not has_git(trunk):
         return MergeResult(ok=False, reason="not_a_git_repo", branch=branch)
@@ -205,6 +218,8 @@ def merge_feature_branch(feature_id: str, *, root: Path | None = None) -> MergeR
 
     if blocked := refusal_if_blocked(feature_id, root=trunk):
         return MergeResult(ok=False, reason=blocked, branch=source_branch)
+    if refusal := _architecture_gate_refusal(feature_id, "merge", trunk):
+        return MergeResult(ok=False, reason=refusal, branch=source_branch)
 
     epic_id = feature.meta.parent
     if not epic_id:
@@ -247,6 +262,9 @@ def promote_epic_to_trunk(epic_id: str, *, root: Path | None = None) -> MergeRes
 
     trunk = resolve_root(root)
     source_branch = f"epic/{epic_id}"
+
+    if refusal := _architecture_gate_refusal(epic_id, "merge", trunk):
+        return MergeResult(ok=False, reason=refusal, branch=source_branch)
 
     if not has_git(trunk):
         return MergeResult(ok=True, branch=source_branch)

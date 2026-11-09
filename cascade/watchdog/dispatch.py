@@ -248,6 +248,13 @@ def _dispatch_feature(
         return _fail(reason)
     if refusal := _provider_preflight_refusal(meta, by=by, root=root):
         return refusal
+    from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    try:
+        require_lifecycle_review_gate(work_id, "dispatch", root=root)
+    except ArchitectureProposalError as exc:
+        return _fail(exc.code)
 
     from cascade.stacked_dispatch import ensure_feature_dispatch_selection
 
@@ -368,6 +375,14 @@ def _dispatch_task(
         return _fail(blocked)
     if refusal := _provider_preflight_refusal(meta, by=by, root=root):
         return refusal
+
+    from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    try:
+        require_lifecycle_review_gate(work_id, "dispatch", root=root)
+    except ArchitectureProposalError as exc:
+        return _fail(exc.code)
 
     if not has_git(root):
         move_doc(work_id, "active", root=root)
