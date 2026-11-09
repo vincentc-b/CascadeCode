@@ -213,6 +213,11 @@ Pending planning work: canonical `run_dependency_check` for `dep_structurizr` (t
   Chose Require validated semantic IDs and a renderer-to-model binding artifact; make its proof Feature B's first acceptance checkpoint..
   Rationale: The pinned offline probe passed DSL validation and JSON/SVG export, but semantic properties survived only in JSON. Stock SVG cannot alone provide reliable paired selection. Bind renderer metadata to the same export, preserve it through sanitization, and test repeated labels, source reordering, and parallel relationships; fail visibly for ambiguous mappings.
   Honors: Success criteria 3, 7–10; reproducible local rendering and meaningful integration evidence without label/order heuristics..
+
+- `dec_006` · 2026-11-09 · Epic Architect · **Revision-bound proposal and acceptance**
+  Chose Bind promotion journals to exact approved revision tuples and expected heads; scope accepted architecture pointers to integration lineages..
+  Rationale: An accepted child must advance its epic baseline without claiming target trunk has changed. Concurrent promotions and crashes must recheck recorded heads, generation, and merge results, resume only the missing operation, and never overwrite newer accepted architecture.
+  Honors: Success criteria 4, 10–11 and 15; recoverable split-repository acceptance and preservation of accepted siblings..
 ## Amendment log
 
 _(none)_
