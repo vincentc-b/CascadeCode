@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_034_001
 - feat_034_002
+- feat_034_003
 depends_on:
 - epic_036
 owners:
@@ -156,6 +157,7 @@ Prefer a few high-signal integration and browser scenarios over broad mock-based
 - [Epic 36](epic_036_split_target_and_tracking_repos.md) (`depends_on: epic_036`) supplies the optional tracking repository and plan routing before this epic starts. This epic adds design/C4 destination selection on that foundation.
 
 ## Feature breakdown
+- feat_034_003
 - feat_034_002
 - feat_034_001
 
