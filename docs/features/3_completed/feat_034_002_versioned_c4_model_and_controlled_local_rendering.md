@@ -2,7 +2,7 @@
 id: feat_034_002
 title: Versioned C4 model and controlled local rendering
 tier: feature
-status: active
+status: completed
 parent: epic_034
 children:
 - task_034_002_001
