@@ -11,7 +11,7 @@ import tempfile
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal, Sequence
+from typing import Literal, Mapping, Sequence
 
 from cascade.workspace.architecture import ArchitectureArtifactRef
 from cascade.workspace.c4_closure import C4SourceClosure, materialize_c4_source_closure
@@ -40,6 +40,8 @@ RepositoryRole = Literal["target", "tracking"]
 ReviewStatus = Literal["draft", "staged", "reviewed", "approved", "stale", "rejected"]
 ReviewDecision = Literal["reviewed", "rejected"]
 ReviewGateBoundary = Literal["approval", "dispatch", "integration", "merge", "closeout"]
+PromotionSideState = Literal["pending", "landed"]
+PromotionOutcome = Literal["reserved", "acceptance_pending", "accepted", "conflict"]
 _REVIEW_GATE_BOUNDARIES = {"approval", "dispatch", "integration", "merge", "closeout"}
 
 
@@ -448,6 +450,140 @@ AcceptedArchitecturePointer = AcceptedLineage
 
 
 @dataclass(frozen=True)
+class PromotionHeads:
+    """Destination and incoming revisions fixed before promotion starts."""
+
+    expected_code_head: str
+    expected_documentation_head: str
+    incoming_implementation_commit: str
+    incoming_documentation_commit: str
+
+    def __post_init__(self) -> None:
+        for value, field in (
+            (self.expected_code_head, "expected code head"),
+            (self.expected_documentation_head, "expected documentation head"),
+            (self.incoming_implementation_commit, "incoming implementation commit"),
+            (self.incoming_documentation_commit, "incoming documentation commit"),
+        ):
+            _revision(value, field)
+
+    def to_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, value: object) -> "PromotionHeads":
+        row = _mapping(value, {
+            "expected_code_head", "expected_documentation_head",
+            "incoming_implementation_commit", "incoming_documentation_commit",
+        })
+        if not all(isinstance(item, str) for item in row.values()):
+            raise WorkspaceError("invalid promotion heads")
+        return cls(**row)
+
+
+@dataclass(frozen=True)
+class PromotionSide:
+    state: PromotionSideState = "pending"
+    observed_resulting_head: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.state not in {"pending", "landed"}:
+            raise WorkspaceError("invalid promotion side state")
+        if self.state == "pending" and self.observed_resulting_head is not None:
+            raise WorkspaceError("a pending promotion side cannot have a resulting head")
+        if self.state == "landed":
+            _revision(self.observed_resulting_head, "observed promotion head")
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, value: object) -> "PromotionSide":
+        row = _mapping(value, {"state", "observed_resulting_head"})
+        return cls(row["state"], row["observed_resulting_head"])
+
+
+@dataclass(frozen=True)
+class PromotionJournal:
+    """Durable reservation binding an approved tuple to exact Git revisions."""
+
+    operation_id: str
+    lineage_key: str
+    reserved_generation: int | None
+    approved_review_unit_id: str
+    approved_tuple_digest: str
+    code_repository_key: str
+    documentation_repository_key: str
+    documentation_repository_role: RepositoryRole
+    documentation_destination_path: Path
+    heads: PromotionHeads
+    code: PromotionSide
+    documentation: PromotionSide
+    outcome: PromotionOutcome
+    error_code: str | None = None
+
+    def __post_init__(self) -> None:
+        for value, field in (
+            (self.operation_id, "promotion operation ID"),
+            (self.lineage_key, "promotion lineage"),
+            (self.approved_review_unit_id, "approved review unit ID"),
+            (self.code_repository_key, "code repository key"),
+            (self.documentation_repository_key, "documentation repository key"),
+        ):
+            _nonblank(value, field)
+        _generation(self.reserved_generation, "reserved lineage generation")
+        _digest(self.approved_tuple_digest, "approved review tuple")
+        _role(self.documentation_repository_role)
+        _relative_path(
+            self.documentation_destination_path,
+            "documentation destination",
+            allow_root=True,
+        )
+        if self.outcome not in {"reserved", "acceptance_pending", "accepted", "conflict"}:
+            raise WorkspaceError("invalid promotion outcome")
+        if self.outcome == "conflict":
+            _nonblank(self.error_code, "promotion conflict code")
+        elif self.error_code is not None:
+            raise WorkspaceError("only a conflicted promotion has an error code")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "operation_id": self.operation_id,
+            "lineage_key": self.lineage_key,
+            "reserved_generation": self.reserved_generation,
+            "approved_review_unit_id": self.approved_review_unit_id,
+            "approved_tuple_digest": self.approved_tuple_digest,
+            "code_repository_key": self.code_repository_key,
+            "documentation_repository_key": self.documentation_repository_key,
+            "documentation_repository_role": self.documentation_repository_role,
+            "documentation_destination_path": self.documentation_destination_path.as_posix(),
+            "heads": self.heads.to_dict(),
+            "code": self.code.to_dict(),
+            "documentation": self.documentation.to_dict(),
+            "outcome": self.outcome,
+            "error_code": self.error_code,
+        }
+
+    @classmethod
+    def from_dict(cls, value: object) -> "PromotionJournal":
+        row = _mapping(value, {
+            "operation_id", "lineage_key", "reserved_generation",
+            "approved_review_unit_id", "approved_tuple_digest", "code_repository_key",
+            "documentation_repository_key", "documentation_repository_role",
+            "documentation_destination_path", "heads", "code", "documentation",
+            "outcome", "error_code",
+        })
+        return cls(
+            row["operation_id"], row["lineage_key"], row["reserved_generation"],
+            row["approved_review_unit_id"], row["approved_tuple_digest"],
+            row["code_repository_key"], row["documentation_repository_key"],
+            row["documentation_repository_role"], Path(row["documentation_destination_path"]),
+            PromotionHeads.from_dict(row["heads"]), PromotionSide.from_dict(row["code"]),
+            PromotionSide.from_dict(row["documentation"]), row["outcome"], row["error_code"],
+        )
+
+
+@dataclass(frozen=True)
 class ReviewBaselineStatus:
     current: AcceptedLineage | None
     stale: bool
@@ -503,6 +639,7 @@ class ArchitectureProposalState:
     review: ArchitectureReviewRecord | None
     semantic_diff: C4SemanticDiff | None
     invalidation_reasons: tuple[str, ...] = ()
+    pending_promotion: PromotionJournal | None = None
 
     @property
     def status(self) -> ReviewStatus | None:
@@ -743,6 +880,143 @@ class ArchitectureReviewStore:
             raise WorkspaceError("invalid architecture acceptance hold")
         return value
 
+    def get_promotion(self, operation_id: str) -> PromotionJournal | None:
+        _nonblank(operation_id, "promotion operation ID")
+        value = self._read()["promotions"].get(operation_id)
+        return PromotionJournal.from_dict(value) if value is not None else None
+
+    def pending_promotion(self, lineage: str) -> PromotionJournal | None:
+        _nonblank(lineage, "integration lineage")
+        state = self._read()
+        operation_id = state["promotion_reservations"].get(lineage)
+        if operation_id is None:
+            return None
+        value = state["promotions"].get(operation_id)
+        if value is None:
+            raise WorkspaceError("invalid architecture promotion reservation")
+        journal = PromotionJournal.from_dict(value)
+        if journal.outcome not in {"reserved", "acceptance_pending"}:
+            raise WorkspaceError("terminal architecture promotion remains reserved")
+        return journal
+
+    def reserve_promotion(
+        self,
+        review_unit_id: str,
+        expected_heads: PromotionHeads | Mapping[str, str],
+        expected_generation: int | None,
+        *,
+        operation_id: str | None = None,
+    ) -> PromotionJournal:
+        """Atomically reserve one approved tuple at the current lineage generation."""
+
+        heads = _promotion_heads(expected_heads)
+        unit = self.get(review_unit_id)
+        if unit is None:
+            raise ArchitectureProposalError("review_required", "unknown architecture review unit")
+        unit = self.refresh(review_unit_id, lineage_revision=heads.expected_code_head)
+        if unit.status != "approved":
+            raise ArchitectureProposalError(
+                "review_required", "architecture proposal is not approved for promotion"
+            )
+        if unit.reviewed_tuple_digest != review_unit_id.removeprefix("architecture-review-"):
+            raise ArchitectureProposalError("artifact_changed", "approved tuple identity changed")
+
+        payload = {
+            "review_unit_id": review_unit_id,
+            "tuple_digest": unit.reviewed_tuple_digest,
+            "lineage": unit.integration_lineage,
+            "reserved_generation": expected_generation,
+            "heads": heads.to_dict(),
+        }
+        generated_id = f"architecture-promotion-{_json_digest(payload)}"
+        if operation_id is None:
+            operation_id = generated_id
+        else:
+            _nonblank(operation_id, "promotion operation ID")
+
+        # The shared lifecycle lock protects reservation, generation, and head
+        # comparisons. It is released before the later promotion adapter does
+        # any rendering, merging, or remote Git work.
+        from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+        with task_lifecycle_lock(root=self.project.target.root):
+            state = self._read()
+            durable_value = state["review_units"].get(review_unit_id)
+            if durable_value is None:
+                raise ArchitectureProposalError(
+                    "review_required", "unknown architecture review unit"
+                )
+            durable = ArchitectureReviewUnit.from_dict(durable_value)
+            if durable.status != "approved" or durable.reviewed_tuple_digest != unit.reviewed_tuple_digest:
+                raise ArchitectureProposalError(
+                    "artifact_changed", "approved architecture tuple changed before reservation"
+                )
+
+            docs = _architecture_repository(
+                self.project,
+                durable.documentation_repository_role,
+                durable.documentation_repository_key,
+            )
+            _require_commit(self.project.target.root, heads.expected_code_head, "expected code head")
+            _require_commit(docs.root, heads.expected_documentation_head,
+                            "expected documentation head")
+            _require_commit(self.project.target.root, heads.incoming_implementation_commit,
+                            "incoming implementation commit")
+            _require_commit(docs.root, heads.incoming_documentation_commit,
+                            "incoming documentation commit")
+            if _head(self.project.target.root) != heads.expected_code_head:
+                raise ArchitectureProposalError("head_conflict", "code destination head changed")
+            if _head(docs.root) != heads.expected_documentation_head:
+                raise ArchitectureProposalError(
+                    "head_conflict", "documentation destination head changed"
+                )
+
+            current = self.resolve_current(
+                durable.integration_lineage, lineage_revision=heads.expected_code_head
+            )
+            actual_generation = current.generation if current else None
+            if actual_generation != expected_generation:
+                raise ArchitectureProposalError(
+                    "reservation_lost", "accepted lineage generation changed"
+                )
+            if self.baseline_status(
+                durable, lineage_revision=heads.expected_code_head
+            ).stale:
+                raise ArchitectureProposalError(
+                    "stale_baseline", "approved tuple is based on a stale accepted lineage"
+                )
+
+            existing_value = state["promotions"].get(operation_id)
+            if existing_value is not None:
+                existing = PromotionJournal.from_dict(existing_value)
+                candidate = _new_promotion_journal(operation_id, durable, heads,
+                                                   expected_generation)
+                if _same_promotion_identity(existing, candidate):
+                    return existing
+                raise ArchitectureProposalError(
+                    "promotion_conflict", "promotion operation ID has different revisions"
+                )
+
+            incumbent_id = state["promotion_reservations"].get(durable.integration_lineage)
+            journal = _new_promotion_journal(
+                operation_id, durable, heads, expected_generation
+            )
+            if incumbent_id is not None and incumbent_id != operation_id:
+                conflict = replace(
+                    journal, outcome="conflict", error_code="promotion_conflict"
+                )
+                state["promotions"][operation_id] = conflict.to_dict()
+                self._write(state)
+                return conflict
+
+            state["promotions"][operation_id] = journal.to_dict()
+            state["promotion_reservations"][durable.integration_lineage] = operation_id
+            holds = state["gate_rollout"]["acceptance_holds"]
+            for work_id in durable.affected_work_ids:
+                holds[work_id] = operation_id
+            self._write(state)
+            return journal
+
     def approve_review_unit(self, review_unit_id: str) -> ArchitectureReviewUnit:
         """Pin the human-reviewed tuple at the existing lifecycle approval boundary."""
 
@@ -802,9 +1076,31 @@ class ArchitectureReviewStore:
                accepted_documentation_head: str | None = None,
                integration_revision: str | None = None,
                expected_generation: int | None) -> AcceptedLineage:
+        """Advance an unreserved lineage using a lifecycle-locked generation CAS."""
+
+        from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+        with task_lifecycle_lock(root=self.project.target.root):
+            return self._accept_locked(
+                review_unit_id,
+                accepted_code_head=accepted_code_head,
+                accepted_documentation_head=accepted_documentation_head,
+                integration_revision=integration_revision,
+                expected_generation=expected_generation,
+            )
+
+    def _accept_locked(self, review_unit_id: str, *, accepted_code_head: str | None = None,
+                       accepted_documentation_head: str | None = None,
+                       integration_revision: str | None = None,
+                       expected_generation: int | None) -> AcceptedLineage:
         unit = self.get(review_unit_id)
         if unit is None:
             raise WorkspaceError("unknown architecture review unit")
+        if self.pending_promotion(unit.integration_lineage) is not None:
+            raise ArchitectureProposalError(
+                "acceptance_pending",
+                "a reserved promotion must finalize through its journal",
+            )
         if integration_revision is not None:
             if accepted_code_head is not None or accepted_documentation_head is not None:
                 raise WorkspaceError("provide accepted heads or integration revision, not both")
@@ -876,25 +1172,26 @@ class ArchitectureReviewStore:
                     "work_policies": {},
                     "acceptance_holds": {},
                 },
+                "promotions": {},
+                "promotion_reservations": {},
             }
         try:
             state = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise WorkspaceError(f"invalid architecture review store: {self.path}") from exc
         if (not isinstance(state, dict) or
-                set(state) not in ({"version", "review_units", "lineages"},
-                                   {"version", "review_units", "lineages", "reviews"},
-                                   {"version", "review_units", "lineages", "reviews", "diffs"},
-                                   {"version", "review_units", "lineages", "reviews", "diffs",
-                                    "invalidations"},
-                                   {"version", "review_units", "lineages", "reviews", "diffs",
-                                    "invalidations", "gate_rollout"}) or
+                not {"version", "review_units", "lineages"}.issubset(state) or
+                not set(state).issubset({"version", "review_units", "lineages", "reviews", "diffs",
+                                         "invalidations", "gate_rollout", "promotions",
+                                         "promotion_reservations"}) or
                 state["version"] != _SCHEMA_VERSION or not isinstance(state["review_units"], dict) or
                 not isinstance(state["lineages"], dict)):
             raise WorkspaceError(f"unsupported architecture review store: {self.path}")
         state.setdefault("reviews", {})
         state.setdefault("diffs", {})
         state.setdefault("invalidations", {})
+        state.setdefault("promotions", {})
+        state.setdefault("promotion_reservations", {})
         state.setdefault(
             "gate_rollout",
             {"name": _REVIEW_GATE_NAME, "active_version": None,
@@ -906,6 +1203,8 @@ class ArchitectureReviewStore:
         state["gate_rollout"].setdefault("acceptance_holds", {})
         if (not isinstance(state["reviews"], dict) or not isinstance(state["diffs"], dict) or
                 not isinstance(state["invalidations"], dict) or
+                not isinstance(state["promotions"], dict) or
+                not isinstance(state["promotion_reservations"], dict) or
                 not isinstance(state["gate_rollout"], dict) or
                 set(state["gate_rollout"]) != {
                     "name", "active_version", "work_policies", "acceptance_holds"
@@ -957,6 +1256,26 @@ def read_architecture_state(
         review_store.get_review(unit.review_unit_id) if unit else None,
         review_store.get_diff(unit.review_unit_id) if unit else None,
         review_store.get_invalidation_reasons(unit.review_unit_id) if unit else (),
+        review_store.pending_promotion(lineage),
+    )
+
+
+def reserve_promotion(
+    project: ProjectContext,
+    unit_id: str,
+    expected_heads: PromotionHeads | Mapping[str, str],
+    expected_generation: int | None,
+    *,
+    operation_id: str | None = None,
+    store: ArchitectureReviewStore | None = None,
+) -> PromotionJournal:
+    """Reserve a lineage generation and journal exact promotion revisions."""
+
+    return (store or ArchitectureReviewStore(project)).reserve_promotion(
+        unit_id,
+        expected_heads,
+        expected_generation,
+        operation_id=operation_id,
     )
 
 
@@ -1634,12 +1953,61 @@ def _is_ancestor(repository: Path, ancestor: str, descendant: str) -> bool:
     return result.returncode == 0
 
 
+def _promotion_heads(value: PromotionHeads | Mapping[str, str]) -> PromotionHeads:
+    if isinstance(value, PromotionHeads):
+        return value
+    if not isinstance(value, Mapping):
+        raise WorkspaceError("invalid promotion heads")
+    return PromotionHeads.from_dict(dict(value))
+
+
+def _new_promotion_journal(
+    operation_id: str,
+    unit: ArchitectureReviewUnit,
+    heads: PromotionHeads,
+    generation: int | None,
+) -> PromotionJournal:
+    return PromotionJournal(
+        operation_id=operation_id,
+        lineage_key=unit.integration_lineage,
+        reserved_generation=generation,
+        approved_review_unit_id=unit.review_unit_id,
+        approved_tuple_digest=unit.reviewed_tuple_digest,
+        code_repository_key=unit.code_repository_key,
+        documentation_repository_key=unit.documentation_repository_key,
+        documentation_repository_role=unit.documentation_repository_role,
+        documentation_destination_path=unit.documentation_destination_path,
+        heads=heads,
+        code=PromotionSide(),
+        documentation=PromotionSide(),
+        outcome="reserved",
+    )
+
+
+def _same_promotion_identity(left: PromotionJournal, right: PromotionJournal) -> bool:
+    """Ignore only result fields when recognizing an idempotent reservation retry."""
+
+    return (
+        left.operation_id == right.operation_id
+        and left.lineage_key == right.lineage_key
+        and left.reserved_generation == right.reserved_generation
+        and left.approved_review_unit_id == right.approved_review_unit_id
+        and left.approved_tuple_digest == right.approved_tuple_digest
+        and left.code_repository_key == right.code_repository_key
+        and left.documentation_repository_key == right.documentation_repository_key
+        and left.documentation_repository_role == right.documentation_repository_role
+        and left.documentation_destination_path == right.documentation_destination_path
+        and left.heads == right.heads
+    )
+
+
 __all__ = ["AcceptedArchitecturePointer", "AcceptedLineage", "ArchitectureBaseline",
            "ArchitectureModelBinding", "ArchitectureProposalError",
            "ArchitectureProposalState", "ArchitectureReviewRecord",
            "ArchitectureReviewStore", "ArchitectureReviewUnit",
            "PinnedArchitectureArtifact", "PinnedDocumentRef", "ProposedAncestorContext",
+           "PromotionHeads", "PromotionJournal", "PromotionSide",
            "ReviewBaselineStatus", "ReviewGateBoundary", "ReviewGateResult",
            "enable_review_gate", "read_architecture_state",
-           "review_architecture_proposal", "stage_architecture_proposal",
+           "reserve_promotion", "review_architecture_proposal", "stage_architecture_proposal",
            "validate_review_gate"]

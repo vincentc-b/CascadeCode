@@ -7,6 +7,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from cascade.workspace import (
     C4RenderSettings,
     PinnedArchitectureArtifact,
     PinnedDocumentRef,
+    PromotionHeads,
     ProjectContext,
     ProposedAncestorContext,
     WorkspaceError,
@@ -32,6 +34,7 @@ from cascade.workspace import (
     materialize_c4_source_closure,
     resolve_design_ownership,
     read_architecture_state,
+    reserve_promotion,
     review_architecture_proposal,
     stage_architecture_proposal,
     validate_review_gate,
@@ -564,6 +567,78 @@ def test_gate_reports_freshness_and_scoped_acceptance_holds(tmp_path: Path) -> N
         )
 
 
+def test_promotion_reservation_survives_restart_with_exact_revisions_and_hold(
+    tmp_path: Path,
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    store = ArchitectureReviewStore(project)
+    proposal = _approve_no_diagram(store, _unit(project, plan, design, model))
+    expected = _git(project.target.root, "rev-parse", "HEAD")
+    incoming = _incoming_commit(project.target.root, expected, "implementation")
+    heads = PromotionHeads(expected, expected, incoming, incoming)
+
+    journal = reserve_promotion(
+        project,
+        proposal.review_unit_id,
+        heads,
+        None,
+        store=store,
+    )
+
+    restarted = ArchitectureReviewStore(project)
+    assert restarted.get_promotion(journal.operation_id) == journal
+    assert restarted.pending_promotion("epic:epic_034") == journal
+    assert restarted.acceptance_hold("feat_034_003") == journal.operation_id
+    assert restarted.resolve_current("epic:epic_034") is None
+    with pytest.raises(ArchitectureProposalError, match="acceptance_pending"):
+        restarted.accept(
+            proposal.review_unit_id,
+            integration_revision=expected,
+            expected_generation=None,
+        )
+    payload = json.loads(restarted.path.read_text(encoding="utf-8"))
+    persisted = payload["promotions"][journal.operation_id]
+    assert persisted["approved_tuple_digest"] == proposal.reviewed_tuple_digest
+    assert persisted["heads"]["incoming_implementation_commit"] == incoming
+    assert persisted["code"] == {"state": "pending", "observed_resulting_head": None}
+    assert persisted["documentation"] == {
+        "state": "pending", "observed_resulting_head": None
+    }
+
+
+def test_competing_promotion_reservations_leave_one_visible_conflict(
+    tmp_path: Path,
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    store = ArchitectureReviewStore(project)
+    first = _approve_no_diagram(store, _unit(project, plan, design, model))
+    second = _approve_no_diagram(
+        store,
+        replace(_unit(project, plan, design, model), impact_reason="Competing reviewed tuple"),
+    )
+    expected = _git(project.target.root, "rev-parse", "HEAD")
+    incoming = _incoming_commit(project.target.root, expected, "implementation")
+    heads = PromotionHeads(expected, expected, incoming, incoming)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        journals = tuple(executor.map(
+            lambda unit_id: reserve_promotion(
+                project, unit_id, heads, None, store=ArchitectureReviewStore(project)
+            ),
+            (first.review_unit_id, second.review_unit_id),
+        ))
+
+    assert {journal.outcome for journal in journals} == {"reserved", "conflict"}
+    winner = next(journal for journal in journals if journal.outcome == "reserved")
+    loser = next(journal for journal in journals if journal.outcome == "conflict")
+    restarted = ArchitectureReviewStore(project)
+    assert loser.error_code == "promotion_conflict"
+    assert restarted.get_promotion(loser.operation_id) == loser
+    assert restarted.pending_promotion("epic:epic_034") == winner
+    assert restarted.acceptance_hold("feat_034_003") == winner.operation_id
+    assert restarted.resolve_current("epic:epic_034") is None
+
+
 def test_owner_scope_and_stale_generation_fail_before_persistence(tmp_path: Path) -> None:
     project, plan, design, model = _review_repository(tmp_path)
     proposal = replace(
@@ -782,6 +857,35 @@ def test_diagram_change_runs_pinned_closure_and_render_validation(tmp_path: Path
         lineage="epic:epic_034",
     )
     assert inspected.semantic_diff == staged.semantic_diff
+
+
+def _approve_no_diagram(
+    store: ArchitectureReviewStore, proposal: ArchitectureReviewUnit
+) -> ArchitectureReviewUnit:
+    proposal = replace(
+        proposal,
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        impact_reason=proposal.impact_reason,
+    )
+    store.save(proposal)
+    store.record_review(
+        proposal.review_unit_id,
+        reviewer="feature-team",
+        decision="reviewed",
+        reviewed_at="2026-11-09T12:00:00+00:00",
+    )
+    return store.approve_review_unit(proposal.review_unit_id)
+
+
+def _incoming_commit(repository: Path, destination_head: str, name: str) -> str:
+    _git(repository, "checkout", "-b", f"incoming-{name}")
+    repository.joinpath(f"{name}.txt").write_text(f"{name}\n", encoding="utf-8")
+    _git(repository, "add", f"{name}.txt")
+    _git(repository, "commit", "-m", f"add {name}")
+    incoming = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "checkout", "--detach", destination_head)
+    return incoming
 
 
 def _unit(
