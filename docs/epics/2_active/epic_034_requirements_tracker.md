@@ -230,6 +230,11 @@ Pending planning work: canonical `run_dependency_check` for `dep_structurizr` ag
   Chose Accept the Architect's refinements in dec_005–dec_007 within the existing seven delivery slices; retain the canonical dependency gate before feature minting and sign-off..
   Rationale: Reliable SVG selection, lineage-safe acceptance recovery, and an authoring path available when gates activate are necessary to deliver the existing brief. The feature graph covers all 18 criteria, including non-Cascade commits and MR/PR descriptions, without widening release scope. Manager review is complete; manifest revision 1 still reports missing_check and no canonical check tool is exposed in this session.
   Honors: Success criteria 1–18; frugal scope and existing approval boundaries; dec_002 and dec_004. Human replay request remains covered by dec_001..
+
+- `dec_009` · 2026-11-09 · Epic Manager · **Core dependencies**
+  Chose Correct the manifest's feasibility_proof_requirements to an empty artifact-ID list; retain the complete executable DSL validation, JSON export, and SVG rendering verification recipe and exact pinned image..
+  Rationale: The now-available canonical check rejected manifest revision 1 before execution because feasibility_proof_requirements contains a prose description where the bootstrap contract expects separately declared artifact IDs. All described checks already run and assert results in verification_recipe; no separate feasibility artifact is required for this installation check. This schema correction removes no executable validation and grants no installation authority. Feature B still owns the semantic SVG mapping proof.
+  Honors: dec_004–dec_005; canonical dependency verification before feature minting and sign-off; no fabricated evidence, installation, or reduced acceptance coverage..
 ## Amendment log
 
 _(none)_
