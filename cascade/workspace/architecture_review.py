@@ -8,11 +8,27 @@ import os
 import re
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Sequence
 
 from cascade.workspace.architecture import ArchitectureArtifactRef
+from cascade.workspace.c4_closure import C4SourceClosure, materialize_c4_source_closure
+from cascade.workspace.c4_diff import (
+    C4ContainmentChange,
+    C4IdentityChange,
+    C4SemanticDiff,
+    C4SemanticModelArtifact,
+    C4ViewDiff,
+    compute_c4_semantic_diff,
+)
+from cascade.workspace.c4_render import (
+    C4ArtifactRenderer,
+    C4RenderArtifact,
+    C4RenderSettings,
+)
+from cascade.workspace.c4_source import C4SourceError
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.types import ProjectContext, RepositoryContext
 
@@ -21,6 +37,15 @@ _REVISION = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 _DIGEST = re.compile(r"(?:sha256:)?[0-9a-f]{64}")
 RepositoryRole = Literal["target", "tracking"]
 ReviewStatus = Literal["draft", "staged", "reviewed", "approved", "stale", "rejected"]
+ReviewDecision = Literal["reviewed", "rejected"]
+
+
+class ArchitectureProposalError(WorkspaceError):
+    """A stable proposal outcome suitable for lifecycle/API callers."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        self.code = code
+        super().__init__(f"{code}: {detail}")
 
 
 @dataclass(frozen=True)
@@ -262,7 +287,9 @@ class ArchitectureReviewUnit:
         if not self.affected_work_ids:
             raise WorkspaceError("an architecture review unit requires affected work")
         if self.architecture_impact == "diagram_change" and self.proposed_model is None:
-            raise WorkspaceError("a diagram change requires a pinned model closure")
+            raise ArchitectureProposalError(
+                "model_required", "a diagram change requires a pinned model closure"
+            )
         if self.architecture_impact == "no_diagram_change" and self.proposed_model is not None:
             raise WorkspaceError("no-diagram-change review cannot contain a model")
         if self.architecture_impact not in {"diagram_change", "no_diagram_change"}:
@@ -299,7 +326,7 @@ class ArchitectureReviewUnit:
 
     @property
     def review_unit_id(self) -> str:
-        return f"architecture-review-{_json_digest(self.to_dict())}"
+        return f"architecture-review-{self.reviewed_tuple_digest}"
 
     def to_dict(self) -> dict[str, object]:
         return {"owner_work_id": self.owner_work_id, "authorized_owner": self.authorized_owner,
@@ -424,6 +451,60 @@ class ReviewBaselineStatus:
     rebase_required: bool
 
 
+@dataclass(frozen=True)
+class ArchitectureReviewRecord:
+    review_unit_id: str
+    reviewer: str
+    reviewed_at: str
+    tuple_digest: str
+    decision: ReviewDecision
+
+    def __post_init__(self) -> None:
+        _nonblank(self.review_unit_id, "review unit ID")
+        _nonblank(self.reviewer, "architecture reviewer")
+        _nonblank(self.reviewed_at, "architecture review time")
+        _digest(self.tuple_digest, "review tuple")
+        if self.decision not in {"reviewed", "rejected"}:
+            raise WorkspaceError("invalid architecture review decision")
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "review_unit_id": self.review_unit_id,
+            "reviewer": self.reviewer,
+            "reviewed_at": self.reviewed_at,
+            "tuple_digest": self.tuple_digest,
+            "decision": self.decision,
+        }
+
+    @classmethod
+    def from_dict(cls, value: object) -> "ArchitectureReviewRecord":
+        row = _mapping(
+            value,
+            {"review_unit_id", "reviewer", "reviewed_at", "tuple_digest", "decision"},
+        )
+        if not all(isinstance(item, str) for item in row.values()):
+            raise WorkspaceError("invalid architecture review record")
+        return cls(
+            row["review_unit_id"],
+            row["reviewer"],
+            row["reviewed_at"],
+            row["tuple_digest"],
+            row["decision"],
+        )
+
+
+@dataclass(frozen=True)
+class ArchitectureProposalState:
+    unit: ArchitectureReviewUnit | None
+    accepted: AcceptedLineage | None
+    review: ArchitectureReviewRecord | None
+    semantic_diff: C4SemanticDiff | None
+
+    @property
+    def status(self) -> ReviewStatus | None:
+        return self.unit.status if self.unit else None
+
+
 class ArchitectureReviewStore:
     def __init__(self, project: ProjectContext, path: Path | None = None) -> None:
         self.project = project
@@ -434,8 +515,13 @@ class ArchitectureReviewStore:
         state = self._read()
         identity, encoded = unit.review_unit_id, unit.to_dict()
         existing = state["review_units"].get(identity)
-        if existing is not None and existing != encoded:
-            raise WorkspaceError("architecture review unit identity collision")
+        if existing is not None:
+            persisted = ArchitectureReviewUnit.from_dict(existing)
+            if persisted.reviewed_tuple_digest != unit.reviewed_tuple_digest:
+                raise WorkspaceError("architecture review unit identity collision")
+            if persisted.status != unit.status:
+                raise WorkspaceError("architecture review status must use the review operation")
+            return identity
         state["review_units"][identity] = encoded
         self._write(state)
         return identity
@@ -443,6 +529,95 @@ class ArchitectureReviewStore:
     def get(self, review_unit_id: str) -> ArchitectureReviewUnit | None:
         value = self._read()["review_units"].get(review_unit_id)
         return ArchitectureReviewUnit.from_dict(value) if value is not None else None
+
+    def get_review(self, review_unit_id: str) -> ArchitectureReviewRecord | None:
+        value = self._read()["reviews"].get(review_unit_id)
+        return ArchitectureReviewRecord.from_dict(value) if value is not None else None
+
+    def get_diff(self, review_unit_id: str) -> C4SemanticDiff | None:
+        value = self._read()["diffs"].get(review_unit_id)
+        return _semantic_diff_from_dict(value) if value is not None else None
+
+    def save_diff(self, review_unit_id: str, diff: C4SemanticDiff) -> None:
+        state = self._read()
+        if review_unit_id not in state["review_units"]:
+            raise WorkspaceError("cannot attach a diff to an unknown architecture review unit")
+        encoded = asdict(diff)
+        existing = state["diffs"].get(review_unit_id)
+        if existing is not None and existing != encoded:
+            raise WorkspaceError("architecture review semantic diff changed")
+        state["diffs"][review_unit_id] = encoded
+        self._write(state)
+
+    def save_staged(
+        self, unit: ArchitectureReviewUnit, diff: C4SemanticDiff
+    ) -> str:
+        """Persist a staged tuple and its review diff in one durable replacement."""
+
+        self._validate_unit_inputs(unit)
+        if unit.status != "staged":
+            raise WorkspaceError("only a staged architecture unit can include a review diff")
+        state = self._read()
+        identity = unit.review_unit_id
+        encoded_unit = unit.to_dict()
+        encoded_diff = asdict(diff)
+        existing = state["review_units"].get(identity)
+        if existing is not None and existing != encoded_unit:
+            raise WorkspaceError("architecture review unit identity collision")
+        existing_diff = state["diffs"].get(identity)
+        if existing_diff is not None and existing_diff != encoded_diff:
+            raise WorkspaceError("architecture review semantic diff changed")
+        state["review_units"][identity] = encoded_unit
+        state["diffs"][identity] = encoded_diff
+        self._write(state)
+        return identity
+
+    def find_for_owner(
+        self, owner: str, work_id: str, lineage: str
+    ) -> ArchitectureReviewUnit | None:
+        _nonblank(owner, "architecture owner")
+        _nonblank(work_id, "owner work ID")
+        _nonblank(lineage, "integration lineage")
+        for value in reversed(tuple(self._read()["review_units"].values())):
+            unit = ArchitectureReviewUnit.from_dict(value)
+            if unit.owner_work_id == work_id and unit.integration_lineage == lineage:
+                if unit.authorized_owner != owner:
+                    raise ArchitectureProposalError(
+                        "owner_denied", "architecture proposal belongs to another owner"
+                    )
+                return unit
+        return None
+
+    def record_review(
+        self,
+        review_unit_id: str,
+        *,
+        reviewer: str,
+        decision: ReviewDecision,
+        reviewed_at: str,
+    ) -> ArchitectureReviewUnit:
+        state = self._read()
+        value = state["review_units"].get(review_unit_id)
+        if value is None:
+            raise ArchitectureProposalError("review_required", "unknown architecture review unit")
+        unit = ArchitectureReviewUnit.from_dict(value)
+        status: ReviewStatus = "reviewed" if decision == "reviewed" else "rejected"
+        updated = replace(unit, status=status)
+        record = ArchitectureReviewRecord(
+            review_unit_id, reviewer, reviewed_at, unit.reviewed_tuple_digest, decision
+        )
+        existing = state["reviews"].get(review_unit_id)
+        if existing is not None:
+            durable = ArchitectureReviewRecord.from_dict(existing)
+            if durable != record:
+                raise ArchitectureProposalError(
+                    "review_required", "architecture review unit was already decided"
+                )
+            return updated
+        state["review_units"][review_unit_id] = updated.to_dict()
+        state["reviews"][review_unit_id] = record.to_dict()
+        self._write(state)
+        return updated
 
     def resolve_current(self, lineage: str, *, lineage_revision: str | None = None) -> AcceptedLineage | None:
         _nonblank(lineage, "integration lineage")
@@ -531,14 +706,27 @@ class ArchitectureReviewStore:
 
     def _read(self) -> dict[str, object]:
         if not self.path.exists():
-            return {"version": _SCHEMA_VERSION, "review_units": {}, "lineages": {}}
+            return {
+                "version": _SCHEMA_VERSION,
+                "review_units": {},
+                "lineages": {},
+                "reviews": {},
+                "diffs": {},
+            }
         try:
             state = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise WorkspaceError(f"invalid architecture review store: {self.path}") from exc
-        if (not isinstance(state, dict) or set(state) != {"version", "review_units", "lineages"} or
+        if (not isinstance(state, dict) or
+                set(state) not in ({"version", "review_units", "lineages"},
+                                   {"version", "review_units", "lineages", "reviews"},
+                                   {"version", "review_units", "lineages", "reviews", "diffs"}) or
                 state["version"] != _SCHEMA_VERSION or not isinstance(state["review_units"], dict) or
                 not isinstance(state["lineages"], dict)):
+            raise WorkspaceError(f"unsupported architecture review store: {self.path}")
+        state.setdefault("reviews", {})
+        state.setdefault("diffs", {})
+        if not isinstance(state["reviews"], dict) or not isinstance(state["diffs"], dict):
             raise WorkspaceError(f"unsupported architecture review store: {self.path}")
         return state
 
@@ -556,10 +744,330 @@ class ArchitectureReviewStore:
                 os.unlink(temporary)
 
 
+def read_architecture_state(
+    project: ProjectContext,
+    *,
+    owner: str,
+    work_id: str,
+    lineage: str,
+    store: ArchitectureReviewStore | None = None,
+    lineage_revision: str | None = None,
+) -> ArchitectureProposalState:
+    """Inspect only the proposal owned by ``owner`` for one integration lineage."""
+
+    review_store = store or ArchitectureReviewStore(project)
+    unit = review_store.find_for_owner(owner, work_id, lineage)
+    accepted = review_store.resolve_current(lineage, lineage_revision=lineage_revision)
+    return ArchitectureProposalState(
+        unit,
+        accepted,
+        review_store.get_review(unit.review_unit_id) if unit else None,
+        review_store.get_diff(unit.review_unit_id) if unit else None,
+    )
+
+
+def stage_architecture_proposal(
+    project: ProjectContext,
+    *,
+    owner: str,
+    work_id: str,
+    proposal: ArchitectureReviewUnit,
+    expected_generation: int | None,
+    store: ArchitectureReviewStore | None = None,
+    renderer: C4ArtifactRenderer | None = None,
+    render_settings: C4RenderSettings | None = None,
+    baseline_artifact: C4SemanticModelArtifact | None = None,
+    lineage_revision: str | None = None,
+) -> ArchitectureProposalState:
+    """Stage committed proposal bytes after validating their pinned C4 evidence."""
+
+    _authorize(proposal, owner, work_id)
+    if proposal.status not in {"draft", "staged"}:
+        raise ArchitectureProposalError(
+            "review_required", "only a draft proposal can be staged"
+        )
+    if not proposal.requirement_citations or not proposal.decision_citations:
+        raise ArchitectureProposalError(
+            "review_required",
+            "architecture proposals require requirement and decision citations",
+        )
+    if proposal.architecture_impact == "diagram_change" and not proposal.view_citations:
+        raise ArchitectureProposalError(
+            "review_required", "a diagram change requires affected view citations"
+        )
+    review_store = store or ArchitectureReviewStore(project)
+    current = review_store.resolve_current(
+        proposal.integration_lineage, lineage_revision=lineage_revision
+    )
+    generation = current.generation if current else None
+    if generation != expected_generation:
+        raise ArchitectureProposalError(
+            "stale_baseline", "accepted architecture baseline generation changed"
+        )
+    staged = replace(proposal, status="staged")
+    if review_store.baseline_status(staged, lineage_revision=lineage_revision).stale:
+        raise ArchitectureProposalError(
+            "stale_baseline", "proposal is not based on the current accepted architecture"
+        )
+    _validate_store_inputs(review_store, staged)
+    semantic_diff = _validate_proposed_model(
+        project,
+        staged,
+        renderer=renderer,
+        settings=render_settings,
+        baseline_artifact=baseline_artifact,
+    )
+    review_store.save_staged(staged, semantic_diff)
+    return ArchitectureProposalState(staged, current, None, semantic_diff)
+
+
+def review_architecture_proposal(
+    project: ProjectContext,
+    *,
+    owner: str,
+    unit_id: str,
+    expected_tuple_digest: str,
+    decision: ReviewDecision,
+    store: ArchitectureReviewStore | None = None,
+    renderer: C4ArtifactRenderer | None = None,
+    render_settings: C4RenderSettings | None = None,
+    baseline_artifact: C4SemanticModelArtifact | None = None,
+    reviewed_at: str | None = None,
+    lineage_revision: str | None = None,
+) -> ArchitectureProposalState:
+    """Review the exact staged tuple; this operation never advances acceptance."""
+
+    review_store = store or ArchitectureReviewStore(project)
+    unit = review_store.get(unit_id)
+    if unit is None:
+        raise ArchitectureProposalError("review_required", "unknown architecture review unit")
+    _authorize(unit, owner, unit.owner_work_id)
+    if unit.status != "staged":
+        raise ArchitectureProposalError(
+            "review_required", "architecture review unit is not staged"
+        )
+    if expected_tuple_digest != unit.reviewed_tuple_digest:
+        raise ArchitectureProposalError(
+            "artifact_changed", "review tuple digest does not match the staged proposal"
+        )
+    if decision not in {"reviewed", "rejected"}:
+        raise ArchitectureProposalError("review_required", "invalid review decision")
+    if review_store.baseline_status(unit, lineage_revision=lineage_revision).stale:
+        raise ArchitectureProposalError(
+            "stale_baseline", "proposal is not based on the current accepted architecture"
+        )
+    _validate_store_inputs(review_store, unit)
+    semantic_diff = _validate_proposed_model(
+        project,
+        unit,
+        renderer=renderer,
+        settings=render_settings,
+        baseline_artifact=baseline_artifact,
+    )
+    durable_diff = review_store.get_diff(unit_id)
+    if durable_diff != semantic_diff:
+        raise ArchitectureProposalError(
+            "artifact_changed", "validated semantic diff no longer matches the staged proposal"
+        )
+    timestamp = reviewed_at or datetime.now(timezone.utc).isoformat()
+    reviewed = review_store.record_review(
+        unit_id, reviewer=owner, decision=decision, reviewed_at=timestamp
+    )
+    current = review_store.resolve_current(
+        unit.integration_lineage, lineage_revision=lineage_revision
+    )
+    return ArchitectureProposalState(
+        reviewed, current, review_store.get_review(unit_id), semantic_diff
+    )
+
+
+def _authorize(unit: ArchitectureReviewUnit, owner: str, work_id: str) -> None:
+    if unit.authorized_owner != owner or unit.owner_work_id != work_id:
+        raise ArchitectureProposalError(
+            "owner_denied", "architecture proposal is outside the caller's owner scope"
+        )
+
+
+def _validate_store_inputs(
+    store: ArchitectureReviewStore, unit: ArchitectureReviewUnit
+) -> None:
+    try:
+        store._validate_unit_inputs(unit)
+    except WorkspaceError as exc:
+        detail = str(exc)
+        code = "destination_changed" if "destination" in detail else "artifact_changed"
+        raise ArchitectureProposalError(code, detail) from exc
+
+
+def _validate_proposed_model(
+    project: ProjectContext,
+    unit: ArchitectureReviewUnit,
+    *,
+    renderer: C4ArtifactRenderer | None,
+    settings: C4RenderSettings | None,
+    baseline_artifact: C4SemanticModelArtifact | None,
+) -> C4SemanticDiff:
+    if unit.architecture_impact == "no_diagram_change":
+        return C4SemanticDiff(
+            "unchanged",
+            unit.accepted_baseline.accepted_review_unit_id,
+            None,
+            f"plan:{unit.plan.revision}",
+            (),
+            (),
+            (),
+            (),
+            "unchanged: proposal explicitly records no diagram change",
+        )
+    binding = unit.proposed_model
+    if binding is None:
+        raise ArchitectureProposalError(
+            "model_required", "a diagram change requires a pinned model closure"
+        )
+    chosen_settings = settings or C4RenderSettings()
+    expected_settings = tuple(sorted(chosen_settings.cache_payload().items()))
+    if binding.renderer_settings != expected_settings:
+        raise ArchitectureProposalError(
+            "model_invalid", "renderer settings do not match the pinned model binding"
+        )
+    chosen_renderer = renderer or C4ArtifactRenderer(
+        project.target.root / ".cascade" / "c4-render-cache"
+    )
+    try:
+        with tempfile.TemporaryDirectory(prefix="cascade-review-source-") as directory:
+            closure = materialize_c4_source_closure(
+                project,
+                binding.contract.reference,
+                tuple(item.reference for item in binding.sources),
+                Path(directory) / "source",
+            )
+            render = chosen_renderer.submit(closure, chosen_settings).wait(
+                timeout=chosen_settings.timeout_seconds + 5
+            )
+    except (C4SourceError, OSError, ValueError, TimeoutError) as exc:
+        raise ArchitectureProposalError("model_invalid", str(exc)) from exc
+    _verify_render_binding(binding, closure, render)
+    proposed = C4SemanticModelArtifact(unit.review_unit_id, render, closure.contract)
+    current = _validated_baseline_artifact(unit, baseline_artifact)
+    if unit.accepted_baseline.kind == "empty_baseline":
+        current = C4SemanticModelArtifact(
+            "empty_baseline",
+            C4RenderArtifact(status="empty", closure_digest="empty_baseline"),
+            closure.contract,
+        )
+    source_reference = render.source_diff_reference or f"revision:{closure.revision}"
+    diff = compute_c4_semantic_diff(
+        current, proposed, source_diff_reference=source_reference
+    )
+    if diff.state == "render_error":
+        raise ArchitectureProposalError("model_invalid", diff.error or diff.summary)
+    return diff
+
+
+def _verify_render_binding(
+    binding: ArchitectureModelBinding,
+    closure: C4SourceClosure,
+    render: C4RenderArtifact,
+) -> None:
+    if closure.digest != binding.source_closure_digest:
+        raise ArchitectureProposalError(
+            "model_invalid", "pinned source closure digest does not match validation"
+        )
+    if render.status != "ready":
+        detail = render.failure.message if render.failure else f"render is {render.status}"
+        raise ArchitectureProposalError("model_invalid", detail)
+    if render.closure_digest != closure.digest or render.image_digest != binding.renderer_image_digest:
+        raise ArchitectureProposalError(
+            "model_invalid", "render provenance does not match the pinned model binding"
+        )
+    if render.semantic_workspace is None or not render.semantic_workspace.is_file():
+        raise ArchitectureProposalError("model_invalid", "render has no semantic model artifact")
+    digest = hashlib.sha256(render.semantic_workspace.read_bytes()).hexdigest()
+    if digest != binding.semantic_artifact_digest or render.semantic_workspace_sha256 != digest:
+        raise ArchitectureProposalError(
+            "model_invalid", "semantic model digest does not match the pinned binding"
+        )
+
+
+def _validated_baseline_artifact(
+    unit: ArchitectureReviewUnit,
+    artifact: C4SemanticModelArtifact | None,
+) -> C4SemanticModelArtifact | None:
+    if unit.accepted_baseline.kind == "empty_baseline":
+        return None
+    binding = unit.accepted_baseline.model
+    if binding is None or artifact is None:
+        raise ArchitectureProposalError(
+            "model_invalid", "accepted model baseline artifact is required for semantic diff"
+        )
+    render = artifact.render
+    if (
+        render.status != "ready"
+        or render.semantic_workspace is None
+        or not render.semantic_workspace.is_file()
+        or hashlib.sha256(render.semantic_workspace.read_bytes()).hexdigest()
+        != binding.semantic_artifact_digest
+    ):
+        raise ArchitectureProposalError(
+            "model_invalid", "accepted model baseline artifact does not match its pointer"
+        )
+    return artifact
+
+
 def _mapping(value: object, fields: set[str]) -> dict[str, object]:
     if not isinstance(value, dict) or set(value) != fields:
         raise WorkspaceError("invalid architecture review persistence payload")
     return value
+
+
+def _semantic_diff_from_dict(value: object) -> C4SemanticDiff:
+    row = _mapping(
+        value,
+        {
+            "state",
+            "current_artifact_ref",
+            "proposed_artifact_ref",
+            "source_diff_reference",
+            "identities",
+            "containment",
+            "views",
+            "changed_view_keys",
+            "summary",
+            "error",
+        },
+    )
+    try:
+        return C4SemanticDiff(
+            state=row["state"],
+            current_artifact_ref=row["current_artifact_ref"],
+            proposed_artifact_ref=row["proposed_artifact_ref"],
+            source_diff_reference=row["source_diff_reference"],
+            identities=tuple(
+                C4IdentityChange(
+                    **{**item, "changed_fields": tuple(item["changed_fields"])}
+                )
+                for item in row["identities"]
+            ),
+            containment=tuple(C4ContainmentChange(**item) for item in row["containment"]),
+            views=tuple(
+                C4ViewDiff(
+                    **{
+                        **item,
+                        "current_elements": tuple(item["current_elements"]),
+                        "proposed_elements": tuple(item["proposed_elements"]),
+                        "current_relationships": tuple(item["current_relationships"]),
+                        "proposed_relationships": tuple(item["proposed_relationships"]),
+                        "changed_identities": tuple(item["changed_identities"]),
+                    }
+                )
+                for item in row["views"]
+            ),
+            changed_view_keys=tuple(row["changed_view_keys"]),
+            summary=row["summary"],
+            error=row["error"],
+        )
+    except (KeyError, TypeError) as exc:
+        raise WorkspaceError("invalid persisted architecture semantic diff") from exc
 
 
 def _nonblank(value: object, field: str) -> None:
@@ -692,6 +1200,9 @@ def _is_ancestor(repository: Path, ancestor: str, descendant: str) -> bool:
 
 
 __all__ = ["AcceptedArchitecturePointer", "AcceptedLineage", "ArchitectureBaseline",
-           "ArchitectureModelBinding", "ArchitectureReviewStore", "ArchitectureReviewUnit",
+           "ArchitectureModelBinding", "ArchitectureProposalError",
+           "ArchitectureProposalState", "ArchitectureReviewRecord",
+           "ArchitectureReviewStore", "ArchitectureReviewUnit",
            "PinnedArchitectureArtifact", "PinnedDocumentRef", "ProposedAncestorContext",
-           "ReviewBaselineStatus"]
+           "ReviewBaselineStatus", "read_architecture_state",
+           "review_architecture_proposal", "stage_architecture_proposal"]
