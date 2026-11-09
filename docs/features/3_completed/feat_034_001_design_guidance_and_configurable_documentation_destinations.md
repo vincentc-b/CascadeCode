@@ -2,7 +2,7 @@
 id: feat_034_001
 title: Design guidance and configurable documentation destinations
 tier: feature
-status: active
+status: completed
 parent: epic_034
 children:
 - task_034_001_001
