@@ -134,8 +134,11 @@ def _active_incidents(
                 candidates.append((str(row_id), store_name, incident))
 
     deadline = time.monotonic() + _INCIDENT_RECHECK_BUDGET_SECONDS
+    observations: dict[str, tuple[Any, str | None]] = {}
     for row_id, store_name, incident in candidates:
-        current, reason = _incident_is_current(root, incident, deadline=deadline)
+        current, reason = _incident_is_current(
+            root, incident, deadline=deadline, observations=observations
+        )
         if not current:
             if reason is not None:
                 errors.append(
@@ -159,7 +162,8 @@ def _active_incidents(
 
 
 def _incident_is_current(
-    root: Path, incident: Mapping[str, Any], *, deadline: float
+    root: Path, incident: Mapping[str, Any], *, deadline: float,
+    observations: dict[str, tuple[Any, str | None]] | None = None,
 ) -> tuple[bool, str | None]:
     """Require fresh authoritative generation before calling a ledger row active."""
 
@@ -171,9 +175,33 @@ def _incident_is_current(
         for value in (work_id, generation, failure_class)
     ):
         return False, "incident identity is unavailable"
+    # Repeated historical generations share one current observation for this
+    # response only. Never carry this read cache into a later request or repair.
+    if observations is None:
+        observations = {}
+    if work_id not in observations:
+        observations[work_id] = _observe_incident_work(root, work_id, deadline)
+    observation, error = observations[work_id]
+    if error is not None:
+        return False, error
+    if observation.classification == "unavailable_evidence":
+        return False, f"current lifecycle evidence unavailable: {observation.reason}"
+    if observation.classification != "proven_incident" or observation.incident is None:
+        return False, None
+    if (
+        str(observation.generation) != generation
+        or observation.incident.failure_class != failure_class
+    ):
+        return False, None
+    return True, None
+
+
+def _observe_incident_work(
+    root: Path, work_id: str, deadline: float
+) -> tuple[Any, str | None]:
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        return False, "current lifecycle recheck exceeded its bounded budget"
+        return None, "current lifecycle recheck exceeded its bounded budget"
     try:
         from cascade.watchdog.audit import project_audit_observation
 
@@ -183,15 +211,8 @@ def _incident_is_current(
             timeout_seconds=remaining,
         )
     except Exception as exc:
-        return False, f"current lifecycle state is unavailable ({type(exc).__name__})"
-    if observation.classification != "proven_incident" or observation.incident is None:
-        return False, None
-    if (
-        str(observation.generation) != generation
-        or observation.incident.failure_class != failure_class
-    ):
-        return False, None
-    return True, None
+        return None, f"current lifecycle state is unavailable ({type(exc).__name__})"
+    return observation, None
 
 
 def _valid_receipt(receipt: Mapping[str, Any]) -> bool:

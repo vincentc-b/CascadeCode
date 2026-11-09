@@ -423,8 +423,10 @@ def test_old_completed_sidecar_reference_is_selected_and_observed_as_incident(
     assert resolved.generation != observation.generation
 
 
+@pytest.mark.parametrize("number_present", [True, False])
+@pytest.mark.parametrize("review_path", ["pull", "-/merge_requests"])
 def test_real_resolution_action_maps_review_identity_to_old_feature(
-    tmp_path: Path,
+    tmp_path: Path, number_present: bool, review_path: str,
 ) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Parent", tier="epic", status="completed")
@@ -442,8 +444,8 @@ def test_real_resolution_action_maps_review_identity_to_old_feature(
         json.dumps(
             {
                 "feat_001": {
-                    "number": "147",
-                    "url": "https://forge.example/repo/pull/147",
+                    **({"number": "147"} if number_present else {}),
+                    "url": f"https://forge.example/repo/{review_path}/147",
                     "closed": False,
                 }
             }
@@ -457,9 +459,14 @@ def test_real_resolution_action_maps_review_identity_to_old_feature(
                     "action_id": "resolution:v1:opaque",
                     "idempotency_key": "resolution:v1:opaque",
                     "status": "blocked",
+                    "handoff": {
+                        "action_id": "resolution:v1:opaque",
+                        "accountable_team": "feature:feat_001",
+                        "review_id": "147",
+                    },
                     "request": {
                         "review_id": "147",
-                        "review_url": "https://forge.example/repo/pull/147",
+                        "review_url": f"https://forge.example/repo/{review_path}/147",
                     },
                 }
             }
@@ -474,6 +481,8 @@ def test_real_resolution_action_maps_review_identity_to_old_feature(
     assert "unresolved_reconciliation" in candidate.reasons
     assert observation.classification == "proven_incident"
     assert "reconciliation:feat_001" in observation.evidence.unresolved_references
+    # The nested handoff must not poison observation of unrelated work.
+    assert project_audit_observation("epic_001", root=root).classification == "healthy"
 
     (sidecars / "resolution_actions.json").write_text(
         json.dumps(
@@ -1069,3 +1078,25 @@ def test_live_parent_owner_never_becomes_a_stall(
     assert first.reason == later.reason == "live_owner"
     assert later.evidence.parent_action is not None
     assert later.evidence.parent_action.state == "gated"
+
+
+@pytest.mark.parametrize("registry_number, registry_url", [
+    ("999", "https://forge.example/repo/pull/147"),
+    (None, "https://forge.example/repo/unknown/147"),
+    (None, "http://[invalid/pull/147"),
+])
+def test_resolution_url_fallback_never_overrides_conflicting_or_unknown_identity(
+    registry_number, registry_url,
+):
+    from cascade.watchdog.audit import _collect_resolution_review_references
+
+    references = []
+    valid = _collect_resolution_review_references(
+        {"action_id": "resolution:v1:one", "status": "blocked", "request": {
+            "review_id": "147", "review_url": registry_url,
+        }},
+        {"feat_001": {"number": registry_number, "url": registry_url}},
+        references,
+    )
+    assert not valid
+    assert references == []

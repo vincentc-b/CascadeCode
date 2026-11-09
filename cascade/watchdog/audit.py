@@ -11,6 +11,7 @@ import base64
 import binascii
 import hashlib
 import json
+import re
 import subprocess
 import threading
 import time
@@ -20,6 +21,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from threading import RLock
 from typing import Any, Callable, Literal, Mapping, TypeAlias
+from urllib.parse import urlsplit
 
 from cascade.board.context import (
     get_project_context,
@@ -818,6 +820,18 @@ def _collect_resolution_review_references(
                 continue
             number = str(record.get("number") or record.get("review_id") or "").strip()
             url = str(record.get("url") or record.get("review_url") or "").strip()
+            # Epic close records retain the URL but may omit the numeric ID.
+            # Recover only a recognized forge identity; never overwrite an
+            # explicit (potentially conflicting) number in the registry.
+            if not number:
+                try:
+                    parsed_url = urlsplit(url)
+                    path = parsed_url.path if parsed_url.scheme in {"http", "https"} and parsed_url.netloc else ""
+                except ValueError:
+                    path = ""
+                match = re.search(r"/(?:pull|merge_requests)/(\d+)/?$", path)
+                if match:
+                    number = match.group(1)
             if review_id and review_id == number:
                 id_matches.add(owner_id)
             if review_url and review_url == url:
@@ -846,8 +860,11 @@ def _collect_resolution_review_references(
             references.append(("reconciliation", owner_id))
         else:
             valid = False
+        # An action is a record boundary. Its handoff repeats action_id, but
+        # is not another persisted resolution action requiring its own request.
+        return valid
     elif _is_resolution_action_row(value):
-        valid = False
+        return False
     for item in value.values():
         if isinstance(item, (Mapping, list)):
             valid = (

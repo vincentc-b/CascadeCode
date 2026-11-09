@@ -451,3 +451,61 @@ def test_malformed_and_missing_receipts_are_distinct_unavailable_evidence(
         "source": "audit_receipt",
         "reason": "audit receipt is malformed or incomplete",
     }
+
+
+def test_incident_rechecks_share_one_fresh_observation_per_work(tmp_path, monkeypatch):
+    from cascade.war_room.audit_status import _active_incidents
+
+    root = make_repo(tmp_path, git=False)
+    (root / ".cascade").mkdir()
+    incident = {
+        "work_id": "feat_001", "tier": "feature",
+        "accountable_owner": "feature_team:feat_001",
+        "failure_class": "stalled_owner", "authoritative_generation": "current",
+    }
+    (root / ".cascade" / "executions.json").write_text(json.dumps({
+        "actions": {
+            "old": {"incident": {**incident, "authoritative_generation": "old"}},
+            "current": {"incident": incident},
+        },
+    }))
+    calls = []
+    def observe(work_id, **kwargs):
+        calls.append(work_id)
+        return SimpleNamespace(
+            classification="proven_incident", generation="current",
+            incident=SimpleNamespace(failure_class="stalled_owner"),
+        )
+    monkeypatch.setattr("cascade.watchdog.audit.project_audit_observation", observe)
+    incidents, errors = _active_incidents(root)
+    assert calls == ["feat_001"]
+    assert not errors
+    assert [row["incident_id"] for row in incidents] == ["current"]
+    _active_incidents(root)
+    assert calls == ["feat_001", "feat_001"]  # No cache across requests.
+
+
+def test_unavailable_current_observation_is_not_silently_hidden(tmp_path, monkeypatch):
+    from cascade.war_room.audit_status import _active_incidents
+
+    root = make_repo(tmp_path, git=False)
+    (root / ".cascade").mkdir()
+    incident = {
+        "work_id": "feat_001", "authoritative_generation": "old",
+        "failure_class": "stalled_owner",
+    }
+    (root / ".cascade" / "executions.json").write_text(json.dumps({
+        "actions": {"old": {"incident": incident}},
+    }))
+    monkeypatch.setattr(
+        "cascade.watchdog.audit.project_audit_observation",
+        lambda *args, **kwargs: SimpleNamespace(
+            classification="unavailable_evidence", reason="reconciliation:unavailable",
+        ),
+    )
+    incidents, errors = _active_incidents(root)
+    assert not incidents
+    assert errors == [{
+        "source": "action_recovery:old",
+        "reason": "current lifecycle evidence unavailable: reconciliation:unavailable",
+    }]
