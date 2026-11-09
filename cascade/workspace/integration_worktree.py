@@ -411,7 +411,7 @@ def retire_integration_worktree(
 
 
 def unregister_missing_integration_worktree(
-    kind: IntegrationKind, work_id: str, *, trunk: Path
+    kind: IntegrationKind, work_id: str, *, trunk: Path, require_missing_branch: bool = False
 ) -> bool:
     """Drop a stale registry row only after its checkout is absent from disk and Git."""
 
@@ -421,6 +421,12 @@ def unregister_missing_integration_worktree(
         return True
     if entry.path.resolve() != integration_worktree_path(kind, work_id, trunk=trunk):
         return False
+    if require_missing_branch:
+        if entry.branch != integration_branch(kind, work_id):
+            return False
+        branch = _git(trunk, "show-ref", "--verify", "--quiet", f"refs/heads/{entry.branch}", check=False)
+        if branch.returncode != 1:
+            return False
     present, _ = _listed_worktree_state(trunk, entry.path)
     if entry.path.exists() or present:
         return False

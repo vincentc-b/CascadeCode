@@ -71,6 +71,27 @@ def _open_feature(root: Path, feat_id: str = "feat_001", *, epic_id: str = "epic
     assert dispatch_feature(feat_id, "human", root=root).ok
 
 
+@pytest.mark.parametrize("artifacts", ["present", "branch_only", "absent"])
+def test_activate_epic_reconciles_only_fully_orphaned_registration(tmp_path: Path, artifacts: str) -> None:
+    import subprocess
+    from cascade.workspace.integration_worktree import create_integration_worktree
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Returned epic", tier="epic", status="backlog")
+    run = create_integration_worktree("epic", "epic_001", branch="epic/epic_001", base_ref="HEAD", trunk=root)
+    if artifacts != "present":
+        subprocess.run(["git", "worktree", "remove", str(run.path)], cwd=root, check=True, capture_output=True)
+    if artifacts == "absent":
+        subprocess.run(["git", "branch", "-D", run.branch], cwd=root, check=True, capture_output=True)
+    result = activate_epic("epic_001", "human", root=root)
+    assert result.ok is (artifacts == "absent")
+    if artifacts != "absent":
+        assert result.reason == "existing_activation_run"
+    else:
+        assert result.event.type == "EpicActivated"
+        assert run.path.is_dir()
+
+
 def test_activate_epic_human_succeeds_and_boss_is_unauthorized(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Ready epic", tier="epic", status="ready_to_plan")

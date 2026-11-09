@@ -41,6 +41,7 @@ from cascade.workspace.integration_worktree import (
     integration_branch,
     merged_board,
     refresh_merged_board,
+    unregister_missing_integration_worktree,
 )
 
 _OPEN = {"backlog", "ready_to_plan"}
@@ -159,7 +160,9 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
         for candidate in board.by_id.values()
     ):
         return _fail("existing_child_work")
-    if get_integration_worktree(root, "epic", work_id) is not None:
+    if get_integration_worktree(root, "epic", work_id) is not None and not unregister_missing_integration_worktree(
+        "epic", work_id, trunk=root, require_missing_branch=True
+    ):
         return _fail("existing_activation_run")
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
