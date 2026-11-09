@@ -225,6 +225,13 @@ def default_capability_registry() -> CapabilityRegistry:
         "lock_protocol": "owning lifecycle lock in canonical order",
         "recheck_protocol": "reread owner, evidence, and generation before mutation",
     }
+    parent_evidence = ("document_revision", "parent_action")
+    parent_failures = {
+        "resume_planning_owner": frozenset({"parent_owner_stalled"}),
+        "restore_child_dispatch": frozenset({"child_dispatch_stalled"}),
+        "publish_integration_review": frozenset({"publication_stalled"}),
+        "reconcile_completion_rollup": frozenset({"completion_rollup_stalled"}),
+    }
     return CapabilityRegistry(
         (
             CapabilityDescriptor(
@@ -323,6 +330,142 @@ def default_capability_registry() -> CapabilityRegistry:
                 resume_action=(
                     "Restore the owned Epic worktree and integration action, then "
                     "rerun probe_capability."
+                ),
+                **common,
+            ),
+            CapabilityDescriptor(
+                name="feature.resume_planning_owner",
+                operation="resume_planning_owner",
+                executor=feature.get("resume_planning_owner"),
+                tiers=frozenset({"feature"}),
+                failure_classes=parent_failures["resume_planning_owner"],
+                owner_kinds=frozenset({"feature_team"}),
+                required_evidence=parent_evidence,
+                durable_store="action_recovery",
+                attempt_bound=3,
+                requires_worktree=True,
+                resume_action=(
+                    "Restore the Feature owner graph input and registered worktree, "
+                    "then retry this exact generation."
+                ),
+                **common,
+            ),
+            CapabilityDescriptor(
+                name="feature.restore_child_dispatch",
+                operation="restore_child_dispatch",
+                executor=feature.get("restore_child_dispatch"),
+                tiers=frozenset({"feature"}),
+                failure_classes=parent_failures["restore_child_dispatch"],
+                owner_kinds=frozenset({"feature_team"}),
+                required_evidence=(*parent_evidence, "child_id"),
+                durable_store="action_recovery",
+                attempt_bound=3,
+                requires_worktree=True,
+                resume_action=(
+                    "Restore the direct Task dispatch path and Feature worktree, "
+                    "then retry this exact generation."
+                ),
+                **common,
+            ),
+            CapabilityDescriptor(
+                name="feature.publish_integration_review",
+                operation="publish_integration_review",
+                executor=feature.get("publish_integration_review"),
+                tiers=frozenset({"feature"}),
+                failure_classes=parent_failures["publish_integration_review"],
+                owner_kinds=frozenset({"feature_team"}),
+                required_evidence=parent_evidence,
+                durable_store="action_recovery",
+                attempt_bound=3,
+                requires_worktree=True,
+                resume_action=(
+                    "Restore the Feature publication worktree and review authority, "
+                    "then retry this exact generation."
+                ),
+                **common,
+            ),
+            CapabilityDescriptor(
+                name="feature.reconcile_completion_rollup",
+                operation="reconcile_completion_rollup",
+                executor=feature.get("reconcile_completion_rollup"),
+                tiers=frozenset({"feature"}),
+                failure_classes=parent_failures["reconcile_completion_rollup"],
+                owner_kinds=frozenset({"feature_team"}),
+                required_evidence=parent_evidence,
+                durable_store="action_recovery",
+                attempt_bound=3,
+                requires_worktree=True,
+                resume_action=(
+                    "Restore Feature completion/review reconciliation and retry this "
+                    "exact generation."
+                ),
+                **common,
+            ),
+            CapabilityDescriptor(
+                name="epic.resume_planning_owner",
+                operation="resume_planning_owner",
+                executor=epic.get("resume_owner"),
+                tiers=frozenset({"epic"}),
+                failure_classes=parent_failures["resume_planning_owner"],
+                owner_kinds=frozenset({"epic_team"}),
+                required_evidence=parent_evidence,
+                durable_store="action_recovery",
+                attempt_bound=3,
+                requires_worktree=True,
+                resume_action=(
+                    "Restore the Epic owner queue and registered worktree, then retry "
+                    "this exact generation."
+                ),
+                **common,
+            ),
+            CapabilityDescriptor(
+                name="epic.restore_child_dispatch",
+                operation="restore_child_dispatch",
+                executor=epic.get("restore_feature_dispatch"),
+                tiers=frozenset({"epic"}),
+                failure_classes=parent_failures["restore_child_dispatch"],
+                owner_kinds=frozenset({"epic_team"}),
+                required_evidence=(*parent_evidence, "child_id"),
+                durable_store="action_recovery",
+                attempt_bound=3,
+                requires_worktree=True,
+                resume_action=(
+                    "Restore the direct Feature dispatch path and Epic worktree, then "
+                    "retry this exact generation."
+                ),
+                **common,
+            ),
+            CapabilityDescriptor(
+                name="epic.publish_integration_review",
+                operation="publish_integration_review",
+                executor=epic.get("publish_integration_review"),
+                tiers=frozenset({"epic"}),
+                failure_classes=parent_failures["publish_integration_review"],
+                owner_kinds=frozenset({"epic_team"}),
+                required_evidence=parent_evidence,
+                durable_store="action_recovery",
+                attempt_bound=3,
+                requires_worktree=True,
+                resume_action=(
+                    "Restore Epic publication/review authority and retry this exact "
+                    "generation."
+                ),
+                **common,
+            ),
+            CapabilityDescriptor(
+                name="epic.reconcile_completion_rollup",
+                operation="reconcile_completion_rollup",
+                executor=epic.get("reconcile_completion_rollup"),
+                tiers=frozenset({"epic"}),
+                failure_classes=parent_failures["reconcile_completion_rollup"],
+                owner_kinds=frozenset({"epic_team"}),
+                required_evidence=parent_evidence,
+                durable_store="action_recovery",
+                attempt_bound=3,
+                requires_worktree=True,
+                resume_action=(
+                    "Restore Epic closeout reconciliation and retry this exact "
+                    "generation."
                 ),
                 **common,
             ),
@@ -602,7 +745,7 @@ def _finish_probe(
 ) -> CapabilityProbe:
     if not persist:
         return probe
-    work_id, _tier, _failure, operation, evidence, generation = _incident_fields(
+    work_id, tier, _failure, operation, evidence, generation = _incident_fields(
         incident
     )
     identity = json.dumps(
@@ -620,10 +763,26 @@ def _finish_probe(
     digest = hashlib.sha256(identity.encode()).hexdigest()[:24]
     action_id = f"{work_id}:health_capability:{digest}"
     owner_kind, owner_id = owner
+    receipt_owner = owner
+    escalation = f"{owner_kind}:{owner_id}"
+    if probe.state == "missing" and tier == "feature":
+        try:
+            parent_id = read_doc(work_id, root=root).meta.parent
+        except Exception:
+            parent_id = None
+        if parent_id:
+            receipt_owner = ("epic_team", parent_id)
+            escalation = f"epic_team:{parent_id}"
+    elif probe.state == "missing" and tier == "epic":
+        escalation = "boss/human"
     details = {
         "affected_work_id": work_id,
+        "responsible_work_id": work_id,
         "selected_capability": probe.capability,
         "requested_operation": operation,
+        "original_action_identity": operation,
+        "original_accountable_owner": f"{owner_kind}:{owner_id}",
+        "escalated_to": escalation,
         "probe_state": probe.state,
         "reason": probe.reason,
         "resume_action": probe.resume_action,
@@ -639,7 +798,17 @@ def _finish_probe(
             "required_action": probe.resume_action or "Resolve the protected gate.",
         }
     elif probe.state == "missing":
-        state, classification, blocker = "retryable", "transient_retry", None
+        state, classification = "retryable", "transient_retry"
+        blocker = (
+            {
+                "code": "missing_epic_recovery_capability",
+                "message": "The Epic recovery operation is not executable.",
+                "required_action": probe.resume_action
+                or "Register the exact Epic recovery operation and re-probe it.",
+            }
+            if tier == "epic"
+            else None
+        )
     else:
         state, classification, blocker = "ready_to_resume", None, None
     create_or_load_action(
@@ -651,7 +820,7 @@ def _finish_probe(
         failure_classification=classification,  # type: ignore[arg-type]
         metadata=details,
         lifecycle_state="capability_probe",
-        owning_team={"kind": owner_kind, "work_id": owner_id},
+        owning_team={"kind": receipt_owner[0], "work_id": receipt_owner[1]},
         evidence=details,
         human_blocker=blocker,
     )
@@ -696,7 +865,12 @@ def _finalize_superseded_missing_receipts(
     """
 
     current = load_action(current_action_id, root=root) or {}
-    current_owner = dict(current.get("recovery") or {}).get("owning_team")
+    current_metadata = current.get("metadata")
+    current_original_owner = (
+        current_metadata.get("original_accountable_owner")
+        if isinstance(current_metadata, Mapping)
+        else None
+    )
     for action in recovery_actions(root=root):
         if action.get("action_id") == current_action_id:
             continue
@@ -709,7 +883,7 @@ def _finalize_superseded_missing_receipts(
             or metadata.get("probe_state") != "missing"
             or metadata.get("affected_work_id") != work_id
             or metadata.get("requested_operation") != operation
-            or dict(action.get("recovery") or {}).get("owning_team") != current_owner
+            or metadata.get("original_accountable_owner") != current_original_owner
         ):
             continue
         prior_action_id = str(action["action_id"])

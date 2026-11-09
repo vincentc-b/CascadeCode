@@ -16,6 +16,7 @@ def load_feature_tools() -> None:
     """Import tool modules so they register. Idempotent."""
 
     import cascade.feature.amendments as amendments_mod
+    import cascade.feature.audit_recovery as audit_recovery_mod
     import cascade.feature.branch_recovery as branch_recovery_mod
     import cascade.feature.comments_tool as comments_tool_mod
     import cascade.feature.decisions as decisions_mod
@@ -39,6 +40,11 @@ def load_feature_tools() -> None:
         "refresh_dependency_status",
         "retry_integration_branch_update",
         "publish_review_resolution",
+        "resume_planning_owner",
+        "restore_child_dispatch",
+        "retry_owned_publication",
+        "publish_integration_review",
+        "reconcile_completion_rollup",
     )
     if all(name in feature_tools() for name in expected):
         return
@@ -65,6 +71,21 @@ def load_feature_tools() -> None:
     register_feature_tool(
         "publish_review_resolution",
         review_recovery_mod.publish_review_resolution,
+    )
+    register_feature_tool(
+        "resume_planning_owner", audit_recovery_mod.resume_planning_owner
+    )
+    register_feature_tool(
+        "restore_child_dispatch", audit_recovery_mod.restore_child_dispatch
+    )
+    register_feature_tool(
+        "retry_owned_publication", audit_recovery_mod.retry_owned_publication
+    )
+    register_feature_tool(
+        "publish_integration_review", audit_recovery_mod.publish_integration_review
+    )
+    register_feature_tool(
+        "reconcile_completion_rollup", audit_recovery_mod.reconcile_completion_rollup
     )
 
 

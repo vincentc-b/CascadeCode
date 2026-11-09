@@ -19,9 +19,15 @@ from cascade.agent.mcp_project_context import (
     restore_project_context,
 )
 from cascade.board.gitutil import inherited_git_process_group
+from cascade.board.store import read_doc
 from cascade.task.action_recovery import recovery_actions
 from cascade.task.lifecycle_lock import lifecycle_root
-from cascade.watchdog.audit import AuditObservation, project_audit_observation
+from cascade.watchdog.audit import (
+    AuditObservation,
+    _restore_parent_observation_episodes,
+    _snapshot_parent_observation_episodes,
+    project_audit_observation,
+)
 from cascade.watchdog.capabilities import (
     CapabilityDescriptor,
     CapabilityRegistry,
@@ -196,6 +202,7 @@ def _bounded_admission(
             deadline,
             project_context_payload(),
             claim_token,
+            _snapshot_parent_observation_episodes(),
         ),
         name="health-audit-admission",
         daemon=True,
@@ -319,10 +326,14 @@ def _admission_process(
     deadline: float,
     context_payload: object,
     claim_token: str,
+    parent_observation_episodes: tuple[
+        tuple[str, str, str, str, float, int], ...
+    ],
 ) -> None:
     try:
         os.setsid()
         restore_project_context(context_payload)
+        _restore_parent_observation_episodes(parent_observation_episodes)
         with inherited_git_process_group():
             payload = _admit_inline(
                 root,
@@ -581,6 +592,29 @@ def _incident_contract(
                     operation = "retry_integration_branch_update"
                     evidence["action_id"] = action.get("action_id")
 
+    parent_action = observation.evidence.parent_action
+    if (
+        operation is None
+        and observation.tier in {"feature", "epic"}
+        and parent_action is not None
+        and parent_action.state == "executable"
+        and parent_action.responsible_work_id == str(observation.work_id)
+    ):
+        candidate = parent_action.candidate_action
+        operation = candidate
+        if candidate.startswith("restore_child_dispatch:"):
+            operation, _, child_id = candidate.partition(":")
+            evidence["child_id"] = child_id
+        if operation in {
+            "resume_planning_owner",
+            "restore_child_dispatch",
+            "publish_integration_review",
+            "reconcile_completion_rollup",
+        }:
+            owner = f"{observation.tier}_team:{observation.work_id}"
+        else:
+            operation = None
+
     if operation is None or owner is None:
         return None
     return incident_record(
@@ -598,7 +632,7 @@ def _incident_contract(
 def _evidence(observation: AuditObservation) -> dict[str, Any]:
     identity = observation.identity
     source = observation.evidence
-    return {
+    evidence = {
         "document_revision": (
             str(identity.document_revision) if identity.document_revision else None
         ),
@@ -612,6 +646,17 @@ def _evidence(observation: AuditObservation) -> dict[str, Any]:
         "local_fingerprint": source.local_fingerprint,
         "reason": observation.reason,
     }
+    if source.parent_action is not None:
+        evidence["parent_action"] = {
+            "responsible_work_id": source.parent_action.responsible_work_id,
+            "candidate_action": source.parent_action.candidate_action,
+            "state": source.parent_action.state,
+            "reason": source.parent_action.reason,
+            "observation_count": source.parent_action.observation_count,
+            "unchanged_for_seconds": source.parent_action.unchanged_for_seconds,
+            "required_interval_seconds": source.parent_action.required_interval_seconds,
+        }
+    return evidence
 
 
 def _integration_action(
@@ -661,21 +706,60 @@ def _execute_reservation(
                 value = executor(
                     str(evidence["action_id"]), root=root, **{owner_arg: owner_id}
                 )
+            elif descriptor.name == "feature.resume_planning_owner":
+                value = executor(owner_id, generation=reservation.generation, root=root)
+            elif descriptor.name == "feature.restore_child_dispatch":
+                value = executor(
+                    str(evidence["child_id"]),
+                    feature_id=owner_id,
+                    generation=reservation.generation,
+                    root=root,
+                )
+            elif descriptor.name in {
+                "feature.publish_integration_review",
+                "feature.reconcile_completion_rollup",
+            }:
+                value = executor(owner_id, generation=reservation.generation, root=root)
+            elif descriptor.name == "epic.resume_planning_owner":
+                value = executor(
+                    reservation.reservation_id,
+                    epic_id=owner_id,
+                    expected_generation=reservation.generation,
+                    root=root,
+                )
+            elif descriptor.name == "epic.restore_child_dispatch":
+                value = executor(
+                    str(evidence["child_id"]),
+                    epic_id=owner_id,
+                    expected_generation=reservation.generation,
+                    root=root,
+                )
+            elif descriptor.name in {
+                "epic.publish_integration_review",
+                "epic.reconcile_completion_rollup",
+            }:
+                value = executor(
+                    epic_id=owner_id,
+                    expected_generation=reservation.generation,
+                    root=root,
+                )
             else:
                 raise RuntimeError(
                     f"unsupported audit recovery operation: {descriptor.operation}"
                 )
         payload = _result_payload(value)
-        outcome = _result_outcome(value)
+        outcome = _result_outcome(value, reservation=reservation)
     except Exception as exc:
         payload = {"error": type(exc).__name__, "message": str(exc)}
         outcome = "error"
-    record_result(
+    recorded = record_result(
         reservation,
         {"worker": "health-audit-recovery", "accepted": True},
         {"outcome": outcome, **payload},
         root=root,
     )
+    if recorded.get("outcome") == "success":
+        _reconcile_exact_blocker(reservation, root=root)
 
 
 def _result_payload(value: object) -> dict[str, Any]:
@@ -686,8 +770,26 @@ def _result_payload(value: object) -> dict[str, Any]:
     return {"adapter_result": {"value": str(value)}}
 
 
-def _result_outcome(value: object) -> str:
+def _result_outcome(value: object, *, reservation: IncidentReservation) -> str:
     if isinstance(value, Mapping):
+        if value.get("durable_result") is True:
+            return "success"
+        state = value.get("state")
+        if state in {"pending", "review_pending", "retryable", "dispatched"}:
+            postcheck = value.get("postcheck")
+            if (
+                value.get("ok") is True
+                and isinstance(postcheck, Mapping)
+                and postcheck.get("available") is True
+                and (
+                    postcheck.get("generation") != reservation.generation
+                    or postcheck.get("classification") != "proven_incident"
+                )
+            ):
+                return "success"
+            return "deferred"
+        if value.get("durable_result") is False:
+            return "deferred"
         return "success" if value.get("ok", True) else "refused"
     decision = getattr(value, "decision", None)
     if decision == "unsafe":
@@ -697,6 +799,38 @@ def _result_outcome(value: object) -> str:
     if decision in {"no_op_live_owner", "already_delivered"}:
         return "no_op"
     return "success"
+
+
+def _reconcile_exact_blocker(
+    reservation: IncidentReservation, *, root: Path
+) -> None:
+    """Clear only a derived parent blocker carrying this result identity."""
+
+    try:
+        child = read_doc(reservation.work_id, root=root)
+        if not child.meta.parent:
+            return
+        supervisor = read_doc(child.meta.parent, root=root)
+        if not any(
+            blocker.child_id == child.meta.id
+            and blocker.incident_id == reservation.reservation_id
+            for blocker in supervisor.meta.monitoring_blockers
+        ):
+            return
+        from cascade.watchdog.blockage import reconcile_direct_report_blockage
+
+        reconcile_direct_report_blockage(
+            supervisor,
+            child,
+            root=root,
+            incident_id=reservation.reservation_id,
+        )
+    except Exception:
+        # Result persistence is authoritative. A concurrent board change leaves
+        # the exact blocker for the next reconciliation pass.
+        _log.exception(
+            "could not reconcile audit blocker %s", reservation.reservation_id
+        )
 
 
 __all__ = ["AuditRecoveryWorker", "dispatch_audit_recovery"]

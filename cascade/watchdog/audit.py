@@ -163,6 +163,67 @@ class AuditEvidence:
     unresolved_references: tuple[str, ...]
     errors: tuple[str, ...] = ()
     local_fingerprint: str | None = None
+    parent_action: ParentActionEvidence | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ParentActionEvidence:
+    """Exact parent-tier action considered by one authoritative observation."""
+
+    responsible_work_id: str
+    candidate_action: str
+    state: Literal["observing", "executable", "gated"]
+    reason: str
+    observation_count: int = 1
+    unchanged_for_seconds: float = 0.0
+    required_interval_seconds: float = 0.0
+
+
+@dataclass(slots=True)
+class _ParentObservationEpisode:
+    generation_inputs: str
+    action: str
+    first_seen: float
+    count: int
+
+
+_parent_observation_episodes: dict[tuple[Path, str], _ParentObservationEpisode] = {}
+_parent_observation_lock = RLock()
+
+
+def _snapshot_parent_observation_episodes(
+) -> tuple[tuple[str, str, str, str, float, int], ...]:
+    """Copy earned no-progress evidence for a bounded admission process."""
+
+    with _parent_observation_lock:
+        return tuple(
+            (
+                str(product),
+                work_id,
+                episode.generation_inputs,
+                episode.action,
+                episode.first_seen,
+                episode.count,
+            )
+            for (product, work_id), episode in _parent_observation_episodes.items()
+        )
+
+
+def _restore_parent_observation_episodes(
+    snapshot: tuple[tuple[str, str, str, str, float, int], ...],
+) -> None:
+    """Restore a supervisor snapshot before the child rereads authority."""
+
+    with _parent_observation_lock:
+        for product, work_id, generation_inputs, action, first_seen, count in snapshot:
+            _parent_observation_episodes[(Path(product).resolve(), work_id)] = (
+                _ParentObservationEpisode(
+                    generation_inputs=generation_inputs,
+                    action=action,
+                    first_seen=first_seen,
+                    count=count,
+                )
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1204,6 +1265,10 @@ def _project_doc(
             execution = {**execution, "delivery_queued": queued}
             if queue_error is not None:
                 errors.append(queue_error)
+    else:
+        execution, runtime_error = _parent_runtime_evidence(doc, product=product)
+        if runtime_error is not None:
+            errors.append(runtime_error)
     protected_gates, gate_errors = _protected_gates(doc, board, tracking=tracking, product=product)
     gates.extend(protected_gates)
     errors.extend(gate_errors)
@@ -1239,7 +1304,11 @@ def _project_doc(
         errors.append(recovery_error)
     if local_error is not None:
         errors.append(local_error)
-    if worktree is not None and doc.meta.status in {"completed", "cancelled"}:
+    if (
+        worktree is not None
+        and doc.meta.tier == "task"
+        and doc.meta.status in {"completed", "cancelled"}
+    ):
         unresolved = (*unresolved, f"worktree:{doc.meta.id}")
     evidence = AuditEvidence(
         tracking_repository=tracking,
@@ -1255,6 +1324,18 @@ def _project_doc(
         errors=tuple(errors),
         local_fingerprint=local_fingerprint,
     )
+    if doc.meta.tier in {"feature", "epic"}:
+        evidence = replace(
+            evidence,
+            parent_action=_parent_action_evidence(
+                doc,
+                board=board,
+                evidence=evidence,
+                worktree_registered=worktree is not None,
+                actual_branch=branch,
+                monotonic=monotonic,
+            ),
+        )
     generation = _generation(doc, git_head, branch, evidence, board=board)
     identity = _identity(doc, git_head, branch, generation)
     classification, reason = _classification(doc, board, evidence)
@@ -1304,6 +1385,16 @@ def incident_failure_class(tier: WorkTier, reason: str, evidence: AuditEvidence)
             # Observation already reports store reachability separately.  Do
             # not infer executable authority from an unreadable recovery row.
             pass
+    if tier in {"feature", "epic"} and evidence.parent_action is not None:
+        action = evidence.parent_action.candidate_action
+        if action == "resume_planning_owner":
+            return "parent_owner_stalled"
+        if action.startswith("restore_child_dispatch:"):
+            return "child_dispatch_stalled"
+        if action == "publish_integration_review":
+            return "publication_stalled"
+        if action == "reconcile_completion_rollup":
+            return "completion_rollup_stalled"
     return reason
 
 
@@ -1472,16 +1563,334 @@ def _review_gate(work_id: str, product: Path) -> tuple[str | None, str | None]:
     return ("review_pending", None) if not record.get("closed") else (None, None)
 
 
+def _parent_runtime_evidence(
+    doc: WorkDoc, *, product: Path
+) -> tuple[Mapping[str, Any], str | None]:
+    """Read parent owner/queue facts without creating a missing checkpoint."""
+
+    from cascade.watchdog.queue_cursor import queue_byte_size
+    from cascade.workspace.kickoff import graph_turn_owner_is_live
+
+    checkpoint = product / ".cascade" / "checkpoints" / f"{doc.meta.id}.sqlite"
+    owner_live = graph_turn_owner_is_live(doc.meta.id)
+    cursor = 0
+    durable_inflight = False
+    if checkpoint.is_file():
+        try:
+            from cascade.workspace.kickoff import (
+                _graph_has_inflight_turn,
+                _queue_offset,
+            )
+
+            cursor = _queue_offset(
+                doc.meta.id,
+                doc.meta.tier,
+                root=product,
+                feature_id=None,
+            )
+            durable_inflight = _graph_has_inflight_turn(
+                doc.meta.id,
+                doc.meta.tier,
+                root=product,
+                feature_id=None,
+            )
+        except Exception as exc:
+            return {}, f"parent_runtime:{type(exc).__name__}"
+    try:
+        queued_bytes = queue_byte_size(doc.meta.id, root=product)
+    except Exception as exc:
+        return {}, f"parent_queue:{type(exc).__name__}"
+    return {
+        "owner_live": owner_live,
+        "durable_inflight": durable_inflight,
+        "queue_cursor": cursor,
+        "queue_size": queued_bytes,
+        "pending_input": queued_bytes > cursor,
+    }, None
+
+
+def _parent_action_evidence(
+    doc: WorkDoc,
+    *,
+    board: BoardIndex,
+    evidence: AuditEvidence,
+    worktree_registered: bool,
+    actual_branch: str | None,
+    monotonic: Callable[[], float],
+) -> ParentActionEvidence | None:
+    """Classify a parent candidate, then require unchanged interval evidence."""
+
+    runtime = evidence.execution or {}
+    hard_gate = next(
+        (gate for gate in evidence.gates if gate != "review_pending"), None
+    )
+    if hard_gate is not None:
+        _clear_parent_episode(evidence.product_repository, doc.meta.id)
+        return ParentActionEvidence(
+            responsible_work_id=doc.meta.id,
+            candidate_action=_gate_action(hard_gate),
+            state="gated",
+            reason=hard_gate,
+        )
+    if runtime.get("owner_live"):
+        _clear_parent_episode(evidence.product_repository, doc.meta.id)
+        return ParentActionEvidence(
+            doc.meta.id, "resume_planning_owner", "gated", "live_owner"
+        )
+    if runtime.get("pending_input"):
+        _clear_parent_episode(evidence.product_repository, doc.meta.id)
+        return ParentActionEvidence(
+            doc.meta.id, "deliver_pending_input", "gated", "pending_input"
+        )
+    if "review_pending" in evidence.gates:
+        _clear_parent_episode(evidence.product_repository, doc.meta.id)
+        return ParentActionEvidence(
+            doc.meta.id, "await_review", "gated", "review_pending"
+        )
+
+    candidate: tuple[str, str] | None = None
+    expected_branch = (
+        f"{'feat' if doc.meta.tier == 'feature' else 'epic'}/{doc.meta.id}"
+    )
+    if worktree_registered and actual_branch != expected_branch:
+        candidate = ("reconcile_integration_branch", "branch_discrepancy")
+    elif doc.meta.status == "cancelling":
+        candidate = ("resume_cancellation", "cancellation_incomplete")
+    elif doc.meta.status == "cancelled" and worktree_registered:
+        candidate = ("reconcile_cancellation_cleanup", "cancelled_worktree_retained")
+    elif doc.meta.status == "completed" and worktree_registered:
+        candidate = ("publish_integration_review", "local_integration_unpublished")
+    elif doc.meta.status in {"backlog", "ready_to_plan"} and worktree_registered:
+        candidate = ("reconcile_return_transition", "returned_worktree_retained")
+    elif _parent_revision_is_stale(doc, board) and not any(
+        board.by_id.get(child_id) is not None
+        and board.by_id[child_id].status == "active"
+        for child_id in doc.meta.children
+    ):
+        candidate = ("resume_owner_with_fresh_parent", "stale_parent_revision")
+    else:
+        graph_problem = _child_graph_problem(doc, board)
+        if graph_problem is not None:
+            candidate = ("reconcile_child_graph", graph_problem)
+        elif doc.meta.status == "active":
+            gated_child = _gated_child_dispatch(doc, board, evidence)
+            if gated_child is not None:
+                action, gate = gated_child
+                _clear_parent_episode(evidence.product_repository, doc.meta.id)
+                return ParentActionEvidence(doc.meta.id, action, "gated", gate)
+            candidate = _active_parent_candidate(doc, board, evidence)
+
+    if candidate is None:
+        _clear_parent_episode(evidence.product_repository, doc.meta.id)
+        return None
+    action, reason = candidate
+    return _observe_parent_candidate(
+        doc,
+        evidence=evidence,
+        action=action,
+        reason=reason,
+        now=monotonic(),
+    )
+
+
+def _gate_action(gate: str) -> str:
+    if gate.startswith("dependency:") or gate.startswith("unmet_deps"):
+        return "await_dependency"
+    if gate in {"plan_approval", "not_approved"}:
+        return "await_approval"
+    if gate == "review_threads_blocking":
+        return "await_comment_resolution"
+    if gate.startswith("human_gate:"):
+        return "await_human_decision"
+    return "await_lifecycle_gate"
+
+
+def _parent_revision_is_stale(doc: WorkDoc, board: BoardIndex) -> bool:
+    if doc.meta.tier != "feature" or not doc.meta.parent or not doc.meta.parent_rev:
+        return False
+    parent = board.by_id.get(doc.meta.parent)
+    if parent is None:
+        return False
+    return _read_canonical_doc(parent.id, board).sha != doc.meta.parent_rev
+
+
+def _child_graph_problem(doc: WorkDoc, board: BoardIndex) -> str | None:
+    for child_id in doc.meta.children:
+        child = board.by_id.get(child_id)
+        if child is None:
+            return f"child_missing:{child_id}"
+        if child.parent != doc.meta.id:
+            return f"child_parent_mismatch:{child_id}"
+        expected_tier = "task" if doc.meta.tier == "feature" else "feature"
+        if child.tier != expected_tier:
+            return f"child_tier_mismatch:{child_id}"
+    return None
+
+
+def _active_parent_candidate(
+    doc: WorkDoc, board: BoardIndex, evidence: AuditEvidence
+) -> tuple[str, str] | None:
+    children = [board.by_id[child_id] for child_id in doc.meta.children]
+    if any(child.status == "active" for child in children):
+        return None
+    if children and all(
+        child.status in {"completed", "cancelled"} for child in children
+    ):
+        if any(child.status == "cancelled" for child in children):
+            return "reconcile_child_cancellation", "cancelled_child_unreconciled"
+        return "reconcile_completion_rollup", "completed_children_unrolled"
+    dispatchable = _dispatchable_child(doc, children, board, evidence)
+    if dispatchable is not None:
+        return (
+            f"restore_child_dispatch:{dispatchable}",
+            f"dispatchable_child:{dispatchable}",
+        )
+    if not children or (evidence.execution or {}).get("durable_inflight"):
+        return "resume_planning_owner", "planning_owner_absent"
+    return None
+
+
+def _dispatchable_child(
+    doc: WorkDoc,
+    children: list[WorkMeta],
+    board: BoardIndex,
+    evidence: AuditEvidence,
+) -> str | None:
+    for child in children:
+        if child.status not in {"backlog", "ready_to_plan"}:
+            continue
+        if any(
+            board.by_id.get(dependency) is None
+            or board.by_id[dependency].status != "completed"
+            for dependency in child.depends_on
+        ):
+            continue
+        if doc.meta.tier == "feature":
+            return child.id
+        try:
+            from cascade.feature.readiness import (
+                compute_feature_readiness,
+                feature_boss_dispatchable,
+            )
+
+            readiness = compute_feature_readiness(
+                child.id, root=evidence.tracking_repository, board=board
+            )
+        except Exception:
+            continue
+        if readiness is not None and feature_boss_dispatchable(readiness):
+            return child.id
+    return None
+
+
+def _gated_child_dispatch(
+    doc: WorkDoc, board: BoardIndex, evidence: AuditEvidence
+) -> tuple[str, str] | None:
+    """Explain why a backlog direct report is not currently executable."""
+
+    for child_id in doc.meta.children:
+        child = board.by_id.get(child_id)
+        if child is None or child.status not in {"backlog", "ready_to_plan"}:
+            continue
+        incomplete = next(
+            (
+                dependency
+                for dependency in child.depends_on
+                if board.by_id.get(dependency) is None
+                or board.by_id[dependency].status != "completed"
+            ),
+            None,
+        )
+        if incomplete is not None:
+            return f"restore_child_dispatch:{child_id}", f"dependency:{incomplete}"
+        if doc.meta.tier == "epic":
+            try:
+                readiness = compute_feature_readiness(
+                    child_id, root=evidence.tracking_repository, board=board
+                )
+            except Exception as exc:
+                return (
+                    f"restore_child_dispatch:{child_id}",
+                    f"feature_readiness:{type(exc).__name__}",
+                )
+            if readiness is not None and readiness.blockers:
+                return (
+                    f"restore_child_dispatch:{child_id}",
+                    readiness.blockers[0],
+                )
+    return None
+
+
+def _observe_parent_candidate(
+    doc: WorkDoc,
+    *,
+    evidence: AuditEvidence,
+    action: str,
+    reason: str,
+    now: float,
+) -> ParentActionEvidence:
+    from cascade.watchdog.config import read_health_audit_config
+
+    interval = float(
+        read_health_audit_config(evidence.product_repository).interval_seconds
+    )
+    signature_payload = {
+        "status": evidence.status,
+        "children": evidence.child_ids,
+        "dependencies": evidence.dependency_ids,
+        "execution": evidence.execution,
+        "gates": evidence.gates,
+        "references": evidence.unresolved_references,
+        "local": evidence.local_fingerprint,
+        "action": action,
+        "reason": reason,
+    }
+    signature = hashlib.sha256(
+        json.dumps(signature_payload, sort_keys=True, default=str).encode()
+    ).hexdigest()
+    key = (evidence.product_repository.resolve(), doc.meta.id)
+    with _parent_observation_lock:
+        episode = _parent_observation_episodes.get(key)
+        if (
+            episode is None
+            or episode.generation_inputs != signature
+            or episode.action != action
+        ):
+            episode = _ParentObservationEpisode(signature, action, now, 1)
+            _parent_observation_episodes[key] = episode
+        else:
+            episode.count += 1
+        unchanged = max(0.0, now - episode.first_seen)
+        executable = episode.count >= 2 and unchanged >= interval
+        count = episode.count
+    return ParentActionEvidence(
+        responsible_work_id=doc.meta.id,
+        candidate_action=action,
+        state="executable" if executable else "observing",
+        reason=reason if executable else f"observing:{reason}",
+        observation_count=count,
+        unchanged_for_seconds=unchanged,
+        required_interval_seconds=interval,
+    )
+
+
+def _clear_parent_episode(product: Path, work_id: str) -> None:
+    with _parent_observation_lock:
+        _parent_observation_episodes.pop((product.resolve(), work_id), None)
+
+
 def _classification(
     doc: WorkDoc, board: BoardIndex, evidence: AuditEvidence
 ) -> tuple[AuditClassification, str]:
     if evidence.errors:
         return "unavailable_evidence", evidence.errors[0]
+    parent_action = evidence.parent_action
     hard_gates = tuple(gate for gate in evidence.gates if gate != "review_pending")
     if hard_gates:
         return "expected_wait", hard_gates[0]
     if "review_pending" in evidence.gates and all(
-        reference.startswith("worktree:") for reference in evidence.unresolved_references
+        reference.startswith("worktree:")
+        for reference in evidence.unresolved_references
     ):
         # Retaining the source worktree until its review lands is intentional.
         return "expected_wait", "review_pending"
@@ -1497,6 +1906,16 @@ def _classification(
         return "proven_incident", "unresolved_recovery_reference"
     if "review_pending" in evidence.gates:
         return "expected_wait", "review_pending"
+    if parent_action is not None and doc.meta.status in {
+        "completed",
+        "cancelled",
+        "cancelling",
+        "backlog",
+        "ready_to_plan",
+    }:
+        if parent_action.state == "executable":
+            return "proven_incident", parent_action.candidate_action
+        return "expected_wait", parent_action.reason
     if doc.meta.status in {"completed", "cancelled"}:
         return "healthy", "terminal"
     if evidence.gates:
@@ -1545,6 +1964,10 @@ def _classification(
             return "proven_incident", f"child:{child_id}:{child_health.reason}"
     if child_wait:
         return "expected_wait", child_wait
+    if parent_action is not None:
+        if parent_action.state == "executable":
+            return "proven_incident", parent_action.candidate_action
+        return "expected_wait", parent_action.reason
     return "healthy", "authoritative_state_consistent"
 
 
@@ -1624,6 +2047,15 @@ def _generation(
         "unresolved_references": evidence.unresolved_references,
         "errors": evidence.errors,
         "local_fingerprint": evidence.local_fingerprint,
+        "parent_action": (
+            {
+                "responsible_work_id": evidence.parent_action.responsible_work_id,
+                "candidate_action": evidence.parent_action.candidate_action,
+                "reason": evidence.parent_action.reason.removeprefix("observing:"),
+            }
+            if evidence.parent_action is not None
+            else None
+        ),
         "capability_fingerprint": capability_authority_fingerprint(),
         "direct_reports": _direct_report_inputs(doc, board, evidence),
     }

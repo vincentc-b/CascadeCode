@@ -452,6 +452,98 @@ def test_delivery_recovery_passes_pinned_feature_identity_without_model_turn(
     assert not model_started.is_set()
 
 
+@pytest.mark.parametrize(
+    ("descriptor_name", "tier", "owner", "evidence", "expected"),
+    (
+        (
+            "feature.restore_child_dispatch",
+            "feature",
+            "feature_team:feat_001",
+            {"child_id": "task_001"},
+            {
+                "args": ("task_001",),
+                "feature_id": "feat_001",
+                "generation": "sha256:" + "2" * 64,
+            },
+        ),
+        (
+            "epic.resume_planning_owner",
+            "epic",
+            "epic_team:epic_001",
+            {},
+            {
+                "args": ("reservation",),
+                "epic_id": "epic_001",
+                "expected_generation": "sha256:" + "2" * 64,
+            },
+        ),
+    ),
+)
+def test_parent_executor_preserves_generation_and_original_action_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    descriptor_name: str,
+    tier: str,
+    owner: str,
+    evidence: dict[str, object],
+    expected: dict[str, object],
+) -> None:
+    received: list[dict[str, object]] = []
+    recorded: list[dict[str, object]] = []
+
+    def execute(*args: object, **kwargs: object) -> dict[str, object]:
+        received.append({"args": args, **kwargs})
+        return {"ok": True, "durable_result": False, "outcome": "pending"}
+
+    descriptor = CapabilityDescriptor(
+        name=descriptor_name,
+        operation=(
+            "restore_child_dispatch"
+            if descriptor_name.endswith("restore_child_dispatch")
+            else "resume_planning_owner"
+        ),
+        executor=execute,
+        tiers=frozenset({tier}),
+        failure_classes=frozenset({"parent_stalled"}),
+        owner_kinds=frozenset({owner.partition(":")[0]}),
+        required_evidence=(),
+        durable_store="action_recovery",
+        attempt_bound=2,
+        lock_protocol="lifecycle lock",
+        recheck_protocol="fresh generation",
+        resume_action="retry exact action",
+    )
+    reservation = IncidentReservation(
+        reservation_id="reservation",
+        claim_token="token",
+        work_id=owner.partition(":")[2],
+        tier=tier,
+        generation="sha256:" + "2" * 64,
+        failure_class="parent_stalled",
+        capability=descriptor_name,
+        durable_store="action_recovery",
+        claimed_at="2026-01-01T00:00:00+00:00",
+        claim_expires_at="2026-01-01T00:05:00+00:00",
+    )
+
+    def capture(_reservation, acknowledgement, result, **_kwargs):
+        recorded.append(
+            {"acknowledgement": acknowledgement, "result": dict(result)}
+        )
+        return dict(result)
+
+    monkeypatch.setattr(audit_recovery, "record_result", capture)
+    audit_recovery._execute_reservation(
+        reservation,
+        descriptor,
+        {"accountable_owner": owner, "evidence": evidence},
+        root=tmp_path,
+    )
+
+    assert received == [{**expected, "root": tmp_path}]
+    assert recorded[0]["result"]["outcome"] == "deferred"
+
+
 def test_integration_action_keeps_authoritative_class_through_reservation(
     tmp_path: Path,
 ) -> None:
