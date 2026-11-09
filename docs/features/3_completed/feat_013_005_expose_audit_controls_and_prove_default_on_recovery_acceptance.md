@@ -2,7 +2,7 @@
 id: feat_013_005
 title: Expose audit controls and prove default-on recovery acceptance
 tier: feature
-status: active
+status: completed
 parent: epic_013
 children:
 - task_013_005_001
@@ -18,7 +18,7 @@ owners:
 skills: []
 parent_rev: a237468cd75ad6c2f16a4ed3ff33db0eeb002e82
 created: '2026-11-08'
-updated: '2026-11-08'
+updated: '2026-11-09'
 provider: codex
 flex_mode: false
 models:
