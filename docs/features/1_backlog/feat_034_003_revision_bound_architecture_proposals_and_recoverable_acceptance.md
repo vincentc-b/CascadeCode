@@ -25,6 +25,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-09T18:25:31.498037+00:00'
 ---
 # Revision-bound architecture proposals and recoverable acceptance
 
