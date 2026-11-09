@@ -1667,9 +1667,8 @@ def validate_review_gate(
             f"promotion {hold} has not accepted both code and documentation",
         )
     if active is None and policy is None:
-        # Parsing the affected units is deliberate: even a legacy policy may
-        # not silently accept a persisted diagram claim with no valid model.
-        review_store.units_affecting(work_id)
+        for unit in review_store.units_affecting(work_id):
+            _validate_claimed_model(project, unit)
         return ReviewGateResult(
             work_id, boundary, _REVIEW_GATE_NAME, 0, None, None
         )
@@ -1696,10 +1695,7 @@ def validate_review_gate(
     if policy == 0:
         # A rollout exception never legalizes a claimed diagram without a model.
         for unit in review_store.units_affecting(work_id):
-            if unit.architecture_impact == "diagram_change" and unit.proposed_model is None:
-                raise ArchitectureProposalError(
-                    "model_required", "a diagram change requires a pinned model closure"
-                )
+            _validate_claimed_model(project, unit)
         return ReviewGateResult(
             work_id, boundary, _REVIEW_GATE_NAME, 0, None, None
         )
@@ -1714,12 +1710,7 @@ def validate_review_gate(
         reasons = review_store.get_invalidation_reasons(refreshed.review_unit_id)
         code = reasons[-1] if reasons else "artifact_changed"
         raise ArchitectureProposalError(code, "approved architecture review tuple is stale")
-    if refreshed.architecture_impact == "diagram_change" and refreshed.proposed_model is None:
-        raise ArchitectureProposalError(
-            "model_required", "a diagram change requires a pinned model closure"
-        )
-    if refreshed.proposed_model is not None:
-        _validate_model_binding(project, refreshed.proposed_model)
+    _validate_claimed_model(project, refreshed)
     if boundary == "approval":
         refreshed = review_store.approve_review_unit(refreshed.review_unit_id)
     elif refreshed.status != "approved":
@@ -1734,6 +1725,17 @@ def validate_review_gate(
         refreshed.review_unit_id,
         refreshed.reviewed_tuple_digest,
     )
+
+
+def _validate_claimed_model(
+    project: ProjectContext, unit: ArchitectureReviewUnit
+) -> None:
+    if unit.architecture_impact == "diagram_change" and unit.proposed_model is None:
+        raise ArchitectureProposalError(
+            "model_required", "a diagram change requires a pinned model closure"
+        )
+    if unit.proposed_model is not None:
+        _validate_model_binding(project, unit.proposed_model)
 
 
 def _authorize(unit: ArchitectureReviewUnit, owner: str, work_id: str) -> None:

@@ -462,8 +462,8 @@ def test_new_accepted_lineage_generation_requires_rebase_and_fresh_review(
     assert review and review.tuple_digest == proposal.reviewed_tuple_digest
 
 
-def test_enabled_rollout_binds_new_dispatch_and_requires_review(tmp_path: Path) -> None:
-    project, _, _, _ = _review_repository(tmp_path)
+def test_enabled_rollout_keeps_minimum_authoring_available(tmp_path: Path) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
     store = ArchitectureReviewStore(project)
     enable_review_gate(project, version=1, store=store)
 
@@ -473,6 +473,44 @@ def test_enabled_rollout_binds_new_dispatch_and_requires_review(tmp_path: Path) 
         )
 
     assert store.gate_policy_version("feat_034_003") == 1
+
+    proposal = replace(
+        _unit(project, plan, design, model),
+        status="draft",
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        impact_reason="The reviewed workflow change does not alter diagrams",
+    )
+    staged = stage_architecture_proposal(
+        project,
+        owner="feature-team",
+        work_id="feat_034_003",
+        proposal=proposal,
+        expected_generation=None,
+        store=store,
+    )
+    reviewed = review_architecture_proposal(
+        project,
+        owner="feature-team",
+        unit_id=proposal.review_unit_id,
+        expected_tuple_digest=proposal.reviewed_tuple_digest,
+        decision="reviewed",
+        reviewed_at="2026-11-09T12:00:00+00:00",
+        store=store,
+    )
+
+    approved = validate_review_gate(
+        project, work_id="feat_034_003", boundary="approval", store=store
+    )
+    dispatched = validate_review_gate(
+        project, work_id="feat_034_003", boundary="dispatch", store=store
+    )
+
+    assert staged.status == "staged"
+    assert reviewed.status == "reviewed"
+    assert approved.review_unit_id == proposal.review_unit_id
+    assert dispatched.tuple_digest == proposal.reviewed_tuple_digest
+    assert store.resolve_current("epic:epic_034") is None
 
 
 def test_approval_pins_reviewed_tuple_for_all_lifecycle_boundaries(tmp_path: Path) -> None:
@@ -530,6 +568,27 @@ def test_gate_revalidates_diagram_model_binding_before_approval(tmp_path: Path) 
 
     assert refusal.value.code == "model_invalid"
     assert store.get(proposal.review_unit_id).status == "reviewed"
+
+
+@pytest.mark.parametrize("rollout_enabled", (False, True))
+def test_legacy_policy_rejects_invalid_persisted_model_claim(
+    tmp_path: Path, rollout_enabled: bool,
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    store = ArchitectureReviewStore(project)
+    store.save(_unit(project, plan, design, model))
+    if rollout_enabled:
+        enable_review_gate(project, version=1, store=store)
+
+    with pytest.raises(ArchitectureProposalError) as refusal:
+        validate_review_gate(
+            project, work_id="feat_034_003", boundary="merge", store=store
+        )
+
+    assert refusal.value.code == "model_invalid"
+    assert store.gate_policy_version("feat_034_003") == (
+        0 if rollout_enabled else None
+    )
 
 
 def test_gate_reports_freshness_and_scoped_acceptance_holds(tmp_path: Path) -> None:
@@ -709,8 +768,12 @@ def test_promotion_retry_recovers_merge_that_landed_before_journal_update(
     assert _git(project.target.root, "rev-parse", "HEAD") == landed_head
 
 
-def test_split_promotion_retries_only_documentation_after_code_lands(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    "failure",
+    ("before_documentation", "after_code_merge", "after_documentation_merge"),
+)
+def test_split_promotion_recovers_failure_or_crash_without_duplicate_merges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str,
 ) -> None:
     colocated, plan, design, model = _review_repository(tmp_path)
     tracking_root = _git_repository(tmp_path / "tracking")
@@ -752,31 +815,67 @@ def test_split_promotion_retries_only_documentation_after_code_lands(
         store=store,
     )
     land = store._land_promotion_side
+    record = store._record_promotion_sides
+    crashed = False
 
     def crash_before_documentation(
         current: object, unit: object, side: str, repository: Path,
         expected_head: str, incoming_commit: str,
     ) -> object:
-        if side == "documentation":
+        if failure == "before_documentation" and side == "documentation":
             raise RuntimeError("documentation repository unavailable")
         return land(current, unit, side, repository, expected_head, incoming_commit)
 
+    def crash_after_git(
+        operation_id: str,
+        *,
+        code_head: str | None = None,
+        documentation_head: str | None = None,
+    ) -> object:
+        nonlocal crashed
+        should_crash = (
+            failure == "after_code_merge" and code_head is not None
+        ) or (
+            failure == "after_documentation_merge" and documentation_head is not None
+        )
+        if should_crash and not crashed:
+            crashed = True
+            raise RuntimeError(f"simulated crash {failure}")
+        return record(
+            operation_id,
+            code_head=code_head,
+            documentation_head=documentation_head,
+        )
+
     monkeypatch.setattr(store, "_land_promotion_side", crash_before_documentation)
-    with pytest.raises(RuntimeError, match="documentation repository unavailable"):
+    monkeypatch.setattr(store, "_record_promotion_sides", crash_after_git)
+    with pytest.raises(RuntimeError):
         promote_or_resume(project, journal.operation_id, store=store)
     pending = store.get_promotion(journal.operation_id)
-    assert pending and pending.outcome == "acceptance_pending"
-    assert pending.code.state == "landed"
-    assert pending.documentation.state == "pending"
+    assert pending and pending.outcome in {"reserved", "acceptance_pending"}
     code_head = _git(project.target.root, "rev-parse", "HEAD")
+    documentation_head = _git(tracking_root, "rev-parse", "HEAD")
 
     monkeypatch.setattr(store, "_land_promotion_side", land)
+    monkeypatch.setattr(store, "_record_promotion_sides", record)
     accepted = promote_or_resume(project, journal.operation_id, store=store)
 
     assert accepted.outcome == "accepted"
     assert _git(project.target.root, "rev-parse", "HEAD") == code_head
+    if failure == "after_documentation_merge":
+        assert _git(tracking_root, "rev-parse", "HEAD") == documentation_head
     assert accepted.code.observed_resulting_head == code_head
-    assert accepted.documentation.state == "landed"
+    assert _git(
+        project.target.root,
+        "merge-base", "--is-ancestor", implementation, code_head,
+    ) == ""
+    accepted_documentation_head = accepted.documentation.observed_resulting_head
+    assert accepted_documentation_head is not None
+    assert _git(
+        tracking_root,
+        "merge-base", "--is-ancestor", documentation, accepted_documentation_head,
+    ) == ""
+    assert accepted.code.state == accepted.documentation.state == "landed"
 
 
 def test_promotion_marks_changed_destination_head_for_rereview(tmp_path: Path) -> None:
