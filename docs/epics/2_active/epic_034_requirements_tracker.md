@@ -208,6 +208,11 @@ Pending planning work: canonical `run_dependency_check` for `dep_structurizr` (t
   Chose Declare the existing Structurizr 2026.09.19-playwright image by immutable digest; use offline DSL validation, semantic JSON, and SVG; require canonical verification before minting/sign-off..
   Rationale: The installed image passed advisory validate/JSON/SVG smoke checks without downloads. Reusing it avoids a host Java upgrade or new renderer dependency. The smoke is not canonical readiness evidence; manifest revision 1 still requires run_dependency_check.
   Honors: Local reproducible architecture tooling; no dependency installation without explicit authorization; no bypass of the software readiness gate..
+
+- `dec_005` · 2026-11-09 · Epic Architect · **Model processing and paired review**
+  Chose Require validated semantic IDs and a renderer-to-model binding artifact; make its proof Feature B's first acceptance checkpoint..
+  Rationale: The pinned offline probe passed DSL validation and JSON/SVG export, but semantic properties survived only in JSON. Stock SVG cannot alone provide reliable paired selection. Bind renderer metadata to the same export, preserve it through sanitization, and test repeated labels, source reordering, and parallel relationships; fail visibly for ambiguous mappings.
+  Honors: Success criteria 3, 7–10; reproducible local rendering and meaningful integration evidence without label/order heuristics..
 ## Amendment log
 
 _(none)_
