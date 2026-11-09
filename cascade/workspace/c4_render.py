@@ -18,6 +18,11 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
+from cascade.workspace.c4_bindings import (
+    C4BindingError,
+    validate_hit_target_manifest,
+    verify_and_sanitize_hit_targets,
+)
 from cascade.workspace.c4_closure import C4SourceClosure
 
 
@@ -37,15 +42,31 @@ _VIEW_COLLECTIONS = (
     "filteredViews",
     "imageViews",
 )
+_BINDING_ADAPTER = Path(__file__).with_name("RendererBindingAdapter.java")
+_BINDING_ADAPTER_SCRIPT = r"""
+set -eu
+mkdir -p /tmp/cascade-binding-lib /tmp/cascade-binding-classes
+unzip -q /usr/local/structurizr.war \
+  'WEB-INF/lib/gson-*.jar' \
+  'WEB-INF/lib/playwright-*.jar' \
+  'WEB-INF/lib/driver-*.jar' \
+  -d /tmp/cascade-binding-lib
+javac -cp '/tmp/cascade-binding-lib/WEB-INF/lib/*' \
+  -d /tmp/cascade-binding-classes /adapter/RendererBindingAdapter.java
+java -cp '/tmp/cascade-binding-classes:/tmp/cascade-binding-lib/WEB-INF/lib/*' \
+  RendererBindingAdapter "$@"
+"""
+_ARTIFACT_VERSION = 2
 
 RenderStatus = Literal[
-    "first", "running", "empty", "ready", "render_error", "cancelled"
+    "first", "running", "empty", "ready", "binding_error", "render_error", "cancelled"
 ]
 FailureCode = Literal[
     "image_unavailable",
     "validation_failed",
     "export_failed",
     "invalid_artifact",
+    "binding_failed",
     "timeout",
     "internal_error",
 ]
@@ -103,6 +124,9 @@ class C4RenderArtifact:
     embedded_workspace: Path | None = None
     static_directory: Path | None = None
     svg_files: tuple[Path, ...] = ()
+    binding_manifest: Path | None = None
+    interactive: bool = False
+    source_diff_reference: str | None = None
     view_keys: tuple[str, ...] = ()
     revision: str | None = None
     source_files: tuple[str, ...] = ()
@@ -159,6 +183,10 @@ class C4RenderOperation:
                 status="render_error",
                 closure_digest=self._closure.digest,
                 revision=self._closure.revision,
+                source_files=tuple(
+                    item.path.as_posix() for item in self._closure.files
+                ),
+                source_diff_reference=_source_diff_reference(self._closure),
                 failure=C4RenderFailure("internal_error", "renderer", str(exc)),
             )
         with self._lock:
@@ -202,7 +230,14 @@ class C4ArtifactRenderer:
         try:
             output = temporary / "output"
             output.mkdir()
-            for name in ("json", "static", "svg"):
+            for name in (
+                "json",
+                "static",
+                "svg",
+                "raw-bindings",
+                "raw-bound-svg",
+                "bound-svg",
+            ):
                 (output / name).mkdir()
             if os.getuid() == 0:
                 for directory in (output, *(output.iterdir())):
@@ -284,9 +319,72 @@ class C4ArtifactRenderer:
                     json.dumps(embedded, sort_keys=True, separators=(",", ":")),
                     encoding="utf-8",
                 )
+            except (OSError, ValueError, ET.ParseError, json.JSONDecodeError) as exc:
+                return _failed(
+                    closure,
+                    cache_key,
+                    "invalid_artifact",
+                    "publish",
+                    f"Structurizr produced invalid artifacts: {exc}",
+                )
+
+            source_diff_reference = _source_diff_reference(closure)
+            binding_views: list[dict[str, object]] = []
+            for index, view_key in enumerate(view_keys):
+                raw_bindings = output / "raw-bindings" / f"view-{index}.json"
+                raw_svg = output / "raw-bound-svg" / f"view-{index}.svg"
+                bound_svg = output / "bound-svg" / f"view-{index}.svg"
+                result = _run_process(
+                    self._binding_command(
+                        closure,
+                        output,
+                        settings,
+                        view_key=view_key,
+                        bindings=raw_bindings,
+                        svg=raw_svg,
+                    ),
+                    deadline,
+                    cancelled,
+                )
+                if result.kind:
+                    return _process_failure(
+                        closure, cache_key, f"binding:{view_key}", result
+                    )
+                try:
+                    targets = verify_and_sanitize_hit_targets(
+                        workspace=embedded,
+                        view_key=view_key,
+                        raw_bindings=raw_bindings,
+                        raw_svg=raw_svg,
+                        sanitized_svg=bound_svg,
+                        expected_semantic_ids=closure.contract.semantic_ids,
+                    )
+                except (C4BindingError, OSError, ET.ParseError) as exc:
+                    return _binding_failed(closure, cache_key, view_key, str(exc))
+                binding_views.append(
+                    {
+                        "view_key": view_key,
+                        "svg": bound_svg.relative_to(output).as_posix(),
+                        "targets": [target.as_dict() for target in targets],
+                    }
+                )
+
+            hit_target_manifest = {
+                "version": 1,
+                "interactive": True,
+                "source_diff_reference": source_diff_reference,
+                "views": binding_views,
+            }
+            (output / "hit-targets.json").write_text(
+                json.dumps(hit_target_manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            for transient in ("raw-bindings", "raw-bound-svg", "svg"):
+                shutil.rmtree(output / transient)
+            try:
                 status: RenderStatus = "ready" if view_keys else "empty"
                 manifest = {
-                    "version": 1,
+                    "version": _ARTIFACT_VERSION,
                     "status": status,
                     "cache_key": cache_key,
                     "closure_digest": closure.digest,
@@ -305,9 +403,11 @@ class C4ArtifactRenderer:
                         for item in closure.files
                     ],
                     "view_keys": list(view_keys),
+                    "binding_manifest": "hit-targets.json",
+                    "interactive": True,
+                    "source_diff_reference": source_diff_reference,
                     "svg_files": [
-                        path.relative_to(output).as_posix()
-                        for path in sorted((output / "svg").glob("*.svg"))
+                        row["svg"] for row in binding_views
                     ],
                 }
                 (temporary / "manifest.json").write_text(
@@ -334,6 +434,39 @@ class C4ArtifactRenderer:
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary, ignore_errors=True)
+
+    def _binding_command(
+        self,
+        closure: C4SourceClosure,
+        output: Path,
+        settings: C4RenderSettings,
+        *,
+        view_key: str,
+        bindings: Path,
+        svg: Path,
+    ) -> list[str]:
+        if not _BINDING_ADAPTER.is_file():
+            raise ValueError("approved renderer binding adapter is missing")
+        command = self._container_command(closure, output, settings, [])
+        image_index = command.index(STRUCTURIZR_IMAGE)
+        command[image_index:image_index] = [
+            "-v",
+            f"{_BINDING_ADAPTER.resolve()}:/adapter/RendererBindingAdapter.java:ro",
+            "--entrypoint",
+            "/bin/sh",
+        ]
+        command.extend(
+            [
+                "-c",
+                _BINDING_ADAPTER_SCRIPT,
+                "cascade-binding-adapter",
+                "/output/static",
+                f"/output/{bindings.relative_to(output).as_posix()}",
+                f"/output/{svg.relative_to(output).as_posix()}",
+                view_key,
+            ]
+        )
+        return command
 
     def _container_command(
         self,
@@ -451,13 +584,19 @@ def _process_failure(
         return _failed(
             closure, cache_key, "timeout", stage, "Structurizr render exceeded its deadline"
         )
-    code = "image_unavailable" if stage == "image" else (
-        "validation_failed" if stage == "validation" else "export_failed"
-    )
     detail = (process.stderr or process.stdout).strip()
     message = f"Structurizr {stage} exited {process.returncode}"
     if detail:
         message = f"{message}: {detail}"
+    if stage.startswith("binding:"):
+        return _binding_failed(closure, cache_key, stage.split(":", 1)[1], message)
+    code: FailureCode = (
+        "image_unavailable"
+        if stage == "image"
+        else "validation_failed"
+        if stage == "validation"
+        else "export_failed"
+    )
     return _failed(closure, cache_key, code, stage, message)
 
 
@@ -474,7 +613,26 @@ def _failed(
         cache_key=cache_key,
         revision=closure.revision,
         source_files=tuple(item.path.as_posix() for item in closure.files),
+        source_diff_reference=_source_diff_reference(closure),
         failure=C4RenderFailure(code, stage, message),
+    )
+
+
+def _binding_failed(
+    closure: C4SourceClosure,
+    cache_key: str,
+    view_key: str,
+    message: str,
+) -> C4RenderArtifact:
+    return C4RenderArtifact(
+        status="binding_error",
+        closure_digest=closure.digest,
+        cache_key=cache_key,
+        revision=closure.revision,
+        source_files=tuple(item.path.as_posix() for item in closure.files),
+        interactive=False,
+        source_diff_reference=_source_diff_reference(closure),
+        failure=C4RenderFailure("binding_failed", f"binding:{view_key}", message),
     )
 
 
@@ -485,12 +643,21 @@ def _cancelled(closure: C4SourceClosure, cache_key: str) -> C4RenderArtifact:
         cache_key=cache_key,
         revision=closure.revision,
         source_files=tuple(item.path.as_posix() for item in closure.files),
+        source_diff_reference=_source_diff_reference(closure),
     )
+
+
+def _source_diff_reference(closure: C4SourceClosure) -> str:
+    paths = ",".join(
+        (closure.architecture_root / item.path).as_posix() for item in closure.files
+    )
+    return f"revision:{closure.revision};paths:{paths}"
 
 
 def _cache_key(closure_digest: str, settings: C4RenderSettings) -> str:
     encoded = json.dumps(
         {
+            "artifact_version": _ARTIFACT_VERSION,
             "closure_digest": closure_digest,
             "image_digest": STRUCTURIZR_IMAGE_DIGEST,
             "settings": settings.cache_payload(),
@@ -530,19 +697,22 @@ def _view_keys(workspace: dict[str, object]) -> tuple[str, ...]:
     return tuple(sorted(keys))
 
 
-def _validate_outputs(output: Path) -> tuple[str, ...]:
+def _validate_outputs(
+    output: Path, *, require_stock_svg: bool = True
+) -> tuple[str, ...]:
     semantic = json.loads((output / "json" / "workspace.json").read_text(encoding="utf-8"))
     embedded = _embedded_workspace(output / "static" / "workspace.js")
     semantic_keys = _view_keys(semantic)
     if semantic_keys != _view_keys(embedded):
         raise ValueError("semantic and static exports disagree on view inventory")
-    svg_files = sorted((output / "svg").glob("*.svg"))
-    for svg in svg_files:
-        root = ET.parse(svg).getroot()
-        if root.tag.rsplit("}", 1)[-1] != "svg":
-            raise ValueError(f"export is not SVG: {svg.name}")
-    if semantic_keys and not svg_files:
-        raise ValueError("no SVG files were exported for nonempty views")
+    if require_stock_svg:
+        svg_files = sorted((output / "svg").glob("*.svg"))
+        for svg in svg_files:
+            root = ET.parse(svg).getroot()
+            if root.tag.rsplit("}", 1)[-1] != "svg":
+                raise ValueError(f"export is not SVG: {svg.name}")
+        if semantic_keys and not svg_files:
+            raise ValueError("no SVG files were exported for nonempty views")
     if not (output / "static" / "index.html").is_file():
         raise ValueError("static export has no index.html")
     return semantic_keys
@@ -558,7 +728,7 @@ def _load_artifact(
     try:
         manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
         if (
-            manifest["version"] != 1
+            manifest["version"] != _ARTIFACT_VERSION
             or manifest["cache_key"] != cache_key
             or manifest["closure_digest"] != closure.digest
             or manifest["image_digest"] != STRUCTURIZR_IMAGE_DIGEST
@@ -577,16 +747,53 @@ def _load_artifact(
         if manifest["source_files"] != expected_sources:
             raise ValueError("cache manifest source provenance does not match request")
         output = directory / "output"
-        view_keys = _validate_outputs(output)
+        view_keys = _validate_outputs(output, require_stock_svg=False)
         if list(view_keys) != manifest["view_keys"]:
             raise ValueError("cache manifest view inventory is invalid")
         status = manifest["status"]
         if status not in ("ready", "empty"):
             raise ValueError("cache manifest status is invalid")
-        svg_files = tuple(output / item for item in manifest["svg_files"])
-        if any(not path.is_file() for path in svg_files):
-            raise ValueError("cache manifest names a missing SVG")
-    except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError, ET.ParseError) as exc:
+        source_diff_reference = _source_diff_reference(closure)
+        if (
+            manifest["binding_manifest"] != "hit-targets.json"
+            or manifest["interactive"] is not True
+            or manifest["source_diff_reference"] != source_diff_reference
+        ):
+            raise ValueError("cache manifest binding contract is invalid")
+        binding_manifest = output / manifest["binding_manifest"]
+        binding_payload = json.loads(binding_manifest.read_text(encoding="utf-8"))
+        if (
+            not isinstance(binding_payload, dict)
+            or binding_payload.get("source_diff_reference") != source_diff_reference
+        ):
+            raise ValueError("hit-target source diff reference is stale")
+        embedded = json.loads(
+            (output / "embedded-workspace.json").read_text(encoding="utf-8")
+        )
+        if not isinstance(embedded, dict):
+            raise ValueError("embedded workspace cache is invalid")
+        if embedded != _embedded_workspace(output / "static" / "workspace.js"):
+            raise ValueError("embedded workspace cache is stale")
+        svg_files = validate_hit_target_manifest(
+            workspace=embedded,
+            manifest=binding_payload,
+            artifact_root=output,
+            expected_view_keys=view_keys,
+            expected_semantic_ids=closure.contract.semantic_ids,
+        )
+        if [path.relative_to(output).as_posix() for path in svg_files] != manifest[
+            "svg_files"
+        ]:
+            raise ValueError("cache manifest bound SVG inventory is invalid")
+    except (
+        C4BindingError,
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+        ET.ParseError,
+    ) as exc:
         return _failed(
             closure,
             cache_key,
@@ -604,6 +811,9 @@ def _load_artifact(
         embedded_workspace=output / "embedded-workspace.json",
         static_directory=output / "static",
         svg_files=svg_files,
+        binding_manifest=binding_manifest,
+        interactive=True,
+        source_diff_reference=source_diff_reference,
         view_keys=view_keys,
         revision=closure.revision,
         source_files=tuple(item["path"] for item in manifest["source_files"]),

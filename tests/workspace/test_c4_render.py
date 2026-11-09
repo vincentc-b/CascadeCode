@@ -36,7 +36,7 @@ def test_real_pinned_renderer_publishes_one_validated_handoff_and_cache(
     assert C4RenderArtifact.first().status == "first"
     result = renderer.submit(closure).wait(timeout=120)
 
-    assert result.status == "ready"
+    assert result.status == "ready", result
     assert result.cache_hit is False
     assert result.view_keys == ("cascade-containers", "cascade-landscape")
     assert result.semantic_workspace and result.semantic_workspace.is_file()
@@ -44,6 +44,10 @@ def test_real_pinned_renderer_publishes_one_validated_handoff_and_cache(
     assert result.static_directory
     assert result.static_directory.joinpath("index.html").is_file()
     assert result.svg_files
+    assert result.interactive is True
+    assert result.binding_manifest and result.binding_manifest.is_file()
+    assert result.source_diff_reference and revision_fragment(result.source_diff_reference)
+    assert all("data-cascade-export-id" in path.read_text() for path in result.svg_files)
     assert result.artifact_directory and result.artifact_directory.joinpath(
         "manifest.json"
     ).is_file()
@@ -52,6 +56,7 @@ def test_real_pinned_renderer_publishes_one_validated_handoff_and_cache(
     assert cached.status == "ready"
     assert cached.cache_hit is True
     assert cached.artifact_directory == result.artifact_directory
+    assert cached.binding_manifest == result.binding_manifest
 
 
 def test_container_contract_is_immutable_offline_read_only_and_bounded(
@@ -86,6 +91,24 @@ def test_container_contract_is_immutable_offline_read_only_and_bounded(
     assert STRUCTURIZR_IMAGE in command
     user = command[command.index("--user") + 1]
     assert user.split(":", 1)[0] != "0"
+
+    bindings = output / "raw-bindings" / "view.json"
+    svg = output / "raw-bound-svg" / "view.svg"
+    binding_command = renderer._binding_command(
+        closure,
+        output,
+        C4RenderSettings(),
+        view_key="cascade-landscape",
+        bindings=bindings,
+        svg=svg,
+    )
+    assert "--entrypoint" in binding_command
+    assert "/bin/sh" in binding_command
+    assert any(
+        item.endswith(":/adapter/RendererBindingAdapter.java:ro")
+        for item in binding_command
+    )
+    assert binding_command[-1] == "cascade-landscape"
 
 
 def test_background_cancellation_and_runtime_failure_are_structured(
@@ -151,3 +174,7 @@ def _closure(tmp_path: Path) -> C4SourceClosure:
         input_directory=root,
         contract=contract,
     )
+
+
+def revision_fragment(reference: str) -> bool:
+    return reference.startswith("revision:") and ";paths:architecture/" in reference

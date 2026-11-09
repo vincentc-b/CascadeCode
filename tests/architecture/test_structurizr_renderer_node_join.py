@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import xml.etree.ElementTree as ET
 
+from cascade.workspace import verify_and_sanitize_hit_targets
+
 
 IMAGE = (
     "structurizr/structurizr@"
@@ -30,10 +32,6 @@ EXPECTED_REMOVED = {
     "container.worker.first",
     "deployment.cloud.first",
     "deployment.region.first",
-}
-APPROVED_BINDING_ATTRIBUTES = {
-    "data-cascade-model-kind",
-    "data-cascade-export-id",
 }
 
 
@@ -121,21 +119,6 @@ def _semantic_id(model_id: str, objects: dict[str, dict]) -> str:
     raise AssertionError(f"model ID {model_id} has no unambiguous cascade.id chain")
 
 
-def _apply_binding_attribute_sanitizer_contract(svg_path: Path) -> ET.ElementTree:
-    """Model the binding-specific allowlist required of the artifact sanitizer."""
-    svg = ET.parse(svg_path)
-    for node in svg.iter():
-        for attribute in list(node.attrib):
-            if attribute.lower().startswith("on"):
-                del node.attrib[attribute]
-            elif (
-                attribute.startswith("data-cascade-")
-                and attribute not in APPROVED_BINDING_ATTRIBUTES
-            ):
-                del node.attrib[attribute]
-    return svg
-
-
 def _run_probe(root: Path) -> None:
     script = """
 set -eu
@@ -193,17 +176,21 @@ def _render(tmp_path: Path, fixture_name: str, *, stock_svg: bool = False) -> di
 
     workspace = _workspace_from_static_export(root / "static")
     objects = _objects_by_export_id(workspace)
+    expected = EXPECTED_REMOVED if fixture_name == "removed" else EXPECTED_BASELINE
+    verified = verify_and_sanitize_hit_targets(
+        workspace=workspace,
+        view_key=VIEW_KEY,
+        raw_bindings=root / "bindings.json",
+        raw_svg=root / "bound.svg",
+        sanitized_svg=root / "sanitized-bound.svg",
+        expected_semantic_ids=frozenset(expected),
+    )
     bindings = json.loads((root / "bindings.json").read_text())
     semantic_by_renderer = {
-        binding["rendererNodeId"]: _semantic_id(binding["modelId"], objects)
-        for binding in bindings
+        binding.renderer_node_id: binding.semantic_id for binding in verified
     }
-    assert len(semantic_by_renderer) == len(bindings), "duplicate renderer node binding"
-    assert len(set(semantic_by_renderer.values())) == len(bindings), (
-        "ambiguous semantic binding"
-    )
 
-    svg = _apply_binding_attribute_sanitizer_contract(root / "bound.svg")
+    svg = ET.parse(root / "sanitized-bound.svg")
     svg_bindings = {
         node.attrib["id"]: (
             node.attrib["data-cascade-model-kind"],
