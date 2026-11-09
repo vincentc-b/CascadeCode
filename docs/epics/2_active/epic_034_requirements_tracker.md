@@ -185,6 +185,10 @@ Pending planning work: Epic Architect review of the macro-architecture and rende
 - 2026-11-06 · Human sequencing · Complete epic_036 first; then let this epic place design/C4 documentation in the target or tracking repository through `cascade.toml`.
 - 2026-11-06 · Human clarification · An epic remains editable after some features merge. Route later feature-plan change requests to the responsible team and escalate cross-feature decisions to the Epic Team; preserve accepted work, add corrective features when needed, and block for human review before any broader restart.
 
+- `dec_001` · 2026-11-09 · Epic Manager · **Historical coverage**
+  Chose Include uncovered target Git commits and linked MR/PR descriptions in design replay. In reply to: cmt_001..
+  Rationale: Completed Cascade records omit direct fixes and other changes. Reconcile pinned Git history with work records, deduplicate evidence, verify narratives against current code/tests, and explicitly ledger missing review provenance.
+  Honors: Success criteria 13–14; human comment cmt_001; evidence-based design without historical plans becoming current truth..
 ## Amendment log
 
 _(none)_
