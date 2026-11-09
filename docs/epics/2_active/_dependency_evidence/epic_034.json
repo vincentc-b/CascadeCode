@@ -185,6 +185,20 @@
           "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
         }
       ]
+    },
+    {
+      "snapshot_id": "evidence_0846508810124f2891d6dc99c8e9dea2",
+      "manifest_revision": 4,
+      "created_at": "2026-11-09T04:00:17.657943+00:00",
+      "accepted": [
+        {
+          "dependency_id": "dep_structurizr",
+          "attempt_id": "attempt_resume_f3c2b255d65cb2d48129d51dc3552dd3a6bbc17442c67036b0932b4ffdc05335",
+          "entry_revision": "sha256:19e92ba02495afa3320b7a2c4abf4f0c87c744c1dcb42a89aa94dfc3f9a7f249",
+          "recipe_revision": "sha256:6ef1905bb29ddf11858aab77b63af5235c053da7dcdf039ebfb9759f2aff1b09",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        }
+      ]
     }
   ]
 }
