@@ -19,6 +19,7 @@ from cascade.workspace.errors import WorkspaceError
 
 
 RepositoryReferenceKind = Literal["local", "remote"]
+ArchitectureDestination = Literal["target", "tracking"]
 
 _CONFIG_NAMES = ("cascade.toml", "cascade.yaml", "cascade.yml")
 _REMOTE_SCHEMES = frozenset({"git", "http", "https", "ssh"})
@@ -52,6 +53,14 @@ class TrackingRepositoryReference:
         return None
 
 
+@dataclass(frozen=True)
+class ProjectConfiguration:
+    """Repository and architecture routing selected by the target config."""
+
+    tracking_repository: TrackingRepositoryReference | None = None
+    architecture_destination: ArchitectureDestination = "target"
+
+
 def find_project_config(root: Path) -> Path:
     """Return the project config path, including the default for a new project.
 
@@ -82,13 +91,37 @@ def read_tracking_repository(
     omitted key both select the backward-compatible colocated repository mode.
     """
 
+    return read_project_configuration(config_path).tracking_repository
+
+
+def read_project_configuration(config_path: Path) -> ProjectConfiguration:
+    """Read repository roles and architecture routing in one consistent pass."""
+
     path = Path(config_path).resolve()
     if not path.exists():
-        return None
+        return ProjectConfiguration()
     data = _load_project_config(path)
-    if "tracking_repository" not in data:
-        return None
-    return parse_tracking_repository_reference(data["tracking_repository"], path)
+    tracking = None
+    if "tracking_repository" in data:
+        tracking = parse_tracking_repository_reference(data["tracking_repository"], path)
+
+    architecture = data.get("architecture", {})
+    if not isinstance(architecture, dict):
+        raise WorkspaceError("architecture must be a configuration table or mapping")
+    destination = architecture.get("destination", "target")
+    if not isinstance(destination, str) or destination not in {"target", "tracking"}:
+        raise WorkspaceError(
+            'architecture.destination must be either "target" or "tracking"'
+        )
+    if destination == "tracking" and tracking is None:
+        raise WorkspaceError(
+            'architecture.destination = "tracking" requires a configured '
+            "tracking_repository"
+        )
+    return ProjectConfiguration(
+        tracking_repository=tracking,
+        architecture_destination=destination,
+    )
 
 
 def parse_tracking_repository_reference(
