@@ -2,7 +2,7 @@
 id: feat_034_007
 title: Historical design reconstruction and final validation
 tier: feature
-status: active
+status: completed
 parent: epic_034
 children:
 - task_034_007_001
