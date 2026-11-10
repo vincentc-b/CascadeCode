@@ -199,20 +199,36 @@ The detailed requirements and acceptance evidence define the intended outcome; t
 
 ## Core dependencies
 
-To be identified during epic planning.
+- Work prerequisite: epic_034 is canonically completed; its renderer, immutable review units, semantic IDs, design mappings, thread store and lifecycle gates remain the foundation.
+- Canonical software dependency manifest revision 2 is ready. Checks ran against the existing host runtime for /home/ubuntu/dev/CascadeCode (the dependency executor's project target); implementation stays in the owned integration worktree. No install or upgrade is requested or authorized.
+- Verified installed versions: Python 3.12.8; pytest 9.0.3; PyYAML 6.0.3; cursor-sdk 1.0.37; langgraph 1.2.14; langgraph-checkpoint-sqlite 3.1.1; Node 20.20.2; Docker server 28.0.0; Playwright 1.64.0; Chromium 156.0.8078.4.
+- The existing local renderer image is structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c. Keep the renderer's bounded offline settings and sanitizer/binding validation. Browser launch and image availability are verified prerequisites, not end-to-end acceptance.
+- Baseline check on activation: `python -m pytest -q tests/workspace/test_c4_render.py::test_real_pinned_renderer_publishes_one_validated_handoff_and_cache` failed (1 failed): the fixture copies nested final-validation evidence but declares only top-level files, so strict closure validation reports extra files before rendering. feat_046_001 owns repairing the fixture and proving actual rendering. Do not weaken inventory validation or describe this failing check as a pass.
 
 ## Feature breakdown
-- feat_046_005
-- feat_046_004
-- feat_046_003
-- feat_046_002
-- feat_046_001
 
-The Epic Team will create and sequence feature plans here.
+All five features are minted in backlog. Dependencies form a deliberate serial chain to keep shared server/viewer changes coherent and reuse one evolving acceptance fixture.
+
+| Feature | Depends on | Deliverable and epic coverage |
+| --- | --- | --- |
+| feat_046_001 — Connect normal architecture planning to revision-pinned HTTP review | None within epic | Requirements 1–2; production planning/publication/render/recovery path, explicit HTTP states, verified artifact/provenance/inventory contracts, real source/diff resources, drill/change metadata and an initial real-browser smoke. |
+| feat_046_002 — Complete live paired C4 navigation comments and exact-tuple approval | feat_046_001 | Requirements 3–4 and client refresh from 2; shared semantic viewer, native SVG navigation, semantic conversation lifecycle, authoritative validation and displayed-tuple approval. |
+| feat_046_003 — Browse pinned branch architecture from the War Room | feat_046_002 | Requirement 5; tab, known branch/worktree selection, pinned snapshots, split documentation refs, update indicators and deep links using shared viewer/render services. |
+| feat_046_004 — Show verified requirements and decisions beside C4 views | feat_046_003 | Requirement 6 on both surfaces; explicit many-to-many context, safe lazy document loading, pinned sources/diffs, unmapped states and requirement-thread entry. |
+| feat_046_005 — Prove the complete C4 review and branch exploration journeys | feat_046_004 | Acceptance A–D and all completion criteria; final integration repairs, reproducible real renderer/browser journeys, screenshots and operator guidance. |
+
+The first feature starts the real user-journey fixture and each subsequent feature extends it. The final feature consolidates evidence at the final integrated revision; it is not the first point at which production-path feasibility is tested. Every detailed brief requirement remains binding. Scope exclusions: another renderer/review/thread store, branch-wide comments, decision-specific anchors, dirty-worktree preview, inferred document coverage, per-C4-level DESIGN.md duplication, and unrelated refactoring.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+Architect review is required before the plan is final and role sign-offs are recorded. Lock these implementation contracts in this epic, retaining the brief's acceptance obligations:
+
+1. Choose and document the bounded paired-review HTTP schema and one supported sanitized SVG delivery mechanism; define immutable lookup authorization, payload bounds, readable source/diff destinations and explicit failure states.
+2. Identify the normal team-tool publication entry point, bounded scheduling/deduplication and durable or reconstructible restart path. Establish how exact tuple freshness is shared by reads, comment writes, approval and downstream gates.
+3. Define branch snapshot/code-to-document association resolution, missing-association behavior and the shared viewer/context seams, reusing existing stable mappings.
+4. Confirm the early real-renderer/browser smoke plan and fixture-inventory repair in feat_046_001. Installed tools alone do not close the production-path risk.
+
+Manager scope and sequencing are prepared. No installation approval or human scope decision is currently needed. No architecture amendments were pending at the activation review. Once the architect updates these contracts, both roles must review and sign the same final epic revision.
 
 ## Decision log
 
