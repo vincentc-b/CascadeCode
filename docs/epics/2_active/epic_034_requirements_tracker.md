@@ -162,7 +162,7 @@ Prefer a few high-signal integration and browser scenarios over broad mock-based
 - [Epic 36](epic_036_split_target_and_tracking_repos.md) (`depends_on: epic_036`) supplies the optional tracking repository and plan routing before this epic starts. This epic adds design/C4 destination selection on that foundation.
 
 ## Feature breakdown
-- feat_034_008
+- `feat_034_008` — Corrective historical evidence and accepted architecture reconciliation; depends on F and G. See dec_015; requires its own review and human approval.
 
 The following seven bounded slices cover all success criteria and are now minted as backlog features with the listed dependency edges. Their specs preserve the reviewed scope and acceptance checkpoints. Human plan approval remains the dispatch boundary.
 
@@ -191,6 +191,12 @@ Architect review completed on 2026-11-09 against the repository context, comment
 Epic Manager review completed on 2026-11-09: the Architect's semantic-ID/SVG binding checkpoint, lineage-safe promotion recovery, and minimum authoring path before gate activation are accepted within slices B, C, and F. The seven-slice dependency graph covers all 18 success criteria without adding a separate service or expanding first-release scope. Human comment `cmt_001` is covered by criterion 13, the replay contract, slice G (`feat_034_007`), and `dec_001`; the canonical thread is resolved.
 
 Planning readiness on 2026-11-09: canonical software verification is complete at manifest revision 4, and slices A–G are minted as `feat_034_001`–`feat_034_007` with their reviewed dependency graph. Manager review confirms the seven feature scopes cover all 18 criteria, including uncovered commits and MR/PR descriptions, and preserve the Architect's mapping, recovery, and authoring checkpoints. Remaining steps are each role's revision-bound sign-off on this final plan and human approval before dispatch. The Manager will record its own sign-off after rereading this revision; the Architect must independently review and sign. Canonical sign-off state is authoritative.
+
+## Current delivery and acceptance checkpoint
+
+As of 2026-11-10, A–G are canonically completed; that status does not establish clean acceptance of historical reconstruction. G's final report at `0bfcaca1` explicitly records `clean_closeout=false`. Its 50 reported passing tests and successful pinned DSL/JSON/SVG validation do not resolve the 2,023 replay rows, missing provenance, pending architecture reviews, or reconciliation receipts. F PR #218 is merged at `d2ed1aca` and reachable from Epic `f83f536a`, superseding G's older accepted-Epic snapshot.
+
+Corrective feature `feat_034_008` owns the remaining evidence acquisition, per-row dispositions, scoped design corrections, accepted-baseline delta reconciliation, exact architecture acceptance and final receipt validation. Preserve A–G IDs and deliveries. Apply dec_013's owner-authorized evidence path and dec_015's corrective sequencing. Review and human approval of the corrective feature are required before execution under criterion 17; prior epic approval does not cover it. Epic clean closeout remains pending this corrective acceptance. No new product capability or diagram interaction is added.
 
 ## Decision log
 
