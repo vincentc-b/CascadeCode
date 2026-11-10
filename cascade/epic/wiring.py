@@ -29,10 +29,14 @@ def load_epic_tools() -> None:
 
     from cascade.epic.registry import epic_tools, register_epic_tool
     from cascade.team_supervision import message_team, supervise_child
-    from cascade.architecture_context_tools import read_epic_historical_evidence
+    from cascade.architecture_context_tools import (
+        read_epic_architecture_amendments,
+        read_epic_historical_evidence,
+    )
     register_epic_tool("message_team", message_team)
     register_epic_tool("supervise_child", supervise_child)
     register_epic_tool("read_historical_evidence", read_epic_historical_evidence)
+    register_epic_tool("read_architecture_amendments", read_epic_architecture_amendments)
 
     expected = (
         "read_dependency_manifest",
@@ -55,6 +59,7 @@ def load_epic_tools() -> None:
         "retry_integration_branch_update",
         "publish_review_resolution",
         "read_historical_evidence",
+        "read_architecture_amendments",
     )
     if all(name in epic_tools() for name in expected):
         return

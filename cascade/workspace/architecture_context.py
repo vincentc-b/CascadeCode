@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Sequence
@@ -21,6 +23,7 @@ ContextRelation = Literal["owned", "ancestor"]
 ArtifactKind = Literal["design", "model_contract", "model_fragment"]
 ReplayScope = Literal["work_record", "git", "review"]
 _REPLAY_SCOPES = frozenset({"work_record", "git", "review"})
+_MAX_REPLAY_ROWS = 100
 
 
 class ArchitectureContextDenied(PermissionError):
@@ -71,6 +74,8 @@ class HistoricalReplayEvidence:
     work_record: dict[str, object] | None
     git: dict[str, object] | None
     reviews: tuple[dict[str, object], ...]
+    linked_reviews: tuple[dict[str, object], ...]
+    unavailable: tuple[dict[str, str], ...]
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -80,6 +85,8 @@ class HistoricalReplayEvidence:
             "work_record": self.work_record,
             "git": self.git,
             "reviews": list(self.reviews),
+            "linked_reviews": list(self.linked_reviews),
+            "unavailable": list(self.unavailable),
         }
 
 
@@ -180,11 +187,12 @@ def read_historical_replay(
         )
     revision = _required_revision(target)
     store = ArchitectureReviewStore(project)
-    owned_units = tuple(
+    all_owned_units = tuple(
         unit
         for unit in store.units_affecting(target.meta.id)
         if unit.owner_work_id == target.meta.id
     )
+    owned_units = all_owned_units[-_MAX_REPLAY_ROWS:]
 
     work_record = None
     if "work_record" in requested:
@@ -197,16 +205,27 @@ def read_historical_replay(
             "body": target.body,
         }
     git = None
+    unavailable: list[dict[str, str]] = []
+    if (
+        ("git" in requested or "review" in requested)
+        and len(all_owned_units) > len(owned_units)
+    ):
+        unavailable.append(_unavailable("architecture", "review_units_truncated"))
     if "git" in requested:
+        commits, commit_unavailable = _target_commit_evidence(project, target.meta.id)
+        unavailable.extend(commit_unavailable)
         git = {
             "plan_revision": revision,
             "integration_branch": target.meta.integration_branch,
+            "target_repository_key": project.target_repository_key,
+            "commits": commits,
             "architecture_promotions": [
                 _promotion_evidence(store, unit) for unit in owned_units
             ],
         }
 
     reviews: list[dict[str, object]] = []
+    linked_reviews: tuple[dict[str, object], ...] = ()
     if "review" in requested:
         for unit in owned_units:
             review = store.get_review(unit.review_unit_id)
@@ -220,6 +239,10 @@ def read_historical_replay(
                     "review": review.to_dict() if review is not None else None,
                 }
             )
+        linked_reviews, review_unavailable = _linked_review_evidence(
+            project, target.meta.id
+        )
+        unavailable.extend(review_unavailable)
     return HistoricalReplayEvidence(
         requester.meta.id,
         target.meta.id,
@@ -227,7 +250,178 @@ def read_historical_replay(
         work_record,
         git,
         tuple(reviews),
+        linked_reviews,
+        tuple(unavailable),
     )
+
+
+def _target_commit_evidence(
+    project: ProjectContext, work_id: str
+) -> tuple[list[dict[str, object]], list[dict[str, str]]]:
+    """Return only receipt-bound commits that are still reachable from target HEAD."""
+
+    from cascade.workspace.reconciliation import ReconciliationReceiptStore
+
+    try:
+        receipts = ReconciliationReceiptStore(project).for_work(work_id)
+    except WorkspaceError:
+        return [], [_unavailable("git", "reconciliation_receipts_unreadable")]
+    if not receipts:
+        return [], [_unavailable("git", "reconciliation_receipt_missing")]
+    rows: list[dict[str, object]] = []
+    unavailable: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for receipt in receipts:
+        for revision in receipt.implementation_revisions:
+            if revision in seen:
+                continue
+            seen.add(revision)
+            if not _reachable_from_head(project.target.root, revision):
+                unavailable.append(
+                    _unavailable("git", "target_commit_unreachable", revision)
+                )
+                continue
+            if len(rows) == _MAX_REPLAY_ROWS:
+                unavailable.append(_unavailable("git", "target_commits_truncated"))
+                return rows, unavailable
+            rows.append(
+                {
+                    "commit_id": revision,
+                    "provenance": "reconciliation_receipt",
+                    "receipt_head": receipt.implementation_head,
+                    "integration_lineage": receipt.integration_lineage,
+                }
+            )
+    return rows, unavailable
+
+
+def _linked_review_evidence(
+    project: ProjectContext, work_id: str
+) -> tuple[tuple[dict[str, object], ...], list[dict[str, str]]]:
+    """Read the one durable forge link keyed to this exact work owner."""
+
+    path = project.target.root / ".cascade" / "reviews.json"
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return (), [_unavailable("review", "linked_review_missing")]
+    except (OSError, json.JSONDecodeError):
+        return (), [_unavailable("review", "review_registry_unreadable")]
+    record = state.get(work_id) if isinstance(state, dict) else None
+    if not isinstance(record, dict):
+        return (), [_unavailable("review", "linked_review_missing")]
+    url = str(record.get("url") or record.get("review_url") or "").strip()
+    if not url:
+        return (), [_unavailable("review", "linked_review_missing")]
+
+    description = record.get("description") or record.get("body")
+    description = description if isinstance(description, str) and description.strip() else None
+    source_revision = record.get("source_revision")
+    source_revision = (
+        str(source_revision).strip() if isinstance(source_revision, str) else ""
+    )
+    source_branch = record.get("source_branch")
+    if not source_revision:
+        if isinstance(source_branch, str) and source_branch.strip():
+            source_revision = _resolve_commit(project.target.root, source_branch.strip()) or ""
+
+    if description is None or not source_revision:
+        remote = _authorized_review_evidence(
+            project.target.root,
+            record,
+            url=url,
+            source_branch=source_branch,
+        )
+        remote_description = remote.get("description")
+        if (
+            description is None
+            and isinstance(remote_description, str)
+            and remote_description.strip()
+        ):
+            description = remote_description
+        if not source_revision and isinstance(remote.get("source_revision"), str):
+            source_revision = remote["source_revision"].strip()
+
+    unavailable: list[dict[str, str]] = []
+    if description is None:
+        unavailable.append(_unavailable("review", "review_description_unavailable", url))
+    if not source_revision:
+        unavailable.append(
+            _unavailable("review", "review_source_revision_unavailable", url)
+        )
+    row = {
+        "review_id": str(record.get("number") or url),
+        "url": url,
+        "forge": record.get("forge"),
+        "description": description,
+        "source_revision": source_revision or None,
+    }
+    return (row,), unavailable
+
+
+def _authorized_review_evidence(
+    root: Path,
+    record: dict[str, object],
+    *,
+    url: str,
+    source_branch: object,
+) -> dict[str, object]:
+    """Fetch only the exact durable review link through configured forge access."""
+
+    from cascade.board.errors import GitError
+    from cascade.tracking import MergeRequest, detect_forge, merge_request_snapshot
+
+    recorded_forge = record.get("forge")
+    forge = (
+        recorded_forge
+        if recorded_forge in {"github", "gitlab"}
+        else detect_forge(root)
+    )
+    if forge not in {"github", "gitlab"}:
+        return {}
+    target_branch = record.get("target_branch")
+    review = MergeRequest(
+        url=url,
+        number=str(record["number"]) if record.get("number") is not None else None,
+        forge=forge,  # type: ignore[arg-type]
+        source_branch=source_branch.strip() if isinstance(source_branch, str) else "",
+        target_branch=target_branch.strip() if isinstance(target_branch, str) else "",
+        draft=bool(record.get("draft", False)),
+    )
+    try:
+        return merge_request_snapshot(root, review)
+    except (GitError, OSError, ValueError):
+        return {}
+
+
+def _resolve_commit(root: Path, ref: str) -> str | None:
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _reachable_from_head(root: Path, revision: str) -> bool:
+    resolved = _resolve_commit(root, revision)
+    if resolved is None:
+        return False
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", resolved, "HEAD"],
+        cwd=root,
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
+def _unavailable(scope: str, reason: str, detail: str = "") -> dict[str, str]:
+    row = {"scope": scope, "reason": reason}
+    if detail:
+        row["detail"] = detail
+    return row
 
 
 def _promotion_evidence(

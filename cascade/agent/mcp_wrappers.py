@@ -327,6 +327,9 @@ def _feature_tool_names() -> set[str]:
 _BOSS_TOOL_NAMES = frozenset({"dispatch_feature", "dispatch_task", "get_boss_view"})
 
 _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "read_architecture_amendments": {
+        "type": "object", "properties": {}, "additionalProperties": False,
+    },
     "read_historical_evidence": {
         "type": "object",
         "properties": {

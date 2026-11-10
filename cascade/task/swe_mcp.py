@@ -20,6 +20,7 @@ SWE_TOOL_NAMES = (
     "swe_write",
     "read_doc",
     "read_historical_evidence",
+    "read_architecture_amendments",
     "swe_run_tests",
     "swe_commit",
     "fail_task",
@@ -31,6 +32,7 @@ _SWE_TOOL_DESCRIPTIONS = {
     "swe_write": "Write the complete UTF-8 contents of a file in the active task worktree.",
     "read_doc": "Read this Task plan or its pinned parent Feature plan.",
     "read_historical_evidence": "Read explicit plan, Git, and/or architecture-review evidence for a completed non-cancelled related work record.",
+    "read_architecture_amendments": "Read architecture amendment requests addressed to this Task owner.",
     "swe_run_tests": "Run pytest in the active task worktree. For delivery, commit first, then run on the clean tree and require a green result containing final_validation.",
     "swe_commit": "Commit all allowed task worktree changes on the task branch. This invalidates prior validation; call swe_run_tests after committing before finishing.",
     "fail_task": "Block this task with a concrete reason when implementation cannot continue.",
@@ -70,6 +72,11 @@ _SWE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         },
         "required": ["work_id", "evidence_scope"],
+        "additionalProperties": False,
+    },
+    "read_architecture_amendments": {
+        "type": "object",
+        "properties": {},
         "additionalProperties": False,
     },
     "swe_run_tests": {

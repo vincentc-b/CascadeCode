@@ -35,9 +35,13 @@ def load_task_tools() -> None:
     from cascade.team_supervision import message_team
 
     register_task_tool("message_team", message_team)
-    from cascade.architecture_context_tools import read_task_historical_evidence
+    from cascade.architecture_context_tools import (
+        read_task_architecture_amendments,
+        read_task_historical_evidence,
+    )
 
     register_task_tool("read_historical_evidence", read_task_historical_evidence)
+    register_task_tool("read_architecture_amendments", read_task_architecture_amendments)
     expected = (
         "swe_read",
         "swe_write",
@@ -46,6 +50,7 @@ def load_task_tools() -> None:
         "swe_commit",
         "fail_task",
         "read_historical_evidence",
+        "read_architecture_amendments",
     )
     if all(name in task_tools() for name in expected):
         return

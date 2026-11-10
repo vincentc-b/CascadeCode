@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from cascade.agent.mcp_wrappers import mcp_tool_catalog as planning_tool_catalog
+from cascade.task.swe_mcp import mcp_tool_catalog as task_tool_catalog
 from cascade.watchdog.events import read_events
+from cascade.architecture_context_tools import (
+    read_epic_architecture_amendments,
+    read_feature_architecture_amendments,
+)
 from cascade.workspace import (
     ArchitectureAuthoringIntent,
     ArchitectureProposalError,
@@ -129,6 +135,10 @@ def test_task_owned_change_stages_but_feature_summary_routes_to_feature_owner(
     assert read_owner_amendments(
         project, owning_work_id="feat_034_006"
     ) == (first.amendment,)
+    assert read_feature_architecture_amendments(
+        feature_id="feat_034_006", root=root
+    ) == [first.amendment.to_dict()]
+    assert read_epic_architecture_amendments(epic_id="epic_034", root=root) == []
     events, _ = read_events("feat_034_006", 0, root=root)
     routed = [event for event in events if event.type == "ArchitectureAmendmentRequested"]
     assert len(routed) == 1
@@ -143,6 +153,19 @@ def test_task_owned_change_stages_but_feature_summary_routes_to_feature_owner(
     )
     assert owner_result.disposition == "owner_staged_review"
     assert owner_result.staged is not None
+
+
+def test_external_amendment_read_schemas_do_not_accept_owner_overrides() -> None:
+    catalogs = (
+        planning_tool_catalog("epic", ["read_architecture_amendments"]),
+        planning_tool_catalog("feature", ["read_architecture_amendments"]),
+        task_tool_catalog(["read_architecture_amendments"]),
+    )
+
+    for catalog in catalogs:
+        schema = catalog[0]["inputSchema"]
+        assert schema["properties"] == {}
+        assert schema["additionalProperties"] is False
 
 
 def test_feature_to_epic_architecture_change_routes_to_epic_owner(
