@@ -896,6 +896,29 @@ Orphans are illegal: a Feature without `parent`, a Task whose Feature is complet
 
 Executable evidence lives under [`tests/`](tests/) and is organized by the production boundary it exercises. The board, lifecycle, Task, Feature, Epic, watchdog, workspace, and War Room suites verify the corresponding contracts described above. A delivery record supplies the exact tested revision and result; this design links the durable evidence location rather than copying transient test output or claiming that a historical run proves the current checkout.
 
+### 12.2 Historical reconstruction evidence
+
+The target-owned [design mapping](architecture/design-mappings.json) assigns every
+meaningful code directory to one editing owner; test and discovery subdirectories
+explicitly inherit a covering parent. Stable C4 element, relationship, and view IDs
+live in the configured target architecture directory and are not inferred from
+exporter IDs, labels, or layout.
+
+The pinned inventory remains immutable evidence of the original accepted baseline.
+Its [replay ledger](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/replay-ledger.json)
+keeps one row per eligible completed work item and per otherwise-uncovered reachable
+commit, while canonical evidence and review records are referenced rather than
+copied. The [reconciliation report](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/reconciliation-report.json)
+preserves that pin and records the accepted delta separately. Missing task records,
+unavailable review descriptions/source revisions, ambiguous commit provenance, and
+missing reconciliation receipts remain material unresolved coverage; they are not
+silently promoted into current requirements.
+
+Architecture changes are proposals until their exact bytes and revision pass the
+owning review path. The leaf-design/C4 proposal from Task 002 is therefore recorded
+as pending, even though its implementation commit is reachable from the refreshed
+Feature baseline. Task 004 owns final DSL/JSON/SVG and cross-feature acceptance.
+
 ---
 
 ## 13. Worked Example

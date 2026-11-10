@@ -58,7 +58,7 @@ def test_materializes_only_pinned_closure_with_stable_provenance(
         "model.dsl",
         "views.dsl",
     }
-    assert {item.owner for item in first.files} == {"feat_034_002"}
+    assert {item.owner for item in first.files} == {"task_034_007_002"}
     assert {item.revision for item in first.files} == {contract_ref.revision}
     assert first.input_directory.joinpath("workspace.dsl").read_text(encoding="utf-8").startswith(
         'workspace "Cascade"'
@@ -190,7 +190,7 @@ def _repository_with_workspace(
             target_repository_key=target_key,
             code_directory=Path("."),
             design_owner_directory=Path("."),
-            owning_work="feat_034_002",
+            owning_work="task_034_007_002",
             destination_repository_key=target_key,
             destination_repository_role="target",
             repository_path=root / name,
