@@ -12,6 +12,7 @@ import pytest
 
 import cascade.board.gitutil as gitutil
 from cascade.board.context import set_project_context
+from cascade.board.store import read_doc, write_doc
 from cascade.task.execution import mark_awaiting_merge, mark_queued
 from cascade.task_rollup import invalidate_task_merge, queue_task_merge
 from cascade.watchdog.audit import (
@@ -506,6 +507,188 @@ def test_real_resolution_action_maps_review_identity_to_old_feature(
     assert resolved.generation != observation.generation
 
 
+def _write_completed_review_recovery(
+    root: Path, *, recovery_review_id: str | None = None
+) -> tuple[Path, Path]:
+    """Persist the production-shaped admission and execution evidence."""
+
+    sidecars = root / ".cascade"
+    action_id = (
+        "resolution:v1:"
+        "e58059ef6a24760191f4653a01e6bf7ebd50260509f8edc865db5067158754ac"
+    )
+    review = {
+        "number": "218",
+        "url": "https://github.com/vincentc-b/CascadeCode/pull/218",
+        "forge": "github",
+        "closed": True,
+        "state": "merged",
+    }
+    request = {"review_id": "218", "review_url": review["url"]}
+    (sidecars / "reviews.json").write_text(
+        json.dumps({"feat_034_006": review}), encoding="utf-8"
+    )
+    admission = sidecars / "resolution_actions.json"
+    admission.write_text(
+        json.dumps(
+            {
+                action_id: {
+                    "action_id": action_id,
+                    "idempotency_key": action_id,
+                    "status": "mutation_ready",
+                    "request": request,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    execution = sidecars / "executions.json"
+    execution.write_text(
+        json.dumps(
+            {
+                "version": 3,
+                "actions": {
+                    action_id: {
+                        "action_id": action_id,
+                        "action_kind": "review_rebase",
+                        "recovery_state": "completed",
+                        "completion_reconciliation": {
+                            "reason": "review_health_restored",
+                            "at": "2026-11-10T02:17:15Z",
+                        },
+                        "recovery": {
+                            "owning_team": {
+                                "kind": "feature_team",
+                                "work_id": "feat_034_006",
+                            },
+                            "evidence": {
+                                "affected_work_id": "feat_034_006",
+                                **request,
+                                "review_id": recovery_review_id,
+                            },
+                        },
+                    }
+                },
+                "executions": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return admission, execution
+
+
+@pytest.mark.parametrize("recovery_review_id", [None, "218"], ids=("legacy", "current"))
+def test_completed_matching_review_recovery_suppresses_only_stale_admission(
+    tmp_path: Path, recovery_review_id: str | None,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_034", title="Parent", tier="epic", status="completed")
+    add_doc(
+        root,
+        id="feat_034_006",
+        title="Recovered feature",
+        tier="feature",
+        status="completed",
+        parent="epic_034",
+    )
+    _commit(root)
+    admission, execution = _write_completed_review_recovery(
+        root, recovery_review_id=recovery_review_id
+    )
+    before = (admission.read_bytes(), execution.read_bytes())
+
+    first = project_audit_observation("feat_034_006", root=root)
+    second = project_audit_observation("feat_034_006", root=root)
+
+    assert first.classification == second.classification == "healthy"
+    assert first.reason == second.reason == "terminal"
+    assert not first.evidence.unresolved_references
+    assert (admission.read_bytes(), execution.read_bytes()) == before
+
+
+@pytest.mark.parametrize(
+    "countercase",
+    (
+        "closed_alone",
+        "live",
+        "failed",
+        "unrelated_action",
+        "wrong_owner",
+        "wrong_review",
+        "wrong_url",
+        "wrong_forge",
+        "wrong_reason",
+    ),
+)
+def test_completed_review_recovery_requires_exact_authoritative_identity(
+    tmp_path: Path, countercase: str
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_034", title="Parent", tier="epic", status="completed")
+    add_doc(
+        root,
+        id="feat_034_006",
+        title="Recovered feature",
+        tier="feature",
+        status="completed",
+        parent="epic_034",
+    )
+    _commit(root)
+    _, execution_path = _write_completed_review_recovery(root)
+    payload = json.loads(execution_path.read_text(encoding="utf-8"))
+    action_id, action = next(iter(payload["actions"].items()))
+    if countercase == "closed_alone":
+        payload["actions"] = {}
+    elif countercase == "live":
+        action["recovery_state"] = "running"
+    elif countercase == "failed":
+        action["recovery_state"] = "blocked"
+    elif countercase == "unrelated_action":
+        action["action_id"] = "resolution:v1:other"
+    elif countercase == "wrong_owner":
+        action["recovery"]["owning_team"]["work_id"] = "feat_999"
+    elif countercase == "wrong_review":
+        action["recovery"]["evidence"]["review_id"] = "999"
+    elif countercase == "wrong_url":
+        action["recovery"]["evidence"]["review_url"] = (
+            "https://github.com/other/CascadeCode/pull/218"
+        )
+    elif countercase == "wrong_forge":
+        action["recovery"]["evidence"]["forge"] = "gitlab"
+    else:
+        action["completion_reconciliation"]["reason"] = "unrelated_completion"
+    execution_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    observation = project_audit_observation("feat_034_006", root=root)
+
+    assert observation.classification == "proven_incident"
+    assert observation.reason == "unresolved_recovery_reference"
+    assert "reconciliation:feat_034_006" in observation.evidence.unresolved_references
+
+
+def test_unreadable_execution_evidence_does_not_hide_stale_admission(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_034", title="Parent", tier="epic", status="completed")
+    add_doc(
+        root,
+        id="feat_034_006",
+        title="Recovered feature",
+        tier="feature",
+        status="completed",
+        parent="epic_034",
+    )
+    _commit(root)
+    _, execution = _write_completed_review_recovery(root)
+    execution.write_text("{broken", encoding="utf-8")
+
+    observation = project_audit_observation("feat_034_006", root=root)
+
+    assert observation.classification == "unavailable_evidence"
+    assert observation.reason == "action_recovery_unavailable"
+
+
 @pytest.mark.parametrize("malformed", [True, False])
 def test_resolution_action_without_unique_review_owner_is_unavailable(
     tmp_path: Path, malformed: bool
@@ -986,6 +1169,132 @@ def test_registered_worktree_head_changes_authoritative_generation(
     assert second.branch == BranchName("epic/epic_001")
 
 
+@pytest.mark.parametrize("status", ("completed", "cancelled"))
+def test_terminal_feature_with_removed_worktree_ignores_later_parent_drift(
+    tmp_path: Path, status: str
+) -> None:
+    root = make_repo(tmp_path)
+    (root / "cascade.toml").write_text(
+        '[automation.health_audit]\ninterval = "1m"\n', encoding="utf-8"
+    )
+    add_doc(root, id="epic_001", title="Parent", tier="epic", status="active")
+    _commit(root, "create parent")
+    parent_revision = read_doc("epic_001", root=root).sha
+    assert parent_revision is not None
+    feature = add_doc(
+        root,
+        id="feat_001",
+        title="Terminal feature",
+        tier="feature",
+        status=status,  # type: ignore[arg-type]
+        parent="epic_001",
+    )
+    feature.meta.parent_rev = parent_revision
+    write_doc(feature, root=root)
+    (root / ".cascade" / "worktrees.json").write_text(
+        json.dumps({"entries": []}), encoding="utf-8"
+    )
+    _commit(root, "finish feature and remove integration worktree")
+    parent = read_doc("epic_001", root=root)
+    parent.body += "\nLater approved parent revision.\n"
+    write_doc(parent, root=root)
+    _commit(root, "advance parent plan")
+
+    first = project_audit_observation("feat_001", root=root, monotonic=lambda: 0.0)
+    later = project_audit_observation("feat_001", root=root, monotonic=lambda: 60.0)
+
+    assert first.classification == later.classification == "healthy"
+    assert first.reason == later.reason == "terminal"
+    assert first.evidence.parent_action is later.evidence.parent_action is None
+    assert read_doc("feat_001", root=root).meta.parent_rev == parent_revision
+
+
+def test_active_feature_with_parent_drift_remains_recovery_eligible(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    (root / "cascade.toml").write_text(
+        '[automation.health_audit]\ninterval = "1m"\n', encoding="utf-8"
+    )
+    add_doc(root, id="epic_001", title="Parent", tier="epic", status="active")
+    _commit(root, "create parent")
+    parent_revision = read_doc("epic_001", root=root).sha
+    assert parent_revision is not None
+    feature = add_doc(
+        root,
+        id="feat_001",
+        title="Active feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+    )
+    feature.meta.parent_rev = parent_revision
+    write_doc(feature, root=root)
+    _commit(root, "start feature")
+    parent = read_doc("epic_001", root=root)
+    parent.body += "\nLater approved parent revision.\n"
+    write_doc(parent, root=root)
+    _commit(root, "advance parent plan")
+
+    first = project_audit_observation("feat_001", root=root, monotonic=lambda: 0.0)
+    later = project_audit_observation("feat_001", root=root, monotonic=lambda: 60.0)
+
+    assert first.reason == "observing:stale_parent_revision"
+    assert later.classification == "proven_incident"
+    assert later.reason == "resume_owner_with_fresh_parent"
+
+
+def test_cancelled_feature_with_retained_worktree_still_requires_cleanup(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Parent", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Cancelled feature",
+        tier="feature",
+        status="cancelled",
+        parent="epic_001",
+    )
+    _commit(root)
+    worktree = root / ".cascade" / "worktrees" / "feature_feat_001"
+    worktree.parent.mkdir(parents=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "feat/feat_001", str(worktree)],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (root / ".cascade" / "worktrees.json").write_text(
+        json.dumps(
+            {
+                "entries": [
+                    {
+                        "kind": "feature",
+                        "work_id": "feat_001",
+                        "branch": "feat/feat_001",
+                        "path": ".cascade/worktrees/feature_feat_001",
+                        "base_sha": "a" * 40,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    first = project_audit_observation("feat_001", root=root, monotonic=lambda: 0.0)
+
+    assert first.classification == "expected_wait"
+    assert first.reason == "observing:cancelled_worktree_retained"
+    assert first.evidence.parent_action is not None
+    assert (
+        first.evidence.parent_action.candidate_action
+        == "reconcile_cancellation_cleanup"
+    )
+
+
 @pytest.mark.parametrize(
     ("tier", "work_id", "parent_id"),
     (
@@ -1097,6 +1406,8 @@ def test_resolution_url_fallback_never_overrides_conflicting_or_unknown_identity
         }},
         {"feat_001": {"number": registry_number, "url": registry_url}},
         references,
+        execution_actions={},
+        execution_unavailable=False,
     )
     assert not valid
     assert references == []

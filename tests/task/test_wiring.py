@@ -119,6 +119,8 @@ def test_boot_wiring_integration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         "swe_run_tests",
         "swe_commit",
         "fail_task",
+        "read_historical_evidence",
+        "read_architecture_amendments",
     )
     assert all(name in task_tools() for name in expected_tools)
 

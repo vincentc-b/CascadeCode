@@ -52,6 +52,7 @@ def comment(
     line_end: int | None = None,
     doc_sha: str | None = None,
     blocks: list[str] | None = None,
+    semantic_anchor: dict[str, object] | None = None,
     author: str,
     root: Path,
     is_attached: Callable[[str], bool] | None = None,
@@ -80,13 +81,21 @@ def comment(
         line_end=line_end,
         doc_sha=doc_sha,
         blocks=tuple(blocks) if blocks else (),
+        semantic_anchor=semantic_anchor,
         author=author,
         body=text,
         parent=None,
         blocking=blocking,
         root=repo,
     )
-    _emit_comment_posted(record, owning, trunk)
+    if record.doc_id.startswith("feat_"):
+        from cascade.comments.handoffs import route_feature_comment
+
+        handoff = route_feature_comment(record, root=trunk)
+        if handoff is None:
+            _emit_comment_posted(record, owning, trunk)
+    else:
+        _emit_comment_posted(record, owning, trunk)
     if author == "human" and is_attached is not None and not is_attached(owning):
         _enqueue_comment_toast(doc_id, trunk)
     return record.id
@@ -182,6 +191,7 @@ def resolve_comment(
                 line_end=row.line_end,
                 doc_sha=row.doc_sha,
                 blocks=row.blocks,
+                semantic_anchor=row.semantic_anchor,
                 author=row.author,
                 body=row.body,
                 parent=row.parent,
@@ -255,6 +265,7 @@ def _append_comment(
     line_end: int | None = None,
     doc_sha: str | None = None,
     blocks: tuple[str, ...] = (),
+    semantic_anchor: dict[str, object] | None = None,
     author: str,
     body: str,
     parent: str | None,
@@ -271,6 +282,7 @@ def _append_comment(
         line_end=line_end,
         doc_sha=doc_sha,
         blocks=blocks,
+        semantic_anchor=semantic_anchor,
         author=author,
         body=body,
         parent=parent,

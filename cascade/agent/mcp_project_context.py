@@ -16,7 +16,11 @@ def project_context_payload() -> dict[str, str] | None:
     }
 
 
-def restore_project_context(payload: object) -> None:
+def restore_project_context(
+    payload: object,
+    *,
+    architecture_destination: object = None,
+) -> None:
     """Restore launcher configuration, never caller-supplied tool arguments."""
     if payload is None:
         set_project_context(None)
@@ -31,8 +35,14 @@ def restore_project_context(payload: object) -> None:
         for value in payload.values()
     ):
         raise ValueError("MCP project roots must be absolute paths")
+    if architecture_destination is None:
+        architecture_destination = "target"
+    if architecture_destination not in {"target", "tracking"}:
+        raise ValueError("invalid MCP architecture destination")
     set_project_context(
         ProjectContext.split(
-            Path(payload["target_root"]), Path(payload["tracking_root"])
+            Path(payload["target_root"]),
+            Path(payload["tracking_root"]),
+            architecture_destination=architecture_destination,
         )
     )

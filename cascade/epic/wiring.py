@@ -18,8 +18,10 @@ def load_epic_tools() -> None:
 
     import cascade.epic.amendments as amendments_mod
     import cascade.epic.branch_recovery as branch_recovery_mod
+    import cascade.epic.change_dispositions as change_dispositions_mod
     import cascade.epic.decisions as decisions_mod
     import cascade.epic.docs_tool as docs_tool_mod
+    import cascade.epic.impact_decisions as impact_decisions_mod
     import cascade.epic.dependency_manifest_authoring as manifest_mod
     import cascade.epic.dependency_checks as dependency_checks_mod
     import cascade.epic.mint as mint_mod
@@ -30,8 +32,14 @@ def load_epic_tools() -> None:
 
     from cascade.epic.registry import epic_tools, register_epic_tool
     from cascade.team_supervision import message_team, supervise_child
+    from cascade.architecture_context_tools import (
+        read_epic_architecture_amendments,
+        read_epic_historical_evidence,
+    )
     register_epic_tool("message_team", message_team)
     register_epic_tool("supervise_child", supervise_child)
+    register_epic_tool("read_historical_evidence", read_epic_historical_evidence)
+    register_epic_tool("read_architecture_amendments", read_epic_architecture_amendments)
     from cascade.watchdog.audit_investigation import report_audit_investigation
     register_epic_tool("report_audit_investigation", report_audit_investigation)
 
@@ -42,6 +50,9 @@ def load_epic_tools() -> None:
         "mint_feature",
         "list_children",
         "record_decision",
+        "record_impact_decision",
+        "apply_impact_disposition",
+        "sign_off_corrective_plan",
         "read_doc",
         "write_doc",
         "reply_comment",
@@ -56,6 +67,8 @@ def load_epic_tools() -> None:
         "refresh_dependency_status",
         "retry_integration_branch_update",
         "publish_review_resolution",
+        "read_historical_evidence",
+        "read_architecture_amendments",
     )
     if all(name in epic_tools() for name in expected):
         return
@@ -64,6 +77,8 @@ def load_epic_tools() -> None:
     register_epic_tool("run_dependency_check", dependency_checks_mod.run_dependency_check)
     importlib.reload(mint_mod)
     importlib.reload(decisions_mod)
+    importlib.reload(impact_decisions_mod)
+    importlib.reload(change_dispositions_mod)
     importlib.reload(docs_tool_mod)
     importlib.reload(stubs_mod)
     importlib.reload(amendments_mod)

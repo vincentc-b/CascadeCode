@@ -152,9 +152,246 @@ body {
 }
 
 .plan-main {
-  max-width: 48rem;
+  max-width: 112rem;
   margin: 0 auto;
   padding: 1.5rem 1.25rem 3rem;
+}
+
+.plan-content-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(24rem, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.plan-content-layout > .plan-body:only-child,
+.paired-c4-review[hidden] + .plan-body {
+  grid-column: 1 / -1;
+  width: min(100%, 48rem);
+  justify-self: center;
+}
+
+.paired-c4-review {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 6px;
+}
+
+.paired-c4-heading h2,
+.paired-c4-side-heading {
+  margin: 0;
+}
+
+.paired-c4-summary,
+.paired-c4-status,
+.paired-c4-revision,
+.paired-c4-absent,
+.paired-c4-unsupported,
+.paired-c4-empty,
+.paired-c4-error {
+  margin: 0.35rem 0;
+}
+
+.paired-c4-summary,
+.paired-c4-revision,
+.paired-c4-status,
+.paired-c4-reference-group {
+  color: var(--plan-muted);
+  font-size: 0.875rem;
+}
+
+.paired-c4-error,
+.paired-c4-unsupported,
+.paired-c4-status.error {
+  color: #b00020;
+}
+
+.paired-c4-status-absent,
+.paired-c4-absent {
+  color: #8a4b00;
+  font-weight: 600;
+}
+
+.paired-c4-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.paired-c4-controls button,
+.paired-c4-controls select {
+  font: inherit;
+}
+
+.paired-c4-diagrams {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.paired-c4-side {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 5px;
+}
+
+.paired-c4-side-absent {
+  border-style: dashed;
+}
+
+.paired-c4-canvas {
+  min-height: 12rem;
+  overflow: auto;
+  background: var(--plan-code-bg);
+  border-radius: 4px;
+}
+
+.paired-c4-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.paired-c4-target {
+  cursor: pointer;
+}
+
+.paired-c4-target:hover,
+.paired-c4-target:focus-visible,
+.paired-c4-target-selected {
+  outline: 3px solid #1f6feb;
+  outline-offset: 3px;
+  filter: drop-shadow(0 0 4px #1f6feb);
+}
+
+.paired-c4-review-meta {
+  margin-top: 0.75rem;
+}
+
+.paired-c4-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin: 0.65rem 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+
+.paired-c4-diff-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+}
+
+.paired-c4-diff-list dt,
+.paired-c4-diff-list dd {
+  margin: 0;
+}
+
+.paired-c4-diff-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--plan-mono);
+  font-size: 0.78rem;
+}
+
+.paired-c4-threads {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--plan-border);
+}
+
+.paired-c4-threads-heading,
+.paired-c4-thread-title {
+  margin: 0;
+}
+
+.paired-c4-thread-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.65rem 0;
+}
+
+.paired-c4-comment-target,
+.paired-c4-thread-compose button,
+.paired-c4-thread-open {
+  font: inherit;
+}
+
+.paired-c4-thread-compose {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0;
+  padding: 0.65rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 5px;
+}
+
+.paired-c4-thread-compose textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+
+.paired-c4-thread {
+  margin-top: 0.65rem;
+  padding: 0.65rem;
+  border: 1px solid var(--plan-border);
+  border-left: 4px solid #1f6feb;
+  border-radius: 4px;
+}
+
+.paired-c4-thread-outdated {
+  border-left-color: #8a4b00;
+}
+
+.paired-c4-thread-state,
+.paired-c4-thread-revision,
+.paired-c4-thread-links,
+.paired-c4-thread-target,
+.paired-c4-thread-empty {
+  margin: 0.3rem 0;
+  color: var(--plan-muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.paired-c4-thread-body-text {
+  white-space: pre-wrap;
+}
+
+.paired-c4-thread-outdated,
+.paired-c4-thread-error {
+  color: #8a4b00;
+  font-weight: 600;
+}
+
+.paired-c4-requirement-selected {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
+}
+
+@media (max-width: 76rem) {
+  .plan-content-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .paired-c4-review,
+  .plan-body {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 48rem) {
+  .paired-c4-diagrams {
+    grid-template-columns: 1fr;
+  }
 }
 
 .plan-loading {

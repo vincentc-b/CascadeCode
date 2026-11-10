@@ -1,0 +1,81 @@
+{
+  "architecture_destination": "target",
+  "artifact_revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+  "directory_coverage": {
+    "excluded": {
+      "cascade/agent/discovery": "cascade/agent",
+      "tests": ".",
+      "tests/agent": ".",
+      "tests/amendments": ".",
+      "tests/architecture": ".",
+      "tests/board": ".",
+      "tests/boss": ".",
+      "tests/comments": ".",
+      "tests/epic": ".",
+      "tests/feature": ".",
+      "tests/harness": ".",
+      "tests/lifecycle": ".",
+      "tests/probe": ".",
+      "tests/task": ".",
+      "tests/war_room": ".",
+      "tests/watchdog": ".",
+      "tests/workspace": "."
+    },
+    "included": [
+      ".",
+      "cascade",
+      "cascade/agent",
+      "cascade/amendments",
+      "cascade/board",
+      "cascade/boss",
+      "cascade/comments",
+      "cascade/epic",
+      "cascade/feature",
+      "cascade/probe",
+      "cascade/task",
+      "cascade/war_room",
+      "cascade/watchdog",
+      "cascade/workspace"
+    ]
+  },
+  "inventory": {
+    "sha256": "d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6",
+    "target_baseline": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084",
+    "tracking_baseline": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084"
+  },
+  "material_gaps": [
+    {"count": 78, "reason": "reconciliation_receipt_missing"},
+    {"count": 1, "reason": "reconciliation_receipt_store_missing"},
+    {"count": 205, "reason": "review_description_unavailable"},
+    {"count": 1, "reason": "review_registry_unavailable"},
+    {"count": 205, "reason": "review_source_revision_unavailable"},
+    {"count": 34, "reason": "task_record_not_read_under_epic_scope"}
+  ],
+  "model_fragment_owners": {
+    "model.dsl": "task_034_007_002",
+    "views.dsl": "task_034_007_002",
+    "workspace.contract.json": "task_034_007_002",
+    "workspace.dsl": "task_034_007_002"
+  },
+  "proposal": {
+    "accepted": false,
+    "owner_work_id": "task_034_007_002",
+    "review_unit_ids": [
+      "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0"
+    ],
+    "status": "staged_pending_review"
+  },
+  "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+  "validation": {
+    "exported_json_sha256": "00fe63b83dd6a9da44bfe67667223b8beea9afe66a0ae6c419ad984a9cf962b0",
+    "exported_svg_sha256": {
+      "cascade-containers.svg": "2286fe866cdea05b267dfcfffb50c0edefbc6230271dfabe6a77f4e2f3e3c474",
+      "cascade-context.svg": "dedf76d6178c37d5985eb6e96d835cdc2f49a1e376a7f69a870804df6627be82",
+      "cascade-landscape.svg": "6083772e4bf47f519f7d4ef244d826f02cc34c1976d93cf081b0b35e6b724938",
+      "cascade-supervisor-components.svg": "9c5dfff7ce8dc51fbe8a3631545d815ba4cee3b1d339e5ba1fa657fe9bf743d1"
+    },
+    "renderer_image": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+    "view_keys": ["cascade-containers", "cascade-context", "cascade-landscape", "cascade-supervisor-components"]
+  },
+  "version": 1
+}

@@ -197,3 +197,28 @@ def test_legacy_config_clears_project_context():
     )
     restore_project_context(None)
     assert get_project_context() is None
+
+
+def test_stdio_context_preserves_architecture_destination(tmp_path):
+    from cascade.agent.mcp_project_context import (
+        project_context_payload,
+        restore_project_context,
+    )
+
+    target = tmp_path / "target"
+    tracking = tmp_path / "tracking"
+    target.mkdir()
+    tracking.mkdir()
+    set_project_context(
+        ProjectContext.split(
+            target, tracking, architecture_destination="tracking"
+        )
+    )
+
+    restore_project_context(
+        project_context_payload(), architecture_destination="tracking"
+    )
+
+    restored = get_project_context()
+    assert restored is not None
+    assert restored.architecture_destination == "tracking"

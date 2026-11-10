@@ -8,6 +8,10 @@ from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
 from cascade.comments import store as comment_store
 from cascade.comments.store import CommentNotFound
+from cascade.comments.handoffs import (
+    CommentHandoffError,
+    escalate_feature_comment,
+)
 from cascade.feature.guard import FeatureToolDenied
 from cascade.feature.registry import register_feature_tool
 
@@ -38,6 +42,30 @@ def reply_comment(
     )
 
 
+def escalate_comment_to_epic(
+    comment_id: str,
+    reason: str,
+    *,
+    feature_id: str,
+    root: Path,
+    affected_work_ids: list[str] | None = None,
+) -> dict[str, object]:
+    """Request the one accountable Epic impact-triage turn for a thread."""
+
+    _require_own_feature(feature_id, root)
+    try:
+        handoff = escalate_feature_comment(
+            feature_id,
+            comment_id,
+            affected_work_ids=affected_work_ids,
+            reason=reason,
+            root=root,
+        )
+    except CommentHandoffError as exc:
+        raise FeatureToolDenied(str(exc)) from exc
+    return handoff.to_dict()
+
+
 def _target_doc_id(feature_id: str, doc_id: str | None, *, root: Path) -> str:
     if doc_id is None:
         return feature_id
@@ -60,3 +88,4 @@ def _require_own_feature(feature_id: str, root: Path) -> None:
 
 
 register_feature_tool("reply_comment", reply_comment)
+register_feature_tool("escalate_comment_to_epic", escalate_comment_to_epic)

@@ -195,7 +195,9 @@ def try_complete_epic_result(
     # Automatic recovery and a concurrent human Close share the same
     # check/create boundary. The durable review/event stores provide
     # idempotency after this in-process serialization point.
-    with process_lock:
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=resolve_root(root)):
         return _finish_epic_completion_result(epic_id, root=root)
 
 
@@ -214,7 +216,9 @@ def confirm_epic_complete_result(
         return EpicCompleteResult(ok=False, reason="unauthorized")
     # Serialize the check/create boundary so concurrent Close requests in this
     # process cannot both observe an absent snapshot and publish reviews.
-    with process_lock:
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=resolve_root(root)):
         return _finish_epic_completion_result(epic_id, root=root)
 
 
@@ -236,6 +240,13 @@ def _finish_epic_completion_result(
     epic_meta = board.by_id[epic_id]
     if epic_meta.tier != "epic":
         return EpicCompleteResult(ok=False, reason="wrong_tier")
+    from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    try:
+        require_lifecycle_review_gate(epic_id, "closeout", root=repo)
+    except ArchitectureProposalError as exc:
+        return EpicCompleteResult(ok=False, reason=str(exc))
     if epic_meta.status == "completed" and epic_meta.path.parent.name == "3_completed":
         if _completed_on_operator_trunk(epic_id, repo):
             review_state = epic_review_snapshot(epic_id, root=repo)

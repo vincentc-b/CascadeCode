@@ -42,6 +42,22 @@ def test_startup_without_tracking_configuration_preserves_colocated_behavior(
     assert workspace.runtime == workspace.target_repository.root / ".cascade"
 
 
+def test_startup_with_explicit_target_architecture_destination(
+    tmp_path: Path,
+) -> None:
+    root = _startable_repo(tmp_path)
+    (root / "cascade.toml").write_text(
+        '[architecture]\ndestination = "target"\n', encoding="utf-8"
+    )
+
+    workspace = prepare_up(root)
+
+    assert workspace.project is not None
+    assert workspace.project.architecture_destination == "target"
+    assert workspace.project.architecture_repository.root == root
+    assert workspace.project.design_path("cascade") == root / "cascade" / "DESIGN.md"
+
+
 @pytest.mark.parametrize("config_name", ["cascade.toml", "cascade.yaml"])
 def test_startup_resolves_split_repository_roles_from_toml_and_yaml(
     tmp_path: Path, config_name: str
@@ -68,6 +84,31 @@ def test_startup_resolves_split_repository_roles_from_toml_and_yaml(
     assert workspace.target_repository.root == root
     assert workspace.tracking_repository.root == tracking
     assert workspace.path == workspace.target_repository.root
+
+
+def test_startup_resolves_tracking_architecture_destination(tmp_path: Path) -> None:
+    root = _startable_repo(tmp_path / "target")
+    tracking_parent = tmp_path / "tracking"
+    tracking_parent.mkdir()
+    tracking = make_git_repo(tracking_parent)
+    (root / "cascade.toml").write_text(
+        f'tracking_repository = "{tracking}"\n\n'
+        '[architecture]\ndestination = "tracking"\n',
+        encoding="utf-8",
+    )
+
+    workspace = prepare_up(root)
+
+    assert workspace.project is not None
+    assert workspace.project.architecture_destination == "tracking"
+    assert workspace.project.architecture_repository.root == tracking
+    assert workspace.project.design_path("cascade") == (
+        tracking
+        / "design"
+        / workspace.project.target_repository_key
+        / "cascade"
+        / "DESIGN.md"
+    )
 
 
 @pytest.mark.parametrize("unavailable", ["missing", "not-a-checkout"])
