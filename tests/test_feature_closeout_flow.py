@@ -427,29 +427,60 @@ def test_closed_review_repairs_active_target_even_after_completion_event(
     assert pushes == ["epic/epic_001"]
 
 
-@pytest.mark.parametrize("epic_status,feature_status,feature_parent,expected_replays", [
-    ("completed", "completed", "epic_001", []),
-    ("active", "completed", "epic_001", ["feat_001"]),
-    ("completed", "active", "epic_001", ["feat_001"]),
-    ("completed", "completed", "epic_002", ["feat_001"]),
-])
+@pytest.mark.parametrize(
+    "epic_status,feature_status,feature_parent,expected_replays",
+    [
+        ("completed", "completed", "epic_001", []),
+        ("active", "completed", "epic_001", ["feat_001"]),
+        ("completed", "active", "epic_001", ["feat_001"]),
+        ("completed", "completed", "epic_002", ["feat_001"]),
+    ],
+)
 def test_closed_review_with_pruned_feed_uses_terminal_trunk_evidence(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, epic_status, feature_status, feature_parent, expected_replays
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    epic_status,
+    feature_status,
+    feature_parent,
+    expected_replays,
 ) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status=epic_status)
     if feature_parent != "epic_001":
-        add_doc(root, id=feature_parent, title="Other Epic", tier="epic", status="completed")
-    add_doc(root, id="feat_001", title="Feature", tier="feature", status=feature_status, parent=feature_parent)
+        add_doc(
+            root, id=feature_parent, title="Other Epic", tier="epic", status="completed"
+        )
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status=feature_status,
+        parent=feature_parent,
+    )
     state_path = root / ".cascade" / "reviews.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text(json.dumps({"feat_001": {
-        "url": "https://github.example/o/r/pull/20", "number": "20",
-        "forge": "github", "source_branch": "feat/feat_001",
-        "target_branch": "epic/epic_001", "draft": False, "closed": True,
-    }}), encoding="utf-8")
+    state_path.write_text(
+        json.dumps(
+            {
+                "feat_001": {
+                    "url": "https://github.example/o/r/pull/20",
+                    "number": "20",
+                    "forge": "github",
+                    "source_branch": "feat/feat_001",
+                    "target_branch": "epic/epic_001",
+                    "draft": False,
+                    "closed": True,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     replays = []
-    monkeypatch.setattr("cascade.boss.rollup.try_complete_feature", lambda feature_id, **kwargs: replays.append(feature_id) or False)
+    monkeypatch.setattr(
+        "cascade.boss.rollup.try_complete_feature",
+        lambda feature_id, **kwargs: replays.append(feature_id) or False,
+    )
     # A missing parent feed is normal after terminal queue retention runs.
     assert not (root / "docs/_queue/epic_001.jsonl").exists()
     assert review_module.reconcile_feature_review_completions(root) == []
@@ -460,16 +491,42 @@ def test_closed_review_with_pruned_feed_uses_terminal_trunk_evidence(
 def test_terminal_trunk_does_not_skip_incomplete_target_repair(tmp_path, monkeypatch):
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
-    add_doc(root, id="feat_001", title="Feature", tier="feature", status="completed", parent="epic_001")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
     state_path = root / ".cascade" / "reviews.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text(json.dumps({"feat_001": {
-        "url": "https://github.example/o/r/pull/20", "number": "20",
-        "forge": "github", "source_branch": "feat/feat_001",
-        "target_branch": "epic/epic_001", "draft": False, "closed": True,
-    }}), encoding="utf-8")
-    monkeypatch.setattr(review_module, "_closed_review_has_incomplete_target", lambda *args, **kwargs: True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "feat_001": {
+                    "url": "https://github.example/o/r/pull/20",
+                    "number": "20",
+                    "forge": "github",
+                    "source_branch": "feat/feat_001",
+                    "target_branch": "epic/epic_001",
+                    "draft": False,
+                    "closed": True,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        review_module,
+        "_closed_review_has_incomplete_target",
+        lambda *args, **kwargs: True,
+    )
     repaired = []
-    monkeypatch.setattr(review_module, "_finalize_merged_review_record", lambda feature_id, *args, **kwargs: repaired.append(feature_id) or False)
+    monkeypatch.setattr(
+        review_module,
+        "_finalize_merged_review_record",
+        lambda feature_id, *args, **kwargs: repaired.append(feature_id) or False,
+    )
     assert review_module.reconcile_feature_review_completions(root) == []
     assert repaired == ["feat_001"]
