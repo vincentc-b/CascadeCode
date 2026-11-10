@@ -36,6 +36,7 @@ from cascade.watchdog.types import Event
 from cascade.workspace.integration_worktree import (
     get_integration_worktree,
     integration_branch,
+    is_trunk_pointer,
     load_registry,
     locate_trunk,
     merged_board,
@@ -791,6 +792,7 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
     # are pruned. Inspect the operator checkout once, without preferring a
     # completed source worktree over an incomplete target copy.
     trunk_board = list_board(trunk)
+    source_board = None
     finalized: list[str] = []
     from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
     from cascade.stacked_review_recovery import persist_if_stacked_review_integration_gap
@@ -822,19 +824,26 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
                 continue
             feature = trunk_board.by_id.get(feature_id)
             epic = trunk_board.by_id.get(epic_id) if epic_id else None
+            terminal_epic = (
+                epic is not None and epic.tier == "epic"
+                and epic.status == "completed" and epic.path.parent.name == "3_completed"
+                and not is_trunk_pointer(epic)
+            )
+            if terminal_epic and feature is None and feature_id in epic.children:
+                # Legacy squash merges may retain the completed child document
+                # only in its source checkout. The closed review and terminal
+                # parent's explicit child list bind that historical copy.
+                if source_board is None:
+                    source_board = merged_board(trunk)
+                feature = source_board.by_id.get(feature_id)
             if (
-                feature is not None and feature.tier == "feature"
-                and feature.parent == epic_id
-                and epic is not None and epic.tier == "epic"
-                and all(
-                    meta.status == "completed" and meta.path.parent.name == "3_completed"
-                    for meta in (feature, epic)
-                )
+                terminal_epic and feature is not None and feature.tier == "feature"
+                and feature.parent == epic_id and feature.status == "completed"
+                and feature.path.parent.name == "3_completed"
             ):
-                # Both accepted documents are terminal on the operator trunk.
-                # Do not recreate a pruned feed or rerun closeout authorization
-                # for this historical review. Incomplete target-worktree repair
-                # deliberately runs above this no-op fast path.
+                # This acknowledges an already terminal parent's history; it
+                # neither emits completion nor changes lifecycle state. Target
+                # repair and stacked integration gaps retain priority above.
                 continue
             if epic_id and not feature_completed_recorded(feature_id, epic_id, root=trunk):
                 if try_complete_feature(feature_id, root=trunk, review_merged=True):

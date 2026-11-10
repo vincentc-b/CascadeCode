@@ -530,3 +530,77 @@ def test_terminal_trunk_does_not_skip_incomplete_target_repair(tmp_path, monkeyp
     )
     assert review_module.reconcile_feature_review_completions(root) == []
     assert repaired == ["feat_001"]
+
+
+@pytest.mark.parametrize(
+    "listed,parent,status,pointer,on_trunk,expected_replays",
+    [
+        (True, "epic_001", "completed", False, False, []),
+        (False, "epic_001", "completed", False, False, ["feat_001"]),
+        (True, "epic_002", "completed", False, False, ["feat_001"]),
+        (True, "epic_001", "active", False, False, ["feat_001"]),
+        (True, "epic_001", "completed", True, False, ["feat_001"]),
+        (True, "epic_001", "completed", True, True, ["feat_001"]),
+    ],
+)
+def test_historical_source_copy_requires_canonical_terminal_parent(
+    tmp_path, monkeypatch, listed, parent, status, pointer, on_trunk, expected_replays
+):
+    from cascade.board.types import BoardIndex
+
+    root = make_repo(tmp_path, git=False)
+    epic = SimpleNamespace(
+        id="epic_001",
+        tier="epic",
+        status="completed",
+        path=root / "docs/epics/3_completed/epic_001.md",
+        children=["feat_001"] if listed else [],
+    )
+    feature = SimpleNamespace(
+        id="feat_001",
+        tier="feature",
+        status=status,
+        parent=parent,
+        path=root
+        / ("docs" if on_trunk else ".cascade/worktrees/source/docs")
+        / "features"
+        / ("3_completed" if status == "completed" else "2_active")
+        / "feat_001.md",
+    )
+    trunk_rows = {epic.id: epic}
+    if on_trunk:
+        trunk_rows[feature.id] = feature
+    monkeypatch.setattr(
+        review_module, "list_board", lambda root: BoardIndex(trunk_rows)
+    )
+    monkeypatch.setattr(
+        review_module,
+        "merged_board",
+        lambda root: BoardIndex({epic.id: epic, feature.id: feature}),
+    )
+    monkeypatch.setattr(review_module, "is_trunk_pointer", lambda meta: pointer)
+    monkeypatch.setattr(
+        review_module, "_closed_review_has_incomplete_target", lambda *a, **kw: False
+    )
+    monkeypatch.setattr(
+        "cascade.stacked_review_recovery.persist_if_stacked_review_integration_gap",
+        lambda *a, **kw: False,
+    )
+    monkeypatch.setattr(
+        review_module,
+        "_load",
+        lambda root: {
+            "feat_001": {
+                "closed": True,
+                "target_branch": "epic/epic_001",
+            }
+        },
+    )
+    replays = []
+    monkeypatch.setattr(
+        "cascade.boss.rollup.try_complete_feature",
+        lambda feature_id, **kw: replays.append(feature_id) or False,
+    )
+    assert review_module.reconcile_feature_review_completions(root) == []
+    assert replays == expected_replays
+    assert not (root / "docs/_queue/epic_001.jsonl").exists()

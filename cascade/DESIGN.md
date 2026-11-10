@@ -87,3 +87,14 @@ is removed and no snapshot survives the reconciliation call.
 
 Regression coverage: `tests/test_feature_closeout_flow.py` exercises absent parent
 feeds, active and incomplete documents, parent mismatches, and target repair.
+
+Legacy accepted Features can retain their completed document only in a source
+worktree after a squash merge; source-tip ancestry is not a reliable acceptance
+check for those records. When a closed Feature review's document is absent from
+operator trunk, reconciliation may also skip historical replay if its canonical,
+non-pointer terminal Epic explicitly lists that child and the merged board has a
+completed child copy with the matching parent. Missing children, active copies,
+unlisted children, parent mismatches, and trunk pointer Epics do not qualify.
+This is only a no-op for historical replay: no completion event or lifecycle
+transition is synthesized. Target-copy repair and stacked-gap checks still run
+first. The source board is acquired lazily once per reconciliation call.
