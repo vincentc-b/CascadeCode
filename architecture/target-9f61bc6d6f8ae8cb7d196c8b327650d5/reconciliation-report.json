@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+  "owner_work_id": "task_034_007_003",
+  "original_pin": {
+    "target_baseline": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084",
+    "tracking_baseline": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084",
+    "inventory_sha256": "d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6"
+  },
+  "refreshed_accepted_baseline": {
+    "target_revision": "1e1a1c945f37632950af83b8d3b26ffa03fc333b",
+    "meaning": "feature_line_after_completed_task_034_007_002_before_task_034_007_003_dispatch"
+  },
+  "accepted_delta": {
+    "target_commits": [
+      "6739c34977daadbe164dc076ad710a842026d240",
+      "6da639fb7274fe4682958411860cc3308aaa2506",
+      "cf2413220012e24299b37444147708888b056f54",
+      "6a23508552cc36ce11e87af94982322fb6fdff70",
+      "7ab8f864ef33ce7553cfba8a78d7d9f9f07cba9f",
+      "3832dfc6429e8fa8c5273e16e8c7b40a1115df5c",
+      "880a4a1c2eb3875b887f660995131e84be39e91e",
+      "f06e697f0d0a082c210dc0c72771f118f2c56cb2",
+      "070349f45ee89c1b7ca4d6fa108e979632d5aa7a",
+      "1576d5e603c783c39750b3d487951e620934269d",
+      "3b54715de9dd10563c5aa91fef1099ad739d3f87",
+      "58d0ed35f25dbb97e8cd4fab65095092c4c228c6",
+      "6f3b3d6d1806a2494e83e92761333b7a8c046b55",
+      "64e2913f6db983861a6a65cad8a02b794684965f",
+      "5be9a50abf01b06c9d8867be723e4eef9af0bdcc",
+      "ac60fb982e219888aaeb7533baec07b9059ea82b",
+      "88fdabbd156a022a9e7fb0e5ff9a0cbc59a6ebc4",
+      "001d907afec57358e937d64855f106018b7e8686",
+      "d78036a7401e3cd37902fc5020cd0cc6152e5a4a",
+      "c57403e2106201d81c35a0c4cf7056f9ea5a23a3",
+      "3e8efde851bfa8c1010363c565bbb892b57915a3",
+      "8845d0b25fca0284086f8703e68a15566ef4fc77",
+      "1d5e5c6f87d40394906cb5ad581662d4cc633fb1",
+      "9c275c24e0034e0eafafb45b30f849484f5a9fa5",
+      "d250226e3008f700414ec898b679167909e59df6",
+      "0207f4c3ad7da7235e6b5420ab7d1680fd9356f8",
+      "3ef880218ac31b965c10cbcdd9cf741f4ac15b6d",
+      "1e1a1c945f37632950af83b8d3b26ffa03fc333b"
+    ],
+    "work_items": [
+      {
+        "work_id": "task_034_007_001",
+        "evidence_revision": "1d5e5c6f87d40394906cb5ad581662d4cc633fb1",
+        "disposition": "durable",
+        "affected_design_paths": [
+          "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/historical-evidence-inventory.json"
+        ]
+      },
+      {
+        "work_id": "task_034_007_002",
+        "evidence_revision": "1e1a1c945f37632950af83b8d3b26ffa03fc333b",
+        "disposition": "durable",
+        "affected_design_paths": [
+          "architecture/design-mappings.json",
+          "cascade/DESIGN.md",
+          "cascade/workspace/DESIGN.md",
+          "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl"
+        ]
+      }
+    ],
+    "reconciliation": "All delta commits are reachable from the refreshed Feature baseline. Lifecycle-only revisions are no-impact to current claims; Task 001 evidence is durable; Task 002 implementation is durable but its architecture proposal remains pending owner review."
+  },
+  "feature_f": {
+    "feature_id": "feat_034_006",
+    "implementation_revision": "24a6bb020a89dea96698ee28fdb4f589366f0f3c",
+    "closeout_revision": "7d078a396a6b79f098da6b9e9e8e3db6b2b3d4b7",
+    "accepted_at_original_pin": true,
+    "review_id": "218",
+    "review_description_status": "unavailable",
+    "review_source_revision_status": "unavailable"
+  },
+  "review_state": {
+    "accepted_revision_ids": [],
+    "pending_revision_ids": [
+      "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+      "a911fb1e13729ebce182383a52b3f9832428b535"
+    ],
+    "pending_review_unit_ids": [
+      "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0",
+      "architecture-review-685cf96b1eb08bbee2b11990dd258a6059222102bf1eeda85d858da6273f5c7c",
+      "architecture-review-9d3c1005e1fcaf965e555148757bc7de586c0a3804aa09e936a6ab2e665a9db8"
+    ],
+    "note": "Task 002 leaf/model edits and Task 003 parent/shared edits are staged through their exact-revision owner paths; no acceptance is inferred from branch reachability."
+  },
+  "inspected_current_evidence": {
+    "code_paths": [
+      "cascade/board",
+      "cascade/workspace",
+      "cascade/agent",
+      "cascade/watchdog",
+      "cascade/war_room"
+    ],
+    "test_paths": [
+      "tests/board",
+      "tests/workspace",
+      "tests/agent",
+      "tests/watchdog",
+      "tests/war_room",
+      "tests/architecture"
+    ],
+    "design_paths": [
+      "DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/workspace/DESIGN.md",
+      "architecture/design-mappings.json"
+    ],
+    "status": "representative_parent_child_and_cross_directory_claims_checked"
+  },
+  "exclusions": {
+    "cancelled_plans_as_requirement_sources": true,
+    "unreachable_or_deleted_history": "not_available_from_pinned_reachable_DAG",
+    "truncated_replay": "receipt_and_review_units_capped_at_100_by_feature_F_contract"
+  },
+  "material_unresolved": [
+    {
+      "reason": "reconciliation_receipt_missing",
+      "count": 78
+    },
+    {
+      "reason": "reconciliation_receipt_store_missing",
+      "count": 1
+    },
+    {
+      "reason": "review_description_unavailable",
+      "count": 205
+    },
+    {
+      "reason": "review_registry_unavailable",
+      "count": 1
+    },
+    {
+      "reason": "review_source_revision_unavailable",
+      "count": 205
+    },
+    {
+      "reason": "task_record_not_read_under_epic_scope",
+      "count": 34
+    },
+    {
+      "reason": "historical_commit_or_work_intent_not_individually_attributed",
+      "count": 2023
+    }
+  ],
+  "final_validation_deferred_to": "task_034_007_004",
+  "closeout_claimed": false
+}

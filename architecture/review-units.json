@@ -338,6 +338,30 @@
           "state": "empty_baseline"
         }
       ]
+    },
+    "architecture-review-685cf96b1eb08bbee2b11990dd258a6059222102bf1eeda85d858da6273f5c7c": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:a911fb1e13729ebce182383a52b3f9832428b535",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-9d3c1005e1fcaf965e555148757bc7de586c0a3804aa09e936a6ab2e665a9db8": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:a911fb1e13729ebce182383a52b3f9832428b535",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
     }
   },
   "gate_rollout": {
@@ -476,6 +500,116 @@
         "cascade-containers",
         "cascade-supervisor-components"
       ]
+    },
+    "architecture-review-685cf96b1eb08bbee2b11990dd258a6059222102bf1eeda85d858da6273f5c7c": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "task_034_007_003"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "swe",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": ".",
+      "code_repository_key": "repository-8eb5fe50a43f70cfdb00c887",
+      "decision_citations": [
+        "DEC-ROOT-006"
+      ],
+      "design": {
+        "content_digest": "a81134da18e9572047b22ecbfdd7bde8b32c5736512a32db75cf1c0ffc65197f",
+        "reference": {
+          "code_directory": ".",
+          "design_owner_directory": ".",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "task_034_007_003",
+          "repository_path": "DESIGN.md",
+          "revision": "a911fb1e13729ebce182383a52b3f9832428b535",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": ".",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "Reconcile root ownership, replay evidence, accepted delta, and pending review boundaries.",
+      "integration_lineage": "feature:feat_034_007",
+      "owner_work_id": "task_034_007_003",
+      "plan": {
+        "content_digest": "78a78a01089056d8694782303be5571e21191ad7f71e5c637fd55aae60a83dfb",
+        "path": "docs/tasks/1_backlog/task_034_007_003_reconcile_parent_designs_interfaces_and_replay_ledger.md",
+        "repository_key": "repository-8eb5fe50a43f70cfdb00c887",
+        "repository_role": "target",
+        "revision": "a911fb1e13729ebce182383a52b3f9832428b535"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-ROOT-002"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": []
+    },
+    "architecture-review-9d3c1005e1fcaf965e555148757bc7de586c0a3804aa09e936a6ab2e665a9db8": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "task_034_007_003"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "swe",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-8eb5fe50a43f70cfdb00c887",
+      "decision_citations": [
+        "DEC-CASCADE-001"
+      ],
+      "design": {
+        "content_digest": "01be898ed48472f4091cdd70b979c41520e8c983692b8321cf919235f0690052",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "task_034_007_003",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "a911fb1e13729ebce182383a52b3f9832428b535",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "Reconcile package-parent interfaces without moving leaf-owned requirement or decision IDs.",
+      "integration_lineage": "feature:feat_034_007",
+      "owner_work_id": "task_034_007_003",
+      "plan": {
+        "content_digest": "78a78a01089056d8694782303be5571e21191ad7f71e5c637fd55aae60a83dfb",
+        "path": "docs/tasks/1_backlog/task_034_007_003_reconcile_parent_designs_interfaces_and_replay_ledger.md",
+        "repository_key": "repository-8eb5fe50a43f70cfdb00c887",
+        "repository_role": "target",
+        "revision": "a911fb1e13729ebce182383a52b3f9832428b535"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": []
     }
   },
   "reviews": {},

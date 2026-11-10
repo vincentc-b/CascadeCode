@@ -59,3 +59,14 @@ to verified manifest targets; it must preserve the source-diff fallback for
 missing, ambiguous, removed, or invalid targets. Neither consumer may mutate or
 silently repair these artifacts, match by labels or geometry, or treat an
 unverified cache directory as a model authority.
+
+## Historical evidence
+
+`historical-evidence-inventory.json` is the immutable Task 001 pin.
+`replay-ledger.json` completes its row contract while referencing canonical work,
+commit, and review evidence keys so shared evidence is not counted twice.
+`reconciliation-report.json` preserves the original pin, records the accepted
+delta through the Task 002 Feature baseline, and distinguishes accepted commits
+from the still-pending exact-revision architecture proposal. Task 003 does not
+claim final reconstruction closeout while that owner review or any material gap
+is pending.
