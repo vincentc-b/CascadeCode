@@ -23,6 +23,9 @@ from cascade.workspace.historical_inventory import HistoricalEvidenceInventory
 Disposition = Literal["durable", "superseded", "no-impact", "unresolved"]
 _REVISION = re.compile(r"^[0-9a-f]{40}$")
 _DISPOSITIONS = {"durable", "superseded", "no-impact", "unresolved"}
+_CLOSEOUT_OUTCOMES = {
+    "missing_evidence", "material_mismatch", "stale_baseline", "acceptance_pending"
+}
 
 
 @dataclass(frozen=True)
@@ -237,6 +240,205 @@ def write_reconciled_replay_ledger(path: Path, ledger: Mapping[str, object]) -> 
             os.unlink(temporary)
 
 
+def build_acceptance_summary(
+    *,
+    owner_work_id: str,
+    baseline_pair: Mapping[str, object],
+    expected_target_revision: str,
+    expected_tracking_revision: str,
+    artifacts: Sequence[Mapping[str, object]],
+    required_artifacts: Sequence[str],
+    expected_artifacts: Mapping[str, Mapping[str, str]],
+    architecture_reviews: Sequence[Mapping[str, object]],
+    receipt_validations: Sequence[Mapping[str, object]],
+    coverage_accounting: Mapping[str, object],
+    accepted_deltas: Sequence[Mapping[str, object]] = (),
+    historical_missing_receipts: Sequence[Mapping[str, object]] = (),
+) -> dict[str, object]:
+    """Build an exact-revision, fail-closed architecture acceptance summary.
+
+    This is deliberately a pure verifier.  It consumes results from the existing
+    review/promotion and reconciliation-receipt services; it never advances
+    lifecycle state or treats repository reachability as architecture acceptance.
+    """
+
+    if not owner_work_id.strip():
+        raise WorkspaceError("acceptance summary owner is required")
+    for field, value in (
+        ("expected target revision", expected_target_revision),
+        ("expected tracking revision", expected_tracking_revision),
+    ):
+        if not _REVISION.fullmatch(value):
+            raise WorkspaceError(f"{field} is invalid")
+
+    blockers: list[dict[str, str]] = []
+
+    def block(outcome: str, owner: str, prerequisite: str) -> None:
+        if outcome not in _CLOSEOUT_OUTCOMES:
+            raise WorkspaceError(f"unsupported acceptance outcome: {outcome}")
+        if not owner.strip() or not prerequisite.strip():
+            raise WorkspaceError("acceptance blockers require an owner and prerequisite")
+        row = {"outcome": outcome, "owner": owner, "prerequisite": prerequisite}
+        if row not in blockers:
+            blockers.append(row)
+
+    target_revision = baseline_pair.get("target_revision")
+    tracking_revision = baseline_pair.get("tracking_revision")
+    if target_revision != expected_target_revision or tracking_revision != expected_tracking_revision:
+        block(
+            "stale_baseline",
+            "epic_034",
+            "refresh the accepted Epic target/tracking pair and rerun exact-revision verification",
+        )
+
+    artifact_rows: list[dict[str, str]] = []
+    artifact_names: set[str] = set()
+    for artifact in artifacts:
+        name = artifact.get("name")
+        revision = artifact.get("revision")
+        digest = artifact.get("sha256")
+        if not isinstance(name, str) or not name.strip() or name in artifact_names:
+            raise WorkspaceError("acceptance artifacts must have unique non-blank names")
+        if not isinstance(revision, str) or not _REVISION.fullmatch(revision):
+            raise WorkspaceError(f"acceptance artifact revision is invalid: {name}")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise WorkspaceError(f"acceptance artifact digest is invalid: {name}")
+        artifact_names.add(name)
+        artifact_rows.append({"name": name, "revision": revision, "sha256": digest})
+        expected = expected_artifacts.get(name)
+        if expected is not None and (
+            revision != expected.get("revision") or digest != expected.get("sha256")
+        ):
+            block(
+                "stale_baseline", owner_work_id,
+                f"refresh changed acceptance artifact {name} and repeat its bound review",
+            )
+    for name in required_artifacts:
+        if name not in artifact_names:
+            block(
+                "missing_evidence", owner_work_id,
+                f"provide the exact revision and content digest for required artifact {name}",
+            )
+
+    review_rows: list[dict[str, object]] = []
+    if not architecture_reviews:
+        block(
+            "missing_evidence", owner_work_id,
+            "stage and obtain exact-revision architecture review evidence",
+        )
+    for review in architecture_reviews:
+        unit_id = review.get("review_unit_id")
+        artifact_revision = review.get("artifact_revision")
+        status = review.get("status")
+        owner = review.get("owner")
+        accepted_revision_id = review.get("accepted_revision_id")
+        if not isinstance(unit_id, str) or not unit_id.strip():
+            raise WorkspaceError("architecture review unit ID is required")
+        if not isinstance(artifact_revision, str) or not _REVISION.fullmatch(artifact_revision):
+            raise WorkspaceError(f"architecture review revision is invalid: {unit_id}")
+        if not isinstance(owner, str) or not owner.strip():
+            raise WorkspaceError(f"architecture review owner is invalid: {unit_id}")
+        if status == "accepted":
+            if not isinstance(accepted_revision_id, str) or not accepted_revision_id.strip():
+                block(
+                    "missing_evidence", owner,
+                    f"record the accepted revision ID for architecture review unit {unit_id}",
+                )
+        elif status in {"staged", "approved"}:
+            block(
+                "acceptance_pending", owner,
+                f"approve and promote architecture review unit {unit_id} at {artifact_revision}",
+            )
+        else:
+            block(
+                "stale_baseline", owner,
+                f"restage and re-review changed architecture review unit {unit_id}",
+            )
+        review_rows.append(dict(review))
+
+    receipt_rows: list[dict[str, object]] = []
+    tiers_seen: set[str] = set()
+    for validation in receipt_validations:
+        tier = validation.get("tier")
+        work_id = validation.get("work_id")
+        status = validation.get("status")
+        code = validation.get("code")
+        owner = validation.get("owner")
+        receipt_id = validation.get("receipt_id")
+        if tier not in {"task", "feature", "epic"} or tier in tiers_seen:
+            raise WorkspaceError("receipt validations require each unique closeout tier")
+        if not isinstance(work_id, str) or not work_id.strip():
+            raise WorkspaceError(f"receipt validation work ID is invalid: {tier}")
+        if not isinstance(owner, str) or not owner.strip():
+            raise WorkspaceError(f"receipt validation owner is invalid: {tier}")
+        tiers_seen.add(str(tier))
+        if status == "passed" and isinstance(receipt_id, str) and receipt_id.strip():
+            pass
+        else:
+            outcome = (
+                "acceptance_pending" if code == "acceptance_pending" else
+                "material_mismatch" if code == "material_mismatch" else
+                "stale_baseline" if isinstance(code, str) and code.startswith("stale") else
+                "missing_evidence"
+            )
+            block(
+                outcome, owner,
+                f"record and validate a current {tier} reconciliation receipt for {work_id}",
+            )
+        receipt_rows.append(dict(validation))
+    for tier in ("task", "feature", "epic"):
+        if tier not in tiers_seen:
+            block(
+                "missing_evidence", owner_work_id,
+                f"run validate_reconciliation_closeout for the current {tier} revision",
+            )
+
+    material = coverage_accounting.get("material_unresolved")
+    if not isinstance(material, int) or isinstance(material, bool) or material < 0:
+        raise WorkspaceError("material unresolved count is invalid")
+    if material:
+        block(
+            "material_mismatch", owner_work_id,
+            f"resolve or obtain a human scope decision for {material} material replay rows",
+        )
+
+    delta_rows: list[dict[str, object]] = []
+    delta_revisions: set[str] = set()
+    for delta in accepted_deltas:
+        revision = delta.get("revision")
+        disposition = delta.get("disposition")
+        if not isinstance(revision, str) or not _REVISION.fullmatch(revision):
+            raise WorkspaceError("accepted delta revision is invalid")
+        if disposition not in _DISPOSITIONS:
+            raise WorkspaceError(f"accepted delta disposition is invalid: {revision}")
+        if revision in delta_revisions:
+            raise WorkspaceError(f"duplicate accepted delta revision: {revision}")
+        delta_revisions.add(revision)
+        if disposition == "unresolved":
+            owner = delta.get("owner")
+            prerequisite = delta.get("prerequisite")
+            block(
+                "material_mismatch",
+                str(owner or owner_work_id),
+                str(prerequisite or f"reconcile accepted delta {revision}"),
+            )
+        delta_rows.append(dict(delta))
+
+    return {
+        "version": 1,
+        "owner_work_id": owner_work_id,
+        "baseline_pair": dict(baseline_pair),
+        "coverage_accounting": dict(coverage_accounting),
+        "artifact_revisions": artifact_rows,
+        "architecture_reviews": review_rows,
+        "receipt_validations": receipt_rows,
+        "historical_missing_receipts": [dict(row) for row in historical_missing_receipts],
+        "accepted_deltas_after_reconciliation": delta_rows,
+        "blockers": blockers,
+        "clean_closeout": not blockers,
+    }
+
+
 def _unique_ids(rows: Sequence[Mapping[str, object]], source: str) -> set[str]:
     identifiers = [row.get("row_id") for row in rows]
     if not all(isinstance(value, str) and value for value in identifiers):
@@ -292,6 +494,7 @@ __all__ = [
     "MaterialGap",
     "ReplayDisposition",
     "accepted_delta_rows",
+    "build_acceptance_summary",
     "reconcile_replay_coverage",
     "write_reconciled_replay_ledger",
 ]

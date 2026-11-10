@@ -142,6 +142,7 @@ from cascade.workspace.historical_reconciliation import (
     MaterialGap,
     ReplayDisposition,
     accepted_delta_rows,
+    build_acceptance_summary,
     reconcile_replay_coverage,
     write_reconciled_replay_ledger,
 )
@@ -163,6 +164,7 @@ __all__ = [
     "ExactRevisionReference",
     "MaterialGap",
     "ReplayDisposition",
+    "build_acceptance_summary",
     "BaselinePair",
     "OwnerEvidenceHandoff",
     "ReviewEvidence",

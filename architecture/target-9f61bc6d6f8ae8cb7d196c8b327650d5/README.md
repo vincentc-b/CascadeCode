@@ -74,8 +74,11 @@ owner-scoped staged design/C4 review units. The accepted deltas require no new
 semantic proposal. Task 003 does not claim final reconstruction closeout while
 exact-revision owner review or any material gap is pending.
 
-`final-validation-report.json` rechecks the accepted delta through Task 003,
+`final-validation-report.json` is the Task 003 `AcceptanceSummary`. It refreshes
+the colocated accepted Epic pair, accounts for every later accepted delta,
+rechecks F/G reachability, binds each input artifact by revision and digest, and
 records the real pinned Structurizr validation/export/render outputs under
-`final-validation/`, and gives the final accepted, pending, and unresolved
-disposition. A successful render is evidence about the authored model bytes; it
-does not clear pending owner review, missing receipts, or unavailable provenance.
+`final-validation/`. It also preserves exact staged review-unit IDs, failed
+receipt-validator outcomes, and historical missing receipts. A successful
+render is evidence about the authored model bytes; it does not clear pending
+owner review, missing receipts, or material provenance gaps.

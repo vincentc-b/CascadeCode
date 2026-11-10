@@ -5,6 +5,8 @@ import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from cascade.workspace import build_acceptance_summary
+
 
 ROOT = Path(__file__).resolve().parents[2]
 TARGET_KEY = "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
@@ -19,49 +21,33 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_final_delta_is_exact_and_does_not_promote_tracking_only_work() -> None:
+def test_final_delta_refreshes_the_exact_accepted_epic_pair() -> None:
     report = _load("final-validation-report.json")
-    start = report["inspected_revisions"]["task_003_refreshed_g_source"]
-    end = report["inspected_revisions"]["task_004_start_g_source"]
+    start = report["baseline_pair"]["previous_accepted_target"]
+    end = report["baseline_pair"]["target_revision"]
     actual = subprocess.check_output(
         ["git", "rev-list", "--reverse", f"{start}..{end}"], cwd=ROOT, text=True
     ).splitlines()
 
-    assert report["g_source_delta_since_task_003_refresh"]["target_commits"] == actual
-    assert report["g_source_delta_since_task_003_refresh"]["work_items"] == [
-        {
-            "work_id": "task_034_007_003",
-            "implementation_revision": "72e593c4bf059651594533865523d0ce9dd0e3d2",
-            "accepted_revision": "6ccef5eea66891a7fdab983ff312598093804254",
-            "disposition": "durable_with_pending_owner_review",
-        }
+    assert [row["revision"] for row in report["accepted_deltas_after_reconciliation"]] == actual
+    assert report["baseline_pair"]["target_revision"] == report["baseline_pair"][
+        "tracking_revision"
     ]
-    assert report["g_source_delta_since_task_003_refresh"]["tracking_only"][0][
-        "disposition"
-    ] == "pending_not_accepted_implementation"
-    assert report["feature_f"]["review_description"] == "unavailable"
+    assert report["coverage_accounting"]["refreshed_accepted_delta_covered"] == len(actual) == 4
+    assert report["baseline_pair"]["corrective_feature_reachable"] is False
 
 
-def test_feature_f_is_now_pinned_as_accepted_without_rewriting_g_snapshot() -> None:
+def test_f_and_g_are_reachable_from_the_refreshed_accepted_epic() -> None:
     report = _load("final-validation-report.json")
-    reconciliation = _load("reconciliation-report.json")
-    feature_f = report["feature_f"]
-    accepted_epic = reconciliation["accepted_epic_pin"]
+    baseline = report["baseline_pair"]
 
-    assert feature_f["reachable_on_g_source_inventory_pin"] is True
-    assert feature_f["reachable_on_accepted_epic_pin"] is False  # G snapshot
-    assert accepted_epic["target_revision"] != report["inspected_revisions"]["epic_034_head"]
-    assert accepted_epic["review_218_state"] == "merged_reachable_from_accepted_target"
-    assert subprocess.run(
-        [
-            "git",
-            "merge-base",
-            "--is-ancestor",
-            feature_f["implementation_revision"],
-            accepted_epic["target_revision"],
-        ],
-        cwd=ROOT,
-    ).returncode == 0
+    assert baseline["feature_f_reachable"] is True
+    assert baseline["feature_g_reachable"] is True
+    for key in ("feature_f_implementation_revision", "feature_g_implementation_revision"):
+        assert subprocess.run(
+            ["git", "merge-base", "--is-ancestor", baseline[key], baseline["target_revision"]],
+            cwd=ROOT,
+        ).returncode == 0
 
 
 def test_captured_pinned_exports_match_hashes_views_and_stable_model_ids() -> None:
@@ -115,24 +101,49 @@ def test_captured_pinned_exports_match_hashes_views_and_stable_model_ids() -> No
 
 def test_final_report_names_every_pending_and_material_gap() -> None:
     report = _load("final-validation-report.json")
-    evidence = _load("reconstruction-evidence.json")
-    reconciliation = _load("reconciliation-report.json")
     ledger = _load("replay-ledger.json")
 
-    pending = report["artifact_state"]["pending"]
     assert report["clean_closeout"] is False
-    assert report["outcome"] == "blocked_pending_review_and_material_provenance_gaps"
-    assert len(pending) == 3
-    assert reconciliation["review_state"]["pending_review_unit_ids"]
-    assert evidence["proposal"]["accepted"] is False
-    assert {row["disposition"] for row in ledger["rows"]} == {
-        "durable", "no-impact", "unresolved"
-    }
+    assert report["outcome"] == "acceptance_pending_with_material_mismatch"
+    assert {row["status"] for row in report["architecture_reviews"]} == {"staged"}
+    assert all(row["accepted_revision_id"] is None for row in report["architecture_reviews"])
     assert ledger["coverage_accounting"]["material_unresolved"] == 2021
-    assert reconciliation["final_validation_deferred_to"] == "task_034_008_003"
-    assert report["artifact_state"]["unresolved"]  # retained G validation snapshot
-    assert {gate["code"] for gate in report["closeout_validators"].values()} == {
+    assert report["coverage_accounting"]["material_unresolved"] == 2021
+    assert {gate["code"] for gate in report["receipt_validations"]} == {
         "missing_reconciliation"
+    }
+    assert report["historical_missing_receipts"][0]["count"] == 78
+    assert {row["outcome"] for row in report["blockers"]} == {
+        "acceptance_pending", "missing_evidence", "material_mismatch"
+    }
+    assert all(row["owner"] and row["prerequisite"] for row in report["blockers"])
+
+    expected_artifacts = {
+        row["name"]: {"revision": row["revision"], "sha256": row["sha256"]}
+        for row in report["artifact_revisions"]
+    }
+    verified = build_acceptance_summary(
+        owner_work_id=report["owner_work_id"],
+        baseline_pair=report["baseline_pair"],
+        expected_target_revision=report["inspected_revisions"]["accepted_epic_target"],
+        expected_tracking_revision=report["inspected_revisions"]["accepted_epic_tracking"],
+        artifacts=report["artifact_revisions"],
+        required_artifacts=(
+            "historical-evidence-inventory.json",
+            "replay-ledger.json",
+            "reconciliation-report.json",
+            "architecture/review-units.json",
+        ),
+        expected_artifacts=expected_artifacts,
+        architecture_reviews=report["architecture_reviews"],
+        receipt_validations=report["receipt_validations"],
+        coverage_accounting=report["coverage_accounting"],
+        accepted_deltas=report["accepted_deltas_after_reconciliation"],
+        historical_missing_receipts=report["historical_missing_receipts"],
+    )
+    assert verified["clean_closeout"] is False
+    assert {row["outcome"] for row in verified["blockers"]} == {
+        "acceptance_pending", "missing_evidence", "material_mismatch"
     }
 
 
@@ -154,30 +165,24 @@ def test_design_heading_references_and_declared_leaf_sections_resolve() -> None:
         assert "Known gaps:" in text
 
 
-def test_final_scenarios_keep_unknown_provenance_unknown() -> None:
-    inventory = _load("historical-evidence-inventory.json")
-    ledger = _load("replay-ledger.json")
+def test_acceptance_summary_pins_artifact_bytes_and_review_units() -> None:
     report = _load("final-validation-report.json")
-    rows = {row["row_id"]: row for row in ledger["rows"]}
-
-    direct = report["focused_scenarios"]["direct_fix"]["example"]
-    ambiguous = report["focused_scenarios"]["unavailable_or_ambiguous_provenance"][
-        "example"
-    ]
-    assert rows[direct]["kind"] == "uncovered_commit"
-    assert rows[direct]["disposition"] == "unresolved"
-    assert rows[ambiguous]["provenance_status"] == "ambiguous"
-    captured = {
-        review["review_id"]: review
-        for review in inventory["reviews"]
-        if review["description_status"] != "unavailable"
+    expected = {
+        "historical-evidence-inventory.json": ARCHITECTURE / "historical-evidence-inventory.json",
+        "replay-ledger.json": ARCHITECTURE / "replay-ledger.json",
+        "reconciliation-report.json": ARCHITECTURE / "reconciliation-report.json",
+        "architecture/review-units.json": ROOT / "architecture/review-units.json",
     }
-    assert set(captured) == {"218", "219"}
-    assert all(
-        review["description_provenance"] == "current_snapshot"
-        and "description_at_merge_time" in review["unavailable_fields"]
-        for review in captured.values()
-    )
-    assert report["focused_scenarios"]["mr_described_non_cascade_change"][
-        "status"
-    ] == "unavailable"
+
+    for artifact in report["artifact_revisions"]:
+        assert _sha256(expected[artifact["name"]]) == artifact["sha256"]
+        subprocess.run(
+            ["git", "cat-file", "-e", f'{artifact["revision"]}^{{commit}}'],
+            cwd=ROOT,
+            check=True,
+        )
+    store = json.loads((ROOT / "architecture/review-units.json").read_text())
+    for review in report["architecture_reviews"]:
+        stored = store["review_units"][review["review_unit_id"]]
+        assert stored["status"] == review["status"]
+        assert stored["design"]["reference"]["revision"] == review["artifact_revision"]

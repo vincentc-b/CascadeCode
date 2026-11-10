@@ -11,6 +11,7 @@ from cascade.workspace import (
     MaterialGap,
     ReplayDisposition,
     WorkspaceError,
+    build_acceptance_summary,
     reconcile_replay_coverage,
 )
 
@@ -157,3 +158,88 @@ def test_reconciliation_rejects_unaccountable_claims(failure: str) -> None:
         reconcile_replay_coverage(
             _inventory(), {"rows": list(_inventory().ledger)}, rows
         )
+
+
+def _acceptance_inputs() -> dict[str, object]:
+    return {
+        "owner_work_id": "task_034_008_003",
+        "baseline_pair": {
+            "target_revision": REVISION,
+            "tracking_revision": REVISION,
+        },
+        "expected_target_revision": REVISION,
+        "expected_tracking_revision": REVISION,
+        "artifacts": ({"name": "ledger", "revision": REVISION, "sha256": "0" * 64},),
+        "required_artifacts": ("ledger",),
+        "expected_artifacts": {
+            "ledger": {"revision": REVISION, "sha256": "0" * 64},
+        },
+        "architecture_reviews": ({
+            "review_unit_id": "architecture-review-1",
+            "artifact_revision": REVISION,
+            "accepted_revision_id": "accepted-1",
+            "status": "accepted",
+            "owner": "feature_architect",
+        },),
+        "receipt_validations": tuple({
+            "tier": tier,
+            "work_id": work_id,
+            "status": "passed",
+            "code": "ok",
+            "receipt_id": f"receipt-{tier}",
+            "owner": owner,
+        } for tier, work_id, owner in (
+            ("task", "task_034_008_003", "feature_team"),
+            ("feature", "feat_034_008", "feature_team"),
+            ("epic", "epic_034", "epic_team"),
+        )),
+        "coverage_accounting": {"material_unresolved": 0},
+        "accepted_deltas": ({"revision": MERGE, "disposition": "no-impact"},),
+    }
+
+
+def test_acceptance_summary_is_clean_only_with_exact_accepted_evidence() -> None:
+    summary = build_acceptance_summary(**_acceptance_inputs())
+
+    assert summary["clean_closeout"] is True
+    assert summary["blockers"] == []
+    assert summary["architecture_reviews"][0]["accepted_revision_id"] == "accepted-1"
+    assert {row["tier"] for row in summary["receipt_validations"]} == {
+        "task", "feature", "epic"
+    }
+
+
+@pytest.mark.parametrize(
+    ("change", "outcome"),
+    (
+        ("stale_baseline", "stale_baseline"),
+        ("stale_artifact", "stale_baseline"),
+        ("pending_review", "acceptance_pending"),
+        ("missing_receipt", "missing_evidence"),
+        ("material_rows", "material_mismatch"),
+    ),
+)
+def test_acceptance_summary_rejects_incomplete_closeout(change: str, outcome: str) -> None:
+    values = _acceptance_inputs()
+    if change == "stale_baseline":
+        values["expected_target_revision"] = DIRECT
+    elif change == "stale_artifact":
+        values["expected_artifacts"] = {
+            "ledger": {"revision": DIRECT, "sha256": "0" * 64},
+        }
+    elif change == "pending_review":
+        values["architecture_reviews"] = ({
+            **values["architecture_reviews"][0],
+            "status": "staged",
+            "accepted_revision_id": None,
+        },)
+    elif change == "missing_receipt":
+        values["receipt_validations"] = values["receipt_validations"][:-1]
+    else:
+        values["coverage_accounting"] = {"material_unresolved": 7}
+
+    summary = build_acceptance_summary(**values)
+
+    assert summary["clean_closeout"] is False
+    assert outcome in {row["outcome"] for row in summary["blockers"]}
+    assert all(row["owner"] and row["prerequisite"] for row in summary["blockers"])
