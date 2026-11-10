@@ -58,6 +58,13 @@ from cascade.workspace.architecture_review import (
     stage_architecture_proposal,
     validate_review_gate,
 )
+from cascade.workspace.architecture_authoring import (
+    ArchitectureAuthoringIntent,
+    ArchitectureAuthoringResult,
+    ArchitectureOwnerAmendment,
+    read_owner_amendments,
+    stage_owned_architecture_change,
+)
 from cascade.workspace.c4_source import (
     C4Element,
     C4Relationship,
@@ -110,6 +117,14 @@ from cascade.workspace.c4_threads import (
     read_semantic_threads,
 )
 from cascade.workspace.blocking_scope import BlockingScope, affected_blocking_threads
+from cascade.workspace.reconciliation import (
+    ReconciledDesign,
+    ReconciliationReceipt,
+    ReconciliationReceiptStore,
+    record_reconciliation_receipt,
+    resolve_closeout_revision,
+    validate_reconciliation_closeout,
+)
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -121,7 +136,13 @@ __all__ = [
     "ReviewBaselineStatus",
     "ReviewGateBoundary",
     "ReviewGateResult",
+    "ReconciledDesign",
+    "ReconciliationReceipt",
+    "ReconciliationReceiptStore",
     "ArchitectureArtifactRef",
+    "ArchitectureAuthoringIntent",
+    "ArchitectureAuthoringResult",
+    "ArchitectureOwnerAmendment",
     "AcceptedArchitecturePointer",
     "AcceptedLineage",
     "ArchitectureBaseline",
@@ -184,12 +205,17 @@ __all__ = [
     "require_design_ownership",
     "read_architecture_artifact",
     "read_architecture_state",
+    "read_owner_amendments",
     "rebase_architecture_proposal",
     "promote_or_resume",
     "reserve_promotion",
     "review_architecture_proposal",
     "replay_architecture_artifact",
     "stage_architecture_proposal",
+    "stage_owned_architecture_change",
+    "record_reconciliation_receipt",
+    "resolve_closeout_revision",
+    "validate_reconciliation_closeout",
     "enable_review_gate",
     "validate_review_gate",
     "resolve_product_trunk",

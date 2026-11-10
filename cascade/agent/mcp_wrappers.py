@@ -99,6 +99,9 @@ def build_planning_mcp_servers(
     tool_names = _planning_tool_names(sandbox)
 
     cfg_path = config_path or (sandbox.scratch_dir / ".cascade_mcp.json")
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
     cfg_path.write_text(
         json.dumps(
             {
@@ -106,6 +109,9 @@ def build_planning_mcp_servers(
                 "scope_id": sandbox.scope_id,
                 "repo_root": str(sandbox.repo_root),
                 "project_context": project_context_payload(),
+                "architecture_destination": (
+                    project.architecture_destination if project is not None else None
+                ),
                 "tool_names": tool_names,
                 "role": sandbox.role,
             }
@@ -346,6 +352,20 @@ def _feature_tool_names() -> set[str]:
 _BOSS_TOOL_NAMES = frozenset({"dispatch_feature", "dispatch_task", "get_boss_view"})
 
 _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "read_architecture_amendments": {
+        "type": "object", "properties": {}, "additionalProperties": False,
+    },
+    "read_historical_evidence": {
+        "type": "object",
+        "properties": {
+            "work_id": {"type": "string"},
+            "evidence_scope": {"type": "array", "items": {
+                "type": "string", "enum": ["work_record", "git", "review"]},
+                "minItems": 1, "uniqueItems": True},
+        },
+        "required": ["work_id", "evidence_scope"],
+        "additionalProperties": False,
+    },
     "message_team": {"type": "object", "properties": {
         "recipient_id": {"type": "string"}, "body": {"type": "string"},
         "request_id": {"type": "string"}}, "required": ["recipient_id", "body", "request_id"]},

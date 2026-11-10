@@ -29,8 +29,16 @@ def load_feature_tools() -> None:
 
     from cascade.feature.registry import feature_tools, register_feature_tool
     from cascade.team_supervision import message_team, supervise_child
+    from cascade.architecture_context_tools import (
+        read_feature_architecture_amendments,
+        read_feature_historical_evidence,
+    )
     register_feature_tool("message_team", message_team)
     register_feature_tool("supervise_child", supervise_child)
+    register_feature_tool("read_historical_evidence", read_feature_historical_evidence)
+    register_feature_tool(
+        "read_architecture_amendments", read_feature_architecture_amendments
+    )
 
     expected = (
         "mint_task", "list_children", "record_decision", "read_doc", "write_doc",
@@ -45,6 +53,8 @@ def load_feature_tools() -> None:
         "retry_owned_publication",
         "publish_integration_review",
         "reconcile_completion_rollup",
+        "read_historical_evidence",
+        "read_architecture_amendments",
     )
     if all(name in feature_tools() for name in expected):
         return
