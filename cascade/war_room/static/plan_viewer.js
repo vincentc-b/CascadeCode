@@ -1480,7 +1480,12 @@
       if (bodyEl) {
         clearManagedInlineThreadContainers(bodyEl);
       }
-      var threads = groupCommentThreads(comments);
+      var threads = groupCommentThreads(comments).filter(function (thread) {
+        // Typed diagram threads have their own semantic target renderer.  Keep
+        // their replies with that root instead of duplicating the thread in the
+        // heading/line/global plan-comment tray.
+        return !thread.root.semantic_anchor;
+      });
       var liveIds = new Set(comments.map(function (row) { return row.id; }));
       commentNodes.forEach(function (_value, id) { if (!liveIds.has(id)) commentNodes.delete(id); });
       var rootIds = new Set(threads.map(function (thread) { return thread.root.id; }));
@@ -1882,12 +1887,200 @@
     };
   }
 
+  function createSemanticThreadModel(payload, navigation, options) {
+    options = options || {};
+    var state = { threads: [], loading: false, error: null };
+
+    function sideRecord(sideName) {
+      return (payload.repositories || []).find(function (row) {
+        return row.side === sideName;
+      }) || null;
+    }
+
+    function sourceFor(kind, targetKey, sideName, viewKey, level) {
+      if (kind === "requirement") {
+        if ((payload.requirements || []).indexOf(targetKey) < 0) return null;
+        return payload.diffs && payload.diffs.plan;
+      }
+      if (kind === "view") {
+        var exactView = (payload.views || []).find(function (view) {
+          return view.key === targetKey && view.level === level && view[sideName];
+        });
+        return exactView && exactView[sideName].svg;
+      }
+      if (kind !== "element" && kind !== "relationship") return null;
+      var containing = (payload.views || []).find(function (view) {
+        var side = view[sideName];
+        return side && (side.targets || []).some(function (target) {
+          return target.kind === kind && target.semantic_id === targetKey;
+        });
+      });
+      return containing && containing[sideName].svg;
+    }
+
+    function buildAnchor(kind, targetKey, sideName, viewKey, level) {
+      var repository = sideRecord(sideName);
+      var source = sourceFor(kind, targetKey, sideName, viewKey, level);
+      var diff = payload.diffs && payload.diffs.source;
+      if (!repository || !source || typeof diff !== "string" || !diff) {
+        return null;
+      }
+      return {
+        version: 1,
+        kind: kind,
+        target_key: targetKey,
+        view_key: kind === "view" ? targetKey : null,
+        level: kind === "view" ? level : null,
+        source_side: sideName,
+        repository_key: repository.repository_key,
+        revision: repository.revision,
+        review_unit_id: payload.review_unit_id,
+        reviewed_tuple_digest: payload.reviewed_tuple_digest,
+        original_source_reference: source,
+        original_diff_link: diff,
+      };
+    }
+
+    function reviewedReplacement(anchor) {
+      if (anchor.kind !== "element" && anchor.kind !== "relationship") return null;
+      var identities = payload.diffs && payload.diffs.model && payload.diffs.model.identities;
+      var replacement = (Array.isArray(identities) ? identities : []).find(function (row) {
+        return row.kind === anchor.kind &&
+          row.previous_semantic_id === anchor.target_key &&
+          sourceFor(anchor.kind, row.semantic_id, anchor.source_side, null, null);
+      });
+      return replacement ? replacement.semantic_id : null;
+    }
+
+    function freshnessFor(anchor) {
+      var repository = sideRecord(anchor.source_side);
+      if (!repository) return ["outdated", "source_side_missing"];
+      if (repository.repository_key !== anchor.repository_key) {
+        return ["outdated", "repository_mismatch"];
+      }
+      if (repository.revision !== anchor.revision) {
+        return ["outdated", "revision_mismatch"];
+      }
+      if (sourceFor(
+        anchor.kind, anchor.target_key, anchor.source_side,
+        anchor.view_key, anchor.level
+      )) return ["current", null];
+      if (reviewedReplacement(anchor)) return ["current", null];
+      return ["outdated", "target_missing_or_renamed"];
+    }
+
+    function normalize(row) {
+      var anchor = row && (row.anchor || row.semantic_anchor);
+      if (!anchor || row.parent) return null;
+      var resolved = freshnessFor(anchor);
+      return {
+        id: row.id,
+        body: row.body,
+        author: row.author,
+        state: row.state === "resolved" ? "resolved" : "open",
+        blocking: row.blocking === true,
+        anchor: anchor,
+        freshness: row.freshness === "outdated" ? "outdated" : resolved[0],
+        outdated_reason: row.freshness === "outdated" ?
+          (row.outdated_reason || resolved[1]) : resolved[1],
+      };
+    }
+
+    function load() {
+      state.loading = true;
+      state.error = null;
+      var request;
+      if (Array.isArray(payload.semantic_threads)) {
+        request = Promise.resolve(payload.semantic_threads);
+      } else if (options.loadThreads) {
+        request = Promise.resolve(options.loadThreads(payload));
+      } else {
+        request = fetch("/api/comments/" + encodeURIComponent(payload.owner_work_id), {
+          signal: pageLoadSignal(),
+        }).then(function (response) {
+          if (!response.ok) throw new Error("Failed to load semantic threads (" + response.status + ")");
+          return response.json();
+        }).then(function (value) { return value.comments || []; });
+      }
+      return request.then(function (rows) {
+        state.threads = (rows || []).map(normalize).filter(Boolean);
+        state.loading = false;
+        return state.threads;
+      }).catch(function (error) {
+        state.loading = false;
+        state.error = error && error.message ? error.message : "Failed to load semantic threads";
+        return state.threads;
+      });
+    }
+
+    function create(anchor, body, blocking) {
+      var request = {
+        doc_id: payload.owner_work_id,
+        section: "semantic-review",
+        body: body,
+        blocking: blocking === true,
+        semantic_anchor: anchor,
+      };
+      if (options.createThread) return Promise.resolve(options.createThread(request));
+      return fetch("/api/comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      }).then(function (response) {
+        return response.json().then(function (value) {
+          if (!response.ok || !value.ok) throw new Error(value.error || "Failed to post semantic thread");
+          return value;
+        });
+      });
+    }
+
+    function navigate(thread) {
+      if (!thread || thread.freshness !== "current") {
+        return { ok: false, error: "Outdated targets retain their original links but cannot be selected." };
+      }
+      var anchor = thread.anchor;
+      if (anchor.kind === "requirement") {
+        return { ok: true, requirement: anchor.target_key };
+      }
+      if (anchor.kind === "view") {
+        return navigation.showView(anchor.target_key, anchor.level);
+      }
+      var navigationTarget = sourceFor(
+        anchor.kind, anchor.target_key, anchor.source_side, null, null
+      ) ? anchor.target_key : reviewedReplacement(anchor);
+      if (!navigationTarget) {
+        return { ok: false, error: "Semantic target is no longer available." };
+      }
+      var location = (payload.views || []).find(function (view) {
+        var side = view[anchor.source_side];
+        return side && (side.targets || []).some(function (target) {
+          return target.kind === anchor.kind && target.semantic_id === navigationTarget;
+        });
+      });
+      if (!location) return { ok: false, error: "Semantic target is no longer available." };
+      var moved = navigation.showView(location.key, location.level);
+      if (!moved.ok) return moved;
+      return navigation.select(anchor.kind, navigationTarget, anchor.source_side);
+    }
+
+    return {
+      state: state,
+      buildAnchor: buildAnchor,
+      normalize: normalize,
+      load: load,
+      create: create,
+      navigate: navigate,
+    };
+  }
+
   function initPairedC4Review(payload, options) {
     options = options || {};
     var doc = options.document || document;
     var host = options.host || doc.getElementById("paired-c4-review");
     if (!host || !payload) return null;
     var navigation = createPairedNavigation(payload);
+    var threadModel = createSemanticThreadModel(payload, navigation, options);
+    var pendingAnchor = null;
     host.hidden = false;
 
     function node(tag, className, text) {
@@ -1907,7 +2100,16 @@
       if (!rows.length) return;
       var group = node("div", "paired-c4-reference-group");
       group.appendChild(node("strong", "", heading + ": "));
-      group.appendChild(node("span", "", rows.join(", ")));
+      rows.forEach(function (value, index) {
+        if (index) group.appendChild(node("span", "", ", "));
+        var reference = node("span", heading === "Requirements" ?
+          "paired-c4-requirement" : "paired-c4-reference", value);
+        if (heading === "Requirements") {
+          reference.setAttribute("data-requirement-id", value);
+          reference.setAttribute("tabindex", "-1");
+        }
+        group.appendChild(reference);
+      });
       parent.appendChild(group);
     }
 
@@ -1926,6 +2128,169 @@
       });
       details.appendChild(list);
       parent.appendChild(details);
+    }
+
+    function appendLink(parent, className, label, href) {
+      var url = safeUrl(href);
+      if (!url) {
+        parent.appendChild(node("span", className, label + ": " + href));
+        return;
+      }
+      var link = node("a", className, label);
+      link.href = url;
+      parent.appendChild(link);
+    }
+
+    function beginThread(anchor) {
+      pendingAnchor = anchor;
+      render();
+    }
+
+    function anchorButton(parent, label, anchor) {
+      if (!anchor) return;
+      var button = node("button", "paired-c4-comment-target", label);
+      button.type = "button";
+      button.addEventListener("click", function () { beginThread(anchor); });
+      parent.appendChild(button);
+    }
+
+    function renderThreadPanel() {
+      var panel = node("section", "paired-c4-threads");
+      panel.appendChild(node("h3", "paired-c4-threads-heading", "Semantic review threads"));
+
+      var shortcuts = node("div", "paired-c4-thread-shortcuts");
+      var view = navigation.currentView();
+      (payload.requirements || []).forEach(function (requirement) {
+        ["current", "proposed"].forEach(function (sideName) {
+          var anchor = threadModel.buildAnchor("requirement", requirement, sideName, null, null);
+          anchorButton(shortcuts, "Comment on " + requirement + " (" + sideName + ")", anchor);
+        });
+      });
+      if (view) {
+        ["current", "proposed"].forEach(function (sideName) {
+          anchorButton(
+            shortcuts,
+            "Comment on " + sideName + " view",
+            threadModel.buildAnchor("view", view.key, sideName, view.key, view.level)
+          );
+        });
+      }
+      var selection = navigation.state.selection;
+      if (selection) {
+        anchorButton(
+          shortcuts,
+          "Comment on selected " + selection.kind,
+          threadModel.buildAnchor(
+            selection.kind, selection.semantic_id, selection.source_side, null, null
+          )
+        );
+      }
+      panel.appendChild(shortcuts);
+
+      if (pendingAnchor) {
+        var form = node("form", "paired-c4-thread-compose");
+        form.appendChild(node(
+          "p", "paired-c4-thread-target",
+          pendingAnchor.kind + " " + pendingAnchor.target_key + " · " +
+            pendingAnchor.repository_key + " @ " + pendingAnchor.revision
+        ));
+        var body = node("textarea", "paired-c4-thread-body");
+        body.rows = 3;
+        body.required = true;
+        body.setAttribute("aria-label", "Semantic comment");
+        form.appendChild(body);
+        var blockingLabel = node("label", "paired-c4-thread-blocking", " Blocking");
+        var blocking = node("input", "");
+        blocking.type = "checkbox";
+        blockingLabel.insertBefore(blocking, blockingLabel.children[0] || null);
+        form.appendChild(blockingLabel);
+        var send = node("button", "", "Post thread");
+        send.type = "submit";
+        form.appendChild(send);
+        var cancel = node("button", "", "Cancel");
+        cancel.type = "button";
+        cancel.addEventListener("click", function () { pendingAnchor = null; render(); });
+        form.appendChild(cancel);
+        form.addEventListener("submit", function (event) {
+          event.preventDefault();
+          var text = String(body.value || "").trim();
+          if (!text) return;
+          send.disabled = true;
+          threadModel.create(pendingAnchor, text, blocking.checked).then(function () {
+            pendingAnchor = null;
+            return threadModel.load();
+          }).then(render).catch(function (error) {
+            send.disabled = false;
+            threadModel.state.error = error.message || "Failed to post semantic thread";
+            render();
+          });
+        });
+        panel.appendChild(form);
+      }
+
+      if (threadModel.state.error) {
+        panel.appendChild(node("p", "paired-c4-thread-error", threadModel.state.error));
+      }
+      var list = node("div", "paired-c4-thread-list");
+      threadModel.state.threads.forEach(function (thread) {
+        var item = node("article", "paired-c4-thread paired-c4-thread-" + thread.freshness);
+        item.setAttribute("data-thread-id", thread.id || "");
+        var anchor = thread.anchor;
+        item.appendChild(node(
+          "h4", "paired-c4-thread-title",
+          anchor.kind + " " + anchor.target_key
+        ));
+        item.appendChild(node(
+          "p", "paired-c4-thread-state",
+          thread.state + (thread.blocking ? " · blocking" : " · non-blocking") +
+            " · " + thread.freshness
+        ));
+        if (thread.freshness === "outdated") {
+          item.appendChild(node(
+            "p", "paired-c4-thread-outdated",
+            "Outdated: " + (thread.outdated_reason || "target is no longer current")
+          ));
+        }
+        item.appendChild(node("p", "paired-c4-thread-body-text", thread.body));
+        item.appendChild(node(
+          "p", "paired-c4-thread-revision",
+          anchor.source_side + " · " + anchor.repository_key + " @ " + anchor.revision
+        ));
+        var links = node("p", "paired-c4-thread-links");
+        appendLink(links, "paired-c4-thread-source", "Original source", anchor.original_source_reference);
+        links.appendChild(node("span", "", " · "));
+        appendLink(links, "paired-c4-thread-diff", "Original diff", anchor.original_diff_link);
+        item.appendChild(links);
+        if (thread.freshness === "current") {
+          var open = node("button", "paired-c4-thread-open", "Open target");
+          open.type = "button";
+          open.addEventListener("click", function () {
+            var result = threadModel.navigate(thread);
+            if (result.ok) {
+              render();
+              if (result.requirement && host.querySelectorAll) {
+                var requirement = Array.prototype.find.call(
+                  host.querySelectorAll("[data-requirement-id]"),
+                  function (item) {
+                    return item.getAttribute("data-requirement-id") === result.requirement;
+                  }
+                );
+                if (requirement) {
+                  requirement.classList.add("paired-c4-requirement-selected");
+                  if (requirement.focus) requirement.focus();
+                }
+              }
+            }
+          });
+          item.appendChild(open);
+        }
+        list.appendChild(item);
+      });
+      if (!threadModel.state.loading && !threadModel.state.threads.length) {
+        list.appendChild(node("p", "paired-c4-thread-empty", "No semantic threads yet."));
+      }
+      panel.appendChild(list);
+      host.appendChild(panel);
     }
 
     function parseSvg(side) {
@@ -2062,6 +2427,7 @@
       if (payload.state === "error") {
         host.appendChild(node("p", "paired-c4-error", payload.error || "Paired diagram review is unavailable."));
         appendDiffs(host);
+        renderThreadPanel();
         return;
       }
       if (!navigation.views.length) {
@@ -2070,6 +2436,7 @@
           payload.state === "unchanged" ? "No diagram changes." : "No paired diagram views are available (" + payload.state + ")."
         ));
         appendDiffs(host);
+        renderThreadPanel();
         return;
       }
 
@@ -2124,10 +2491,12 @@
       if (legend.children.length) meta.appendChild(legend);
       appendDiffs(meta);
       host.appendChild(meta);
+      renderThreadPanel();
     }
 
     render();
-    return { navigation: navigation, render: render };
+    threadModel.load().then(render);
+    return { navigation: navigation, threads: threadModel, render: render };
   }
 
   function bootstrapPlanViewer() {
@@ -2238,6 +2607,7 @@
     initEpicPlanReadinessChrome: initEpicPlanReadinessChrome,
     initDependencyReviewChrome: initDependencyReviewChrome,
     createPairedNavigation: createPairedNavigation,
+    createSemanticThreadModel: createSemanticThreadModel,
     initPairedC4Review: initPairedC4Review,
   };
 });

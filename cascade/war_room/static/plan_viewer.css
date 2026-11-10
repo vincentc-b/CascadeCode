@@ -300,6 +300,83 @@ body {
   font-size: 0.78rem;
 }
 
+.paired-c4-threads {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--plan-border);
+}
+
+.paired-c4-threads-heading,
+.paired-c4-thread-title {
+  margin: 0;
+}
+
+.paired-c4-thread-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.65rem 0;
+}
+
+.paired-c4-comment-target,
+.paired-c4-thread-compose button,
+.paired-c4-thread-open {
+  font: inherit;
+}
+
+.paired-c4-thread-compose {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0;
+  padding: 0.65rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 5px;
+}
+
+.paired-c4-thread-compose textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+
+.paired-c4-thread {
+  margin-top: 0.65rem;
+  padding: 0.65rem;
+  border: 1px solid var(--plan-border);
+  border-left: 4px solid #1f6feb;
+  border-radius: 4px;
+}
+
+.paired-c4-thread-outdated {
+  border-left-color: #8a4b00;
+}
+
+.paired-c4-thread-state,
+.paired-c4-thread-revision,
+.paired-c4-thread-links,
+.paired-c4-thread-target,
+.paired-c4-thread-empty {
+  margin: 0.3rem 0;
+  color: var(--plan-muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.paired-c4-thread-body-text {
+  white-space: pre-wrap;
+}
+
+.paired-c4-thread-outdated,
+.paired-c4-thread-error {
+  color: #8a4b00;
+  font-weight: 600;
+}
+
+.paired-c4-requirement-selected {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
+}
+
 @media (max-width: 76rem) {
   .plan-content-layout {
     grid-template-columns: 1fr;
