@@ -70,3 +70,9 @@ delta through the Task 002 Feature baseline, and distinguishes accepted commits
 from the still-pending exact-revision architecture proposal. Task 003 does not
 claim final reconstruction closeout while that owner review or any material gap
 is pending.
+
+`final-validation-report.json` rechecks the accepted delta through Task 003,
+records the real pinned Structurizr validation/export/render outputs under
+`final-validation/`, and gives the final accepted, pending, and unresolved
+disposition. A successful render is evidence about the authored model bytes; it
+does not clear pending owner review, missing receipts, or unavailable provenance.

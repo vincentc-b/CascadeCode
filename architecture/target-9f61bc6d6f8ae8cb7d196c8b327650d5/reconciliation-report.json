@@ -2,16 +2,25 @@
   "version": 1,
   "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
   "owner_work_id": "task_034_007_003",
-  "original_pin": {
-    "target_baseline": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084",
-    "tracking_baseline": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084",
+  "g_source_inventory_pin": {
+    "target_revision": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084",
+    "tracking_revision": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084",
+    "meaning": "Feature G source-line inventory pin; not an accepted Epic baseline",
     "inventory_sha256": "d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6"
   },
-  "refreshed_accepted_baseline": {
+  "refreshed_g_source_baseline": {
     "target_revision": "1e1a1c945f37632950af83b8d3b26ffa03fc333b",
-    "meaning": "feature_line_after_completed_task_034_007_002_before_task_034_007_003_dispatch"
+    "meaning": "Feature G source line after completed task_034_007_002 and before task_034_007_003 dispatch; not an accepted Epic baseline"
   },
-  "accepted_delta": {
+  "accepted_epic_pin": {
+    "work_id": "epic_034",
+    "target_revision": "2791e6ccd2fce86c80e38e21281caadeb45b5360",
+    "feature_f_implementation_reachable": false,
+    "feature_f_architecture_context_present": false,
+    "review_218_state": "open_clean_mergeable_not_merged",
+    "source": "Epic dec_014 acceptance checkpoint plus local Git object inspection"
+  },
+  "g_source_delta": {
     "target_commits": [
       "6739c34977daadbe164dc076ad710a842026d240",
       "6da639fb7274fe4682958411860cc3308aaa2506",
@@ -63,13 +72,14 @@
         ]
       }
     ],
-    "reconciliation": "All delta commits are reachable from the refreshed Feature baseline. Lifecycle-only revisions are no-impact to current claims; Task 001 evidence is durable; Task 002 implementation is durable but its architecture proposal remains pending owner review."
+    "reconciliation": "All delta commits are reachable from the refreshed Feature G source baseline. This is not evidence of accepted Epic reachability. Lifecycle-only revisions are no-impact to current claims; Task 001 evidence is durable; Task 002 implementation is durable but its architecture proposal remains pending owner review."
   },
   "feature_f": {
     "feature_id": "feat_034_006",
     "implementation_revision": "24a6bb020a89dea96698ee28fdb4f589366f0f3c",
     "closeout_revision": "7d078a396a6b79f098da6b9e9e8e3db6b2b3d4b7",
-    "accepted_at_original_pin": true,
+    "reachable_on_g_source_inventory_pin": true,
+    "reachable_on_accepted_epic_pin": false,
     "review_id": "218",
     "review_description_status": "unavailable",
     "review_source_revision_status": "unavailable"

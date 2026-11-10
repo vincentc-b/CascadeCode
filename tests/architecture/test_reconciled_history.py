@@ -74,25 +74,39 @@ def test_ledger_references_canonical_evidence_without_double_counting() -> None:
     }
 
 
-def test_reconciliation_preserves_pin_and_accounts_for_accepted_delta() -> None:
+def test_reconciliation_preserves_pin_and_accounts_for_g_source_delta() -> None:
     report = _load("reconciliation-report.json")
-    original = report["original_pin"]["target_baseline"]
-    refreshed = report["refreshed_accepted_baseline"]["target_revision"]
+    original = report["g_source_inventory_pin"]["target_revision"]
+    refreshed = report["refreshed_g_source_baseline"]["target_revision"]
     actual = subprocess.check_output(
         ["git", "rev-list", "--reverse", f"{original}..{refreshed}"], cwd=ROOT, text=True
     ).splitlines()
 
-    assert report["accepted_delta"]["target_commits"] == actual
-    assert {row["work_id"] for row in report["accepted_delta"]["work_items"]} == {
+    assert report["g_source_delta"]["target_commits"] == actual
+    assert {row["work_id"] for row in report["g_source_delta"]["work_items"]} == {
         "task_034_007_001",
         "task_034_007_002",
     }
-    assert report["feature_f"]["accepted_at_original_pin"] is True
+    assert report["feature_f"]["reachable_on_g_source_inventory_pin"] is True
+    assert report["feature_f"]["reachable_on_accepted_epic_pin"] is False
     subprocess.run(
         ["git", "merge-base", "--is-ancestor", report["feature_f"]["implementation_revision"], original],
         cwd=ROOT,
         check=True,
     )
+    accepted_epic = report["accepted_epic_pin"]
+    assert accepted_epic["feature_f_implementation_reachable"] is False
+    assert accepted_epic["feature_f_architecture_context_present"] is False
+    missing = subprocess.run(
+        [
+            "git",
+            "cat-file",
+            "-e",
+            f'{accepted_epic["target_revision"]}:cascade/workspace/architecture_context.py',
+        ],
+        cwd=ROOT,
+    )
+    assert missing.returncode != 0
     assert report["review_state"]["accepted_revision_ids"] == []
     assert report["review_state"]["pending_revision_ids"]
     assert report["closeout_claimed"] is False
