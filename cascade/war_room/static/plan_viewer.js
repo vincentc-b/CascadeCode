@@ -1762,6 +1762,374 @@
     startRefresh();
   }
 
+  function createPairedNavigation(payload) {
+    var views = Array.isArray(payload && payload.views) ? payload.views.slice() : [];
+    var changed = Array.isArray(payload && payload.changed_views) ? payload.changed_views : [];
+
+    function findView(viewKey, level) {
+      return views.find(function (view) {
+        return view.key === viewKey && view.level === level;
+      }) || null;
+    }
+
+    var initial = null;
+    if (changed.length) initial = findView(changed[0][0], changed[0][1]);
+    if (!initial && views.length) initial = views[0];
+    var state = initial ? {
+      view_key: initial.key,
+      level: initial.level,
+      selection: null,
+      history: [],
+    } : { view_key: null, level: null, selection: null, history: [] };
+
+    function snapshot() {
+      return {
+        view_key: state.view_key,
+        level: state.level,
+        selection: state.selection ? {
+          kind: state.selection.kind,
+          semantic_id: state.selection.semantic_id,
+          source_side: state.selection.source_side,
+        } : null,
+      };
+    }
+
+    function currentView() {
+      return findView(state.view_key, state.level);
+    }
+
+    function sideResolution(view, sideName, kind, semanticId) {
+      var side = view && view[sideName];
+      if (!side) return { state: "absent", side: sideName };
+      if (side.interactive === false) {
+        return { state: "unsupported", side: sideName, reason: side.error || "Interaction unsupported" };
+      }
+      var target = (side.targets || []).find(function (item) {
+        return item.kind === kind && item.semantic_id === semanticId;
+      });
+      return target
+        ? { state: "present", side: sideName, target: target }
+        : { state: "absent", side: sideName };
+    }
+
+    function push(next) {
+      state.history.push(snapshot());
+      state.view_key = next.view_key;
+      state.level = next.level;
+      state.selection = next.selection || null;
+      return snapshot();
+    }
+
+    return {
+      state: state,
+      views: views,
+      currentView: currentView,
+      resolutions: function () {
+        if (!state.selection) return null;
+        var view = currentView();
+        return {
+          current: sideResolution(
+            view, "current", state.selection.kind, state.selection.semantic_id
+          ),
+          proposed: sideResolution(
+            view, "proposed", state.selection.kind, state.selection.semantic_id
+          ),
+        };
+      },
+      select: function (kind, semanticId, sourceSide) {
+        var view = currentView();
+        if (!view || (kind !== "element" && kind !== "relationship") ||
+            (sourceSide !== "current" && sourceSide !== "proposed")) {
+          return { ok: false, error: "Unsupported paired diagram selection" };
+        }
+        var source = sideResolution(view, sourceSide, kind, semanticId);
+        if (source.state !== "present") {
+          return { ok: false, error: source.reason || "Target is not present in the selected side" };
+        }
+        push({
+          view_key: view.key,
+          level: view.level,
+          selection: { kind: kind, semantic_id: semanticId, source_side: sourceSide },
+        });
+        return { ok: true, state: snapshot(), resolutions: this.resolutions() };
+      },
+      showView: function (viewKey, level) {
+        var view = findView(viewKey, level);
+        if (!view) return { ok: false, error: "Unknown paired diagram view" };
+        push({ view_key: view.key, level: view.level, selection: null });
+        return { ok: true, state: snapshot() };
+      },
+      drill: function (sourceSide, kind, semanticId) {
+        var view = currentView();
+        var resolution = sideResolution(view, sourceSide, kind, semanticId);
+        var target = resolution.target;
+        if (!target || !target.drill_view_key || !target.drill_level) {
+          return { ok: false, error: "No verified drill target is available" };
+        }
+        var destination = findView(target.drill_view_key, target.drill_level);
+        if (!destination) return { ok: false, error: "Verified drill target is unavailable" };
+        push({ view_key: destination.key, level: destination.level, selection: null });
+        return { ok: true, state: snapshot() };
+      },
+      back: function () {
+        if (!state.history.length) return { ok: false, error: "No previous paired view" };
+        var previous = state.history.pop();
+        state.view_key = previous.view_key;
+        state.level = previous.level;
+        state.selection = previous.selection;
+        return { ok: true, state: snapshot(), resolutions: this.resolutions() };
+      },
+    };
+  }
+
+  function initPairedC4Review(payload, options) {
+    options = options || {};
+    var doc = options.document || document;
+    var host = options.host || doc.getElementById("paired-c4-review");
+    if (!host || !payload) return null;
+    var navigation = createPairedNavigation(payload);
+    host.hidden = false;
+
+    function node(tag, className, text) {
+      var el = doc.createElement(tag);
+      el.className = className || "";
+      if (text != null) el.textContent = String(text);
+      return el;
+    }
+
+    function clear(element) {
+      if (element.replaceChildren) element.replaceChildren();
+      else element.innerHTML = "";
+    }
+
+    function appendReferences(parent, heading, values) {
+      var rows = Array.isArray(values) ? values : [];
+      if (!rows.length) return;
+      var group = node("div", "paired-c4-reference-group");
+      group.appendChild(node("strong", "", heading + ": "));
+      group.appendChild(node("span", "", rows.join(", ")));
+      parent.appendChild(group);
+    }
+
+    function appendDiffs(parent) {
+      var details = node("details", "paired-c4-diffs");
+      details.appendChild(node("summary", "", "Reviewed diffs"));
+      var list = node("dl", "paired-c4-diff-list");
+      ["source", "model", "plan"].forEach(function (name) {
+        var value = payload.diffs && payload.diffs[name];
+        if (value == null) return;
+        list.appendChild(node("dt", "", name));
+        list.appendChild(node(
+          "dd", "paired-c4-diff-value",
+          typeof value === "string" ? value : JSON.stringify(value, null, 2)
+        ));
+      });
+      details.appendChild(list);
+      parent.appendChild(details);
+    }
+
+    function parseSvg(side) {
+      if (!side || typeof side.svg !== "string" || !side.svg.trim()) {
+        return Promise.reject(new Error("Pinned diagram SVG is unavailable"));
+      }
+      if (side.svg.trim().charAt(0) === "<") return Promise.resolve(side.svg);
+      var load = options.loadSvg || function (url) {
+        return fetch(url, { signal: pageLoadSignal() }).then(function (response) {
+          if (!response.ok) throw new Error("Failed to load pinned diagram (" + response.status + ")");
+          return response.text();
+        });
+      };
+      return Promise.resolve(load(side.svg));
+    }
+
+    function installSvg(container, side, sideName, status) {
+      return parseSvg(side).then(function (raw) {
+        if (typeof DOMParser === "undefined") throw new Error("SVG parsing is unavailable");
+        var parsed = new DOMParser().parseFromString(raw, "image/svg+xml");
+        if (parsed.querySelector("parsererror, script, foreignObject, iframe, object, embed")) {
+          throw new Error("Pinned diagram SVG failed safety validation");
+        }
+        var svg = parsed.documentElement;
+        if (!svg || String(svg.localName).toLowerCase() !== "svg") {
+          throw new Error("Pinned diagram is not an SVG");
+        }
+        var imported = doc.importNode ? doc.importNode(svg, true) : svg;
+        imported.classList.add("paired-c4-svg");
+        var bound = {};
+        var annotated = imported.querySelectorAll("[data-cascade-semantic-id]");
+        for (var i = 0; i < annotated.length; i += 1) {
+          var semanticId = annotated[i].getAttribute("data-cascade-semantic-id");
+          var kind = annotated[i].getAttribute("data-cascade-model-kind");
+          var key = kind + "\u0000" + semanticId;
+          if (bound[key]) throw new Error("Diagram contains an ambiguous semantic hit target");
+          bound[key] = annotated[i];
+        }
+        (side.targets || []).forEach(function (target) {
+          var key = target.kind + "\u0000" + target.semantic_id;
+          var hit = bound[key];
+          if (!hit) throw new Error("Diagram is missing a verified semantic hit target");
+          hit.classList.add("paired-c4-target");
+          hit.setAttribute("tabindex", "0");
+          hit.setAttribute("role", "button");
+          hit.setAttribute("aria-label", target.kind + " " + target.semantic_id);
+          function choose() {
+            var result = navigation.select(target.kind, target.semantic_id, sideName);
+            if (!result.ok) {
+              status.textContent = result.error;
+              status.classList.add("error");
+              return;
+            }
+            render();
+          }
+          hit.addEventListener("click", choose);
+          hit.addEventListener("keydown", function (event) {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              choose();
+            }
+          });
+          if (target.drill_view_key && target.drill_level) {
+            hit.addEventListener("dblclick", function () {
+              var result = navigation.drill(sideName, target.kind, target.semantic_id);
+              if (result.ok) render();
+            });
+          }
+        });
+        clear(container);
+        container.appendChild(imported);
+        var selection = navigation.state.selection;
+        if (selection) {
+          var selected = bound[selection.kind + "\u0000" + selection.semantic_id];
+          if (selected) {
+            selected.classList.add("paired-c4-target-selected");
+            selected.setAttribute("aria-pressed", "true");
+            if (selection.source_side === sideName && selected.focus) {
+              try { selected.focus({ preventScroll: true }); } catch (_err) { selected.focus(); }
+            }
+          }
+        }
+      }).catch(function (error) {
+        clear(container);
+        container.appendChild(node("p", "paired-c4-unsupported", "Interaction unsupported: " + error.message));
+        status.textContent = "Diagram interaction is unavailable; inspect the source diff below.";
+        status.classList.add("error");
+      });
+    }
+
+    function renderSide(parent, view, sideName, status) {
+      var side = view[sideName];
+      var card = node("section", "paired-c4-side paired-c4-side-" + sideName);
+      card.setAttribute("data-side", sideName);
+      card.appendChild(node("h3", "paired-c4-side-heading", sideName === "current" ? "Current" : "Proposed"));
+      if (!side) {
+        card.classList.add("paired-c4-side-absent");
+        card.appendChild(node("p", "paired-c4-absent", "Absent counterpart for this view."));
+        parent.appendChild(card);
+        return;
+      }
+      card.appendChild(node(
+        "p", "paired-c4-revision",
+        side.repository_key + " @ " + side.revision
+      ));
+      var selectedResolutions = navigation.resolutions();
+      var selectedResolution = selectedResolutions && selectedResolutions[sideName];
+      if (selectedResolution && selectedResolution.state === "absent") {
+        card.appendChild(node(
+          "p", "paired-c4-absent",
+          "Selected semantic target has no " + sideName + " counterpart."
+        ));
+      }
+      var canvas = node("div", "paired-c4-canvas");
+      canvas.setAttribute("aria-label", sideName + " diagram");
+      canvas.appendChild(node("p", "paired-c4-loading", "Loading pinned diagram…"));
+      card.appendChild(canvas);
+      parent.appendChild(card);
+      installSvg(canvas, side, sideName, status);
+    }
+
+    function render() {
+      clear(host);
+      var heading = node("div", "paired-c4-heading");
+      var title = node("div", "");
+      title.appendChild(node("h2", "", "Architecture change review"));
+      title.appendChild(node("p", "paired-c4-summary", payload.summary || "No semantic summary supplied."));
+      heading.appendChild(title);
+      host.appendChild(heading);
+      var status = node("p", "paired-c4-status");
+      status.setAttribute("role", "status");
+      host.appendChild(status);
+
+      if (payload.state === "error") {
+        host.appendChild(node("p", "paired-c4-error", payload.error || "Paired diagram review is unavailable."));
+        appendDiffs(host);
+        return;
+      }
+      if (!navigation.views.length) {
+        host.appendChild(node(
+          "p", "paired-c4-empty",
+          payload.state === "unchanged" ? "No diagram changes." : "No paired diagram views are available (" + payload.state + ")."
+        ));
+        appendDiffs(host);
+        return;
+      }
+
+      var controls = node("div", "paired-c4-controls");
+      var back = node("button", "paired-c4-back", "Back");
+      back.type = "button";
+      back.disabled = navigation.state.history.length === 0;
+      back.addEventListener("click", function () {
+        if (navigation.back().ok) render();
+      });
+      controls.appendChild(back);
+      var label = node("label", "paired-c4-view-label", "View ");
+      var select = node("select", "paired-c4-view-select");
+      navigation.views.forEach(function (view) {
+        var option = node("option", "", view.key + " · " + view.level + " · " + view.state);
+        option.value = view.key + "\u0000" + view.level;
+        option.selected = view.key === navigation.state.view_key && view.level === navigation.state.level;
+        select.appendChild(option);
+      });
+      select.addEventListener("change", function () {
+        var parts = select.value.split("\u0000");
+        if (navigation.showView(parts[0], parts[1]).ok) render();
+      });
+      label.appendChild(select);
+      controls.appendChild(label);
+      host.appendChild(controls);
+
+      var view = navigation.currentView();
+      var diagrams = node("div", "paired-c4-diagrams");
+      renderSide(diagrams, view, "current", status);
+      renderSide(diagrams, view, "proposed", status);
+      host.appendChild(diagrams);
+
+      var resolutions = navigation.resolutions();
+      if (resolutions) {
+        var selection = navigation.state.selection;
+        status.textContent = selection.kind + " " + selection.semantic_id +
+          " — current: " + resolutions.current.state +
+          ", proposed: " + resolutions.proposed.state;
+        status.classList.toggle(
+          "paired-c4-status-absent",
+          resolutions.current.state === "absent" || resolutions.proposed.state === "absent"
+        );
+      }
+      var meta = node("div", "paired-c4-review-meta");
+      appendReferences(meta, "Requirements", payload.requirements);
+      appendReferences(meta, "Decisions", payload.decisions);
+      var legend = node("ul", "paired-c4-legend");
+      (payload.legend || []).forEach(function (item) {
+        legend.appendChild(node("li", "paired-c4-legend-" + item.state, item.state + ": " + item.meaning));
+      });
+      if (legend.children.length) meta.appendChild(legend);
+      appendDiffs(meta);
+      host.appendChild(meta);
+    }
+
+    render();
+    return { navigation: navigation, render: render };
+  }
+
   function bootstrapPlanViewer() {
     var workId = document.body.getAttribute("data-work-id");
     if (!workId) {
@@ -1802,6 +2170,9 @@
           }
           if (bodyEl) {
             bodyEl.hidden = false;
+          }
+          if (doc.paired_review) {
+            initPairedC4Review(doc.paired_review);
           }
           var readinessMount = null;
           if (meta.tier === "epic" && doc.plan_readiness) {
@@ -1866,5 +2237,7 @@
     initPlanComments: initPlanComments,
     initEpicPlanReadinessChrome: initEpicPlanReadinessChrome,
     initDependencyReviewChrome: initDependencyReviewChrome,
+    createPairedNavigation: createPairedNavigation,
+    initPairedC4Review: initPairedC4Review,
   };
 });

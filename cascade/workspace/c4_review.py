@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
@@ -233,7 +234,7 @@ def _load_side(
                 C4ReviewSide(
                     reference.destination_repository_key,
                     reference.revision,
-                    row["svg"],
+                    _semantic_svg(render.artifact_directory, row),
                     targets,
                 ),
             )
@@ -244,6 +245,32 @@ def _load_side(
         "revision": reference.revision,
     }
     return tuple(result), repository
+
+
+def _semantic_svg(artifact_root: Path, row: dict[str, object]) -> str:
+    """Return the validated SVG with stable semantic hit-target annotations.
+
+    Renderer node and export IDs remain an implementation detail of the pinned
+    artifact.  The review client receives only the semantic identity proven by
+    the same-render manifest validation above.
+    """
+
+    svg_path = artifact_root / str(row["svg"])
+    tree = ET.parse(svg_path)
+    nodes = {
+        node.get("id"): node
+        for node in tree.iter()
+        if node.get("id") is not None
+    }
+    for target in row["targets"]:
+        if not isinstance(target, dict):  # Already rejected by manifest validation.
+            raise C4BindingError("hit-target manifest target is invalid")
+        renderer_id = target["renderer_node_id"]
+        node = nodes.get(renderer_id)
+        if node is None:
+            raise C4BindingError("validated SVG lost a hit-target node")
+        node.set("data-cascade-semantic-id", str(target["semantic_id"]))
+    return ET.tostring(tree.getroot(), encoding="unicode")
 
 
 def _read_semantic_workspace(artifact: C4SemanticModelArtifact) -> dict[str, object]:

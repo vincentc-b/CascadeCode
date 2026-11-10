@@ -60,6 +60,7 @@ def test_payload_pairs_only_exact_key_and_level_and_lists_every_change(
     # Only semantic identities reach clients; renderer node and export IDs do not.
     assert payload.views[0].current.targets[0].semantic_id == "element.system"
     assert "renderer_node_id" not in payload.to_dict()["views"][0]["current"]["targets"][0]
+    assert 'data-cascade-semantic-id="element.system"' in payload.views[0].current.svg
 
 
 def test_revision_or_manifest_failure_is_visible_and_keeps_all_diffs(
