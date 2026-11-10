@@ -125,6 +125,15 @@ from cascade.workspace.reconciliation import (
     resolve_closeout_revision,
     validate_reconciliation_closeout,
 )
+from cascade.workspace.historical_inventory import (
+    AuthorizedReviewHandoff,
+    AuthorizedWorkHandoff,
+    HistoricalEvidenceInventory,
+    build_historical_inventory,
+    inventory_path,
+    pin_historical_inventory,
+    read_historical_inventory,
+)
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -139,6 +148,9 @@ __all__ = [
     "ReconciledDesign",
     "ReconciliationReceipt",
     "ReconciliationReceiptStore",
+    "HistoricalEvidenceInventory",
+    "AuthorizedReviewHandoff",
+    "AuthorizedWorkHandoff",
     "ArchitectureArtifactRef",
     "ArchitectureAuthoringIntent",
     "ArchitectureAuthoringResult",
@@ -214,6 +226,10 @@ __all__ = [
     "stage_architecture_proposal",
     "stage_owned_architecture_change",
     "record_reconciliation_receipt",
+    "build_historical_inventory",
+    "inventory_path",
+    "pin_historical_inventory",
+    "read_historical_inventory",
     "resolve_closeout_revision",
     "validate_reconciliation_closeout",
     "enable_review_gate",
