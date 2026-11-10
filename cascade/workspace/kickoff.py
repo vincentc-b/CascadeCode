@@ -724,7 +724,19 @@ def _human_message_from_comment_event(event, repo: Path) -> dict | None:
         return None
     if record is None or record.author != "human":
         return None
-    return {"role": "human", "content": _comment_kickoff_content(record)}
+    content = _comment_kickoff_content(record)
+    purpose = event.payload.get("delivery_purpose")
+    affected = event.payload.get("affected_work_ids")
+    reason = event.payload.get("escalation_reason")
+    if purpose == "initial_delivery" and event.dest != doc_id:
+        content += f"\n\nRouted to {event.dest} for this unstaffed feature."
+    elif purpose == "epic_impact_triage":
+        content += "\n\nExplicit Epic impact-triage escalation."
+    if isinstance(affected, list) and affected:
+        content += "\nAffected work: " + ", ".join(str(item) for item in affected)
+    if isinstance(reason, str) and reason:
+        content += "\nEscalation reason: " + reason
+    return {"role": "human", "content": content}
 
 
 def _commit_classified_queue_batch(

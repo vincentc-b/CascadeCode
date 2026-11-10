@@ -102,6 +102,11 @@ def approve_feature(
             if current is None or current.tier != "feature":
                 raise ValueError("feature approval requires a feature on the board")
             if current.approved_at is None:
+                from cascade.epic.change_dispositions import (
+                    require_corrective_feature_ready_for_approval,
+                )
+
+                require_corrective_feature_ready_for_approval(feature_id, root=repo)
                 _require_approval_selections(
                     (current, *_approval_tasks(evidence.board.by_id.values(), feature_id)),
                     root=repo,
@@ -182,6 +187,11 @@ def approve_epic_plan(
 
             for feature_id in children:
                 if board.by_id[feature_id].approved_at is None:
+                    from cascade.epic.change_dispositions import (
+                        require_corrective_feature_ready_for_approval,
+                    )
+
+                    require_corrective_feature_ready_for_approval(feature_id, root=repo)
                     require_lifecycle_review_gate(feature_id, "approval", root=repo)
             for feature_id in children:
                 _set_feature_approved(feature_id, root=repo)

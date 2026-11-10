@@ -7,7 +7,6 @@ from pathlib import Path
 
 from cascade.board.errors import NotFound, SchemaError
 from cascade.board.id_reservations import release_work_id
-from cascade.board.lock import process_lock
 from cascade.board.paths import slugify
 from cascade.board.store import allocate_id, list_board, read_doc, write_doc
 from cascade.board.types import WorkDoc, WorkId, WorkMeta
@@ -32,7 +31,9 @@ def mint_task(
     """Create a backlog task under this feature; does not dispatch or move columns."""
 
     trunk = Path(root).resolve()
-    with process_lock:
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=trunk):
         _require_feature(feature_id, trunk)
         evidence = require_action_dependencies(feature_id, root=trunk)
         assert evidence.board is not None
@@ -64,6 +65,15 @@ def _mint_task(
 
     if blocked := refusal_if_blocked(feature_id, root=trunk):
         raise FeatureToolDenied(blocked)
+    from cascade.scoped_change_holds import (
+        ScopedChangeHoldError,
+        require_no_scoped_change_hold,
+    )
+
+    try:
+        require_no_scoped_change_hold(feature_id, "mint", root=trunk)
+    except ScopedChangeHoldError as exc:
+        raise FeatureToolDenied(str(exc)) from exc
 
     deps = list(depends_on or [])
     skill_paths = _validate_skills(list(skills or []), trunk)

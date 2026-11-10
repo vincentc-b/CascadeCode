@@ -195,7 +195,9 @@ def try_complete_epic_result(
     # Automatic recovery and a concurrent human Close share the same
     # check/create boundary. The durable review/event stores provide
     # idempotency after this in-process serialization point.
-    with process_lock:
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=resolve_root(root)):
         return _finish_epic_completion_result(epic_id, root=root)
 
 
@@ -214,7 +216,9 @@ def confirm_epic_complete_result(
         return EpicCompleteResult(ok=False, reason="unauthorized")
     # Serialize the check/create boundary so concurrent Close requests in this
     # process cannot both observe an absent snapshot and publish reviews.
-    with process_lock:
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=resolve_root(root)):
         return _finish_epic_completion_result(epic_id, root=root)
 
 

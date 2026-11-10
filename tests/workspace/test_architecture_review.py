@@ -9,9 +9,27 @@ import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
+from cascade.board.store import read_doc
+from cascade.comments import (
+    comment,
+    read_change_request_handoffs,
+    read_comments,
+)
+from cascade.epic.impact_decisions import EpicImpactDecision, record_impact_decision
+from cascade.feature.comments_tool import escalate_comment_to_epic
+from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+from cascade.scoped_change_holds import (
+    ScopedChangeHoldError,
+    create_scoped_change_hold,
+    holds_affecting,
+    release_revised_change_hold,
+)
+from cascade.watchdog import read_events
 
 from cascade.workspace import (
     ArchitectureBaseline,
@@ -35,17 +53,220 @@ from cascade.workspace import (
     promote_or_resume,
     resolve_design_ownership,
     read_architecture_state,
+    rebase_architecture_proposal,
     reserve_promotion,
     review_architecture_proposal,
     stage_architecture_proposal,
     validate_review_gate,
 )
+from tests.support import add_doc
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 _VERSIONED_WORKSPACE = (
     _REPOSITORY_ROOT / "architecture" / "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
 )
+
+
+def test_living_revision_resumes_only_after_fresh_review_on_accepted_lineage(
+    tmp_path: Path,
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    repository = project.target.root
+    add_doc(
+        repository,
+        id="epic_034",
+        title="Living Epic",
+        tier="epic",
+        status="active",
+        children=["feat_034_002", "feat_034_003"],
+    )
+    add_doc(
+        repository,
+        id="feat_034_002",
+        title="Accepted sibling",
+        tier="feature",
+        status="completed",
+        parent="epic_034",
+    )
+    add_doc(
+        repository,
+        id="feat_034_003",
+        title="Changed active feature",
+        tier="feature",
+        status="active",
+        parent="epic_034",
+        children=["task_034_003_001"],
+    )
+    add_doc(
+        repository,
+        id="task_034_003_001",
+        title="Running implementation",
+        tier="task",
+        status="active",
+        parent="feat_034_003",
+    )
+    # Accept a sibling on its feature branch, then merge it into the Epic
+    # integration lineage. The accepted pointer becomes current only there.
+    store = ArchitectureReviewStore(project)
+    sibling = replace(
+        _unit(project, plan, design, model),
+        owner_work_id="feat_034_002",
+        affected_work_ids=("feat_034_002",),
+        impact_reason="Accepted sibling architecture",
+    )
+    store.save(sibling)
+    starting_head = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "checkout", "-b", "feature/accepted-sibling")
+    repository.joinpath("accepted-sibling.txt").write_text(
+        "accepted sibling\n", encoding="utf-8"
+    )
+    _git(repository, "add", "accepted-sibling.txt")
+    _git(repository, "commit", "-m", "implement accepted sibling")
+    sibling_head = _git(repository, "rev-parse", "HEAD")
+    accepted = store.accept(
+        sibling.review_unit_id,
+        accepted_code_head=sibling_head,
+        accepted_documentation_head=starting_head,
+        expected_generation=None,
+    )
+    _git(repository, "checkout", "main")
+    _git(repository, "checkout", "-b", "epic/epic_034")
+    _git(
+        repository,
+        "merge",
+        "--no-ff",
+        "feature/accepted-sibling",
+        "-m",
+        "merge accepted sibling",
+    )
+    epic_head = _git(repository, "rev-parse", "HEAD")
+    assert store.resolve_current("epic:epic_034", lineage_revision=epic_head) == accepted
+
+    root_comment_id = comment(
+        "feat_034_003",
+        "Plan",
+        "Revise the active contract after the sibling merge.",
+        author="human",
+        root=repository,
+    )
+    escalation = escalate_comment_to_epic(
+        root_comment_id,
+        "The request changes work based on an accepted sibling.",
+        feature_id="feat_034_003",
+        affected_work_ids=["feat_034_003"],
+        root=repository,
+    )
+    replayed_escalation = escalate_comment_to_epic(
+        root_comment_id,
+        "A retry must retain the original accountable handoff.",
+        feature_id="feat_034_003",
+        affected_work_ids=["feat_034_003"],
+        root=repository,
+    )
+    assert replayed_escalation["id"] == escalation["id"]
+    handoffs = read_change_request_handoffs(
+        root=repository, source_feature_id="feat_034_003"
+    )
+    assert [row.purpose for row in handoffs] == [
+        "initial_delivery",
+        "epic_impact_triage",
+    ]
+    events, _ = read_events("epic_034", 0, root=repository)
+    assert sum(
+        event.payload.get("delivery_purpose") == "epic_impact_triage"
+        for event in events
+    ) == 1
+
+    decision = record_impact_decision(
+        str(escalation["id"]),
+        "material",
+        ["feature_plan"],
+        "open_work_amendment",
+        "Rebase the open work and obtain fresh review and approval.",
+        epic_id="epic_034",
+        root=repository,
+    )
+    assert decision["accepted_sibling_ids"] == ["feat_034_002"]
+    replies = [
+        row
+        for row in read_comments("feat_034_003", root=repository)
+        if row.parent == root_comment_id and row.author == "epic_manager"
+    ]
+    assert len(replies) == 1
+    assert replies[0].state == "open"
+
+    request_id = str(escalation["id"])
+    create_scoped_change_hold(
+        request_id,
+        ["feat_034_003"],
+        ["integration", "merge"],
+        reason="Changed work requires a revised accepted-lineage review.",
+        owner="epic_034",
+        root=repository,
+    )
+    assert read_doc("task_034_003_001", root=repository).meta.status == "active"
+    with pytest.raises(ArchitectureProposalError, match=request_id):
+        require_lifecycle_review_gate(
+            "task_034_003_001", "integration", root=repository
+        )
+    with pytest.raises(ScopedChangeHoldError, match="revised_approval_required"):
+        release_revised_change_hold(
+            request_id,
+            decision_ref=str(decision["id"]),
+            review_unit_id=sibling.review_unit_id,
+            approval_ref="feature-approval:feat_034_003:revision-2",
+            released_by="epic_manager",
+            project=project,
+        )
+
+    changed = replace(
+        _unit(project, plan, design, model),
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        impact_reason="Apply the accepted open-work amendment",
+        decision_citations=(str(decision["id"]),),
+    )
+    staged = rebase_architecture_proposal(
+        project,
+        owner="feature-team",
+        work_id="feat_034_003",
+        proposal=changed,
+        lineage_revision=epic_head,
+    )
+    assert staged.unit is not None
+    assert staged.accepted == accepted
+    assert staged.unit.accepted_baseline == accepted.baseline
+    reviewed = review_architecture_proposal(
+        project,
+        owner="feature-team",
+        unit_id=staged.unit.review_unit_id,
+        expected_tuple_digest=staged.unit.reviewed_tuple_digest,
+        decision="reviewed",
+        reviewed_at="2099-01-01T00:00:00+00:00",
+        lineage_revision=epic_head,
+    )
+    assert reviewed.unit is not None
+    approved = store.approve_review_unit(reviewed.unit.review_unit_id)
+    released = release_revised_change_hold(
+        request_id,
+        decision_ref=str(decision["id"]),
+        review_unit_id=approved.review_unit_id,
+        approval_ref="feature-approval:feat_034_003:revision-2",
+        released_by="epic_manager",
+        project=project,
+    )
+
+    assert released.status == "released"
+    assert holds_affecting(
+        "task_034_003_001", "integration", root=repository
+    ) == ()
+    resumed = require_lifecycle_review_gate(
+        "task_034_003_001", "integration", root=repository
+    )
+    assert resumed.boundary == "integration"
+    assert store.resolve_current("epic:epic_034", lineage_revision=epic_head) == accepted
+    assert read_doc("feat_034_002", root=repository).meta.status == "completed"
 
 
 def test_review_unit_round_trips_complete_v1_tuple_and_explicit_empty_baseline(
@@ -185,6 +406,158 @@ def test_accepted_child_advances_only_its_lineage_with_monotonic_generation(
             integration_revision=epic_revision,
             expected_generation=1,
         )
+
+
+def test_changed_open_work_rebases_on_merged_sibling_and_requires_fresh_review(
+    tmp_path: Path,
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    repository = project.target.root
+    store = ArchitectureReviewStore(project)
+    original = _unit(project, plan, design, model)
+    sibling = replace(
+        original,
+        owner_work_id="feat_034_002",
+        affected_work_ids=("feat_034_002",),
+        impact_reason="Accepted sibling architecture",
+    )
+    store.save(sibling)
+    store.save(original)
+
+    repository.joinpath("accepted-sibling.txt").write_text(
+        "accepted sibling\n", encoding="utf-8"
+    )
+    _git(repository, "add", "accepted-sibling.txt")
+    _git(repository, "commit", "-m", "accept sibling")
+    sibling_head = _git(repository, "rev-parse", "HEAD")
+    accepted = store.accept(
+        sibling.review_unit_id,
+        integration_revision=sibling_head,
+        expected_generation=None,
+    )
+
+    changed = replace(
+        original,
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        impact_reason="Revise remaining work after the accepted sibling",
+        decision_citations=("decision:living-revision",),
+    )
+    rebased = rebase_architecture_proposal(
+        project,
+        owner="feature-team",
+        work_id="feat_034_003",
+        proposal=changed,
+        lineage_revision=sibling_head,
+    )
+
+    assert rebased.status == "staged"
+    assert rebased.accepted == accepted
+    assert rebased.unit is not None
+    assert rebased.unit.review_unit_id != original.review_unit_id
+    assert rebased.unit.accepted_baseline == accepted.baseline
+    assert rebased.unit.baseline_pointer_id == accepted.pointer_id
+    assert rebased.unit.baseline_generation == accepted.generation
+    assert rebased.unit.proposed_ancestor_context == ProposedAncestorContext(
+        original.review_unit_id, accepted.pointer_id, accepted.generation
+    )
+    assert store.get(original.review_unit_id).status == "stale"  # type: ignore[union-attr]
+    assert store.get(sibling.review_unit_id) == sibling
+    assert store.resolve_current(
+        "epic:epic_034", lineage_revision=sibling_head
+    ) == accepted
+
+    assert store.get_review(rebased.unit.review_unit_id) is None
+    with pytest.raises(ArchitectureProposalError, match="human review"):
+        store.approve_review_unit(rebased.unit.review_unit_id)
+
+
+def test_changed_work_hold_releases_only_with_rebased_approved_tuple(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    repository = project.target.root
+    store = ArchitectureReviewStore(project)
+    original = _unit(project, plan, design, model)
+    sibling = replace(
+        original,
+        owner_work_id="feat_034_002",
+        affected_work_ids=("feat_034_002",),
+        impact_reason="Accepted sibling architecture",
+    )
+    store.save(sibling)
+    store.save(original)
+    head = _git(repository, "rev-parse", "HEAD")
+    store.accept(sibling.review_unit_id, integration_revision=head, expected_generation=None)
+    create_scoped_change_hold(
+        "handoff_001",
+        ["feat_034_003"],
+        ["merge"],
+        reason="Open work changed after sibling acceptance",
+        owner="epic_034",
+        root=repository,
+    )
+
+    changed = replace(
+        original,
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        impact_reason="Apply the accepted open-work amendment",
+        decision_citations=("decision:impact_001",),
+    )
+    staged = rebase_architecture_proposal(
+        project,
+        owner="feature-team",
+        work_id="feat_034_003",
+        proposal=changed,
+        lineage_revision=head,
+    )
+    assert staged.unit is not None
+    reviewed = review_architecture_proposal(
+        project,
+        owner="feature-team",
+        unit_id=staged.unit.review_unit_id,
+        expected_tuple_digest=staged.unit.reviewed_tuple_digest,
+        decision="reviewed",
+        reviewed_at="2099-01-01T00:00:00+00:00",
+        lineage_revision=head,
+    )
+    assert reviewed.unit is not None
+    approved = store.approve_review_unit(reviewed.unit.review_unit_id)
+
+    decision = EpicImpactDecision(
+        id="impact_001",
+        handoff_id="handoff_001",
+        root_comment_id="comment_001",
+        source_feature_id="feat_034_003",
+        affected_work_ids=("feat_034_003",),
+        accepted_sibling_ids=("feat_034_002",),
+        accepted_baseline=None,
+        materiality="material",
+        impact_reasons=("accepted_work",),
+        disposition="open_work_amendment",
+        decision_log_reference="decision:impact_001",
+        originating_thread_reply_reference="reply_001",
+        outcome="Revise the remaining work",
+        decided_by="epic_manager",
+        decided_at=datetime.now(timezone.utc),
+    )
+    monkeypatch.setattr(
+        "cascade.epic.impact_decisions.read_epic_impact_decisions",
+        lambda **_kwargs: [decision],
+    )
+
+    released = release_revised_change_hold(
+        "handoff_001",
+        decision_ref="impact_001",
+        review_unit_id=approved.review_unit_id,
+        approval_ref="feature-approval:feat_034_003:revision-2",
+        released_by="epic_manager",
+        project=project,
+    )
+    assert released.status == "released"
+    assert released.release_evidence is not None
+    assert released.release_evidence.reviewed_tuple_digest == approved.reviewed_tuple_digest
 
 
 def test_owner_can_stage_inspect_and_review_without_advancing_accepted_state(

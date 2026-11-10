@@ -1562,6 +1562,78 @@ def stage_architecture_proposal(
     return ArchitectureProposalState(staged, current, None, semantic_diff)
 
 
+def rebase_architecture_proposal(
+    project: ProjectContext,
+    *,
+    owner: str,
+    work_id: str,
+    proposal: ArchitectureReviewUnit,
+    store: ArchitectureReviewStore | None = None,
+    renderer: C4ArtifactRenderer | None = None,
+    render_settings: C4RenderSettings | None = None,
+    baseline_artifact: C4SemanticModelArtifact | None = None,
+    lineage_revision: str | None = None,
+) -> ArchitectureProposalState:
+    """Stage a changed proposal on the latest accepted integration lineage.
+
+    The previous proposal remains in the review ledger (including its review and
+    invalidation evidence).  The replacement receives a new tuple identity and
+    starts at ``staged``, so an earlier review or approval cannot authorize the
+    changed work.
+    """
+
+    _authorize(proposal, owner, work_id)
+    review_store = store or ArchitectureReviewStore(project)
+    previous = review_store.find_for_owner(owner, work_id, proposal.integration_lineage)
+    current = review_store.resolve_current(
+        proposal.integration_lineage, lineage_revision=lineage_revision
+    )
+    if current is None:
+        raise ArchitectureProposalError(
+            "stale_baseline", "no accepted architecture exists on the integration lineage"
+        )
+
+    if previous is not None:
+        status = review_store.baseline_status(
+            previous, lineage_revision=lineage_revision
+        )
+        if (
+            status.stale
+            and previous.review_unit_id != current.accepted_review_unit_id
+            and previous.status not in {"stale", "rejected"}
+        ):
+            review_store.mark_stale(previous.review_unit_id, "stale_baseline")
+
+    rebased = replace(
+        proposal,
+        proposed_ancestor_context=ProposedAncestorContext(
+            previous.review_unit_id if previous is not None else current.accepted_review_unit_id,
+            current.pointer_id,
+            current.generation,
+        ),
+        accepted_baseline=current.baseline,
+        baseline_pointer_id=current.pointer_id,
+        baseline_generation=current.generation,
+        status="draft",
+    )
+    if previous is not None and rebased.reviewed_tuple_digest == previous.reviewed_tuple_digest:
+        raise ArchitectureProposalError(
+            "review_required", "a revision must change the reviewable proposal tuple"
+        )
+    return stage_architecture_proposal(
+        project,
+        owner=owner,
+        work_id=work_id,
+        proposal=rebased,
+        expected_generation=current.generation,
+        store=review_store,
+        renderer=renderer,
+        render_settings=render_settings,
+        baseline_artifact=baseline_artifact,
+        lineage_revision=lineage_revision,
+    )
+
+
 def review_architecture_proposal(
     project: ProjectContext,
     *,
@@ -2276,5 +2348,6 @@ __all__ = ["AcceptedArchitecturePointer", "AcceptedLineage", "ArchitectureBaseli
            "PromotionHeads", "PromotionJournal", "PromotionSide",
            "ReviewBaselineStatus", "ReviewGateBoundary", "ReviewGateResult",
            "enable_review_gate", "read_architecture_state",
-           "promote_or_resume", "reserve_promotion", "review_architecture_proposal", "stage_architecture_proposal",
+           "promote_or_resume", "rebase_architecture_proposal", "reserve_promotion",
+           "review_architecture_proposal", "stage_architecture_proposal",
            "validate_review_gate"]

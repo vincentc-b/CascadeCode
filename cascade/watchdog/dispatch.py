@@ -68,7 +68,9 @@ def dispatch_feature(
     """Human or Boss starts feature planning. Success status is active, not ready_to_plan."""
 
     repo = resolve_root(root)
-    with process_lock:
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=repo):
         result = _dispatch_feature(work_id, by, repo, expected_parent=expected_parent)
     return _boot_after(result, "feature", work_id, by, repo)
 
@@ -254,7 +256,7 @@ def _dispatch_feature(
     try:
         require_lifecycle_review_gate(work_id, "dispatch", root=root)
     except ArchitectureProposalError as exc:
-        return _fail(exc.code)
+        return _fail(exc.code, detail=str(exc))
 
     from cascade.stacked_dispatch import ensure_feature_dispatch_selection
 
@@ -382,7 +384,7 @@ def _dispatch_task(
     try:
         require_lifecycle_review_gate(work_id, "dispatch", root=root)
     except ArchitectureProposalError as exc:
-        return _fail(exc.code)
+        return _fail(exc.code, detail=str(exc))
 
     if not has_git(root):
         move_doc(work_id, "active", root=root)
@@ -752,6 +754,7 @@ def _fail(
     *,
     preflight: ProviderCapabilityBatchPreflight | None = None,
     selections: EffectiveSelectionBatch | None = None,
+    detail: str | None = None,
 ) -> DispatchResult:
     return DispatchResult(
         ok=False,
@@ -759,6 +762,7 @@ def _fail(
         event=None,
         preflight=preflight,
         selections=selections,
+        detail=detail,
     )
 
 

@@ -49,3 +49,4 @@ class DispatchResult:
     event: Event | None
     preflight: ProviderCapabilityBatchPreflight | None = None
     selections: EffectiveSelectionBatch | None = None
+    detail: str | None = None
