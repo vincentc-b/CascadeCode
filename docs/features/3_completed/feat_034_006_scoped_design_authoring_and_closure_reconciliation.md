@@ -2,7 +2,7 @@
 id: feat_034_006
 title: Scoped design authoring and closure reconciliation
 tier: feature
-status: active
+status: completed
 parent: epic_034
 children:
 - task_034_006_001
