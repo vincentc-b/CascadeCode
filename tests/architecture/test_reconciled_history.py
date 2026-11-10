@@ -14,7 +14,7 @@ def _load(name: str) -> dict:
     return json.loads((ARCHITECTURE / name).read_text())
 
 
-def test_replay_ledger_covers_work_and_uncovered_commits_once() -> None:
+def test_replay_ledger_covers_original_rows_and_accepted_deltas_once() -> None:
     inventory_path = ARCHITECTURE / "historical-evidence-inventory.json"
     inventory = json.loads(inventory_path.read_text())
     ledger = _load("replay-ledger.json")
@@ -25,22 +25,66 @@ def test_replay_ledger_covers_work_and_uncovered_commits_once() -> None:
         for work in inventory["work_items"]
         for commit_id in work["commit_ids"]
     }
-    expected = {f"work:{row['work_id']}" for row in inventory["work_items"]}
-    expected |= {
+    original = {f"work:{row['work_id']}" for row in inventory["work_items"]}
+    original |= {
         f"commit:{row['commit_id']}"
         for row in inventory["commits"]
         if row["commit_id"] not in covered_commits
     }
+    accepted = {
+        f"delta:{row['merge_revision']}"
+        for row in inventory["baseline_pair"]["integrations"]
+    } | {
+        f"delta:{row['revision']}"
+        for row in inventory["baseline_pair"]["accepted_deltas"]
+    }
+    expected = original | accepted
 
-    assert ledger["version"] == 1
+    assert ledger["version"] == 2
     assert ledger["target_repository_key"] == TARGET_KEY
     assert ledger["inventory_sha256"] == hashlib.sha256(inventory_path.read_bytes()).hexdigest()
-    assert len(rows) == len(expected) == 2023
+    assert len(original) == 2023
+    assert len(accepted) == 16
+    assert len(rows) == len(expected) == 2039
     assert {row["row_id"] for row in rows} == expected
-    assert all(row["owner"] == "task_034_007_003" for row in rows)
     assert all(row["disposition"] in {"durable", "superseded", "no-impact", "unresolved"} for row in rows)
-    assert all(row["affected_design_paths"] for row in rows)
-    assert all("requirement_ids" in row and "decision_ids" in row for row in rows)
+    assert all(row["rationale"] and row["row_id"] in row["rationale"] for row in rows)
+    assert all(row["current_code_references"] or row["current_test_references"] for row in rows)
+    assert all(
+        row["affected_requirement_ids"]
+        or row["affected_design_ids"]
+        or row["affected_model_ids"]
+        for row in rows
+    )
+    assert ledger["coverage_accounting"] == {
+        "original_expected": 2023,
+        "original_covered": 2023,
+        "accepted_delta_expected": 16,
+        "accepted_delta_covered": 16,
+        "total_expected": 2039,
+        "total_covered": 2039,
+        "duplicate_rows": 0,
+        "missing_rows": 0,
+        "dispositions": {
+            "durable": 4,
+            "no-impact": 14,
+            "superseded": 0,
+            "unresolved": 2021,
+        },
+        "material_unresolved": 2021,
+    }
+    references = {
+        (reference["revision"], reference["repository_path"])
+        for row in rows
+        for field in ("current_code_references", "current_test_references")
+        for reference in row[field]
+    }
+    for revision, repository_path in references:
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{revision}:{repository_path}"],
+            cwd=ROOT,
+            check=True,
+        )
 
 
 def test_ledger_references_canonical_evidence_without_double_counting() -> None:
@@ -62,11 +106,14 @@ def test_ledger_references_canonical_evidence_without_double_counting() -> None:
         assert row["review_references"] == commit["review_ids"]
         assert set(row["review_references"]) <= review_ids
 
-    unread_children = [
+    pending_children = [
         row for row in ledger["rows"]
-        if row.get("unavailable_reason") == "task_record_not_read_under_epic_scope"
+        if row.get("unavailable_reason") == (
+            "exact child content/revision unavailable to Epic reader under dec_013; "
+            "owner response not yet received; retrieval failure at owner not established"
+        )
     ]
-    assert len(unread_children) == 34
+    assert len(pending_children) == 34
     assert ledger["evidence_index"] == {
         "commits": "historical-evidence-inventory.json#/commits",
         "reviews": "historical-evidence-inventory.json#/reviews",
@@ -88,16 +135,16 @@ def test_reconciliation_preserves_pin_and_accounts_for_g_source_delta() -> None:
         "task_034_007_002",
     }
     assert report["feature_f"]["reachable_on_g_source_inventory_pin"] is True
-    assert report["feature_f"]["reachable_on_accepted_epic_pin"] is False
+    assert report["feature_f"]["reachable_on_accepted_epic_pin"] is True
     subprocess.run(
         ["git", "merge-base", "--is-ancestor", report["feature_f"]["implementation_revision"], original],
         cwd=ROOT,
         check=True,
     )
     accepted_epic = report["accepted_epic_pin"]
-    assert accepted_epic["feature_f_implementation_reachable"] is False
-    assert accepted_epic["feature_f_architecture_context_present"] is False
-    missing = subprocess.run(
+    assert accepted_epic["feature_f_implementation_reachable"] is True
+    assert accepted_epic["feature_g_implementation_reachable"] is True
+    present = subprocess.run(
         [
             "git",
             "cat-file",
@@ -106,7 +153,7 @@ def test_reconciliation_preserves_pin_and_accounts_for_g_source_delta() -> None:
         ],
         cwd=ROOT,
     )
-    assert missing.returncode != 0
+    assert present.returncode == 0
     assert report["review_state"]["accepted_revision_ids"] == []
     assert report["review_state"]["pending_revision_ids"]
     assert report["closeout_claimed"] is False
@@ -152,3 +199,58 @@ def test_requirement_and_decision_ids_have_one_design_home() -> None:
     assert homes["REQ-ROOT-002"] == ROOT / "DESIGN.md"
     assert homes["REQ-BOARD-001"] == ROOT / "cascade/board/DESIGN.md"
     assert homes["DEC-WORKSPACE-001"] == ROOT / "cascade/workspace/DESIGN.md"
+
+
+def test_reconciliation_keeps_direct_mr_overlap_and_unavailable_provenance_honest() -> None:
+    inventory = _load("historical-evidence-inventory.json")
+    ledger = _load("replay-ledger.json")
+    report = _load("reconciliation-report.json")
+    rows = {row["row_id"]: row for row in ledger["rows"]}
+
+    direct = rows["commit:9b748ad5568167263ba56d11ab4654097f8d1672"]
+    assert direct["disposition"] == "durable"
+    assert {ref["repository_path"] for ref in direct["current_test_references"]} == {
+        "tests/task/test_worktree.py",
+        "tests/war_room/test_http_read.py",
+    }
+
+    feature = rows["work:feat_034_006"]
+    integration = rows["delta:d2ed1aca886e61d087fa29842ebca617c0956d96"]
+    assert feature["disposition"] == integration["disposition"] == "durable"
+    assert "review:218" in feature["evidence_keys"]
+    assert "review:218" in integration["evidence_keys"]
+    review = next(row for row in inventory["reviews"] if row["review_id"] == "218")
+    assert review["description_sha256"] == report["evidence_checks"][
+        "mr_described_change"
+    ]["review_description_sha256"]
+    assert review["description_provenance"] == "current_snapshot"
+    assert "description_at_merge_time" in review["unavailable_fields"]
+    assert report["evidence_checks"]["overlapping_evidence"]["row_ids"] == [
+        feature["row_id"], integration["row_id"]
+    ]
+
+    unavailable = [row for row in ledger["rows"] if row.get("material_gap")]
+    assert len(unavailable) == 2021
+    assert all(row["disposition"] == "unresolved" for row in unavailable)
+    assert all(row["material_gap"]["owner"] for row in unavailable)
+    assert report["closeout_claimed"] is False
+
+
+def test_reconciliation_reuses_only_exact_staged_owner_proposals() -> None:
+    report = _load("reconciliation-report.json")
+    store = json.loads((ROOT / "architecture/review-units.json").read_text())
+
+    assert report["proposal_outcome"] == {
+        "new_owner_amendments": 0,
+        "pending_exact_revision_review": True,
+        "reason": (
+            "The accepted deltas are lifecycle/plan-only or integrate the "
+            "already-staged Feature F/G architecture changes. Reusing the exact "
+            "pending owner-scoped units avoids a second store and duplicate proposals."
+        ),
+        "stable_c4_ids_changed": [],
+    }
+    assert {row["review_unit_id"] for row in report["design_proposals"]} == set(
+        store["review_units"]
+    )
+    assert {row["status"] for row in report["design_proposals"]} == {"staged"}

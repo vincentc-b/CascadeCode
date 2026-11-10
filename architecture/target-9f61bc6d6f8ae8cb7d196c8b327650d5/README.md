@@ -63,16 +63,22 @@ unverified cache directory as a model authority.
 ## Historical evidence
 
 `historical-evidence-inventory.json` is the immutable Task 001 pin.
-`replay-ledger.json` completes its row contract while referencing canonical work,
-commit, and review evidence keys so shared evidence is not counted twice.
-`reconciliation-report.json` preserves the original pin, records the accepted
-delta through the Task 002 Feature baseline, and distinguishes accepted commits
-from the still-pending exact-revision architecture proposal. Task 003 does not
-claim final reconstruction closeout while that owner review or any material gap
-is pending.
+`replay-ledger.json` preserves all 2,023 G row IDs and accounts once for each of
+the 16 accepted integration/delta revisions. Every row carries row-specific
+rationale, exact current-code/test references, affected architecture IDs, and
+explicit unresolved materiality. Canonical work, commit, and review keys remain
+many-to-many references rather than duplicated evidence.
+`reconciliation-report.json` preserves the original G pin and the separately
+accepted Epic pair, records the balanced coverage, and reuses the existing
+owner-scoped staged design/C4 review units. The accepted deltas require no new
+semantic proposal. Task 003 does not claim final reconstruction closeout while
+exact-revision owner review or any material gap is pending.
 
-`final-validation-report.json` rechecks the accepted delta through Task 003,
+`final-validation-report.json` is the Task 003 `AcceptanceSummary`. It refreshes
+the colocated accepted Epic pair, accounts for every later accepted delta,
+rechecks F/G reachability, binds each input artifact by revision and digest, and
 records the real pinned Structurizr validation/export/render outputs under
-`final-validation/`, and gives the final accepted, pending, and unresolved
-disposition. A successful render is evidence about the authored model bytes; it
-does not clear pending owner review, missing receipts, or unavailable provenance.
+`final-validation/`. It also preserves exact staged review-unit IDs, failed
+receipt-validator outcomes, and historical missing receipts. A successful
+render is evidence about the authored model bytes; it does not clear pending
+owner review, missing receipts, or material provenance gaps.

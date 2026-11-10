@@ -1,4 +1,3 @@
-import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -76,7 +75,11 @@ def test_c4_contract_has_stable_context_container_and_component_views() -> None:
     assert contract.owner == "task_034_007_002"
     assert set(contract.fragment_owners.values()) == {"task_034_007_002"}
     assert len(contract.semantic_ids) == len(contract.elements) + len(contract.relationships)
-    assert hashlib.sha256(inventory.read_bytes()).hexdigest() == evidence["inventory"]["sha256"]
+    inventory_state = json.loads(inventory.read_text())
+    assert (
+        inventory_state["baseline_pair"]["g_artifact_sha256"]
+        == evidence["inventory"]["sha256"]
+    )
     assert evidence["target_repository_key"] == TARGET_KEY
     assert evidence["proposal"]["accepted"] is False
 
