@@ -234,6 +234,10 @@ Manager scope and sequencing are prepared. No installation approval or human sco
 
 - 2026-11-10 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-10 · Epic Manager · **Feature breakdown**
+  Chose Deliver feat_046_001 through feat_046_005 as a serial chain: production publication/HTTP contracts, paired interaction and semantic approval, branch browsing, verified documentation context, then integrated acceptance and guidance..
+  Rationale: The same server, semantic viewer and immutable provenance contracts span the slices. Serial dependencies reduce conflicting implementations and allow each feature to extend one production-path acceptance scaffold. Keep all requested functionality; exclude unrelated refactoring and new parallel architecture/comment systems.
+  Honors: All epic_046 detailed requirements and completion criteria; reuse Epic 034 infrastructure; frugal engineering and product scope constraints..
 ## Amendment log
 
 _(none)_
