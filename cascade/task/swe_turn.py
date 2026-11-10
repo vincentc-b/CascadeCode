@@ -67,6 +67,12 @@ def augment_swe_prompt_with_work_context(task_id: str, prompt: str, *, root: Pat
         sections.append(
             f"--- Pinned Feature plan: {parent.meta.id} ({parent.meta.title}) ---\n{parent.body}"
         )
+    from cascade.board.context import get_project_context
+    from cascade.workspace.architecture_context import planning_context_prompt
+    from cascade.workspace.types import ProjectContext
+
+    project = get_project_context() or ProjectContext.colocated(root)
+    sections.append(planning_context_prompt(project, task_id))
     sections.append(f"--- Lifecycle input ---\n{prompt}")
     return "\n\n".join(sections)
 
