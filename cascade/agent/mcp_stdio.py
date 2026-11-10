@@ -22,7 +22,10 @@ def main() -> None:
         raise SystemExit("CASCADE_MCP_CONFIG is required")
     config = json.loads(Path(config_path).read_text(encoding="utf-8"))
     from cascade.agent.mcp_project_context import restore_project_context
-    restore_project_context(config.get("project_context"))
+    restore_project_context(
+        config.get("project_context"),
+        architecture_destination=config.get("architecture_destination"),
+    )
     tier: PlanningTier = config["tier"]
     scope_id = config.get("scope_id")
     repo_root = Path(config["repo_root"])

@@ -168,6 +168,8 @@ def test_load_epic_tools_registers_all_tools() -> None:
         "write_doc",
         "reply_comment",
         "resolve_amendment",
+        "read_historical_evidence",
+        "read_architecture_amendments",
     } <= names
 
 

@@ -41,12 +41,14 @@ def test_merged_review_snapshot_exposes_immutable_merge_commit(tmp_path: Path) -
         source_branch="epic/epic_001", target_branch="main", draft=False,
     )
     sha = "a" * 40
+    source_sha = "b" * 40
 
     def runner(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
         assert root == tmp_path
         if args[:3] == ["gh", "pr", "view"]:
             return subprocess.CompletedProcess(args, 0, json.dumps({
                 "state": "MERGED", "baseRefName": "main", "mergeCommit": {"oid": sha},
+                "headRefOid": source_sha, "body": "Review description",
                 "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN",
                 "comments": [], "reviews": [],
             }), "")
@@ -56,6 +58,8 @@ def test_merged_review_snapshot_exposes_immutable_merge_commit(tmp_path: Path) -
     assert snapshot["state"] == "merged"
     assert snapshot["merge_sha"] == sha
     assert snapshot["mergeability"] == "mergeable"
+    assert snapshot["description"] == "Review description"
+    assert snapshot["source_revision"] == source_sha
 
 
 def test_review_snapshot_exposes_conflicting_mergeability(tmp_path: Path) -> None:

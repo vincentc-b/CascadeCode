@@ -114,6 +114,8 @@ def test_swe_prompt_includes_playbook_text_and_paths(tmp_path: Path) -> None:
     assert "native shell do not satisfy" in prompt
     assert "--- Task plan: task_063" in prompt
     assert "--- Pinned Feature plan: feat_001" in prompt
+    assert "Revision-pinned architecture context" in prompt
+    assert '"plan_revision"' in prompt
 
 
 def test_failed_fresh_check_does_not_mark_task_running(

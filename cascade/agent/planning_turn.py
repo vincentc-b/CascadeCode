@@ -69,6 +69,7 @@ async def run_epic_planning_turn(
     workspace = doc_filesystem_root(epic_id, trunk=repo).resolve()
     paths = collect_epic_readable_paths(epic_id, root=repo)
     turn_prompt = _with_dependency_projection(prompt, owner_path=paths[0], root=repo)
+    turn_prompt = _with_architecture_context(turn_prompt, epic_id, root=repo)
     scratch = materialize_scratch(repo, paths, tier="epic")
     return await _run_sandbox_turn(
         role=role,
@@ -112,6 +113,7 @@ async def run_feature_planning_turn(
     workspace = feature_checkout_root(feature_id, trunk=repo).resolve()
     paths = collect_feature_readable_paths(feature_id, root=repo)
     turn_prompt = _with_dependency_projection(prompt, owner_path=paths[0], root=repo)
+    turn_prompt = _with_architecture_context(turn_prompt, feature_id, root=repo)
     scratch = materialize_scratch(repo, paths, tier="feature")
     return await _run_sandbox_turn(
         role=role,
@@ -234,3 +236,12 @@ def _with_dependency_projection(prompt: str, *, owner_path: Path, root: Path) ->
     return "\n\n".join(
         (prompt, _DEPENDENCY_PROJECTION_HEADING, payload, _DEPENDENCY_PROJECTION_BOUNDARY)
     )
+
+
+def _with_architecture_context(prompt: str, work_id: str, *, root: Path) -> str:
+    from cascade.board.context import get_project_context
+    from cascade.workspace.architecture_context import planning_context_prompt
+    from cascade.workspace.types import ProjectContext
+
+    project = get_project_context() or ProjectContext.colocated(root)
+    return f"{prompt}\n\n{planning_context_prompt(project, work_id)}"
