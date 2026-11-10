@@ -60,6 +60,16 @@ def _merge_result_from_sync(
 
 
 def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
+    """Serialize the hold recheck with Task integration and completion."""
+
+    trunk = resolve_root(root)
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=trunk):
+        return _merge_task_branch(task_id, root=trunk)
+
+
+def _merge_task_branch(task_id: str, *, root: Path) -> MergeResult:
     """Merge ``task/{task_id}`` into ``feat/{feature_id}`` and complete the task."""
 
     trunk = resolve_root(root)
@@ -199,6 +209,16 @@ def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
 
 
 def merge_feature_branch(feature_id: str, *, root: Path | None = None) -> MergeResult:
+    """Serialize the hold recheck with Feature integration."""
+
+    trunk = resolve_root(root)
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=trunk):
+        return _merge_feature_branch(feature_id, root=trunk)
+
+
+def _merge_feature_branch(feature_id: str, *, root: Path) -> MergeResult:
     """Merge ``feat/{feature_id}`` into ``epic/{epic_id}`` when branches exist."""
 
     trunk = resolve_root(root)
