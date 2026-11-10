@@ -170,6 +170,11 @@ def ingest_queue(
 def invoke_tool(feature_id: str, name: str, args: dict, *, root: Path) -> object:
     """Run a registered feature tool and record a tool message on success."""
 
+    if name == "publish_architecture_review":
+        from cascade.feature.guard import FeatureToolDenied
+        raise FeatureToolDenied(
+            "architecture publication requires the authenticated planning-role dispatcher"
+        )
     if name in {"message_team", "supervise_child", "report_audit_investigation"} and set(args) & {"task_id", "feature_id", "epic_id", "root"}:
         raise PermissionError("team controls do not accept caller scope overrides")
     tools = feature_tools()

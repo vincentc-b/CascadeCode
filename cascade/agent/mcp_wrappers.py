@@ -42,12 +42,17 @@ def _planning_tool_names(sandbox: PlanningSandbox) -> list[str]:
             names.add("sign_off_plan")
         else:
             names -= {"read_dependency_manifest", "write_dependency_manifest", "run_dependency_check"}
+        if sandbox.role != "epic_architect":
+            names.discard("publish_architecture_review")
         return sorted(names)
     if sandbox.tier == "feature":
         from cascade.feature.wiring import load_feature_tools
 
         load_feature_tools()
-        return sorted(_feature_tool_names())
+        names = _feature_tool_names()
+        if sandbox.role != "feature_architect":
+            names.discard("publish_architecture_review")
+        return sorted(names)
     return sorted(_BOSS_TOOL_NAMES)
 
 
@@ -209,6 +214,22 @@ def dispatch_planning_tool(
         result = report_audit_investigation(
             **tool_args, root=repo, **{f"{tier}_id": scope_id},
         )
+    elif name == "publish_architecture_review":
+        expected_role = {
+            "epic": "epic_architect", "feature": "feature_architect"
+        }.get(tier)
+        if role != expected_role or not scope_id:
+            raise PermissionError("owning architecture planning role required")
+        allowed = {"proposal", "expected_plan_revision", "expected_generation"}
+        if set(tool_args) != allowed:
+            raise ValueError(
+                "architecture publication requires exactly its declared arguments; "
+                "actor, owner, scope, and repository overrides are denied"
+            )
+        from cascade.workspace.architecture_publication import publish_architecture_review
+        result = publish_architecture_review(
+            **tool_args, actor=role, work_id=scope_id, root=repo,
+        )
     elif name == "run_dependency_check":
         if tier != "epic" or role not in ("epic_manager", "epic_architect") or not scope_id:
             raise PermissionError("owning Epic planning role required")
@@ -325,6 +346,14 @@ def mcp_tool_catalog(tier: PlanningToolTier, tool_names: list[str]) -> list[dict
 
 
 def _planning_tool_description(tier: PlanningToolTier, name: str) -> str:
+    if name == "publish_architecture_review":
+        return (
+            "Publish the exact committed architecture proposal for this plan. "
+            "The authenticated architect, owning work, and repository context are "
+            "derived by Cascade. Diagram changes return a durable pending operation "
+            "while bounded rendering completes; repeat the identical call to discover "
+            "the ready, routed, superseded, or failed result."
+        )
     if name == "report_audit_investigation":
         return (
             "Record findings and evidence for an audit case assigned to your team. "
@@ -384,6 +413,20 @@ def _feature_tool_names() -> set[str]:
 _BOSS_TOOL_NAMES = frozenset({"dispatch_feature", "dispatch_task", "get_boss_view"})
 
 _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "publish_architecture_review": {
+        "type": "object",
+        "properties": {
+            "proposal": {"type": "object"},
+            "expected_plan_revision": {
+                "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+            },
+            "expected_generation": {
+                "anyOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]
+            },
+        },
+        "required": ["proposal", "expected_plan_revision", "expected_generation"],
+        "additionalProperties": False,
+    },
     "read_architecture_amendments": {
         "type": "object", "properties": {}, "additionalProperties": False,
     },
@@ -566,6 +609,7 @@ _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 _FEATURE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "publish_architecture_review": _EPIC_TOOL_SCHEMAS["publish_architecture_review"],
     "refresh_dependency_status": {
         "type": "object",
         "properties": {},

@@ -65,6 +65,10 @@ from cascade.workspace.architecture_authoring import (
     read_owner_amendments,
     stage_owned_architecture_change,
 )
+from cascade.workspace.architecture_publication import (
+    discover_architecture_publication,
+    publish_architecture_review,
+)
 from cascade.workspace.c4_source import (
     C4Element,
     C4Relationship,
@@ -181,6 +185,8 @@ __all__ = [
     "ArchitectureAuthoringIntent",
     "ArchitectureAuthoringResult",
     "ArchitectureOwnerAmendment",
+    "discover_architecture_publication",
+    "publish_architecture_review",
     "AcceptedArchitecturePointer",
     "AcceptedLineage",
     "ArchitectureBaseline",

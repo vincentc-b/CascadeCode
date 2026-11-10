@@ -29,6 +29,7 @@ def load_epic_tools() -> None:
     import cascade.epic.review_recovery as review_recovery_mod
     import cascade.epic.stubs as stubs_mod
     import cascade.planning_dependency_tools as dependency_tools_mod
+    from cascade.planning_architecture_tools import publish_epic_architecture_review
 
     from cascade.epic.registry import epic_tools, register_epic_tool
     from cascade.team_supervision import message_team, supervise_child
@@ -40,6 +41,7 @@ def load_epic_tools() -> None:
     register_epic_tool("supervise_child", supervise_child)
     register_epic_tool("read_historical_evidence", read_epic_historical_evidence)
     register_epic_tool("read_architecture_amendments", read_epic_architecture_amendments)
+    register_epic_tool("publish_architecture_review", publish_epic_architecture_review)
     from cascade.watchdog.audit_investigation import report_audit_investigation
     register_epic_tool("report_audit_investigation", report_audit_investigation)
 
@@ -69,6 +71,7 @@ def load_epic_tools() -> None:
         "publish_review_resolution",
         "read_historical_evidence",
         "read_architecture_amendments",
+        "publish_architecture_review",
     )
     if all(name in epic_tools() for name in expected):
         return

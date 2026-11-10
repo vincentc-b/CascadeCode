@@ -486,6 +486,16 @@ def _append_planning_tool_directive(
             "question threads have been handled. If the other role edits the plan "
             "after your sign-off, review the new revision and sign off again."
         )
+    if role in {"epic_architect", "feature_architect"}:
+        parts.append(
+            "When the plan's architecture decision is complete, call "
+            "publish_architecture_review with its exact committed plan, design, and "
+            "model references and accepted-lineage generation. Use "
+            "architecture_impact=no_diagram_change with a concrete rationale only when "
+            "that is the reviewed decision; omitting publication does not mean no change. "
+            "A pending result is durable: repeat the identical call on a later turn to "
+            "discover completion, and never substitute newer unreviewed references."
+        )
     if (
         role in _FEATURE_PLANNING_ROLES
         and latest is not None
