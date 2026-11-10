@@ -65,6 +65,10 @@ from cascade.workspace.architecture_authoring import (
     read_owner_amendments,
     stage_owned_architecture_change,
 )
+from cascade.workspace.architecture_publication import (
+    discover_architecture_publication,
+    publish_architecture_review,
+)
 from cascade.workspace.c4_source import (
     C4Element,
     C4Relationship,
@@ -94,6 +98,13 @@ from cascade.workspace.c4_render import (
     C4RenderOperation,
     C4RenderSettings,
 )
+from cascade.workspace.c4_scheduler import (
+    C4RenderAdmissionError,
+    C4RenderScheduler,
+    C4ScheduledRender,
+    C4ScheduledRenderOperation,
+    render_identity,
+)
 from cascade.workspace.c4_diff import (
     C4ContainmentChange,
     C4IdentityChange,
@@ -108,6 +119,7 @@ from cascade.workspace.c4_review import (
     C4ReviewTarget,
     C4ReviewView,
     compose_c4_review_payload,
+    resolve_c4_review_payload,
 )
 from cascade.workspace.c4_threads import (
     SemanticThread,
@@ -174,6 +186,8 @@ __all__ = [
     "ArchitectureAuthoringIntent",
     "ArchitectureAuthoringResult",
     "ArchitectureOwnerAmendment",
+    "discover_architecture_publication",
+    "publish_architecture_review",
     "AcceptedArchitecturePointer",
     "AcceptedLineage",
     "ArchitectureBaseline",
@@ -204,6 +218,11 @@ __all__ = [
     "C4RenderFailure",
     "C4RenderOperation",
     "C4RenderSettings",
+    "C4RenderAdmissionError",
+    "C4RenderScheduler",
+    "C4ScheduledRender",
+    "C4ScheduledRenderOperation",
+    "render_identity",
     "C4ContainmentChange",
     "C4IdentityChange",
     "C4SemanticDiff",
@@ -263,6 +282,7 @@ __all__ = [
     "verify_and_sanitize_hit_targets",
     "compute_c4_semantic_diff",
     "compose_c4_review_payload",
+    "resolve_c4_review_payload",
     "build_semantic_thread_anchor",
     "create_semantic_thread",
     "read_semantic_threads",

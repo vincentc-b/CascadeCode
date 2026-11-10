@@ -54,6 +54,7 @@ from cascade.workspace import (
     resolve_design_ownership,
     read_architecture_state,
     rebase_architecture_proposal,
+    render_identity,
     reserve_promotion,
     review_architecture_proposal,
     stage_architecture_proposal,
@@ -1465,6 +1466,7 @@ def test_diagram_change_runs_pinned_closure_and_render_validation(tmp_path: Path
         renderer_image_digest="sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
         renderer_settings=tuple(sorted(settings.cache_payload().items())),
         semantic_artifact_digest=semantic_digest,
+        render_identity=render_identity(closure.digest, settings),
     )
     plan = PinnedDocumentRef(
         project.target.repository_key,
@@ -1487,6 +1489,10 @@ def test_diagram_change_runs_pinned_closure_and_render_validation(tmp_path: Path
     )
 
     assert staged.semantic_diff and staged.semantic_diff.state == "empty_baseline"
+    assert staged.unit and staged.unit.proposed_model
+    assert staged.unit.proposed_model.render_identity == render_identity(
+        closure.digest, settings
+    )
     inspected = read_architecture_state(
         project,
         owner="feature-team",

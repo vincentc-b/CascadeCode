@@ -233,7 +233,11 @@ def test_background_cancellation_and_runtime_failure_are_structured(
 
 def _closure(tmp_path: Path) -> C4SourceClosure:
     root = tmp_path / "input"
-    shutil.copytree(_VERSIONED_WORKSPACE, root)
+    root.mkdir()
+    # The real architecture directory also retains nested renderer evidence.
+    # A source closure contains only the contract's declared, reachable inputs.
+    for name in ("workspace.contract.json", "workspace.dsl", "model.dsl", "views.dsl"):
+        shutil.copy2(_VERSIONED_WORKSPACE / name, root / name)
     contract = validate_c4_workspace(root)
     revision = subprocess.run(
         ["git", "rev-parse", "HEAD"],

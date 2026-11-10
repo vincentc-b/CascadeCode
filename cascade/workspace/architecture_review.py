@@ -31,6 +31,7 @@ from cascade.workspace.c4_render import (
     C4RenderArtifact,
     C4RenderSettings,
 )
+from cascade.workspace.c4_scheduler import render_identity
 from cascade.workspace.c4_source import C4SourceError
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.types import ProjectContext, RepositoryContext
@@ -115,6 +116,7 @@ class ArchitectureModelBinding:
     renderer_image_digest: str
     renderer_settings: tuple[tuple[str, str | int | float | bool], ...]
     semantic_artifact_digest: str
+    render_identity: str | None = None
 
     def __post_init__(self) -> None:
         if not self.sources:
@@ -122,6 +124,8 @@ class ArchitectureModelBinding:
         _digest(self.source_closure_digest, "model source closure")
         _digest(self.renderer_image_digest, "renderer image")
         _digest(self.semantic_artifact_digest, "semantic model artifact")
+        if self.render_identity is not None:
+            _digest(self.render_identity, "render identity")
         keys = [key for key, _ in self.renderer_settings]
         if any(not isinstance(key, str) or not key.strip() for key in keys):
             raise WorkspaceError("renderer setting names must be non-blank")
@@ -147,18 +151,26 @@ class ArchitectureModelBinding:
             raise WorkspaceError("model closure contains duplicate artifact paths")
 
     def to_dict(self) -> dict[str, object]:
-        return {"contract": self.contract.to_dict(),
+        value = {"contract": self.contract.to_dict(),
                 "sources": [item.to_dict() for item in self.sources],
                 "source_closure_digest": self.source_closure_digest,
                 "renderer_image_digest": self.renderer_image_digest,
                 "renderer_settings": dict(self.renderer_settings),
                 "semantic_artifact_digest": self.semantic_artifact_digest}
+        if self.render_identity is not None:
+            value["render_identity"] = self.render_identity
+        return value
 
     @classmethod
     def from_dict(cls, value: object) -> "ArchitectureModelBinding":
-        row = _mapping(value, {"contract", "sources", "source_closure_digest",
-                               "renderer_image_digest", "renderer_settings",
-                               "semantic_artifact_digest"})
+        fields = {"contract", "sources", "source_closure_digest",
+                  "renderer_image_digest", "renderer_settings",
+                  "semantic_artifact_digest"}
+        if not isinstance(value, dict) or frozenset(value) not in {
+            frozenset(fields), frozenset({*fields, "render_identity"})
+        }:
+            raise WorkspaceError("invalid architecture review persistence payload")
+        row = value
         if not isinstance(row["sources"], list) or not isinstance(row["renderer_settings"], dict):
             raise WorkspaceError("invalid architecture model binding")
         if not all(isinstance(row[field], str) for field in
@@ -167,7 +179,8 @@ class ArchitectureModelBinding:
         return cls(PinnedArchitectureArtifact.from_dict(row["contract"]),
                    tuple(PinnedArchitectureArtifact.from_dict(item) for item in row["sources"]),
                    row["source_closure_digest"], row["renderer_image_digest"],
-                   tuple(sorted(row["renderer_settings"].items())), row["semantic_artifact_digest"])
+                   tuple(sorted(row["renderer_settings"].items())), row["semantic_artifact_digest"],
+                   row.get("render_identity"))
 
 
 @dataclass(frozen=True)
@@ -770,15 +783,22 @@ class ArchitectureReviewStore:
         _nonblank(owner, "architecture owner")
         _nonblank(work_id, "owner work ID")
         _nonblank(lineage, "integration lineage")
-        for value in reversed(tuple(self._read()["review_units"].values())):
+        matches: list[ArchitectureReviewUnit] = []
+        for value in self._read()["review_units"].values():
             unit = ArchitectureReviewUnit.from_dict(value)
             if unit.owner_work_id == work_id and unit.integration_lineage == lineage:
                 if unit.authorized_owner != owner:
                     raise ArchitectureProposalError(
                         "owner_denied", "architecture proposal belongs to another owner"
                     )
-                return unit
-        return None
+                matches.append(unit)
+        if not matches:
+            return None
+        # Store serialization sorts object keys, so dict order is not review
+        # chronology.  The accepted-lineage CAS is the durable ordering: prefer
+        # a proposal based on its current pointer over a now-stale predecessor.
+        current = [unit for unit in matches if not self.baseline_status(unit).stale]
+        return (current or matches)[-1]
 
     def record_review(
         self,
@@ -1941,6 +1961,12 @@ def _validate_model_binding(
         raise ArchitectureProposalError(
             "model_invalid", "renderer settings do not match the pinned model binding"
         )
+    if binding.render_identity is not None:
+        expected_identity = render_identity(binding.source_closure_digest, chosen_settings)
+        if binding.render_identity != expected_identity:
+            raise ArchitectureProposalError(
+                "model_invalid", "render identity does not match the pinned model binding"
+            )
     chosen_renderer = renderer or C4ArtifactRenderer(
         project.target.root / ".cascade" / "c4-render-cache"
     )
