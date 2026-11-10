@@ -62,11 +62,14 @@ def test_ledger_references_canonical_evidence_without_double_counting() -> None:
         assert row["review_references"] == commit["review_ids"]
         assert set(row["review_references"]) <= review_ids
 
-    unread_children = [
+    pending_children = [
         row for row in ledger["rows"]
-        if row.get("unavailable_reason") == "task_record_not_read_under_epic_scope"
+        if row.get("unavailable_reason") == (
+            "exact child content/revision unavailable to Epic reader under dec_013; "
+            "owner response not yet received; retrieval failure at owner not established"
+        )
     ]
-    assert len(unread_children) == 34
+    assert len(pending_children) == 34
     assert ledger["evidence_index"] == {
         "commits": "historical-evidence-inventory.json#/commits",
         "reviews": "historical-evidence-inventory.json#/reviews",

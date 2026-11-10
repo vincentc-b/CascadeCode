@@ -168,7 +168,17 @@ def test_final_scenarios_keep_unknown_provenance_unknown() -> None:
     assert rows[direct]["kind"] == "uncovered_commit"
     assert rows[direct]["disposition"] == "unresolved"
     assert rows[ambiguous]["provenance_status"] == "ambiguous"
-    assert all(review["description_status"] == "unavailable" for review in inventory["reviews"])
+    captured = {
+        review["review_id"]: review
+        for review in inventory["reviews"]
+        if review["description_status"] != "unavailable"
+    }
+    assert set(captured) == {"218", "219"}
+    assert all(
+        review["description_provenance"] == "current_snapshot"
+        and "description_at_merge_time" in review["unavailable_fields"]
+        for review in captured.values()
+    )
     assert report["focused_scenarios"]["mr_described_non_cascade_change"][
         "status"
     ] == "unavailable"

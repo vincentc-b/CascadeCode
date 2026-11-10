@@ -1,7 +1,7 @@
 {
   "version": 1,
   "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
-  "inventory_sha256": "d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6",
+  "inventory_sha256": "dea781d17a2e6cec23e18b06ca16596502adf46d4ab81c5ae58c861f33fe397c",
   "original_target_baseline": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084",
   "owner_work_id": "task_034_007_003",
   "evidence_index": {
@@ -49074,7 +49074,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_001",
         "feature_revision": "2843c8f87ff6ab8f215ae03a3349c301671781e7",
@@ -49105,7 +49105,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_001",
         "feature_revision": "2843c8f87ff6ab8f215ae03a3349c301671781e7",
@@ -49136,7 +49136,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_001",
         "feature_revision": "2843c8f87ff6ab8f215ae03a3349c301671781e7",
@@ -49167,7 +49167,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_001",
         "feature_revision": "2843c8f87ff6ab8f215ae03a3349c301671781e7",
@@ -49198,7 +49198,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_002",
         "feature_revision": "3ceda65501172a864b5db88fd3470208eba0ad11",
@@ -49229,7 +49229,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_002",
         "feature_revision": "3ceda65501172a864b5db88fd3470208eba0ad11",
@@ -49260,7 +49260,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_002",
         "feature_revision": "3ceda65501172a864b5db88fd3470208eba0ad11",
@@ -49291,7 +49291,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_002",
         "feature_revision": "3ceda65501172a864b5db88fd3470208eba0ad11",
@@ -49322,7 +49322,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_002",
         "feature_revision": "3ceda65501172a864b5db88fd3470208eba0ad11",
@@ -49353,7 +49353,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_002",
         "feature_revision": "3ceda65501172a864b5db88fd3470208eba0ad11",
@@ -49384,7 +49384,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_002",
         "feature_revision": "3ceda65501172a864b5db88fd3470208eba0ad11",
@@ -49415,7 +49415,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_003",
         "feature_revision": "78d2feaaeebb94c4c672da5a1d5efcb3f92cae68",
@@ -49446,7 +49446,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_003",
         "feature_revision": "78d2feaaeebb94c4c672da5a1d5efcb3f92cae68",
@@ -49477,7 +49477,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_003",
         "feature_revision": "78d2feaaeebb94c4c672da5a1d5efcb3f92cae68",
@@ -49508,7 +49508,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_003",
         "feature_revision": "78d2feaaeebb94c4c672da5a1d5efcb3f92cae68",
@@ -49539,7 +49539,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_003",
         "feature_revision": "78d2feaaeebb94c4c672da5a1d5efcb3f92cae68",
@@ -49570,7 +49570,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_003",
         "feature_revision": "78d2feaaeebb94c4c672da5a1d5efcb3f92cae68",
@@ -49601,7 +49601,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_003",
         "feature_revision": "78d2feaaeebb94c4c672da5a1d5efcb3f92cae68",
@@ -49631,7 +49631,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_004",
         "feature_revision": "1f6a3c2c8626bc86e8f2daf676c7c4a8bc12d369",
@@ -49661,7 +49661,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_004",
         "feature_revision": "1f6a3c2c8626bc86e8f2daf676c7c4a8bc12d369",
@@ -49691,7 +49691,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_004",
         "feature_revision": "1f6a3c2c8626bc86e8f2daf676c7c4a8bc12d369",
@@ -49721,7 +49721,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_004",
         "feature_revision": "1f6a3c2c8626bc86e8f2daf676c7c4a8bc12d369",
@@ -49751,7 +49751,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_004",
         "feature_revision": "1f6a3c2c8626bc86e8f2daf676c7c4a8bc12d369",
@@ -49781,7 +49781,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_004",
         "feature_revision": "1f6a3c2c8626bc86e8f2daf676c7c4a8bc12d369",
@@ -49814,7 +49814,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_005",
         "feature_revision": "ede9292c67c67e4558b23ec3fa5fd99d3c4ecbc6",
@@ -49847,7 +49847,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_005",
         "feature_revision": "ede9292c67c67e4558b23ec3fa5fd99d3c4ecbc6",
@@ -49880,7 +49880,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_005",
         "feature_revision": "ede9292c67c67e4558b23ec3fa5fd99d3c4ecbc6",
@@ -49913,7 +49913,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_005",
         "feature_revision": "ede9292c67c67e4558b23ec3fa5fd99d3c4ecbc6",
@@ -49946,7 +49946,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_005",
         "feature_revision": "ede9292c67c67e4558b23ec3fa5fd99d3c4ecbc6",
@@ -49979,7 +49979,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_005",
         "feature_revision": "ede9292c67c67e4558b23ec3fa5fd99d3c4ecbc6",
@@ -50010,7 +50010,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_006",
         "feature_revision": "7d078a396a6b79f098da6b9e9e8e3db6b2b3d4b7",
@@ -50041,7 +50041,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_006",
         "feature_revision": "7d078a396a6b79f098da6b9e9e8e3db6b2b3d4b7",
@@ -50072,7 +50072,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_006",
         "feature_revision": "7d078a396a6b79f098da6b9e9e8e3db6b2b3d4b7",
@@ -50103,7 +50103,7 @@
       "owner": "task_034_007_003",
       "disposition": "unresolved",
       "current_code_check": "bounded_parent_and_interface_reconciliation",
-      "unavailable_reason": "task_record_not_read_under_epic_scope",
+      "unavailable_reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established",
       "completion_evidence": {
         "feature_id": "feat_034_006",
         "feature_revision": "7d078a396a6b79f098da6b9e9e8e3db6b2b3d4b7",
