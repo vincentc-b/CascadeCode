@@ -116,6 +116,14 @@ from cascade.workspace.c4_threads import (
     read_semantic_threads,
 )
 from cascade.workspace.blocking_scope import BlockingScope, affected_blocking_threads
+from cascade.workspace.reconciliation import (
+    ReconciledDesign,
+    ReconciliationReceipt,
+    ReconciliationReceiptStore,
+    record_reconciliation_receipt,
+    resolve_closeout_revision,
+    validate_reconciliation_closeout,
+)
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -127,6 +135,9 @@ __all__ = [
     "ReviewBaselineStatus",
     "ReviewGateBoundary",
     "ReviewGateResult",
+    "ReconciledDesign",
+    "ReconciliationReceipt",
+    "ReconciliationReceiptStore",
     "ArchitectureArtifactRef",
     "ArchitectureAuthoringIntent",
     "ArchitectureAuthoringResult",
@@ -200,6 +211,9 @@ __all__ = [
     "replay_architecture_artifact",
     "stage_architecture_proposal",
     "stage_owned_architecture_change",
+    "record_reconciliation_receipt",
+    "resolve_closeout_revision",
+    "validate_reconciliation_closeout",
     "enable_review_gate",
     "validate_review_gate",
     "resolve_product_trunk",

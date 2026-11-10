@@ -1788,6 +1788,18 @@ def _refresh_review_unit(
         _validate_store_inputs(store, unit, lineage_revision=lineage_revision)
     except ArchitectureProposalError as exc:
         return store.mark_stale(unit.review_unit_id, exc.code)
+    current = store.resolve_current(
+        unit.integration_lineage, lineage_revision=lineage_revision
+    )
+    if (
+        current is not None
+        and current.accepted_review_unit_id == unit.review_unit_id
+        and current.accepted_tuple_digest == unit.reviewed_tuple_digest
+    ):
+        # Acceptance advances the lineage from the unit's recorded baseline.
+        # The accepted unit is therefore fresh against the pointer it created,
+        # even though its input baseline IDs necessarily name the predecessor.
+        return unit
     if store.baseline_status(unit, lineage_revision=lineage_revision).stale:
         return store.mark_stale(unit.review_unit_id, "stale_baseline")
     return unit

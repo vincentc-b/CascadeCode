@@ -87,6 +87,13 @@ def merge_task_branch(task_id: str, *, root: Path | None = None) -> MergeResult:
         return MergeResult(ok=False, reason=blocked, branch=branch)
     if refusal := _architecture_gate_refusal(task_id, "merge", trunk):
         return MergeResult(ok=False, reason=refusal, branch=branch)
+    from cascade.lifecycle_review_gate import require_task_reconciliation_closeout
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    try:
+        require_task_reconciliation_closeout(task_id, root=trunk)
+    except ArchitectureProposalError as exc:
+        return MergeResult(ok=False, reason=str(exc), branch=branch)
 
     if not has_git(trunk):
         return MergeResult(ok=False, reason="not_a_git_repo", branch=branch)
