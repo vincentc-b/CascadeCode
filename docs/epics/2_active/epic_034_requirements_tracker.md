@@ -299,6 +299,11 @@ Manager review on 2026-11-10 accepts H's concrete evidence contracts at `18fb474
   Chose Retain feat_034_009 as the narrow dec_017 repair; normalize its duplicate scaffold into one concrete contract and explicitly record no diagram change within existing audit/review-health components..
   Rationale: Independent store, code and remote review inspection confirms the same admission action remains mutation_ready while its execution recovery is completed and PR #218 is merged. Exact action plus review-owner identity and terminal evidence are required; closed-feature status alone cannot suppress incidents. Existing scope needs no additional repair feature.
   Honors: dec_017; preserved Feature F lineage; existing identity regressions; epic criteria 17–18 require independent review and fresh human approval before corrective implementation. Feature H acceptance work remains separate..
+
+- `dec_019` · 2026-11-10 · Epic Manager · **Corrective feature Manager review**
+  Chose Accept H's concrete contract at 18fb4746 and I's focused repair contract at 19ff1361 within dec_015–dec_018 scope. Both are ready for human review; preserve their separate fresh-approval gates before implementation..
+  Rationale: Manager review confirms H accounts for every replay row, authorized child evidence, mutable review-description provenance and exact accepted-baseline validation. I addresses the independently rechecked stale mutation_ready admission with matching completed recovery, preserving identity and unavailable-evidence countercases. No duplicate repair, completed-feature retry or additional capability is justified. Updated the epic checkpoint through write_doc at be184066; no test execution or repaired acceptance is claimed.
+  Honors: Epic criteria 12–18; dec_013–dec_018; preserve completed A–G and the original human approval boundaries..
 ## Amendment log
 
 _(none)_
