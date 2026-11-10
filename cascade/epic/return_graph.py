@@ -317,6 +317,33 @@ def recover_returns(*, root: Path) -> None:
             execute_return(path.parent.name, manifest["request_id"], root=root)
 
 
+def _archive_descendant_run(row: dict, *, root: Path, home: Path, run_id: str) -> None:
+    """Keep old checkpoint evidence while preventing stale child turns resuming."""
+    import importlib
+    import os
+    from cascade.board.work_ids import tier_of_work_id
+
+    tier = tier_of_work_id(row["id"])
+    if tier == "epic":
+        return  # The normal Epic activation boundary archives its own checkpoint.
+    checkpoints = importlib.import_module(f"cascade.{tier}.checkpoint")
+    graph = importlib.import_module(f"cascade.{tier}.graph")
+    path = checkpoints.checkpoint_path(row["id"], root=root).resolve()
+    connection = checkpoints._connections.pop(str(path), None)
+    checkpoints._savers.pop(str(path), None)
+    if connection is not None:
+        connection.close()
+    key = (str(root.resolve()), row["id"])
+    graph._graph_cache.pop(key, None)
+    graph._session_roots.pop(key, None)
+    for suffix in ("", "-wal", "-shm"):
+        source = Path(str(path) + suffix)
+        if source.exists():
+            destination = home / "checkpoint-history" / run_id / source.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(source, destination)
+
+
 def reactivate_graph(epic_id: str, *, root: Path) -> None:
     """Restore the preserved graph into its retained owned integration trees."""
     from cascade.board.gitutil import commit_paths, has_git
@@ -333,6 +360,9 @@ def reactivate_graph(epic_id: str, *, root: Path) -> None:
     roots = {}
     epic_wt = get_integration_worktree(root, "epic", epic_id)
     epic_root = epic_wt.path if epic_wt else root
+    run_id = hashlib.sha256(manifest["request_id"].encode()).hexdigest()
+    for row in manifest["members"]:
+        _archive_descendant_run(row, root=root, home=home, run_id=run_id)
     for row in manifest["members"]:
         doc = epic if row["id"] == epic_id else parse_doc(home / row["backlog_path"])
         wt = get_integration_worktree(root, doc.meta.tier, doc.meta.id)

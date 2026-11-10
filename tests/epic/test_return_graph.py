@@ -153,7 +153,14 @@ def test_restart_recovers_every_journal_boundary(tmp_path, monkeypatch, boundary
 def test_reactivation_restores_same_children_and_allows_another_return(tmp_path):
     root, wt = fixture_graph(tmp_path)
     assert return_epic_to_backlog("epic_044", "first", actor="human", root=root).ok
+    child_checkpoint = root / ".cascade/checkpoints/feat_044_001.sqlite"
+    child_checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    child_checkpoint.write_bytes(b"old feature run")
     reactivate_graph("epic_044", root=root)
+    assert not child_checkpoint.exists()
+    assert list(
+        return_home(root, "epic_044").glob("checkpoint-history/*/feat_044_001.sqlite")
+    )
     assert merged_board(root).by_id["epic_044"].status == "active"
     assert merged_board(root).by_id["feat_044_001"].status == "backlog"
     assert not holds_turn("epic_044", root=root)
