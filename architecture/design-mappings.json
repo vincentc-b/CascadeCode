@@ -1,10 +1,36 @@
 {
   "designs": {
-    ".": {
-      "artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.",
-      "code_directory": ".",
-      "design_owner_directory": "."
-    }
+    ".": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": ".", "design_owner_directory": "."},
+    "cascade": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade", "code_directory": "cascade", "design_owner_directory": "cascade"},
+    "cascade/agent": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/agent", "code_directory": "cascade/agent", "design_owner_directory": "cascade/agent"},
+    "cascade/agent/discovery": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/agent", "code_directory": "cascade/agent/discovery", "design_owner_directory": "cascade/agent"},
+    "cascade/amendments": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/amendments", "code_directory": "cascade/amendments", "design_owner_directory": "cascade/amendments"},
+    "cascade/board": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/board", "code_directory": "cascade/board", "design_owner_directory": "cascade/board"},
+    "cascade/boss": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/boss", "code_directory": "cascade/boss", "design_owner_directory": "cascade/boss"},
+    "cascade/comments": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/comments", "code_directory": "cascade/comments", "design_owner_directory": "cascade/comments"},
+    "cascade/epic": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/epic", "code_directory": "cascade/epic", "design_owner_directory": "cascade/epic"},
+    "cascade/feature": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/feature", "code_directory": "cascade/feature", "design_owner_directory": "cascade/feature"},
+    "cascade/probe": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/probe", "code_directory": "cascade/probe", "design_owner_directory": "cascade/probe"},
+    "cascade/task": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/task", "code_directory": "cascade/task", "design_owner_directory": "cascade/task"},
+    "cascade/war_room": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/war_room", "code_directory": "cascade/war_room", "design_owner_directory": "cascade/war_room"},
+    "cascade/watchdog": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/watchdog", "code_directory": "cascade/watchdog", "design_owner_directory": "cascade/watchdog"},
+    "cascade/workspace": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:cascade/workspace", "code_directory": "cascade/workspace", "design_owner_directory": "cascade/workspace"},
+    "tests": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests", "design_owner_directory": "."},
+    "tests/agent": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/agent", "design_owner_directory": "."},
+    "tests/amendments": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/amendments", "design_owner_directory": "."},
+    "tests/architecture": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/architecture", "design_owner_directory": "."},
+    "tests/board": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/board", "design_owner_directory": "."},
+    "tests/boss": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/boss", "design_owner_directory": "."},
+    "tests/comments": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/comments", "design_owner_directory": "."},
+    "tests/epic": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/epic", "design_owner_directory": "."},
+    "tests/feature": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/feature", "design_owner_directory": "."},
+    "tests/harness": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/harness", "design_owner_directory": "."},
+    "tests/lifecycle": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/lifecycle", "design_owner_directory": "."},
+    "tests/probe": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/probe", "design_owner_directory": "."},
+    "tests/task": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/task", "design_owner_directory": "."},
+    "tests/war_room": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/war_room", "design_owner_directory": "."},
+    "tests/watchdog": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/watchdog", "design_owner_directory": "."},
+    "tests/workspace": {"artifact_id": "design:target-9f61bc6d6f8ae8cb7d196c8b327650d5:.", "code_directory": "tests/workspace", "design_owner_directory": "."}
   },
   "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
   "version": 1
