@@ -6,6 +6,12 @@
       "plan_revision": "aab5dd4e76caa8dd770c619c64baa34600050dea",
       "signed_at": "2026-11-10T20:16:45.738983+00:00",
       "evidence_snapshot_id": "evidence_59a4b779d2f74127900f97bc58c52f6f"
+    },
+    {
+      "role": "epic_architect",
+      "plan_revision": "aab5dd4e76caa8dd770c619c64baa34600050dea",
+      "signed_at": "2026-11-10T20:18:14.031498+00:00",
+      "evidence_snapshot_id": "evidence_aef19c4d630c439885ef5a54cc6bd98c"
     }
   ]
 }
