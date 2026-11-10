@@ -94,6 +94,13 @@ from cascade.workspace.c4_diff import (
     C4ViewDiff,
     compute_c4_semantic_diff,
 )
+from cascade.workspace.c4_review import (
+    C4ReviewPayload,
+    C4ReviewSide,
+    C4ReviewTarget,
+    C4ReviewView,
+    compose_c4_review_payload,
+)
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -141,6 +148,10 @@ __all__ = [
     "C4SemanticDiff",
     "C4SemanticModelArtifact",
     "C4ViewDiff",
+    "C4ReviewPayload",
+    "C4ReviewSide",
+    "C4ReviewTarget",
+    "C4ReviewView",
     "C4View",
     "C4WorkspaceContract",
     "find_project_config",
@@ -174,6 +185,7 @@ __all__ = [
     "validate_hit_target_manifest",
     "verify_and_sanitize_hit_targets",
     "compute_c4_semantic_diff",
+    "compose_c4_review_payload",
     "STRUCTURIZR_IMAGE",
     "STRUCTURIZR_IMAGE_DIGEST",
     "up",
