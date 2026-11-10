@@ -1704,7 +1704,9 @@ def _claim_resume_attempt(
             recovery_state="running",
             updated_at=claimed_at,
             attempts=attempts,
-            execution_claim={"claim_id": claim_id, "claimed_at": claimed_at},
+            execution_claim={"claim_id": claim_id, "claimed_at": claimed_at,
+                             **({"owner_process": _review_owner_identity()}
+                                if action.get("action_kind") == "review_rebase" else {})},
         )
         _refresh_incident(action, now=now)
         actions[action_id] = action
@@ -2038,3 +2040,65 @@ def _work_tier(work_id: str) -> str | None:
         return parse_work_id_parts(work_id).tier
     except Exception:
         return None
+
+
+def _review_owner_identity() -> dict | None:
+    from cascade.review_owner import current_review_owner
+    return current_review_owner()
+
+
+def reconcile_abandoned_review_publications(*, root: Path) -> int:
+    """Fail proven-dead publication claims back to their owner, never retry Git.
+
+    Run before board projection so malformed team documents cannot hide an
+    interrupted publication. Unknown legacy owners remain untouched.
+    """
+    from cascade.review_owner import review_owner_exited
+    repo = resolve_root(root)
+    changed = 0
+    with task_lifecycle_lock(root=repo):
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        for action_id, action in actions.items():
+            if action.get('action_kind') != 'review_rebase' or action.get('recovery_state') != 'running':
+                continue
+            claim = action.get('execution_claim') or {}
+            if not review_owner_exited(claim.get('owner_process')):
+                continue
+            attempts = list(action.get('attempts') or [])
+            if not attempts or attempts[-1].get('outcome') is not None:
+                continue
+            recovery = dict(action.get('recovery') or {})
+            owner = recovery.get('owning_team') or {}
+            evidence = dict(recovery.get('evidence') or {})
+            investigation_id = f"recovery:{action_id}:owner-exited:{claim.get('claim_id')}"
+            summary = ('The review publication process exited without recording a result. '
+                       'Preserve the checkout; inspect remaining validators, local and remote heads, '
+                       'and validation evidence before retrying publish_review_resolution. '
+                       'A local commit alone does not prove publication.')
+            # Enqueue before closing the attempt; replay after a crash deduplicates
+            # this claim-specific request. No new action or dispatch is invented.
+            if owner.get('kind') in _DECISION_OWNERS and owner.get('work_id'):
+                _enqueue_recovery_request_if_missing(
+                    str(owner['work_id']), investigation_id=investigation_id,
+                    action_id=action_id, action_kind='review_rebase',
+                    affected_work_id=str(owner['work_id']), failure_code='publication_owner_exited',
+                    safe_summary=summary, conflicting_paths=(),
+                    intended_target_ref=evidence.get('intended_target_ref'),
+                    owner_kind=str(owner['kind']), review_id=evidence.get('review_id'), root=repo, now=None,
+                )
+                recovery['routing_marker'] = {'status': 'enqueued', 'investigation_id': investigation_id}
+            evidence.update(failure_code='publication_owner_exited', safe_summary=summary)
+            recovery['evidence'] = evidence
+            finished = _iso(None)
+            attempts[-1] = {**attempts[-1], 'outcome': 'failed', 'classification': 'owner_decision',
+                           'completed_at': finished, 'completion_metadata': {'reason': 'publication_owner_exited'}}
+            action.update(recovery_state='awaiting_owner_decision', failure_classification='owner_decision',
+                          updated_at=finished, attempts=attempts, recovery=recovery)
+            action.pop('execution_claim', None)
+            _refresh_incident(action)
+            changed += 1
+        if changed:
+            payload['actions'] = actions
+            _write_payload(repo, payload)
+    return changed

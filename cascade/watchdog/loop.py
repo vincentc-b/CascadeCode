@@ -60,6 +60,8 @@ def watchdog_tick(root: Path | None = None) -> None:
     """Scan `2_active` once. Unauthorized docs are moved back to backlog and toasted."""
 
     repo = resolve_root(root)
+    from cascade.task.action_recovery import reconcile_abandoned_review_publications
+    reconcile_abandoned_review_publications(root=repo)
     from cascade.automation import maybe_sync_briefs
 
     maybe_sync_briefs(repo)

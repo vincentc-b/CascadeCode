@@ -159,7 +159,7 @@ def publish_team_review_resolution(
             if isinstance(item, Mapping) and item.get("state") != "resolved"
         ]
         if not decisions:
-            decision_id = f"review-resolution:{action_id}"
+            decision_id = f"review-resolution:{action_id}:attempt:{int(action.get('attempt_count') or 0) + 1}"
             action = record_owner_decision(
                 action_id,
                 decision_id,

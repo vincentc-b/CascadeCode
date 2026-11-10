@@ -969,3 +969,14 @@ At no point did the SWE agent see the memory-layout debate, and at no point did 
 | `DEC-ROOT-010` | Failure policy | Live-run infra flakes retry **2** times. A pre-execution stale parent pin is refreshed and retried automatically. Spec/test misses fail closed and automatically wake the Feature Team, which can revise and retry its own blocked child; the blocked Task does **not** count toward the cap. | Bounded retries absorb transient failures, while specification failures return to the contract owner instead of looping execution. |
 
 All DESIGN.md §15 questions are locked.
+
+
+## Review publication recovery contract
+
+Conflict recovery preserves completed lifecycle documents, validates unique board
+identities before repository checks, and bounds validation before any remote push.
+The watchdog converts proven-dead publication-process claims into owner recovery
+requests without blindly replaying Git. The detailed requirements, timeout setting,
+legacy-owner limitations and evidence rules are maintained in
+[`cascade/DESIGN.md`](cascade/DESIGN.md#review-publication-safeguards), with durable
+attempt ownership in [`cascade/task/DESIGN.md`](cascade/task/DESIGN.md).

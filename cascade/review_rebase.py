@@ -35,6 +35,7 @@ _ALLOWED_OPERATIONS = (
 )
 
 from cascade.validation_command import validation_command
+from cascade.review_validation import review_validation_timeout, run_review_validation, validate_publication_board
 
 
 @dataclass(frozen=True)
@@ -226,11 +227,30 @@ def check_and_publish_review_rebase(
     if _dirty_paths(worktree):
         return _publication_blocked("worktree_clean", "dirty_unrelated_paths", "The authorized worktree has uncommitted paths; they were left untouched.", worktree)
 
-    command = validation_command(locate_trunk(worktree))
-    check_result = subprocess.run(
-        command, cwd=worktree, capture_output=True,
-        text=True, encoding="utf-8",
-    )
+    # A conflict-free Git tree can still contain duplicate lifecycle documents.
+    # Reject it before spawning checks or publishing any remote mutation.
+    from cascade.board.errors import SchemaError
+    try:
+        validate_publication_board(worktree)
+    except (SchemaError, OSError, ValueError) as exc:
+        return _publication_blocked(
+            "board", "board_validation_failed",
+            f"Resolved checkout has invalid lifecycle documents ({type(exc).__name__}); repair the board before publication.", worktree,
+        )
+    try:
+        command = validation_command(locate_trunk(worktree))
+        timeout = review_validation_timeout(locate_trunk(worktree))
+        check_result = run_review_validation(command, cwd=worktree, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return _publication_blocked(
+            "checks", "repository_checks_timed_out",
+            f"Repository checks exceeded {timeout:g} seconds; validation processes were stopped and the checkout preserved.", worktree,
+        )
+    except (OSError, ValueError) as exc:
+        return _publication_blocked(
+            "checks", "repository_checks_unavailable",
+            f"Repository checks could not run ({type(exc).__name__}); no publication attempted.", worktree,
+        )
     check = ReviewRebaseCheck(
         command, check_result.returncode,
         check_result.stdout, check_result.stderr,
