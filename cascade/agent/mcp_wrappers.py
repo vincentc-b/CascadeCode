@@ -60,6 +60,15 @@ def build_planning_custom_tools(
     tier = sandbox.tier
     tool_names = _planning_tool_names(sandbox)
     schemas = {**_EPIC_TOOL_SCHEMAS, **_FEATURE_TOOL_SCHEMAS, **_BOSS_TOOL_SCHEMAS}
+    from cascade.epic.dependency_declaration import manifest_schema
+
+    schemas["write_dependency_manifest"] = {
+        **schemas["write_dependency_manifest"],
+        "properties": {
+            "manifest": manifest_schema(),
+            "expected_revision": {"type": "integer", "minimum": 0},
+        },
+    }
     tools: dict[str, CustomTool] = {}
 
     for name in tool_names:
@@ -309,8 +318,19 @@ def merge_tool_effects_from_file(
     return effects
 
 
-def mcp_tool_catalog(tier: PlanningToolTier, tool_names: list[str]) -> list[dict[str, Any]]:
+def mcp_tool_catalog(
+    tier: PlanningToolTier, tool_names: list[str]
+) -> list[dict[str, Any]]:
     schemas = {**_EPIC_TOOL_SCHEMAS, **_FEATURE_TOOL_SCHEMAS, **_BOSS_TOOL_SCHEMAS}
+    from cascade.epic.dependency_declaration import manifest_schema
+
+    schemas["write_dependency_manifest"] = {
+        **schemas["write_dependency_manifest"],
+        "properties": {
+            "manifest": manifest_schema(),
+            "expected_revision": {"type": "integer", "minimum": 0},
+        },
+    }
     tools: list[dict[str, Any]] = []
     for name in tool_names:
         schema = schemas.get(name, {"type": "object", "properties": {}})
@@ -325,6 +345,10 @@ def mcp_tool_catalog(tier: PlanningToolTier, tool_names: list[str]) -> list[dict
 
 
 def _planning_tool_description(tier: PlanningToolTier, name: str) -> str:
+    if name == "read_dependency_manifest":
+        return "Read the owned dependency declaration, exact authoring schema, observed local executor identity and revision. Call this first when a declaration is missing."
+    if name == "write_dependency_manifest":
+        return "Persist the owning Epic dependency declaration using every field in the supplied schema and the revision from read_dependency_manifest. Declare real prerequisites or explicitly assess none_required=true. Verification is automatic; installation still requires separate human approval."
     if name == "report_audit_investigation":
         return (
             "Record findings and evidence for an audit case assigned to your team. "

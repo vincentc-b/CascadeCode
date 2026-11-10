@@ -72,10 +72,23 @@ async def run_epic_planning_turn(
 
     workspace = doc_filesystem_root(epic_id, trunk=repo).resolve()
     paths = collect_epic_readable_paths(epic_id, root=repo)
+    from cascade.epic.dependency_declaration import authoring_context
+
+    declaration = authoring_context(epic_id, root=repo)
+    prompt = (
+        (
+            "Dependency declaration phase (complete before general planning):\n"
+            + json.dumps(declaration, sort_keys=True)
+            + "\n\n"
+            + prompt
+        )
+        if declaration["state"] == "declaration_required"
+        else prompt
+    )
     turn_prompt = _with_dependency_projection(prompt, owner_path=paths[0], root=repo)
     turn_prompt = _with_architecture_context(turn_prompt, epic_id, root=repo)
     scratch = materialize_scratch(repo, paths, tier="epic")
-    return await _run_sandbox_turn(
+    result = await _run_sandbox_turn(
         role=role,
         provider=provider,
         model_id=model_id,
@@ -93,6 +106,20 @@ async def run_epic_planning_turn(
         ),
         permission_mode=provider_permission_mode(repo, provider),
     )
+    from cascade.epic.dependency_manifests import read_dependency_manifest
+
+    if (
+        result.status == "finished"
+        and read_dependency_manifest(epic_id, root=repo) is None
+    ):
+        return RoleResult(
+            text="Dependency declaration incomplete: read_dependency_manifest and write_dependency_manifest are required before planning can finish. "
+            + result.text,
+            status="error",
+            tool_effects=result.tool_effects,
+            recovery=result.recovery,
+        )
+    return result
 
 
 async def run_feature_planning_turn(
