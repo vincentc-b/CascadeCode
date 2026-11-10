@@ -287,6 +287,11 @@ The Epic Architect will sign the saved final revision after review. The Epic Man
   Chose Add normal epic/feature publish_architecture_review tool adapters over existing ownership/staging services, backed by durable idempotent intents and a bounded project scheduler. Pin renderer identity, deduplicate jobs, recover from original committed sources, and require explicit retry after bounded recovery. feat_046_001 repairs the strict fixture inventory and proves a real tool-to-HTTP-to-browser journey with restart..
   Rationale: Code inspection found no production caller for the architecture authoring operations. C4ArtifactRenderer.submit starts an in-memory thread per call and staging currently waits for render validation. Durable admission and controlled worker execution close these gaps while preserving existing review, cache and acceptance authorities. The recorded fixture failure is an implementation obligation, not a reason to weaken inventory checks.
   Honors: Normal authorized planning paths, exact baseline and source provenance, bounded offline rendering, no unauthorized dependency installation, release-blocking real-renderer/browser acceptance..
+
+- `dec_005` · 2026-11-10 · Epic Architect · **Final implementation contracts — branch and documentation provenance**
+  Chose Pin branch browsing to immutable code/document snapshot descriptors resolved from known session contexts and exact recorded associations. Missing or ambiguous split-repository associations require an explicitly labeled known documentation-ref selection or an unavailable state. Share semantic navigation and lazy verified many-to-many context projections with paired review; keep accepted-lineage references separate..
+  Rationale: A current branch and an accepted architecture lineage answer different questions, and tracking HEAD cannot establish a code-to-document association. Snapshot identity and pinned mapping/document reads keep diagrams and context coherent across navigation, branch advance, restart and deep links without introducing branch-wide comments or inferred document coverage.
+  Honors: Requirements 5–6; detached HEAD and dirty-edit behavior, split-repository provenance, no one-to-one C4/DESIGN hierarchy, stable citations and ownership mappings, existing serial feature scope..
 ## Amendment log
 
 _(none)_
