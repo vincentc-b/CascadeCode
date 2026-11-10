@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,8 +18,10 @@ from cascade.workspace import (
     C4View,
     C4ViewDiff,
     C4WorkspaceContract,
+    ProjectContext,
     WorkspaceError,
     compose_c4_review_payload,
+    resolve_c4_review_payload,
 )
 
 
@@ -179,6 +182,100 @@ def test_unchanged_review_is_explicit_and_keeps_the_pinned_pair(tmp_path: Path) 
     assert payload.views[0].state == "unchanged"
     assert payload.views[0].current.repository_key == "docs-current"
     assert payload.views[0].proposed.repository_key == "docs-proposed"
+
+
+def test_explicit_no_diagram_change_needs_no_model_artifacts() -> None:
+    unit = _unit(empty_baseline=True)
+    unit.architecture_impact = "no_diagram_change"
+    unit.impact_reason = "Only explanatory plan text changed"
+    unit.proposed_model = None
+    diff = C4SemanticDiff(
+        "unchanged", None, None, "plan:" + REVISION_B,
+        (), (), (), (), "explicitly unchanged", None,
+    )
+
+    payload = compose_c4_review_payload(
+        unit, diff, owner="feature-team", work_id="feat_034_004",
+        current=None, proposed=None, plan_diff_reference="git:plan-a..plan-b",
+    )
+
+    assert payload.state == "no_diagram_change"
+    assert payload.reason == "Only explanatory plan text changed"
+
+
+def test_claimed_diagram_change_with_missing_evidence_is_not_no_change() -> None:
+    diff = C4SemanticDiff(
+        "unchanged", None, None, "git:model-a..model-b",
+        (), (), (), (), "no semantic changes", None,
+    )
+
+    payload = compose_c4_review_payload(
+        _unit(), diff, owner="feature-team", work_id="feat_034_004",
+        current=None, proposed=None, plan_diff_reference="git:plan-a..plan-b",
+    )
+
+    assert payload.state == "error"
+    assert "no corresponding rendered artifact" in (payload.error or "")
+
+
+def test_semantic_inventory_has_side_state_and_deterministic_drill_choices(
+    tmp_path: Path,
+) -> None:
+    current = _artifact(tmp_path / "current", "current", REVISION_A, ("context",))
+    proposed = _artifact(
+        tmp_path / "proposed", "proposed", REVISION_B, ("context", "detail")
+    )
+    diff = C4SemanticDiff(
+        "changed", "current", "proposed", "git:model-a..model-b", (), (),
+        (
+            C4ViewDiff(
+                "context", "unchanged",
+                current_elements=("element.system",),
+                proposed_elements=("element.system",),
+            ),
+            C4ViewDiff(
+                "detail", "added", proposed_elements=("element.system",),
+                changed_identities=("element.system",),
+            ),
+        ),
+        ("detail",), "one affected view", None,
+    )
+
+    payload = compose_c4_review_payload(
+        _unit(), diff, owner="feature-team", work_id="feat_034_004",
+        current=current, proposed=proposed, plan_diff_reference="git:plan-a..plan-b",
+    )
+
+    assert payload.targets[0].semantic_id == "element.system"
+    assert payload.targets[0].current == "present"
+    assert payload.targets[0].proposed == "present"
+    assert payload.targets[0].drill_choices == (
+        {"view_key": "context", "level": "systemContextViews", "label": "context (systemContextViews)"},
+        {"view_key": "detail", "level": "containerViews", "label": "detail (containerViews)"},
+    )
+    assert payload.views[1].current_state == "absent"
+    assert payload.views[1].proposed_state == "present"
+
+
+def test_resolver_returns_actionable_missing_review_with_lineage_provenance(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    (tmp_path / "README.md").write_text("test\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "initial"], cwd=tmp_path, check=True)
+
+    payload = resolve_c4_review_payload(
+        ProjectContext.colocated(tmp_path), owner="feature_architect",
+        work_id="feat_046_001", lineage="epic_046",
+    )
+
+    assert payload.state == "missing_review"
+    assert payload.reason_code == "missing_review"
+    assert "published" in (payload.reason or "")
+    assert payload.provenance["code"]["accepted_revision"] is None
 
 
 def _unit(*, proposed_revision: str = REVISION_B, empty_baseline: bool = False) -> SimpleNamespace:

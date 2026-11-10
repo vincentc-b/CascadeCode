@@ -27,6 +27,7 @@ from cascade.workspace.c4_render import (
     _snapshot_verified_closure,
 )
 from cascade.workspace.c4_source import C4SourceError, validate_c4_workspace
+from cascade.workspace.c4_diff import C4SemanticModelArtifact
 
 
 ScheduledStatus = Literal["pending", "running", "ready", "empty", "failed", "cancelled"]
@@ -210,6 +211,34 @@ class C4RenderScheduler:
         if row is None:
             raise KeyError(operation_id)
         return _scheduled_from_row(row)
+
+    def get_semantic_artifact(
+        self, operation_id: str, *, artifact_ref: str
+    ) -> C4SemanticModelArtifact:
+        """Load one durable ready render with its validated source contract.
+
+        Review projection is read-only: it may reuse a completed scheduled render,
+        but it must never start renderer work or reconstruct identity from labels.
+        """
+
+        if not artifact_ref.strip():
+            raise ValueError("semantic artifact reference must be non-blank")
+        with task_lifecycle_read_lock(root=self.project_root):
+            row = self._read()["operations"].get(operation_id)
+        if row is None:
+            raise KeyError(operation_id)
+        scheduled = _scheduled_from_row(row)
+        if scheduled.status != "ready" or scheduled.artifact is None:
+            raise C4RenderAdmissionError(
+                "artifact_unavailable",
+                f"render {operation_id} is {scheduled.status}",
+            )
+        closure = _closure_from_row(row, self._source_path(row))
+        if scheduled.render_identity != render_identity(
+            closure.digest, C4RenderSettings(**row["settings"])
+        ):
+            raise ValueError("durable render identity is invalid")
+        return C4SemanticModelArtifact(artifact_ref, scheduled.artifact, closure.contract)
 
     def retry(self, operation_id: str) -> C4ScheduledRenderOperation:
         with task_lifecycle_lock(root=self.project_root):
