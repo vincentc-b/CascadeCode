@@ -136,6 +136,11 @@ No product scope question remains. The architecture review must confirm the shar
   Chose Separate supervisor-produced current/coverage/history projections from read-only dashboard consumption; retain authoritative rechecks at repair boundaries. Deliver feat_044_001 → feat_044_002 → feat_044_003..
   Rationale: The existing GET repeats expensive historical observation under a shared budget. A producer/consumer contract removes poll-triggered scans while preserving genuine current incidents and existing repair authority. Sequential slices constrain scope and give consumers tested schema fixtures.
   Honors: Success criteria 1–12; normal team/review workflow; immutable forensic history; configured cadence and manual audit semantics..
+
+- `dec_002` · 2026-11-10 · Epic Manager · **Macro-architecture**
+  Chose Keep legacy remediation rows with child_id/observed_child_sha/supervisor_id as historical/unverifiable unless unambiguous authoritative evidence establishes modern identity; do not migrate source ledgers. Use the existing verified toolchain without new installations..
+  Rationale: Inspected six durable rows: child SHA and supervisor identity alone do not establish authoritative generation or failure class. Preserving provenance avoids false incidents and false resolution. All eight declared toolchain entries passed canonical read-only checks.
+  Honors: Success criteria 4, 7, 8; dependency installation gates; no fabricated validation or evidence deletion..
 ## Amendment log
 
 _(none)_
