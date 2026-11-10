@@ -24,6 +24,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-10T16:56:46.484857+00:00'
 ---
 # Reconcile completed review recovery admissions in health audits
 
