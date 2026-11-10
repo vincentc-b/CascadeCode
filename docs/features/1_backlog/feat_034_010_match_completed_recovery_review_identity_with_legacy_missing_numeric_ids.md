@@ -24,6 +24,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-10T18:39:58.570224+00:00'
 ---
 # Match completed recovery review identity with legacy missing numeric IDs
 
