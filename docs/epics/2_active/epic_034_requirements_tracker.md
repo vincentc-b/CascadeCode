@@ -14,6 +14,7 @@ children:
 - feat_034_007
 - feat_034_008
 - feat_034_009
+- feat_034_010
 depends_on:
 - epic_036
 owners:
@@ -163,6 +164,7 @@ Prefer a few high-signal integration and browser scenarios over broad mock-based
 - [Epic 36](epic_036_split_target_and_tracking_repos.md) (`depends_on: epic_036`) supplies the optional tracking repository and plan routing before this epic starts. This epic adds design/C4 destination selection on that foundation.
 
 ## Feature breakdown
+- feat_034_010
 - `feat_034_009` — Corrective audit projection reconciliation; depends on F. Covers F's stale admission and A–E's terminal stale-parent false incidents. See dec_017–dec_018 and the terminal-parent audit follow-up below; requires its own review and human approval.
 - `feat_034_008` — Corrective historical evidence and accepted architecture reconciliation; depends on F and G. See dec_015; requires its own review and human approval.
 
