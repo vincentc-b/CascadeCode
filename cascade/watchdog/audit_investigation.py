@@ -339,7 +339,7 @@ def read_investigation_cases(*, root: Path, limit: int = 100) -> tuple[dict, ...
     return tuple(sorted(cases, key=lambda case: (case["created_at"], case["case_id"])))
 
 
-def replay_pending_investigations(*, root: Path, limit: int = 100, now: datetime | None = None) -> tuple[dict, ...]:
+def replay_pending_investigations(*, root: Path, limit: int = 100, now: datetime | None = None, eligible_owner_ids: set[str] | None = None) -> tuple[dict, ...]:
     """Replay queued delivery only; no model execution or assumption of repair."""
     product, _ = _repositories(root)
     results = []
@@ -347,6 +347,8 @@ def replay_pending_investigations(*, root: Path, limit: int = 100, now: datetime
         raise ValueError("replay limit must be between 1 and 1000")
     for stored in read_investigation_cases(root=root, limit=1000):
         if stored["status"] != "queued":
+            continue
+        if eligible_owner_ids is not None and stored["owner_id"] not in eligible_owner_ids:
             continue
         path = _case_path(root, stored["case_id"])
         # Board projection may traverse worktrees: never hold the shared event

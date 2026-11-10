@@ -117,3 +117,8 @@ ui.render(container, {
 for (const expected of ['Agent investigations (1)', 'Parent is investigating the blocker', 'DeliveryUnavailable', 'Next agent review']) {
   assert.ok(container.textContent.includes(expected), expected);
 }
+
+ui.render(container, {agent_schedule: {admission: {reason: "no_live_work"}}});
+assert.ok(container.textContent.includes("Idle: no active or blocked work"));
+ui.render(container, {agent_schedule: {admission: {reason: "grace_period"}}});
+assert.ok(container.textContent.includes("20 minutes old"));

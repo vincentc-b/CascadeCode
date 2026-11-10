@@ -10,17 +10,24 @@ from cascade.watchdog import audit_agent_lane as lane
 from cascade.watchdog import audit_investigation as cases
 from cascade.watchdog import audit_lane as scanner
 from cascade.watchdog.events import read_events
-from tests.watchdog.test_audit_investigation import board
+from tests.watchdog.test_audit_investigation import board as fresh_board
+
+
+def board(tmp_path):
+    root = fresh_board(tmp_path)
+    lane._write_json_atomically(lane._home(root) / "agent_activity.json", {
+        "first_seen": {"epic_001": 0, "feat_001": 0, "task_001": 0}})
+    return root
 
 
 def test_periodic_reviews_are_independent_of_classifier_and_restart(tmp_path, monkeypatch):
     root = board(tmp_path)
     monkeypatch.setattr(scanner, 'project_audit_observation', lambda *a, **k: pytest.fail('scanner invoked'))
-    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=1000)
+    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=11000)
     assert {c['owner_id'] for c in cases.read_investigation_cases(root=root)} == {'epic_001', 'feat_001'}
-    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=1010)
+    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=11010)
     assert len(read_events('feat_001', 0, root=root)[0]) == 1
-    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=1061)
+    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=11061)
     assert len(read_events('feat_001', 0, root=root)[0]) == 2
 
 
@@ -34,11 +41,11 @@ def test_failed_request_does_not_block_other_owner_and_retries(tmp_path, monkeyp
             raise OSError('unavailable')
         return original(work_id, **kwargs)
     monkeypatch.setattr(cases, 'request_investigation', fail)
-    worker.run_once(now=1000)
+    worker.run_once(now=11000)
     assert len(read_events('epic_001', 0, root=root)[0]) == 1
     assert lane.investigation_schedule(root)['last_error']['delivery_failures']
     monkeypatch.setattr(cases, 'request_investigation', original)
-    worker.run_once(now=1061)
+    worker.run_once(now=11061)
     assert len(read_events('feat_001', 0, root=root)[0]) == 1
     assert not list((lane._home(root) / 'agent_outbox').glob('*.json'))
 
@@ -46,24 +53,24 @@ def test_failed_request_does_not_block_other_owner_and_retries(tmp_path, monkeyp
 def test_disabled_reviews_allow_manual_request(tmp_path):
     root = board(tmp_path)
     worker = lane.AuditInvestigationWorker(root, enabled=False)
-    worker.run_once(now=1000)
+    worker.run_once(now=11000)
     assert not cases.read_investigation_cases(root=root)
     lane.request_agent_review(root)
-    worker.run_once(now=1001)
+    worker.run_once(now=11001)
     assert len(cases.read_investigation_cases(root=root)) == 2
 
 
 def test_reported_fix_is_reassessed_at_cadence_with_prior_finding(tmp_path):
     root = board(tmp_path)
     worker = lane.AuditInvestigationWorker(root, interval_seconds=60)
-    worker.run_once(now=1000)
+    worker.run_once(now=11000)
     case = cases.request_investigation('task_001', 'unknown_failure', {}, root=root,
-                                       now=datetime.fromtimestamp(1000, timezone.utc))
+                                       now=datetime.fromtimestamp(11000, timezone.utc))
     cases.report_audit_investigation(case['case_id'], 'Removed obsolete blocker', 'reported_fixed',
-                                    root=root, feature_id='feat_001', now=datetime.fromtimestamp(1001, timezone.utc))
-    worker.run_once(now=1005)
+                                    root=root, feature_id='feat_001', now=datetime.fromtimestamp(11001, timezone.utc))
+    worker.run_once(now=11005)
     before = len(read_events('feat_001', 0, root=root)[0])
-    worker.run_once(now=1061)
+    worker.run_once(now=11061)
     events = read_events('feat_001', 0, root=root)[0]
     assert len(events) > before
     assert any('Removed obsolete blocker' in e.payload['body'] for e in events)
@@ -114,6 +121,48 @@ def test_failed_periodic_scan_and_corrupt_envelope_do_not_starve_delivery(tmp_pa
     monkeypatch.setattr(worker, '_schedule_owner_reviews', broken)
     lane.enqueue_investigations(root, ({'work_id': 'feat_001', 'reason': 'unknown', 'evidence': {}},))
     (lane._home(root) / 'agent_outbox' / '0-corrupt.json').write_text('{')
-    worker.run_once(now=1000)
+    worker.run_once(now=11000)
     assert len(read_events('feat_001', 0, root=root)[0]) == 1
     assert lane.investigation_schedule(root)['last_error']
+
+
+def test_new_work_waits_twenty_minutes_across_restart_including_outbox(tmp_path):
+    root = fresh_board(tmp_path)
+    lane.enqueue_investigations(root, ({'work_id': 'task_001', 'reason': 'audit_observation_error', 'evidence': {}},))
+    worker = lane.AuditInvestigationWorker(root, interval_seconds=60)
+    worker.run_once(now=10000)
+    assert not cases.read_investigation_cases(root=root)
+    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=11199)
+    assert not cases.read_investigation_cases(root=root)
+    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=11260)
+    assert len(read_events('feat_001', 0, root=root)[0]) >= 1
+    assert lane.investigation_schedule(root)['admission']['ready']
+
+
+def test_idle_workspace_never_dispatches_even_with_manual_or_queued_work(tmp_path, monkeypatch):
+    from tests.support import make_repo
+    root = make_repo(tmp_path, git=False)
+    lane.enqueue_investigations(root, ({'work_id': 'epic_old', 'reason': 'audit_observation_error', 'evidence': {}},))
+    lane.request_agent_review(root)
+    monkeypatch.setattr(cases, 'request_investigation', lambda **k: pytest.fail('idle dispatch'))
+    monkeypatch.setattr(cases, 'replay_pending_investigations', lambda **k: pytest.fail('idle replay'))
+    lane.AuditInvestigationWorker(root).run_once(now=10000)
+    assert lane.investigation_schedule(root)['admission']['reason'] == 'no_live_work'
+    assert not cases.read_investigation_cases(root=root)
+
+
+def test_oldest_live_item_qualifies_and_retired_age_is_removed(tmp_path):
+    root = fresh_board(tmp_path)
+    path = lane._home(root) / 'agent_activity.json'
+    lane._write_json_atomically(path, {'first_seen': {'epic_retired': 0, 'task_001': 8800}})
+    result = lane._agent_admission(root, 10000)
+    assert result['ready'] and result['oldest_age_seconds'] == 1200
+    assert 'epic_retired' not in result['first_seen']
+    assert result['first_seen']['epic_001'] == 10000
+
+
+def test_manual_review_bypasses_grace_for_live_work(tmp_path):
+    root = fresh_board(tmp_path)
+    lane.request_agent_review(root)
+    lane.AuditInvestigationWorker(root).run_once(now=10000)
+    assert len(cases.read_investigation_cases(root=root)) == 2

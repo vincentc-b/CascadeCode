@@ -38,11 +38,52 @@ def _read(path: Path) -> dict:
 
 def investigation_schedule(root: Path) -> dict:
     return {**_read(_home(root) / 'agent_schedule.json'),
-            'last_error': _read(_home(root) / 'agent_error.json') or None}
+            'last_error': _read(_home(root) / 'agent_error.json') or None,
+            'admission': {k: v for k, v in _read(_home(root) / 'agent_activity.json').items()
+                          if k not in {'first_seen', 'owners', 'targets'}}}
 
 
 def request_agent_review(root: Path) -> None:
     _write_json_atomically(_home(root) / 'agent_review_requested.json', {'requested_at': time.time()})
+
+
+_MIN_ACTIVE_AGE_SECONDS = 20 * 60
+
+
+def _agent_admission(root: Path, now: float) -> dict:
+    """Use observed active tenure, never the date a backlog brief was created.
+
+    Persist first-seen times across restarts. Remove retired items so a later
+    observed reactivation receives a fresh grace period. Missing evidence never
+    permits paid work. No model or provider calls are made here.
+    """
+    from cascade.board.context import resolve_tracking_root
+    from cascade.workspace.integration_worktree import merged_board_readonly
+
+    board = merged_board_readonly(resolve_tracking_root(root))
+    live = {m.id: m for m in board.by_id.values()
+            if m.tier in {'epic', 'feature', 'task'} and m.status in {'active', 'blocked'}}
+    path = _home(root) / 'agent_activity.json'
+    previous = _read(path).get('first_seen', {})
+    first_seen = {}
+    for work_id in live:
+        stamp = previous.get(work_id, now)
+        if not isinstance(stamp, (int, float)) or not 0 <= stamp <= now:
+            stamp = now
+        first_seen[work_id] = stamp
+    oldest = min(first_seen.values(), default=now)
+    ready = bool(live) and now - oldest >= _MIN_ACTIVE_AGE_SECONDS
+    owners = [m.id for m in live.values() if m.tier in {'epic', 'feature'}]
+    targets = [m.id for m in board.by_id.values()
+               if m.id in owners or m.parent in owners]
+    result = {'first_seen': first_seen, 'live_items': len(live),
+              'owners': owners, 'targets': targets, 'ready': ready,
+              'oldest_age_seconds': now - oldest if live else None,
+              'minimum_age_seconds': _MIN_ACTIVE_AGE_SECONDS,
+              'reason': 'eligible' if ready else ('no_live_work' if not live else 'grace_period'),
+              'checked_at': now}
+    _write_json_atomically(path, result)
+    return result
 
 
 class AuditInvestigationWorker:
@@ -81,7 +122,7 @@ class AuditInvestigationWorker:
             self._stop.wait(5)
 
     def run_once(self, *, now: float | None = None) -> None:
-        from cascade.watchdog.audit_investigation import request_investigation, replay_pending_investigations
+        from cascade.watchdog.audit_investigation import request_investigation, replay_pending_investigations, read_investigation_cases
 
         now = time.time() if now is None else now
         home = _home(self.root)
@@ -93,6 +134,26 @@ class AuditInvestigationWorker:
                 return
             manual_path = home / 'agent_review_requested.json'
             manual = manual_path.exists()
+            schedule = investigation_schedule(self.root)
+            pending_cases = read_investigation_cases(root=self.root, limit=1000)
+            queued = any(c['status'] == 'queued' for c in pending_cases)
+            outbox = any((home / 'agent_outbox').glob('*.json'))
+            due = self.enabled and float(schedule.get('next_due', 0)) <= now
+            # Observe activity once per minute even while idle, but do not
+            # rebuild the board every five seconds just to check an empty queue.
+            last_check = schedule.get('admission', {}).get('checked_at', 0)
+            if not manual and now - last_check < 60:
+                if not schedule.get('admission', {}).get('ready') or not (queued or outbox or due):
+                    return
+            admission = _agent_admission(self.root, now)
+            if not admission['live_items'] or (not manual and not admission['ready']):
+                _write_json_atomically(home / 'agent_schedule.json', {
+                    **{k: v for k, v in schedule.items() if k not in {'admission', 'last_error'}},
+                    'next_due': now + 60, 'scheduled': 0,
+                })
+                if not admission['live_items']:
+                    manual_path.unlink(missing_ok=True)
+                return
             errors = []
             if self.enabled or manual:
                 try:
@@ -102,7 +163,8 @@ class AuditInvestigationWorker:
                 except Exception as exc:
                     errors.append({'work_id': 'periodic_review', 'error': type(exc).__name__})
             try:
-                replay_pending_investigations(root=self.root, limit=12)
+                replay_pending_investigations(root=self.root, limit=12,
+                    eligible_owner_ids=set(admission['owners']))
             except Exception as exc:
                 errors.append({'work_id': 'pending_delivery', 'error': type(exc).__name__})
             # Bound each drain; unfinished envelopes remain durable. Replaying
@@ -116,6 +178,8 @@ class AuditInvestigationWorker:
                     continue
                 pending = []
                 for request in requests:
+                    if request['work_id'] not in admission['targets']:
+                        continue  # Retired/unstaffed history is not an agent dispatch target.
                     if not remaining or self._stop.is_set() or request.get('retry_after', 0) > now:
                         pending.append(request)
                         if request.get('delivery_error'):

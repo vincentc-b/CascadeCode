@@ -104,6 +104,11 @@
       "Teams investigate progress, logs and unexpected failures. Delivery is not proof of repair.");
     const agentSchedule = payload && payload.agent_schedule;
     if (agentSchedule) {
+      const admission = agentSchedule.admission;
+      if (admission && admission.reason) appendLine(document, container, "Automatic agent review",
+        admission.reason === "no_live_work" ? "Idle: no active or blocked work" :
+        admission.reason === "grace_period" ? "Waiting: live work must be at least 20 minutes old" :
+        "Eligible: live work has passed the 20-minute grace period");
       appendLine(document, container, "Next agent review", time(agentSchedule.next_due ? new Date(agentSchedule.next_due * 1000).toISOString() : null));
       if (agentSchedule.last_error) appendLine(document, container, "Agent delivery issue", JSON.stringify(agentSchedule.last_error));
     }
