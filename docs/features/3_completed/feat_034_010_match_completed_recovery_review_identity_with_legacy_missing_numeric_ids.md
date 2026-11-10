@@ -2,7 +2,7 @@
 id: feat_034_010
 title: Match completed recovery review identity with legacy missing numeric IDs
 tier: feature
-status: active
+status: completed
 parent: epic_034
 children:
 - task_034_010_001
