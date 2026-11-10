@@ -88,7 +88,14 @@ def comment(
         blocking=blocking,
         root=repo,
     )
-    _emit_comment_posted(record, owning, trunk)
+    if record.doc_id.startswith("feat_"):
+        from cascade.comments.handoffs import route_feature_comment
+
+        handoff = route_feature_comment(record, root=trunk)
+        if handoff is None:
+            _emit_comment_posted(record, owning, trunk)
+    else:
+        _emit_comment_posted(record, owning, trunk)
     if author == "human" and is_attached is not None and not is_attached(owning):
         _enqueue_comment_toast(doc_id, trunk)
     return record.id

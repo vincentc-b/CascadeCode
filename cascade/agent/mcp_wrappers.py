@@ -303,6 +303,12 @@ def _planning_tool_description(tier: PlanningToolTier, name: str) -> str:
             "and dependency_status_unavailable are distinct refusals. A "
             "content_access_denied spec read does not establish either result."
         )
+    if tier == "feature" and name == "escalate_comment_to_epic":
+        return (
+            "Escalate one originating feature-comment thread to the owning Epic "
+            "Team for impact triage. Replays return the original accountable "
+            "handoff instead of starting another Epic turn."
+        )
     return f"Cascade {tier} tool {name}"
 
 
@@ -469,6 +475,19 @@ _FEATURE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "body": {"type": "string"},
         },
         "required": ["comment_id", "body"],
+    },
+    "escalate_comment_to_epic": {
+        "type": "object",
+        "properties": {
+            "comment_id": {"type": "string"},
+            "reason": {"type": "string"},
+            "affected_work_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+        },
+        "required": ["comment_id", "reason"],
+        "additionalProperties": False,
     },
     "propose_epic_amendment": {"type": "object", "properties": {}},
     "ack_amendment": {"type": "object", "properties": {}},
