@@ -2,7 +2,7 @@
 id: feat_034_008
 title: Reconcile historical evidence and accepted architecture gaps
 tier: feature
-status: active
+status: completed
 parent: epic_034
 children:
 - task_034_008_001
