@@ -238,6 +238,11 @@ Manager scope and sequencing are prepared. No installation approval or human sco
   Chose Deliver feat_046_001 through feat_046_005 as a serial chain: production publication/HTTP contracts, paired interaction and semantic approval, branch browsing, verified documentation context, then integrated acceptance and guidance..
   Rationale: The same server, semantic viewer and immutable provenance contracts span the slices. Serial dependencies reduce conflicting implementations and allow each feature to extend one production-path acceptance scaffold. Keep all requested functionality; exclude unrelated refactoring and new parallel architecture/comment systems.
   Honors: All epic_046 detailed requirements and completion criteria; reuse Epic 034 infrastructure; frugal engineering and product scope constraints..
+
+- `dec_002` · 2026-11-10 · Epic Manager · **Required acceptance evidence**
+  Chose Start the real planning/renderer/browser smoke in feat_046_001 and extend it through each feature; feat_046_005 must retain passing A-D evidence at the final integrated revision. Assign the discovered renderer fixture inventory failure to feat_046_001 without weakening closure validation..
+  Rationale: The production connection is the core risk. Dependency checks confirm installed tooling and a browser launch, but the existing renderer test fails before rendering because its copied nested evidence is absent from its declared inventory. Treat that as a concrete early repair and do not defer feasibility or mistake unit/DOM coverage for acceptance.
+  Honors: Release-blocking real-renderer and real-browser proof, immutable source safety and the brief's prohibition on fabricated primary acceptance payloads..
 ## Amendment log
 
 _(none)_
