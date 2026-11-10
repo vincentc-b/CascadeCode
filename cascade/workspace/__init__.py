@@ -128,11 +128,23 @@ from cascade.workspace.reconciliation import (
 from cascade.workspace.historical_inventory import (
     AuthorizedReviewHandoff,
     AuthorizedWorkHandoff,
+    BaselinePair,
     HistoricalEvidenceInventory,
+    OwnerEvidenceHandoff,
+    ReviewEvidence,
     build_historical_inventory,
     inventory_path,
     pin_historical_inventory,
     read_historical_inventory,
+)
+from cascade.workspace.historical_reconciliation import (
+    ExactRevisionReference,
+    MaterialGap,
+    ReplayDisposition,
+    accepted_delta_rows,
+    build_acceptance_summary,
+    reconcile_replay_coverage,
+    write_reconciled_replay_ledger,
 )
 from cascade.workspace.up import prepare_up, up
 
@@ -149,6 +161,13 @@ __all__ = [
     "ReconciliationReceipt",
     "ReconciliationReceiptStore",
     "HistoricalEvidenceInventory",
+    "ExactRevisionReference",
+    "MaterialGap",
+    "ReplayDisposition",
+    "build_acceptance_summary",
+    "BaselinePair",
+    "OwnerEvidenceHandoff",
+    "ReviewEvidence",
     "AuthorizedReviewHandoff",
     "AuthorizedWorkHandoff",
     "ArchitectureArtifactRef",
@@ -230,6 +249,9 @@ __all__ = [
     "inventory_path",
     "pin_historical_inventory",
     "read_historical_inventory",
+    "accepted_delta_rows",
+    "reconcile_replay_coverage",
+    "write_reconciled_replay_ledger",
     "resolve_closeout_revision",
     "validate_reconciliation_closeout",
     "enable_review_gate",

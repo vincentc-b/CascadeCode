@@ -7,12 +7,14 @@ checks them against the pinned code and tests.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Literal, Mapping, Sequence
 
@@ -26,11 +28,226 @@ from cascade.workspace.architecture_context import (
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.types import ProjectContext
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+_CONTRACT_VERSION = 1
 _WORK_PATH = re.compile(r"^docs/(epics|features|tasks)/3_completed/[^/]+\.md$")
 _WORK_ID = re.compile(r"\b(?:epic|feat|task)_\d+(?:_\d+){0,2}\b")
 _REVISION = re.compile(r"^[0-9a-f]{40}$")
 InventoryOutcome = Literal["unresolved"]
+
+
+@dataclass(frozen=True)
+class BaselinePair:
+    """Accepted Epic repositories plus the independently pinned G artifact."""
+
+    target_repository_key: str
+    target_revision: str
+    tracking_repository_key: str
+    tracking_revision: str
+    g_artifact_repository_key: str
+    g_artifact_repository_role: Literal["target", "tracking"]
+    g_artifact_path: str
+    g_artifact_revision: str
+    g_artifact_sha256: str
+    integrations: tuple[dict[str, object], ...] = ()
+    accepted_deltas: tuple[dict[str, object], ...] = ()
+    version: int = _CONTRACT_VERSION
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "version": self.version,
+            "target_repository_key": self.target_repository_key,
+            "target_revision": self.target_revision,
+            "tracking_repository_key": self.tracking_repository_key,
+            "tracking_revision": self.tracking_revision,
+            "g_artifact_repository_key": self.g_artifact_repository_key,
+            "g_artifact_repository_role": self.g_artifact_repository_role,
+            "g_artifact_path": self.g_artifact_path,
+            "g_artifact_revision": self.g_artifact_revision,
+            "g_artifact_sha256": self.g_artifact_sha256,
+            "integrations": list(self.integrations),
+            "accepted_deltas": list(self.accepted_deltas),
+        }
+
+    @classmethod
+    def from_dict(cls, value: object) -> "BaselinePair":
+        try:
+            if not isinstance(value, dict) or value.get("version") != _CONTRACT_VERSION:
+                raise ValueError
+            pair = cls(
+                target_repository_key=value["target_repository_key"],
+                target_revision=value["target_revision"],
+                tracking_repository_key=value["tracking_repository_key"],
+                tracking_revision=value["tracking_revision"],
+                g_artifact_repository_key=value["g_artifact_repository_key"],
+                g_artifact_repository_role=value["g_artifact_repository_role"],
+                g_artifact_path=value["g_artifact_path"],
+                g_artifact_revision=value["g_artifact_revision"],
+                g_artifact_sha256=value["g_artifact_sha256"],
+                integrations=tuple(value.get("integrations", ())),
+                accepted_deltas=tuple(value.get("accepted_deltas", ())),
+            )
+            _validate_baseline_pair_shape(pair)
+            return pair
+        except (KeyError, TypeError, ValueError) as exc:
+            raise WorkspaceError("invalid historical baseline pair") from exc
+
+
+@dataclass(frozen=True)
+class OwnerEvidenceHandoff:
+    """Revision-pinned child evidence supplied by its authorized Feature owner."""
+
+    work_id: str
+    owning_feature: str
+    authorized_source: str
+    availability: Literal["available", "unavailable", "pending_owner_handoff"]
+    record_revision: str | None
+    source_repository: str | None = None
+    source_path: str | None = None
+    owner_request_id: str | None = None
+    intent_excerpt: str | None = None
+    intent_source_reference: str | None = None
+    verification_excerpt: str | None = None
+    verification_source_reference: str | None = None
+    unavailable_reason: str | None = None
+    responsible_owner: str | None = None
+    title: str | None = None
+    version: int = _CONTRACT_VERSION
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "version": self.version,
+            "work_id": self.work_id,
+            "owning_feature": self.owning_feature,
+            "authorized_source": self.authorized_source,
+            "availability": self.availability,
+            "record_revision": self.record_revision,
+            "source_repository": self.source_repository,
+            "source_path": self.source_path,
+            "owner_request_id": self.owner_request_id,
+            "intent_excerpt": self.intent_excerpt,
+            "intent_source_reference": self.intent_source_reference,
+            "verification_excerpt": self.verification_excerpt,
+            "verification_source_reference": self.verification_source_reference,
+            "unavailable_reason": self.unavailable_reason,
+            "responsible_owner": self.responsible_owner,
+            "title": self.title,
+        }
+
+    @classmethod
+    def from_dict(cls, value: object) -> "OwnerEvidenceHandoff":
+        try:
+            if not isinstance(value, dict) or value.get("version") != _CONTRACT_VERSION:
+                raise ValueError
+            handoff = cls(
+                work_id=value["work_id"],
+                owning_feature=value["owning_feature"],
+                authorized_source=value["authorized_source"],
+                availability=value["availability"],
+                record_revision=value["record_revision"],
+                source_repository=value.get("source_repository"),
+                source_path=value.get("source_path"),
+                owner_request_id=value.get("owner_request_id"),
+                intent_excerpt=value.get("intent_excerpt"),
+                intent_source_reference=value.get("intent_source_reference"),
+                verification_excerpt=value.get("verification_excerpt"),
+                verification_source_reference=value.get(
+                    "verification_source_reference"
+                ),
+                unavailable_reason=value.get("unavailable_reason"),
+                responsible_owner=value.get("responsible_owner"),
+                title=value.get("title"),
+            )
+            _validate_owner_evidence_handoffs((handoff,))
+            return handoff
+        except (KeyError, TypeError, ValueError) as exc:
+            raise WorkspaceError("invalid owner evidence handoff") from exc
+
+
+@dataclass(frozen=True)
+class ReviewEvidence:
+    """Captured forge evidence; current text is not historical merge-time text."""
+
+    review_id: str
+    forge: str
+    repository_key: str
+    url: str
+    work_ids: tuple[str, ...]
+    captured_at: str
+    description: str | None
+    description_sha256: str | None
+    description_provenance: Literal[
+        "current_snapshot", "merge_time_archive", "unavailable"
+    ]
+    source_revision: str | None = None
+    head_revision: str | None = None
+    base_revision: str | None = None
+    merge_revision: str | None = None
+    linked_commit_ids: tuple[str, ...] = ()
+    unavailable_fields: Mapping[str, str] = field(default_factory=dict)
+    version: int = _CONTRACT_VERSION
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "version": self.version,
+            "review_id": self.review_id,
+            "forge": self.forge,
+            "repository_key": self.repository_key,
+            "url": self.url,
+            "work_ids": list(self.work_ids),
+            "captured_at": self.captured_at,
+            "description": self.description,
+            "description_sha256": self.description_sha256,
+            "description_provenance": self.description_provenance,
+            "source_revision": self.source_revision,
+            "head_revision": self.head_revision,
+            "base_revision": self.base_revision,
+            "merge_revision": self.merge_revision,
+            "linked_commit_ids": list(self.linked_commit_ids),
+            "unavailable_fields": dict(self.unavailable_fields),
+        }
+
+    @classmethod
+    def from_dict(cls, value: object) -> "ReviewEvidence":
+        try:
+            if not isinstance(value, dict) or value.get("version") != _CONTRACT_VERSION:
+                raise ValueError
+            unavailable = value.get("unavailable_fields", {})
+            if not isinstance(unavailable, dict) or not all(
+                isinstance(key, str) and isinstance(reason, str)
+                for key, reason in unavailable.items()
+            ):
+                raise ValueError
+            evidence = cls(
+                review_id=value["review_id"],
+                forge=value["forge"],
+                repository_key=value["repository_key"],
+                url=value["url"],
+                work_ids=tuple(value["work_ids"]),
+                captured_at=value["captured_at"],
+                description=value["description"],
+                description_sha256=value["description_sha256"],
+                description_provenance=value["description_provenance"],
+                source_revision=value.get("source_revision"),
+                head_revision=value.get("head_revision"),
+                base_revision=value.get("base_revision"),
+                merge_revision=value.get("merge_revision"),
+                linked_commit_ids=tuple(value.get("linked_commit_ids", ())),
+                unavailable_fields=unavailable,
+            )
+            if not all(isinstance(item, str) for item in (
+                evidence.review_id,
+                evidence.forge,
+                evidence.repository_key,
+                evidence.url,
+                evidence.captured_at,
+                *evidence.work_ids,
+                *evidence.linked_commit_ids,
+            )):
+                raise ValueError
+            return evidence
+        except (KeyError, TypeError, ValueError) as exc:
+            raise WorkspaceError("invalid review evidence") from exc
 
 
 @dataclass(frozen=True)
@@ -75,10 +292,12 @@ class HistoricalEvidenceInventory:
     reviews: tuple[dict[str, object], ...]
     ledger: tuple[dict[str, object], ...]
     unavailable: tuple[dict[str, str], ...]
+    baseline_pair: BaselinePair | None = None
+    owner_evidence_handoffs: tuple[dict[str, object], ...] = ()
     version: int = _SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        value: dict[str, object] = {
             "version": self.version,
             "owner_work_id": self.owner_work_id,
             "target_repository_key": self.target_repository_key,
@@ -89,13 +308,18 @@ class HistoricalEvidenceInventory:
             "reviews": list(self.reviews),
             "ledger": list(self.ledger),
             "unavailable": list(self.unavailable),
+            "owner_evidence_handoffs": list(self.owner_evidence_handoffs),
         }
+        if self.baseline_pair is not None:
+            value["baseline_pair"] = self.baseline_pair.to_dict()
+        return value
 
     @classmethod
     def from_dict(cls, value: object) -> "HistoricalEvidenceInventory":
         try:
-            if not isinstance(value, dict) or value.get("version") != _SCHEMA_VERSION:
+            if not isinstance(value, dict) or value.get("version") not in {1, _SCHEMA_VERSION}:
                 raise ValueError
+            baseline_value = value.get("baseline_pair")
             inventory = cls(
                 owner_work_id=value["owner_work_id"],
                 target_repository_key=value["target_repository_key"],
@@ -106,6 +330,14 @@ class HistoricalEvidenceInventory:
                 reviews=tuple(value["reviews"]),
                 ledger=tuple(value["ledger"]),
                 unavailable=tuple(value["unavailable"]),
+                baseline_pair=(
+                    BaselinePair.from_dict(baseline_value)
+                    if baseline_value is not None else None
+                ),
+                owner_evidence_handoffs=tuple(
+                    value.get("owner_evidence_handoffs", ())
+                ),
+                version=value["version"],
             )
             if not all(
                 isinstance(item, str)
@@ -124,6 +356,7 @@ class HistoricalEvidenceInventory:
             if not all(isinstance(row, dict) for rows in (
                 inventory.work_items, inventory.commits, inventory.reviews,
                 inventory.ledger, inventory.unavailable,
+                inventory.owner_evidence_handoffs,
             ) for row in rows):
                 raise ValueError
             return inventory
@@ -145,6 +378,9 @@ def build_historical_inventory(
     tracking_revision: str = "HEAD",
     authorized_work_handoffs: Sequence[AuthorizedWorkHandoff] = (),
     authorized_review_handoffs: Sequence[AuthorizedReviewHandoff] = (),
+    baseline_pair: BaselinePair | None = None,
+    owner_evidence_handoffs: Sequence[OwnerEvidenceHandoff] = (),
+    review_evidence: Sequence[ReviewEvidence] = (),
 ) -> HistoricalEvidenceInventory:
     """Snapshot all eligible work and reachable target history at exact commits.
 
@@ -153,16 +389,47 @@ def build_historical_inventory(
     silently change its contents.
     """
 
+    if baseline_pair is not None:
+        _validate_baseline_pair(project, baseline_pair)
+        if target_revision != "HEAD" and target_revision != baseline_pair.target_revision:
+            raise WorkspaceError("target revision does not match accepted baseline pair")
+        if tracking_revision != "HEAD" and tracking_revision != baseline_pair.tracking_revision:
+            raise WorkspaceError("tracking revision does not match accepted baseline pair")
+        target_revision = baseline_pair.target_revision
+        tracking_revision = baseline_pair.tracking_revision
     target = _resolve_revision(project.target.root, target_revision)
     tracking = _resolve_revision(project.tracking.root, tracking_revision)
     handoffs = _validate_handoffs(authorized_work_handoffs)
+    owner_handoffs = _validate_owner_evidence_handoffs(owner_evidence_handoffs)
+    for handoff in owner_handoffs.values():
+        if (
+            handoff.record_revision is not None
+            and not _is_ancestor(
+                project.tracking.root, handoff.record_revision, tracking
+            )
+        ):
+            raise WorkspaceError(
+                f"owner evidence revision is unreachable: {handoff.work_id}"
+            )
+    overlap = set(handoffs) & set(owner_handoffs)
+    if overlap:
+        raise WorkspaceError(
+            "duplicate legacy and owner evidence handoff: "
+            + ",".join(sorted(overlap))
+        )
     # A handoff is also an access boundary: do not open a board document whose
     # owner supplied a deliberately bounded record (for example a parent
     # closeout that cannot disclose its child task content).
     work_docs, unavailable = _completed_work(
-        project.tracking.root, tracking, excluded_work_ids=set(handoffs)
+        project.tracking.root,
+        tracking,
+        excluded_work_ids=set(handoffs) | set(owner_handoffs),
     )
-    work_ids = {doc.meta.id for doc, _, _ in work_docs} | set(handoffs)
+    work_ids = (
+        {doc.meta.id for doc, _, _ in work_docs}
+        | set(handoffs)
+        | set(owner_handoffs)
+    )
 
     receipt_map, receipt_unavailable = _receipt_commit_map(
         project.target.root, target, work_ids
@@ -179,6 +446,10 @@ def build_historical_inventory(
         work_ids,
     )
     unavailable.extend(handoff_review_unavailable)
+    unavailable.extend(_merge_review_evidence(
+        review_rows, review_by_work, review_evidence, work_ids,
+        project=project, accepted_target_revision=target,
+    ))
 
     commits = _reachable_commits(
         project.target.root, target, receipt_map, review_rows
@@ -291,6 +562,51 @@ def build_historical_inventory(
         })
         ledger.append(ledger_row)
 
+    for work_id, handoff in owner_handoffs.items():
+        commit_ids = sorted(
+            revision for revision, owners in receipt_map.items()
+            if work_id in owners and revision in reachable_ids
+        )
+        review_ids = list(review_by_work.get(work_id, ()))
+        row = handoff.to_dict()
+        work_rows.append({
+            "work_id": work_id,
+            "tier": "task",
+            "title": handoff.title or work_id,
+            "parent": handoff.owning_feature,
+            "repository_path": None,
+            "evidence_revision": handoff.record_revision,
+            "narrative": None,
+            "narrative_status": (
+                "authorized_excerpts_available"
+                if handoff.availability == "available" else handoff.availability
+            ),
+            "owner_evidence_handoff": row,
+            "unavailable_reason": handoff.unavailable_reason,
+            "commit_ids": commit_ids,
+            "review_ids": review_ids,
+        })
+        if not commit_ids:
+            unavailable.append(
+                _unavailable("git", "reconciliation_receipt_missing", work_id)
+            )
+        if handoff.availability != "available":
+            unavailable.append(_unavailable(
+                "work_record", handoff.unavailable_reason or "unavailable", work_id
+            ))
+        ledger_row = _initial_ledger_row(
+            f"work:{work_id}", "work_item", work_id,
+            ([handoff.record_revision] if handoff.record_revision else [])
+            + commit_ids,
+            review_ids,
+        )
+        ledger_row.update({
+            "revision": handoff.record_revision,
+            "owner_evidence_handoff": row,
+            "unavailable_reason": handoff.unavailable_reason,
+        })
+        ledger.append(ledger_row)
+
     covered = set(receipt_map) & reachable_ids
     for commit in commits:
         if commit["commit_id"] in covered:
@@ -319,6 +635,10 @@ def build_historical_inventory(
         reviews=tuple(review_rows),
         ledger=tuple(sorted(ledger, key=lambda row: str(row["row_id"]))),
         unavailable=tuple(unavailable),
+        baseline_pair=baseline_pair,
+        owner_evidence_handoffs=tuple(
+            owner_handoffs[key].to_dict() for key in sorted(owner_handoffs)
+        ),
     )
 
 
@@ -330,6 +650,9 @@ def pin_historical_inventory(
     tracking_revision: str = "HEAD",
     authorized_work_handoffs: Sequence[AuthorizedWorkHandoff] = (),
     authorized_review_handoffs: Sequence[AuthorizedReviewHandoff] = (),
+    baseline_pair: BaselinePair | None = None,
+    owner_evidence_handoffs: Sequence[OwnerEvidenceHandoff] = (),
+    review_evidence: Sequence[ReviewEvidence] = (),
     path: Path | None = None,
 ) -> HistoricalEvidenceInventory:
     """Build and atomically persist a reproducible historical inventory."""
@@ -341,6 +664,9 @@ def pin_historical_inventory(
         tracking_revision=tracking_revision,
         authorized_work_handoffs=authorized_work_handoffs,
         authorized_review_handoffs=authorized_review_handoffs,
+        baseline_pair=baseline_pair,
+        owner_evidence_handoffs=owner_evidence_handoffs,
+        review_evidence=review_evidence,
     )
     destination = path or inventory_path(project)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -434,6 +760,267 @@ def _validate_handoffs(
             )
         result[value.work_id] = value
     return result
+
+
+def _validate_owner_evidence_handoffs(
+    values: Sequence[OwnerEvidenceHandoff],
+) -> dict[str, OwnerEvidenceHandoff]:
+    result: dict[str, OwnerEvidenceHandoff] = {}
+    for value in values:
+        if value.version != _CONTRACT_VERSION:
+            raise WorkspaceError(f"unsupported owner evidence version: {value.work_id}")
+        if value.work_id in result:
+            raise WorkspaceError(f"duplicate owner evidence handoff: {value.work_id}")
+        if not value.work_id or not value.owning_feature or not value.authorized_source:
+            raise WorkspaceError(f"incomplete owner evidence handoff: {value.work_id}")
+        if value.availability == "available":
+            if value.record_revision is None or not _REVISION.fullmatch(
+                value.record_revision
+            ):
+                raise WorkspaceError(
+                    f"available owner evidence lacks exact revision: {value.work_id}"
+                )
+            if not all((
+                value.intent_excerpt,
+                value.intent_source_reference,
+                value.verification_excerpt,
+                value.verification_source_reference,
+            )):
+                raise WorkspaceError(
+                    f"available owner evidence lacks referenced excerpts: {value.work_id}"
+                )
+            if value.unavailable_reason is not None:
+                raise WorkspaceError(
+                    f"available owner evidence has unavailable reason: {value.work_id}"
+                )
+        elif value.availability in {"unavailable", "pending_owner_handoff"}:
+            if value.record_revision is not None:
+                raise WorkspaceError(
+                    f"non-available owner evidence has a revision: {value.work_id}"
+                )
+            if not value.unavailable_reason or not value.responsible_owner:
+                raise WorkspaceError(
+                    f"non-available owner evidence lacks reason or owner: {value.work_id}"
+                )
+            if any((
+                value.intent_excerpt,
+                value.intent_source_reference,
+                value.verification_excerpt,
+                value.verification_source_reference,
+            )):
+                raise WorkspaceError(
+                    f"non-available owner evidence contains excerpts: {value.work_id}"
+                )
+            if value.availability == "pending_owner_handoff":
+                if not value.owner_request_id:
+                    raise WorkspaceError(
+                        f"pending owner evidence lacks request id: {value.work_id}"
+                    )
+                if value.source_repository is not None or value.source_path is not None:
+                    raise WorkspaceError(
+                        f"pending owner evidence contains unreceived source: {value.work_id}"
+                    )
+        else:
+            raise WorkspaceError(f"invalid owner evidence availability: {value.work_id}")
+        result[value.work_id] = value
+    return result
+
+
+def _expected_repository_key(project: ProjectContext, role: str) -> str:
+    if role == "target" or project.target.root == project.tracking.root:
+        return project.target_repository_key
+    assert project.tracking.repository_key is not None
+    return project.tracking.repository_key
+
+
+def _validate_baseline_pair_shape(pair: BaselinePair) -> None:
+    string_values = (
+        pair.target_repository_key,
+        pair.tracking_repository_key,
+        pair.g_artifact_repository_key,
+        pair.g_artifact_path,
+        pair.g_artifact_sha256,
+    )
+    if pair.version != _CONTRACT_VERSION or not all(
+        isinstance(value, str) and value.strip() for value in string_values
+    ):
+        raise ValueError
+    if pair.g_artifact_repository_role not in {"target", "tracking"}:
+        raise ValueError
+    if not all(_REVISION.fullmatch(revision) for revision in (
+        pair.target_revision,
+        pair.tracking_revision,
+        pair.g_artifact_revision,
+    )):
+        raise ValueError
+    if not re.fullmatch(r"[0-9a-f]{64}", pair.g_artifact_sha256):
+        raise ValueError
+    artifact_path = Path(pair.g_artifact_path)
+    if artifact_path.is_absolute() or ".." in artifact_path.parts:
+        raise ValueError
+    if not all(isinstance(row, dict) for row in (
+        *pair.integrations, *pair.accepted_deltas,
+    )):
+        raise ValueError
+
+
+def _validate_baseline_pair(project: ProjectContext, pair: BaselinePair) -> None:
+    try:
+        _validate_baseline_pair_shape(pair)
+    except ValueError as exc:
+        raise WorkspaceError("invalid historical baseline pair") from exc
+    if pair.target_repository_key != _expected_repository_key(project, "target"):
+        raise WorkspaceError("baseline target repository mismatch")
+    if pair.tracking_repository_key != _expected_repository_key(project, "tracking"):
+        raise WorkspaceError("baseline tracking repository mismatch")
+    artifact_root = (
+        project.target.root
+        if pair.g_artifact_repository_role == "target"
+        else project.tracking.root
+    )
+    if pair.g_artifact_repository_key != _expected_repository_key(
+        project, pair.g_artifact_repository_role
+    ):
+        raise WorkspaceError("G artifact repository mismatch")
+    target = _resolve_revision(project.target.root, pair.target_revision)
+    tracking = _resolve_revision(project.tracking.root, pair.tracking_revision)
+    if target != pair.target_revision or tracking != pair.tracking_revision:
+        raise WorkspaceError("baseline pair revisions are not exact commits")
+    artifact_revision = _resolve_revision(artifact_root, pair.g_artifact_revision)
+    artifact = _git_bytes(
+        artifact_root, ["show", f"{artifact_revision}:{pair.g_artifact_path}"]
+    )
+    if hashlib.sha256(artifact).hexdigest() != pair.g_artifact_sha256:
+        raise WorkspaceError("G artifact content hash mismatch")
+    for integration in pair.integrations:
+        _validate_integration_evidence(project.target.root, target, integration)
+    for delta in pair.accepted_deltas:
+        revision = delta.get("revision")
+        if not isinstance(revision, str) or not _REVISION.fullmatch(revision):
+            raise WorkspaceError("accepted delta lacks exact revision")
+        if not _is_ancestor(project.target.root, revision, target):
+            raise WorkspaceError(f"accepted delta is unreachable: {revision}")
+    if pair.integrations:
+        last_merge = pair.integrations[-1].get("merge_revision")
+        assert isinstance(last_merge, str)
+        expected_deltas = _git_lines(project.target.root, [
+            "rev-list", "--first-parent", "--reverse",
+            f"{last_merge}..{target}",
+        ])
+        recorded_deltas = [str(row["revision"]) for row in pair.accepted_deltas]
+        if recorded_deltas != expected_deltas:
+            raise WorkspaceError("accepted delta cut does not match accepted target")
+
+
+def _validate_integration_evidence(
+    root: Path, accepted_revision: str, integration: Mapping[str, object]
+) -> None:
+    merge = integration.get("merge_revision")
+    head = integration.get("head_revision")
+    base = integration.get("base_revision")
+    if not all(
+        isinstance(value, str) and _REVISION.fullmatch(value)
+        for value in (merge, head, base)
+    ):
+        raise WorkspaceError("integration evidence lacks exact merge/head/base revisions")
+    assert isinstance(merge, str) and isinstance(head, str) and isinstance(base, str)
+    if not _is_ancestor(root, merge, accepted_revision):
+        raise WorkspaceError(f"integration merge is not accepted: {merge}")
+    parents = _git_lines(root, ["show", "-s", "--format=%P", merge])
+    parent_ids = parents[0].split() if parents else []
+    if parent_ids[:2] != [base, head]:
+        raise WorkspaceError(f"integration linkage mismatch: {merge}")
+
+
+def _validate_review_evidence(
+    value: ReviewEvidence,
+    *,
+    expected_repository_key: str,
+    root: Path,
+    accepted_revision: str,
+) -> None:
+    if value.version != _CONTRACT_VERSION:
+        raise WorkspaceError(f"unsupported review evidence version: {value.review_id}")
+    if value.repository_key != expected_repository_key:
+        raise WorkspaceError(f"review repository mismatch: {value.review_id}")
+    if not all((value.review_id, value.forge, value.url, value.captured_at)):
+        raise WorkspaceError("review evidence lacks identity or capture time")
+    try:
+        captured_at = datetime.fromisoformat(value.captured_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise WorkspaceError("review evidence has invalid capture time") from exc
+    if captured_at.tzinfo is None:
+        raise WorkspaceError("review evidence capture time lacks timezone")
+    if not value.work_ids:
+        raise WorkspaceError("review evidence lacks linked work")
+    unavailable = dict(value.unavailable_fields)
+    revision_fields = {
+        "source_revision": value.source_revision,
+        "head_revision": value.head_revision,
+        "base_revision": value.base_revision,
+        "merge_revision": value.merge_revision,
+    }
+    for field_name, revision in revision_fields.items():
+        if revision is None:
+            if not unavailable.get(field_name):
+                raise WorkspaceError(
+                    f"review evidence lacks explicit unavailable field: {field_name}"
+                )
+        elif not _REVISION.fullmatch(revision):
+            raise WorkspaceError(f"invalid review revision: {field_name}")
+    for field_name in ("source_revision", "head_revision", "base_revision"):
+        revision = revision_fields[field_name]
+        if revision is not None and not _is_ancestor(root, revision, accepted_revision):
+            raise WorkspaceError(
+                f"review revision is unreachable: {field_name}:{revision}"
+            )
+    if value.description is None:
+        if value.description_sha256 is not None or not unavailable.get("description"):
+            raise WorkspaceError("unavailable review description is not explicit")
+        if value.description_provenance != "unavailable":
+            raise WorkspaceError("unavailable review description has provenance")
+    else:
+        digest = hashlib.sha256(value.description.encode("utf-8")).hexdigest()
+        if digest != value.description_sha256:
+            raise WorkspaceError("review description content hash mismatch")
+        if value.description_provenance not in {
+            "current_snapshot", "merge_time_archive",
+        }:
+            raise WorkspaceError("invalid review description provenance")
+    for revision in value.linked_commit_ids:
+        if not _REVISION.fullmatch(revision) or not _is_ancestor(
+            root, revision, accepted_revision
+        ):
+            raise WorkspaceError(f"review linked commit is unreachable: {revision}")
+    if not value.linked_commit_ids and not unavailable.get("linked_commit_ids"):
+        raise WorkspaceError("review evidence lacks linked commits or unavailable reason")
+    if value.merge_revision is not None:
+        if not _is_ancestor(root, value.merge_revision, accepted_revision):
+            raise WorkspaceError(
+                f"review merge is unreachable: {value.merge_revision}"
+            )
+        parents = _git_lines(
+            root, ["show", "-s", "--format=%P", value.merge_revision]
+        )
+        parent_ids = parents[0].split() if parents else []
+        head = value.head_revision or value.source_revision
+        if head is not None and (
+            len(parent_ids) < 2
+            or parent_ids[1] != head
+            or (
+                value.base_revision is not None
+                and parent_ids[0] != value.base_revision
+            )
+        ):
+            raise WorkspaceError(
+                f"review head/merge linkage mismatch: {value.review_id}"
+            )
+        if value.base_revision is not None and not _is_ancestor(
+            root, value.base_revision, value.merge_revision
+        ):
+            raise WorkspaceError(
+                f"review base/merge linkage mismatch: {value.review_id}"
+            )
 
 
 def _receipt_commit_map(
@@ -620,6 +1207,69 @@ def _merge_authorized_reviews(
     return unavailable
 
 
+def _merge_review_evidence(
+    reviews: list[dict[str, object]],
+    review_by_work: dict[str, tuple[str, ...]],
+    values: Sequence[ReviewEvidence],
+    work_ids: set[str],
+    *,
+    project: ProjectContext,
+    accepted_target_revision: str,
+) -> list[dict[str, str]]:
+    """Merge exact forge captures and reject repository or commit mismatches."""
+
+    by_url = {str(row["url"]): row for row in reviews}
+    seen: set[str] = set()
+    unavailable: list[dict[str, str]] = []
+    for value in values:
+        if value.url in seen:
+            raise WorkspaceError(f"duplicate review evidence: {value.url}")
+        seen.add(value.url)
+        unknown = set(value.work_ids) - work_ids
+        if unknown:
+            raise WorkspaceError(
+                "review evidence references unknown work: "
+                + ",".join(sorted(unknown))
+            )
+        _validate_review_evidence(
+            value,
+            expected_repository_key=_expected_repository_key(project, "target"),
+            root=project.target.root,
+            accepted_revision=accepted_target_revision,
+        )
+        row = value.to_dict()
+        row.update({
+            "description_status": (
+                "captured_current_description"
+                if value.description_provenance == "current_snapshot"
+                else "captured_merge_time_description"
+                if value.description_provenance == "merge_time_archive"
+                else "unavailable"
+            ),
+            "acceptance_status": (
+                "merged_reachable_from_accepted_target"
+                if value.merge_revision is not None else "not_proven_merged"
+            ),
+        })
+        existing = by_url.get(value.url)
+        if existing is None:
+            reviews.append(row)
+            by_url[value.url] = row
+        else:
+            existing.clear()
+            existing.update(row)
+        for work_id in value.work_ids:
+            review_by_work[work_id] = tuple(dict.fromkeys((
+                *review_by_work.get(work_id, ()), value.review_id,
+            )))
+        for field_name, reason in sorted(value.unavailable_fields.items()):
+            unavailable.append(_unavailable(
+                "review", f"review_{field_name}_unavailable", f"{value.url}:{reason}"
+            ))
+    reviews.sort(key=lambda row: str(row["url"]))
+    return unavailable
+
+
 def _merge_commit_reviews(
     root: Path,
     commits: list[dict[str, object]],
@@ -713,8 +1363,8 @@ def _reachable_commits(
     revisions = _git_lines(root, ["rev-list", "--reverse", "--topo-order", baseline])
     review_by_revision: dict[str, list[str]] = {}
     for review in reviews:
-        for field in ("source_revision", "merge_revision"):
-            value = review.get(field)
+        for revision_field in ("source_revision", "merge_revision"):
+            value = review.get(revision_field)
             if isinstance(value, str) and _REVISION.fullmatch(value):
                 review_by_revision.setdefault(value, []).append(str(review["review_id"]))
     rows: list[dict[str, object]] = []
@@ -806,7 +1456,28 @@ def _git_text(root: Path, args: list[str]) -> str:
     return result.stdout
 
 
+def _git_bytes(root: Path, args: list[str]) -> bytes:
+    result = subprocess.run(["git", *args], cwd=root, capture_output=True)
+    if result.returncode != 0:
+        raise GitError(
+            result.stderr.decode("utf-8", errors="replace").strip()
+            or f"git {' '.join(args)} failed"
+        )
+    return result.stdout
+
+
+def _is_ancestor(root: Path, ancestor: str, descendant: str) -> bool:
+    return subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=root,
+        capture_output=True,
+    ).returncode == 0
+
+
 __all__ = [
+    "BaselinePair",
+    "OwnerEvidenceHandoff",
+    "ReviewEvidence",
     "AuthorizedReviewHandoff",
     "AuthorizedWorkHandoff",
     "HistoricalEvidenceInventory",
