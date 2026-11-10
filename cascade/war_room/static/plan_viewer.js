@@ -2541,7 +2541,28 @@
             bodyEl.hidden = false;
           }
           if (doc.paired_review) {
-            initPairedC4Review(doc.paired_review);
+            var envelope = doc.paired_review;
+            if (envelope.resource_url) {
+              fetch(envelope.resource_url, { signal: pageLoadSignal() })
+                .then(function (response) {
+                  if (!response.ok) {
+                    throw new Error("Failed to load architecture review (" + response.status + ")");
+                  }
+                  return response.json();
+                })
+                .then(initPairedC4Review)
+                .catch(function (error) {
+                  initPairedC4Review({
+                    state: "error",
+                    summary: envelope.message || "Architecture review is unavailable.",
+                    error: (envelope.message || error.message || "Architecture review is unavailable.") +
+                      (envelope.retry && envelope.retry.retryable ? " Retry shortly." : ""),
+                    views: [], changed_views: [], diffs: {},
+                  });
+                });
+            } else {
+              initPairedC4Review(envelope);
+            }
           }
           var readinessMount = null;
           if (meta.tier === "epic" && doc.plan_readiness) {

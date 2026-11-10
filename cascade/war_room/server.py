@@ -15,6 +15,7 @@ import socket
 import sys
 import threading
 import time
+import urllib.parse
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -482,6 +483,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = self.path.split("?", 1)[0]
+        if path.startswith("/api/architecture/"):
+            self._handle_architecture_get(path)
+            return
         if path in self._exact_get_routes():
             self._exact_get_routes()[path](self)
             return
@@ -1335,6 +1339,12 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
         payload = work_doc_to_dict(doc, root=self.server.root)
         meta = doc.meta
+        if meta.tier in {"epic", "feature"}:
+            from cascade.war_room.architecture_routes import review_envelope
+
+            payload["paired_review"] = review_envelope(
+                self.server.root, work_id, meta.tier
+            )
         if (
             meta.tier == "epic"
             and meta.plan_approved_at is None
@@ -1349,6 +1359,76 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             if readiness is not None:
                 payload["plan_readiness"] = epic_plan_readiness_to_dict(readiness)
         self._json_response(HTTPStatus.OK, payload)
+
+    def _handle_architecture_get(self, path: str) -> None:
+        from cascade.war_room.architecture_routes import (
+            ArchitectureHTTPError,
+            MAX_METADATA_BYTES,
+            artifact_bytes,
+            resource_bytes,
+            review_projection,
+        )
+
+        if len(self.path.encode("utf-8")) > MAX_METADATA_BYTES:
+            self._json_error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "request exceeds 256 KiB")
+            return
+        try:
+            if path.startswith("/api/architecture/reviews/"):
+                work_id = path.removeprefix("/api/architecture/reviews/").strip("/")
+                if not work_id or "/" in work_id:
+                    raise ArchitectureHTTPError(404, "architecture review not found")
+                query = urllib.parse.parse_qs(
+                    urllib.parse.urlsplit(self.path).query,
+                    keep_blank_values=True,
+                    max_num_fields=8,
+                )
+                if set(query) - {"cursor", "limit"}:
+                    raise ArchitectureHTTPError(400, "unknown review query parameter")
+                try:
+                    cursor = int(query.get("cursor", ["0"])[0])
+                    limit = int(query.get("limit", ["25"])[0])
+                except (ValueError, IndexError) as exc:
+                    raise ArchitectureHTTPError(400, "invalid review pagination") from exc
+                self._json_response(
+                    HTTPStatus.OK,
+                    review_projection(self.server.root, work_id, cursor=cursor, limit=limit),
+                )
+                return
+            for prefix, loader in (
+                ("/api/architecture/artifacts/", artifact_bytes),
+                ("/api/architecture/resources/", resource_bytes),
+            ):
+                if not path.startswith(prefix):
+                    continue
+                parts = path.removeprefix(prefix).strip("/").split("/")
+                if len(parts) != 2 or not all(parts):
+                    raise ArchitectureHTTPError(404, "architecture resource not found")
+                loaded = loader(self.server.root, parts[0], parts[1])
+                if loader is artifact_bytes:
+                    body, etag = loaded
+                    content_type = "image/svg+xml; charset=utf-8"
+                else:
+                    body, content_type, etag = loaded
+                if self.headers.get("If-None-Match") == etag:
+                    self.send_response(HTTPStatus.NOT_MODIFIED)
+                    self.send_header("ETag", etag)
+                    self.send_header("Cache-Control", "private, max-age=31536000, immutable")
+                    self.end_headers()
+                    return
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Cache-Control", "private, max-age=31536000, immutable")
+                self.send_header("ETag", etag)
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            raise ArchitectureHTTPError(404, "architecture resource not found")
+        except ArchitectureHTTPError as exc:
+            self._json_error(HTTPStatus(exc.status), str(exc))
+        except (OSError, ValueError, WorkspaceError) as exc:
+            self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
 
     def end_headers(self) -> None:
         """Finish the response and tell the browser not to wait on this connection."""
@@ -1433,6 +1513,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/doc/"):
             work_id = path.removeprefix("/api/doc/").strip("/")
             return bool(work_id and "/" not in work_id)
+        if path.startswith("/api/architecture/"):
+            return True
         if path.startswith("/api/comments/"):
             doc_id = path.removeprefix("/api/comments/").strip("/")
             return bool(doc_id and "/" not in doc_id)

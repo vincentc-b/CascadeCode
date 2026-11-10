@@ -693,6 +693,7 @@ def _semantic_svg(artifact_root: Path, row: dict[str, object]) -> str:
         if node is None:
             raise C4BindingError("validated SVG lost a hit-target node")
         node.set("data-cascade-semantic-id", str(target["semantic_id"]))
+        node.set("data-cascade-model-kind", str(target["kind"]))
     return ET.tostring(tree.getroot(), encoding="unicode")
 
 
