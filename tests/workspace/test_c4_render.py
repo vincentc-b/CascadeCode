@@ -45,7 +45,12 @@ def test_real_pinned_renderer_publishes_one_validated_handoff_and_cache(
 
     assert result.status == "ready", result
     assert result.cache_hit is False
-    assert result.view_keys == ("cascade-containers", "cascade-landscape")
+    assert result.view_keys == (
+        "cascade-containers",
+        "cascade-context",
+        "cascade-landscape",
+        "cascade-supervisor-components",
+    )
     assert result.semantic_workspace and result.semantic_workspace.is_file()
     assert result.embedded_workspace and result.embedded_workspace.is_file()
     assert result.static_directory
@@ -241,7 +246,7 @@ def _closure(tmp_path: Path) -> C4SourceClosure:
         C4SourceFile(
             path=path.relative_to(root),
             repository_path=path.relative_to(root),
-            owner="feat_034_002",
+            owner="task_034_007_002",
             revision=revision,
             sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
         )

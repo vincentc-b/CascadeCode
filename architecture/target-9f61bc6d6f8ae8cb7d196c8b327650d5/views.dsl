@@ -1,9 +1,19 @@
 systemLandscape "cascade-landscape" {
     include *
-    autoLayout
+    autoLayout lr
+}
+
+systemContext cascade "cascade-context" {
+    include *
+    autoLayout lr
 }
 
 container cascade "cascade-containers" {
     include *
-    autoLayout
+    autoLayout lr
+}
+
+component supervisor "cascade-supervisor-components" {
+    include *
+    autoLayout lr
 }

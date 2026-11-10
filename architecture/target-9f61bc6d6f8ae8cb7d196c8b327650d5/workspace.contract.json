@@ -2,24 +2,48 @@
   "elements": [
     {"dsl_identifier": "operator", "semantic_id": "element.person.operator", "fragment": "model.dsl"},
     {"dsl_identifier": "cascade", "semantic_id": "element.system.cascade", "fragment": "model.dsl"},
-    {"dsl_identifier": "supervisor", "semantic_id": "element.container.cascade-supervisor", "fragment": "model.dsl"},
+    {"dsl_identifier": "war_room", "semantic_id": "element.container.war-room", "fragment": "model.dsl"},
+    {"dsl_identifier": "supervisor", "semantic_id": "element.container.supervisor", "fragment": "model.dsl"},
+    {"dsl_identifier": "board_component", "semantic_id": "element.component.board", "fragment": "model.dsl"},
+    {"dsl_identifier": "agent_component", "semantic_id": "element.component.agent", "fragment": "model.dsl"},
+    {"dsl_identifier": "team_component", "semantic_id": "element.component.teams", "fragment": "model.dsl"},
+    {"dsl_identifier": "watchdog_component", "semantic_id": "element.component.watchdog", "fragment": "model.dsl"},
+    {"dsl_identifier": "boss_component", "semantic_id": "element.component.boss", "fragment": "model.dsl"},
+    {"dsl_identifier": "workspace_component", "semantic_id": "element.component.workspace", "fragment": "model.dsl"},
+    {"dsl_identifier": "collaboration_component", "semantic_id": "element.component.collaboration", "fragment": "model.dsl"},
+    {"dsl_identifier": "repository", "semantic_id": "element.container.repository", "fragment": "model.dsl"},
+    {"dsl_identifier": "forge", "semantic_id": "element.system.forge", "fragment": "model.dsl"},
+    {"dsl_identifier": "model_provider", "semantic_id": "element.system.model-provider", "fragment": "model.dsl"},
     {"dsl_identifier": "structurizr", "semantic_id": "element.system.structurizr", "fragment": "model.dsl"},
     {"dsl_identifier": "structurizr_cli", "semantic_id": "element.container.structurizr-cli", "fragment": "model.dsl"}
   ],
   "fragments": [
-    {"path": "model.dsl", "owner": "feat_034_002"},
-    {"path": "views.dsl", "owner": "feat_034_002"}
+    {"path": "model.dsl", "owner": "task_034_007_002"},
+    {"path": "views.dsl", "owner": "task_034_007_002"}
   ],
   "relationships": [
-    {"dsl_identifier": "reviews", "semantic_id": "relationship.operator-reviews-cascade", "source": "operator", "destination": "cascade", "fragment": "model.dsl"},
+    {"dsl_identifier": "operator_uses_war_room", "semantic_id": "relationship.operator-uses-war-room", "source": "operator", "destination": "war_room", "fragment": "model.dsl"},
+    {"dsl_identifier": "war_room_calls_supervisor", "semantic_id": "relationship.war-room-calls-supervisor", "source": "war_room", "destination": "supervisor", "fragment": "model.dsl"},
+    {"dsl_identifier": "supervisor_reads_repository", "semantic_id": "relationship.supervisor-reads-repository", "source": "supervisor", "destination": "repository", "fragment": "model.dsl"},
+    {"dsl_identifier": "agent_calls_provider", "semantic_id": "relationship.agent-calls-provider", "source": "agent_component", "destination": "model_provider", "fragment": "model.dsl"},
+    {"dsl_identifier": "boss_uses_forge", "semantic_id": "relationship.boss-uses-forge", "source": "boss_component", "destination": "forge", "fragment": "model.dsl"},
+    {"dsl_identifier": "workspace_calls_structurizr", "semantic_id": "relationship.workspace-calls-structurizr", "source": "workspace_component", "destination": "structurizr", "fragment": "model.dsl"},
     {"dsl_identifier": "validates", "semantic_id": "relationship.supervisor-validates-with-cli", "source": "supervisor", "destination": "structurizr_cli", "fragment": "model.dsl"},
-    {"dsl_identifier": "exports", "semantic_id": "relationship.supervisor-exports-with-cli", "source": "supervisor", "destination": "structurizr_cli", "fragment": "model.dsl"}
+    {"dsl_identifier": "exports", "semantic_id": "relationship.supervisor-exports-with-cli", "source": "supervisor", "destination": "structurizr_cli", "fragment": "model.dsl"},
+    {"dsl_identifier": "watchdog_reads_board", "semantic_id": "relationship.watchdog-reads-board", "source": "watchdog_component", "destination": "board_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "watchdog_dispatches_teams", "semantic_id": "relationship.watchdog-dispatches-teams", "source": "watchdog_component", "destination": "team_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "teams_use_agent", "semantic_id": "relationship.teams-use-agent", "source": "team_component", "destination": "agent_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "teams_use_collaboration", "semantic_id": "relationship.teams-use-collaboration", "source": "team_component", "destination": "collaboration_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "boss_reads_board", "semantic_id": "relationship.boss-reads-board", "source": "boss_component", "destination": "board_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "teams_use_workspace", "semantic_id": "relationship.teams-use-workspace", "source": "team_component", "destination": "workspace_component", "fragment": "model.dsl"}
   ],
   "renames": [],
   "version": 1,
   "views": [
     {"key": "cascade-landscape", "fragment": "views.dsl"},
-    {"key": "cascade-containers", "fragment": "views.dsl"}
+    {"key": "cascade-context", "fragment": "views.dsl"},
+    {"key": "cascade-containers", "fragment": "views.dsl"},
+    {"key": "cascade-supervisor-components", "fragment": "views.dsl"}
   ],
-  "workspace": {"source": "workspace.dsl", "owner": "feat_034_002"}
+  "workspace": {"source": "workspace.dsl", "owner": "task_034_007_002"}
 }

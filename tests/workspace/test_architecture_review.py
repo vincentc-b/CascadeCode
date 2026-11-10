@@ -1434,10 +1434,10 @@ def test_diagram_change_runs_pinned_closure_and_render_validation(tmp_path: Path
         _digest(root.joinpath("DESIGN.md").read_bytes()),
     )
     contract = create_architecture_model_ref(
-        project, ".", "workspace.contract.json", owning_work="feat_034_002"
+        project, ".", "workspace.contract.json", owning_work="task_034_007_002"
     )
     sources = tuple(
-        create_architecture_model_ref(project, ".", name, owning_work="feat_034_002")
+        create_architecture_model_ref(project, ".", name, owning_work="task_034_007_002")
         for name in ("workspace.dsl", "model.dsl", "views.dsl")
     )
     with tempfile.TemporaryDirectory() as directory:

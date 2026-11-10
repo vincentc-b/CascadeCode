@@ -1,0 +1,483 @@
+{
+  "diffs": {
+    "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0": {
+      "changed_view_keys": [
+        "cascade-containers",
+        "cascade-context",
+        "cascade-landscape",
+        "cascade-supervisor-components"
+      ],
+      "containment": [],
+      "current_artifact_ref": "empty_baseline",
+      "error": null,
+      "identities": [
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.agent",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.board",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.boss",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.collaboration",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.teams",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.watchdog",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.workspace",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.container.repository",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.container.structurizr-cli",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.container.supervisor",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.container.war-room",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.person.operator",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.system.cascade",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.system.forge",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.system.model-provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.system.structurizr",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.agent-calls-provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.boss-reads-board",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.boss-uses-forge",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.operator-uses-war-room",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.supervisor-exports-with-cli",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.supervisor-reads-repository",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.supervisor-validates-with-cli",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.teams-use-agent",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.teams-use-collaboration",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.teams-use-workspace",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.war-room-calls-supervisor",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.watchdog-dispatches-teams",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.watchdog-reads-board",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.workspace-calls-structurizr",
+          "state": "added"
+        }
+      ],
+      "proposed_artifact_ref": "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0",
+      "source_diff_reference": "revision:50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a;paths:architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl,architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl,architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json,architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+      "state": "empty_baseline",
+      "summary": "empty baseline: 30 identity change(s), 0 containment change(s), 4 affected view(s)",
+      "views": [
+        {
+          "changed_identities": [
+            "element.container.repository",
+            "element.container.supervisor",
+            "element.container.war-room",
+            "element.person.operator",
+            "relationship.operator-uses-war-room",
+            "relationship.supervisor-reads-repository",
+            "relationship.war-room-calls-supervisor"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-containers",
+          "proposed_elements": [
+            "element.container.repository",
+            "element.container.supervisor",
+            "element.container.war-room",
+            "element.person.operator"
+          ],
+          "proposed_relationships": [
+            "relationship.operator-uses-war-room",
+            "relationship.supervisor-reads-repository",
+            "relationship.war-room-calls-supervisor"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.system.cascade"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-context",
+          "proposed_elements": [
+            "element.system.cascade"
+          ],
+          "proposed_relationships": [],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.person.operator",
+            "element.system.cascade",
+            "element.system.forge",
+            "element.system.model-provider",
+            "element.system.structurizr"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-landscape",
+          "proposed_elements": [
+            "element.person.operator",
+            "element.system.cascade",
+            "element.system.forge",
+            "element.system.model-provider",
+            "element.system.structurizr"
+          ],
+          "proposed_relationships": [],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.component.agent",
+            "element.component.board",
+            "element.component.boss",
+            "element.component.collaboration",
+            "element.component.teams",
+            "element.component.watchdog",
+            "element.component.workspace",
+            "element.system.forge",
+            "element.system.model-provider",
+            "element.system.structurizr",
+            "relationship.agent-calls-provider",
+            "relationship.boss-reads-board",
+            "relationship.boss-uses-forge",
+            "relationship.teams-use-agent",
+            "relationship.teams-use-collaboration",
+            "relationship.teams-use-workspace",
+            "relationship.watchdog-dispatches-teams",
+            "relationship.watchdog-reads-board",
+            "relationship.workspace-calls-structurizr"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-supervisor-components",
+          "proposed_elements": [
+            "element.component.agent",
+            "element.component.board",
+            "element.component.boss",
+            "element.component.collaboration",
+            "element.component.teams",
+            "element.component.watchdog",
+            "element.component.workspace",
+            "element.system.forge",
+            "element.system.model-provider",
+            "element.system.structurizr"
+          ],
+          "proposed_relationships": [
+            "relationship.agent-calls-provider",
+            "relationship.boss-reads-board",
+            "relationship.boss-uses-forge",
+            "relationship.teams-use-agent",
+            "relationship.teams-use-collaboration",
+            "relationship.teams-use-workspace",
+            "relationship.watchdog-dispatches-teams",
+            "relationship.watchdog-reads-board",
+            "relationship.workspace-calls-structurizr"
+          ],
+          "state": "empty_baseline"
+        }
+      ]
+    }
+  },
+  "gate_rollout": {
+    "acceptance_holds": {},
+    "active_version": null,
+    "name": "revision_bound_architecture",
+    "work_policies": {}
+  },
+  "invalidations": {},
+  "lineages": {},
+  "promotion_reservations": {},
+  "promotions": {},
+  "review_units": {
+    "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "task_034_007_002"
+      ],
+      "architecture_impact": "diagram_change",
+      "authorized_owner": "swe",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/workspace",
+      "code_repository_key": "repository-6a3b10bc78c83ffea7c9c7be",
+      "decision_citations": [
+        "DEC-WORKSPACE-001"
+      ],
+      "design": {
+        "content_digest": "e6ef4744d62c4b1e58e4a3dfbef5c5fb25f54c4f958f5587630866d3e7083b33",
+        "reference": {
+          "code_directory": "cascade/workspace",
+          "design_owner_directory": "cascade/workspace",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "task_034_007_002",
+          "repository_path": "cascade/workspace/DESIGN.md",
+          "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/workspace",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "Initial stable-ID context, container, and component model grounded in current package boundaries.",
+      "integration_lineage": "feature:feat_034_007",
+      "owner_work_id": "task_034_007_002",
+      "plan": {
+        "content_digest": "946a60859e74cae21ab2b87d5f7422eae00a9d2c1b2de81b9bc554d42c9f70f5",
+        "path": "docs/tasks/1_backlog/task_034_007_002_assign_design_ownership_and_reconstruct_leaf_designs_and_c4_model.md",
+        "repository_key": "repository-6a3b10bc78c83ffea7c9c7be",
+        "repository_role": "target",
+        "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": {
+        "contract": {
+          "content_digest": "a68a9a5d295656da3e555ac8ed13731716a3f7a4997035754a9ba6b7b593e66f",
+          "reference": {
+            "code_directory": "cascade/workspace",
+            "design_owner_directory": "cascade/workspace",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "owning_work": "task_034_007_002",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+            "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+          }
+        },
+        "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+        "renderer_settings": {
+          "cpus": "2",
+          "memory": "1536m",
+          "pids_limit": 256,
+          "timeout_seconds": 90.0,
+          "tmpfs_size": "512m"
+        },
+        "semantic_artifact_digest": "00fe63b83dd6a9da44bfe67667223b8beea9afe66a0ae6c419ad984a9cf962b0",
+        "source_closure_digest": "98bfed8b38a468acb8aaca292c71d936b08122f1cdc88a90d26efab9bf0e07c1",
+        "sources": [
+          {
+            "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a",
+            "reference": {
+              "code_directory": "cascade/workspace",
+              "design_owner_directory": "cascade/workspace",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "task_034_007_002",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+              "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          },
+          {
+            "content_digest": "0ab973402d6302d23022b086725dc767a274dddfb850db020c6681f89ac116d7",
+            "reference": {
+              "code_directory": "cascade/workspace",
+              "design_owner_directory": "cascade/workspace",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "task_034_007_002",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+              "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          },
+          {
+            "content_digest": "a8ff346f7c6b7c483527b0430bab56bb0c08efcdfc2e8a0df3eae0b2e0fa5354",
+            "reference": {
+              "code_directory": "cascade/workspace",
+              "design_owner_directory": "cascade/workspace",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "task_034_007_002",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+              "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          }
+        ]
+      },
+      "requirement_citations": [
+        "REQ-WORKSPACE-001",
+        "REQ-WORKSPACE-002"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components"
+      ]
+    }
+  },
+  "reviews": {},
+  "version": 1
+}
