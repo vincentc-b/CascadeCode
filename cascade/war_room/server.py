@@ -116,6 +116,7 @@ from cascade.watchdog import activate_epic, append_event, dispatch_feature, disp
 from cascade.watchdog.types import Event
 from cascade.board.errors import BoardError, GitError
 from cascade.workspace.errors import WorkspaceError
+from cascade.workspace.c4_threads import SemanticThreadAnchor
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SKILLS_INVALID = object()
@@ -1001,6 +1002,28 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        semantic_anchor_raw = body.get("semantic_anchor")
+        semantic_anchor: dict[str, object] | None = None
+        if semantic_anchor_raw is not None:
+            try:
+                semantic_anchor = SemanticThreadAnchor.from_dict(
+                    semantic_anchor_raw
+                ).to_dict()
+            except (TypeError, WorkspaceError) as exc:
+                self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            # Semantic roots are a separate, typed namespace.  In particular,
+            # they must never be interpreted as markdown headings or line
+            # annotations by the existing plan-comment renderer.
+            body["section"] = "semantic-review"
+            for field in ("anchor", "line_start", "line_end", "doc_sha", "blocks"):
+                if body.get(field) not in (None, []):
+                    self._json_error(
+                        HTTPStatus.BAD_REQUEST,
+                        "semantic comments cannot carry document anchors",
+                    )
+                    return
+
         section_raw = body.get("section")
         if not isinstance(section_raw, str) or not section_raw.strip():
             self._json_error(HTTPStatus.BAD_REQUEST, "missing section")
@@ -1052,6 +1075,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 line_end=line_end,
                 doc_sha=doc_sha,
                 blocks=blocks,
+                semantic_anchor=semantic_anchor,
                 author="human",
                 root=self.server.root,
                 is_attached=self.server.attachment.is_attached,

@@ -426,6 +426,10 @@ def dispatch_result_to_dict(result: DispatchResult) -> dict:
         payload["preflight"] = preflight
     if result.selections is not None:
         payload["selections"] = result.selections.to_dict()
+    if result.detail is not None:
+        payload["code"] = result.reason
+        payload["error"] = result.detail
+        payload["message"] = result.detail
     return payload
 
 

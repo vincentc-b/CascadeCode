@@ -53,6 +53,21 @@ def try_complete_feature(
     """Complete the feature when all rollup gates pass; otherwise return False with no side effects."""
 
     repo = resolve_root(root)
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=repo):
+        return _try_complete_feature(feature_id, root=repo, review_merged=review_merged)
+
+
+def _try_complete_feature(
+    feature_id: WorkId,
+    *,
+    root: Path,
+    review_merged: bool = False,
+) -> bool:
+    """Locked Feature closeout implementation."""
+
+    repo = resolve_root(root)
     from cascade.workspace.integration_worktree import locate_trunk, merged_board
 
     board = merged_board(locate_trunk(repo))
@@ -60,6 +75,13 @@ def try_complete_feature(
         return False
     feature_meta = board.by_id[feature_id]
     if feature_meta.tier != "feature":
+        return False
+    from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    try:
+        require_lifecycle_review_gate(feature_id, "closeout", root=repo)
+    except ArchitectureProposalError:
         return False
     if (
         feature_meta.status == "completed"

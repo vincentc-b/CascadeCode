@@ -1,0 +1,509 @@
+{
+  "configuration" : { },
+  "description" : "Cascade local architecture review",
+  "documentation" : { },
+  "id" : 0,
+  "model" : {
+    "people" : [ {
+      "description" : "Plans, reviews, and approves repository-local delivery.",
+      "id" : "1",
+      "name" : "Operator",
+      "properties" : {
+        "structurizr.dsl.identifier" : "operator",
+        "cascade.semanticId" : "element.person.operator"
+      },
+      "relationships" : [ {
+        "description" : "Uses",
+        "destinationId" : "3",
+        "id" : "17",
+        "properties" : {
+          "structurizr.dsl.identifier" : "operator_uses_war_room",
+          "cascade.semanticId" : "relationship.operator-uses-war-room"
+        },
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      } ],
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "containers" : [ {
+        "description" : "Loopback operator UI and HTTP API.",
+        "documentation" : { },
+        "id" : "3",
+        "name" : "War Room",
+        "properties" : {
+          "structurizr.dsl.identifier" : "war_room",
+          "cascade.semanticId" : "element.container.war-room"
+        },
+        "relationships" : [ {
+          "description" : "Invokes authenticated operations",
+          "destinationId" : "4",
+          "id" : "18",
+          "properties" : {
+            "structurizr.dsl.identifier" : "war_room_calls_supervisor",
+            "cascade.semanticId" : "relationship.war-room-calls-supervisor"
+          },
+          "sourceId" : "3",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container",
+        "technology" : "Python HTTP"
+      }, {
+        "components" : [ {
+          "description" : "Parses and validates Markdown work state.",
+          "documentation" : { },
+          "id" : "5",
+          "name" : "Board",
+          "properties" : {
+            "structurizr.dsl.identifier" : "board_component",
+            "cascade.semanticId" : "element.component.board"
+          },
+          "tags" : "Element,Component",
+          "technology" : "cascade.board"
+        }, {
+          "description" : "Normalizes provider turns and capability checks.",
+          "documentation" : { },
+          "id" : "6",
+          "name" : "Agent runtime",
+          "properties" : {
+            "structurizr.dsl.identifier" : "agent_component",
+            "cascade.semanticId" : "element.component.agent"
+          },
+          "relationships" : [ {
+            "description" : "Runs bounded turns",
+            "destinationId" : "14",
+            "id" : "20",
+            "properties" : {
+              "structurizr.dsl.identifier" : "agent_calls_provider",
+              "cascade.semanticId" : "relationship.agent-calls-provider"
+            },
+            "sourceId" : "6",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "cascade.agent"
+        }, {
+          "description" : "Runs persistent Epic/Feature and bounded Task graphs.",
+          "documentation" : { },
+          "id" : "7",
+          "name" : "Tier teams",
+          "properties" : {
+            "structurizr.dsl.identifier" : "team_component",
+            "cascade.semanticId" : "element.component.teams"
+          },
+          "relationships" : [ {
+            "description" : "Run role turns through",
+            "destinationId" : "6",
+            "id" : "27",
+            "properties" : {
+              "structurizr.dsl.identifier" : "teams_use_agent",
+              "cascade.semanticId" : "relationship.teams-use-agent"
+            },
+            "sourceId" : "7",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Route comments and amendments through",
+            "destinationId" : "11",
+            "id" : "28",
+            "properties" : {
+              "structurizr.dsl.identifier" : "teams_use_collaboration",
+              "cascade.semanticId" : "relationship.teams-use-collaboration"
+            },
+            "sourceId" : "7",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Use worktrees and architecture contracts",
+            "destinationId" : "10",
+            "id" : "30",
+            "properties" : {
+              "structurizr.dsl.identifier" : "teams_use_workspace",
+              "cascade.semanticId" : "relationship.teams-use-workspace"
+            },
+            "sourceId" : "7",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "cascade.epic/feature/task"
+        }, {
+          "description" : "Admits ready work and coordinates bounded recovery.",
+          "documentation" : { },
+          "id" : "8",
+          "name" : "Watchdog",
+          "properties" : {
+            "structurizr.dsl.identifier" : "watchdog_component",
+            "cascade.semanticId" : "element.component.watchdog"
+          },
+          "relationships" : [ {
+            "description" : "Observes lifecycle state",
+            "destinationId" : "5",
+            "id" : "25",
+            "properties" : {
+              "structurizr.dsl.identifier" : "watchdog_reads_board",
+              "cascade.semanticId" : "relationship.watchdog-reads-board"
+            },
+            "sourceId" : "8",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Dispatches eligible work",
+            "destinationId" : "7",
+            "id" : "26",
+            "properties" : {
+              "structurizr.dsl.identifier" : "watchdog_dispatches_teams",
+              "cascade.semanticId" : "relationship.watchdog-dispatches-teams"
+            },
+            "sourceId" : "8",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "cascade.watchdog"
+        }, {
+          "description" : "Owns rollups, merge gates, and completion.",
+          "documentation" : { },
+          "id" : "9",
+          "name" : "Boss",
+          "properties" : {
+            "structurizr.dsl.identifier" : "boss_component",
+            "cascade.semanticId" : "element.component.boss"
+          },
+          "relationships" : [ {
+            "description" : "Publishes and observes reviews",
+            "destinationId" : "13",
+            "id" : "21",
+            "properties" : {
+              "structurizr.dsl.identifier" : "boss_uses_forge",
+              "cascade.semanticId" : "relationship.boss-uses-forge"
+            },
+            "sourceId" : "9",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Computes gates and rollups from",
+            "destinationId" : "5",
+            "id" : "29",
+            "properties" : {
+              "structurizr.dsl.identifier" : "boss_reads_board",
+              "cascade.semanticId" : "relationship.boss-reads-board"
+            },
+            "sourceId" : "9",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "cascade.boss"
+        }, {
+          "description" : "Resolves repositories and revision-pinned architecture.",
+          "documentation" : { },
+          "id" : "10",
+          "name" : "Workspace",
+          "properties" : {
+            "structurizr.dsl.identifier" : "workspace_component",
+            "cascade.semanticId" : "element.component.workspace"
+          },
+          "relationships" : [ {
+            "description" : "Owns pinned model processing",
+            "destinationId" : "15",
+            "id" : "22",
+            "properties" : {
+              "structurizr.dsl.identifier" : "workspace_calls_structurizr",
+              "cascade.semanticId" : "relationship.workspace-calls-structurizr"
+            },
+            "sourceId" : "10",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "cascade.workspace"
+        }, {
+          "description" : "Persists review routing and upward negotiation.",
+          "documentation" : { },
+          "id" : "11",
+          "name" : "Comments and amendments",
+          "properties" : {
+            "structurizr.dsl.identifier" : "collaboration_component",
+            "cascade.semanticId" : "element.component.collaboration"
+          },
+          "tags" : "Element,Component",
+          "technology" : "cascade.comments/amendments"
+        } ],
+        "description" : "Runs lifecycle, teams, automation, and integration.",
+        "documentation" : { },
+        "id" : "4",
+        "name" : "Service",
+        "properties" : {
+          "structurizr.dsl.identifier" : "supervisor",
+          "cascade.semanticId" : "element.container.supervisor"
+        },
+        "relationships" : [ {
+          "description" : "Reads and commits canonical artifacts",
+          "destinationId" : "12",
+          "id" : "19",
+          "properties" : {
+            "structurizr.dsl.identifier" : "supervisor_reads_repository",
+            "cascade.semanticId" : "relationship.supervisor-reads-repository"
+          },
+          "sourceId" : "4",
+          "tags" : "Relationship"
+        }, {
+          "description" : "Requests validation from",
+          "destinationId" : "16",
+          "id" : "23",
+          "properties" : {
+            "structurizr.dsl.identifier" : "validates",
+            "cascade.semanticId" : "relationship.supervisor-validates-with-cli"
+          },
+          "sourceId" : "4",
+          "tags" : "Relationship"
+        }, {
+          "description" : "Requests an isolated export from",
+          "destinationId" : "16",
+          "id" : "24",
+          "properties" : {
+            "structurizr.dsl.identifier" : "exports",
+            "cascade.semanticId" : "relationship.supervisor-exports-with-cli"
+          },
+          "sourceId" : "4",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container",
+        "technology" : "Python"
+      }, {
+        "description" : "Git-backed board, designs, queues, and evidence.",
+        "documentation" : { },
+        "id" : "12",
+        "name" : "Repository artifacts",
+        "properties" : {
+          "structurizr.dsl.identifier" : "repository",
+          "cascade.semanticId" : "element.container.repository"
+        },
+        "tags" : "Element,Container",
+        "technology" : "Git + Markdown/JSON/DSL"
+      } ],
+      "description" : "Coordinates artifact-driven delivery in a Git repository.",
+      "documentation" : { },
+      "id" : "2",
+      "name" : "Cascade",
+      "properties" : {
+        "structurizr.dsl.identifier" : "cascade",
+        "cascade.semanticId" : "element.system.cascade"
+      },
+      "tags" : "Element,Software System"
+    }, {
+      "description" : "Hosts approval and Feature review boundaries.",
+      "documentation" : { },
+      "id" : "13",
+      "name" : "Git forge",
+      "properties" : {
+        "structurizr.dsl.identifier" : "forge",
+        "cascade.semanticId" : "element.system.forge"
+      },
+      "tags" : "Element,Software System"
+    }, {
+      "description" : "Executes bounded planning and implementation turns.",
+      "documentation" : { },
+      "id" : "14",
+      "name" : "Model provider",
+      "properties" : {
+        "structurizr.dsl.identifier" : "model_provider",
+        "cascade.semanticId" : "element.system.model-provider"
+      },
+      "tags" : "Element,Software System"
+    }, {
+      "containers" : [ {
+        "description" : "Validates and exports the model.",
+        "documentation" : { },
+        "id" : "16",
+        "name" : "Service",
+        "properties" : {
+          "structurizr.dsl.identifier" : "structurizr_cli",
+          "cascade.semanticId" : "element.container.structurizr-cli"
+        },
+        "tags" : "Element,Container",
+        "technology" : "Structurizr CLI"
+      } ],
+      "description" : "Produces local model artifacts.",
+      "documentation" : { },
+      "id" : "15",
+      "name" : "Structurizr",
+      "properties" : {
+        "structurizr.dsl.identifier" : "structurizr",
+        "cascade.semanticId" : "element.system.structurizr"
+      },
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "name" : "Cascade",
+  "properties" : {
+    "structurizr.inspection.error" : "22",
+    "structurizr.inspection.info" : "0",
+    "structurizr.inspection.ignore" : "0",
+    "structurizr.inspection.warning" : "0"
+  },
+  "views" : {
+    "componentViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "containerId" : "4",
+      "elements" : [ {
+        "id" : "5",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "6",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "7",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "8",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "9",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "10",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "11",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "13",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "14",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "15",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalContainerBoundariesVisible" : false,
+      "key" : "cascade-supervisor-components",
+      "name" : "Component View: Cascade - Service",
+      "order" : 4,
+      "relationships" : [ {
+        "id" : "20"
+      }, {
+        "id" : "21"
+      }, {
+        "id" : "22"
+      }, {
+        "id" : "25"
+      }, {
+        "id" : "26"
+      }, {
+        "id" : "27"
+      }, {
+        "id" : "28"
+      }, {
+        "id" : "29"
+      }, {
+        "id" : "30"
+      } ]
+    } ],
+    "configuration" : {
+      "styles" : { },
+      "terminology" : { }
+    },
+    "containerViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "4",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "12",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalSoftwareSystemBoundariesVisible" : false,
+      "key" : "cascade-containers",
+      "name" : "Container View: Cascade",
+      "order" : 3,
+      "relationships" : [ {
+        "id" : "17"
+      }, {
+        "id" : "18"
+      }, {
+        "id" : "19"
+      } ],
+      "softwareSystemId" : "2"
+    } ],
+    "systemContextViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "cascade-context",
+      "name" : "System Context View: Cascade",
+      "order" : 2,
+      "softwareSystemId" : "2"
+    } ],
+    "systemLandscapeViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "13",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "14",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "15",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "cascade-landscape",
+      "name" : "System Landscape View",
+      "order" : 1
+    } ]
+  }
+}

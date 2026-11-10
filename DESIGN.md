@@ -21,15 +21,15 @@ A flat todo list cannot express this. A single chat window cannot isolate it. Ca
 
 ## 2. Goals
 
-- **Hierarchy over chatter.** Epic, Feature, and Task are first-class work objects with parent/child links, not tags on a flat ticket.
-- **Filesystem is the board.** Moving a `.md` file is a state transition. Agents and the UI both watch directories.
-- **Artifact-driven messaging.** Tiers do not share transcripts. They communicate through document diffs and typed queue messages.
-- **Human is mobile across persisting teams.** Default home is the Epic War Room, but the operator can drop into any live Epic or Feature team, comment on that team's design, and read why decisions were locked. Task teams stay ephemeral.
-- **Decisions outlive the chat.** Every persisting team keeps an append-only decision log on its `.md`. Dropping in later still answers "why," even if the transcript is gone.
-- **Context isolation.** Agents only load the documents and messages required for their tier. The human may attach to several graphs; those graphs still cannot see each other.
-- **Upward negotiation.** A Feature may not silently violate Epic constraints. It must propose an amendment and wait.
-- **Approval boundaries, automatic execution.** The human approves a brief by merging its MR, activates the resulting backlog epic, and reviews feature MRs. The watchdog automatically starts eligible Feature and Task teams between those boundaries.
-- **Forge-backed review.** The runtime stays local, while GitHub or GitLab holds brief approvals, draft feature reviews, and reviewer discussion. Cascade uses the operator's authenticated `gh` or `glab` session.
+- `REQ-ROOT-001` — **Hierarchy over chatter.** Epic, Feature, and Task are first-class work objects with parent/child links, not tags on a flat ticket.
+- `REQ-ROOT-002` — **Filesystem is the board.** Moving a `.md` file is a state transition. Agents and the UI both watch directories.
+- `REQ-ROOT-003` — **Artifact-driven messaging.** Tiers do not share transcripts. They communicate through document diffs and typed queue messages.
+- `REQ-ROOT-004` — **Human is mobile across persisting teams.** Default home is the Epic War Room, but the operator can drop into any live Epic or Feature team, comment on that team's design, and read why decisions were locked. Task teams stay ephemeral.
+- `REQ-ROOT-005` — **Decisions outlive the chat.** Every persisting team keeps an append-only decision log on its `.md`. Dropping in later still answers "why," even if the transcript is gone.
+- `REQ-ROOT-006` — **Context isolation.** Agents only load the documents and messages required for their tier. The human may attach to several graphs; those graphs still cannot see each other.
+- `REQ-ROOT-007` — **Upward negotiation.** A Feature may not silently violate Epic constraints. It must propose an amendment and wait.
+- `REQ-ROOT-008` — **Approval boundaries, automatic execution.** The human approves a brief by merging its MR, activates the resulting backlog epic, and reviews feature MRs. The watchdog automatically starts eligible Feature and Task teams between those boundaries.
+- `REQ-ROOT-009` — **Forge-backed review.** The runtime stays local, while GitHub or GitLab holds brief approvals, draft feature reviews, and reviewer discussion. Cascade uses the operator's authenticated `gh` or `glab` session.
 
 Non-goals for v1:
 
@@ -337,6 +337,16 @@ Required sections:
 8. **Out of scope** — explicit, to stop drive-by refactors
 
 The Task agent may read the parent Feature for types and APIs. It may **not** read sibling tasks, Feature comment threads, or the Epic amendment debate. Tasks have no durable team chat; they are not a drop-in target.
+
+### 4.5 Repository design documents
+
+`DESIGN.md` files describe durable code architecture; Epic, Feature, and Task documents retain delivery history. The repository design workflow and copy-ready format live in [`skills/design/SKILL.md`](skills/design/SKILL.md) and [`skills/design/templates/DESIGN.md`](skills/design/templates/DESIGN.md).
+
+Each requirement and decision has one owning design and a stable identifier. A parent owns system goals, cross-cutting constraints, shared contracts, and interfaces between children. A meaningful child directory owns its distinct behavior, state, interfaces, and decisions; the parent links to and summarizes that child without copying its owned detail. Moving ownership updates references in the same change.
+
+This root document is currently the owning design for the repository. Until focused changes introduce child designs, it covers the production packages under `cascade/`, executable verification under `tests/`, role and workflow guidance under `skills/` (including the trivial `skills/design/templates/` directory), and work-record infrastructure under `docs/`. Generated or runtime-only paths such as `cascade.egg-info/`, `__pycache__/`, and `.cascade/` do not own designs and are covered by this root. A new child `DESIGN.md` transfers only the boundary and identifiers it explicitly claims.
+
+The diagrams in [Product workflow](#21-product-workflow), [The 3-Tier Directory Structure](#3-the-3-tier-directory-structure), [Agent Lifecycles](#5-agent-lifecycles), [LangGraph Topology](#6-langgraph-topology), and [Workspace supervisor](#94-workspace-supervisor) are the current architecture views. The repository-owned C4 source, semantic identity rules, derived artifact schema, provenance boundary, failure states, and downstream review/viewer contracts live under [`architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/`](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/README.md). Rendered exports remain hash-verified derived artifacts rather than an authority; consumers must retain the source-diff fallback whenever verified interaction is unavailable.
 
 ---
 
@@ -882,6 +892,33 @@ A path sandbox enforces the above. Prompting alone is not sufficient.
 
 Orphans are illegal: a Feature without `parent`, a Task whose Feature is completed, a completed Epic with an active child. The watchdog flags these; it does not auto-repair strategy.
 
+### 12.1 Verification evidence
+
+Executable evidence lives under [`tests/`](tests/) and is organized by the production boundary it exercises. The board, lifecycle, Task, Feature, Epic, watchdog, workspace, and War Room suites verify the corresponding contracts described above. A delivery record supplies the exact tested revision and result; this design links the durable evidence location rather than copying transient test output or claiming that a historical run proves the current checkout.
+
+### 12.2 Historical reconstruction evidence
+
+The target-owned [design mapping](architecture/design-mappings.json) assigns every
+meaningful code directory to one editing owner; test and discovery subdirectories
+explicitly inherit a covering parent. Stable C4 element, relationship, and view IDs
+live in the configured target architecture directory and are not inferred from
+exporter IDs, labels, or layout.
+
+The pinned inventory remains immutable evidence of the original accepted baseline.
+Its [replay ledger](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/replay-ledger.json)
+keeps one row per eligible completed work item and per otherwise-uncovered reachable
+commit, while canonical evidence and review records are referenced rather than
+copied. The [reconciliation report](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/reconciliation-report.json)
+preserves that pin and records the accepted delta separately. Missing task records,
+unavailable review descriptions/source revisions, ambiguous commit provenance, and
+missing reconciliation receipts remain material unresolved coverage; they are not
+silently promoted into current requirements.
+
+Architecture changes are proposals until their exact bytes and revision pass the
+owning review path. The leaf-design/C4 proposal from Task 002 is therefore recorded
+as pending, even though its implementation commit is reachable from the refreshed
+Feature baseline. Task 004 owns final DSL/JSON/SVG and cross-feature acceptance.
+
 ---
 
 ## 13. Worked Example
@@ -918,17 +955,17 @@ At no point did the SWE agent see the memory-layout debate, and at no point did 
 
 ### Locked
 
-| Topic | Decision |
-|---|---|
-| Epic activation | **Human only.** The Boss cannot mark an Epic `ready_to_plan`. |
-| Feature planning start | **Automatic after Epic plan approval.** Watchdog starts one dependency-ready Feature per Epic at a time. |
-| Task dispatch | **Automatic after planning.** Watchdog starts dependency-ready Tasks up to the parallelism cap. |
-| Parallelism | Configurable (`task_parallelism`, default **4**). Watchdog enforces. |
-| Dependencies | Declared on the `.md` (`depends_on` in frontmatter and body). Dispatch is illegal until they are `3_completed`. |
-| Doc versioning | **Git commits.** Children pin `parent_rev` to a SHA. No integer rev counter. |
-| Deployment | **Local runtime with forge review.** Local UI/checkpointers plus GitHub (`gh`) or GitLab (`glab`) for brief and feature MRs. |
-| Comment severity | Default **non-blocking**. Human may mark `blocking`, which pauses `mint_task` only. Agents cannot set it. Open human threads still gate completion. |
-| Task specialization | **No enum.** Optional in-repo `SKILL.md` paths on the Task. Empty = general SWE agent. Human/Boss may override the list at dispatch. Missing/out-of-repo paths fail dispatch. No classifier. |
-| Failure policy | Live-run infra flakes retry **2** times. A pre-execution stale parent pin is refreshed and retried automatically. Spec/test misses fail closed and automatically wake the Feature Team, which can revise and retry its own blocked child; the blocked Task does **not** count toward the cap. |
+| ID | Topic | Decision | Rationale |
+|---|---|---|---|
+| `DEC-ROOT-001` | Epic activation | **Human only.** The Boss cannot mark an Epic `ready_to_plan`. | Starting strategic work is an explicit product-ownership boundary. |
+| `DEC-ROOT-002` | Feature planning start | **Automatic after Epic plan approval.** Watchdog starts one dependency-ready Feature per Epic at a time. | Approval fixes the strategic contract; serialized feature planning limits conflicting tactical decisions. |
+| `DEC-ROOT-003` | Task dispatch | **Automatic after planning.** Watchdog starts dependency-ready Tasks up to the parallelism cap. | Sealed task contracts need no additional human scheduling gate. |
+| `DEC-ROOT-004` | Parallelism | Configurable (`task_parallelism`, default **4**). Watchdog enforces. | A bounded workspace limit permits concurrency without unbounded local resource use. |
+| `DEC-ROOT-005` | Dependencies | Declared on the `.md` (`depends_on` in frontmatter and body). Dispatch is illegal until they are `3_completed`. | Keeping dependency evidence with the work artifact makes dispatch reproducible and reviewable. |
+| `DEC-ROOT-006` | Doc versioning | **Git commits.** Children pin `parent_rev` to a SHA. No integer rev counter. | Git already supplies immutable content revisions and avoids a second version authority. |
+| `DEC-ROOT-007` | Deployment | **Local runtime with forge review.** Local UI/checkpointers plus GitHub (`gh`) or GitLab (`glab`) for brief and feature MRs. | Local execution preserves workspace control while existing forge review supplies durable approval and discussion. |
+| `DEC-ROOT-008` | Comment severity | Default **non-blocking**. Human may mark `blocking`, which pauses `mint_task` only. Agents cannot set it. Open human threads still gate completion. | Discussion should continue delivery by default, while only the human can impose an early planning stop. |
+| `DEC-ROOT-009` | Task specialization | **No enum.** Optional in-repo `SKILL.md` paths on the Task. Empty = general SWE agent. Human/Boss may override the list at dispatch. Missing/out-of-repo paths fail dispatch. No classifier. | Repository playbooks are inspectable and extensible without a parallel specialization taxonomy. |
+| `DEC-ROOT-010` | Failure policy | Live-run infra flakes retry **2** times. A pre-execution stale parent pin is refreshed and retried automatically. Spec/test misses fail closed and automatically wake the Feature Team, which can revise and retry its own blocked child; the blocked Task does **not** count toward the cap. | Bounded retries absorb transient failures, while specification failures return to the contract owner instead of looping execution. |
 
 All DESIGN.md §15 questions are locked.

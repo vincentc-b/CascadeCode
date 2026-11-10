@@ -19,6 +19,8 @@ SWE_TOOL_NAMES = (
     "swe_read",
     "swe_write",
     "read_doc",
+    "read_historical_evidence",
+    "read_architecture_amendments",
     "swe_run_tests",
     "swe_commit",
     "fail_task",
@@ -29,6 +31,8 @@ _SWE_TOOL_DESCRIPTIONS = {
     "swe_read": "Read a UTF-8 file from the active task worktree.",
     "swe_write": "Write the complete UTF-8 contents of a file in the active task worktree.",
     "read_doc": "Read this Task plan or its pinned parent Feature plan.",
+    "read_historical_evidence": "Read explicit plan, Git, and/or architecture-review evidence for a completed non-cancelled related work record.",
+    "read_architecture_amendments": "Read architecture amendment requests addressed to this Task owner.",
     "swe_run_tests": "Run pytest in the active task worktree. For delivery, commit first, then run on the clean tree and require a green result containing final_validation.",
     "swe_commit": "Commit all allowed task worktree changes on the task branch. This invalidates prior validation; call swe_run_tests after committing before finishing.",
     "fail_task": "Block this task with a concrete reason when implementation cannot continue.",
@@ -55,6 +59,25 @@ _SWE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "type": "object",
         "properties": {"work_id": {"type": "string"}},
         "required": ["work_id"],
+    },
+    "read_historical_evidence": {
+        "type": "object",
+        "properties": {
+            "work_id": {"type": "string"},
+            "evidence_scope": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["work_record", "git", "review"]},
+                "minItems": 1,
+                "uniqueItems": True,
+            },
+        },
+        "required": ["work_id", "evidence_scope"],
+        "additionalProperties": False,
+    },
+    "read_architecture_amendments": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
     },
     "swe_run_tests": {
         "type": "object",
@@ -95,6 +118,9 @@ def build_swe_mcp_servers(
     tool_names = [name for name in SWE_TOOL_NAMES if name in registered]
 
     repo = Path(root).resolve()
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
     cfg_path = config_path or (repo / ".cascade" / "task_mcp" / f"{task_id}.json")
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
     cfg_path.write_text(
@@ -103,6 +129,9 @@ def build_swe_mcp_servers(
                 "task_id": task_id,
                 "repo_root": str(repo),
                 "project_context": project_context_payload(),
+                "architecture_destination": (
+                    project.architecture_destination if project is not None else None
+                ),
                 "tool_names": tool_names,
             }
         ),

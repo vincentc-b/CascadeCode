@@ -65,6 +65,83 @@ clones a remote reference into a deterministic managed checkout below
 starts, and synchronizes its checked-out branch at startup and after planning
 commits.
 
+## Architecture documentation destination
+
+Architecture documentation has an independent destination setting in the
+target repository's project configuration. Omitting the table keeps designs
+and editable models in the target repository:
+
+```toml
+[architecture]
+destination = "target"
+```
+
+Use the configured tracking repository instead with:
+
+```toml
+tracking_repository = "../project-planning"
+
+[architecture]
+destination = "tracking"
+```
+
+Only `target` and `tracking` are valid. Selecting `tracking` requires an
+explicit, usable `tracking_repository`; colocated compatibility mode is not an
+implicit tracking selection. Invalid combinations stop configuration or
+startup before architecture paths are routed.
+
+### Paths and ownership
+
+For a target-code-relative directory `<directory>`, Cascade resolves exactly
+one current design home:
+
+| Destination | Design path | Editable model and fragment root |
+|---|---|---|
+| `target` | `<target>/<directory>/DESIGN.md` | `<target>/architecture/<target-key>/` |
+| `tracking` | `<tracking>/design/<target-key>/<directory>/DESIGN.md` | `<tracking>/architecture/<target-key>/` |
+
+The root directory is represented by `.` and resolves to `<target>/DESIGN.md`
+or `<tracking>/design/<target-key>/DESIGN.md`. Enabling this feature does not
+replace or rewrite an existing target-root `DESIGN.md`.
+
+The target repository always owns
+`architecture/design-mappings.json`, including when artifacts live in the
+tracking repository. Its schema-v1 object records one opaque, immutable
+`target_repository_key` and a `designs` map keyed by normalized target-code
+directory. Each row fixes `code_directory`, `design_owner_directory`, and a
+stable `artifact_id`. Meaningful directories may own their design; trivial or
+generated directories map to a covering parent. Conflicting owners, duplicate
+identities, a changed committed target key, path escapes, and writes or reviews
+without a persisted owner fail closed.
+
+### Fixed review references
+
+Consumers should use `ProjectContext.design_path()` and
+`editable_architecture_root` for a new artifact, and the architecture ownership
+APIs to persist or require its owner. A new design or model review reference
+records the target key, target-code directory and owner, owning work,
+destination repository identity and role, repository-relative path, and Git
+revision. Reads, links, review, and replay then use those recorded fields and
+the bytes at the pinned commit. Reference creation requires the reviewed design
+or model bytes to exactly match the artifact at destination `HEAD`; a new,
+modified, deleted, or otherwise unreadable working artifact cannot be pinned as
+reviewed content. Commit the reviewed bytes before creating the reference.
+
+Changing `[architecture].destination` affects only new references. It neither
+moves artifacts nor rewrites the target-owned mapping index. An existing review
+unit remains at its recorded repository, path, and revision; an unavailable
+commit, missing blob, or mismatched repository identity is an error rather than
+a retarget. Reconfiguring `tracking_repository` therefore cannot make an old
+reference read from the replacement checkout, even if it has a matching path.
+This is the location/provenance contract for design rendering, semantic model
+processing, review-unit gates, authoring closure, and historical replay.
+
+Known limits: Cascade does not migrate architecture artifacts between
+destinations, merge target and tracking changes transactionally, infer durable
+identity from a checkout basename, or authorize edits merely because it can
+resolve a path. Destination migration is a separate reviewed operation, and
+existing scoped editing and owner-amendment rules still apply.
+
 ## Prerequisites and non-goals
 
 Before enabling split mode:

@@ -204,6 +204,10 @@ def _blocks_work(row: Comment, work_id: str, board, *, root: Path) -> bool:
 
 
 def _affected_work_ids(row: Comment, board, *, root: Path) -> set[str]:
+    if row.semantic_anchor is not None:
+        from cascade.workspace.blocking_scope import semantic_affected_work_ids
+
+        return semantic_affected_work_ids(row, board=board, root=root)
     if row.blocks:
         return {bid for bid in row.blocks if bid in board.by_id}
 

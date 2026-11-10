@@ -29,14 +29,22 @@ def load_feature_tools() -> None:
 
     from cascade.feature.registry import feature_tools, register_feature_tool
     from cascade.team_supervision import message_team, supervise_child
+    from cascade.architecture_context_tools import (
+        read_feature_architecture_amendments,
+        read_feature_historical_evidence,
+    )
     register_feature_tool("message_team", message_team)
     register_feature_tool("supervise_child", supervise_child)
+    register_feature_tool("read_historical_evidence", read_feature_historical_evidence)
+    register_feature_tool(
+        "read_architecture_amendments", read_feature_architecture_amendments
+    )
     from cascade.watchdog.audit_investigation import report_audit_investigation
     register_feature_tool("report_audit_investigation", report_audit_investigation)
 
     expected = (
         "mint_task", "list_children", "record_decision", "read_doc", "write_doc",
-        "reply_comment", "propose_epic_amendment", "ack_amendment",
+        "reply_comment", "escalate_comment_to_epic", "propose_epic_amendment", "ack_amendment",
         "reply_merge_request_comment", "revise_task", "retry_task", "recovery_status",
         "recover_task",
         "refresh_dependency_status",
@@ -47,6 +55,8 @@ def load_feature_tools() -> None:
         "retry_owned_publication",
         "publish_integration_review",
         "reconcile_completion_rollup",
+        "read_historical_evidence",
+        "read_architecture_amendments",
     )
     if all(name in feature_tools() for name in expected):
         return
@@ -56,6 +66,9 @@ def load_feature_tools() -> None:
     register_feature_tool("write_doc", docs_tool_mod.write_doc)
     register_feature_tool("list_children", docs_tool_mod.list_children)
     register_feature_tool("reply_comment", comments_tool_mod.reply_comment)
+    register_feature_tool(
+        "escalate_comment_to_epic", comments_tool_mod.escalate_comment_to_epic
+    )
     register_feature_tool("propose_epic_amendment", amendments_mod.propose_epic_amendment)
     register_feature_tool("ack_amendment", amendments_mod.ack_amendment)
     register_feature_tool("reply_merge_request_comment", reply_feature_review)

@@ -23,6 +23,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["cascade*"]
 
+[tool.setuptools.package-data]
+"cascade.workspace" = ["*.java"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

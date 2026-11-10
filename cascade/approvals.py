@@ -102,12 +102,20 @@ def approve_feature(
             if current is None or current.tier != "feature":
                 raise ValueError("feature approval requires a feature on the board")
             if current.approved_at is None:
+                from cascade.epic.change_dispositions import (
+                    require_corrective_feature_ready_for_approval,
+                )
+
+                require_corrective_feature_ready_for_approval(feature_id, root=repo)
                 _require_approval_selections(
                     (current, *_approval_tasks(evidence.board.by_id.values(), feature_id)),
                     root=repo,
                     inventory=inventory,
                     action="feature_approval",
                 )
+                from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+
+                require_lifecycle_review_gate(feature_id, "approval", root=repo)
             newly = _set_feature_approved(feature_id, root=repo)
     result: dict[str, object] = {
         "ok": True, "feature_id": feature_id, "newly_approved": newly
@@ -175,6 +183,16 @@ def approve_epic_plan(
                 inventory=inventory,
                 action="epic_plan_approval",
             )
+            from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+
+            for feature_id in children:
+                if board.by_id[feature_id].approved_at is None:
+                    from cascade.epic.change_dispositions import (
+                        require_corrective_feature_ready_for_approval,
+                    )
+
+                    require_corrective_feature_ready_for_approval(feature_id, root=repo)
+                    require_lifecycle_review_gate(feature_id, "approval", root=repo)
             for feature_id in children:
                 _set_feature_approved(feature_id, root=repo)
             # The epic timestamp durably indicates that the whole plan was approved.

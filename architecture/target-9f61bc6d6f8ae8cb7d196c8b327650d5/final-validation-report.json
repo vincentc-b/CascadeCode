@@ -1,0 +1,197 @@
+{
+  "version": 2,
+  "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+  "owner_work_id": "task_034_008_003",
+  "outcome": "acceptance_pending_with_material_mismatch",
+  "clean_closeout": false,
+  "inspected_revisions": {
+    "verification_base": "e5e87f52b77bceb09c3b2edbc1b4bc5ad6500ace",
+    "feature_source_head": "20af2a4529efc19d5dee1b11f9204fc195cb9467",
+    "accepted_epic_target": "24956e36977468f8cef6e3eb2ba8fcedafa54016",
+    "accepted_epic_tracking": "24956e36977468f8cef6e3eb2ba8fcedafa54016",
+    "task_002_artifacts": "714c8a5156dd5ad8e81b1d4080510cb26d97a296",
+    "task_001_inventory": "c645e6fdf8402c7d8a8dab6c88d8c7ada96e20c6"
+  },
+  "baseline_pair": {
+    "previous_accepted_target": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9",
+    "previous_accepted_tracking": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9",
+    "target_revision": "24956e36977468f8cef6e3eb2ba8fcedafa54016",
+    "tracking_revision": "24956e36977468f8cef6e3eb2ba8fcedafa54016",
+    "feature_f_implementation_revision": "24a6bb020a89dea96698ee28fdb4f589366f0f3c",
+    "feature_f_reachable": true,
+    "feature_g_implementation_revision": "79d58659a2837b593c6e5c2ceca1d73ee5e1e779",
+    "feature_g_reachable": true,
+    "corrective_feature_reachable": false,
+    "note": "Target and tracking are colocated. Feature-source ancestry is not accepted Epic reachability."
+  },
+  "accepted_deltas_after_reconciliation": [
+    {
+      "revision": "db1a23b59e490bf3a6dd9c67fabf15d7c4d060cf",
+      "kind": "feature_implementation",
+      "work_id": "task_034_009_001",
+      "disposition": "durable",
+      "architecture_impact": "accepted no-diagram-change within existing audit and review-health components",
+      "current_code_references": ["cascade/war_room/audit_status.py", "cascade/watchdog/audit.py"],
+      "current_test_references": ["tests/war_room/test_health_audit_routes.py", "tests/watchdog/test_audit.py"]
+    },
+    {
+      "revision": "82194f5a55d61a8fb9e315a2150c5c6569d2a430",
+      "kind": "feature_closeout_metadata",
+      "work_id": "feat_034_009",
+      "disposition": "no-impact"
+    },
+    {
+      "revision": "721423b6b64ca14a216430aa1bb8d35f83d9c52f",
+      "kind": "accepted_integration",
+      "work_id": "feat_034_009",
+      "review_id": "221",
+      "disposition": "durable"
+    },
+    {
+      "revision": "24956e36977468f8cef6e3eb2ba8fcedafa54016",
+      "kind": "epic_closeout_metadata",
+      "work_id": "feat_034_009",
+      "disposition": "no-impact"
+    }
+  ],
+  "coverage_accounting": {
+    "original_expected": 2023,
+    "original_covered": 2023,
+    "task_002_accepted_delta_expected": 16,
+    "task_002_accepted_delta_covered": 16,
+    "refreshed_accepted_delta_expected": 4,
+    "refreshed_accepted_delta_covered": 4,
+    "duplicate_rows": 0,
+    "missing_rows": 0,
+    "material_unresolved": 2021
+  },
+  "artifact_revisions": [
+    {
+      "name": "historical-evidence-inventory.json",
+      "revision": "c645e6fdf8402c7d8a8dab6c88d8c7ada96e20c6",
+      "sha256": "dea781d17a2e6cec23e18b06ca16596502adf46d4ab81c5ae58c861f33fe397c"
+    },
+    {
+      "name": "replay-ledger.json",
+      "revision": "714c8a5156dd5ad8e81b1d4080510cb26d97a296",
+      "sha256": "f8d7d73a8069cce38621e1326ffa9bd1e642fa3d6d79b1c2848644db463c0b08"
+    },
+    {
+      "name": "reconciliation-report.json",
+      "revision": "714c8a5156dd5ad8e81b1d4080510cb26d97a296",
+      "sha256": "80b5fe7bd96a16ba2e65d2d8a551a9aba96bcde6e50ca6d47173c12c91c45fc6"
+    },
+    {
+      "name": "architecture/review-units.json",
+      "revision": "a8c01a7e9ceb9cf47669944786e60fa9ab794cea",
+      "sha256": "92644ea8e65e2c7741b10d35d77792df918cb6b01ecc4031a7b1f9525968c805"
+    }
+  ],
+  "architecture_reviews": [
+    {
+      "review_unit_id": "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0",
+      "artifact_revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+      "status": "staged",
+      "accepted_revision_id": null,
+      "promotion_operation_id": null,
+      "owner": "task_034_007_002"
+    },
+    {
+      "review_unit_id": "architecture-review-685cf96b1eb08bbee2b11990dd258a6059222102bf1eeda85d858da6273f5c7c",
+      "artifact_revision": "a911fb1e13729ebce182383a52b3f9832428b535",
+      "status": "staged",
+      "accepted_revision_id": null,
+      "promotion_operation_id": null,
+      "owner": "task_034_007_003"
+    },
+    {
+      "review_unit_id": "architecture-review-9d3c1005e1fcaf965e555148757bc7de586c0a3804aa09e936a6ab2e665a9db8",
+      "artifact_revision": "a911fb1e13729ebce182383a52b3f9832428b535",
+      "status": "staged",
+      "accepted_revision_id": null,
+      "promotion_operation_id": null,
+      "owner": "task_034_007_003"
+    }
+  ],
+  "receipt_validations": [
+    {
+      "tier": "task",
+      "work_id": "task_034_008_003",
+      "inspected_revision": "e5e87f52b77bceb09c3b2edbc1b4bc5ad6500ace",
+      "status": "failed",
+      "code": "missing_reconciliation",
+      "receipt_id": null,
+      "owner": "feat_034_008"
+    },
+    {
+      "tier": "feature",
+      "work_id": "feat_034_008",
+      "inspected_revision": "20af2a4529efc19d5dee1b11f9204fc195cb9467",
+      "status": "failed",
+      "code": "missing_reconciliation",
+      "receipt_id": null,
+      "owner": "feat_034_008"
+    },
+    {
+      "tier": "epic",
+      "work_id": "epic_034",
+      "inspected_revision": "24956e36977468f8cef6e3eb2ba8fcedafa54016",
+      "status": "failed",
+      "code": "missing_reconciliation",
+      "receipt_id": null,
+      "owner": "epic_034"
+    }
+  ],
+  "historical_missing_receipts": [
+    {
+      "count": 78,
+      "status": "unavailable",
+      "reason": "Pinned G evidence contained no historical reconciliation receipts; none were synthesized retroactively."
+    }
+  ],
+  "structurizr_validation": {
+    "status": "passed",
+    "image": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+    "network": "none",
+    "source_revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+    "commands": [
+      "validate -workspace workspace.dsl",
+      "export -workspace workspace.dsl -format json -output json",
+      "export -workspace workspace.dsl -format svg -output svg"
+    ],
+    "json": {"path": "final-validation/json/workspace.json", "sha256": "00fe63b83dd6a9da44bfe67667223b8beea9afe66a0ae6c419ad984a9cf962b0"},
+    "svg_sha256": {
+      "cascade-containers.svg": "b7769bdf98b47215d42d292414105a4bd8036db7cbbb5231e5954def1f68c480",
+      "cascade-context.svg": "4ad9bdedd460cb966329f865e1405e40b10d3878510fb0874ae3dc0eaf6afa6e",
+      "cascade-landscape.svg": "7a20be924daff147d4c8bcfce91de661958d6e206e73b729e6fb254ccd230dbe",
+      "cascade-supervisor-components.svg": "1b3c36a204cbbea56e4148f364b8f392e2b56488e4239a53659958291e85e4c6"
+    },
+    "view_keys": ["cascade-landscape", "cascade-context", "cascade-containers", "cascade-supervisor-components"]
+  },
+  "blockers": [
+    {
+      "outcome": "acceptance_pending",
+      "owner": "Feature G architecture owners",
+      "prerequisite": "Approve and promote all three exact staged review units; record accepted-revision and promotion IDs."
+    },
+    {
+      "outcome": "missing_evidence",
+      "owner": "feat_034_008",
+      "prerequisite": "After accepted promotion, record and validate current Task and Feature reconciliation receipts."
+    },
+    {
+      "outcome": "missing_evidence",
+      "owner": "epic_034",
+      "prerequisite": "After accepted Feature integration, record and validate the current Epic reconciliation receipt."
+    },
+    {
+      "outcome": "material_mismatch",
+      "owner": "epic_034 and the authorized A-F evidence owners",
+      "prerequisite": "Resolve the 2,021 material replay rows or obtain a human scope decision; 34 pending child handoffs require owner responses."
+    }
+  ],
+  "test_execution": {
+    "command": "python -m pytest -q tests/architecture/test_final_reconstruction_validation.py tests/architecture/test_reconstructed_design.py tests/architecture/test_reconciled_history.py tests/workspace/test_historical_inventory.py tests/workspace/test_historical_reconciliation.py tests/workspace/test_c4_review.py tests/workspace/test_reconciliation_receipts.py tests/workspace/test_architecture_review.py::test_living_revision_resumes_only_after_fresh_review_on_accepted_lineage tests/test_epic_review_state.py",
+    "result": "65 passed"
+  }
+}

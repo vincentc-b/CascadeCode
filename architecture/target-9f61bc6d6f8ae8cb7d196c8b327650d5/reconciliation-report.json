@@ -1,0 +1,664 @@
+{
+  "accepted_delta_coverage": [
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:0d47232aede3e6fd019055e4c75c8ba8d993b8f4"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:0d47232aede3e6fd019055e4c75c8ba8d993b8f4 is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "0d47232aede3e6fd019055e4c75c8ba8d993b8f4",
+      "row_id": "delta:0d47232aede3e6fd019055e4c75c8ba8d993b8f4",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:2c5476fabf83a0b0eb996d3ad53b22fdf31321b9"
+      ],
+      "kind": "feature_g_closeout_update",
+      "rationale": "delta:2c5476fabf83a0b0eb996d3ad53b22fdf31321b9 is an accepted feature_g_closeout_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9",
+      "row_id": "delta:2c5476fabf83a0b0eb996d3ad53b22fdf31321b9",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:31143171f61ed49f41a85dad540c830f20e14b24"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:31143171f61ed49f41a85dad540c830f20e14b24 is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "31143171f61ed49f41a85dad540c830f20e14b24",
+      "row_id": "delta:31143171f61ed49f41a85dad540c830f20e14b24",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:467e98ffaa1d562d2a83f6f2251dda4dd702c47b"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:467e98ffaa1d562d2a83f6f2251dda4dd702c47b is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "467e98ffaa1d562d2a83f6f2251dda4dd702c47b",
+      "row_id": "delta:467e98ffaa1d562d2a83f6f2251dda4dd702c47b",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:4713be9540971fa4fbe6277c9cff01971ab0bc6b"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:4713be9540971fa4fbe6277c9cff01971ab0bc6b is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "4713be9540971fa4fbe6277c9cff01971ab0bc6b",
+      "row_id": "delta:4713be9540971fa4fbe6277c9cff01971ab0bc6b",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:59cba5bd0660b29f8444c0a9837905041ae9c82f"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:59cba5bd0660b29f8444c0a9837905041ae9c82f is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "59cba5bd0660b29f8444c0a9837905041ae9c82f",
+      "row_id": "delta:59cba5bd0660b29f8444c0a9837905041ae9c82f",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:667fc4ff9802e6254e27bf3086de4a8e145399e0"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:667fc4ff9802e6254e27bf3086de4a8e145399e0 is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "667fc4ff9802e6254e27bf3086de4a8e145399e0",
+      "row_id": "delta:667fc4ff9802e6254e27bf3086de4a8e145399e0",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:73a4ad0143606e76264a70ac0445f14fa0b7b759"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:73a4ad0143606e76264a70ac0445f14fa0b7b759 is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "73a4ad0143606e76264a70ac0445f14fa0b7b759",
+      "row_id": "delta:73a4ad0143606e76264a70ac0445f14fa0b7b759",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:7f3199f1db69f9e8eb56ea8ab9975ddc18cbae7d"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:7f3199f1db69f9e8eb56ea8ab9975ddc18cbae7d is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "7f3199f1db69f9e8eb56ea8ab9975ddc18cbae7d",
+      "row_id": "delta:7f3199f1db69f9e8eb56ea8ab9975ddc18cbae7d",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:88d831f0d888fbb5186419b0d6034615c20b1a42"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:88d831f0d888fbb5186419b0d6034615c20b1a42 is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "88d831f0d888fbb5186419b0d6034615c20b1a42",
+      "row_id": "delta:88d831f0d888fbb5186419b0d6034615c20b1a42",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:bd3ecd6fb28ec42a06a0409c71b9f870b67b7521"
+      ],
+      "kind": "accepted_line_sync",
+      "rationale": "delta:bd3ecd6fb28ec42a06a0409c71b9f870b67b7521 is an accepted accepted_line_sync revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "bd3ecd6fb28ec42a06a0409c71b9f870b67b7521",
+      "row_id": "delta:bd3ecd6fb28ec42a06a0409c71b9f870b67b7521",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:be1840668a3bf2dfe8f33451b06a6fa664beb781"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:be1840668a3bf2dfe8f33451b06a6fa664beb781 is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "be1840668a3bf2dfe8f33451b06a6fa664beb781",
+      "row_id": "delta:be1840668a3bf2dfe8f33451b06a6fa664beb781",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:c220c7747cad4d62c2d80e103bb28648570c0dd1"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:c220c7747cad4d62c2d80e103bb28648570c0dd1 is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "c220c7747cad4d62c2d80e103bb28648570c0dd1",
+      "row_id": "delta:c220c7747cad4d62c2d80e103bb28648570c0dd1",
+      "source": "accepted_delta",
+      "work_id": null
+    },
+    {
+      "disposition": "durable",
+      "evidence_keys": [
+        "delta:d2ed1aca886e61d087fa29842ebca617c0956d96",
+        "review:218",
+        "work:feat_034_006"
+      ],
+      "kind": "integration",
+      "rationale": "delta:d2ed1aca886e61d087fa29842ebca617c0956d96 is the accepted feat_034_006 integration, linked to reachable review 218; accepted code and architecture reconciliation tests retain the integration.",
+      "review_id": "218",
+      "revision": "d2ed1aca886e61d087fa29842ebca617c0956d96",
+      "row_id": "delta:d2ed1aca886e61d087fa29842ebca617c0956d96",
+      "source": "integration",
+      "work_id": "feat_034_006"
+    },
+    {
+      "disposition": "durable",
+      "evidence_keys": [
+        "delta:e3b6c6c61ac5defd176b96429097491e618f7ba9",
+        "review:219"
+      ],
+      "kind": "integration",
+      "rationale": "delta:e3b6c6c61ac5defd176b96429097491e618f7ba9 is the accepted feat_034_007 integration, linked to reachable review 219; accepted code and architecture reconciliation tests retain the integration.",
+      "review_id": "219",
+      "revision": "e3b6c6c61ac5defd176b96429097491e618f7ba9",
+      "row_id": "delta:e3b6c6c61ac5defd176b96429097491e618f7ba9",
+      "source": "integration",
+      "work_id": "feat_034_007"
+    },
+    {
+      "disposition": "no-impact",
+      "evidence_keys": [
+        "delta:e490e5efe4b3fa6dbcd8f6be46bfd8547ece6e95"
+      ],
+      "kind": "epic_plan_update",
+      "rationale": "delta:e490e5efe4b3fa6dbcd8f6be46bfd8547ece6e95 is an accepted epic_plan_update revision whose independent diff is lifecycle/plan metadata only; it changes no current code, test contract, requirement ID, design decision, or C4 semantic ID.",
+      "review_id": null,
+      "revision": "e490e5efe4b3fa6dbcd8f6be46bfd8547ece6e95",
+      "row_id": "delta:e490e5efe4b3fa6dbcd8f6be46bfd8547ece6e95",
+      "source": "accepted_delta",
+      "work_id": null
+    }
+  ],
+  "accepted_epic_pin": {
+    "feature_f_implementation_reachable": true,
+    "feature_g_implementation_reachable": true,
+    "review_218_state": "merged_reachable_from_accepted_target",
+    "review_219_state": "merged_reachable_from_accepted_target",
+    "source": "Task 001 BaselinePair with independently pinned G artifact revision and content hash",
+    "target_revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9",
+    "tracking_revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9",
+    "work_id": "epic_034"
+  },
+  "baseline_pair": {
+    "accepted_deltas": [
+      {
+        "kind": "epic_plan_update",
+        "revision": "0d47232aede3e6fd019055e4c75c8ba8d993b8f4"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "73a4ad0143606e76264a70ac0445f14fa0b7b759"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "7f3199f1db69f9e8eb56ea8ab9975ddc18cbae7d"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "31143171f61ed49f41a85dad540c830f20e14b24"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "c220c7747cad4d62c2d80e103bb28648570c0dd1"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "667fc4ff9802e6254e27bf3086de4a8e145399e0"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "e490e5efe4b3fa6dbcd8f6be46bfd8547ece6e95"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "be1840668a3bf2dfe8f33451b06a6fa664beb781"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "4713be9540971fa4fbe6277c9cff01971ab0bc6b"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "88d831f0d888fbb5186419b0d6034615c20b1a42"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "467e98ffaa1d562d2a83f6f2251dda4dd702c47b"
+      },
+      {
+        "kind": "epic_plan_update",
+        "revision": "59cba5bd0660b29f8444c0a9837905041ae9c82f"
+      },
+      {
+        "kind": "accepted_line_sync",
+        "revision": "bd3ecd6fb28ec42a06a0409c71b9f870b67b7521"
+      },
+      {
+        "kind": "feature_g_closeout_update",
+        "revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9"
+      }
+    ],
+    "g_artifact_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/historical-evidence-inventory.json",
+    "g_artifact_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "g_artifact_repository_role": "target",
+    "g_artifact_revision": "e3c5e3126b63bef102d4d85cf7ac68f5974daeb4",
+    "g_artifact_sha256": "d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6",
+    "integrations": [
+      {
+        "base_revision": "ede9292c67c67e4558b23ec3fa5fd99d3c4ecbc6",
+        "head_revision": "47342fb3bf6e68d0a09845560e8791f7c787b863",
+        "merge_revision": "d2ed1aca886e61d087fa29842ebca617c0956d96",
+        "review_id": "218",
+        "work_id": "feat_034_006"
+      },
+      {
+        "base_revision": "f83f536a5bc38817c75ec4546d0b1fb21fb17c27",
+        "head_revision": "79d58659a2837b593c6e5c2ceca1d73ee5e1e779",
+        "merge_revision": "e3b6c6c61ac5defd176b96429097491e618f7ba9",
+        "review_id": "219",
+        "work_id": "feat_034_007"
+      }
+    ],
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "target_revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9",
+    "tracking_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "tracking_revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9",
+    "version": 1
+  },
+  "closeout_claimed": false,
+  "coverage_accounting": {
+    "accepted_delta_covered": 16,
+    "accepted_delta_expected": 16,
+    "dispositions": {
+      "durable": 4,
+      "no-impact": 14,
+      "superseded": 0,
+      "unresolved": 2021
+    },
+    "duplicate_rows": 0,
+    "material_unresolved": 2021,
+    "missing_rows": 0,
+    "original_covered": 2023,
+    "original_expected": 2023,
+    "total_covered": 2039,
+    "total_expected": 2039
+  },
+  "design_proposals": [
+    {
+      "design_reference": {
+        "code_directory": "cascade/workspace",
+        "design_owner_directory": "cascade/workspace",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "owning_work": "task_034_007_002",
+        "repository_path": "cascade/workspace/DESIGN.md",
+        "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+      },
+      "model_reference": {
+        "contract": {
+          "content_digest": "a68a9a5d295656da3e555ac8ed13731716a3f7a4997035754a9ba6b7b593e66f",
+          "reference": {
+            "code_directory": "cascade/workspace",
+            "design_owner_directory": "cascade/workspace",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "owning_work": "task_034_007_002",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+            "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+          }
+        },
+        "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+        "renderer_settings": {
+          "cpus": "2",
+          "memory": "1536m",
+          "pids_limit": 256,
+          "timeout_seconds": 90.0,
+          "tmpfs_size": "512m"
+        },
+        "semantic_artifact_digest": "00fe63b83dd6a9da44bfe67667223b8beea9afe66a0ae6c419ad984a9cf962b0",
+        "source_closure_digest": "98bfed8b38a468acb8aaca292c71d936b08122f1cdc88a90d26efab9bf0e07c1",
+        "sources": [
+          {
+            "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a",
+            "reference": {
+              "code_directory": "cascade/workspace",
+              "design_owner_directory": "cascade/workspace",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "task_034_007_002",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+              "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          },
+          {
+            "content_digest": "0ab973402d6302d23022b086725dc767a274dddfb850db020c6681f89ac116d7",
+            "reference": {
+              "code_directory": "cascade/workspace",
+              "design_owner_directory": "cascade/workspace",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "task_034_007_002",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+              "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          },
+          {
+            "content_digest": "a8ff346f7c6b7c483527b0430bab56bb0c08efcdfc2e8a0df3eae0b2e0fa5354",
+            "reference": {
+              "code_directory": "cascade/workspace",
+              "design_owner_directory": "cascade/workspace",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "task_034_007_002",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+              "revision": "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          }
+        ]
+      },
+      "owner_work_id": "task_034_007_002",
+      "proposal_source": "reused Feature G owner-scoped staged proposal; accepted deltas require no additional semantic design or C4 change",
+      "review_unit_id": "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0",
+      "status": "staged"
+    },
+    {
+      "design_reference": {
+        "code_directory": ".",
+        "design_owner_directory": ".",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "owning_work": "task_034_007_003",
+        "repository_path": "DESIGN.md",
+        "revision": "a911fb1e13729ebce182383a52b3f9832428b535",
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+      },
+      "model_reference": null,
+      "owner_work_id": "task_034_007_003",
+      "proposal_source": "reused Feature G owner-scoped staged proposal; accepted deltas require no additional semantic design or C4 change",
+      "review_unit_id": "architecture-review-685cf96b1eb08bbee2b11990dd258a6059222102bf1eeda85d858da6273f5c7c",
+      "status": "staged"
+    },
+    {
+      "design_reference": {
+        "code_directory": "cascade",
+        "design_owner_directory": "cascade",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "owning_work": "task_034_007_003",
+        "repository_path": "cascade/DESIGN.md",
+        "revision": "a911fb1e13729ebce182383a52b3f9832428b535",
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+      },
+      "model_reference": null,
+      "owner_work_id": "task_034_007_003",
+      "proposal_source": "reused Feature G owner-scoped staged proposal; accepted deltas require no additional semantic design or C4 change",
+      "review_unit_id": "architecture-review-9d3c1005e1fcaf965e555148757bc7de586c0a3804aa09e936a6ab2e665a9db8",
+      "status": "staged"
+    }
+  ],
+  "evidence_checks": {
+    "direct_non_cascade_fix": {
+      "current_code_references": [
+        {
+          "claim": "task retry changes remain implemented",
+          "repository_path": "cascade/task/worktree.py",
+          "revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9"
+        },
+        {
+          "claim": "plan approval remains projected",
+          "repository_path": "cascade/war_room/server.py",
+          "revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9"
+        }
+      ],
+      "current_test_references": [
+        {
+          "claim": "task retry preservation is exercised",
+          "repository_path": "tests/task/test_worktree.py",
+          "revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9"
+        },
+        {
+          "claim": "plan approval projection is exercised",
+          "repository_path": "tests/war_room/test_http_read.py",
+          "revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9"
+        }
+      ],
+      "disposition": "durable",
+      "evidence_keys": [
+        "commit:9b748ad5568167263ba56d11ab4654097f8d1672"
+      ],
+      "rationale": "commit:9b748ad5568167263ba56d11ab4654097f8d1672 is a pinned non-Cascade direct fix; its task retry and plan-approval behavior remains in accepted code and focused tests.",
+      "row_id": "commit:9b748ad5568167263ba56d11ab4654097f8d1672"
+    },
+    "mr_described_change": {
+      "current_code_references": [
+        {
+          "claim": "Feature F closeout gate remains implemented",
+          "repository_path": "cascade/lifecycle_review_gate.py",
+          "revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9"
+        },
+        {
+          "claim": "scoped review state remains implemented",
+          "repository_path": "cascade/workspace/architecture_review.py",
+          "revision": "2c5476fabf83a0b0eb996d3ad53b22fdf31321b9"
+        }
+      ],
+      "disposition": "durable",
+      "evidence_keys": [
+        "work:feat_034_006",
+        "review:218"
+      ],
+      "rationale": "work:feat_034_006 is linked to accepted review 218 and its reachable merge; current architecture gate code and focused wiring tests retain the described Feature F behavior.",
+      "review_description_provenance": "current_snapshot_not_merge_time_archive",
+      "review_description_sha256": "508aaef4c6ae6fc3d38f3b3b37b5625679af985c1fc2eb184cb8833b7ab51e1d",
+      "review_references": [
+        "218"
+      ],
+      "row_id": "work:feat_034_006"
+    },
+    "overlapping_evidence": {
+      "accounting": "shared evidence is referenced many-to-many; both coverage rows remain individually accountable",
+      "evidence_key": "review:218",
+      "row_ids": [
+        "work:feat_034_006",
+        "delta:d2ed1aca886e61d087fa29842ebca617c0956d96"
+      ]
+    },
+    "unavailable_provenance": {
+      "disposition": "unresolved",
+      "policy": "unavailable child/review evidence is retained as a material gap and never relabeled no-impact",
+      "row_count": 2021
+    }
+  },
+  "exclusions": {
+    "cancelled_plans_as_requirement_sources": true,
+    "truncated_replay": "receipt_and_review_units_capped_at_100_by_feature_F_contract",
+    "unreachable_or_deleted_history": "not_available_from_pinned_reachable_DAG"
+  },
+  "feature_f": {
+    "closeout_revision": "7d078a396a6b79f098da6b9e9e8e3db6b2b3d4b7",
+    "feature_id": "feat_034_006",
+    "implementation_revision": "24a6bb020a89dea96698ee28fdb4f589366f0f3c",
+    "reachable_on_accepted_epic_pin": true,
+    "reachable_on_g_source_inventory_pin": true,
+    "review_description_status": "captured_current_description_not_merge_time_archive",
+    "review_id": "218",
+    "review_source_revision_status": "reachable"
+  },
+  "final_validation_deferred_to": "task_034_008_003",
+  "g_source_delta": {
+    "reconciliation": "All delta commits are reachable from the refreshed Feature G source baseline. This is not evidence of accepted Epic reachability. Lifecycle-only revisions are no-impact to current claims; Task 001 evidence is durable; Task 002 implementation is durable but its architecture proposal remains pending owner review.",
+    "target_commits": [
+      "6739c34977daadbe164dc076ad710a842026d240",
+      "6da639fb7274fe4682958411860cc3308aaa2506",
+      "cf2413220012e24299b37444147708888b056f54",
+      "6a23508552cc36ce11e87af94982322fb6fdff70",
+      "7ab8f864ef33ce7553cfba8a78d7d9f9f07cba9f",
+      "3832dfc6429e8fa8c5273e16e8c7b40a1115df5c",
+      "880a4a1c2eb3875b887f660995131e84be39e91e",
+      "f06e697f0d0a082c210dc0c72771f118f2c56cb2",
+      "070349f45ee89c1b7ca4d6fa108e979632d5aa7a",
+      "1576d5e603c783c39750b3d487951e620934269d",
+      "3b54715de9dd10563c5aa91fef1099ad739d3f87",
+      "58d0ed35f25dbb97e8cd4fab65095092c4c228c6",
+      "6f3b3d6d1806a2494e83e92761333b7a8c046b55",
+      "64e2913f6db983861a6a65cad8a02b794684965f",
+      "5be9a50abf01b06c9d8867be723e4eef9af0bdcc",
+      "ac60fb982e219888aaeb7533baec07b9059ea82b",
+      "88fdabbd156a022a9e7fb0e5ff9a0cbc59a6ebc4",
+      "001d907afec57358e937d64855f106018b7e8686",
+      "d78036a7401e3cd37902fc5020cd0cc6152e5a4a",
+      "c57403e2106201d81c35a0c4cf7056f9ea5a23a3",
+      "3e8efde851bfa8c1010363c565bbb892b57915a3",
+      "8845d0b25fca0284086f8703e68a15566ef4fc77",
+      "1d5e5c6f87d40394906cb5ad581662d4cc633fb1",
+      "9c275c24e0034e0eafafb45b30f849484f5a9fa5",
+      "d250226e3008f700414ec898b679167909e59df6",
+      "0207f4c3ad7da7235e6b5420ab7d1680fd9356f8",
+      "3ef880218ac31b965c10cbcdd9cf741f4ac15b6d",
+      "1e1a1c945f37632950af83b8d3b26ffa03fc333b"
+    ],
+    "work_items": [
+      {
+        "affected_design_paths": [
+          "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/historical-evidence-inventory.json"
+        ],
+        "disposition": "durable",
+        "evidence_revision": "1d5e5c6f87d40394906cb5ad581662d4cc633fb1",
+        "work_id": "task_034_007_001"
+      },
+      {
+        "affected_design_paths": [
+          "architecture/design-mappings.json",
+          "cascade/DESIGN.md",
+          "cascade/workspace/DESIGN.md",
+          "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl"
+        ],
+        "disposition": "durable",
+        "evidence_revision": "1e1a1c945f37632950af83b8d3b26ffa03fc333b",
+        "work_id": "task_034_007_002"
+      }
+    ]
+  },
+  "g_source_inventory_pin": {
+    "inventory_sha256": "d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6",
+    "meaning": "Feature G source-line inventory pin; not an accepted Epic baseline",
+    "target_revision": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084",
+    "tracking_revision": "d932f48764cc0ceb2f4810cdd4487bef0c9ef084"
+  },
+  "inspected_current_evidence": {
+    "code_paths": [
+      "cascade/board",
+      "cascade/workspace",
+      "cascade/agent",
+      "cascade/watchdog",
+      "cascade/war_room"
+    ],
+    "design_paths": [
+      "DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/workspace/DESIGN.md",
+      "architecture/design-mappings.json"
+    ],
+    "status": "representative_parent_child_and_cross_directory_claims_checked",
+    "test_paths": [
+      "tests/board",
+      "tests/workspace",
+      "tests/agent",
+      "tests/watchdog",
+      "tests/war_room",
+      "tests/architecture"
+    ]
+  },
+  "material_unresolved": [
+    {
+      "count": 1740,
+      "reason": "ambiguous_provenance_and_no_review_mapping"
+    },
+    {
+      "count": 34,
+      "reason": "exact child content/revision unavailable to Epic reader under dec_013; owner response not yet received; retrieval failure at owner not established"
+    },
+    {
+      "count": 43,
+      "reason": "historical_intent_not_individually_attributed_to_current_claim"
+    },
+    {
+      "count": 204,
+      "reason": "review_description_or_source_revision_unavailable"
+    }
+  ],
+  "owner_work_id": "task_034_008_002",
+  "proposal_outcome": {
+    "new_owner_amendments": 0,
+    "pending_exact_revision_review": true,
+    "reason": "The accepted deltas are lifecycle/plan-only or integrate the already-staged Feature F/G architecture changes. Reusing the exact pending owner-scoped units avoids a second store and duplicate proposals.",
+    "stable_c4_ids_changed": []
+  },
+  "refreshed_g_source_baseline": {
+    "meaning": "Feature G source line after completed task_034_007_002 and before task_034_007_003 dispatch; not an accepted Epic baseline",
+    "target_revision": "1e1a1c945f37632950af83b8d3b26ffa03fc333b"
+  },
+  "review_state": {
+    "accepted_revision_ids": [],
+    "note": "Task 002 leaf/model edits and Task 003 parent/shared edits are staged through their exact-revision owner paths; no acceptance is inferred from branch reachability.",
+    "pending_review_unit_ids": [
+      "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0",
+      "architecture-review-685cf96b1eb08bbee2b11990dd258a6059222102bf1eeda85d858da6273f5c7c",
+      "architecture-review-9d3c1005e1fcaf965e555148757bc7de586c0a3804aa09e936a6ab2e665a9db8"
+    ],
+    "pending_revision_ids": [
+      "50b9c0f19baed0c4ea3ace0a2fd0a17ba85d083a",
+      "a911fb1e13729ebce182383a52b3f9832428b535"
+    ]
+  },
+  "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+  "version": 2
+}
