@@ -42,16 +42,16 @@ def test_final_delta_is_exact_and_does_not_promote_tracking_only_work() -> None:
     assert report["feature_f"]["review_description"] == "unavailable"
 
 
-def test_feature_f_source_reachability_is_not_epic_acceptance() -> None:
+def test_feature_f_is_now_pinned_as_accepted_without_rewriting_g_snapshot() -> None:
     report = _load("final-validation-report.json")
     reconciliation = _load("reconciliation-report.json")
     feature_f = report["feature_f"]
     accepted_epic = reconciliation["accepted_epic_pin"]
 
     assert feature_f["reachable_on_g_source_inventory_pin"] is True
-    assert feature_f["reachable_on_accepted_epic_pin"] is False
-    assert accepted_epic["target_revision"] == report["inspected_revisions"]["epic_034_head"]
-    assert accepted_epic["review_218_state"] == "open_clean_mergeable_not_merged"
+    assert feature_f["reachable_on_accepted_epic_pin"] is False  # G snapshot
+    assert accepted_epic["target_revision"] != report["inspected_revisions"]["epic_034_head"]
+    assert accepted_epic["review_218_state"] == "merged_reachable_from_accepted_target"
     assert subprocess.run(
         [
             "git",
@@ -61,7 +61,7 @@ def test_feature_f_source_reachability_is_not_epic_acceptance() -> None:
             accepted_epic["target_revision"],
         ],
         cwd=ROOT,
-    ).returncode != 0
+    ).returncode == 0
 
 
 def test_captured_pinned_exports_match_hashes_views_and_stable_model_ids() -> None:
@@ -125,13 +125,12 @@ def test_final_report_names_every_pending_and_material_gap() -> None:
     assert len(pending) == 3
     assert reconciliation["review_state"]["pending_review_unit_ids"]
     assert evidence["proposal"]["accepted"] is False
-    assert {row["disposition"] for row in ledger["rows"]} == {"unresolved"}
-
-    expected = {
-        row["reason"]: row["count"] for row in reconciliation["material_unresolved"]
+    assert {row["disposition"] for row in ledger["rows"]} == {
+        "durable", "no-impact", "unresolved"
     }
-    actual = {row["reason"]: row["count"] for row in report["artifact_state"]["unresolved"]}
-    assert actual == expected
+    assert ledger["coverage_accounting"]["material_unresolved"] == 2021
+    assert reconciliation["final_validation_deferred_to"] == "task_034_008_003"
+    assert report["artifact_state"]["unresolved"]  # retained G validation snapshot
     assert {gate["code"] for gate in report["closeout_validators"].values()} == {
         "missing_reconciliation"
     }
