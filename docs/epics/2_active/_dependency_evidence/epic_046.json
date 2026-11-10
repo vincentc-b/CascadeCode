@@ -77,6 +77,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_5b4da7e5eca6ec6a7ae0ae5e188c15b7339a11d6fb0cfb3ca4673366672b2dbb",
+      "dependency_id": "dep_node",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:8efedb41ffed8bca2c01a62644f32913d04ba08039b44397b36f5877b35bf6c4",
+      "recipe_revision": "sha256:8d9d32a2f8d59f0e29e450862ac1428e9237d5f8c628ca4211673ee4ad3fe40d",
+      "exact_operation": "test \"$(/usr/bin/node --version)\" = v20.20.2 && echo success",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-10T21:11:23.155059+00:00",
+      "completed_at": "2026-11-10T21:11:23.809818+00:00",
+      "result": "succeeded",
+      "redacted_output": "success\n",
+      "selected_version": "20.20.2",
+      "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
