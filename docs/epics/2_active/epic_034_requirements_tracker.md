@@ -13,6 +13,7 @@ children:
 - feat_034_006
 - feat_034_007
 - feat_034_008
+- feat_034_009
 depends_on:
 - epic_036
 owners:
@@ -162,6 +163,7 @@ Prefer a few high-signal integration and browser scenarios over broad mock-based
 - [Epic 36](epic_036_split_target_and_tracking_repos.md) (`depends_on: epic_036`) supplies the optional tracking repository and plan routing before this epic starts. This epic adds design/C4 destination selection on that foundation.
 
 ## Feature breakdown
+- feat_034_009
 - `feat_034_008` — Corrective historical evidence and accepted architecture reconciliation; depends on F and G. See dec_015; requires its own review and human approval.
 
 The following seven bounded slices cover all success criteria and are now minted as backlog features with the listed dependency edges. Their specs preserve the reviewed scope and acceptance checkpoints. Human plan approval remains the dispatch boundary.
