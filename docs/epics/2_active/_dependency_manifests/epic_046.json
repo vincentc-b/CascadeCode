@@ -164,6 +164,167 @@
           "integrity_reference": "version-pinned-existing-installation:playwright-1.64.0-chromium-156.0.8078.4"
         }
       ]
+    },
+    {
+      "revision": 2,
+      "recorded_at": "2026-11-10T21:11:50.124497+00:00",
+      "target_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "none_required": false,
+      "dependencies": [
+        {
+          "dependency_id": "dep_python_test_runtime",
+          "version": "Python 3.12.8; pytest 9.0.3; PyYAML 6.0.3; cursor-sdk 1.0.37; langgraph 1.2.14; langgraph-checkpoint-sqlite 3.1.1",
+          "source": "Existing /opt/conda environment; repository pyproject.toml",
+          "digest": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing shared host tools only; verification, no installation requested",
+          "operation": "false",
+          "cleanup_plan": "No installation or upgrade requested; verification leaves installed tools unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import sys, importlib.metadata as m; assert sys.version_info[:3] == (3,12,8); expected={\"pytest\":\"9.0.3\",\"PyYAML\":\"6.0.3\",\"cursor-sdk\":\"1.0.37\",\"langgraph\":\"1.2.14\",\"langgraph-checkpoint-sqlite\":\"3.1.1\"}; assert all(m.version(k)==v for k,v in expected.items()); import pytest, yaml, cursor_sdk, langgraph, langgraph.checkpoint.sqlite; print(\"success\")'",
+          "requested_range": "Python 3.12.8; pytest 9.0.3; PyYAML 6.0.3; cursor-sdk 1.0.37; langgraph 1.2.14; langgraph-checkpoint-sqlite 3.1.1",
+          "resolved_version": "Python 3.12.8; pytest 9.0.3; PyYAML 6.0.3; cursor-sdk 1.0.37; langgraph 1.2.14; langgraph-checkpoint-sqlite 3.1.1",
+          "expected_verification_result": "success",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "Existing shared host environment",
+          "lock_references": [
+            "pyproject.toml"
+          ],
+          "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612"
+        },
+        {
+          "dependency_id": "dep_node",
+          "version": "20.20.2",
+          "source": "Existing /usr/bin/node",
+          "digest": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing shared host tools only; verification, no installation requested",
+          "operation": "false",
+          "cleanup_plan": "No installation or upgrade requested; verification leaves installed tools unchanged.",
+          "verification_recipe": "test \"$(/usr/bin/node --version)\" = v20.20.2 && echo success",
+          "requested_range": "20.20.2",
+          "resolved_version": "20.20.2",
+          "expected_verification_result": "success",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "Existing shared host environment",
+          "lock_references": [
+            "pyproject.toml"
+          ],
+          "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd"
+        },
+        {
+          "dependency_id": "dep_c4_renderer",
+          "version": "Docker server 28.0.0; Structurizr sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "source": "Existing Docker daemon and local structurizr/structurizr image",
+          "digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing shared host tools only; verification, no installation requested",
+          "operation": "false",
+          "cleanup_plan": "No installation or upgrade requested; verification leaves installed tools unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import json,subprocess; image=\"structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c\"; assert subprocess.check_output([\"docker\",\"version\",\"--format\",\"{{.Server.Version}}\"],text=True).strip()==\"28.0.0\"; rows=json.loads(subprocess.check_output([\"docker\",\"image\",\"inspect\",image],text=True)); assert image in rows[0][\"RepoDigests\"]; print(\"success\")'",
+          "requested_range": "Docker server 28.0.0; Structurizr sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "resolved_version": "Docker server 28.0.0; Structurizr sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "expected_verification_result": "success",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "Existing shared host environment",
+          "lock_references": [
+            "pyproject.toml",
+            "cascade/workspace/c4_render.py"
+          ],
+          "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c"
+        },
+        {
+          "dependency_id": "dep_browser",
+          "version": "Playwright 1.64.0; Chromium 156.0.8078.4",
+          "source": "Existing Python Playwright package and its cached Chromium",
+          "digest": "version-pinned-existing-installation:playwright-1.64.0-chromium-156.0.8078.4",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing shared host tools only; verification, no installation requested",
+          "operation": "false",
+          "cleanup_plan": "No installation or upgrade requested; verification leaves installed tools unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; from playwright.sync_api import sync_playwright; assert m.version(\"playwright\")==\"1.64.0\"; p=sync_playwright().start(); b=p.chromium.launch(headless=True); assert b.version==\"156.0.8078.4\"; page=b.new_page(); page.set_content(\"<p>browser ready</p>\"); assert page.locator(\"p\").inner_text()==\"browser ready\"; b.close(); p.stop(); print(\"success\")'",
+          "requested_range": "Playwright 1.64.0; Chromium 156.0.8078.4",
+          "resolved_version": "Playwright 1.64.0; Chromium 156.0.8078.4",
+          "expected_verification_result": "success",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "Existing shared host environment",
+          "lock_references": [
+            "pyproject.toml",
+            "tests/war_room/test_responsive_layout.py"
+          ],
+          "integrity_reference": "version-pinned-existing-installation:playwright-1.64.0-chromium-156.0.8078.4"
+        }
+      ]
     }
   ]
 }
