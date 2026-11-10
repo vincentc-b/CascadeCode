@@ -9,6 +9,7 @@ children:
 - feat_046_002
 - feat_046_003
 - feat_046_004
+- feat_046_005
 depends_on:
 - epic_034
 owners:
@@ -201,6 +202,7 @@ The detailed requirements and acceptance evidence define the intended outcome; t
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_046_005
 - feat_046_004
 - feat_046_003
 - feat_046_002
