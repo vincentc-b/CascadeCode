@@ -277,6 +277,11 @@ The Epic Architect will sign the saved final revision after review. The Epic Man
   Chose Start the real planning/renderer/browser smoke in feat_046_001 and extend it through each feature; feat_046_005 must retain passing A-D evidence at the final integrated revision. Assign the discovered renderer fixture inventory failure to feat_046_001 without weakening closure validation..
   Rationale: The production connection is the core risk. Dependency checks confirm installed tooling and a browser launch, but the existing renderer test fails before rendering because its copied nested evidence is absent from its declared inventory. Treat that as a concrete early repair and do not defer feasibility or mistake unit/DOM coverage for acceptance.
   Honors: Release-blocking real-renderer and real-browser proof, immutable source safety and the brief's prohibition on fabricated primary acceptance payloads..
+
+- `dec_003` · 2026-11-10 · Epic Architect · **Final implementation contracts — HTTP and immutable resources**
+  Chose Use an always-present paired_review envelope and a lazy review resource, with scoped immutable same-origin SVG and source/document/diff URLs. Reuse the existing composer, binding validation, semantic viewer and review-context resolver; enforce explicit states, payload limits and exact displayed-tuple validation for comments and approval..
+  Rationale: The current document handler omits the review payload and local artifact references are not browser resources. A single authorized resource boundary serves both review and branch browsing without serializing every diagram or creating a parallel review system. Server-side freshness and serialized mutation checks prevent stale tabs from approving or commenting on replacement evidence.
+  Honors: Requirements 1–4 and 6; exact immutable revisions, SVG safety, semantic identity, existing thread routing and downstream gates, usable plan text during architecture failure..
 ## Amendment log
 
 _(none)_
