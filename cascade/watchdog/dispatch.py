@@ -94,7 +94,9 @@ def dispatch_task(
     from cascade.task.lifecycle_lock import task_lifecycle_lock
 
     with task_lifecycle_lock(root=repo):
-        result = _dispatch_task(work_id, by, skills, repo, expected_parent=expected_parent)
+        result = _dispatch_task(
+            work_id, by, skills, repo, expected_parent=expected_parent
+        )
         if result.ok:
             from cascade.task.execution import _read, _write
 
@@ -162,14 +164,34 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
         for candidate in board.by_id.values()
     ):
         return _fail("existing_child_work")
-    if get_integration_worktree(root, "epic", work_id) is not None and not unregister_missing_integration_worktree(
-        "epic", work_id, trunk=root, require_missing_branch=True
+    from cascade.epic.return_graph import read_manifest, reactivate_graph
+
+    returned_manifest = read_manifest(root, work_id)
+    returning = (
+        returned_manifest is not None and returned_manifest["state"] == "returned"
+    )
+    if (
+        not returning
+        and get_integration_worktree(root, "epic", work_id) is not None
+        and not unregister_missing_integration_worktree(
+            "epic", work_id, trunk=root, require_missing_branch=True
+        )
     ):
         return _fail("existing_activation_run")
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
     if refusal := _provider_preflight_refusal(meta, by=by, root=root):
         return refusal
+    if returning:
+        reactivate_graph(work_id, root=root)
+        run_id = _begin_epic_activation_run(work_id, root)
+        event = _emit(
+            root,
+            work_id,
+            "EpicActivated",
+            {"epic_id": work_id, "by": by, "run_id": run_id},
+        )
+        return DispatchResult(ok=True, reason=None, event=event)
     if not has_git(root):
         move_doc(work_id, "active", root=root)
         run_id = _begin_epic_activation_run(work_id, root)

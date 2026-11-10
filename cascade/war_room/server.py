@@ -915,7 +915,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         )
 
     def _handle_return_epic_to_backlog(self, body: dict[str, Any]) -> None:
-        """Human-only command boundary; it has no transition implementation yet."""
+        """Return the complete preserved Epic graph through the human command."""
 
         epic_id = self._require_work_id(body, key="epic_id")
         if epic_id is None:

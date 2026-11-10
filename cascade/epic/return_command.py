@@ -1,10 +1,4 @@
-"""Human-authorized, non-mutating boundary for returning an Epic to backlog.
-
-The durable lifecycle transition intentionally lives in the next feature.  This
-module owns the public command contract now: it authenticates the caller,
-re-evaluates the shared eligibility snapshot, and only delegates an eligible
-request to an explicitly supplied transition capability.
-"""
+"""Human-authorized boundary for a durable Epic graph return to backlog."""
 
 from __future__ import annotations
 
@@ -14,7 +8,6 @@ from typing import Callable, Literal
 
 from cascade.board.context import resolve_root
 from cascade.board.errors import BoardError
-from cascade.workspace.integration_worktree import merged_board
 from cascade.epic.return_eligibility import (
     ReturnEligibility,
     ReturnEligibilityInput,
@@ -69,11 +62,10 @@ def return_epic_to_backlog(
     quiesce_timeout: float = 0.0,
     root: Path | None = None,
 ) -> ReturnEpicCommandResult:
-    """Authorize and evaluate one return request without simulating a transition.
+    """Return a graph through production persistence or an injected test adapter.
 
-    ``transition`` is deliberately opt-in until feat_030_002 supplies its
-    locked, durable implementation.  Consequently an otherwise eligible
-    request receives ``transition_unavailable`` rather than changing state.
+    Injected snapshots still require an explicit transition capability; the
+    default path discovers and preserves the complete live graph itself.
     """
 
     if not isinstance(epic_id, str) or not epic_id.strip():
@@ -81,7 +73,29 @@ def return_epic_to_backlog(
     if not isinstance(request_id, str) or not request_id.strip():
         return _error(epic_id, "", "invalid_request_id", "A request ID is required.")
     if actor != "human":
-        return _error(epic_id, request_id, "unauthorized", "A human authorization is required.")
+        return _error(
+            epic_id, request_id, "unauthorized", "A human authorization is required."
+        )
+
+    if snapshot_loader is None and transition is None:
+        from cascade.epic.return_graph import execute_return
+        from cascade.epic.return_transaction import TransitionUnsafe
+
+        try:
+            return execute_return(
+                epic_id,
+                request_id,
+                root=resolve_root(root),
+                gate=gate,
+                timeout=quiesce_timeout,
+            )
+        except (BoardError, OSError, ValueError, KeyError, TransitionUnsafe):
+            return _error(
+                epic_id,
+                request_id,
+                "return_state_unavailable",
+                "Return state could not be preserved; retry or inspect the transition journal.",
+            )
 
     loader = snapshot_loader or (
         lambda item_id: load_return_eligibility_snapshot(item_id, root=root)
@@ -94,7 +108,9 @@ def return_epic_to_backlog(
         # leak filesystem or provider details to the operator.
         eligibility = evaluate_return_eligibility(_unreadable_snapshot(epic_id))
     if not eligibility.eligible:
-        return ReturnEpicCommandResult(False, epic_id, request_id, eligibility=eligibility)
+        return ReturnEpicCommandResult(
+            False, epic_id, request_id, eligibility=eligibility
+        )
     if transition is None:
         return _error(
             epic_id,
@@ -119,36 +135,22 @@ def return_epic_to_backlog(
                 eligibility=_quiescence_refusal(eligibility),
             )
         if not eligibility.eligible:
-            return ReturnEpicCommandResult(False, epic_id, request_id, eligibility=eligibility)
+            return ReturnEpicCommandResult(
+                False, epic_id, request_id, eligibility=eligibility
+            )
         transition(epic_id, request_id)
-        return ReturnEpicCommandResult(True, epic_id, request_id, eligibility=eligibility)
+        return ReturnEpicCommandResult(
+            True, epic_id, request_id, eligibility=eligibility
+        )
 
 
 def load_return_eligibility_snapshot(
     epic_id: str, *, root: Path | None = None
 ) -> ReturnEligibilityInput:
-    """Read only identity facts available today; unknown safety facts stay unknown.
+    """Read the same authoritative graph facts used by the production command."""
+    from cascade.epic.return_graph import load_snapshot
 
-    This intentionally does not infer preservation or quiescence from document
-    layout.  The durable snapshot provider added with the transition feature
-    will replace those unknown fields with authoritative facts.
-    """
-
-    board = merged_board(resolve_root(root))
-    meta = board.by_id.get(epic_id)
-    if meta is None:
-        return _unreadable_snapshot(epic_id)
-    return ReturnEligibilityInput(
-        epic_id=meta.id,
-        epic_tier=meta.tier,
-        epic_status=meta.status,
-        epic_transition_in_progress=None,
-        graph=None,
-        graph_complete=None,
-        source_brief_revision=None,
-        lock_order=None,
-        conflicting_lifecycle_operation=None,
-    )
+    return load_snapshot(epic_id, root=resolve_root(root))
 
 
 def _unreadable_snapshot(epic_id: str) -> ReturnEligibilityInput:
@@ -191,5 +193,10 @@ def _error(
     eligibility: ReturnEligibility | None = None,
 ) -> ReturnEpicCommandResult:
     return ReturnEpicCommandResult(
-        False, epic_id, request_id, eligibility=eligibility, error_code=code, message=message
+        False,
+        epic_id,
+        request_id,
+        eligibility=eligibility,
+        error_code=code,
+        message=message,
     )
