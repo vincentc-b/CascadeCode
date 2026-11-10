@@ -33,14 +33,6 @@ epic_034
 
 ## Scope
 
-# Match completed recovery review identity with legacy missing numeric IDs
-
-## Parent Epic
-
-epic_034
-
-## Scope
-
 Correct the remaining Feature F audit incident investigation_90d4c50f3e8326ebc96bc0186bbb96a5 after Feature I integration. Preserve completed I and F. No diagram change: this is confined to existing audit identity reconciliation, without new stores, services or access grants.
 
 At owned Epic revision 24956e36977468f8cef6e3eb2ba8fcedafa54016, I's _completed_resolution_execution requires string equality for both review_id and review_url. The actual retained admission action resolution:v1:e58059ef6a24760191f4653a01e6bf7ebd50260509f8edc865db5067158754ac has review_id='218'; the identical completed execution recovery has review_id=null. Both contain https://github.com/vincentc-b/CascadeCode/pull/218, and the completed execution binds owning_team.work_id and affected_work_id to feat_034_006 with completion reason review_health_restored. A read-only probe executing the integrated helper against actual persisted rows returns false. Changing only the missing ID in an in-memory control to '218' returns true. No persisted state was changed. The existing regression fixture fills both IDs and misses the production shape. Deployed product checkout still lacks I's completion helper; deployment alone will therefore not cure this remaining mismatch.
@@ -71,33 +63,6 @@ One focused SWE implementation and persisted-store regression slice in an isolat
 ## Risks & upward questions
 
 Production runtime currently predates I; accepted correction and deployment are separate prerequisites. Avoid permissive URL guessing, number-only identity, or treating every terminal feature as healthy. Historical reconstruction and architecture acceptance remain H/epic concerns, outside this repair.
-
-## Decision log
-
-None yet.
-
-## Data structures
-
-TBD.
-
-## API contracts
-
-TBD.
-
-## Logic flow
-
-```mermaid
-flowchart TD
-  A[Start] --> B[End]
-```
-
-## Task breakdown
-
-_(empty — Feature Team mints tasks after dispatch)_
-
-## Risks & upward questions
-
-None.
 
 ## Decision log
 
