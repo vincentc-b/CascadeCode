@@ -245,6 +245,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_15fc46fc715d91174695a988d57d2c1fc271e7796d821f73cd7418362151781e",
+      "dependency_id": "dep_python_test_runtime",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:f2f2c14165e69677668352460d7f0858e96c2617f6631f26a8a325db3894860a",
+      "recipe_revision": "sha256:b8241be56e7f5b7eeb9024ed17f0263af68be12798384f07be55ae005bae0da5",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import sys, importlib.metadata as m; assert sys.version_info[:3] == (3,12,8); expected={\"pytest\":\"9.0.3\",\"PyYAML\":\"6.0.3\",\"cursor-sdk\":\"1.0.37\",\"langgraph\":\"1.2.14\",\"langgraph-checkpoint-sqlite\":\"3.1.1\"}; assert all(m.version(k)==v for k,v in expected.items()); import pytest, yaml, cursor_sdk, langgraph, langgraph.checkpoint.sqlite; print(\"success\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-10T21:11:52.621288+00:00",
+      "completed_at": "2026-11-10T21:11:55.025712+00:00",
+      "result": "succeeded",
+      "redacted_output": "success\n",
+      "selected_version": "Python 3.12.8; pytest 9.0.3; PyYAML 6.0.3; cursor-sdk 1.0.37; langgraph 1.2.14; langgraph-checkpoint-sqlite 3.1.1",
+      "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
