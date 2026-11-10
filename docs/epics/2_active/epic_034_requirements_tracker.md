@@ -292,6 +292,11 @@ Corrective feature `feat_034_008` owns the remaining evidence acquisition, per-r
   Chose Create corrective feat_034_009 for the stale review-admission audit reference; preserve completed Feature F and do not retry its delivery. Keep historical/architecture acceptance correction in feat_034_008..
   Rationale: PR #218 is merged and the matching review recovery is completed, but resolution_actions.json retains mutation_ready. The deployed audit collector attributes this historical admission as an unresolved reference without checking matching completion. A focused SWE repair with persisted-store regressions is needed; direct state editing or re-executing F would not repair the cause. Feature 009 requires independent review and fresh human approval before implementation; neither existing epic approval nor minting is repair success.
   Honors: Epic criteria 15, 17–18; audit investigation investigation_90d4c50f3e8326ebc96bc0186bbb96a5; completed child lineage and exact-action recovery evidence..
+
+- `dec_018` · 2026-11-10 · Epic Architect · **Corrective audit repair architecture review**
+  Chose Retain feat_034_009 as the narrow dec_017 repair; normalize its duplicate scaffold into one concrete contract and explicitly record no diagram change within existing audit/review-health components..
+  Rationale: Independent store, code and remote review inspection confirms the same admission action remains mutation_ready while its execution recovery is completed and PR #218 is merged. Exact action plus review-owner identity and terminal evidence are required; closed-feature status alone cannot suppress incidents. Existing scope needs no additional repair feature.
+  Honors: dec_017; preserved Feature F lineage; existing identity regressions; epic criteria 17–18 require independent review and fresh human approval before corrective implementation. Feature H acceptance work remains separate..
 ## Amendment log
 
 _(none)_
