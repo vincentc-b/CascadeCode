@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
-from cascade.board.context import get_project_context, set_project_context
-from cascade.workspace.types import ProjectContext
-
 
 def project_context_payload() -> dict[str, str] | None:
+    # MCP entry points import this bridge while planning/task tool modules are
+    # still initializing. Load repository packages only when using the bridge.
+    from cascade.board.context import get_project_context
+
     project = get_project_context()
     if project is None:
         return None
@@ -22,6 +23,9 @@ def restore_project_context(
     architecture_destination: object = None,
 ) -> None:
     """Restore launcher configuration, never caller-supplied tool arguments."""
+    from cascade.board.context import set_project_context
+    from cascade.workspace.types import ProjectContext
+
     if payload is None:
         set_project_context(None)
         return

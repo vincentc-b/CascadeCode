@@ -50,12 +50,16 @@ def test_stdio_servers_speak_jsonl(
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
     ]
     payload = "".join(json.dumps(message) + "\n" for message in messages)
+    # Launch from outside the source checkout, as a planning sandbox does, but
+    # test this checkout rather than an unrelated editable installation.
+    source_root = str(Path(__file__).resolve().parents[2])
     completed = subprocess.run(
         [sys.executable, "-m", module],
         input=payload,
         text=True,
         capture_output=True,
-        env={**os.environ, env_key: str(config_path)},
+        cwd=tmp_path,
+        env={**os.environ, env_key: str(config_path), "PYTHONPATH": source_root},
         check=True,
         timeout=10,
     )
