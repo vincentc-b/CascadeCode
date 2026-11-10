@@ -105,6 +105,24 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_b8cc67745c6b99b29721d351c4468b27e63d42db7c8b9a11a05321a9c4123693",
+      "dependency_id": "dep_pyyaml",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:b544317c8b3a0549a2db7e9da7c81aafc467697d736cbdaa00f0129dd035c5cc",
+      "recipe_revision": "sha256:ed2de46000d2697660ab6c14b33637eecfdaa500a011c64e164ba3d01c184778",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'PyYAML'\"'\"') == '\"'\"'6.0.3'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:03c3b415ed38d09faedc49360e930769b40c58f68585e6de00e2e4916a858d34'\"'\"''",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-10T20:14:08.808399+00:00",
+      "selected_version": "6.0.3",
+      "integrity_reference": "sha256:03c3b415ed38d09faedc49360e930769b40c58f68585e6de00e2e4916a858d34",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
