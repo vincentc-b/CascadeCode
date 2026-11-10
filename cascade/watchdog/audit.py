@@ -11,6 +11,7 @@ import base64
 import binascii
 import hashlib
 import json
+import re
 import subprocess
 import threading
 import time
@@ -20,6 +21,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from threading import RLock
 from typing import Any, Callable, Literal, Mapping, TypeAlias
+from urllib.parse import urlsplit
 
 from cascade.board.context import (
     get_project_context,
@@ -754,6 +756,17 @@ def _unresolved_candidate_references(
             reviews, review_error = _read_json_source(
                 product / ".cascade" / "reviews.json", "review"
             )
+            executions, execution_error = _read_json_source(
+                lifecycle_root(product) / ".cascade" / "executions.json",
+                "reconciliation",
+            )
+            execution_actions: Mapping[str, Any] | None = None
+            if isinstance(executions, Mapping) and isinstance(
+                executions.get("actions"), Mapping
+            ):
+                execution_actions = executions["actions"]
+            elif executions is not None:
+                execution_error = "reconciliation:unavailable"
             if review_error or (
                 reviews is not None and not isinstance(reviews, Mapping)
             ):
@@ -763,7 +776,11 @@ def _unresolved_candidate_references(
                     unavailable.append("reconciliation:unavailable")
             elif isinstance(reviews, Mapping):
                 if not _collect_resolution_review_references(
-                    payload, reviews, references
+                    payload,
+                    reviews,
+                    references,
+                    execution_actions=execution_actions or {},
+                    execution_unavailable=execution_error is not None,
                 ):
                     unavailable.append("reconciliation:unavailable")
     return references, unavailable
@@ -795,12 +812,21 @@ def _collect_resolution_review_references(
     value: Any,
     reviews: Mapping[str, Any],
     references: list[tuple[str, str]],
+    *,
+    execution_actions: Mapping[str, Any],
+    execution_unavailable: bool,
 ) -> bool:
     """Attribute real resolution-action rows through their review registry owner."""
 
     if isinstance(value, list):
         results = tuple(
-            _collect_resolution_review_references(item, reviews, references)
+            _collect_resolution_review_references(
+                item,
+                reviews,
+                references,
+                execution_actions=execution_actions,
+                execution_unavailable=execution_unavailable,
+            )
             for item in value
         )
         return all(results)
@@ -818,6 +844,18 @@ def _collect_resolution_review_references(
                 continue
             number = str(record.get("number") or record.get("review_id") or "").strip()
             url = str(record.get("url") or record.get("review_url") or "").strip()
+            # Epic close records retain the URL but may omit the numeric ID.
+            # Recover only a recognized forge identity; never overwrite an
+            # explicit (potentially conflicting) number in the registry.
+            if not number:
+                try:
+                    parsed_url = urlsplit(url)
+                    path = parsed_url.path if parsed_url.scheme in {"http", "https"} and parsed_url.netloc else ""
+                except ValueError:
+                    path = ""
+                match = re.search(r"/(?:pull|merge_requests)/(\d+)/?$", path)
+                if match:
+                    number = match.group(1)
             if review_id and review_id == number:
                 id_matches.add(owner_id)
             if review_url and review_url == url:
@@ -843,18 +881,71 @@ def _collect_resolution_review_references(
             else None
         )
         if owner_id is not None and _looks_like_work_id(owner_id):
-            references.append(("reconciliation", owner_id))
+            if _is_resolution_action_row(value) and execution_unavailable:
+                valid = False
+            elif not _completed_resolution_execution(
+                value, request, owner_id, execution_actions
+            ):
+                references.append(("reconciliation", owner_id))
         else:
             valid = False
+        # An action is a record boundary. Its handoff repeats action_id, but
+        # is not another persisted resolution action requiring its own request.
+        return valid
     elif _is_resolution_action_row(value):
-        valid = False
+        return False
     for item in value.values():
         if isinstance(item, (Mapping, list)):
             valid = (
-                _collect_resolution_review_references(item, reviews, references)
+                _collect_resolution_review_references(
+                    item,
+                    reviews,
+                    references,
+                    execution_actions=execution_actions,
+                    execution_unavailable=execution_unavailable,
+                )
                 and valid
             )
     return valid
+
+
+def _completed_resolution_execution(
+    admission: Mapping[str, Any],
+    request: Mapping[str, Any],
+    owner_id: str,
+    execution_actions: Mapping[str, Any],
+) -> bool:
+    """Join a retained admission to its exact, authoritatively completed repair."""
+
+    action_id = str(admission.get("action_id") or "").strip()
+    execution = execution_actions.get(action_id)
+    if not action_id or not isinstance(execution, Mapping):
+        return False
+    reconciliation = execution.get("completion_reconciliation")
+    recovery = execution.get("recovery")
+    if (
+        execution.get("action_id") != action_id
+        or execution.get("action_kind") not in {"review_health", "review_rebase"}
+        or execution.get("recovery_state") != "completed"
+        or not isinstance(reconciliation, Mapping)
+        or reconciliation.get("reason") != "review_health_restored"
+        or not isinstance(recovery, Mapping)
+    ):
+        return False
+    owning_team = recovery.get("owning_team")
+    evidence = recovery.get("evidence")
+    if (
+        not isinstance(owning_team, Mapping)
+        or owning_team.get("work_id") != owner_id
+        or not isinstance(evidence, Mapping)
+        or evidence.get("affected_work_id") != owner_id
+    ):
+        return False
+    return all(
+        str(evidence.get(field) or "").strip()
+        == str(request.get(field) or "").strip()
+        for field in ("review_id", "review_url")
+    )
 
 
 def _is_resolution_action_row(value: Mapping[str, Any]) -> bool:
@@ -1662,7 +1753,10 @@ def _parent_action_evidence(
         candidate = ("publish_integration_review", "local_integration_unpublished")
     elif doc.meta.status in {"backlog", "ready_to_plan"} and worktree_registered:
         candidate = ("reconcile_return_transition", "returned_worktree_retained")
-    elif _parent_revision_is_stale(doc, board) and not any(
+    elif (
+        doc.meta.status not in {"completed", "cancelled"}
+        and _parent_revision_is_stale(doc, board)
+    ) and not any(
         board.by_id.get(child_id) is not None
         and board.by_id[child_id].status == "active"
         for child_id in doc.meta.children
