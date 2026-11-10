@@ -1,0 +1,119 @@
+from datetime import datetime, timezone
+import json
+from types import SimpleNamespace
+import threading
+import time
+
+import pytest
+
+from cascade.watchdog import audit_agent_lane as lane
+from cascade.watchdog import audit_investigation as cases
+from cascade.watchdog import audit_lane as scanner
+from cascade.watchdog.events import read_events
+from tests.watchdog.test_audit_investigation import board
+
+
+def test_periodic_reviews_are_independent_of_classifier_and_restart(tmp_path, monkeypatch):
+    root = board(tmp_path)
+    monkeypatch.setattr(scanner, 'project_audit_observation', lambda *a, **k: pytest.fail('scanner invoked'))
+    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=1000)
+    assert {c['owner_id'] for c in cases.read_investigation_cases(root=root)} == {'epic_001', 'feat_001'}
+    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=1010)
+    assert len(read_events('feat_001', 0, root=root)[0]) == 1
+    lane.AuditInvestigationWorker(root, interval_seconds=60).run_once(now=1061)
+    assert len(read_events('feat_001', 0, root=root)[0]) == 2
+
+
+def test_failed_request_does_not_block_other_owner_and_retries(tmp_path, monkeypatch):
+    root = board(tmp_path)
+    worker = lane.AuditInvestigationWorker(root, enabled=False)
+    lane.enqueue_investigations(root, tuple({'work_id': w, 'reason': 'unknown', 'evidence': {}} for w in ('feat_001', 'epic_001')))
+    original = cases.request_investigation
+    def fail(work_id, **kwargs):
+        if work_id == 'feat_001':
+            raise OSError('unavailable')
+        return original(work_id, **kwargs)
+    monkeypatch.setattr(cases, 'request_investigation', fail)
+    worker.run_once(now=1000)
+    assert len(read_events('epic_001', 0, root=root)[0]) == 1
+    assert lane.investigation_schedule(root)['last_error']['delivery_failures']
+    monkeypatch.setattr(cases, 'request_investigation', original)
+    worker.run_once(now=1061)
+    assert len(read_events('feat_001', 0, root=root)[0]) == 1
+    assert not list((lane._home(root) / 'agent_outbox').glob('*.json'))
+
+
+def test_disabled_reviews_allow_manual_request(tmp_path):
+    root = board(tmp_path)
+    worker = lane.AuditInvestigationWorker(root, enabled=False)
+    worker.run_once(now=1000)
+    assert not cases.read_investigation_cases(root=root)
+    lane.request_agent_review(root)
+    worker.run_once(now=1001)
+    assert len(cases.read_investigation_cases(root=root)) == 2
+
+
+def test_reported_fix_is_reassessed_at_cadence_with_prior_finding(tmp_path):
+    root = board(tmp_path)
+    worker = lane.AuditInvestigationWorker(root, interval_seconds=60)
+    worker.run_once(now=1000)
+    case = cases.request_investigation('task_001', 'unknown_failure', {}, root=root,
+                                       now=datetime.fromtimestamp(1000, timezone.utc))
+    cases.report_audit_investigation(case['case_id'], 'Removed obsolete blocker', 'reported_fixed',
+                                    root=root, feature_id='feat_001', now=datetime.fromtimestamp(1001, timezone.utc))
+    worker.run_once(now=1005)
+    before = len(read_events('feat_001', 0, root=root)[0])
+    worker.run_once(now=1061)
+    events = read_events('feat_001', 0, root=root)[0]
+    assert len(events) > before
+    assert any('Removed obsolete blocker' in e.payload['body'] for e in events)
+    assert next(c for c in cases.read_investigation_cases(root=root) if c['case_id'] == case['case_id'])['status'] != 'resolved'
+
+
+def test_unknown_probe_exception_is_durable_investigation_input(tmp_path, monkeypatch):
+    monkeypatch.setattr(scanner, 'select_audit_candidates', lambda *a, **k: SimpleNamespace(
+        candidates=(SimpleNamespace(work_id='feat_001', tier='feature', evidence_available=True),),
+        next_cursor='next', unavailable_evidence=(), continuation_cursors=('next',)))
+    def unknown(*a, **k):
+        raise RuntimeError('sensitive details not copied')
+    monkeypatch.setattr(scanner, 'project_audit_observation', unknown)
+    result = scanner._run_bounded_audit_pass_inline(tmp_path, None, threading.Event(),
+                                                   max_items=10, max_seconds=60, monotonic=time.monotonic)
+    assert result.next_cursor == 'next'
+    assert result.investigation_requests[0]['reason'] == 'audit_observation_error'
+    assert 'sensitive' not in json.dumps(result.investigation_requests)
+
+
+@pytest.mark.parametrize('tier,owner,role', [('epic', 'epic_001', 'epic_manager'), ('feature', 'feat_001', 'feature_lead')])
+def test_agent_mcp_report_is_exposed_and_scoped(tmp_path, tier, owner, role):
+    from cascade.agent.mcp_wrappers import dispatch_planning_tool, ToolEffectCollector
+    from cascade.epic.wiring import load_epic_tools
+    from cascade.feature.wiring import load_feature_tools
+    from cascade.epic.registry import epic_tools
+    from cascade.feature.registry import feature_tools
+    root = board(tmp_path)
+    load_epic_tools()
+    load_feature_tools()
+    assert 'report_audit_investigation' in epic_tools()
+    assert 'report_audit_investigation' in feature_tools()
+    case = cases.request_investigation(owner, 'periodic_agent_review', {}, root=root)
+    args = {'case_id': case['case_id'], 'finding': 'Waiting on live child; no duplicate work', 'outcome': 'waiting'}
+    result = dispatch_planning_tool(tier, 'report_audit_investigation', args, scope_id=owner,
+                                   repo_root=root, collector=ToolEffectCollector(), role=role)
+    assert result['latest_outcome'] == 'waiting'
+    with pytest.raises(PermissionError):
+        dispatch_planning_tool(tier, 'report_audit_investigation', {**args, 'root': '/tmp'},
+                               scope_id=owner, repo_root=root, collector=ToolEffectCollector(), role=role)
+
+
+def test_failed_periodic_scan_and_corrupt_envelope_do_not_starve_delivery(tmp_path, monkeypatch):
+    root = board(tmp_path)
+    worker = lane.AuditInvestigationWorker(root)
+    def broken(*a, **k):
+        raise RuntimeError('scan failed')
+    monkeypatch.setattr(worker, '_schedule_owner_reviews', broken)
+    lane.enqueue_investigations(root, ({'work_id': 'feat_001', 'reason': 'unknown', 'evidence': {}},))
+    (lane._home(root) / 'agent_outbox' / '0-corrupt.json').write_text('{')
+    worker.run_once(now=1000)
+    assert len(read_events('feat_001', 0, root=root)[0]) == 1
+    assert lane.investigation_schedule(root)['last_error']

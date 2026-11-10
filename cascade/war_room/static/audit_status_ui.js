@@ -96,6 +96,28 @@
     appendLine(document, container, "Next due", time(payload && payload.next_due));
     appendLine(document, container, "Duration", duration(payload && payload.duration_seconds));
     renderCounts(document, container, payload && payload.counts);
+    const investigations = payload && Array.isArray(payload.investigations) ? payload.investigations : [];
+    const agentHeading = document.createElement("h3");
+    agentHeading.textContent = "Agent investigations (" + investigations.length + ")";
+    container.appendChild(agentHeading);
+    appendLine(document, container, "Agent review",
+      "Teams investigate progress, logs and unexpected failures. Delivery is not proof of repair.");
+    const agentSchedule = payload && payload.agent_schedule;
+    if (agentSchedule) {
+      appendLine(document, container, "Next agent review", time(agentSchedule.next_due ? new Date(agentSchedule.next_due * 1000).toISOString() : null));
+      if (agentSchedule.last_error) appendLine(document, container, "Agent delivery issue", JSON.stringify(agentSchedule.last_error));
+    }
+    investigations.forEach(function (item) {
+      appendLine(document, container, text(item.work_id, "Unknown work"),
+        text(item.reason, "Investigation") + " · " + text(item.status, "pending") +
+        " · owner " + text(item.owner_id, "unavailable"));
+      const reports = Array.isArray(item.reports) ? item.reports : [];
+      const report = reports.length ? reports[reports.length - 1] : null;
+      if (report) appendLine(document, container, "Latest finding",
+        text(report.outcome, "investigating") + " · " + text(report.finding, "No finding recorded"));
+      if (item.delivery_error) appendLine(document, container, "Delivery issue", text(item.delivery_error, "Unavailable"));
+      appendLine(document, container, "Next reassessment", time(item.next_reassessment_at));
+    });
     const incidents = payload && Array.isArray(payload.incidents) ? payload.incidents : [];
     const heading = document.createElement("h3");
     heading.textContent = "Active incidents (" + incidents.length + ")";

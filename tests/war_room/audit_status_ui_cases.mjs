@@ -108,3 +108,12 @@ await unavailable.submit();
 assert.equal(unavailableStatus.textContent, "health audit unavailable");
 assert.equal(unavailableStatus.error, true);
 assert.equal(unavailableButton.disabled, false);
+
+ui.render(container, {
+  investigations: [{work_id: 'task_034_005_001', owner_id: 'feat_034_005', reason: 'unknown_failure',
+    status: 'reassess', reports: [{outcome: 'repair_requested', finding: 'Parent is investigating the blocker'}]}],
+  agent_schedule: {next_due: 1800, last_error: {error: 'DeliveryUnavailable'}}
+});
+for (const expected of ['Agent investigations (1)', 'Parent is investigating the blocker', 'DeliveryUnavailable', 'Next agent review']) {
+  assert.ok(container.textContent.includes(expected), expected);
+}

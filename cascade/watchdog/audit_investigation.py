@@ -145,10 +145,12 @@ def _locked(path: Path):
 
 
 def _read(path: Path) -> dict | None:
+    from cascade.watchdog.audit_lane import _read_runtime_json
     try:
-        with path.open("rb") as handle:
-            raw = handle.read(_MAX_FILE + 1)
-    except FileNotFoundError:
+        raw = _read_runtime_json(path)
+    except OSError as exc:
+        raise InvestigationUnavailable("investigation record unavailable or exceeds bounded size") from exc
+    if raw is None:
         return None
     if len(raw) > _MAX_FILE:
         raise InvestigationUnavailable("investigation record exceeds bounded size")
@@ -220,12 +222,12 @@ def _prompt(case: dict) -> str:
         "Explain an expected wait and its prerequisite if no repair is justified. "
         "Do not claim success merely because a turn ran or a repair was enqueued; reported fixes "
         "remain open for fresh authoritative reassessment.\n"
-        + json.dumps(case["evidence"], sort_keys=True)
+        + json.dumps({"evidence": case["evidence"], "previous_reports": case.get("reports", [])[-2:]}, sort_keys=True)
     )
 
 
-def _deliver(case: dict, path: Path, product: Path, now: datetime) -> None:
-    owner, canonical = _owner(case["work_id"], _repositories(product)[1])
+def _deliver(case: dict, path: Path, product: Path, now: datetime, owner_state: tuple[str, dict]) -> None:
+    owner, canonical = owner_state
     if owner != case["owner_id"]:
         raise InvestigationUnavailable("investigation owner changed; request fresh reassessment")
     if canonical["owner_status"] in {"completed", "cancelled"}:
@@ -299,7 +301,7 @@ def request_investigation(
             due = datetime.fromisoformat(previous["next_reassessment_at"])
             if previous["status"] == "queued" or when < due:
                 if previous["status"] == "queued":
-                    _deliver(previous, path, product, when)
+                    _deliver(previous, path, product, when, (owner, canonical))
                 return {**previous, "deduplicated": True}
         generation = previous["delivery_generation"] + 1 if previous else 1
         case = {"version": 1, "case_id": case_id, "work_id": work_id, "owner_id": owner,
@@ -311,7 +313,7 @@ def request_investigation(
                 "reports": previous.get("reports", []) if previous else []}
         _write(path, case)
         try:
-            _deliver(case, path, product, when)
+            _deliver(case, path, product, when, (owner, canonical))
         except Exception as exc:
             case["delivery_error"] = type(exc).__name__
             case["delivery_error_detail"] = str(exc) if isinstance(exc, InvestigationUnavailable) else "delivery failed; retained for replay"
@@ -347,11 +349,17 @@ def replay_pending_investigations(*, root: Path, limit: int = 100, now: datetime
         if stored["status"] != "queued":
             continue
         path = _case_path(root, stored["case_id"])
+        # Board projection may traverse worktrees: never hold the shared event
+        # writer lock while gathering that read-only evidence.
+        try:
+            owner_state = _owner(stored["work_id"], _repositories(root)[1])
+        except InvestigationUnavailable:
+            continue
         with _locked(path):
             case = _read(path)
             if case and case["status"] == "queued":
                 try:
-                    _deliver(case, path, product, _now(now))
+                    _deliver(case, path, product, _now(now), owner_state)
                 except Exception as exc:
                     case["delivery_error"] = type(exc).__name__
                     case["delivery_error_detail"] = str(exc) if isinstance(exc, InvestigationUnavailable) else "delivery failed; retained for replay"
@@ -378,11 +386,14 @@ def report_audit_investigation(
         raise ValueError("references must be a list of paths or review URLs")
     when = _now(now)
     path = _case_path(root, case_id)
+    initial = _read(path)
+    if initial is None:
+        raise InvestigationUnavailable("investigation case unavailable")
+    current_owner, _ = _owner(initial["work_id"], _repositories(root)[1])
     with _locked(path):
         case = _read(path)
         if case is None:
             raise InvestigationUnavailable("investigation case unavailable")
-        current_owner, _ = _owner(case["work_id"], _repositories(root)[1])
         if owner != case["owner_id"] or owner != current_owner:
             raise PermissionError("investigation report belongs to another owning team")
         report = {"reported_at": when.isoformat(), "owner_id": owner,

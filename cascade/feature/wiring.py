@@ -31,6 +31,8 @@ def load_feature_tools() -> None:
     from cascade.team_supervision import message_team, supervise_child
     register_feature_tool("message_team", message_team)
     register_feature_tool("supervise_child", supervise_child)
+    from cascade.watchdog.audit_investigation import report_audit_investigation
+    register_feature_tool("report_audit_investigation", report_audit_investigation)
 
     expected = (
         "mint_task", "list_children", "record_decision", "read_doc", "write_doc",

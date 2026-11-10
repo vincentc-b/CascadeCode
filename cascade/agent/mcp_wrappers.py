@@ -187,7 +187,18 @@ def dispatch_planning_tool(
         "epic_manager", "epic_architect"
     ):
         tool_args["author"] = role
-    if name == "run_dependency_check":
+    if name == "report_audit_investigation":
+        allowed_roles = {"epic": {"epic_manager", "epic_architect"},
+                         "feature": {"feature_lead", "feature_architect"}}
+        if role not in allowed_roles.get(tier, set()) or not scope_id:
+            raise PermissionError("owning planning role required for audit reports")
+        if set(tool_args) - {"case_id", "finding", "outcome", "evidence", "references"}:
+            raise PermissionError("audit reports do not accept owner or root overrides")
+        from cascade.watchdog.audit_investigation import report_audit_investigation
+        result = report_audit_investigation(
+            **tool_args, root=repo, **{f"{tier}_id": scope_id},
+        )
+    elif name == "run_dependency_check":
         if tier != "epic" or role not in ("epic_manager", "epic_architect") or not scope_id:
             raise PermissionError("owning Epic planning role required")
         if tool_args:
@@ -303,6 +314,13 @@ def mcp_tool_catalog(tier: PlanningToolTier, tool_names: list[str]) -> list[dict
 
 
 def _planning_tool_description(tier: PlanningToolTier, name: str) -> str:
+    if name == "report_audit_investigation":
+        return (
+            "Record findings and evidence for an audit case assigned to your team. "
+            "Investigate logs and current state, use owned tools or mint repair work, "
+            "then report investigating, waiting, repair_requested, or reported_fixed. "
+            "A reported fix is not verified completion; cite concrete checks and repair references."
+        )
     if name == "run_dependency_check":
         return (
             "Verify this Epic's declared dependencies using bounded recipes. Existing "
@@ -335,6 +353,12 @@ def _feature_tool_names() -> set[str]:
 _BOSS_TOOL_NAMES = frozenset({"dispatch_feature", "dispatch_task", "get_boss_view"})
 
 _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "report_audit_investigation": {"type": "object", "properties": {
+        "case_id": {"type": "string"}, "finding": {"type": "string"},
+        "outcome": {"type": "string", "enum": ["investigating", "waiting", "repair_requested", "reported_fixed"]},
+        "evidence": {"type": "object"},
+        "references": {"type": "array", "items": {"type": "string"}},
+    }, "required": ["case_id", "finding", "outcome"], "additionalProperties": False},
     "message_team": {"type": "object", "properties": {
         "recipient_id": {"type": "string"}, "body": {"type": "string"},
         "request_id": {"type": "string"}}, "required": ["recipient_id", "body", "request_id"]},

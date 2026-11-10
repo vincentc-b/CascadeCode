@@ -80,6 +80,16 @@ def health_audit_status(*, root: Path) -> dict[str, object]:
     incidents, ledger_errors = _active_incidents(root)
     unavailable.extend(ledger_errors)
     counts = _project_counts(receipt.get("counts") if receipt else None)
+    from cascade.watchdog.audit_investigation import read_investigation_cases
+    from cascade.watchdog.audit_agent_lane import investigation_schedule
+
+    investigations = []
+    agent_schedule = {}
+    try:
+        investigations = list(read_investigation_cases(root=root))
+        agent_schedule = investigation_schedule(root)
+    except (OSError, ValueError) as exc:
+        unavailable.append({"source": "agent_investigations", "reason": type(exc).__name__})
     return {
         "schema_version": 1,
         "last_run": receipt.get("last_completed_at") if receipt else None,
@@ -90,6 +100,8 @@ def health_audit_status(*, root: Path) -> dict[str, object]:
         "incidents": incidents,
         "failure": failure,
         "unavailable_evidence": unavailable,
+        "investigations": investigations,
+        "agent_schedule": agent_schedule,
     }
 
 
