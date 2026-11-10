@@ -159,6 +159,28 @@ def test_semantic_render_error_never_falls_back_to_static_artifacts(tmp_path: Pa
     assert payload.diffs["source"] == "git:model-a..model-b"
 
 
+def test_unchanged_review_is_explicit_and_keeps_the_pinned_pair(tmp_path: Path) -> None:
+    current = _artifact(tmp_path / "current", "current", REVISION_A, ("context",))
+    proposed = _artifact(tmp_path / "proposed", "proposed", REVISION_B, ("context",))
+    diff = C4SemanticDiff(
+        "unchanged", current.artifact_ref, proposed.artifact_ref,
+        "git:model-a..model-b", (), (),
+        (C4ViewDiff("context", "unchanged"),), (), "no diagram changes", None,
+    )
+
+    payload = compose_c4_review_payload(
+        _unit(), diff, owner="feature-team", work_id="feat_034_004",
+        current=current, proposed=proposed,
+        plan_diff_reference="git:plan-a..plan-b",
+    )
+
+    assert payload.state == "unchanged"
+    assert payload.changed_views == ()
+    assert payload.views[0].state == "unchanged"
+    assert payload.views[0].current.repository_key == "docs-current"
+    assert payload.views[0].proposed.repository_key == "docs-proposed"
+
+
 def _unit(*, proposed_revision: str = REVISION_B, empty_baseline: bool = False) -> SimpleNamespace:
     current = None if empty_baseline else _binding("docs-current", REVISION_A)
     return SimpleNamespace(

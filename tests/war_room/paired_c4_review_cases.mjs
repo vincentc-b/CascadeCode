@@ -33,10 +33,11 @@ const payload = {
     { side: "current", repository_key: "docs-a", revision: "a".repeat(40) },
     { side: "proposed", repository_key: "docs-b", revision: "b".repeat(40) },
   ],
-  summary: "2 affected views",
+  summary: "3 affected views",
   changed_views: [
     ["context", "systemContextViews"],
     ["payments", "containerViews"],
+    ["legacy", "containerViews"],
   ],
   views: [
     {
@@ -46,10 +47,14 @@ const payload = {
       current: side("docs-a", "a".repeat(40), [
         target("element", "system.shop", "payments", "containerViews"),
         target("relationship", "relationship.checkout"),
+        { ...target("relationship", "relationship.checkout.primary"), label: "checkout" },
+        { ...target("relationship", "relationship.checkout.secondary"), label: "checkout" },
       ]),
       proposed: side("docs-b", "b".repeat(40), [
         target("element", "system.shop", "payments", "containerViews"),
         target("relationship", "relationship.checkout"),
+        { ...target("relationship", "relationship.checkout.primary"), label: "checkout" },
+        { ...target("relationship", "relationship.checkout.secondary"), label: "checkout" },
         target("relationship", "relationship.new"),
       ]),
     },
@@ -60,11 +65,23 @@ const payload = {
       current: null,
       proposed: side("docs-b", "b".repeat(40), [target("element", "container.api")]),
     },
+    {
+      key: "legacy",
+      level: "containerViews",
+      state: "removed",
+      current: side("docs-a", "a".repeat(40), [target("element", "container.legacy")]),
+      proposed: null,
+    },
   ],
   legend: [],
   requirements: ["REQ-7"],
   decisions: ["ADR-4"],
-  diffs: { source: "git:model-a..model-b", plan: "git:plan-a..plan-b" },
+  diffs: {
+    source: "git:model-a..model-b",
+    model: { state: "changed" },
+    plan: "git:plan-a..plan-b",
+  },
+  semantic_threads: [],
 };
 
 const navigation = createPairedNavigation(payload);
@@ -80,6 +97,24 @@ assert.equal(navigation.state.selection.source_side, "current");
 result = navigation.back();
 assert.equal(result.ok, true);
 assert.equal(navigation.state.selection, null, "back restores the shared selection state");
+
+result = navigation.select("relationship", "relationship.checkout", "proposed");
+assert.equal(result.ok, true, "a proposed-side selection drives the same shared state");
+assert.equal(result.resolutions.current.state, "present");
+assert.equal(result.resolutions.proposed.state, "present");
+assert.equal(navigation.state.selection.source_side, "proposed");
+navigation.back();
+
+for (const semanticId of [
+  "relationship.checkout.primary",
+  "relationship.checkout.secondary",
+]) {
+  result = navigation.select("relationship", semanticId, "current");
+  assert.equal(result.ok, true, "parallel same-label relationships resolve by semantic ID");
+  assert.equal(result.resolutions.current.target.semantic_id, semanticId);
+  assert.equal(result.resolutions.proposed.target.semantic_id, semanticId);
+  navigation.back();
+}
 
 result = navigation.select("relationship", "relationship.new", "proposed");
 assert.equal(result.ok, true);
@@ -103,6 +138,14 @@ result = navigation.drill("current", "element", "system.shop");
 assert.equal(result.ok, true, "verified drill metadata moves both sides together");
 assert.equal(navigation.state.view_key, "payments");
 assert.equal(navigation.currentView().current, null, "drill retains an explicit absent side");
+
+const inventoryNavigation = createPairedNavigation(payload);
+for (const [viewKey, level] of payload.changed_views) {
+  assert.equal(inventoryNavigation.showView(viewKey, level).ok, true);
+  assert.equal(inventoryNavigation.currentView().key, viewKey, "every changed view is reachable");
+}
+assert.equal(inventoryNavigation.currentView().state, "removed");
+assert.equal(inventoryNavigation.currentView().proposed, null);
 
 const threadNavigation = createPairedNavigation(payload);
 const created = [];
@@ -207,17 +250,44 @@ initPairedC4Review({
   views: [],
   changed_views: [],
   diffs: { source: "git:model-a..model-b" },
+  semantic_threads: [],
 }, { document, host: errorHost });
 assert.ok(descendants(errorHost).some((node) => node.textContent === "ambiguous semantic binding"));
 assert.ok(descendants(errorHost).some((node) => node.textContent === "git:model-a..model-b"));
 
-const emptyHost = createElement("section");
-initPairedC4Review({
-  state: "empty",
-  summary: "first proposal",
-  views: [],
-  changed_views: [],
-  diffs: {},
-}, { document, host: emptyHost });
-assert.ok(descendants(emptyHost).some((node) => /No paired diagram views/.test(node.textContent)));
+for (const [state, expected] of [
+  ["first", /No paired diagram views.*first/],
+  ["empty", /No paired diagram views.*empty/],
+  ["removed", /No paired diagram views.*removed/],
+  ["unchanged", /No diagram changes/],
+]) {
+  const stateHost = createElement("section");
+  initPairedC4Review({
+    state,
+    summary: state + " proposal",
+    views: [],
+    changed_views: [],
+    diffs: {},
+    semantic_threads: [],
+  }, { document, host: stateHost });
+  assert.ok(descendants(stateHost).some((node) => expected.test(node.textContent)));
+}
+
+const readyHost = createElement("section");
+initPairedC4Review(payload, { document, host: readyHost });
+const readyText = descendants(readyHost).map((node) => node.textContent);
+assert.ok(readyText.includes("3 affected views"), "proposal summary stays adjacent to the pair");
+assert.ok(readyText.includes("docs-a @ " + "a".repeat(40)));
+assert.ok(readyText.includes("docs-b @ " + "b".repeat(40)));
+assert.ok(readyText.includes("REQ-7"));
+assert.ok(readyText.includes("ADR-4"));
+assert.ok(readyText.includes("git:model-a..model-b"));
+assert.ok(readyText.some((value) => /\"state\": \"changed\"/.test(value)));
+assert.ok(readyText.includes("git:plan-a..plan-b"));
+await Promise.resolve();
+await Promise.resolve();
+assert.ok(
+  descendants(readyHost).some((node) => /Interaction unsupported:/.test(node.textContent)),
+  "a client-side binding failure is actionable and never replaced with static interaction"
+);
 
