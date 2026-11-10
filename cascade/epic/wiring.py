@@ -20,6 +20,7 @@ def load_epic_tools() -> None:
     import cascade.epic.branch_recovery as branch_recovery_mod
     import cascade.epic.decisions as decisions_mod
     import cascade.epic.docs_tool as docs_tool_mod
+    import cascade.epic.impact_decisions as impact_decisions_mod
     import cascade.epic.dependency_manifest_authoring as manifest_mod
     import cascade.epic.mint as mint_mod
     import cascade.epic.recovery as recovery_mod
@@ -38,6 +39,7 @@ def load_epic_tools() -> None:
         "mint_feature",
         "list_children",
         "record_decision",
+        "record_impact_decision",
         "read_doc",
         "write_doc",
         "reply_comment",
@@ -59,6 +61,7 @@ def load_epic_tools() -> None:
     register_epic_tool("write_dependency_manifest", manifest_mod.write_dependency_manifest)
     importlib.reload(mint_mod)
     importlib.reload(decisions_mod)
+    importlib.reload(impact_decisions_mod)
     importlib.reload(docs_tool_mod)
     importlib.reload(stubs_mod)
     importlib.reload(amendments_mod)
