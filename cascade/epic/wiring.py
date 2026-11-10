@@ -18,6 +18,7 @@ def load_epic_tools() -> None:
 
     import cascade.epic.amendments as amendments_mod
     import cascade.epic.branch_recovery as branch_recovery_mod
+    import cascade.epic.change_dispositions as change_dispositions_mod
     import cascade.epic.decisions as decisions_mod
     import cascade.epic.docs_tool as docs_tool_mod
     import cascade.epic.impact_decisions as impact_decisions_mod
@@ -40,6 +41,8 @@ def load_epic_tools() -> None:
         "list_children",
         "record_decision",
         "record_impact_decision",
+        "apply_impact_disposition",
+        "sign_off_corrective_plan",
         "read_doc",
         "write_doc",
         "reply_comment",
@@ -62,6 +65,7 @@ def load_epic_tools() -> None:
     importlib.reload(mint_mod)
     importlib.reload(decisions_mod)
     importlib.reload(impact_decisions_mod)
+    importlib.reload(change_dispositions_mod)
     importlib.reload(docs_tool_mod)
     importlib.reload(stubs_mod)
     importlib.reload(amendments_mod)

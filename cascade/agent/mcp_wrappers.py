@@ -183,7 +183,12 @@ def dispatch_planning_tool(
     tool_args = _normalize_planning_tool_args(
         tier, name, dict(args), scope_id=scope_id, repo=repo
     )
-    if tier == "epic" and name in ("reply_comment", "record_impact_decision") and role in (
+    if tier == "epic" and name in (
+        "reply_comment",
+        "record_impact_decision",
+        "apply_impact_disposition",
+        "sign_off_corrective_plan",
+    ) and role in (
         "epic_manager", "epic_architect"
     ):
         tool_args["author"] = role
@@ -315,6 +320,14 @@ def _planning_tool_description(tier: PlanningToolTier, name: str) -> str:
             "capture accepted sibling and architecture-lineage evidence, then "
             "relay the Epic disposition in its original open comment thread."
         )
+    if tier == "epic" and name == "apply_impact_disposition":
+        return (
+            "Apply a recorded corrective-feature or human-blocker disposition. "
+            "Corrective work is minted in backlog with accepted-work dependencies; "
+            "a blocker leaves work unchanged and requests a visible human decision."
+        )
+    if tier == "epic" and name == "sign_off_corrective_plan":
+        return "Sign off the current revision of a separately approved corrective plan."
     return f"Cascade {tier} tool {name}"
 
 
@@ -436,6 +449,26 @@ _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "disposition",
             "outcome",
         ],
+        "additionalProperties": False,
+    },
+    "apply_impact_disposition": {
+        "type": "object",
+        "properties": {
+            "decision_id": {"type": "string"},
+            "title": {"type": "string"},
+            "plan": {"type": "string"},
+            "requested_human_action": {"type": "string"},
+        },
+        "required": ["decision_id"],
+        "additionalProperties": False,
+    },
+    "sign_off_corrective_plan": {
+        "type": "object",
+        "properties": {
+            "decision_id": {"type": "string"},
+            "plan_revision": {"type": "string"},
+        },
+        "required": ["decision_id", "plan_revision"],
         "additionalProperties": False,
     },
     "read_doc": {
