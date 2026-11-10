@@ -2,7 +2,7 @@
 id: feat_046_001
 title: Connect normal architecture planning to revision-pinned HTTP review
 tier: feature
-status: active
+status: completed
 parent: epic_046
 children:
 - task_046_001_001
