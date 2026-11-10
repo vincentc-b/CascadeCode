@@ -67,3 +67,23 @@ owner exit, PID reuse, live/unknown owners and durable exactly-once handoff.
 
 These safeguards remain inside the existing supervisor, lifecycle-recovery and
 review-publication components; they add no C4 container or external service.
+
+### Historical review reconciliation and queue retention
+
+Requirement: pruning a terminal Epic's queue must not trigger replay of all its
+closed Feature reviews. Queue absence is not evidence that accepted work needs
+another closeout authorization. Reconciliation reads one operator-trunk board
+snapshot and treats a closed review as historical when its Feature and target
+Epic are both in `3_completed` with completed status and the Feature's parent
+matches that target. It skips event replay in that case; it does not synthesize
+new completion events or bypass a gate for unfinished work.
+
+Stacked integration-gap checks and repair of an incomplete registered Epic-target
+copy retain priority over this fast path. Active parents, incomplete Features,
+and mismatched parent relationships retain normal replay and all authorization
+checks. This prevents an endless prune/replay cycle from performing full semantic
+gate scans under the global lifecycle lock and starving War Room reads. No lock
+is removed and no snapshot survives the reconciliation call.
+
+Regression coverage: `tests/test_feature_closeout_flow.py` exercises absent parent
+feeds, active and incomplete documents, parent mismatches, and target repair.

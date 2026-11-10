@@ -16,7 +16,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from cascade.board.errors import BoardError, GitError, NotFound
-from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
+from cascade.board.store import list_board, move_doc, read_doc, read_doc_in_worktree
 from cascade.board.types import WorkMeta
 from cascade.tracking import (
     MergeRequest,
@@ -787,6 +787,10 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
 
     trunk = locate_trunk(root)
     state = _load(trunk)
+    # Queue retention is not durable completion evidence: terminal Epic feeds
+    # are pruned. Inspect the operator checkout once, without preferring a
+    # completed source worktree over an incomplete target copy.
+    trunk_board = list_board(trunk)
     finalized: list[str] = []
     from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
     from cascade.stacked_review_recovery import persist_if_stacked_review_integration_gap
@@ -815,6 +819,22 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
                         feature_id, epic_id, root=trunk
                     ):
                         finalized.append(feature_id)
+                continue
+            feature = trunk_board.by_id.get(feature_id)
+            epic = trunk_board.by_id.get(epic_id) if epic_id else None
+            if (
+                feature is not None and feature.tier == "feature"
+                and feature.parent == epic_id
+                and epic is not None and epic.tier == "epic"
+                and all(
+                    meta.status == "completed" and meta.path.parent.name == "3_completed"
+                    for meta in (feature, epic)
+                )
+            ):
+                # Both accepted documents are terminal on the operator trunk.
+                # Do not recreate a pruned feed or rerun closeout authorization
+                # for this historical review. Incomplete target-worktree repair
+                # deliberately runs above this no-op fast path.
                 continue
             if epic_id and not feature_completed_recorded(feature_id, epic_id, root=trunk):
                 if try_complete_feature(feature_id, root=trunk, review_merged=True):
