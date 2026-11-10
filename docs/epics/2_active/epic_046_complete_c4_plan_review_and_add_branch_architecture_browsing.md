@@ -282,6 +282,11 @@ The Epic Architect will sign the saved final revision after review. The Epic Man
   Chose Use an always-present paired_review envelope and a lazy review resource, with scoped immutable same-origin SVG and source/document/diff URLs. Reuse the existing composer, binding validation, semantic viewer and review-context resolver; enforce explicit states, payload limits and exact displayed-tuple validation for comments and approval..
   Rationale: The current document handler omits the review payload and local artifact references are not browser resources. A single authorized resource boundary serves both review and branch browsing without serializing every diagram or creating a parallel review system. Server-side freshness and serialized mutation checks prevent stale tabs from approving or commenting on replacement evidence.
   Honors: Requirements 1–4 and 6; exact immutable revisions, SVG safety, semantic identity, existing thread routing and downstream gates, usable plan text during architecture failure..
+
+- `dec_004` · 2026-11-10 · Epic Architect · **Final implementation contracts — publication and recovery**
+  Chose Add normal epic/feature publish_architecture_review tool adapters over existing ownership/staging services, backed by durable idempotent intents and a bounded project scheduler. Pin renderer identity, deduplicate jobs, recover from original committed sources, and require explicit retry after bounded recovery. feat_046_001 repairs the strict fixture inventory and proves a real tool-to-HTTP-to-browser journey with restart..
+  Rationale: Code inspection found no production caller for the architecture authoring operations. C4ArtifactRenderer.submit starts an in-memory thread per call and staging currently waits for render validation. Durable admission and controlled worker execution close these gaps while preserving existing review, cache and acceptance authorities. The recorded fixture failure is an implementation obligation, not a reason to weaken inventory checks.
+  Honors: Normal authorized planning paths, exact baseline and source provenance, bounded offline rendering, no unauthorized dependency installation, release-blocking real-renderer/browser acceptance..
 ## Amendment log
 
 _(none)_
