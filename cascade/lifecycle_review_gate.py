@@ -24,24 +24,24 @@ def require_lifecycle_review_gate(
 
     project = get_project_context() or ProjectContext.colocated(root)
     store = ArchitectureReviewStore(project)
-    if store.gate_rollout_version() is None and store.gate_policy_version(work_id) is None:
-        return validate_review_gate(
-            project, work_id=work_id, boundary=boundary, store=store
-        )
-
     affected = {work_id}
     for unit in store.units_affecting(work_id):
         affected.update(unit.affected_work_ids)
     from cascade.comments.gate import blocking_threads_for_many
+    from cascade.workspace.blocking_scope import affected_blocking_threads
 
     gates = blocking_threads_for_many(affected, root=root)
     blocked = tuple(item for item, result in gates.items() if result.blocked)
+    semantic_blockers = affected_blocking_threads(
+        work_id, boundary, root=root, store=store
+    )
     return validate_review_gate(
         project,
         work_id=work_id,
         boundary=boundary,
         store=store,
         blocking_work_ids=blocked,
+        semantic_blockers=semantic_blockers,
     )
 
 

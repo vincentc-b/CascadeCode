@@ -108,6 +108,7 @@ from cascade.workspace.c4_threads import (
     create_semantic_thread,
     read_semantic_threads,
 )
+from cascade.workspace.blocking_scope import BlockingScope, affected_blocking_threads
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -161,6 +162,7 @@ __all__ = [
     "C4ReviewView",
     "SemanticThread",
     "SemanticThreadAnchor",
+    "BlockingScope",
     "C4View",
     "C4WorkspaceContract",
     "find_project_config",
@@ -198,6 +200,7 @@ __all__ = [
     "build_semantic_thread_anchor",
     "create_semantic_thread",
     "read_semantic_threads",
+    "affected_blocking_threads",
     "STRUCTURIZR_IMAGE",
     "STRUCTURIZR_IMAGE_DIGEST",
     "up",

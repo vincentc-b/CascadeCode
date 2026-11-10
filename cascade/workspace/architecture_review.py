@@ -11,7 +11,10 @@ import tempfile
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal, Mapping, Sequence
+from typing import TYPE_CHECKING, Literal, Mapping, Sequence
+
+if TYPE_CHECKING:
+    from cascade.workspace.blocking_scope import BlockingScope
 
 from cascade.workspace.architecture import ArchitectureArtifactRef
 from cascade.workspace.c4_closure import C4SourceClosure, materialize_c4_source_closure
@@ -1646,6 +1649,7 @@ def validate_review_gate(
     store: ArchitectureReviewStore | None = None,
     lineage_revision: str | None = None,
     blocking_work_ids: Sequence[str] = (),
+    semantic_blockers: Sequence[BlockingScope] = (),
 ) -> ReviewGateResult:
     """Apply one revision-bound policy at every safe lifecycle boundary.
 
@@ -1665,6 +1669,16 @@ def validate_review_gate(
         raise ArchitectureProposalError(
             "acceptance_pending",
             f"promotion {hold} has not accepted both code and documentation",
+        )
+    if semantic_blockers:
+        details = "; ".join(
+            f"{item.thread_id} affected={','.join(item.affected_work_ids)} "
+            f"reason={item.reason} fallback={str(item.fallback).lower()}"
+            for item in semantic_blockers
+        )
+        raise ArchitectureProposalError(
+            "review_required",
+            "open semantic blocking review threads: " + details,
         )
     if active is None and policy is None:
         for unit in review_store.units_affecting(work_id):
