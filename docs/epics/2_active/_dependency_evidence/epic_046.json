@@ -133,6 +133,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_8f06783146c8751ae52135b138ddbb4a04feee73ea2d0b2f1ebc3f4d8976d640",
+      "dependency_id": "dep_c4_renderer",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:d9cd49a6a4ad53e33b2e893b63dc3187e2fe7d762a84ad2eebd82c44a2b064cf",
+      "recipe_revision": "sha256:91624fa1dff9669100d7ceeb1f9c48fc328552ecbdaa9c8090742e6aad9a2012",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import json,subprocess; image=\"structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c\"; assert subprocess.check_output([\"docker\",\"version\",\"--format\",\"{{.Server.Version}}\"],text=True).strip()==\"28.0.0\"; rows=json.loads(subprocess.check_output([\"docker\",\"image\",\"inspect\",image],text=True)); assert image in rows[0][\"RepoDigests\"]; print(\"success\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-10T21:11:24.435348+00:00",
+      "completed_at": "2026-11-10T21:11:25.506889+00:00",
+      "result": "succeeded",
+      "redacted_output": "success\n",
+      "selected_version": "Docker server 28.0.0; Structurizr sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
