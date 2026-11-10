@@ -2,7 +2,7 @@
 id: feat_034_005
 title: Living epic revisions and accountable change-request routing
 tier: feature
-status: active
+status: completed
 parent: epic_034
 children:
 - task_034_005_001
