@@ -2,7 +2,7 @@
 id: epic_034
 title: Requirements and architecture traceability
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_034_001
