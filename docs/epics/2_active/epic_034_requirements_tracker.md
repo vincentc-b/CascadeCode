@@ -287,6 +287,11 @@ Corrective feature `feat_034_008` owns the remaining evidence acquisition, per-r
   Chose Replace backlog Feature H's data/API/flow placeholders with concrete versioned baseline, authorized handoff, review snapshot, row disposition and exact acceptance contracts within dec_015's existing scope. Keep implementation gated on independent review and fresh human corrective-feature approval..
   Rationale: Feature H remained backlog without tasks while G's committed report still rejects clean closeout. Concrete contracts make the correction reviewable and avoid repeating a placeholder handoff. Current PR descriptions must be captured with their hashes and observation times; a current snapshot cannot be mislabeled as historical merge-time text. Preserve all existing replay rows, explicit unavailable evidence, completed A–G work and separate accepted-Epic versus G-source pins. Feature write_doc succeeded at 18fb474612863e901ba1e95a67badb0da73e8743.
   Honors: Epic criteria 12–18, cmt_001, dec_013 scoped evidence, dec_014 material-gap gate and dec_015 corrective scope; no implementation, installation or approval granted..
+
+- `dec_017` · 2026-11-10 · Epic Manager · **Audit recovery admission reconciliation**
+  Chose Create corrective feat_034_009 for the stale review-admission audit reference; preserve completed Feature F and do not retry its delivery. Keep historical/architecture acceptance correction in feat_034_008..
+  Rationale: PR #218 is merged and the matching review recovery is completed, but resolution_actions.json retains mutation_ready. The deployed audit collector attributes this historical admission as an unresolved reference without checking matching completion. A focused SWE repair with persisted-store regressions is needed; direct state editing or re-executing F would not repair the cause. Feature 009 requires independent review and fresh human approval before implementation; neither existing epic approval nor minting is repair success.
+  Honors: Epic criteria 15, 17–18; audit investigation investigation_90d4c50f3e8326ebc96bc0186bbb96a5; completed child lineage and exact-action recovery evidence..
 ## Amendment log
 
 _(none)_
