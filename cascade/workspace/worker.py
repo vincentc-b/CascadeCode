@@ -279,6 +279,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     from cascade.epic.local_dependency_executor import LocalBoundedDependencyExecutor
     from cascade.watchdog.audit_lane import HealthAuditLane, run_bounded_audit_pass
     from cascade.watchdog.audit_recovery import AuditRecoveryWorker
+    from cascade.watchdog.audit_agent_lane import AuditInvestigationWorker
     from cascade.watchdog.config import (
         ConfigError,
         HealthAuditConfig,
@@ -299,6 +300,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     handlers_abandoned = False
     audit_lane: HealthAuditLane | None = None
     audit_recovery: AuditRecoveryWorker | None = None
+    audit_investigations: AuditInvestigationWorker | None = None
 
     def should_stop() -> bool:
         nonlocal next_source_check_at, source_changed, shutdown_reason, launcher_lost
@@ -382,6 +384,10 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     try:
         audit_config = read_health_audit_config(ws.path)
         audit_recovery = AuditRecoveryWorker(ws.path)
+        audit_investigations = AuditInvestigationWorker(
+            ws.path, interval_seconds=audit_config.interval_seconds,
+            enabled=audit_config.enabled,
+        ).start()
         audit_lane = HealthAuditLane(
             root=ws.path,
             config=audit_config,
@@ -397,6 +403,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
         # Invalid periodic settings fail closed for scheduling, but the
         # authenticated manual diagnostic remains available to the operator.
         audit_recovery = AuditRecoveryWorker(ws.path)
+        audit_investigations = AuditInvestigationWorker(ws.path, enabled=False).start()
         audit_lane = HealthAuditLane(
             root=ws.path,
             config=HealthAuditConfig(enabled=False),
@@ -432,6 +439,8 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
             audit_lane.stop(timeout=5.0)
         if audit_recovery is not None:
             audit_recovery.stop(timeout=5.0)
+        if audit_investigations is not None:
+            audit_investigations.stop(timeout=5.0)
         if abnormal_exit and not operator_stop.is_set() and not source_changed:
             shutdown_reason = "crash"
         elif launcher_lost:

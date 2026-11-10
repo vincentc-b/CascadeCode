@@ -43,7 +43,11 @@ _DEPENDENCY_PROJECTION_BOUNDARY = (
     "For missing_manifest, the owning Epic Manager or Architect must use "
     "read_dependency_manifest then write_dependency_manifest with expected_revision=0 "
     "and complete target environment identity. Declare none_required=true and "
-    "dependencies=[] only when no software is needed. Declaration grants no install authority."
+    "dependencies=[] only when no software is needed. Manifest writes automatically verify "
+    "declared dependencies. Use run_dependency_check to retry after fixing a check failure. "
+    "Checks of existing installations need no human approval. Setup runs only with current "
+    "human installation approval from the Dependencies UI; approval automatically rechecks "
+    "and resumes planning. Declaration grants no install authority."
 )
 
 

@@ -311,6 +311,8 @@ def _rollup_gates_pass(
     board,
     repo: Path,
 ) -> bool:
+    if _delivery_recovery_planning_pending(feature_id, repo):
+        return False
     if not _all_child_tasks_completed(feature_id, board):
         return False
     if _has_open_human_comments(feature_id, repo):
@@ -318,6 +320,30 @@ def _rollup_gates_pass(
     if not _closeout_present(body):
         return False
     return True
+
+
+def _delivery_recovery_planning_pending(feature_id: str, root: Path) -> bool:
+    """A recovered planning blockage must return control to its owning team.
+
+    Ordinary closeout still needs no extra model turn. This boundary only
+    applies after delivery recovery may have interrupted task decomposition.
+    """
+    event_type = "TaskDeliveryBlockageCleared"
+    events, _ = read_events(feature_id, 0, root=root)
+    if not any(e.type == event_type for e in events):
+        return False
+    from cascade.feature.checkpoint import thread_config
+    from cascade.feature.graph import ensure_feature_graph
+    from cascade.workspace.kickoff import graph_turn_owner_is_live
+
+    snapshot = ensure_feature_graph(feature_id, root=root).get_state(thread_config(feature_id))
+    offset = int((snapshot.values or {}).get("last_queue_offset") or 0)
+    unread, _ = read_events(feature_id, offset, root=root)
+    return (
+        any(e.type == event_type for e in unread)
+        or bool(snapshot.next)
+        or graph_turn_owner_is_live(feature_id)
+    )
 
 
 def _child_task_ids(feature_id: WorkId, board) -> set[WorkId]:

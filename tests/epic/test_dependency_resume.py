@@ -345,3 +345,30 @@ def create_or_current_revision(root: Path) -> int:
     snapshot = read_bootstrap("epic_001", root=root)
     assert snapshot is not None
     return snapshot.revision
+
+
+def test_different_team_and_ui_requests_cannot_execute_concurrently(tmp_path):
+    import pytest
+    from cascade.epic.dependency_resume import DependencyResumeError
+
+    root, target, _, _ = prepare(tmp_path)
+    executor = BlockingExecutor(observed(target), OperationObservation(target, 0, "adapter succeeded"))
+    results = []
+    first = Thread(target=lambda: results.append(resume_dependency_bootstrap(
+        "epic_001", "manager-check", root=root, executor=executor,
+        coordinate_planning=False,
+    )))
+    first.start()
+    assert executor.started.wait(5)
+    try:
+        with pytest.raises(DependencyResumeError, match="already running"):
+            resume_dependency_bootstrap(
+                "epic_001", "ui-approval", root=root, executor=executor,
+                coordinate_planning=False,
+            )
+        assert executor.requests == []  # First executor is paused before its call append.
+    finally:
+        executor.release.set()
+        first.join(5)
+    assert len(results) == 1 and results[0].ready
+    assert len(executor.requests) == 2

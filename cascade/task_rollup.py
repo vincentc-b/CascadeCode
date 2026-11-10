@@ -560,6 +560,20 @@ def _clear_delivery_blockers(task_id: str, root: Path) -> None:
             continue
         if blocker.incident_id not in matching_incidents:
             continue
+        # Wake planning before removing the cause. A crash may replay this
+        # notification, but must never leave an unblocked Feature silently
+        # publishing an incomplete task decomposition.
+        from cascade.watchdog.events import read_events
+
+        event_type = "TaskDeliveryBlockageCleared"
+        events, _ = read_events(parent.meta.id, 0, root=root)
+        if not any(e.type == event_type and e.payload.get("incident_id") == blocker.incident_id
+                   for e in events):
+            append_event(parent.meta.id, Event(
+                type=event_type, ts=datetime.now(timezone.utc), dest=parent.meta.id,
+                payload={"task_id": task_id, "incident_id": blocker.incident_id,
+                         "body": "Completed Task delivery has cleared its supervisor blocker. Resume planning, mint any remaining planned Tasks, and confirm the full scope before closeout."},
+            ), root=root)
         reconcile_direct_report_blockage(parent, child, root=root, incident_id=blocker.incident_id)
         parent = read_doc(child.meta.parent, root=root)
 
@@ -570,7 +584,9 @@ def _matching_delivery_blocker_ids(task_id: str, root: Path) -> set[str]:
     action = load_action(_queued_merge_action_id(task_id), root=root)
     if action is None or (action.get("metadata") or {}).get("task_id") != task_id:
         return set()
-    incidents: set[str] = set()
+    from cascade.task.supervisor_recovery import delivery_incident_ids
+
+    incidents = delivery_incident_ids(task_id, root=root)
     from cascade.task.execution import execution_view
 
     attempt = (execution_view(task_id, root=root) or {}).get("attempt")

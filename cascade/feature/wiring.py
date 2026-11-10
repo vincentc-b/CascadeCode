@@ -39,6 +39,8 @@ def load_feature_tools() -> None:
     register_feature_tool(
         "read_architecture_amendments", read_feature_architecture_amendments
     )
+    from cascade.watchdog.audit_investigation import report_audit_investigation
+    register_feature_tool("report_audit_investigation", report_audit_investigation)
 
     expected = (
         "mint_task", "list_children", "record_decision", "read_doc", "write_doc",

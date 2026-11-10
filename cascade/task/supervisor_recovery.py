@@ -256,6 +256,17 @@ def supervisor_recover_task_delivery(
     )
 
 
+def delivery_incident_ids(task_id: str, *, root: Path) -> set[str]:
+    """Known recovery identities, including generation-qualified attempts."""
+    prefix = f"{task_id}:delivery:"
+    return {
+        incident_id for incident_id, row in _read_ledger(resolve_root(root)).items()
+        if incident_id.startswith(prefix)
+        and (result := _result_from_row(row)) is not None
+        and result.incident_id == incident_id
+    }
+
+
 def recovery_incident(task_id: str, *, root: Path) -> RecoveryResult | None:
     """Return the durable result for the Task's current recovery attempt.
 
@@ -269,8 +280,6 @@ def recovery_incident(task_id: str, *, root: Path) -> RecoveryResult | None:
     current = _result_from_row(
         ledger.get(_incident_id(task_id, _execution_attempt(task_id, repo)))
     )
-    if current is not None:
-        return current
     # A resumed execution advances its attempt after recording the incident
     # that triggered it.  Keep that incident visible until a later attempt
     # records its own decision.
@@ -281,7 +290,18 @@ def recovery_incident(task_id: str, *, root: Path) -> RecoveryResult | None:
         if incident_id.startswith(prefix)
         and (result := _result_from_row(row)) is not None
     ]
-    latest = candidates[-1] if candidates else None
+    latest = current or (candidates[-1] if candidates else None)
+    if latest is not None:
+        from cascade.board.errors import NotFound
+
+        try:
+            task = read_doc(task_id, root=repo)
+        except NotFound:
+            task = None
+        if task is not None and task.meta.status == "completed" and task.meta.path.parent.name == "3_completed":
+            # Successful delivery drains the queue too. Historical incidents
+            # remain auditable, but must not claim a completed Task needs rerun.
+            return replace(latest, decision="already_delivered", reason="task_completed", mutated=False)
     if latest is not None and latest.reason == "validated_delivery_already_queued":
         from cascade.task_rollup import pending_task_merges
 

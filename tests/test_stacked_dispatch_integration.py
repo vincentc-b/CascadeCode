@@ -405,3 +405,72 @@ def test_feature_room_override_disables_stacked(tmp_path: Path) -> None:
     result = dispatch_feature("feat_002", "human", root=root)
     assert result.ok is False
     assert result.reason == "feature_awaiting_merge"
+
+
+@pytest.mark.parametrize('shape', ['chain', 'divergent', 'missing'])
+def test_multiple_predecessors_require_a_git_base_containing_their_work(tmp_path, shape):
+    import subprocess
+    from cascade.workspace.integration_worktree import get_integration_worktree
+
+    root = make_repo(tmp_path)
+    _activate_and_open_epic(root)
+    write_stacked_pr_enabled('epic_001', True, root=root)
+    for fid in ('feat_001', 'feat_002'):
+        add_doc(root, id=fid, title=fid, tier='feature', status='completed', parent='epic_001')
+        _seed_predecessor_review(root, fid)
+    add_doc(root, id='feat_003', title='Join', tier='feature', parent='epic_001',
+            depends_on=['feat_001', 'feat_002'])
+    approve_board_feature(root, 'feat_003')
+
+    def git(*args):
+        return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
+
+    initial_branch = git('branch', '--show-current')
+    base = git('rev-parse', 'HEAD')
+    git('checkout', '-b', 'feat/feat_001')
+    (root / 'first.py').write_text('FIRST = True\n')
+    git('add', 'first.py')
+    git('commit', '-m', 'first predecessor')
+    first = git('rev-parse', 'HEAD')
+    git('checkout', '-b', 'feat/feat_002', base if shape == 'divergent' else first)
+    (root / 'second.py').write_text('SECOND = True\n')
+    git('add', 'second.py')
+    git('commit', '-m', 'second predecessor')
+    git('checkout', initial_branch)
+    if shape == 'missing':
+        git('branch', '-D', 'feat/feat_001')
+    result = dispatch_feature('feat_003', 'human', root=root)
+    if shape in ('divergent', 'missing'):
+        assert not result.ok
+        assert result.reason == 'unsupported_topology'
+        assert read_feature_dispatch_selection('feat_003', root=root) is None
+    else:
+        assert result.ok, result.reason
+        selection = read_feature_dispatch_selection('feat_003', root=root)
+        assert selection.predecessor_id == 'feat_002'
+        assert selection.base_branch == 'feat/feat_002'
+        owned = get_integration_worktree(root, 'feature', 'feat_003')
+        assert (owned.path / 'first.py').is_file()
+        assert (owned.path / 'second.py').is_file()
+
+
+def test_mixed_closed_and_open_predecessors_require_accepted_epic_ancestry(tmp_path):
+    import subprocess
+    from cascade.stacked_dispatch import _covering_predecessor
+
+    root = make_repo(tmp_path)
+    def git(*args):
+        return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
+    git('commit', '--allow-empty', '-m', 'base')
+    base = git('rev-parse', 'HEAD')
+    tree = git('rev-parse', 'HEAD^{tree}')
+    accepted = git('commit-tree', tree, '-p', base, '-m', 'accepted predecessor')
+    stacked = git('commit-tree', tree, '-p', accepted, '-m', 'open stack')
+    git('branch', 'epic/epic_001', accepted)
+    git('branch', 'feat/feat_002', stacked)
+    assert _covering_predecessor({'feat_002': 'feat/feat_002'},
+        epic_branch='epic/epic_001', require_epic=True, root=root) == 'feat_002'
+    newer = git('commit-tree', tree, '-p', accepted, '-m', 'another accepted predecessor')
+    git('update-ref', 'refs/heads/epic/epic_001', newer)
+    assert _covering_predecessor({'feat_002': 'feat/feat_002'},
+        epic_branch='epic/epic_001', require_epic=True, root=root) is None

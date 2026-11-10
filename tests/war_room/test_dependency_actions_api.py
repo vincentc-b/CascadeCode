@@ -262,7 +262,7 @@ def test_dependency_actions_require_a_trusted_human_boundary(tmp_path: Path) -> 
     assert later["refusal"]["code"] == "human_authentication_required"
 
 
-def test_review_approve_and_duplicate_ping_remain_distinct(
+def test_approval_automatically_verifies_and_duplicate_retry_is_deduplicated(
     tmp_path: Path, monkeypatch
 ) -> None:
     root = make_repo(tmp_path, git=False)
@@ -280,6 +280,7 @@ def test_review_approve_and_duplicate_ping_remain_distinct(
     monkeypatch.setattr(
         "cascade.epic.dependency_resume._kickoff_planning", kickoffs.append
     )
+    monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", kickoffs.append)
     human = AuthenticatedHuman("operator@example.test")
 
     with _server(root, human=human, executor=executor) as base:
@@ -316,6 +317,8 @@ def test_review_approve_and_duplicate_ping_remain_distinct(
             cookie=cookie,
         )
         assert approval_status == 200
+        assert approved["continuation"]["ready"] is True
+        assert len(executor.requests) == 4  # No separate ping required.
         approval = approved["approvals"][0]
         assert approval["approver_id"] == human.subject
 
@@ -337,4 +340,4 @@ def test_review_approve_and_duplicate_ping_remain_distinct(
     assert pinged["ping"]["ready"] is True
     assert duplicate["ping"]["deduplicated"] is True
     assert len(executor.requests) == 4
-    assert len(kickoffs) == 1
+    assert len(kickoffs) == 2  # Approval continuation and explicit later retry.

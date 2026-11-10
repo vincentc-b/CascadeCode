@@ -23,6 +23,7 @@ def load_epic_tools() -> None:
     import cascade.epic.docs_tool as docs_tool_mod
     import cascade.epic.impact_decisions as impact_decisions_mod
     import cascade.epic.dependency_manifest_authoring as manifest_mod
+    import cascade.epic.dependency_checks as dependency_checks_mod
     import cascade.epic.mint as mint_mod
     import cascade.epic.recovery as recovery_mod
     import cascade.epic.review_recovery as review_recovery_mod
@@ -39,10 +40,13 @@ def load_epic_tools() -> None:
     register_epic_tool("supervise_child", supervise_child)
     register_epic_tool("read_historical_evidence", read_epic_historical_evidence)
     register_epic_tool("read_architecture_amendments", read_epic_architecture_amendments)
+    from cascade.watchdog.audit_investigation import report_audit_investigation
+    register_epic_tool("report_audit_investigation", report_audit_investigation)
 
     expected = (
         "read_dependency_manifest",
         "write_dependency_manifest",
+        "run_dependency_check",
         "mint_feature",
         "list_children",
         "record_decision",
@@ -70,6 +74,7 @@ def load_epic_tools() -> None:
         return
     register_epic_tool("read_dependency_manifest", manifest_mod.read_dependency_manifest)
     register_epic_tool("write_dependency_manifest", manifest_mod.write_dependency_manifest)
+    register_epic_tool("run_dependency_check", dependency_checks_mod.run_dependency_check)
     importlib.reload(mint_mod)
     importlib.reload(decisions_mod)
     importlib.reload(impact_decisions_mod)

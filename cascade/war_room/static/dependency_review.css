@@ -7,8 +7,8 @@
   padding: 0.6rem;
   border: 1px solid var(--border, var(--plan-border, #888));
   border-radius: 6px;
-  background: color-mix(in srgb, Canvas 94%, CanvasText 6%);
-  color: inherit;
+  background: var(--panel, var(--plan-code-bg, #f4f4f5));
+  color: var(--text, var(--plan-text, #1a1a1a));
   font-size: 0.78rem;
   overflow-wrap: anywhere;
 }
@@ -53,14 +53,14 @@
 
 .dependency-review-approval-current,
 .dependency-review-ready {
-  color: #15803d;
+  color: var(--dependency-success, #166534);
 }
 
 .dependency-review-approval-missing,
 .dependency-review-approval-stale,
 .dependency-review-warning,
 .dependency-review-feedback-error {
-  color: #b45309;
+  color: var(--dependency-warning, #92400e);
 }
 
 .dependency-review-feedback {
@@ -111,8 +111,8 @@
   padding: 0.35rem;
   overflow: auto;
   border-radius: 4px;
-  background: color-mix(in srgb, Canvas 88%, CanvasText 12%);
-  color: inherit;
+  background: var(--bg, var(--plan-code-bg, #f4f4f5));
+  color: var(--text, var(--plan-text, #1a1a1a));
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -135,7 +135,17 @@
 
 .dependency-review-action {
   padding: 0.3rem 0.55rem;
+  background: var(--panel, var(--plan-code-bg, #f4f4f5));
+  color: var(--text, var(--plan-text, #1a1a1a));
+  border: 1px solid var(--border, var(--plan-border, #888));
   cursor: pointer;
+}
+
+@media (prefers-color-scheme: dark) {
+  .dependency-review-panel {
+    --dependency-success: #86efac;
+    --dependency-warning: #fbbf24;
+  }
 }
 
 .dependency-review-approval-reference,

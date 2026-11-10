@@ -83,6 +83,7 @@ class AuditPassResult:
     incident_work_ids: tuple[str, ...] = ()
     timed_out_candidates: tuple[str, ...] = ()
     reassessed_candidates: tuple[str, ...] = ()
+    investigation_requests: tuple[dict[str, Any], ...] = ()
 
 
 AuditPass = Callable[[str | None, threading.Event], AuditPassResult]
@@ -431,6 +432,7 @@ def _run_bounded_audit_pass_inline(
     completed_cursor = cursor
     timed_out_candidates: list[str] = []
     reassessed_candidates: list[str] = []
+    investigation_requests: list[dict[str, Any]] = []
 
     def completed(next_cursor: str | None) -> AuditPassResult:
         return AuditPassResult(
@@ -439,6 +441,7 @@ def _run_bounded_audit_pass_inline(
             incident_work_ids=tuple(incident_work_ids),
             timed_out_candidates=tuple(timed_out_candidates),
             reassessed_candidates=tuple(reassessed_candidates),
+            investigation_requests=tuple(investigation_requests),
         )
 
     for index, candidate in enumerate(page.candidates):
@@ -449,6 +452,10 @@ def _run_bounded_audit_pass_inline(
             continuations[index] if index < len(continuations) else page.next_cursor
         )
         if not candidate.evidence_available:
+            investigation_requests.append({
+                "work_id": work_id, "reason": "audit_evidence_unavailable",
+                "evidence": {"classification": "unavailable_evidence"},
+            })
             # Selection already proved this identity cannot currently be
             # projected.  Count it as unavailable evidence and advance the
             # exact selector cursor so one malformed reference cannot pin the
@@ -482,8 +489,26 @@ def _run_bounded_audit_pass_inline(
             if tier in {"task", "feature", "epic"}:
                 counts[f"tier.{tier}.unavailable_evidence"] += 1
             timed_out_candidates.append(work_id)
+            investigation_requests.append({
+                "work_id": work_id, "reason": "audit_observation_timeout",
+                "evidence": {"classification": "unavailable_evidence", "observation_error": "TimeoutExpired"},
+            })
             completed_cursor = candidate_cursor
             _log.warning("health audit observation timed out for %s: %s", work_id, exc)
+            if monotonic() - started >= max_seconds:
+                return completed(completed_cursor)
+            continue
+        except Exception as exc:
+            # An unfamiliar observation failure is investigation input, not
+            # grounds to drop the rest of the page or require a new adapter.
+            counts["unavailable_evidence"] += 1
+            if tier in {"task", "feature", "epic"}:
+                counts[f"tier.{tier}.unavailable_evidence"] += 1
+            investigation_requests.append({
+                "work_id": work_id, "reason": "audit_observation_error",
+                "evidence": {"observation_error": type(exc).__name__},
+            })
+            completed_cursor = candidate_cursor
             if monotonic() - started >= max_seconds:
                 return completed(completed_cursor)
             continue
@@ -493,6 +518,15 @@ def _run_bounded_audit_pass_inline(
             counts[f"tier.{tier}.{observation.classification}"] += 1
         if observation.classification == "proven_incident":
             incident_work_ids.append(work_id)
+        if observation.classification in {"proven_incident", "unavailable_evidence"}:
+            investigation_requests.append({
+                "work_id": work_id, "reason": "audit_requires_investigation",
+                "evidence": {
+                    "classification": observation.classification,
+                    "reason": str(getattr(observation, "reason", "unknown"))[:240],
+                    "generation": str(getattr(observation, "generation", ""))[:160],
+                },
+            })
         if observation.classification != "unavailable_evidence":
             reassessed_candidates.append(work_id)
         completed_cursor = candidate_cursor
@@ -595,6 +629,9 @@ class HealthAuditLane:
                 return None
             if self._manual_pending or self._in_flight:
                 return False
+            from cascade.watchdog.audit_agent_lane import request_agent_review
+
+            request_agent_review(self.root)
             self._manual_pending = True
             self._manual_retry_deadline = None
             self._ensure_thread_locked()
@@ -692,6 +729,11 @@ class HealthAuditLane:
                 "counts": self._validated_counts(result.counts),
                 "next_cursor": result.next_cursor,
             }
+            # Durable outbox precedes the cursor receipt. An agent worker
+            # independently drains it even when no deterministic repair exists.
+            from cascade.watchdog.audit_agent_lane import enqueue_investigations
+
+            enqueue_investigations(self.root, result.investigation_requests)
             _write_receipt(self.root, receipt)
             pending_timeouts.difference_update(result.reassessed_candidates)
             pending_timeouts.update(result.timed_out_candidates)

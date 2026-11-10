@@ -440,3 +440,53 @@ def test_review_recovers_remote_creation_before_local_registry_write(tmp_path, m
     assert ensure_feature_review("feat_001", root=root) == created[0]
     assert len(created) == 1
     assert _git(entry.path, "rev-parse", "HEAD") == normalized
+
+
+def test_publication_replays_validated_tasks_in_ancestry_order(tmp_path, monkeypatch):
+    """A lower-numbered Task may absorb an already-landed higher-numbered Task."""
+    root = make_repo(tmp_path)
+    shared = root / 'shared.py'
+    shared.write_text('VALUE = "base"\n')
+    _git(root, 'add', 'shared.py')
+    _git(root, 'commit', '-m', 'base')
+    base = _git(root, 'rev-parse', 'HEAD')
+    _git(root, 'checkout', '-b', 'task-one')
+    shared.write_text('VALUE = "one"\n')
+    (root / 'adapter.py').write_text('ADAPTER = True\n')
+    _git(root, 'add', '.')
+    _git(root, 'commit', '-m', 'task one')
+    _git(root, 'checkout', '-b', 'task-two', base)
+    shared.write_text('VALUE = "two"\n')
+    _git(root, 'commit', '-am', 'task two')
+    second = _git(root, 'rev-parse', 'HEAD')
+    _git(root, 'checkout', 'task-one')
+    conflict = subprocess.run(['git', 'merge', '--no-ff', 'task-two'], cwd=root,
+                              capture_output=True, text=True)
+    assert conflict.returncode != 0
+    shared.write_text('VALUE = "one and two"\n')
+    _git(root, 'add', 'shared.py')
+    _git(root, 'commit', '-m', 'resolve against landed task two')
+    first = _git(root, 'rev-parse', 'HEAD')
+    _git(root, 'checkout', '-b', 'feature')
+    (root / 'final.py').write_text('FINAL = True\n')
+    _git(root, 'add', 'final.py')
+    _git(root, 'commit', '-m', 'task three')
+    final = _git(root, 'rev-parse', 'HEAD')
+    action = {'metadata': {'final_validation': {
+        'task_id': 'task_001', 'deliverable_sha': first, 'feature_base_sha': second}}}
+    monkeypatch.setattr('cascade.feature.publication.load_action',
+                        lambda action_id, **kw: action if action_id.startswith('task_001:') else None)
+    monkeypatch.setattr('cascade.feature.publication.read_doc',
+                        lambda task_id, **kw: SimpleNamespace(meta=SimpleNamespace(title=task_id)))
+    tip = _build_publication_tail(root, base_sha=base, final_tree_ref=final,
+        task_ids=['task_001', 'task_002', 'task_003'], task_commits=[first, second, final])
+    history = validate_feature_publication('feat_001', source_root=root,
+        source_ref=tip, base_ref=base, expected_task_ids=['task_001', 'task_002', 'task_003'])
+    assert history.task_ids == ('task_002', 'task_001', 'task_003')
+    assert _git(root, 'show', f'{history.commits[0]}:shared.py') == 'VALUE = "two"'
+    assert 'adapter.py' not in _git(root, 'ls-tree', '--name-only', history.commits[0]).splitlines()
+    assert _git(root, 'show', f'{history.commits[1]}:adapter.py') == 'ADAPTER = True'
+    assert _git(root, 'rev-parse', f'{tip}^{{tree}}') == _git(root, 'rev-parse', f'{final}^{{tree}}')
+    assert _git(root, 'rev-parse', 'task-one') == first
+    assert _git(root, 'rev-parse', 'task-two') == second
+    assert _git(root, 'rev-parse', 'feature') == final

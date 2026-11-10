@@ -167,7 +167,7 @@ assert.ok(
 assert.equal(descendants(host).some((node) => node.tagName === "SCRIPT"), false);
 assert.equal(globalThis.compromised, undefined);
 assert.ok(byText(host, "button", "Review bootstrap scope"));
-assert.ok(byText(host, "button", "Ping team after completion"));
+assert.ok(byText(host, "button", "Retry verification"));
 
 const approve = byText(host, "button", "Approve selected installations");
 assert.ok(approve);
@@ -212,10 +212,10 @@ DependencyReviewUi.renderInto(document, pingHost, projection, {
     return Promise.resolve({ dependency_status: projection });
   },
 });
-byText(pingHost, "button", "Ping team after completion").dispatch("click");
+byText(pingHost, "button", "Retry verification").dispatch("click");
 await tick();
 await tick();
-byText(pingHost, "button", "Ping team after completion").dispatch("click");
+byText(pingHost, "button", "Retry verification").dispatch("click");
 await tick();
 await tick();
 assert.equal(pingCalls[0].path, "/api/ping_dependency_team");
@@ -236,7 +236,7 @@ assert.ok(
     String(node.textContent).includes("No software dependencies are required")
   )
 );
-assert.equal(byText(noDependencies, "button", "Ping team after completion"), undefined);
+assert.equal(byText(noDependencies, "button", "Retry verification"), undefined);
 
 const planHost = enhancedElement("div");
 planHost.hidden = true;
@@ -273,3 +273,14 @@ assert.ok(descendants(missingDeclaration).some((node) =>
 assert.equal(descendants(missingDeclaration).filter((node) => node.tagName === "BUTTON").length, 0);
 
 console.log("dependency_review_ui_cases: ok");
+
+const verifiedHost = enhancedElement("section");
+DependencyReviewUi.renderInto(document, verifiedHost, {
+  ...projection,
+  status: "ready",
+  bootstrap: { ...projection.bootstrap, scope: { entries: [], feasibility_artifacts: [] } },
+  dependencies: projection.dependencies.map(row => ({ ...row, status: "ready", installation_approval: { state: "missing", current: [] } })),
+});
+assert.ok(byText(verifiedHost, "span", "Installation approval: not needed (already verified)"));
+assert.equal(byText(verifiedHost, "button", "Approve selected installations"), undefined);
+assert.equal(byText(verifiedHost, "button", "Review bootstrap scope"), undefined);

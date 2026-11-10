@@ -41,7 +41,7 @@ def _planning_tool_names(sandbox: PlanningSandbox) -> list[str]:
         if sandbox.role in ("epic_manager", "epic_architect"):
             names.add("sign_off_plan")
         else:
-            names -= {"read_dependency_manifest", "write_dependency_manifest"}
+            names -= {"read_dependency_manifest", "write_dependency_manifest", "run_dependency_check"}
         return sorted(names)
     if sandbox.tier == "feature":
         from cascade.feature.wiring import load_feature_tools
@@ -198,7 +198,25 @@ def dispatch_planning_tool(
         "epic_manager", "epic_architect"
     ):
         tool_args["author"] = role
-    if name in {"read_dependency_manifest", "write_dependency_manifest"}:
+    if name == "report_audit_investigation":
+        allowed_roles = {"epic": {"epic_manager", "epic_architect"},
+                         "feature": {"feature_lead", "feature_architect"}}
+        if role not in allowed_roles.get(tier, set()) or not scope_id:
+            raise PermissionError("owning planning role required for audit reports")
+        if set(tool_args) - {"case_id", "finding", "outcome", "evidence", "references"}:
+            raise PermissionError("audit reports do not accept owner or root overrides")
+        from cascade.watchdog.audit_investigation import report_audit_investigation
+        result = report_audit_investigation(
+            **tool_args, root=repo, **{f"{tier}_id": scope_id},
+        )
+    elif name == "run_dependency_check":
+        if tier != "epic" or role not in ("epic_manager", "epic_architect") or not scope_id:
+            raise PermissionError("owning Epic planning role required")
+        if tool_args:
+            raise ValueError("run_dependency_check accepts no arguments or scope overrides")
+        from cascade.epic.dependency_checks import run_dependency_check
+        result = run_dependency_check(epic_id=scope_id, root=repo)
+    elif name in {"read_dependency_manifest", "write_dependency_manifest"}:
         if tier != "epic" or role not in ("epic_manager", "epic_architect") or not scope_id:
             raise PermissionError("owning Epic planning role required")
         allowed = set() if name == "read_dependency_manifest" else {"manifest", "expected_revision"}
@@ -307,6 +325,20 @@ def mcp_tool_catalog(tier: PlanningToolTier, tool_names: list[str]) -> list[dict
 
 
 def _planning_tool_description(tier: PlanningToolTier, name: str) -> str:
+    if name == "report_audit_investigation":
+        return (
+            "Record findings and evidence for an audit case assigned to your team. "
+            "Investigate logs and current state, use owned tools or mint repair work, "
+            "then report investigating, waiting, repair_requested, or reported_fixed. "
+            "A reported fix is not verified completion; cite concrete checks and repair references."
+        )
+    if name == "run_dependency_check":
+        return (
+            "Verify this Epic's declared dependencies using bounded recipes. Existing "
+            "installations need no approval. Missing dependencies are installed only "
+            "with current human installation approval, then verified automatically. "
+            "Returns current failures and readiness; accepts no command or scope overrides."
+        )
     if tier == "epic" and name == "mint_feature":
         return (
             "Create a backlog feature. Cascade rechecks the owning epic's current "
@@ -366,6 +398,12 @@ _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["work_id", "evidence_scope"],
         "additionalProperties": False,
     },
+    "report_audit_investigation": {"type": "object", "properties": {
+        "case_id": {"type": "string"}, "finding": {"type": "string"},
+        "outcome": {"type": "string", "enum": ["investigating", "waiting", "repair_requested", "reported_fixed"]},
+        "evidence": {"type": "object"},
+        "references": {"type": "array", "items": {"type": "string"}},
+    }, "required": ["case_id", "finding", "outcome"], "additionalProperties": False},
     "message_team": {"type": "object", "properties": {
         "recipient_id": {"type": "string"}, "body": {"type": "string"},
         "request_id": {"type": "string"}}, "required": ["recipient_id", "body", "request_id"]},
@@ -373,6 +411,7 @@ _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "child_id": {"type": "string"}, "action": {"type": "string", "enum": ["inspect", "recover"]}},
         "required": ["child_id"]},
     "read_dependency_manifest": {"type": "object", "properties": {}, "additionalProperties": False},
+    "run_dependency_check": {"type": "object", "properties": {}, "additionalProperties": False},
     "write_dependency_manifest": {
         "type": "object", "properties": {
             "manifest": {"type": "object"},
