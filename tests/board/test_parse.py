@@ -160,3 +160,23 @@ def test_missing_frontmatter_raises() -> None:
 def test_invalid_yaml_raises() -> None:
     with pytest.raises(SchemaError):
         parse_doc(FIXTURES / "bad_yaml.md")
+
+
+@pytest.mark.parametrize('loader_name', ['SafeLoader', 'CSafeLoader'])
+def test_safe_loader_compatibility_and_object_rejection(monkeypatch, loader_name):
+    import yaml
+    import cascade.board.parse as parser
+    loader = getattr(yaml, loader_name, None)
+    if loader is None:
+        pytest.skip('libyaml unavailable')
+    path = FIXTURES / 'docs' / 'epics' / '1_backlog' / 'epic_001_ok.md'
+    text = path.read_text()
+    monkeypatch.setattr(parser, '_SAFE_LOADER', yaml.SafeLoader)
+    expected = parser.parse_text(text, path)
+    monkeypatch.setattr(parser, '_SAFE_LOADER', loader)
+    actual = parser.parse_text(text, path)
+    assert actual == expected
+    assert parser.parse_text(parser.render_doc(actual), path).meta == actual.meta
+    hostile = text.replace('title:', 'title: !!python/object/apply:os.system [echo unsafe]\nignored_title:', 1)
+    with pytest.raises(SchemaError):
+        parser.parse_text(hostile, path)

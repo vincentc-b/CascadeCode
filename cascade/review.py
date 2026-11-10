@@ -167,6 +167,28 @@ def epic_close_document_staged(meta: WorkMeta, *, root: Path) -> bool:
     return entry is not None and meta.path.resolve().is_relative_to(entry.path.resolve())
 
 
+def epic_close_documents_staged(metas: list[WorkMeta], *, root: Path) -> dict[str, bool]:
+    """Project completed epic staging from one request-local registry snapshot."""
+
+    candidates = [
+        meta for meta in metas
+        if meta.tier == "epic" and meta.status == "completed"
+        and meta.path.parent.name == "3_completed"
+    ]
+    if not candidates:
+        return {}
+    entries = {}
+    for entry in load_registry(locate_trunk(root)):
+        if entry.kind == "epic":
+            # Match get_integration_worktree's first-record semantics.
+            entries.setdefault(entry.work_id, entry)
+    return {
+        meta.id: (entry := entries.get(meta.id)) is not None
+        and meta.path.resolve().is_relative_to(entry.path.resolve())
+        for meta in candidates
+    }
+
+
 def persist_epic_review_snapshot(
     epic_id: str, snapshot: EpicReviewSnapshot, *, root: Path
 ) -> None:

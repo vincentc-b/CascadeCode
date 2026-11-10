@@ -20,7 +20,7 @@ from cascade.epic.planning_signoffs import (
     current_valid_sign_offs,
     unresolved_canonical_open_questions,
 )
-from cascade.planning_action_dependencies import evaluate_action_dependencies
+from cascade.planning_action_dependencies import ActionDependencyEvidence, evaluate_action_dependencies
 from cascade.workspace.integration_worktree import merged_board
 
 PlanningStatus = Literal["planning", "ready_for_review"]
@@ -67,8 +67,38 @@ def compute_epic_plan_readiness(
     """Return readiness for an active, unapproved epic; ``None`` when not applicable."""
 
     board = board or merged_board(root)
-    snapshot_meta = board.by_id.get(epic_id)
     dependency_evidence = evaluate_action_dependencies(epic_id, root=root)
+    return _compute_epic_plan_readiness(
+        epic_id, root=root, board=board, dependency_evidence=dependency_evidence
+    )
+
+
+def project_epic_plan_readiness(
+    epic_id: str, *, root: Path, board: BoardIndex
+) -> EpicPlanReadiness | None:
+    """Read-only projection from the board response's existing snapshot.
+
+    Never use this projection to authorize sign-off, approval or dispatch;
+    those callers retain compute/require and their fresh dependency read.
+    """
+    from cascade.board.context import resolve_tracking_root
+    from cascade.dependency_evaluation import evaluate_dependencies, DependencyEvaluation
+
+    owner = board.by_id.get(epic_id)
+    evaluation = (
+        evaluate_dependencies(owner, root=resolve_tracking_root(root), board=board)
+        if owner is not None
+        else DependencyEvaluation(dependencies=(), outcome="dependency_status_unavailable")
+    )
+    evidence = ActionDependencyEvidence(evaluation=evaluation, board=board, owner=owner)
+    return _compute_epic_plan_readiness(epic_id, root=root, board=board, dependency_evidence=evidence)
+
+
+def _compute_epic_plan_readiness(
+    epic_id: str, *, root: Path, board: BoardIndex,
+    dependency_evidence: ActionDependencyEvidence,
+) -> EpicPlanReadiness | None:
+    snapshot_meta = board.by_id.get(epic_id)
     # Prefer the owner read at the dependency boundary. Keeping the supplied
     # snapshot only as a fallback lets an unavailable refresh be represented as
     # a dependency blocker instead of making an otherwise visible epic vanish.

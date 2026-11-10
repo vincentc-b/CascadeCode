@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from cascade.amendments.types import Amendment
-from cascade.board.types import WorkDoc, WorkMeta
+from cascade.board.types import BoardIndex, WorkDoc, WorkMeta
 from cascade.comments.types import Comment
 from cascade.feature.briefing import BriefingPack
 from cascade.watchdog.types import DispatchResult, Event
@@ -37,7 +37,7 @@ from cascade.agent.discovery.types import (
     ReasoningCapability,
 )
 from cascade.agent.providers import ProviderId, ProviderStatus
-from cascade.review import EpicReviewSnapshot, OpenReview, epic_close_document_staged
+from cascade.review import EpicReviewSnapshot, OpenReview, epic_close_documents_staged
 from cascade.war_room.room_settings import RoomSettings
 from cascade.workspace.types import FlightOverlap, FlightReport
 
@@ -66,6 +66,7 @@ def work_meta_to_dict(
     branch_sync: dict[str, Any] | None = None,
     recovery_incident: dict[str, object] | None = None,
     sidecars_preloaded: bool = False,
+    board_snapshot: BoardIndex | None = None,
     delivery_actions: dict[str, dict] | None = None,
     pending_deliveries: set[str] | None = None,
 ) -> dict:
@@ -154,7 +155,7 @@ def work_meta_to_dict(
             if meta.path.parent.name == "2_active":
                 # Software setup approvals are separate from work-item dependency status.
                 value["software_dependency_status"] = project_dependency_status(
-                    meta.id, root=root
+                    meta.id, root=root, board_snapshot=board_snapshot
                 )
         if (
             root is not None
@@ -163,10 +164,15 @@ def work_meta_to_dict(
         ):
             from cascade.epic.plan_readiness import (
                 compute_epic_plan_readiness,
+                project_epic_plan_readiness,
                 epic_plan_readiness_to_dict,
             )
 
-            readiness = compute_epic_plan_readiness(meta.id, root=root)
+            readiness = (
+                project_epic_plan_readiness(meta.id, root=root, board=board_snapshot)
+                if board_snapshot is not None
+                else compute_epic_plan_readiness(meta.id, root=root)
+            )
             if readiness is not None:
                 value["plan_readiness"] = epic_plan_readiness_to_dict(readiness)
     if meta.tier == "feature" and root is not None:
@@ -745,13 +751,13 @@ def board_view_from_index(board, *, root: Path) -> dict:
         for feature_id, result in gate_results.items()
     }
     sync_views = branch_sync_views(metas, root=root)
-    incidents = recovery_incidents_by_work_id(root=root)
     from cascade.task.action_recovery import recovery_actions
     from cascade.task_rollup import pending_task_merges
 
-    delivery_actions = {
-        action["action_id"]: action for action in recovery_actions(root=root)
-    }
+    actions = recovery_actions(root=root)
+    incidents = recovery_incidents_by_work_id(root=root, actions=actions)
+    delivery_actions = {action["action_id"]: action for action in actions}
+    staged_epics = epic_close_documents_staged(metas, root=root)
     pending_deliveries = pending_task_merges(root)
 
     # A board render is one projection boundary.  Acquire the bounded cache
@@ -784,6 +790,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
             branch_sync=sync_views.get(meta.id),
             recovery_incident=incidents.get(meta.id),
             sidecars_preloaded=True,
+            board_snapshot=board,
             delivery_actions=delivery_actions,
             pending_deliveries=pending_deliveries,
         )
@@ -851,7 +858,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
                     and close_review.get("close_stage") != "completed"
                 )
                 or (
-                    close_review is None and epic_close_document_staged(meta, root=root)
+                    close_review is None and staged_epics.get(meta.id, False)
                 )
             )
         ):

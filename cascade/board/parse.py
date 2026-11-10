@@ -8,6 +8,10 @@ from pathlib import Path
 
 import yaml
 
+# Both loaders reject Python/object constructors. Prefer libyaml when present
+# because a cold board can include thousands of worktree frontmatter records.
+_SAFE_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 from cascade.agent.errors import ProviderConfigError
 from cascade.agent.providers import parse_provider_id
 from cascade.board.errors import SchemaError
@@ -56,7 +60,7 @@ def parse_text(text: str, path: Path) -> WorkDoc:
 
     frontmatter, body = _split_frontmatter(text)
     try:
-        loaded = yaml.safe_load(frontmatter)
+        loaded = yaml.load(frontmatter, Loader=_SAFE_LOADER)
     except yaml.YAMLError as exc:
         raise SchemaError(f"invalid frontmatter in {Path(path).name}: {exc}") from exc
     if not isinstance(loaded, dict):

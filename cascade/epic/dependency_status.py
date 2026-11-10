@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from cascade.board.types import BoardIndex
+
 from cascade.epic.dependency_approvals import (
     DependencyApprovalError,
     read_installation_approvals,
@@ -40,7 +42,7 @@ _UNKNOWN = frozenset(
 )
 
 
-def project_dependency_status(epic_id: str, *, root: Path) -> dict[str, Any]:
+def project_dependency_status(epic_id: str, *, root: Path, board_snapshot: BoardIndex | None = None) -> dict[str, Any]:
     """Build the complete current read model without creating authority.
 
     Read failures are data in this model rather than exceptions.  That keeps a
@@ -52,13 +54,13 @@ def project_dependency_status(epic_id: str, *, root: Path) -> dict[str, Any]:
     try:
         manifest = read_dependency_manifest(epic_id, root=repo)
     except DependencyManifestError as exc:
-        return _unavailable(epic_id, "invalid_manifest", str(exc), root=repo)
+        return _unavailable(epic_id, "invalid_manifest", str(exc), root=repo, board_snapshot=board_snapshot)
     if manifest is None:
         return _unavailable(
             epic_id,
             "missing_manifest",
             "The owning Epic Manager or Architect must call read_dependency_manifest then write_dependency_manifest with expected_revision=0. Declare none_required=true and dependencies=[] with a complete target environment when no dependencies are needed. Declaration does not authorize installation.",
-            root=repo,
+            root=repo, board_snapshot=board_snapshot,
         )
 
     readiness = compute_dependency_readiness(epic_id, root=repo)
@@ -239,7 +241,7 @@ def project_dependency_status(epic_id: str, *, root: Path) -> dict[str, Any]:
                 list(bootstrap_projection.blockers) if bootstrap_projection else []
             ),
         },
-        "planning_readiness": _planning_readiness(epic_id, root=repo),
+        "planning_readiness": _planning_readiness(epic_id, root=repo, board_snapshot=board_snapshot),
         "dependencies": dependency_rows,
         "errors": errors,
     }
@@ -254,7 +256,7 @@ def dependency_status_chat_summary(epic_id: str, *, root: Path) -> str:
     )
 
 
-def _unavailable(epic_id: str, code: str, detail: str, *, root: Path) -> dict[str, Any]:
+def _unavailable(epic_id: str, code: str, detail: str, *, root: Path, board_snapshot: BoardIndex | None = None) -> dict[str, Any]:
     return {
         "epic_id": epic_id,
         "status": "blocked",
@@ -262,20 +264,25 @@ def _unavailable(epic_id: str, code: str, detail: str, *, root: Path) -> dict[st
         "explicit_no_dependencies": False,
         "manifest": None,
         "bootstrap": None,
-        "planning_readiness": _planning_readiness(epic_id, root=root),
+        "planning_readiness": _planning_readiness(epic_id, root=root, board_snapshot=board_snapshot),
         "dependencies": [],
         "errors": [{"code": code, "detail": detail}],
     }
 
 
-def _planning_readiness(epic_id: str, *, root: Path) -> dict[str, object] | None:
+def _planning_readiness(epic_id: str, *, root: Path, board_snapshot: BoardIndex | None = None) -> dict[str, object] | None:
     try:
         from cascade.epic.plan_readiness import (
             compute_epic_plan_readiness,
+            project_epic_plan_readiness,
             epic_plan_readiness_to_dict,
         )
 
-        readiness = compute_epic_plan_readiness(epic_id, root=root)
+        readiness = (
+            project_epic_plan_readiness(epic_id, root=root, board=board_snapshot)
+            if board_snapshot is not None
+            else compute_epic_plan_readiness(epic_id, root=root)
+        )
         return epic_plan_readiness_to_dict(readiness) if readiness else None
     except Exception as exc:  # a read model must expose corrupt sidecars, not hide the row
         return {"status": "unavailable", "error": type(exc).__name__}
