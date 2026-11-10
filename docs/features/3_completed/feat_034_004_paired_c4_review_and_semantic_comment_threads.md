@@ -2,7 +2,7 @@
 id: feat_034_004
 title: Paired C4 review and semantic comment threads
 tier: feature
-status: active
+status: completed
 parent: epic_034
 children:
 - task_034_004_001
