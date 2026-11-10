@@ -507,20 +507,26 @@ def test_real_resolution_action_maps_review_identity_to_old_feature(
     assert resolved.generation != observation.generation
 
 
-def _write_completed_review_recovery(root: Path) -> tuple[Path, Path]:
+def _write_completed_review_recovery(
+    root: Path, *, recovery_review_id: str | None = None
+) -> tuple[Path, Path]:
     """Persist the production-shaped admission and execution evidence."""
 
     sidecars = root / ".cascade"
-    action_id = "resolution:v1:e58059ef"
+    action_id = (
+        "resolution:v1:"
+        "e58059ef6a24760191f4653a01e6bf7ebd50260509f8edc865db5067158754ac"
+    )
     review = {
         "number": "218",
-        "url": "https://forge.example/repo/pull/218",
+        "url": "https://github.com/vincentc-b/CascadeCode/pull/218",
+        "forge": "github",
         "closed": True,
         "state": "merged",
     }
     request = {"review_id": "218", "review_url": review["url"]}
     (sidecars / "reviews.json").write_text(
-        json.dumps({"feat_001": review}), encoding="utf-8"
+        json.dumps({"feat_034_006": review}), encoding="utf-8"
     )
     admission = sidecars / "resolution_actions.json"
     admission.write_text(
@@ -553,11 +559,12 @@ def _write_completed_review_recovery(root: Path) -> tuple[Path, Path]:
                         "recovery": {
                             "owning_team": {
                                 "kind": "feature_team",
-                                "work_id": "feat_001",
+                                "work_id": "feat_034_006",
                             },
                             "evidence": {
-                                "affected_work_id": "feat_001",
+                                "affected_work_id": "feat_034_006",
                                 **request,
+                                "review_id": recovery_review_id,
                             },
                         },
                     }
@@ -570,25 +577,28 @@ def _write_completed_review_recovery(root: Path) -> tuple[Path, Path]:
     return admission, execution
 
 
+@pytest.mark.parametrize("recovery_review_id", [None, "218"], ids=("legacy", "current"))
 def test_completed_matching_review_recovery_suppresses_only_stale_admission(
-    tmp_path: Path,
+    tmp_path: Path, recovery_review_id: str | None,
 ) -> None:
     root = make_repo(tmp_path)
-    add_doc(root, id="epic_001", title="Parent", tier="epic", status="completed")
+    add_doc(root, id="epic_034", title="Parent", tier="epic", status="completed")
     add_doc(
         root,
-        id="feat_001",
+        id="feat_034_006",
         title="Recovered feature",
         tier="feature",
         status="completed",
-        parent="epic_001",
+        parent="epic_034",
     )
     _commit(root)
-    admission, execution = _write_completed_review_recovery(root)
+    admission, execution = _write_completed_review_recovery(
+        root, recovery_review_id=recovery_review_id
+    )
     before = (admission.read_bytes(), execution.read_bytes())
 
-    first = project_audit_observation("feat_001", root=root)
-    second = project_audit_observation("feat_001", root=root)
+    first = project_audit_observation("feat_034_006", root=root)
+    second = project_audit_observation("feat_034_006", root=root)
 
     assert first.classification == second.classification == "healthy"
     assert first.reason == second.reason == "terminal"
@@ -605,6 +615,8 @@ def test_completed_matching_review_recovery_suppresses_only_stale_admission(
         "unrelated_action",
         "wrong_owner",
         "wrong_review",
+        "wrong_url",
+        "wrong_forge",
         "wrong_reason",
     ),
 )
@@ -612,14 +624,14 @@ def test_completed_review_recovery_requires_exact_authoritative_identity(
     tmp_path: Path, countercase: str
 ) -> None:
     root = make_repo(tmp_path)
-    add_doc(root, id="epic_001", title="Parent", tier="epic", status="completed")
+    add_doc(root, id="epic_034", title="Parent", tier="epic", status="completed")
     add_doc(
         root,
-        id="feat_001",
+        id="feat_034_006",
         title="Recovered feature",
         tier="feature",
         status="completed",
-        parent="epic_001",
+        parent="epic_034",
     )
     _commit(root)
     _, execution_path = _write_completed_review_recovery(root)
@@ -637,35 +649,41 @@ def test_completed_review_recovery_requires_exact_authoritative_identity(
         action["recovery"]["owning_team"]["work_id"] = "feat_999"
     elif countercase == "wrong_review":
         action["recovery"]["evidence"]["review_id"] = "999"
+    elif countercase == "wrong_url":
+        action["recovery"]["evidence"]["review_url"] = (
+            "https://github.com/other/CascadeCode/pull/218"
+        )
+    elif countercase == "wrong_forge":
+        action["recovery"]["evidence"]["forge"] = "gitlab"
     else:
         action["completion_reconciliation"]["reason"] = "unrelated_completion"
     execution_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    observation = project_audit_observation("feat_001", root=root)
+    observation = project_audit_observation("feat_034_006", root=root)
 
     assert observation.classification == "proven_incident"
     assert observation.reason == "unresolved_recovery_reference"
-    assert "reconciliation:feat_001" in observation.evidence.unresolved_references
+    assert "reconciliation:feat_034_006" in observation.evidence.unresolved_references
 
 
 def test_unreadable_execution_evidence_does_not_hide_stale_admission(
     tmp_path: Path,
 ) -> None:
     root = make_repo(tmp_path)
-    add_doc(root, id="epic_001", title="Parent", tier="epic", status="completed")
+    add_doc(root, id="epic_034", title="Parent", tier="epic", status="completed")
     add_doc(
         root,
-        id="feat_001",
+        id="feat_034_006",
         title="Recovered feature",
         tier="feature",
         status="completed",
-        parent="epic_001",
+        parent="epic_034",
     )
     _commit(root)
     _, execution = _write_completed_review_recovery(root)
     execution.write_text("{broken", encoding="utf-8")
 
-    observation = project_audit_observation("feat_001", root=root)
+    observation = project_audit_observation("feat_034_006", root=root)
 
     assert observation.classification == "unavailable_evidence"
     assert observation.reason == "action_recovery_unavailable"

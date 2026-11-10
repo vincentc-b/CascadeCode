@@ -884,7 +884,7 @@ def _collect_resolution_review_references(
             if _is_resolution_action_row(value) and execution_unavailable:
                 valid = False
             elif not _completed_resolution_execution(
-                value, request, owner_id, execution_actions
+                value, request, owner_id, reviews, execution_actions
             ):
                 references.append(("reconciliation", owner_id))
         else:
@@ -913,6 +913,7 @@ def _completed_resolution_execution(
     admission: Mapping[str, Any],
     request: Mapping[str, Any],
     owner_id: str,
+    reviews: Mapping[str, Any],
     execution_actions: Mapping[str, Any],
 ) -> bool:
     """Join a retained admission to its exact, authoritatively completed repair."""
@@ -941,10 +942,54 @@ def _completed_resolution_execution(
         or evidence.get("affected_work_id") != owner_id
     ):
         return False
+    registry_review = reviews.get(owner_id)
+    if not isinstance(registry_review, Mapping):
+        return False
+    registry_url = str(
+        registry_review.get("url") or registry_review.get("review_url") or ""
+    ).strip()
+    try:
+        parsed_url = urlsplit(registry_url)
+    except ValueError:
+        return False
+    if (
+        parsed_url.scheme not in {"http", "https"}
+        or not parsed_url.netloc
+        or parsed_url.query
+        or parsed_url.fragment
+    ):
+        return False
+    match = re.fullmatch(
+        r"/(?:[^/]+/){2,}(?:pull/(\d+)|-/merge_requests/(\d+))/?",
+        parsed_url.path,
+    )
+    if match is None:
+        return False
+    url_review_id = next(group for group in match.groups() if group is not None)
+    url_forge = "github" if match.group(1) is not None else "gitlab"
+    supplied_forges = (
+        str(identity.get("forge") or "").strip().lower()
+        for identity in (registry_review, request, evidence)
+    )
+    if any(forge and forge != url_forge for forge in supplied_forges):
+        return False
+    registry_review_id = str(
+        registry_review.get("number") or registry_review.get("review_id") or ""
+    ).strip()
+    if registry_review_id and registry_review_id != url_review_id:
+        return False
+    if any(
+        str(identity.get("review_url") or "").strip() != registry_url
+        for identity in (request, evidence)
+    ):
+        return False
+    supplied_review_ids = (
+        str(identity.get("review_id") or "").strip()
+        for identity in (request, evidence)
+    )
     return all(
-        str(evidence.get(field) or "").strip()
-        == str(request.get(field) or "").strip()
-        for field in ("review_id", "review_url")
+        not supplied_review_id or supplied_review_id == url_review_id
+        for supplied_review_id in supplied_review_ids
     )
 
 
