@@ -360,6 +360,74 @@
           "ping_action": "ping the team after resolving this blocker"
         }
       ]
+    },
+    {
+      "revision": 5,
+      "recorded_at": "2026-11-10T21:11:51.085717+00:00",
+      "scope": {
+        "manifest_revision": 2,
+        "entries": [
+          {
+            "dependency_id": "dep_python_test_runtime",
+            "source": "Existing /opt/conda environment; repository pyproject.toml",
+            "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+            "setup_operation": "false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import sys, importlib.metadata as m; assert sys.version_info[:3] == (3,12,8); expected={\"pytest\":\"9.0.3\",\"PyYAML\":\"6.0.3\",\"cursor-sdk\":\"1.0.37\",\"langgraph\":\"1.2.14\",\"langgraph-checkpoint-sqlite\":\"3.1.1\"}; assert all(m.version(k)==v for k,v in expected.items()); import pytest, yaml, cursor_sdk, langgraph, langgraph.checkpoint.sqlite; print(\"success\")'",
+            "paths": [
+              "Existing shared host environment"
+            ],
+            "destination": "Existing shared host environment",
+            "cleanup": "No installation or upgrade requested; verification leaves installed tools unchanged."
+          },
+          {
+            "dependency_id": "dep_node",
+            "source": "Existing /usr/bin/node",
+            "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+            "setup_operation": "false",
+            "check_operation": "test \"$(/usr/bin/node --version)\" = v20.20.2 && echo success",
+            "paths": [
+              "Existing shared host environment"
+            ],
+            "destination": "Existing shared host environment",
+            "cleanup": "No installation or upgrade requested; verification leaves installed tools unchanged."
+          },
+          {
+            "dependency_id": "dep_c4_renderer",
+            "source": "Existing Docker daemon and local structurizr/structurizr image",
+            "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+            "setup_operation": "false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import json,subprocess; image=\"structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c\"; assert subprocess.check_output([\"docker\",\"version\",\"--format\",\"{{.Server.Version}}\"],text=True).strip()==\"28.0.0\"; rows=json.loads(subprocess.check_output([\"docker\",\"image\",\"inspect\",image],text=True)); assert image in rows[0][\"RepoDigests\"]; print(\"success\")'",
+            "paths": [
+              "Existing shared host environment"
+            ],
+            "destination": "Existing shared host environment",
+            "cleanup": "No installation or upgrade requested; verification leaves installed tools unchanged."
+          },
+          {
+            "dependency_id": "dep_browser",
+            "source": "Existing Python Playwright package and its cached Chromium",
+            "integrity_reference": "version-pinned-existing-installation:playwright-1.64.0-chromium-156.0.8078.4",
+            "setup_operation": "false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; from playwright.sync_api import sync_playwright; assert m.version(\"playwright\")==\"1.64.0\"; p=sync_playwright().start(); b=p.chromium.launch(headless=True); assert b.version==\"156.0.8078.4\"; page=b.new_page(); page.set_content(\"<p>browser ready</p>\"); assert page.locator(\"p\").inner_text()==\"browser ready\"; b.close(); p.stop(); print(\"success\")'",
+            "paths": [
+              "Existing shared host environment"
+            ],
+            "destination": "Existing shared host environment",
+            "cleanup": "No installation or upgrade requested; verification leaves installed tools unchanged."
+          }
+        ],
+        "feasibility_artifacts": [],
+        "limits": {
+          "timeout_seconds": 180,
+          "max_attempts": 5,
+          "max_output_bytes": 32768,
+          "memory_bytes": null
+        }
+      },
+      "authorization": null,
+      "checking": false,
+      "feasibility_results": [],
+      "blockers": []
     }
   ]
 }
