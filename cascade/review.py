@@ -16,7 +16,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from cascade.board.errors import BoardError, GitError, NotFound
-from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
+from cascade.board.store import list_board, move_doc, read_doc, read_doc_in_worktree
 from cascade.board.types import WorkMeta
 from cascade.tracking import (
     MergeRequest,
@@ -36,6 +36,7 @@ from cascade.watchdog.types import Event
 from cascade.workspace.integration_worktree import (
     get_integration_worktree,
     integration_branch,
+    is_trunk_pointer,
     load_registry,
     locate_trunk,
     merged_board,
@@ -165,6 +166,28 @@ def epic_close_document_staged(meta: WorkMeta, *, root: Path) -> bool:
         return False
     entry = get_integration_worktree(locate_trunk(root), "epic", meta.id)
     return entry is not None and meta.path.resolve().is_relative_to(entry.path.resolve())
+
+
+def epic_close_documents_staged(metas: list[WorkMeta], *, root: Path) -> dict[str, bool]:
+    """Project completed epic staging from one request-local registry snapshot."""
+
+    candidates = [
+        meta for meta in metas
+        if meta.tier == "epic" and meta.status == "completed"
+        and meta.path.parent.name == "3_completed"
+    ]
+    if not candidates:
+        return {}
+    entries = {}
+    for entry in load_registry(locate_trunk(root)):
+        if entry.kind == "epic":
+            # Match get_integration_worktree's first-record semantics.
+            entries.setdefault(entry.work_id, entry)
+    return {
+        meta.id: (entry := entries.get(meta.id)) is not None
+        and meta.path.resolve().is_relative_to(entry.path.resolve())
+        for meta in candidates
+    }
 
 
 def persist_epic_review_snapshot(
@@ -765,6 +788,11 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
 
     trunk = locate_trunk(root)
     state = _load(trunk)
+    # Queue retention is not durable completion evidence: terminal Epic feeds
+    # are pruned. Inspect the operator checkout once, without preferring a
+    # completed source worktree over an incomplete target copy.
+    trunk_board = list_board(trunk)
+    source_board = None
     finalized: list[str] = []
     from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
     from cascade.stacked_review_recovery import persist_if_stacked_review_integration_gap
@@ -793,6 +821,29 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
                         feature_id, epic_id, root=trunk
                     ):
                         finalized.append(feature_id)
+                continue
+            feature = trunk_board.by_id.get(feature_id)
+            epic = trunk_board.by_id.get(epic_id) if epic_id else None
+            terminal_epic = (
+                epic is not None and epic.tier == "epic"
+                and epic.status == "completed" and epic.path.parent.name == "3_completed"
+                and not is_trunk_pointer(epic)
+            )
+            if terminal_epic and feature is None and feature_id in epic.children:
+                # Legacy squash merges may retain the completed child document
+                # only in its source checkout. The closed review and terminal
+                # parent's explicit child list bind that historical copy.
+                if source_board is None:
+                    source_board = merged_board(trunk)
+                feature = source_board.by_id.get(feature_id)
+            if (
+                terminal_epic and feature is not None and feature.tier == "feature"
+                and feature.parent == epic_id and feature.status == "completed"
+                and feature.path.parent.name == "3_completed"
+            ):
+                # This acknowledges an already terminal parent's history; it
+                # neither emits completion nor changes lifecycle state. Target
+                # repair and stacked integration gaps retain priority above.
                 continue
             if epic_id and not feature_completed_recorded(feature_id, epic_id, root=trunk):
                 if try_complete_feature(feature_id, root=trunk, review_merged=True):

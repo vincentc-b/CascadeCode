@@ -108,3 +108,60 @@ async function testActionRefreshFetchesAfterPendingPoll() {
 
 await testStaleChatReplyCannotReplaceCurrentRoom();
 await testActionRefreshFetchesAfterPendingPoll();
+
+async function testBoardAndCancellationLookupRunInParallel() {
+  const boardRequest = deferred();
+  const cancellationRequest = deferred();
+  const rendered = [];
+  let cancellationStarted = false;
+  const context = {
+    apiGet() { return boardRequest.promise; },
+    refreshPendingBriefCancels() { cancellationStarted = true; return cancellationRequest.promise; },
+    renderBoard(view) { rendered.push(view); },
+    refreshFlightReport() { return Promise.resolve(); },
+    refreshBossView() { return Promise.resolve(); },
+    reportBoardLoadFailure(error) { throw error; },
+    document: { hidden: false },
+  };
+  const board = vm.runInNewContext(`
+    ${section("  let boardRefreshInFlight = null;", "  function epicIdForFlightLens()")}
+    ({ pollBoard });
+  `, context);
+  const pending = board.pollBoard();
+  assert.ok(cancellationStarted, "cancellation lookup must start before board response");
+  boardRequest.resolve({ version: 1 });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(rendered.length, 0, "retain cancellation safety before enabling board actions");
+  cancellationRequest.resolve();
+  await pending;
+  assert.equal(rendered.length, 1);
+}
+
+async function testSlowOptionalPanelsDoNotBlockStartupPolling() {
+  const slow = deferred();
+  const calls = [];
+  const context = {
+    wireCompletedCollapseControls() {}, updateFocusUi() {},
+    refreshBoard(options) { assert.equal(options.refreshRelated, false); calls.push('board'); return Promise.resolve(); },
+    refreshRelatedPanels() { calls.push('related'); return slow.promise; },
+    loadChat() { return slow.promise; }, reportChatLoadFailure() {},
+    refreshAmendments() { return slow.promise; }, refreshProviders() { return slow.promise; },
+    refreshOpenReviews() { return slow.promise; }, pollToasts() { return slow.promise; },
+    pollSupervisorHealth() { return slow.promise; }, pollAuditStatus() { return slow.promise; },
+    document: { hidden: false, addEventListener() {} }, handleVisibilityChange() {},
+    scheduleBoardPoll() { calls.push('polling'); }, boardPollDelayMs: 3000,
+    setInterval() { calls.push('interval'); }, pollChatSidecar() {},
+  };
+  const bootstrap = vm.runInNewContext(`
+    ${section("  async function bootstrapWarRoom()", "  bootstrapWarRoom().catch")}
+    bootstrapWarRoom;
+  `, context);
+  await bootstrap();
+  assert.ok(calls.includes('related'));
+  assert.ok(calls.includes('polling'), 'board polling starts despite pending optional panels');
+  assert.equal(calls.filter(c => c === 'interval').length, 4);
+  slow.resolve();
+}
+
+await testBoardAndCancellationLookupRunInParallel();
+await testSlowOptionalPanelsDoNotBlockStartupPolling();

@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 
-def recovery_incidents_by_work_id(*, root) -> dict[str, dict[str, object]]:
+def recovery_incidents_by_work_id(
+    *, root, actions: Iterable[Mapping[str, Any]] | None = None
+) -> dict[str, dict[str, object]]:
     """Return at most one active incident per affected board row."""
 
     from cascade.task.action_recovery import recovery_actions
 
     incidents: dict[str, tuple[str, dict[str, object]]] = {}
-    for action in recovery_actions(root=root):
+    for action in recovery_actions(root=root) if actions is None else actions:
         incident = recovery_incident_from_action(action)
         if incident is None:
             continue

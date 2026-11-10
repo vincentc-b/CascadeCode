@@ -67,3 +67,34 @@ owner exit, PID reuse, live/unknown owners and durable exactly-once handoff.
 
 These safeguards remain inside the existing supervisor, lifecycle-recovery and
 review-publication components; they add no C4 container or external service.
+
+### Historical review reconciliation and queue retention
+
+Requirement: pruning a terminal Epic's queue must not trigger replay of all its
+closed Feature reviews. Queue absence is not evidence that accepted work needs
+another closeout authorization. Reconciliation reads one operator-trunk board
+snapshot and treats a closed review as historical when its Feature and target
+Epic are both in `3_completed` with completed status and the Feature's parent
+matches that target. It skips event replay in that case; it does not synthesize
+new completion events or bypass a gate for unfinished work.
+
+Stacked integration-gap checks and repair of an incomplete registered Epic-target
+copy retain priority over this fast path. Active parents, incomplete Features,
+and mismatched parent relationships retain normal replay and all authorization
+checks. This prevents an endless prune/replay cycle from performing full semantic
+gate scans under the global lifecycle lock and starving War Room reads. No lock
+is removed and no snapshot survives the reconciliation call.
+
+Regression coverage: `tests/test_feature_closeout_flow.py` exercises absent parent
+feeds, active and incomplete documents, parent mismatches, and target repair.
+
+Legacy accepted Features can retain their completed document only in a source
+worktree after a squash merge; source-tip ancestry is not a reliable acceptance
+check for those records. When a closed Feature review's document is absent from
+operator trunk, reconciliation may also skip historical replay if its canonical,
+non-pointer terminal Epic explicitly lists that child and the merged board has a
+completed child copy with the matching parent. Missing children, active copies,
+unlisted children, parent mismatches, and trunk pointer Epics do not qualify.
+This is only a no-op for historical replay: no completion event or lifecycle
+transition is synthesized. Target-copy repair and stacked-gap checks still run
+first. The source board is acquired lazily once per reconciliation call.

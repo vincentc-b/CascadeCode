@@ -262,3 +262,36 @@ def test_resolved_questions_restore_ready_state(board: Path) -> None:
     assert readiness is not None
     assert readiness.status == "ready_for_review"
     assert readiness.can_approve_plan is True
+
+
+def test_board_projection_reuses_snapshot_but_authorization_refreshes(board, monkeypatch):
+    from cascade.epic.plan_readiness import project_epic_plan_readiness
+    from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
+    import cascade.planning_action_dependencies as boundary
+    snapshot = merged_board(board)
+    calls = []
+    original = boundary.refresh_merged_board
+    def refresh(root):
+        calls.append(root)
+        return original(root)
+    monkeypatch.setattr(boundary, 'refresh_merged_board', refresh)
+    with merged_board_snapshot(board, snapshot):
+        projected = project_epic_plan_readiness('epic_001', root=board, board=snapshot)
+        assert projected is not None
+        assert not calls
+        authoritative = compute_epic_plan_readiness('epic_001', root=board, board=snapshot)
+        assert authoritative is not None
+        assert len(calls) == 1
+    assert projected.status == authoritative.status
+    assert projected.dependency_status.outcome == authoritative.dependency_status.outcome
+
+
+def test_board_serialization_does_not_refresh_per_epic(board, monkeypatch):
+    from cascade.war_room.serialize import board_view_from_index
+    from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
+    import cascade.planning_action_dependencies as boundary
+    snapshot = merged_board(board)
+    monkeypatch.setattr(boundary, 'refresh_merged_board', lambda root: pytest.fail('read-only board refreshed authorization evidence'))
+    with merged_board_snapshot(board, snapshot):
+        payload = board_view_from_index(snapshot, root=board)
+    assert _epic_row(payload)['plan_readiness']['status'] == 'planning'

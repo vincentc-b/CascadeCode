@@ -353,7 +353,7 @@ def test_task_execution_controls_and_board_polling_are_load_safe():
     assert 'recovery.action === "retry"' in source
     assert '"/api/retry_task"' in source
     assert 'appendRecoveryFeedback(row, item.recovery)' in source
-    assert 'boardRefreshInFlight = apiGet("/api/board?_=" + Date.now())' in source
+    assert "boardRefreshInFlight = Promise.all([" in source
     assert source.count('apiGet("/api/board') == 1
     assert "return refreshBoard({ refreshRelated: false, forceFresh: false })" in source
     assert "setInterval(pollBoard" not in source
@@ -361,7 +361,7 @@ def test_task_execution_controls_and_board_polling_are_load_safe():
     assert "Math.min(BOARD_POLL_MAX_MS, boardPollDelayMs * 2)" in source
     assert 'document.addEventListener("visibilitychange", handleVisibilityChange)' in source
     bootstrap = source[source.index("async function bootstrapWarRoom()") :]
-    assert bootstrap.index("await Promise.allSettled([") < bootstrap.index(
+    assert bootstrap.index("Promise.allSettled([") < bootstrap.index(
         "scheduleBoardPoll(boardPollDelayMs)"
     )
 
@@ -373,7 +373,9 @@ def test_startup_does_not_duplicate_board_related_requests():
     source = js_path.read_text(encoding="utf-8")
 
     bootstrap = source[source.index("async function bootstrapWarRoom()") :]
-    assert bootstrap.count("await refreshBoard();") == 1
+    assert bootstrap.count("await refreshBoard({ refreshRelated: false });") == 1
+    assert "await Promise.allSettled" not in bootstrap
+    assert bootstrap.count("refreshRelatedPanels(),") == 1
     assert "refreshFlightReport().catch" not in bootstrap
     assert "refreshBossView();" not in bootstrap
     assert "pollChatSidecar()," not in bootstrap

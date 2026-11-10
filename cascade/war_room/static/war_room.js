@@ -2411,12 +2411,16 @@
       }
       return boardRefreshInFlight;
     }
-    boardRefreshInFlight = apiGet("/api/board?_=" + Date.now())
-      .then(function (view) {
-        return refreshPendingBriefCancels(!!forceFresh).then(function () {
-          renderBoard(view);
-          return view;
-        });
+    // Cancellation state controls destructive-action availability; load it
+    // alongside the board rather than adding a second serial network round trip.
+    boardRefreshInFlight = Promise.all([
+      apiGet("/api/board?_=" + Date.now()),
+      refreshPendingBriefCancels(!!forceFresh),
+    ])
+      .then(function (results) {
+        const view = results[0];
+        renderBoard(view);
+        return view;
       })
       .finally(function () {
         boardRefreshInFlight = null;
@@ -3217,8 +3221,11 @@
 
     // Load the board first. It supplies the lens used by flight and avoids a
     // burst of duplicate board/flight/boss requests during startup.
-    await refreshBoard();
-    await Promise.allSettled([
+    await refreshBoard({ refreshRelated: false });
+    // Optional panels must not hold up polling and room interaction. The board
+    // has established the focus lens, so these can now refresh independently.
+    Promise.allSettled([
+      refreshRelatedPanels(),
       loadChat({ userInitiated: true }).catch(function (err) {
         reportChatLoadFailure(err, { userInitiated: true });
       }),
