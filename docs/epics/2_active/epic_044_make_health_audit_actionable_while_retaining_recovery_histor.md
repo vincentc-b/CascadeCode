@@ -132,6 +132,10 @@ No product scope question remains. The architecture review must confirm the shar
 
 - 2026-11-10 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-10 · Epic Manager · **Macro-architecture**
+  Chose Separate supervisor-produced current/coverage/history projections from read-only dashboard consumption; retain authoritative rechecks at repair boundaries. Deliver feat_044_001 → feat_044_002 → feat_044_003..
+  Rationale: The existing GET repeats expensive historical observation under a shared budget. A producer/consumer contract removes poll-triggered scans while preserving genuine current incidents and existing repair authority. Sequential slices constrain scope and give consumers tested schema fixtures.
+  Honors: Success criteria 1–12; normal team/review workflow; immutable forensic history; configured cadence and manual audit semantics..
 ## Amendment log
 
 _(none)_
