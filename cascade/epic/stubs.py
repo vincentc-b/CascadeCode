@@ -25,17 +25,18 @@ def reply_comment(
     epic_id: str,
     root: Path,
     author: str = "epic_manager",
-) -> None:
+    doc_id: str | None = None,
+) -> str:
     _require_active_epic(epic_id, root)
-    doc_id = epic_id
+    target = _target_doc_id(epic_id, doc_id, root=root)
     try:
-        rows = comment_store.read_comments(doc_id, root=root)
+        rows = comment_store.read_comments(target, root=root)
     except comment_store.CommentStoreError as exc:
         raise EpicToolDenied(str(exc)) from exc
     if not any(row.id == comment_id for row in rows):
         raise CommentNotFound(comment_id)
-    comment_store.reply_comment(
-        doc_id,
+    return comment_store.reply_comment(
+        target,
         comment_id,
         body,
         author=author,
@@ -43,14 +44,30 @@ def reply_comment(
     )
 
 
-def read_comment(comment_id: str, *, epic_id: str, root: Path) -> dict[str, object]:
+def read_comment(
+    comment_id: str, *, epic_id: str, root: Path, doc_id: str | None = None
+) -> dict[str, object]:
     """Read the full text of a comment on this epic's plan."""
 
     _require_active_epic(epic_id, root)
-    for row in comment_store.read_comments(epic_id, root=root):
+    target = _target_doc_id(epic_id, doc_id, root=root)
+    for row in comment_store.read_comments(target, root=root):
         if row.id == comment_id:
             return row.to_dict()
     raise CommentNotFound(comment_id)
+
+
+def _target_doc_id(epic_id: str, doc_id: str | None, *, root: Path) -> str:
+    if doc_id is None or doc_id == epic_id:
+        return epic_id
+    from cascade.workspace.integration_worktree import merged_board
+
+    meta = merged_board(Path(root).resolve()).by_id.get(doc_id)
+    if meta is None or meta.tier != "feature" or meta.parent != epic_id:
+        raise EpicToolDenied(
+            "epic tools can access only this epic and its feature threads"
+        )
+    return doc_id
 
 
 def _require_active_epic(epic_id: str, root: Path) -> None:

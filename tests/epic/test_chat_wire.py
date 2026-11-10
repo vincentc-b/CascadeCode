@@ -162,6 +162,8 @@ def test_load_epic_tools_registers_all_tools() -> None:
         "mint_feature",
         "list_children",
         "record_decision",
+        "apply_impact_disposition",
+        "sign_off_corrective_plan",
         "read_doc",
         "write_doc",
         "reply_comment",

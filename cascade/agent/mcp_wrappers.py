@@ -189,7 +189,12 @@ def dispatch_planning_tool(
     tool_args = _normalize_planning_tool_args(
         tier, name, dict(args), scope_id=scope_id, repo=repo
     )
-    if tier == "epic" and name == "reply_comment" and role in (
+    if tier == "epic" and name in (
+        "reply_comment",
+        "record_impact_decision",
+        "apply_impact_disposition",
+        "sign_off_corrective_plan",
+    ) and role in (
         "epic_manager", "epic_architect"
     ):
         tool_args["author"] = role
@@ -309,6 +314,26 @@ def _planning_tool_description(tier: PlanningToolTier, name: str) -> str:
             "and dependency_status_unavailable are distinct refusals. A "
             "content_access_denied spec read does not establish either result."
         )
+    if tier == "feature" and name == "escalate_comment_to_epic":
+        return (
+            "Escalate one originating feature-comment thread to the owning Epic "
+            "Team for impact triage. Replays return the original accountable "
+            "handoff instead of starting another Epic turn."
+        )
+    if tier == "epic" and name == "record_impact_decision":
+        return (
+            "Classify and record one delivered feature change-request handoff, "
+            "capture accepted sibling and architecture-lineage evidence, then "
+            "relay the Epic disposition in its original open comment thread."
+        )
+    if tier == "epic" and name == "apply_impact_disposition":
+        return (
+            "Apply a recorded corrective-feature or human-blocker disposition. "
+            "Corrective work is minted in backlog with accepted-work dependencies; "
+            "a blocker leaves work unchanged and requests a visible human decision."
+        )
+    if tier == "epic" and name == "sign_off_corrective_plan":
+        return "Sign off the current revision of a separately approved corrective plan."
     return f"Cascade {tier} tool {name}"
 
 
@@ -400,6 +425,72 @@ _EPIC_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "required": ["section", "choice", "rationale", "honors"],
     },
+    "record_impact_decision": {
+        "type": "object",
+        "properties": {
+            "handoff_id": {"type": "string"},
+            "materiality": {
+                "type": "string",
+                "enum": ["material", "non_material"],
+            },
+            "impact_reasons": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    "enum": [
+                        "feature_plan",
+                        "epic_constraint",
+                        "sibling_work",
+                        "accepted_work",
+                        "architecture",
+                        "sequencing",
+                    ],
+                },
+            },
+            "disposition": {
+                "type": "string",
+                "enum": [
+                    "open_work_amendment",
+                    "contract_amendment",
+                    "corrective_feature",
+                    "human_blocker",
+                ],
+            },
+            "outcome": {"type": "string"},
+            "affected_work_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+        },
+        "required": [
+            "handoff_id",
+            "materiality",
+            "impact_reasons",
+            "disposition",
+            "outcome",
+        ],
+        "additionalProperties": False,
+    },
+    "apply_impact_disposition": {
+        "type": "object",
+        "properties": {
+            "decision_id": {"type": "string"},
+            "title": {"type": "string"},
+            "plan": {"type": "string"},
+            "requested_human_action": {"type": "string"},
+        },
+        "required": ["decision_id"],
+        "additionalProperties": False,
+    },
+    "sign_off_corrective_plan": {
+        "type": "object",
+        "properties": {
+            "decision_id": {"type": "string"},
+            "plan_revision": {"type": "string"},
+        },
+        "required": ["decision_id", "plan_revision"],
+        "additionalProperties": False,
+    },
     "read_doc": {
         "type": "object",
         "properties": {"work_id": {"type": "string"}},
@@ -489,6 +580,19 @@ _FEATURE_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "body": {"type": "string"},
         },
         "required": ["comment_id", "body"],
+    },
+    "escalate_comment_to_epic": {
+        "type": "object",
+        "properties": {
+            "comment_id": {"type": "string"},
+            "reason": {"type": "string"},
+            "affected_work_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+        },
+        "required": ["comment_id", "reason"],
+        "additionalProperties": False,
     },
     "propose_epic_amendment": {"type": "object", "properties": {}},
     "ack_amendment": {"type": "object", "properties": {}},

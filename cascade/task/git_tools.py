@@ -292,6 +292,15 @@ def _git(worktree: Path, *args: str, check: bool = True) -> subprocess.Completed
 
 
 def integrate_feature(*, task_id: str, task_run: TaskRun, root: Path) -> dict[str, object]:
+    """Serialize the hold recheck with the integration merge."""
+
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=root):
+        return _integrate_feature(task_id=task_id, task_run=task_run, root=root)
+
+
+def _integrate_feature(*, task_id: str, task_run: TaskRun, root: Path) -> dict[str, object]:
     """Integrate only the authoritative parent into the existing owned branch."""
     from cascade.board.store import read_doc
     _assert_task_run(task_id, task_run)

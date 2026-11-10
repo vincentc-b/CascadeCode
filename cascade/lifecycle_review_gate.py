@@ -22,6 +22,22 @@ def require_lifecycle_review_gate(
 ) -> ReviewGateResult:
     """Resolve repository roles and apply scoped comment/affected-work holds."""
 
+    from cascade.scoped_change_holds import (
+        ScopedChangeHoldError,
+        require_no_scoped_change_hold,
+    )
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    # Approval is the path that creates the refreshed evidence needed to
+    # release changed work. It is intentionally not itself a held boundary.
+    if boundary != "approval":
+        try:
+            require_no_scoped_change_hold(work_id, boundary, root=root)
+        except ScopedChangeHoldError as exc:
+            raise ArchitectureProposalError(
+                exc.code, str(exc).partition(": ")[2]
+            ) from exc
+
     project = get_project_context() or ProjectContext.colocated(root)
     store = ArchitectureReviewStore(project)
     affected = {work_id}

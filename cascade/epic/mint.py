@@ -7,7 +7,6 @@ from pathlib import Path
 
 from cascade.board.errors import NotFound, SchemaError
 from cascade.board.id_reservations import release_work_id
-from cascade.board.lock import process_lock
 from cascade.board.paths import slugify
 from cascade.board.store import allocate_id
 from cascade.board.types import WorkDoc, WorkMeta
@@ -31,8 +30,19 @@ def mint_feature(
     """Create a backlog feature under this epic; does not dispatch or move columns."""
 
     repo = Path(root).resolve()
-    with process_lock:
+    from cascade.task.lifecycle_lock import task_lifecycle_lock
+
+    with task_lifecycle_lock(root=repo):
         _require_epic(epic_id, repo)
+        from cascade.scoped_change_holds import (
+            ScopedChangeHoldError,
+            require_no_scoped_change_hold,
+        )
+
+        try:
+            require_no_scoped_change_hold(epic_id, "mint", root=repo)
+        except ScopedChangeHoldError as exc:
+            raise EpicToolDenied(str(exc)) from exc
         evidence = require_action_dependencies(epic_id, root=repo)
         from cascade.epic.dependency_evidence import compute_dependency_readiness
 
