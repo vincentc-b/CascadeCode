@@ -4,7 +4,8 @@ title: Complete C4 plan review and add branch architecture browsing
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_046_001
 depends_on:
 - epic_034
 owners:
@@ -197,6 +198,7 @@ The detailed requirements and acceptance evidence define the intended outcome; t
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_046_001
 
 The Epic Team will create and sequence feature plans here.
 
