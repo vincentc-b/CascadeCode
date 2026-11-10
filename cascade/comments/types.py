@@ -30,6 +30,7 @@ class Comment:
     line_end: int | None
     doc_sha: str | None
     blocks: tuple[str, ...]
+    semantic_anchor: dict[str, Any] | None
     author: str
     body: str
     parent: str | None
@@ -47,6 +48,7 @@ class Comment:
             "line_end": self.line_end,
             "doc_sha": self.doc_sha,
             "blocks": list(self.blocks),
+            "semantic_anchor": self.semantic_anchor,
             "author": self.author,
             "body": self.body,
             "parent": self.parent,
@@ -82,6 +84,9 @@ class Comment:
             blocks: tuple[str, ...] = ()
         else:
             blocks = tuple(str(b) for b in blocks_raw)
+        semantic_anchor = raw.get("semantic_anchor")
+        if not isinstance(semantic_anchor, dict):
+            semantic_anchor = None
         return cls(
             id=str(raw["id"]),
             doc_id=str(raw["doc_id"]),
@@ -91,6 +96,7 @@ class Comment:
             line_end=line_end,
             doc_sha=doc_sha,
             blocks=blocks,
+            semantic_anchor=semantic_anchor,
             author=str(raw["author"]),
             body=str(raw["body"]),
             parent=parent if parent is None or isinstance(parent, str) else None,

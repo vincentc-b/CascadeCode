@@ -101,6 +101,13 @@ from cascade.workspace.c4_review import (
     C4ReviewView,
     compose_c4_review_payload,
 )
+from cascade.workspace.c4_threads import (
+    SemanticThread,
+    SemanticThreadAnchor,
+    build_semantic_thread_anchor,
+    create_semantic_thread,
+    read_semantic_threads,
+)
 from cascade.workspace.up import prepare_up, up
 
 __all__ = [
@@ -152,6 +159,8 @@ __all__ = [
     "C4ReviewSide",
     "C4ReviewTarget",
     "C4ReviewView",
+    "SemanticThread",
+    "SemanticThreadAnchor",
     "C4View",
     "C4WorkspaceContract",
     "find_project_config",
@@ -186,6 +195,9 @@ __all__ = [
     "verify_and_sanitize_hit_targets",
     "compute_c4_semantic_diff",
     "compose_c4_review_payload",
+    "build_semantic_thread_anchor",
+    "create_semantic_thread",
+    "read_semantic_threads",
     "STRUCTURIZR_IMAGE",
     "STRUCTURIZR_IMAGE_DIGEST",
     "up",
