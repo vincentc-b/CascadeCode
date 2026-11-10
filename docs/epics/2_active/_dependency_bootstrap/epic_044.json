@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "epic_id": "epic_044",
+  "snapshots": [
+    {
+      "revision": 1,
+      "recorded_at": "2026-11-10T20:14:03.341658+00:00",
+      "scope": {
+        "manifest_revision": 1,
+        "entries": [
+          {
+            "dependency_id": "dep_python",
+            "source": "file:///opt/conda/bin/python3.12",
+            "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import sys; assert sys.version_info[:3] == (3,12,8); import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/bin/python3.12'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"''",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import sys; assert sys.version_info[:3] == (3,12,8); import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/bin/python3.12'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"''",
+            "paths": [
+              "/opt/conda/bin/python3.12"
+            ],
+            "destination": "/opt/conda/bin/python3.12",
+            "cleanup": "No installation or modification requested; nothing to remove."
+          },
+          {
+            "dependency_id": "dep_pytest",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/METADATA",
+            "integrity_reference": "sha256:c3966f28791686477bae35e518736d4cbea5b626d3a79011215854e2bc670207",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'pytest'\"'\"') == '\"'\"'9.0.3'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:c3966f28791686477bae35e518736d4cbea5b626d3a79011215854e2bc670207'\"'\"''",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'pytest'\"'\"') == '\"'\"'9.0.3'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:c3966f28791686477bae35e518736d4cbea5b626d3a79011215854e2bc670207'\"'\"''",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/METADATA"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/METADATA",
+            "cleanup": "No installation or modification requested; nothing to remove."
+          },
+          {
+            "dependency_id": "dep_pyyaml",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA",
+            "integrity_reference": "sha256:03c3b415ed38d09faedc49360e930769b40c58f68585e6de00e2e4916a858d34",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'PyYAML'\"'\"') == '\"'\"'6.0.3'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:03c3b415ed38d09faedc49360e930769b40c58f68585e6de00e2e4916a858d34'\"'\"''",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'PyYAML'\"'\"') == '\"'\"'6.0.3'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:03c3b415ed38d09faedc49360e930769b40c58f68585e6de00e2e4916a858d34'\"'\"''",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA",
+            "cleanup": "No installation or modification requested; nothing to remove."
+          },
+          {
+            "dependency_id": "dep_cursor_sdk",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/METADATA",
+            "integrity_reference": "sha256:dc75c3a3ff6cc938311b3186a2c46794acb3a4d4fbe2521722cfda69f86548b4",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'cursor-sdk'\"'\"') == '\"'\"'1.0.37'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:dc75c3a3ff6cc938311b3186a2c46794acb3a4d4fbe2521722cfda69f86548b4'\"'\"''",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'cursor-sdk'\"'\"') == '\"'\"'1.0.37'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:dc75c3a3ff6cc938311b3186a2c46794acb3a4d4fbe2521722cfda69f86548b4'\"'\"''",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/METADATA"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/METADATA",
+            "cleanup": "No installation or modification requested; nothing to remove."
+          },
+          {
+            "dependency_id": "dep_langgraph",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/METADATA",
+            "integrity_reference": "sha256:41883360994797eb0e7b0fe8d8255af7cb95253c6f43e30829fd001ca904c833",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'langgraph'\"'\"') == '\"'\"'1.2.14'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:41883360994797eb0e7b0fe8d8255af7cb95253c6f43e30829fd001ca904c833'\"'\"''",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'langgraph'\"'\"') == '\"'\"'1.2.14'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:41883360994797eb0e7b0fe8d8255af7cb95253c6f43e30829fd001ca904c833'\"'\"''",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/METADATA"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/METADATA",
+            "cleanup": "No installation or modification requested; nothing to remove."
+          },
+          {
+            "dependency_id": "dep_langgraph_checkpoint_sqlite",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/METADATA",
+            "integrity_reference": "sha256:cc9f7bdb2671a5ed31209d2d83c85a9314cab1fac7a163339348933c7602b93f",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'langgraph-checkpoint-sqlite'\"'\"') == '\"'\"'3.1.1'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:cc9f7bdb2671a5ed31209d2d83c85a9314cab1fac7a163339348933c7602b93f'\"'\"''",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'langgraph-checkpoint-sqlite'\"'\"') == '\"'\"'3.1.1'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:cc9f7bdb2671a5ed31209d2d83c85a9314cab1fac7a163339348933c7602b93f'\"'\"''",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/METADATA"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/METADATA",
+            "cleanup": "No installation or modification requested; nothing to remove."
+          },
+          {
+            "dependency_id": "dep_node",
+            "source": "file:///usr/bin/node",
+            "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import subprocess; assert subprocess.check_output(['\"'\"'/usr/bin/node'\"'\"',\"--version\"], text=True).strip()=='\"'\"'v20.20.2'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/node'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"''",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import subprocess; assert subprocess.check_output(['\"'\"'/usr/bin/node'\"'\"',\"--version\"], text=True).strip()=='\"'\"'v20.20.2'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/node'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"''",
+            "paths": [
+              "/usr/bin/node"
+            ],
+            "destination": "/usr/bin/node",
+            "cleanup": "No installation or modification requested; nothing to remove."
+          },
+          {
+            "dependency_id": "dep_git",
+            "source": "file:///usr/bin/git",
+            "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import subprocess; assert subprocess.check_output(['\"'\"'/usr/bin/git'\"'\"',\"--version\"], text=True).strip()=='\"'\"'git version 2.34.1'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/git'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"''",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import subprocess; assert subprocess.check_output(['\"'\"'/usr/bin/git'\"'\"',\"--version\"], text=True).strip()=='\"'\"'git version 2.34.1'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/git'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"''",
+            "paths": [
+              "/usr/bin/git"
+            ],
+            "destination": "/usr/bin/git",
+            "cleanup": "No installation or modification requested; nothing to remove."
+          }
+        ],
+        "feasibility_artifacts": [],
+        "limits": {
+          "timeout_seconds": 180,
+          "max_attempts": 5,
+          "max_output_bytes": 32768,
+          "memory_bytes": null
+        }
+      },
+      "authorization": null,
+      "checking": false,
+      "feasibility_results": [],
+      "blockers": []
+    }
+  ]
+}
