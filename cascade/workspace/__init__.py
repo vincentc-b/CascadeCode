@@ -94,6 +94,13 @@ from cascade.workspace.c4_render import (
     C4RenderOperation,
     C4RenderSettings,
 )
+from cascade.workspace.c4_scheduler import (
+    C4RenderAdmissionError,
+    C4RenderScheduler,
+    C4ScheduledRender,
+    C4ScheduledRenderOperation,
+    render_identity,
+)
 from cascade.workspace.c4_diff import (
     C4ContainmentChange,
     C4IdentityChange,
@@ -204,6 +211,11 @@ __all__ = [
     "C4RenderFailure",
     "C4RenderOperation",
     "C4RenderSettings",
+    "C4RenderAdmissionError",
+    "C4RenderScheduler",
+    "C4ScheduledRender",
+    "C4ScheduledRenderOperation",
+    "render_identity",
     "C4ContainmentChange",
     "C4IdentityChange",
     "C4SemanticDiff",
