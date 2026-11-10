@@ -261,6 +261,24 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_d59bbcac19984121c6037efcefe85f0c8fbc6b88e7aa8ae2c54483f2c400ff57",
+      "dependency_id": "dep_langgraph_checkpoint_sqlite",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:425fa8ddac80c9268f8875bf878718923343cfdfd3135272abe235a844caf7b0",
+      "recipe_revision": "sha256:41f691d0a507b0c5bdac66f669b0cd7ff6a66375c3723f016e05585f77f789da",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m; assert m.version('\"'\"'langgraph-checkpoint-sqlite'\"'\"') == '\"'\"'3.1.1'\"'\"'; import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/METADATA'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:cc9f7bdb2671a5ed31209d2d83c85a9314cab1fac7a163339348933c7602b93f'\"'\"''",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-10T20:14:16.602717+00:00",
+      "selected_version": "3.1.1",
+      "integrity_reference": "sha256:cc9f7bdb2671a5ed31209d2d83c85a9314cab1fac7a163339348933c7602b93f",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
