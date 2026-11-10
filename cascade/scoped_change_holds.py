@@ -9,11 +9,14 @@ import tempfile
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import TYPE_CHECKING, Iterable, Literal
 
 from cascade.board.context import resolve_root
 from cascade.task.lifecycle_lock import task_lifecycle_lock, task_lifecycle_read_lock
 from cascade.workspace.integration_worktree import locate_trunk, merged_board
+
+if TYPE_CHECKING:
+    from cascade.workspace.types import ProjectContext
 
 HoldBoundary = Literal["mint", "dispatch", "integration", "merge", "closeout"]
 HoldStatus = Literal["active", "released"]
@@ -333,6 +336,127 @@ def release_scoped_change_hold(
         return released
 
 
+def release_revised_change_hold(
+    request_id: str,
+    *,
+    decision_ref: str,
+    review_unit_id: str,
+    approval_ref: str,
+    released_by: str,
+    project: "ProjectContext",
+) -> ScopedChangeHold:
+    """Release changed work after checking its decision and fresh approved tuple.
+
+    ``release_scoped_change_hold`` remains the persistence primitive.  This is
+    the policy entry point for living revisions: it proves that the Epic
+    disposition exists, the replacement tuple covers that disposition's scope,
+    and review happened after the hold was created on the latest accepted
+    lineage.
+    """
+
+    from cascade.epic.impact_decisions import read_epic_impact_decisions
+    from cascade.workspace.architecture_review import ArchitectureReviewStore
+
+    repo = locate_trunk(resolve_root(project.target.root))
+    hold = next(
+        (row for row in read_scoped_change_holds(root=repo) if row.request_id == request_id),
+        None,
+    )
+    if hold is None:
+        raise ScopedChangeHoldError("hold_not_found", f"unknown request {request_id}")
+    if not hold.requires_revised_approval:
+        raise ScopedChangeHoldError(
+            "invalid_release_evidence", "changed-work release requires a revised-approval hold"
+        )
+
+    decisions = read_epic_impact_decisions(root=repo)
+    decision = next(
+        (
+            row
+            for row in decisions
+            if decision_ref in {row.id, row.decision_log_reference}
+            and request_id in {row.id, row.handoff_id}
+        ),
+        None,
+    )
+    if decision is None:
+        raise ScopedChangeHoldError(
+            "decision_required", "release does not match a recorded Epic impact decision"
+        )
+    if decision.materiality != "material" or decision.disposition not in {
+        "open_work_amendment",
+        "contract_amendment",
+    }:
+        raise ScopedChangeHoldError(
+            "decision_required", "release decision is not a material work amendment"
+        )
+    if decision.disposition == "contract_amendment":
+        from cascade.amendments import AmendmentNotFound, read_amendment
+
+        prefix = "amendment:"
+        if not approval_ref.startswith(prefix) or not approval_ref[len(prefix) :].strip():
+            raise ScopedChangeHoldError(
+                "revised_approval_required",
+                "contract changes require an accepted feature-to-Epic amendment reference",
+            )
+        try:
+            amendment = read_amendment(approval_ref[len(prefix) :], root=repo)
+        except AmendmentNotFound as exc:
+            raise ScopedChangeHoldError(
+                "revised_approval_required", "referenced contract amendment does not exist"
+            ) from exc
+        if (
+            amendment.state != "accepted"
+            or amendment.feature_id != decision.source_feature_id
+        ):
+            raise ScopedChangeHoldError(
+                "revised_approval_required",
+                "contract amendment is not accepted for the changed feature",
+            )
+
+    store = ArchitectureReviewStore(project)
+    unit = store.get(review_unit_id)
+    review = store.get_review(review_unit_id)
+    if unit is None or review is None or unit.status != "approved":
+        raise ScopedChangeHoldError(
+            "revised_approval_required", "replacement proposal is not freshly reviewed and approved"
+        )
+    if review.decision != "reviewed" or review.tuple_digest != unit.reviewed_tuple_digest:
+        raise ScopedChangeHoldError(
+            "revised_approval_required", "replacement review does not match the approved tuple"
+        )
+    try:
+        reviewed_at = datetime.fromisoformat(review.reviewed_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ScopedChangeHoldError(
+            "invalid_release_evidence", "replacement review time is invalid"
+        ) from exc
+    if reviewed_at.tzinfo is None or reviewed_at <= hold.created_at:
+        raise ScopedChangeHoldError(
+            "revised_approval_required", "replacement review predates the scoped change hold"
+        )
+    if store.baseline_status(unit).stale:
+        raise ScopedChangeHoldError(
+            "stale_baseline", "replacement proposal is not based on the latest accepted lineage"
+        )
+    missing = set(decision.affected_work_ids).difference(unit.affected_work_ids)
+    if missing:
+        raise ScopedChangeHoldError(
+            "invalid_release_evidence",
+            "replacement proposal omits affected work: " + ", ".join(sorted(missing)),
+        )
+
+    return release_scoped_change_hold(
+        request_id,
+        decision_ref=decision_ref,
+        review_unit_id=unit.review_unit_id,
+        reviewed_tuple_digest=unit.reviewed_tuple_digest,
+        approval_ref=approval_ref,
+        released_by=released_by,
+        root=repo,
+    )
+
+
 def read_scoped_change_holds(
     *, root: Path, active_only: bool = False
 ) -> tuple[ScopedChangeHold, ...]:
@@ -522,6 +646,7 @@ __all__ = [
     "create_scoped_change_hold",
     "holds_affecting",
     "read_scoped_change_holds",
+    "release_revised_change_hold",
     "release_scoped_change_hold",
     "require_no_scoped_change_hold",
 ]
