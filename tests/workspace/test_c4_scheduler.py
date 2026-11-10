@@ -144,6 +144,66 @@ def test_startup_reclaims_interruption_once_then_requires_explicit_retry(tmp_pat
         exhausted.close()
 
 
+def test_restarted_worker_fences_stale_finish_from_crashed_attempt(tmp_path: Path) -> None:
+    """A late pre-restart result cannot overwrite the recovered attempt."""
+
+    root = _git_root(tmp_path)
+    old = C4RenderScheduler(root, start_worker=False)
+    operation = old.admit(
+        _closure(tmp_path, "race"), owner="feature", snapshot_id="race"
+    )
+    claimed = old._claim()
+    assert claimed is not None
+
+    ledger_path = root / ".cascade" / "c4-render-operations.json"
+    ledger = json.loads(ledger_path.read_text())
+    row = ledger["operations"][operation.operation_id]
+    row["lease"] = {
+        "worker_id": "crashed-worker",
+        "pid": 99999999,
+        "expires_at": time.time() - 1,
+    }
+    ledger_path.write_text(json.dumps(ledger))
+
+    restarted = C4RenderScheduler(root, start_worker=False)
+    try:
+        recovered = restarted._claim()
+        assert recovered is not None
+        assert recovered["attempts"] == 2
+
+        old._finish(
+            operation.operation_id,
+            C4RenderArtifact(
+                status="render_error",
+                closure_digest=claimed["closure"]["digest"],
+                failure=C4RenderFailure(
+                    "internal_error", "scheduler", "late crashed-attempt result"
+                ),
+            ),
+        )
+        assert restarted.get(operation.operation_id).status == "running"
+
+        restarted._finish(
+            operation.operation_id,
+            C4RenderArtifact(
+                status="ready",
+                closure_digest=recovered["closure"]["digest"],
+                cache_key="recovered-cache",
+                semantic_workspace_sha256="a" * 64,
+                view_keys=("context",),
+                revision="1" * 40,
+            ),
+        )
+        final = restarted.get(operation.operation_id)
+        assert final.status == "ready"
+        assert final.attempts == 2
+        assert final.recovery_attempts == 1
+        assert final.failure is None
+    finally:
+        old.close()
+        restarted.close()
+
+
 def _git_root(tmp_path: Path) -> Path:
     root = tmp_path / "project"
     root.mkdir()

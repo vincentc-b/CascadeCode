@@ -783,15 +783,22 @@ class ArchitectureReviewStore:
         _nonblank(owner, "architecture owner")
         _nonblank(work_id, "owner work ID")
         _nonblank(lineage, "integration lineage")
-        for value in reversed(tuple(self._read()["review_units"].values())):
+        matches: list[ArchitectureReviewUnit] = []
+        for value in self._read()["review_units"].values():
             unit = ArchitectureReviewUnit.from_dict(value)
             if unit.owner_work_id == work_id and unit.integration_lineage == lineage:
                 if unit.authorized_owner != owner:
                     raise ArchitectureProposalError(
                         "owner_denied", "architecture proposal belongs to another owner"
                     )
-                return unit
-        return None
+                matches.append(unit)
+        if not matches:
+            return None
+        # Store serialization sorts object keys, so dict order is not review
+        # chronology.  The accepted-lineage CAS is the durable ordering: prefer
+        # a proposal based on its current pointer over a now-stale predecessor.
+        current = [unit for unit in matches if not self.baseline_status(unit).stale]
+        return (current or matches)[-1]
 
     def record_review(
         self,

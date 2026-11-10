@@ -495,13 +495,18 @@ def _load_side(
         )
     if render.binding_manifest is None or render.artifact_directory is None:
         raise C4BindingError("rendered artifact has no hit-target manifest")
+    artifact_root = render.binding_manifest.parent.resolve()
+    try:
+        artifact_root.relative_to(render.artifact_directory.resolve())
+    except ValueError as exc:
+        raise C4BindingError("hit-target manifest escapes the rendered artifact") from exc
     workspace = _read_semantic_workspace(artifact)
     inventory = _semantic_targets(workspace)
     manifest = json.loads(render.binding_manifest.read_text(encoding="utf-8"))
     validate_hit_target_manifest(
         workspace=workspace,
         manifest=manifest,
-        artifact_root=render.artifact_directory,
+        artifact_root=artifact_root,
         expected_view_keys=render.view_keys,
         expected_semantic_ids=artifact.contract.semantic_ids,
     )
@@ -524,7 +529,7 @@ def _load_side(
                 C4ReviewSide(
                     reference.destination_repository_key,
                     reference.revision,
-                    _semantic_svg(render.artifact_directory, row),
+                    _semantic_svg(artifact_root, row),
                     targets,
                 ),
             )

@@ -157,10 +157,12 @@ def discover_architecture_publication(
                 project, scheduler, unit.proposed_model, owner=unit.owner_work_id,
                 snapshot_id=operation_id,
             )
-            row = _update(
+            _update(
                 project, row, "pending", render_operation_id=proposed_id,
                 message="bounded architecture render is pending",
             )
+            with task_lifecycle_lock(root=project.target.root):
+                row = _read_ledger(project)["operations"][operation_id]
 
         baseline_id = row.get("baseline_render_operation_id")
         baseline_binding = unit.accepted_baseline.model
@@ -169,9 +171,11 @@ def discover_architecture_publication(
                 project, scheduler, baseline_binding, owner=unit.owner_work_id,
                 snapshot_id=f"{operation_id}:baseline",
             )
-            row = _update(
+            _update(
                 project, row, "pending", baseline_render_operation_id=baseline_id,
             )
+            with task_lifecycle_lock(root=project.target.root):
+                row = _read_ledger(project)["operations"][operation_id]
 
         proposed = scheduler.get(str(proposed_id))
         baseline = scheduler.get(str(baseline_id)) if baseline_id is not None else None
