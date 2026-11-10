@@ -163,10 +163,10 @@ Prefer a few high-signal integration and browser scenarios over broad mock-based
 - [Epic 36](epic_036_split_target_and_tracking_repos.md) (`depends_on: epic_036`) supplies the optional tracking repository and plan routing before this epic starts. This epic adds design/C4 destination selection on that foundation.
 
 ## Feature breakdown
-- feat_034_009
+- `feat_034_009` — Corrective audit admission reconciliation; depends on F. See dec_017–dec_018; requires its own review and human approval.
 - `feat_034_008` — Corrective historical evidence and accepted architecture reconciliation; depends on F and G. See dec_015; requires its own review and human approval.
 
-The following seven bounded slices cover all success criteria and are now minted as backlog features with the listed dependency edges. Their specs preserve the reviewed scope and acceptance checkpoints. Human plan approval remains the dispatch boundary.
+The following seven original slices are canonically completed with the listed dependency edges. Their delivery does not supersede the outstanding acceptance checkpoint below. Corrective features H and I retain their own review and human approval boundaries.
 
 | Key | Feature | Depends on | Owned result and acceptance coverage |
 | --- | --- | --- | --- |
@@ -199,6 +199,8 @@ Planning readiness on 2026-11-09: canonical software verification is complete at
 As of 2026-11-10, A–G are canonically completed; that status does not establish clean acceptance of historical reconstruction. G's final report at `0bfcaca1` explicitly records `clean_closeout=false`. Its 50 reported passing tests and successful pinned DSL/JSON/SVG validation do not resolve the 2,023 replay rows, missing provenance, pending architecture reviews, or reconciliation receipts. F PR #218 is merged at `d2ed1aca` and reachable from Epic `f83f536a`, superseding G's older accepted-Epic snapshot.
 
 Corrective feature `feat_034_008` owns the remaining evidence acquisition, per-row dispositions, scoped design corrections, accepted-baseline delta reconciliation, exact architecture acceptance and final receipt validation. Preserve A–G IDs and deliveries. Apply dec_013's owner-authorized evidence path and dec_015's corrective sequencing. Review and human approval of the corrective feature are required before execution under criterion 17; prior epic approval does not cover it. Epic clean closeout remains pending this corrective acceptance. No new product capability or diagram interaction is added.
+
+Manager review on 2026-11-10 accepts H's concrete evidence contracts at `18fb4746` and I's focused repair contract at `19ff1361`, including the Architect's dec_016 and dec_018 refinements. No scope expansion is needed. H retains the material-gap and exact-revision acceptance gates. I corrects the stale admission/recovery projection using exact action and review-owner identity, with focused persisted-store regressions; it cannot declare H or the epic accepted. Both remain backlog without tasks or fresh human approval. Their independently reviewed specifications are ready for human review; implementation remains gated by criteria 17–18. No implementation validation or repair success is claimed by this planning review.
 
 ## Decision log
 
