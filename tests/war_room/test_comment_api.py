@@ -106,6 +106,94 @@ def test_root_comment_slugifies_section_and_persists_optional_fields(war_room_se
     assert row["blocks"] == ["task_001"]
 
 
+@pytest.mark.parametrize(
+    ("kind", "target_key", "view_key", "level"),
+    (
+        ("requirement", "REQ-7", None, None),
+        ("view", "context", "context", "systemContextViews"),
+        ("element", "element.system", None, None),
+        ("relationship", "relationship.calls", None, None),
+    ),
+)
+def test_semantic_comment_api_preserves_typed_anchor(
+    war_room_server, kind, target_key, view_key, level
+) -> None:
+    base, _root, _server = war_room_server
+    anchor = {
+        "version": 1,
+        "kind": kind,
+        "target_key": target_key,
+        "view_key": view_key,
+        "level": level,
+        "source_side": "proposed",
+        "repository_key": "architecture-docs",
+        "revision": "b" * 40,
+        "review_unit_id": "architecture-review-exact",
+        "reviewed_tuple_digest": "tuple-exact",
+        "original_source_reference": "artifacts/proposed.svg",
+        "original_diff_link": "/diff/model-a..model-b",
+    }
+    status, body = _post(
+        f"{base}/api/comment",
+        {
+            "doc_id": "feat_001",
+            "body": f"review {kind}",
+            "blocking": kind == "relationship",
+            "semantic_anchor": anchor,
+        },
+    )
+    assert status == HTTPStatus.ACCEPTED
+
+    _status, payload = _get(f"{base}/api/comments/feat_001")
+    row = next(item for item in payload["comments"] if item["id"] == body["comment_id"])
+    assert row["section"] == "semantic-review"
+    assert row["semantic_anchor"] == anchor
+    assert row["anchor"] is None
+    assert row["line_start"] is None
+    assert row["blocking"] is (kind == "relationship")
+
+
+def test_semantic_comment_api_rejects_mixed_or_malformed_anchors(war_room_server) -> None:
+    base, _root, _server = war_room_server
+    malformed = {
+        "version": 1,
+        "kind": "element",
+        "target_key": "element.system",
+    }
+    code, error = _post_expect_error(
+        f"{base}/api/comment",
+        {"doc_id": "feat_001", "body": "bad", "semantic_anchor": malformed},
+    )
+    assert code == HTTPStatus.BAD_REQUEST
+    assert "anchor" in error["error"]
+
+    complete = {
+        "version": 1,
+        "kind": "element",
+        "target_key": "element.system",
+        "view_key": None,
+        "level": None,
+        "source_side": "current",
+        "repository_key": "architecture-docs",
+        "revision": "a" * 40,
+        "review_unit_id": "architecture-review-exact",
+        "reviewed_tuple_digest": "tuple-exact",
+        "original_source_reference": "artifacts/current.svg",
+        "original_diff_link": "/diff/model-a..model-b",
+    }
+    code, error = _post_expect_error(
+        f"{base}/api/comment",
+        {
+            "doc_id": "feat_001",
+            "body": "mixed",
+            "line_start": 3,
+            "semantic_anchor": complete,
+        },
+    )
+    assert code == HTTPStatus.BAD_REQUEST
+    assert "document anchors" in error["error"]
+
+
 def test_reply_inherits_parent_section_and_anchor(war_room_server) -> None:
     base, _root, _server = war_room_server
     status, root_body = _post(
