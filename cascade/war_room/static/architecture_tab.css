@@ -1,0 +1,277 @@
+.war-room-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin: -0.25rem 0 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.war-room-tab {
+  margin-bottom: -1px;
+  padding: 0.55rem 0.9rem;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom-color: var(--border);
+  border-radius: 6px 6px 0 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.war-room-tab[aria-selected="true"] {
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--border);
+  border-bottom-color: var(--panel);
+}
+
+.war-room-tab:focus-visible,
+.architecture-panel button:focus-visible,
+.architecture-panel select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.architecture-panel {
+  min-width: 0;
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.architecture-heading,
+.architecture-provenance-title,
+.architecture-navigation,
+.architecture-context-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.architecture-heading,
+.architecture-provenance-title {
+  justify-content: space-between;
+}
+
+.architecture-heading h2,
+.architecture-heading p,
+.architecture-provenance h3,
+.architecture-sources h3 {
+  margin: 0;
+}
+
+.architecture-heading p,
+.architecture-status,
+.architecture-selection-status,
+.architecture-accepted-lineage,
+.architecture-associated-review {
+  color: var(--muted);
+}
+
+.architecture-context-controls label,
+.architecture-navigation label,
+.architecture-notice label {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.architecture-panel button,
+.architecture-panel select {
+  font: inherit;
+}
+
+.architecture-notice {
+  margin: 0.85rem 0;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.architecture-notice p {
+  margin: 0 0 0.65rem;
+}
+
+.architecture-notice.error,
+.architecture-status.error {
+  color: #ffb4a8;
+}
+
+.architecture-status {
+  margin: 0.8rem 0;
+}
+
+.architecture-provenance,
+.architecture-sources,
+.architecture-target-detail {
+  margin-top: 0.9rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.architecture-provenance dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.3rem 0.75rem;
+  margin: 0.7rem 0 0;
+}
+
+.architecture-provenance dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.architecture-provenance dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.82rem;
+}
+
+.architecture-update-indicator {
+  padding: 0.15rem 0.45rem;
+  color: #1f1300;
+  background: #fbbf24;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.architecture-navigation {
+  margin-top: 1rem;
+}
+
+.architecture-selection-status {
+  flex: 1 1 16rem;
+  font-size: 0.85rem;
+}
+
+.architecture-viewer {
+  margin-top: 0.7rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.architecture-viewer .semantic-c4-toolbar {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.45rem;
+}
+
+.architecture-viewer .paired-c4-canvas {
+  min-height: 14rem;
+  overflow: auto;
+  background: var(--bg);
+  border-radius: 4px;
+}
+
+.architecture-viewer .paired-c4-svg {
+  display: block;
+  width: 100%;
+  height: clamp(20rem, 58vw, 48rem);
+  touch-action: none;
+  user-select: none;
+}
+
+.architecture-viewer .semantic-c4-target {
+  cursor: pointer;
+}
+
+.architecture-viewer .semantic-c4-target:focus-visible,
+.architecture-viewer .semantic-c4-target-selected {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+
+.architecture-viewer .semantic-c4-panning {
+  cursor: grabbing;
+}
+
+.architecture-viewer .semantic-c4-targets {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.architecture-viewer .semantic-c4-target-list {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 15rem;
+  overflow: auto;
+  margin: 0.4rem 0 0;
+  padding-left: 1.3rem;
+}
+
+.architecture-viewer .semantic-c4-target-button,
+.architecture-viewer .semantic-c4-drill,
+.architecture-viewer .semantic-c4-viewport-control {
+  font: inherit;
+}
+
+.architecture-viewer .semantic-c4-drill {
+  margin-left: 0.35rem;
+}
+
+.architecture-viewer .semantic-c4-relationship-details {
+  overflow-wrap: anywhere;
+}
+
+.architecture-drill-choices {
+  margin-top: 0.65rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.architecture-drill-choices p {
+  margin: 0 0 0.5rem;
+}
+
+.architecture-drill-choices button {
+  margin: 0 0.35rem 0.35rem 0;
+}
+
+.architecture-target-detail h3,
+.architecture-target-detail p {
+  margin: 0 0 0.4rem;
+}
+
+.architecture-target-detail code {
+  overflow-wrap: anywhere;
+}
+
+.architecture-source-list {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0;
+}
+
+.architecture-source-list a,
+.architecture-associated-review a {
+  color: var(--accent);
+}
+
+@media (max-width: 48rem) {
+  .architecture-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .architecture-context-controls {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .architecture-provenance dl {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-provenance dd {
+    margin-bottom: 0.35rem;
+  }
+}
