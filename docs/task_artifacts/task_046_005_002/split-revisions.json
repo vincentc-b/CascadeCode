@@ -1,0 +1,16 @@
+{
+  "accepted_pointer_id": "accepted-lineage-9282b8e22317c0efc3b379a926807ae425854ae971ad421952a64679cb742adc",
+  "associated_code_revision": "ec5b2b7846ecd47eda91290bec8b3df8bf39158d",
+  "documentation_revision": "94776fdddb6bb94c68cf94391961e6726ff6fe92",
+  "renderer_settings": {
+    "cpus": "2",
+    "memory": "1536m",
+    "pids_limit": 256,
+    "timeout_seconds": 180.0,
+    "tmpfs_size": "512m"
+  },
+  "review_unit_id": "architecture-review-c3195a22d55fbb9a751801d3f3e3d8fceced5f3c0d6dfc07e1de644afa3d942a",
+  "selected_documentation_ref_id": "documentation-08633f912366f8435c280b5d835fd636",
+  "structurizr_image": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+  "unassociated_code_revision": "eb2fb6f31fa261edc2689bd32bdd820305f054fb"
+}

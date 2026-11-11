@@ -226,11 +226,104 @@ body {
   font: inherit;
 }
 
+.paired-c4-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
 .paired-c4-diagrams {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
+
+.paired-c4-context {
+  min-width: 0;
+  max-height: 54rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 5px;
+  background: var(--plan-code-bg);
+}
+
+.paired-c4-context-heading,
+.paired-c4-context-sides,
+.paired-c4-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.65rem;
+}
+
+.paired-c4-context-heading { justify-content: space-between; }
+
+.paired-c4-context-heading h3,
+.paired-c4-context-group-heading,
+.paired-c4-context-document-title { margin: 0; }
+
+.paired-c4-context button,
+.paired-c4-context a { font: inherit; }
+
+.paired-c4-context-lazy,
+.paired-c4-context-selection,
+.paired-c4-context-state,
+.paired-c4-context-source,
+.paired-c4-context-evidence,
+.paired-c4-context-empty,
+.paired-c4-context-document-name,
+.paired-c4-context-design-path {
+  margin: 0.35rem 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+
+.paired-c4-context-selection,
+.paired-c4-context-source,
+.paired-c4-context-evidence,
+.paired-c4-context-lazy,
+.paired-c4-context-empty { color: var(--plan-muted); }
+
+.paired-c4-context-group {
+  margin-top: 0.8rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--plan-border);
+}
+
+.paired-c4-context-document,
+.paired-c4-context-design {
+  margin-top: 0.55rem;
+  padding: 0.55rem;
+  border-left: 3px solid #238636;
+}
+
+.paired-c4-context-missing,
+.paired-c4-context-stale { border-left-color: #8a4b00; }
+
+.paired-c4-context-unmapped,
+.paired-c4-context-error,
+.paired-c4-context-missing .paired-c4-context-state,
+.paired-c4-context-stale .paired-c4-context-state {
+  color: #8a4b00;
+  font-weight: 600;
+}
+
+.paired-c4-context-actions { margin-top: 0.45rem; }
+
+.paired-c4-context-markdown {
+  max-height: 18rem;
+  overflow: auto;
+  margin-top: 0.55rem;
+  padding: 0.55rem;
+  border: 1px solid var(--plan-border);
+  background: var(--plan-code-bg);
+  font-size: 0.82rem;
+}
+
+.paired-c4-context-markdown > :first-child { margin-top: 0; }
+.paired-c4-context-markdown > :last-child { margin-bottom: 0; }
 
 .paired-c4-side {
   min-width: 0;
@@ -253,19 +346,102 @@ body {
 .paired-c4-svg {
   display: block;
   width: 100%;
-  height: auto;
+  height: clamp(16rem, 38vw, 34rem);
+  touch-action: none;
+  user-select: none;
 }
 
+.semantic-c4-target,
 .paired-c4-target {
   cursor: pointer;
 }
 
+.semantic-c4-diff-added {
+  filter: drop-shadow(0 0 3px #238636);
+}
+
+.semantic-c4-diff-removed {
+  filter: grayscale(0.7) drop-shadow(0 0 3px #cf222e);
+  opacity: 0.78;
+}
+
+.semantic-c4-diff-changed {
+  filter: drop-shadow(0 0 3px #bf8700);
+}
+
 .paired-c4-target:hover,
 .paired-c4-target:focus-visible,
-.paired-c4-target-selected {
+.paired-c4-target-selected,
+.semantic-c4-target:focus-visible,
+.semantic-c4-target-selected {
   outline: 3px solid #1f6feb;
   outline-offset: 3px;
-  filter: drop-shadow(0 0 4px #1f6feb);
+  /* A second shadow preserves the semantic diff color underneath selection. */
+  filter: drop-shadow(0 0 4px #1f6feb) drop-shadow(0 0 2px currentColor);
+}
+
+.semantic-c4-toolbar {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.45rem 0;
+}
+
+.semantic-c4-toolbar button,
+.semantic-c4-target-button,
+.semantic-c4-drill,
+.paired-c4-drill-choices button {
+  font: inherit;
+}
+
+.semantic-c4-panning {
+  cursor: grabbing;
+}
+
+.semantic-c4-targets {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.semantic-c4-target-list {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 14rem;
+  overflow: auto;
+  margin: 0.4rem 0 0;
+  padding-left: 1.3rem;
+}
+
+.semantic-c4-target-row {
+  padding-left: 0.25rem;
+  border-left: 3px solid transparent;
+}
+
+.semantic-c4-target-row.semantic-c4-diff-added { border-left-color: #238636; }
+.semantic-c4-target-row.semantic-c4-diff-removed { border-left-color: #cf222e; }
+.semantic-c4-target-row.semantic-c4-diff-changed { border-left-color: #bf8700; }
+
+.semantic-c4-relationship-details {
+  overflow-wrap: anywhere;
+}
+
+.semantic-c4-drill {
+  margin-left: 0.35rem;
+}
+
+.paired-c4-drill-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 4px;
+}
+
+.paired-c4-drill-explanation {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .paired-c4-review-meta {
@@ -320,7 +496,10 @@ body {
 
 .paired-c4-comment-target,
 .paired-c4-thread-compose button,
-.paired-c4-thread-open {
+.paired-c4-thread-open,
+.paired-c4-thread-reply-form button,
+.paired-c4-thread-resolve,
+.paired-c4-thread-reopen {
   font: inherit;
 }
 
@@ -366,6 +545,55 @@ body {
   white-space: pre-wrap;
 }
 
+.paired-c4-thread-tuple,
+.paired-c4-thread-review-message,
+.paired-c4-thread-reply-meta {
+  margin: 0.3rem 0;
+  color: var(--plan-muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.paired-c4-thread-draft-review,
+.paired-c4-thread-outdated-blocking {
+  margin: 0.4rem 0;
+  color: #8a4b00;
+  font-weight: 600;
+}
+
+.paired-c4-thread-replies {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.55rem 0;
+}
+
+.paired-c4-thread-reply {
+  padding-left: 0.65rem;
+  border-left: 2px solid var(--plan-border);
+}
+
+.paired-c4-thread-reply-body {
+  margin: 0.2rem 0;
+  white-space: pre-wrap;
+}
+
+.paired-c4-thread-reply-form {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.paired-c4-thread-reply-form textarea {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+}
+
+.paired-c4-thread-resolve,
+.paired-c4-thread-reopen {
+  margin-top: 0.45rem;
+}
+
 .paired-c4-thread-outdated,
 .paired-c4-thread-error {
   color: #8a4b00;
@@ -386,11 +614,29 @@ body {
   .plan-body {
     grid-column: 1;
   }
+
+  .paired-c4-workspace { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 48rem) {
   .paired-c4-diagrams {
     grid-template-columns: 1fr;
+  }
+
+  .paired-c4-svg {
+    height: clamp(15rem, 75vw, 28rem);
+  }
+
+  .paired-c4-thread-shortcuts,
+  .paired-c4-thread-compose,
+  .paired-c4-thread-reply-form {
+    min-width: 0;
+  }
+
+  .paired-c4-thread-shortcuts button,
+  .paired-c4-thread-compose button,
+  .paired-c4-thread-reply-form button {
+    width: 100%;
   }
 }
 

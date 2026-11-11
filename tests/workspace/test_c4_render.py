@@ -41,7 +41,10 @@ def test_real_pinned_renderer_publishes_one_validated_handoff_and_cache(
     renderer = C4ArtifactRenderer(tmp_path / "cache")
 
     assert C4RenderArtifact.first().status == "first"
-    result = renderer.submit(closure).wait(timeout=120)
+    settings = C4RenderSettings()
+    result = renderer.submit(closure, settings).wait(
+        timeout=settings.timeout_seconds + 5
+    )
 
     assert result.status == "ready", result
     assert result.cache_hit is False
@@ -233,7 +236,11 @@ def test_background_cancellation_and_runtime_failure_are_structured(
 
 def _closure(tmp_path: Path) -> C4SourceClosure:
     root = tmp_path / "input"
-    shutil.copytree(_VERSIONED_WORKSPACE, root)
+    root.mkdir()
+    # The real architecture directory also retains nested renderer evidence.
+    # A source closure contains only the contract's declared, reachable inputs.
+    for name in ("workspace.contract.json", "workspace.dsl", "model.dsl", "views.dsl"):
+        shutil.copy2(_VERSIONED_WORKSPACE / name, root / name)
     contract = validate_c4_workspace(root)
     revision = subprocess.run(
         ["git", "rev-parse", "HEAD"],

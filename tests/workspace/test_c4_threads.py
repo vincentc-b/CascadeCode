@@ -73,6 +73,7 @@ def test_all_anchor_types_round_trip_separately_from_heading_anchors(
     assert all(thread.freshness == "current" for thread in threads)
     assert threads[1].anchor.view_key == "context"
     assert threads[1].anchor.level == "systemContextViews"
+    assert threads[0].anchor.source_path is None  # legacy narrow payload remains readable
     assert threads[2].anchor.original_source_reference == "proposed-context.svg"
     stored = read_comments("feat_034_004", root=review_repo)
     assert all(row.anchor is None and row.section == "semantic-review" for row in stored)

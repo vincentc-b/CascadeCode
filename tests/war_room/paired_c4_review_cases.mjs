@@ -7,7 +7,12 @@ import { createElement } from "./plan_dom_fixture.mjs";
 
 const require = createRequire(import.meta.url);
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { createPairedNavigation, createSemanticThreadModel, initPairedC4Review } = require(
+const {
+  createPairedNavigation,
+  createSemanticThreadModel,
+  initPairedC4Review,
+  sortedDrillChoices,
+} = require(
   join(repoRoot, "cascade/war_room/static/plan_viewer.js")
 );
 
@@ -139,6 +144,56 @@ assert.equal(result.ok, true, "verified drill metadata moves both sides together
 assert.equal(navigation.state.view_key, "payments");
 assert.equal(navigation.currentView().current, null, "drill retains an explicit absent side");
 
+const choiceTarget = {
+  kind: "element",
+  semantic_id: "system.multi",
+  drill_choices: [
+    { view_key: "zeta", level: "containerViews", label: "Zeta" },
+    { view_key: "alpha", level: "componentViews", label: "Alpha" },
+  ],
+};
+assert.deepEqual(
+  sortedDrillChoices(choiceTarget).map((choice) => choice.view_key),
+  ["alpha", "zeta"],
+  "drill choices use deterministic level/key order"
+);
+const choicePayload = {
+  ...payload,
+  views: [
+    {
+      ...payload.views[0],
+      current: side("docs-a", "a".repeat(40), [choiceTarget]),
+      proposed: side("docs-b", "b".repeat(40), [choiceTarget]),
+    },
+    { key: "zeta", level: "containerViews", state: "unchanged", current: null, proposed: null },
+    { key: "alpha", level: "componentViews", state: "unchanged", current: null, proposed: null },
+  ],
+};
+const choiceNavigation = createPairedNavigation(choicePayload);
+result = choiceNavigation.drill("current", "element", "system.multi");
+assert.equal(result.needs_choice, true, "ambiguous containment never guesses a destination");
+assert.equal(result.choices.length, 2);
+assert.equal(
+  choiceNavigation.drill(
+    "current", "element", "system.multi", "alpha", "componentViews"
+  ).ok,
+  true,
+  "an explicit verified drill choice drives shared navigation"
+);
+
+const refreshedNavigation = createPairedNavigation(payload);
+refreshedNavigation.select("element", "system.shop", "current");
+refreshedNavigation.updatePayload({ ...payload, views: payload.views.slice(0, 2) });
+assert.equal(refreshedNavigation.state.view_key, "context");
+assert.equal(
+  refreshedNavigation.state.selection.semantic_id,
+  "system.shop",
+  "refresh preserves a surviving semantic selection"
+);
+refreshedNavigation.updatePayload({ ...payload, views: payload.views.slice(1) });
+assert.equal(refreshedNavigation.state.view_key, "payments");
+assert.equal(refreshedNavigation.state.selection, null, "refresh drops only vanished targets");
+
 const inventoryNavigation = createPairedNavigation(payload);
 for (const [viewKey, level] of payload.changed_views) {
   assert.equal(inventoryNavigation.showView(viewKey, level).ok, true);
@@ -242,6 +297,10 @@ function descendants(root) {
   return rows;
 }
 
+function settle() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 const errorHost = createElement("section");
 initPairedC4Review({
   state: "error",
@@ -260,6 +319,7 @@ for (const [state, expected] of [
   ["empty", /No paired diagram views.*empty/],
   ["removed", /No paired diagram views.*removed/],
   ["unchanged", /No diagram changes/],
+  ["partial_acceptance", /Partial acceptance remains pending.*proposal/],
 ]) {
   const stateHost = createElement("section");
   initPairedC4Review({
@@ -284,10 +344,258 @@ assert.ok(readyText.includes("ADR-4"));
 assert.ok(readyText.includes("git:model-a..model-b"));
 assert.ok(readyText.some((value) => /\"state\": \"changed\"/.test(value)));
 assert.ok(readyText.includes("git:plan-a..plan-b"));
-await Promise.resolve();
-await Promise.resolve();
+await settle();
 assert.ok(
   descendants(readyHost).some((node) => /Interaction unsupported:/.test(node.textContent)),
   "a client-side binding failure is actionable and never replaced with static interaction"
 );
+
+// The live discussion reconciles roots and replies without discarding local
+// drafts, and all lifecycle writes use the owner-routed HTTP contract.
+const liveHost = createElement("section");
+const livePayload = { ...payload };
+delete livePayload.semantic_threads;
+const liveModel = createSemanticThreadModel(livePayload, createPairedNavigation(livePayload));
+const liveAnchor = liveModel.buildAnchor("element", "system.shop", "proposed");
+let liveRows = [
+  {
+    id: "semantic-root", body: "check the shop", author: "human", state: "open",
+    blocking: true, semantic_anchor: liveAnchor, created: "2026-11-10T00:00:00Z",
+  },
+  {
+    id: "semantic-reply-1", parent: "semantic-root", body: "first reply",
+    author: "agent", state: "open", blocking: false,
+    created: "2026-11-10T00:01:00Z",
+  },
+];
+let refreshedPayload = livePayload;
+const lifecycleCalls = [];
+const liveReview = initPairedC4Review(livePayload, {
+  document,
+  host: liveHost,
+  loadThreads() { return liveRows; },
+  refreshPayload() { return { ...refreshedPayload }; },
+  createThread(request) {
+    lifecycleCalls.push(["create", request]);
+    return { ok: true, comment_id: "semantic-created" };
+  },
+  replyThread(request) {
+    lifecycleCalls.push(["reply", request]);
+    liveRows.push({
+      id: "semantic-reply-local", parent: request.parent, body: request.body,
+      author: "human", state: "open", blocking: false,
+      created: "2026-11-10T00:03:00Z",
+    });
+    return { ok: true };
+  },
+  resolveThread(request) {
+    lifecycleCalls.push(["resolve", request]);
+    liveRows = liveRows.map((row) => ({ ...row, state: "resolved" }));
+    return { ok: true };
+  },
+  reopenThread(request) {
+    lifecycleCalls.push(["reopen", request]);
+    liveRows = liveRows.map((row) => ({ ...row, state: "open" }));
+    return { ok: true };
+  },
+});
+await settle();
+assert.equal(liveHost.querySelectorAll(".paired-c4-thread-reply").length, 1);
+assert.equal(liveHost.querySelector(".paired-c4-thread-resolve").textContent, "Resolve");
+
+const replyDraft = liveHost.querySelector(".paired-c4-thread-reply-body-input");
+replyDraft.value = "preserve this reply";
+replyDraft.dispatchEvent({ type: "input" });
+liveRows.push({
+  id: "semantic-reply-incoming", parent: "semantic-root", body: "incoming reply",
+  author: "agent", state: "open", blocking: false,
+  created: "2026-11-10T00:02:00Z",
+});
+await liveReview.refresh();
+assert.equal(liveHost.querySelectorAll(".paired-c4-thread-reply").length, 2);
+assert.equal(
+  liveHost.querySelector(".paired-c4-thread-reply-body-input").value,
+  "preserve this reply",
+  "incoming refresh preserves the local reply draft"
+);
+liveHost.querySelector(".paired-c4-thread-reply-form").dispatchEvent({ type: "submit" });
+await settle();
+assert.equal(lifecycleCalls[0][0], "reply");
+assert.equal(lifecycleCalls[0][1].parent, "semantic-root");
+assert.equal(lifecycleCalls[0][1].body, "preserve this reply");
+assert.equal(liveHost.querySelectorAll(".paired-c4-thread-reply").length, 3);
+
+liveHost.querySelector(".paired-c4-thread-resolve").click();
+await settle();
+assert.equal(lifecycleCalls[1][0], "resolve");
+assert.equal(lifecycleCalls[1][1].doc_id, payload.owner_work_id);
+assert.equal(liveHost.querySelector(".paired-c4-thread-reopen").textContent, "Reopen");
+liveHost.querySelector(".paired-c4-thread-reopen").click();
+await settle();
+assert.equal(lifecycleCalls[2][0], "reopen");
+assert.ok(liveHost.querySelector(".paired-c4-thread-resolve"));
+
+// A composer opened in an old tab keeps its draft, but tuple replacement
+// disables submission until the reviewer explicitly rebinds the same target.
+liveHost.querySelector(".paired-c4-comment-target").click();
+const rootDraft = liveHost.querySelector(".paired-c4-thread-body");
+rootDraft.value = "draft from the old tuple";
+rootDraft.dispatchEvent({ type: "input" });
+liveReview.navigation.select("element", "system.shop", "proposed");
+refreshedPayload = {
+  ...livePayload,
+  review_unit_id: "review-next",
+  reviewed_tuple_digest: "tuple-next",
+};
+await liveReview.refresh();
+assert.equal(liveReview.selection().semantic_id, "system.shop");
+assert.equal(liveReview.draftState().body, "draft from the old tuple");
+assert.equal(liveReview.draftState().needs_review, true);
+assert.equal(liveHost.querySelector(".paired-c4-thread-send").disabled, true);
+assert.ok(liveHost.querySelector(".paired-c4-thread-review-target"));
+liveHost.querySelector(".paired-c4-thread-review-target").click();
+assert.equal(liveReview.draftState().needs_review, false);
+assert.equal(liveReview.draftState().anchor.reviewed_tuple_digest, "tuple-next");
+liveHost.querySelector(".paired-c4-thread-compose").dispatchEvent({ type: "submit" });
+await settle();
+assert.equal(lifecycleCalls[3][0], "create");
+assert.equal(lifecycleCalls[3][1].body, "draft from the old tuple");
+assert.equal(lifecycleCalls[3][1].semantic_anchor.reviewed_tuple_digest, "tuple-next");
+
+liveRows[0] = { ...liveRows[0], state: "open", freshness: "outdated", outdated_reason: "review_tuple_mismatch" };
+await liveReview.refresh();
+assert.ok(liveHost.querySelector(".paired-c4-thread-outdated-blocking"));
+liveReview.stopRefresh();
+
+const grouped = createSemanticThreadModel(livePayload, createPairedNavigation(livePayload), {
+  loadThreads() { return liveRows; },
+});
+await grouped.load();
+assert.equal(grouped.state.threads.length, 1, "Markdown roots are excluded from semantic discussion");
+assert.equal(grouped.state.threads[0].replies.length, 3);
+
+// Context documents stay lazy, follow the exact side/view/target selection,
+// preserve coverage labels, and enter the existing authoritative requirement
+// thread composer without inventing a decision anchor.
+const contextHost = createElement("section");
+const contextCalls = [];
+const markdownCalls = [];
+const contextPayload = {
+  ...payload,
+  documentation_context_url: "/api/architecture/reviews/feat_034_004/context",
+  provenance: {
+    plan: {
+      repository_key: "plans",
+      revision: "p".repeat(40),
+      path: "docs/feature.md",
+    },
+  },
+};
+function contextDocument(id, kind, state = "available") {
+  return {
+    document_id: id,
+    kind,
+    title: id + " title",
+    state,
+    reason: state === "available" ? null : state + "_citation",
+    source: state === "missing" ? null : {
+      repository_key: "plans",
+      revision: "p".repeat(40),
+      path: "docs/feature.md",
+      section: id,
+    },
+    provenance: [{ relation: "reviewed_association", evidence_id: "review-exact" }],
+    resources: {
+      section_url: "/api/architecture/resources/review-exact/section-" + id,
+      current_url: "/api/architecture/resources/review-exact/current-" + id,
+      proposed_url: "/api/architecture/resources/review-exact/proposed-" + id,
+      diff_url: "/api/architecture/resources/review-exact/diff-" + id,
+    },
+  };
+}
+const contextReview = initPairedC4Review(contextPayload, {
+  document,
+  host: contextHost,
+  loadDocumentationContext(selection, url) {
+    contextCalls.push({ ...selection, url });
+    const selectedTarget = selection.kind !== "view";
+    return {
+      mapping_state: selectedTarget ? "unmapped" : "mapped",
+      explicit_target_links: selectedTarget ? [
+        contextDocument("REQ-MISSING", "requirement", "missing"),
+        contextDocument("DEC-STALE", "decision", "stale"),
+      ] : [],
+      view_links: [
+        contextDocument("REQ-7", "requirement"),
+        contextDocument("ADR-4", "decision"),
+      ],
+      owner_context: [{
+        code_directory: "cascade/war_room",
+        design_owner_directory: "cascade",
+        state: "available",
+        document_url: "/api/architecture/resources/review-exact/design",
+      }],
+      broader_index: selectedTarget ? [] : [{
+        code_directory: ".",
+        design_owner_directory: ".",
+        state: "available",
+      }],
+    };
+  },
+  loadDocumentationMarkdown(url) {
+    markdownCalls.push(url);
+    return "- `REQ-7` — Keep reads pinned.";
+  },
+});
+assert.equal(contextCalls.length, 0, "context metadata is not read during board render");
+contextHost.querySelector(".paired-c4-context-toggle").click();
+await settle();
+await settle();
+assert.equal(contextCalls.length, 1);
+assert.deepEqual(
+  [contextCalls[0].side, contextCalls[0].view_key, contextCalls[0].kind],
+  ["proposed", "context", "view"],
+  "the initial panel uses the proposed side and exact reviewed view"
+);
+assert.match(contextCalls[0].url, /side=proposed.*view=context.*kind=view/);
+assert.ok(contextHost.querySelector('[data-document-id="REQ-7"]'));
+assert.ok(descendants(contextHost).some((node) =>
+  node.textContent === "Owning designs (context, not coverage)"));
+assert.ok(descendants(contextHost).some((node) =>
+  node.textContent === "Broader context index"));
+assert.ok(descendants(contextHost).some((node) =>
+  node.textContent === "Open current/proposed diff"));
+
+contextHost.querySelector(".paired-c4-context-preview").click();
+await settle();
+assert.equal(markdownCalls.length, 1, "source Markdown loads only after explicit preview");
+
+const requirement = contextHost.querySelector('[data-document-id="REQ-7"]');
+requirement.querySelector(".paired-c4-comment-target").click();
+assert.equal(contextReview.draftState().anchor.kind, "requirement");
+assert.equal(contextReview.draftState().anchor.target_key, "REQ-7");
+assert.equal(contextReview.draftState().anchor.repository_key, "plans");
+assert.equal(contextReview.draftState().anchor.source_path, "docs/feature.md");
+assert.equal(contextReview.draftState().anchor.source_section, "REQ-7");
+assert.equal(contextReview.draftState().anchor.reviewed_tuple_digest, "tuple-exact");
+
+contextReview.navigation.select("element", "system.shop", "proposed");
+contextReview.render();
+await settle();
+await settle();
+assert.equal(contextCalls.at(-1).kind, "element");
+assert.equal(contextCalls.at(-1).target, "system.shop");
+assert.ok(descendants(contextHost).some((node) =>
+  node.textContent === "Unmapped target: no verified explicit requirement or decision link."));
+assert.ok(descendants(contextHost).some((node) => node.textContent === "missing · missing_citation"));
+assert.ok(descendants(contextHost).some((node) => node.textContent === "stale · stale_citation"));
+assert.equal(
+  contextHost.querySelector('[data-document-id="DEC-STALE"]')
+    .querySelector(".paired-c4-comment-target"),
+  null,
+  "decisions remain readable and linkable without a new thread anchor"
+);
+contextReview.stopRefresh();
+
+console.log("paired_c4_review cases ok");
 
