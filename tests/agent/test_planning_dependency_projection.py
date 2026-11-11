@@ -28,7 +28,8 @@ from tests.support import SyntheticDependencyLifecycle, add_doc, make_repo
 def _projection_from_prompt(prompt: str) -> dict[str, object]:
     heading = f"\n\n{_DEPENDENCY_PROJECTION_HEADING}\n\n"
     payload, boundary = prompt.split(heading, 1)[1].split("\n\n", 1)
-    assert boundary == _DEPENDENCY_PROJECTION_BOUNDARY
+    # Architecture and declaration context can follow this delimited section.
+    assert boundary.split("\n\n", 1)[0] == _DEPENDENCY_PROJECTION_BOUNDARY
     return json.loads(payload)
 
 
@@ -141,10 +142,12 @@ def test_epic_turn_projects_all_dependencies_without_content_access(
     )
 
     assert len(captured) == 1
-    assert captured[0].prompt.startswith("original prompt\n\n")
+    assert "original prompt\n\n" in captured[0].prompt
+    assert "Dependency declaration phase" in captured[0].prompt
     assert "Completed private epic" not in captured[0].prompt
-    assert str(root) not in captured[0].prompt
     projection = _projection_from_prompt(captured[0].prompt)
+    # Local executor identity is authoring context, not dependency lifecycle data.
+    assert str(root) not in json.dumps(projection)
     assert projection["owner_work_id"] == "epic_001"
     assert projection["outcome"] == "dependency_unmet"
     assert [row["work_id"] for row in projection["dependencies"]] == [
@@ -211,8 +214,9 @@ def test_feature_turn_projects_all_dependencies_without_content_access(
 
     assert len(captured) == 1
     assert "Completed private feature" not in captured[0].prompt
-    assert str(root) not in captured[0].prompt
     projection = _projection_from_prompt(captured[0].prompt)
+    # Local executor identity is authoring context, not dependency lifecycle data.
+    assert str(root) not in json.dumps(projection)
     assert projection["owner_work_id"] == "feat_001"
     assert projection["outcome"] == "dependency_unmet"
     assert [row["work_id"] for row in projection["dependencies"]] == [

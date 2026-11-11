@@ -271,6 +271,13 @@ assert.ok(descendants(missingDeclaration).some((node) =>
   String(node.textContent).includes("read_dependency_manifest and write_dependency_manifest")
 ));
 assert.equal(descendants(missingDeclaration).filter((node) => node.tagName === "BUTTON").length, 0);
+assert.ok(descendants(missingDeclaration).some((node) =>
+  String(node.textContent).includes("Awaiting Epic Team declaration")
+));
+assert.ok(descendants(missingDeclaration).some((node) =>
+  String(node.textContent).includes("Plan approval remains unavailable")
+));
+
 
 console.log("dependency_review_ui_cases: ok");
 
