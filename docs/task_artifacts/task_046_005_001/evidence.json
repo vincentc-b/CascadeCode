@@ -1,0 +1,44 @@
+{
+  "baseline_review_unit_id": "architecture-review-264ce654ccdae26544e17253865bcf123f82fb7b4d2560a3dcaa9171e7c8ead2",
+  "baseline_revision": "7459d46710b0a602c3e434ac4845b0cdaeadd371",
+  "browser": "156.0.8078.4",
+  "changed_proposed_revision": "801d8338dee662f5e5d8c56c8b68407f60ed6576",
+  "changed_review_unit_id": "architecture-review-b799c556ff5a308ce76b0fde36b92459199c125b01a6d08db99702a8a3716043",
+  "code_revision": "edba55c944f028f8117c97551b021c15aeb21f25",
+  "documentation_revision": "edba55c944f028f8117c97551b021c15aeb21f25",
+  "epic_review_unit_id": "architecture-review-29bedab639221cf20ae9807e43a08d6fd7e611db5a8224855e85936463056820",
+  "epic_status": "no_diagram_change",
+  "plan_revision": "edba55c944f028f8117c97551b021c15aeb21f25",
+  "proposed_revision": "edba55c944f028f8117c97551b021c15aeb21f25",
+  "publication_operation_ids": {
+    "baseline": [
+      "architecture-publication-13fc808e44d16012f5358fad4746f3aefe05a4d5b742e86ac102a8aabfc34459",
+      "architecture-publication-13fc808e44d16012f5358fad4746f3aefe05a4d5b742e86ac102a8aabfc34459"
+    ],
+    "changed": [
+      "architecture-publication-52d957b6d492a3674b21cb54fb72e0516c5d10a62888c5e78f8302c1516aea7b"
+    ],
+    "epic": [
+      "architecture-publication-9cd36871708f4031a2865854991fd27e946a21463b90da98a80092a97d0fb828"
+    ],
+    "refreshed": [
+      "architecture-publication-9c725647a0fc742f5d9cdc5b6c3d4eda601230803a82c119775ee61cb2aaf9dd"
+    ]
+  },
+  "renderer_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+  "renderer_image": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+  "renderer_settings": {
+    "cpus": "2",
+    "memory": "1536m",
+    "pids_limit": 256,
+    "timeout_seconds": 180.0,
+    "tmpfs_size": "512m"
+  },
+  "result": "pass",
+  "review_unit_id": "architecture-review-1a714e7262810e10a5d6be5ebd9c5c3199afb4b371079a6689f82a9879b64d32",
+  "reviewed_tuple_digest": "1a714e7262810e10a5d6be5ebd9c5c3199afb4b371079a6689f82a9879b64d32",
+  "screenshots": [
+    "01-paired-review.png",
+    "02-approved-review.png"
+  ]
+}

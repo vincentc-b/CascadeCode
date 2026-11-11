@@ -7,6 +7,7 @@ from pathlib import Path
 from cascade.board.context import get_project_context
 from cascade.workspace.architecture_review import (
     ArchitectureReviewStore,
+    ReviewApprovalContext,
     ReviewGateBoundary,
     ReviewGateResult,
     validate_review_gate,
@@ -19,6 +20,7 @@ def require_lifecycle_review_gate(
     boundary: ReviewGateBoundary,
     *,
     root: Path,
+    approval_context: ReviewApprovalContext | None = None,
 ) -> ReviewGateResult:
     """Resolve repository roles and apply scoped comment/affected-work holds."""
 
@@ -40,6 +42,15 @@ def require_lifecycle_review_gate(
 
     project = get_project_context() or ProjectContext.colocated(root)
     store = ArchitectureReviewStore(project)
+    if (
+        boundary == "approval"
+        and approval_context is None
+        and (store.gate_rollout_version() or store.gate_policy_version(work_id) or 0) > 0
+    ):
+        raise ArchitectureProposalError(
+            "stale_review_context",
+            "approval requires the exact architecture review tuple displayed by the page",
+        )
     affected = {work_id}
     for unit in store.units_affecting(work_id):
         affected.update(unit.affected_work_ids)
@@ -58,6 +69,7 @@ def require_lifecycle_review_gate(
         store=store,
         blocking_work_ids=blocked,
         semantic_blockers=semantic_blockers,
+        approval_context=approval_context,
     )
     if boundary == "closeout" and result.rollout_version > 0:
         from cascade.workspace.reconciliation import validate_reconciliation_closeout

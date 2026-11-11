@@ -163,10 +163,20 @@ const host = integrationDoc.register(
 
 const staleError = "Epic plan is not ready for approval; refresh and sign off again.";
 let docRefreshCalls = 0;
+let approvalRequest = null;
+const displayedReviewContext = {
+  owner_work_id: "epic_001",
+  target_repository_key: "target-repository",
+  plan_revision: "a".repeat(40),
+  review_unit_id: "architecture-review-exact",
+  reviewed_tuple_digest: "b".repeat(64),
+  accepted_baseline_generation: 3,
+};
 
 globalThis.fetch = (url, options) => {
   const path = String(url);
   if (path.includes("/api/approve_epic_plan") && options && options.method === "POST") {
+    approvalRequest = JSON.parse(options.body);
     return Promise.resolve({
       ok: false,
       status: 409,
@@ -197,6 +207,7 @@ globalThis.AbortController = class {
 const epicId = "epic_001";
 const mounted = initEpicPlanReadinessChrome(epicId, readyBoth, {
   EpicPlanReadinessUi,
+  reviewContext: displayedReviewContext,
 });
 assert.ok(mounted);
 assert.ok(host.children.length > 0, "readiness chrome mounted in host");
@@ -215,6 +226,10 @@ assert.equal(liveChrome.errorElement.hidden, false);
 assert.equal(liveChrome.errorElement.textContent, staleError);
 assert.equal(liveChrome.errorElement.getAttribute("role"), "alert");
 assert.ok(docRefreshCalls >= 1, "readiness refresh should call /api/doc after stale rejection");
+assert.deepEqual(approvalRequest, {
+  id: epicId,
+  review_context: displayedReviewContext,
+});
 assertDisabledApprove(liveChrome, "Epic Architect");
 assert.equal(planBody.textContent.includes("Canonical epic plan"), true);
 

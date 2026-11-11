@@ -44,6 +44,7 @@
       onload="this.media='all'; this.onload=null;"
     />
     <link rel="stylesheet" href="/static/dependency_review.css?v=20261109" />
+    <link rel="stylesheet" href="/static/architecture_tab.css?v=20261111" />
     <noscript><link rel="stylesheet" href="/static/war_room.css?v=20261109" /></noscript>
   </head>
   <body>
@@ -74,6 +75,26 @@
           <button type="button" id="btn-detach" class="btn-secondary" hidden>Detach</button>
         </div>
       </header>
+
+      <nav class="war-room-tabs" aria-label="War Room views" role="tablist">
+        <button
+          type="button"
+          id="war-room-board-tab"
+          class="war-room-tab"
+          role="tab"
+          aria-selected="true"
+          aria-controls="war-room-board-panel"
+        >Board</button>
+        <button
+          type="button"
+          id="war-room-architecture-tab"
+          class="war-room-tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="war-room-architecture-panel"
+          tabindex="-1"
+        >Architecture</button>
+      </nav>
 
       <dialog id="brief-dialog" class="brief-dialog">
         <form id="brief-form" method="dialog">
@@ -151,7 +172,12 @@
         </form>
       </dialog>
 
-      <div class="war-room-layout">
+      <div
+        id="war-room-board-panel"
+        role="tabpanel"
+        aria-labelledby="war-room-board-tab"
+      >
+        <div class="war-room-layout">
         <section id="war-room-board" class="board-panel" aria-label="Board">
           <h2>Board</h2>
           ${boss_panel_markup}
@@ -434,7 +460,90 @@
           </details>
 
         </aside>
+        </div>
       </div>
+
+      <section
+        id="war-room-architecture-panel"
+        class="architecture-panel"
+        role="tabpanel"
+        aria-labelledby="war-room-architecture-tab"
+        hidden
+      >
+        <div class="architecture-heading">
+          <div>
+            <h2>Branch architecture</h2>
+            <p>Explore a commit-pinned model. Dirty working-tree edits are never included.</p>
+          </div>
+          <div class="architecture-context-controls">
+            <label for="architecture-context">Project context</label>
+            <select id="architecture-context" disabled>
+              <option>Loading known contexts…</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="architecture-invalid-link" class="architecture-notice error" role="alert" hidden></div>
+        <div id="architecture-documentation-choice" class="architecture-notice" hidden>
+          <p>No exact documentation association is recorded for this code revision. Select a known documentation ref to continue.</p>
+          <label for="architecture-documentation-ref">Documentation ref</label>
+          <select id="architecture-documentation-ref"></select>
+          <button type="button" id="architecture-use-documentation-ref">Open pinned architecture</button>
+        </div>
+        <p id="architecture-status" class="architecture-status" role="status" aria-live="polite">Open this tab to load architecture.</p>
+
+        <div id="architecture-snapshot" hidden>
+          <section class="architecture-provenance" aria-labelledby="architecture-provenance-heading">
+            <div class="architecture-provenance-title">
+              <h3 id="architecture-provenance-heading">Pinned provenance</h3>
+              <span id="architecture-update-indicator" class="architecture-update-indicator" hidden>New HEAD available</span>
+              <button type="button" id="architecture-refresh-snapshot" hidden>Refresh whole snapshot</button>
+            </div>
+            <dl id="architecture-provenance-list"></dl>
+            <p id="architecture-accepted-lineage" class="architecture-accepted-lineage"></p>
+            <p id="architecture-associated-review" class="architecture-associated-review" hidden></p>
+          </section>
+
+          <div id="architecture-ready" hidden>
+            <div class="architecture-navigation">
+              <button type="button" id="architecture-back" disabled>Back</button>
+              <label for="architecture-view">View</label>
+              <select id="architecture-view"></select>
+              <span id="architecture-selection-status" aria-live="polite"></span>
+            </div>
+            <div id="architecture-drill-choices" class="architecture-drill-choices" hidden></div>
+            <div id="architecture-viewer" class="architecture-viewer"></div>
+            <aside id="architecture-target-detail" class="architecture-target-detail" aria-label="Selected architecture target" hidden></aside>
+            <section
+              id="architecture-documentation-context"
+              class="architecture-documentation-context"
+              aria-labelledby="architecture-documentation-heading"
+            >
+              <div class="architecture-documentation-title">
+                <div>
+                  <h3 id="architecture-documentation-heading">Requirements &amp; decisions</h3>
+                  <p>Verified links and owning designs from this pinned snapshot.</p>
+                </div>
+              </div>
+              <p id="architecture-documentation-status" class="architecture-documentation-status" role="status" aria-live="polite"></p>
+              <div id="architecture-documentation-content"></div>
+              <section id="architecture-document-preview" class="architecture-document-preview" hidden aria-labelledby="architecture-document-preview-heading">
+                <div class="architecture-documentation-title">
+                  <h4 id="architecture-document-preview-heading">Pinned document</h4>
+                  <button type="button" id="architecture-document-preview-close">Close document</button>
+                </div>
+                <p id="architecture-document-preview-provenance" class="architecture-document-preview-provenance"></p>
+                <div id="architecture-document-preview-body" class="architecture-document-preview-body"></div>
+              </section>
+            </section>
+          </div>
+
+          <section class="architecture-sources" aria-labelledby="architecture-sources-heading">
+            <h3 id="architecture-sources-heading">Pinned sources</h3>
+            <ul id="architecture-source-list"></ul>
+          </section>
+        </div>
+      </section>
     </div>
     <script src="/static/board_focus.js"></script>
     <script src="/static/backlog_priority_ui.js?v=20261105"></script>
@@ -448,6 +557,9 @@
     <script src="/static/provider_recovery_dialog_ui.js?v=20261103"></script>
     <script src="/static/audit_status_ui.js?v=20261110-agent-age-gate"></script>
     <script src="/static/panel_resizing.js?v=20261105"></script>
+    <script src="/static/vendor/marked.min.js"></script>
+    <script src="/static/plan_viewer.js?v=20261111-semantic-viewer"></script>
+    <script src="/static/architecture_tab.js?v=20261111-document-context"></script>
     <script src="/static/war_room.js?v=20261110-refresh-performance"></script>
   </body>
 </html>
