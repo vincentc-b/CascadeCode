@@ -2,7 +2,7 @@
 id: feat_046_002
 title: Complete live paired C4 navigation comments and exact-tuple approval
 tier: feature
-status: active
+status: completed
 parent: epic_046
 children:
 - task_046_002_001
