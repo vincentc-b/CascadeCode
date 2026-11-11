@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import socket
 import subprocess
 import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -27,6 +29,7 @@ from cascade.workspace.architecture_review import (
     PinnedDocumentRef,
 )
 from cascade.workspace.types import ProjectContext
+from cascade.workspace.c4_render import C4ArtifactRenderer, C4RenderArtifact
 from tests.support import add_doc, make_repo
 
 
@@ -39,6 +42,20 @@ def _free_port() -> int:
 def _get(url: str) -> tuple[int, bytes, dict[str, str]]:
     try:
         with urllib.request.urlopen(url) as response:
+            return response.status, response.read(), dict(response.headers)
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(), dict(exc.headers)
+
+
+def _post(url: str, payload: dict[str, object]) -> tuple[int, bytes, dict[str, str]]:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request) as response:
             return response.status, response.read(), dict(response.headers)
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read(), dict(exc.headers)
@@ -95,6 +112,185 @@ def test_context_catalog_exposes_session_target_without_accepting_queries(
         assert json.loads(raw)["error"] == (
             "architecture contexts do not accept query parameters"
         )
+    finally:
+        _stop(server, thread)
+
+
+def test_snapshot_http_is_scoped_pinned_and_does_not_create_review_units(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    project = ProjectContext.colocated(root)
+    resolve_design_ownership(project, ".")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "mapping only"], cwd=root, check=True)
+    reviews = ArchitectureReviewStore(project)
+    assert reviews.units_affecting("feat_001") == ()
+
+    server, thread, base = _start(root)
+    try:
+        status, raw, headers = _post(base + "/api/architecture/snapshots", {})
+        assert status == 200
+        assert headers["Cache-Control"] == "no-store"
+        snapshot = json.loads(raw)
+        assert snapshot["state"] == "missing_model"
+        assert snapshot["provenance"]["revisions"]["code"] == subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=root, text=True
+        ).strip()
+        assert snapshot["associated_review"] is None
+        snapshot_id = snapshot["snapshot_id"]
+
+        status, raw, _headers = _get(
+            base + f"/api/architecture/snapshots/{snapshot_id}"
+        )
+        assert status == 200
+        assert json.loads(raw)["snapshot_id"] == snapshot_id
+
+        mapping = snapshot["resources"][0]
+        status, body, resource_headers = _get(base + mapping["url"])
+        assert status == 200
+        assert json.loads(body)["version"] == 1
+        assert resource_headers["Cache-Control"] == (
+            "private, max-age=31536000, immutable"
+        )
+        etag_request = urllib.request.Request(
+            base + mapping["url"], headers={"If-None-Match": resource_headers["ETag"]}
+        )
+        try:
+            urllib.request.urlopen(etag_request)
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 304
+
+        forged = snapshot_id[:-1] + ("0" if snapshot_id[-1] != "0" else "1")
+        status, raw, _headers = _get(
+            base + f"/api/architecture/snapshots/{forged}"
+        )
+        assert status == 404
+        assert json.loads(raw)["error"] == "architecture snapshot not found"
+
+        root.joinpath("code.py").write_text("changed\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "advance"], cwd=root, check=True)
+        status, raw, status_headers = _get(
+            base + f"/api/architecture/snapshots/{snapshot_id}/status"
+        )
+        assert status == 200
+        assert status_headers["Cache-Control"] == "no-store"
+        assert json.loads(raw)["state"] == "changed"
+
+        status, raw, _headers = _post(
+            base + "/api/architecture/snapshots", {"context_id": "forged"}
+        )
+        assert status == 404
+        assert "unknown_context" in json.loads(raw)["error"]
+        assert reviews.units_affecting("feat_001") == ()
+    finally:
+        _stop(server, thread)
+
+
+def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    root = make_repo(tmp_path)
+    project = ProjectContext.colocated(root)
+    resolve_design_ownership(project, ".")
+    fixture = (
+        Path(__file__).parents[2]
+        / "architecture"
+        / "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+    )
+    shutil.copytree(fixture, project.editable_architecture_root)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "architecture"], cwd=root, check=True)
+
+    class Result:
+        def __init__(self, value: C4RenderArtifact) -> None:
+            self.value = value
+
+        def wait(self, timeout=None):  # type: ignore[no-untyped-def]
+            return self.value
+
+    def submit(_renderer, closure, settings=None):  # type: ignore[no-untyped-def]
+        output = tmp_path / "rendered"
+        output.mkdir(exist_ok=True)
+        element = closure.contract.elements[0]
+        view = closure.contract.views[0]
+        workspace = {
+            "model": {"softwareSystems": [{
+                "id": "1", "name": "System",
+                "properties": {"cascade.semanticId": element.semantic_id},
+            }]},
+            "views": {"systemContextViews": [{"key": view.key}]},
+        }
+        semantic = output / "workspace.json"
+        semantic.write_text(json.dumps(workspace), encoding="utf-8")
+        svg = output / "view.svg"
+        svg.write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg"><g id="node-1" '
+            'data-cascade-model-kind="element" data-cascade-export-id="1" /></svg>',
+            encoding="utf-8",
+        )
+        manifest = output / "hit-targets.json"
+        manifest.write_text(json.dumps({
+            "version": 1,
+            "interactive": True,
+            "source_diff_reference": "pinned:test",
+            "views": [{
+                "view_key": view.key,
+                "svg": svg.name,
+                "targets": [{
+                    "view_key": view.key,
+                    "renderer_node_id": "node-1",
+                    "kind": "element",
+                    "export_id": "1",
+                    "semantic_id": element.semantic_id,
+                }],
+            }],
+        }), encoding="utf-8")
+        return Result(C4RenderArtifact(
+            status="ready",
+            closure_digest=closure.digest,
+            artifact_directory=output,
+            semantic_workspace=semantic,
+            semantic_workspace_sha256=hashlib.sha256(semantic.read_bytes()).hexdigest(),
+            svg_files=(svg,),
+            binding_manifest=manifest,
+            interactive=True,
+            view_keys=(view.key,),
+            revision=closure.revision,
+        ))
+
+    monkeypatch.setattr(C4ArtifactRenderer, "submit", submit)
+    server, thread, base = _start(root)
+    try:
+        status, raw, _headers = _post(base + "/api/architecture/snapshots", {})
+        assert status in {200, 202}
+        payload = json.loads(raw)
+        snapshot_id = payload["snapshot_id"]
+        deadline = time.monotonic() + 3
+        while payload["state"] == "pending" and time.monotonic() < deadline:
+            status, raw, _headers = _get(
+                base + f"/api/architecture/snapshots/{snapshot_id}"
+            )
+            assert status in {200, 202}
+            payload = json.loads(raw)
+            time.sleep(0.02)
+        assert payload["state"] == "ready"
+        assert payload["views"][0]["level"] == "systemContextViews"
+        target = payload["targets"][0]
+        assert target["semantic_id"]
+        assert target["drill_choices"][0]["view_key"] == payload["views"][0]["key"]
+
+        status, svg_body, headers = _get(base + payload["views"][0]["artifact_url"])
+        assert status == 200
+        assert b"data-cascade-semantic-id" in svg_body
+        assert headers["ETag"].startswith('"')
+
+        status, raw, _headers = _get(
+            base + f"/api/architecture/snapshots/{snapshot_id}?target=forged"
+        )
+        assert status == 400
+        assert json.loads(raw)["error"] == "invalid semantic target"
     finally:
         _stop(server, thread)
 

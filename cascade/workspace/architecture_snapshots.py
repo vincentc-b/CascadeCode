@@ -363,6 +363,10 @@ class ArchitectureSnapshotStore:
                 "provenance": selection.association_provenance,
                 "evidence_id": selection.association_evidence_id,
             },
+            "accepted_lineage": (
+                selection.accepted_lineage.to_dict()
+                if selection.accepted_lineage is not None else None
+            ),
             "selected_documentation_ref_id": documentation_ref_id,
         }
 
