@@ -2,7 +2,7 @@
 id: feat_046_004
 title: Show verified requirements and decisions beside C4 views
 tier: feature
-status: active
+status: completed
 parent: epic_046
 children:
 - task_046_004_001
