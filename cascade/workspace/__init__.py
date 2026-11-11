@@ -107,6 +107,10 @@ from cascade.workspace.c4_scheduler import (
     C4ScheduledRenderOperation,
     render_identity,
 )
+from cascade.workspace.architecture_snapshots import (
+    ArchitectureBrowsingSnapshot,
+    ArchitectureSnapshotStore,
+)
 from cascade.workspace.c4_diff import (
     C4ContainmentChange,
     C4IdentityChange,
@@ -168,6 +172,7 @@ from cascade.workspace.architecture_browsing import (
     ArchitectureContextSelection,
     KnownDocumentationRef,
     architecture_context_catalog,
+    resolve_architecture_code_context,
     resolve_architecture_context,
 )
 
@@ -179,7 +184,10 @@ __all__ = [
     "ArchitectureContextSelection",
     "KnownDocumentationRef",
     "architecture_context_catalog",
+    "resolve_architecture_code_context",
     "resolve_architecture_context",
+    "ArchitectureBrowsingSnapshot",
+    "ArchitectureSnapshotStore",
     "ProjectContext",
     "ProjectConfiguration",
     "PinnedDocumentRef",

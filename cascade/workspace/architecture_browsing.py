@@ -207,6 +207,27 @@ def resolve_architecture_context(
     )
 
 
+def resolve_architecture_code_context(
+    project: ProjectContext,
+    session_target: Path,
+    context_id: str,
+) -> ArchitectureCodeContext:
+    """Resolve only the current Git identity for a previously known context.
+
+    Snapshot update checks intentionally avoid loading review, promotion, and
+    lineage evidence.  They only need to compare the selected checkout's HEAD
+    with the revision already pinned in the snapshot.
+    """
+
+    contexts = _known_checkouts(project, session_target)
+    try:
+        return next(item for item in contexts if item.context_id == context_id)
+    except StopIteration as exc:
+        raise ArchitectureBrowsingError(
+            "unknown_context", "architecture context is not registered for this session"
+        ) from exc
+
+
 def _resolve_known_context(
     project: ProjectContext,
     context: ArchitectureCodeContext,
