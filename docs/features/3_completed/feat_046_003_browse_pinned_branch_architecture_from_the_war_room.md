@@ -2,7 +2,7 @@
 id: feat_046_003
 title: Browse pinned branch architecture from the War Room
 tier: feature
-status: active
+status: completed
 parent: epic_046
 children:
 - task_046_003_001
