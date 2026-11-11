@@ -2,7 +2,7 @@
 id: epic_010
 title: Multi-epic War Room visibility and control
 tier: epic
-status: backlog
+status: cancelled
 parent: null
 children: []
 depends_on: []
@@ -12,11 +12,14 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-10-22'
-updated: '2026-10-22'
+updated: '2026-11-11'
 provider: cursor
 models:
   epic_manager: claude-opus-5-5
   epic_architect: claude-opus-5-5
+cancellation_reason: duplicate, already supported.
+cancelled_at: '2026-11-11T17:47:43.197005+00:00'
+cancellation_step: complete
 ---
 # Multi-epic War Room visibility and control
 
