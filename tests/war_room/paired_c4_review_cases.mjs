@@ -7,7 +7,12 @@ import { createElement } from "./plan_dom_fixture.mjs";
 
 const require = createRequire(import.meta.url);
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { createPairedNavigation, createSemanticThreadModel, initPairedC4Review } = require(
+const {
+  createPairedNavigation,
+  createSemanticThreadModel,
+  initPairedC4Review,
+  sortedDrillChoices,
+} = require(
   join(repoRoot, "cascade/war_room/static/plan_viewer.js")
 );
 
@@ -138,6 +143,56 @@ result = navigation.drill("current", "element", "system.shop");
 assert.equal(result.ok, true, "verified drill metadata moves both sides together");
 assert.equal(navigation.state.view_key, "payments");
 assert.equal(navigation.currentView().current, null, "drill retains an explicit absent side");
+
+const choiceTarget = {
+  kind: "element",
+  semantic_id: "system.multi",
+  drill_choices: [
+    { view_key: "zeta", level: "containerViews", label: "Zeta" },
+    { view_key: "alpha", level: "componentViews", label: "Alpha" },
+  ],
+};
+assert.deepEqual(
+  sortedDrillChoices(choiceTarget).map((choice) => choice.view_key),
+  ["alpha", "zeta"],
+  "drill choices use deterministic level/key order"
+);
+const choicePayload = {
+  ...payload,
+  views: [
+    {
+      ...payload.views[0],
+      current: side("docs-a", "a".repeat(40), [choiceTarget]),
+      proposed: side("docs-b", "b".repeat(40), [choiceTarget]),
+    },
+    { key: "zeta", level: "containerViews", state: "unchanged", current: null, proposed: null },
+    { key: "alpha", level: "componentViews", state: "unchanged", current: null, proposed: null },
+  ],
+};
+const choiceNavigation = createPairedNavigation(choicePayload);
+result = choiceNavigation.drill("current", "element", "system.multi");
+assert.equal(result.needs_choice, true, "ambiguous containment never guesses a destination");
+assert.equal(result.choices.length, 2);
+assert.equal(
+  choiceNavigation.drill(
+    "current", "element", "system.multi", "alpha", "componentViews"
+  ).ok,
+  true,
+  "an explicit verified drill choice drives shared navigation"
+);
+
+const refreshedNavigation = createPairedNavigation(payload);
+refreshedNavigation.select("element", "system.shop", "current");
+refreshedNavigation.updatePayload({ ...payload, views: payload.views.slice(0, 2) });
+assert.equal(refreshedNavigation.state.view_key, "context");
+assert.equal(
+  refreshedNavigation.state.selection.semantic_id,
+  "system.shop",
+  "refresh preserves a surviving semantic selection"
+);
+refreshedNavigation.updatePayload({ ...payload, views: payload.views.slice(1) });
+assert.equal(refreshedNavigation.state.view_key, "payments");
+assert.equal(refreshedNavigation.state.selection, null, "refresh drops only vanished targets");
 
 const inventoryNavigation = createPairedNavigation(payload);
 for (const [viewKey, level] of payload.changed_views) {

@@ -500,6 +500,50 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 assert proposed_revision in page.locator(
                     ".paired-c4-side-proposed .paired-c4-revision"
                 ).inner_text()
+
+                proposed_target = page.locator(
+                    '.paired-c4-side-proposed [aria-label="element element.system.portal"]'
+                )
+                proposed_target.click()
+                assert page.locator(".paired-c4-target-selected").count() == 2
+                assert "element element.system.portal" in page.locator(
+                    ".paired-c4-status"
+                ).inner_text()
+
+                current_target = page.locator(
+                    '.paired-c4-side-current [aria-label="element element.system.portal"]'
+                )
+                current_target.focus()
+                current_target.press("Enter")
+                assert current_target.get_attribute("aria-pressed") == "true"
+
+                proposed_svg = page.locator(".paired-c4-side-proposed .paired-c4-svg")
+                fitted_view_box = proposed_svg.get_attribute("viewBox")
+                page.locator(
+                    '.paired-c4-side-proposed .semantic-c4-toolbar button',
+                    has_text="Zoom in",
+                ).click()
+                assert proposed_svg.get_attribute("viewBox") != fitted_view_box
+                page.locator(
+                    '.paired-c4-side-proposed .semantic-c4-toolbar button',
+                    has_text="Fit",
+                ).click()
+                assert proposed_svg.get_attribute("viewBox") == fitted_view_box
+
+                relationship = page.locator(
+                    '.paired-c4-side-proposed '
+                    '[aria-label="relationship relationship.reviewer-uses-portal"]'
+                )
+                relationship.click()
+                assert page.locator(
+                    ".paired-c4-side-proposed .semantic-c4-relationship-details"
+                ).count() >= 1
+
+                page.set_viewport_size({"width": 700, "height": 1000})
+                current_box = page.locator(".paired-c4-side-current").bounding_box()
+                proposed_box = page.locator(".paired-c4-side-proposed").bounding_box()
+                assert current_box is not None and proposed_box is not None
+                assert proposed_box["y"] > current_box["y"] + current_box["height"] - 2
                 page.close()
             finally:
                 _stop(restarted, restarted_thread)

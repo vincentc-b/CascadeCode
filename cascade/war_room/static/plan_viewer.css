@@ -253,19 +253,102 @@ body {
 .paired-c4-svg {
   display: block;
   width: 100%;
-  height: auto;
+  height: clamp(16rem, 38vw, 34rem);
+  touch-action: none;
+  user-select: none;
 }
 
+.semantic-c4-target,
 .paired-c4-target {
   cursor: pointer;
 }
 
+.semantic-c4-diff-added {
+  filter: drop-shadow(0 0 3px #238636);
+}
+
+.semantic-c4-diff-removed {
+  filter: grayscale(0.7) drop-shadow(0 0 3px #cf222e);
+  opacity: 0.78;
+}
+
+.semantic-c4-diff-changed {
+  filter: drop-shadow(0 0 3px #bf8700);
+}
+
 .paired-c4-target:hover,
 .paired-c4-target:focus-visible,
-.paired-c4-target-selected {
+.paired-c4-target-selected,
+.semantic-c4-target:focus-visible,
+.semantic-c4-target-selected {
   outline: 3px solid #1f6feb;
   outline-offset: 3px;
-  filter: drop-shadow(0 0 4px #1f6feb);
+  /* A second shadow preserves the semantic diff color underneath selection. */
+  filter: drop-shadow(0 0 4px #1f6feb) drop-shadow(0 0 2px currentColor);
+}
+
+.semantic-c4-toolbar {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.45rem 0;
+}
+
+.semantic-c4-toolbar button,
+.semantic-c4-target-button,
+.semantic-c4-drill,
+.paired-c4-drill-choices button {
+  font: inherit;
+}
+
+.semantic-c4-panning {
+  cursor: grabbing;
+}
+
+.semantic-c4-targets {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.semantic-c4-target-list {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 14rem;
+  overflow: auto;
+  margin: 0.4rem 0 0;
+  padding-left: 1.3rem;
+}
+
+.semantic-c4-target-row {
+  padding-left: 0.25rem;
+  border-left: 3px solid transparent;
+}
+
+.semantic-c4-target-row.semantic-c4-diff-added { border-left-color: #238636; }
+.semantic-c4-target-row.semantic-c4-diff-removed { border-left-color: #cf222e; }
+.semantic-c4-target-row.semantic-c4-diff-changed { border-left-color: #bf8700; }
+
+.semantic-c4-relationship-details {
+  overflow-wrap: anywhere;
+}
+
+.semantic-c4-drill {
+  margin-left: 0.35rem;
+}
+
+.paired-c4-drill-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 4px;
+}
+
+.paired-c4-drill-explanation {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .paired-c4-review-meta {
@@ -391,6 +474,10 @@ body {
 @media (max-width: 48rem) {
   .paired-c4-diagrams {
     grid-template-columns: 1fr;
+  }
+
+  .paired-c4-svg {
+    height: clamp(15rem, 75vw, 28rem);
   }
 }
 
