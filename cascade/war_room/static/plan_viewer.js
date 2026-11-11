@@ -1966,6 +1966,14 @@
       }) || null;
     }
 
+    function repositoryFor(kind, sideName) {
+      if (kind === "requirement") {
+        var plan = payload.provenance && payload.provenance.plan;
+        if (plan && plan.repository_key && plan.revision) return plan;
+      }
+      return sideRecord(sideName);
+    }
+
     function sourceFor(kind, targetKey, sideName, viewKey, level) {
       if (kind === "requirement") {
         if ((payload.requirements || []).indexOf(targetKey) < 0) return null;
@@ -1988,7 +1996,7 @@
     }
 
     function buildAnchor(kind, targetKey, sideName, viewKey, level) {
-      var repository = sideRecord(sideName);
+      var repository = repositoryFor(kind, sideName);
       var source = sourceFor(kind, targetKey, sideName, viewKey, level);
       var diff = payload.diffs && payload.diffs.source;
       if (!repository || !source || typeof diff !== "string" || !diff) {
@@ -2022,7 +2030,7 @@
     }
 
     function freshnessFor(anchor) {
-      var repository = sideRecord(anchor.source_side);
+      var repository = repositoryFor(anchor.kind, anchor.source_side);
       if (!repository) return ["outdated", "source_side_missing"];
       if (repository.repository_key !== anchor.repository_key) {
         return ["outdated", "repository_mismatch"];

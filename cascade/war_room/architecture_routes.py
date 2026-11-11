@@ -125,6 +125,12 @@ def review_projection(
     return value
 
 
+def resolve_review_context(root: Path, work_id: str) -> C4ReviewPayload:
+    """Resolve the authoritative active review tuple for another HTTP slice."""
+
+    return _resolve(root, work_id)
+
+
 def artifact_bytes(root: Path, scope: str, artifact_id: str) -> tuple[bytes, str]:
     unit = _unit_for_scope(root, scope)
     payload = _resolve_unit(root, unit)

@@ -107,7 +107,9 @@ from cascade.comments.store import (
     CommentNotFound,
     CommentStoreError,
     NotARoot,
+    ReopenNotAllowed,
     read_comments,
+    reopen_comment,
     reply_comment,
     resolve_comment,
 )
@@ -117,7 +119,11 @@ from cascade.watchdog import activate_epic, append_event, dispatch_feature, disp
 from cascade.watchdog.types import Event
 from cascade.board.errors import BoardError, GitError
 from cascade.workspace.errors import WorkspaceError
-from cascade.workspace.c4_threads import SemanticThreadAnchor
+from cascade.workspace.c4_threads import (
+    SemanticThreadAnchor,
+    create_semantic_thread,
+    read_semantic_threads,
+)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SKILLS_INVALID = object()
@@ -628,6 +634,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/boss_drain": lambda h, b: h._handle_boss_drain(b),
             "/api/comment": lambda h, b: h._handle_comment(b),
             "/api/comment/resolve": lambda h, b: h._handle_comment_resolve(b),
+            "/api/comment/reopen": lambda h, b: h._handle_comment_reopen(b),
             "/api/briefs": lambda h, b: h._handle_create_brief(b),
             "/api/sync/pull": lambda h, b: h._handle_sync_pull(b),
             "/api/approve_epic_plan": lambda h, b: h._handle_approve_epic_plan(b),
@@ -987,6 +994,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 self._json_error(HTTPStatus.BAD_REQUEST, "invalid parent")
                 return
             try:
+                self._authorize_semantic_thread_operation(doc_id.strip(), parent.strip())
                 comment_id = reply_comment(
                     doc_id.strip(),
                     parent.strip(),
@@ -996,6 +1004,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 )
             except CommentNotFound:
                 self._json_error(HTTPStatus.NOT_FOUND, "parent not found")
+                return
+            except WorkspaceError as exc:
+                self._json_error(HTTPStatus.CONFLICT, str(exc))
                 return
             except CommentStoreError as exc:
                 self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -1007,12 +1018,10 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
 
         semantic_anchor_raw = body.get("semantic_anchor")
-        semantic_anchor: dict[str, object] | None = None
+        semantic_anchor: SemanticThreadAnchor | None = None
         if semantic_anchor_raw is not None:
             try:
-                semantic_anchor = SemanticThreadAnchor.from_dict(
-                    semantic_anchor_raw
-                ).to_dict()
+                semantic_anchor = SemanticThreadAnchor.from_dict(semantic_anchor_raw)
             except (TypeError, WorkspaceError) as exc:
                 self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
                 return
@@ -1069,23 +1078,38 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 return
             blocks = list(blocks_raw)
         try:
-            comment_id = post_comment(
-                doc_id.strip(),
-                section,
-                text,
-                anchor=anchor,
-                blocking=blocking,
-                line_start=line_start,
-                line_end=line_end,
-                doc_sha=doc_sha,
-                blocks=blocks,
-                semantic_anchor=semantic_anchor,
-                author="human",
-                root=self.server.root,
-                is_attached=self.server.attachment.is_attached,
-            )
+            if semantic_anchor is not None:
+                payload = self._semantic_review_context(doc_id.strip())
+                comment_id = create_semantic_thread(
+                    payload,
+                    semantic_anchor,
+                    text,
+                    blocking,
+                    owner=payload.authorized_owner,
+                    author="human",
+                    root=self.server.root,
+                )
+            else:
+                comment_id = post_comment(
+                    doc_id.strip(),
+                    section,
+                    text,
+                    anchor=anchor,
+                    blocking=blocking,
+                    line_start=line_start,
+                    line_end=line_end,
+                    doc_sha=doc_sha,
+                    blocks=blocks,
+                    semantic_anchor=None,
+                    author="human",
+                    root=self.server.root,
+                    is_attached=self.server.attachment.is_attached,
+                )
         except CommentStoreError as exc:
             self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except WorkspaceError as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(
             HTTPStatus.ACCEPTED,
@@ -1102,6 +1126,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             self._json_error(HTTPStatus.BAD_REQUEST, "missing comment_id")
             return
         try:
+            self._authorize_semantic_thread_operation(
+                doc_id.strip(), comment_id.strip()
+            )
             resolve_comment(
                 doc_id.strip(),
                 comment_id.strip(),
@@ -1116,6 +1143,40 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
         except CommentStoreError as exc:
             self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except WorkspaceError as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._json_response(
+            HTTPStatus.ACCEPTED,
+            {"ok": True, "comment_id": comment_id.strip()},
+        )
+
+    def _handle_comment_reopen(self, body: dict[str, Any]) -> None:
+        doc_id = body.get("doc_id")
+        comment_id = body.get("comment_id")
+        if not isinstance(doc_id, str) or not doc_id.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing doc_id")
+            return
+        if not isinstance(comment_id, str) or not comment_id.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing comment_id")
+            return
+        try:
+            self._authorize_semantic_thread_operation(doc_id.strip(), comment_id.strip())
+            reopen_comment(
+                doc_id.strip(), comment_id.strip(), author="human", root=self.server.root
+            )
+        except CommentNotFound:
+            self._json_error(HTTPStatus.NOT_FOUND, "comment not found")
+            return
+        except (NotARoot, ReopenNotAllowed) as exc:
+            self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except CommentStoreError as exc:
+            self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except WorkspaceError as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(
             HTTPStatus.ACCEPTED,
@@ -1135,10 +1196,71 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             )
             return
         rows = read_comments(doc_id, root=self.server.root)
+        freshness: dict[str, tuple[str, str | None]] = {}
+        if any(row.semantic_anchor is not None for row in rows):
+            try:
+                payload = self._semantic_review_context(doc_id)
+                freshness = {
+                    thread.id: (thread.freshness, thread.outdated_reason)
+                    for thread in read_semantic_threads(
+                        payload, owner=payload.authorized_owner, root=self.server.root
+                    )
+                }
+                semantic_root_ids = {
+                    row.id for row in rows
+                    if row.parent is None and row.semantic_anchor is not None
+                }
+                if semantic_root_ids != set(freshness):
+                    raise WorkspaceError("stored semantic review anchor is invalid")
+            except WorkspaceError as exc:
+                self._json_error(HTTPStatus.CONFLICT, str(exc))
+                return
+        projected = []
+        for row in rows:
+            value = comment_to_dict(row)
+            if row.id in freshness:
+                value["freshness"], value["outdated_reason"] = freshness[row.id]
+            projected.append(value)
         self._json_response(
             HTTPStatus.OK,
-            {"doc_id": doc_id, "comments": [comment_to_dict(row) for row in rows]},
+            {"doc_id": doc_id, "comments": projected},
         )
+
+    def _semantic_review_context(self, doc_id: str):
+        from cascade.war_room.architecture_routes import resolve_review_context
+
+        payload = resolve_review_context(self.server.root, doc_id)
+        if payload.owner_work_id != doc_id or not payload.review_unit_id:
+            raise WorkspaceError("semantic review context is not active for this work")
+        return payload
+
+    def _authorize_semantic_thread_operation(
+        self, doc_id: str, comment_id: str
+    ) -> None:
+        """Apply review ownership to replies and lifecycle changes when semantic."""
+
+        rows = read_comments(doc_id, root=self.server.root)
+        by_id = {row.id: row for row in rows}
+        row = by_id.get(comment_id)
+        if row is None:
+            raise CommentNotFound(comment_id)
+        seen: set[str] = set()
+        while row.parent is not None:
+            if row.id in seen:
+                raise WorkspaceError("semantic review thread ancestry is invalid")
+            seen.add(row.id)
+            parent = by_id.get(row.parent)
+            if parent is None:
+                raise WorkspaceError("semantic review thread parent is missing")
+            row = parent
+        if row.semantic_anchor is None:
+            return
+        payload = self._semantic_review_context(doc_id)
+        threads = read_semantic_threads(
+            payload, owner=payload.authorized_owner, root=self.server.root
+        )
+        if not any(thread.id == row.id for thread in threads):
+            raise WorkspaceError("semantic review thread anchor is invalid")
 
     def _handle_ask_boss_dispatch(self, body: dict[str, Any]) -> None:
         kind = body.get("kind")
