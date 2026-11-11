@@ -157,6 +157,8 @@ def test_semantic_comment_api_preserves_typed_anchor(
     if kind == "requirement":
         assert row["semantic_anchor"]["repository_key"] == "plans"
         assert row["semantic_anchor"]["revision"] == "p" * 40
+        assert row["semantic_anchor"]["source_path"] == "docs/feature.md"
+        assert row["semantic_anchor"]["source_section"] == "REQ-7"
 
 
 def test_semantic_comment_api_rejects_mixed_or_malformed_anchors(war_room_server) -> None:
@@ -217,6 +219,21 @@ def test_semantic_http_rejects_forged_and_stale_anchors(war_room_server) -> None
         )
         assert code == HTTPStatus.CONFLICT
         assert "semantic thread anchor" in error["error"] or "absent" in error["error"]
+
+    requirement = build_semantic_thread_anchor(
+        _review_payload("feat_001"), kind="requirement", target_key="REQ-7",
+        source_side="proposed",
+    ).to_dict()
+    code, error = _post_expect_error(
+        f"{base}/api/comment",
+        {
+            "doc_id": "feat_001",
+            "body": "forged requirement source",
+            "semantic_anchor": {**requirement, "source_path": "docs/other.md"},
+        },
+    )
+    assert code == HTTPStatus.CONFLICT
+    assert "document source is not pinned" in error["error"]
 
 
 def test_semantic_http_marks_a_previous_review_tuple_outdated(
@@ -393,7 +410,11 @@ def _review_payload(work_id: str) -> C4ReviewPayload:
         changed_views=(("context", "systemContextViews"),), legend=(), summary="changed",
         requirements=("REQ-7",), decisions=(),
         diffs={"source": "/diff/model-a..model-b", "plan": "/diff/plan-a..plan-b", "model": {"identities": []}},
-        provenance={"plan": {"repository_key": "plans", "revision": "p" * 40}},
+        provenance={"plan": {
+            "repository_key": "plans",
+            "revision": "p" * 40,
+            "path": "docs/feature.md",
+        }},
     )
 
 

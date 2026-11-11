@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -32,6 +32,8 @@ class SemanticThreadAnchor:
     reviewed_tuple_digest: str
     original_source_reference: str
     original_diff_link: str
+    source_path: str | None = None
+    source_section: str | None = None
 
     def __post_init__(self) -> None:
         if self.version != 1:
@@ -56,9 +58,39 @@ class SemanticThreadAnchor:
                 raise WorkspaceError("view anchor requires its exact view key and level")
         elif self.view_key is not None or self.level is not None:
             raise WorkspaceError("only view anchors carry view key and level")
+        if self.kind == "requirement":
+            if (self.source_path is None) != (self.source_section is None):
+                raise WorkspaceError(
+                    "requirement anchor source path and section must be supplied together"
+                )
+            for value, field in (
+                (self.source_path, "source path"),
+                (self.source_section, "source section"),
+            ):
+                if value is not None and not value.strip():
+                    raise WorkspaceError(f"semantic thread anchor {field} must be nonempty")
+        elif self.source_path is not None or self.source_section is not None:
+            raise WorkspaceError("only requirement anchors carry document source fields")
 
     def to_dict(self) -> dict[str, object]:
-        return asdict(self)
+        value: dict[str, object] = {
+            "version": self.version,
+            "kind": self.kind,
+            "target_key": self.target_key,
+            "view_key": self.view_key,
+            "level": self.level,
+            "source_side": self.source_side,
+            "repository_key": self.repository_key,
+            "revision": self.revision,
+            "review_unit_id": self.review_unit_id,
+            "reviewed_tuple_digest": self.reviewed_tuple_digest,
+            "original_source_reference": self.original_source_reference,
+            "original_diff_link": self.original_diff_link,
+        }
+        if self.source_path is not None:
+            value["source_path"] = self.source_path
+            value["source_section"] = self.source_section
+        return value
 
     @classmethod
     def from_dict(cls, raw: object) -> "SemanticThreadAnchor":
@@ -69,7 +101,8 @@ class SemanticThreadAnchor:
             "repository_key", "revision", "review_unit_id", "reviewed_tuple_digest",
             "original_source_reference", "original_diff_link",
         }
-        if set(raw) != fields:
+        optional = {"source_path", "source_section"}
+        if frozenset(raw) not in {frozenset(fields), frozenset(fields | optional)}:
             raise WorkspaceError("invalid semantic thread anchor fields")
         return cls(**raw)  # type: ignore[arg-type]
 
@@ -105,6 +138,13 @@ def build_semantic_thread_anchor(
     diff_link = payload.diffs.get("source")
     if not isinstance(diff_link, str) or not diff_link.strip():
         raise WorkspaceError("review payload has no exact source diff")
+    source_path = None
+    source_section = None
+    if kind == "requirement" and isinstance(payload.provenance, dict):
+        plan = payload.provenance.get("plan")
+        if isinstance(plan, dict) and isinstance(plan.get("path"), str):
+            source_path = plan["path"]
+            source_section = target_key
     return SemanticThreadAnchor(
         version=1,
         kind=kind,
@@ -118,6 +158,8 @@ def build_semantic_thread_anchor(
         reviewed_tuple_digest=payload.reviewed_tuple_digest,
         original_source_reference=source_reference,
         original_diff_link=diff_link,
+        source_path=source_path,
+        source_section=source_section,
     )
 
 
@@ -199,6 +241,12 @@ def _validate_anchor(payload: C4ReviewPayload, anchor: SemanticThreadAnchor) -> 
         raise WorkspaceError("semantic thread anchor source reference is not pinned")
     if anchor.original_diff_link != payload.diffs.get("source"):
         raise WorkspaceError("semantic thread anchor diff link is not pinned")
+    if anchor.kind == "requirement" and anchor.source_path is not None:
+        provenance = payload.provenance
+        plan = provenance.get("plan") if isinstance(provenance, dict) else None
+        expected_path = plan.get("path") if isinstance(plan, dict) else None
+        if anchor.source_path != expected_path or anchor.source_section != anchor.target_key:
+            raise WorkspaceError("semantic thread anchor document source is not pinned")
 
 
 def _resolve_freshness(
