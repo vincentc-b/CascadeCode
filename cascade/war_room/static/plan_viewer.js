@@ -2046,7 +2046,7 @@
       return ["outdated", "target_missing_or_renamed"];
     }
 
-    function normalize(row) {
+    function normalize(row, replies) {
       var anchor = row && (row.anchor || row.semantic_anchor);
       if (!anchor || row.parent) return null;
       var resolved = freshnessFor(anchor);
@@ -2060,6 +2060,15 @@
         freshness: row.freshness === "outdated" ? "outdated" : resolved[0],
         outdated_reason: row.freshness === "outdated" ?
           (row.outdated_reason || resolved[1]) : resolved[1],
+        replies: (replies || []).map(function (reply) {
+          return {
+            id: reply.id,
+            body: reply.body,
+            author: reply.author,
+            created: reply.created,
+            state: reply.state === "resolved" ? "resolved" : "open",
+          };
+        }),
       };
     }
 
@@ -2080,7 +2089,9 @@
         }).then(function (value) { return value.comments || []; });
       }
       return request.then(function (rows) {
-        state.threads = (rows || []).map(normalize).filter(Boolean);
+        state.threads = groupCommentThreads(rows || []).map(function (thread) {
+          return normalize(thread.root, thread.replies);
+        }).filter(Boolean);
         state.loading = false;
         return state.threads;
       }).catch(function (error) {
@@ -2109,6 +2120,35 @@
           return value;
         });
       });
+    }
+
+    function perform(path, request, hookName) {
+      if (typeof options[hookName] === "function") {
+        return Promise.resolve(options[hookName](request));
+      }
+      return postJson(path, request);
+    }
+
+    function reply(threadId, body) {
+      return perform("/api/comment", {
+        doc_id: payload.owner_work_id,
+        parent: threadId,
+        body: body,
+      }, "replyThread");
+    }
+
+    function resolve(threadId) {
+      return perform("/api/comment/resolve", {
+        doc_id: payload.owner_work_id,
+        comment_id: threadId,
+      }, "resolveThread");
+    }
+
+    function reopen(threadId) {
+      return perform("/api/comment/reopen", {
+        doc_id: payload.owner_work_id,
+        comment_id: threadId,
+      }, "reopenThread");
     }
 
     function navigate(thread) {
@@ -2146,6 +2186,9 @@
       normalize: normalize,
       load: load,
       create: create,
+      reply: reply,
+      resolve: resolve,
+      reopen: reopen,
       navigate: navigate,
     };
   }
@@ -2457,6 +2500,9 @@
     var pendingDrill = null;
     var pendingThreadDraft = "";
     var pendingThreadBlocking = false;
+    var pendingThreadNeedsReview = false;
+    var pendingThreadReviewMessage = "";
+    var replyDrafts = {};
     var refreshTimer = null;
     var refreshInFlight = false;
     var stopped = false;
@@ -2554,7 +2600,46 @@
 
     function beginThread(anchor) {
       pendingAnchor = anchor;
+      pendingThreadNeedsReview = false;
+      pendingThreadReviewMessage = "";
       render();
+    }
+
+    function reviewTupleKey(value) {
+      return String(value && value.review_unit_id || "") + "\u0000" +
+        String(value && value.reviewed_tuple_digest || "");
+    }
+
+    function refreshPendingAnchor() {
+      if (!pendingAnchor) return false;
+      var updated = threadModel.buildAnchor(
+        pendingAnchor.kind,
+        pendingAnchor.target_key,
+        pendingAnchor.source_side,
+        pendingAnchor.view_key,
+        pendingAnchor.level
+      );
+      if (!updated) {
+        pendingThreadReviewMessage =
+          "This target is not present in the updated review. Cancel and select a current target.";
+        return false;
+      }
+      pendingAnchor = updated;
+      pendingThreadNeedsReview = false;
+      pendingThreadReviewMessage = "Target reviewed against the updated tuple.";
+      return true;
+    }
+
+    function runThreadAction(action, threadId, body) {
+      threadModel.state.error = null;
+      return threadModel[action](threadId, body).then(function () {
+        if (action === "reply") replyDrafts[threadId] = "";
+        return threadModel.load();
+      }).then(render).catch(function (error) {
+        threadModel.state.error = error && error.message ? error.message :
+          "Failed to update semantic thread";
+        render();
+      });
     }
 
     function anchorButton(parent, label, anchor) {
@@ -2603,8 +2688,34 @@
         form.appendChild(node(
           "p", "paired-c4-thread-target",
           pendingAnchor.kind + " " + pendingAnchor.target_key + " · " +
+            pendingAnchor.source_side + " · " +
             pendingAnchor.repository_key + " @ " + pendingAnchor.revision
         ));
+        form.appendChild(node(
+          "p", "paired-c4-thread-tuple",
+          "Review tuple " + pendingAnchor.review_unit_id + " · " +
+            pendingAnchor.reviewed_tuple_digest
+        ));
+        if (pendingThreadNeedsReview) {
+          var staleDraft = node(
+            "p", "paired-c4-thread-draft-review",
+            "The displayed review tuple changed. Review this target before posting the preserved draft."
+          );
+          staleDraft.setAttribute("role", "alert");
+          form.appendChild(staleDraft);
+          var reviewTarget = node("button", "paired-c4-thread-review-target", "Review updated target");
+          reviewTarget.type = "button";
+          reviewTarget.addEventListener("click", function () {
+            refreshPendingAnchor();
+            render();
+          });
+          form.appendChild(reviewTarget);
+        }
+        if (pendingThreadReviewMessage) {
+          form.appendChild(node(
+            "p", "paired-c4-thread-review-message", pendingThreadReviewMessage
+          ));
+        }
         var body = node("textarea", "paired-c4-thread-body");
         body.rows = 3;
         body.required = true;
@@ -2621,8 +2732,9 @@
         });
         blockingLabel.insertBefore(blocking, blockingLabel.children[0] || null);
         form.appendChild(blockingLabel);
-        var send = node("button", "", "Post thread");
+        var send = node("button", "paired-c4-thread-send", "Post thread");
         send.type = "submit";
+        send.disabled = pendingThreadNeedsReview;
         form.appendChild(send);
         var cancel = node("button", "", "Cancel");
         cancel.type = "button";
@@ -2630,11 +2742,14 @@
           pendingAnchor = null;
           pendingThreadDraft = "";
           pendingThreadBlocking = false;
+          pendingThreadNeedsReview = false;
+          pendingThreadReviewMessage = "";
           render();
         });
         form.appendChild(cancel);
         form.addEventListener("submit", function (event) {
           event.preventDefault();
+          if (pendingThreadNeedsReview) return;
           var text = String(body.value || "").trim();
           if (!text) return;
           send.disabled = true;
@@ -2642,6 +2757,8 @@
             pendingAnchor = null;
             pendingThreadDraft = "";
             pendingThreadBlocking = false;
+            pendingThreadNeedsReview = false;
+            pendingThreadReviewMessage = "";
             return threadModel.load();
           }).then(render).catch(function (error) {
             send.disabled = false;
@@ -2674,8 +2791,25 @@
             "p", "paired-c4-thread-outdated",
             "Outdated: " + (thread.outdated_reason || "target is no longer current")
           ));
+          if (thread.blocking && thread.state !== "resolved") {
+            item.appendChild(node(
+              "p", "paired-c4-thread-outdated-blocking",
+              "This outdated thread remains blocking until it is resolved."
+            ));
+          }
         }
         item.appendChild(node("p", "paired-c4-thread-body-text", thread.body));
+        var replies = node("div", "paired-c4-thread-replies");
+        (thread.replies || []).forEach(function (reply) {
+          var entry = node("article", "paired-c4-thread-reply");
+          entry.setAttribute("data-reply-id", reply.id || "");
+          entry.appendChild(node(
+            "p", "paired-c4-thread-reply-meta", (reply.author || "unknown") + " replied"
+          ));
+          entry.appendChild(node("p", "paired-c4-thread-reply-body", reply.body));
+          replies.appendChild(entry);
+        });
+        item.appendChild(replies);
         item.appendChild(node(
           "p", "paired-c4-thread-revision",
           anchor.source_side + " · " + anchor.repository_key + " @ " + anchor.revision
@@ -2707,6 +2841,44 @@
             }
           });
           item.appendChild(open);
+        }
+        if (thread.state === "open") {
+          var replyForm = node("form", "paired-c4-thread-reply-form");
+          var replyBody = node("textarea", "paired-c4-thread-reply-body-input");
+          replyBody.rows = 2;
+          replyBody.required = true;
+          replyBody.value = replyDrafts[thread.id] || "";
+          replyBody.setAttribute("aria-label", "Reply to semantic thread");
+          replyBody.addEventListener("input", function () {
+            replyDrafts[thread.id] = replyBody.value;
+          });
+          replyForm.appendChild(replyBody);
+          var replySend = node("button", "paired-c4-thread-reply-send", "Reply");
+          replySend.type = "submit";
+          replyForm.appendChild(replySend);
+          replyForm.addEventListener("submit", function (event) {
+            event.preventDefault();
+            var replyText = String(replyBody.value || "").trim();
+            if (!replyText) return;
+            replySend.disabled = true;
+            runThreadAction("reply", thread.id, replyText);
+          });
+          item.appendChild(replyForm);
+          var resolve = node("button", "paired-c4-thread-resolve", "Resolve");
+          resolve.type = "button";
+          resolve.addEventListener("click", function () {
+            resolve.disabled = true;
+            runThreadAction("resolve", thread.id);
+          });
+          item.appendChild(resolve);
+        } else {
+          var reopen = node("button", "paired-c4-thread-reopen", "Reopen");
+          reopen.type = "button";
+          reopen.addEventListener("click", function () {
+            reopen.disabled = true;
+            runThreadAction("reopen", thread.id);
+          });
+          item.appendChild(reopen);
         }
         list.appendChild(item);
       });
@@ -2921,10 +3093,15 @@
       refreshInFlight = true;
       return Promise.resolve(options.refreshPayload()).then(function (nextPayload) {
         if (!nextPayload || stopped) return null;
+        var tupleChanged = reviewTupleKey(payload) !== reviewTupleKey(nextPayload);
         // Preserve the object identity captured by the semantic-thread model.
         Object.keys(payload).forEach(function (key) { delete payload[key]; });
         Object.keys(nextPayload).forEach(function (key) { payload[key] = nextPayload[key]; });
         navigation.updatePayload(payload);
+        if (tupleChanged && pendingAnchor) {
+          pendingThreadNeedsReview = true;
+          pendingThreadReviewMessage = "";
+        }
         return threadModel.load().then(function () {
           render();
           return nextPayload;
@@ -2954,6 +3131,15 @@
       refresh: refresh,
       stopRefresh: stopRefresh,
       selection: function () { return navigation.state.selection; },
+      draftState: function () {
+        return {
+          anchor: pendingAnchor,
+          body: pendingThreadDraft,
+          blocking: pendingThreadBlocking,
+          needs_review: pendingThreadNeedsReview,
+          replies: Object.assign({}, replyDrafts),
+        };
+      },
     };
   }
 

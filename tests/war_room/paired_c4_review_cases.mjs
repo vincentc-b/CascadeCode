@@ -297,6 +297,10 @@ function descendants(root) {
   return rows;
 }
 
+function settle() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 const errorHost = createElement("section");
 initPairedC4Review({
   state: "error",
@@ -339,10 +343,135 @@ assert.ok(readyText.includes("ADR-4"));
 assert.ok(readyText.includes("git:model-a..model-b"));
 assert.ok(readyText.some((value) => /\"state\": \"changed\"/.test(value)));
 assert.ok(readyText.includes("git:plan-a..plan-b"));
-await Promise.resolve();
-await Promise.resolve();
+await settle();
 assert.ok(
   descendants(readyHost).some((node) => /Interaction unsupported:/.test(node.textContent)),
   "a client-side binding failure is actionable and never replaced with static interaction"
 );
+
+// The live discussion reconciles roots and replies without discarding local
+// drafts, and all lifecycle writes use the owner-routed HTTP contract.
+const liveHost = createElement("section");
+const livePayload = { ...payload };
+delete livePayload.semantic_threads;
+const liveModel = createSemanticThreadModel(livePayload, createPairedNavigation(livePayload));
+const liveAnchor = liveModel.buildAnchor("element", "system.shop", "proposed");
+let liveRows = [
+  {
+    id: "semantic-root", body: "check the shop", author: "human", state: "open",
+    blocking: true, semantic_anchor: liveAnchor, created: "2026-11-10T00:00:00Z",
+  },
+  {
+    id: "semantic-reply-1", parent: "semantic-root", body: "first reply",
+    author: "agent", state: "open", blocking: false,
+    created: "2026-11-10T00:01:00Z",
+  },
+];
+let refreshedPayload = livePayload;
+const lifecycleCalls = [];
+const liveReview = initPairedC4Review(livePayload, {
+  document,
+  host: liveHost,
+  loadThreads() { return liveRows; },
+  refreshPayload() { return { ...refreshedPayload }; },
+  createThread(request) {
+    lifecycleCalls.push(["create", request]);
+    return { ok: true, comment_id: "semantic-created" };
+  },
+  replyThread(request) {
+    lifecycleCalls.push(["reply", request]);
+    liveRows.push({
+      id: "semantic-reply-local", parent: request.parent, body: request.body,
+      author: "human", state: "open", blocking: false,
+      created: "2026-11-10T00:03:00Z",
+    });
+    return { ok: true };
+  },
+  resolveThread(request) {
+    lifecycleCalls.push(["resolve", request]);
+    liveRows = liveRows.map((row) => ({ ...row, state: "resolved" }));
+    return { ok: true };
+  },
+  reopenThread(request) {
+    lifecycleCalls.push(["reopen", request]);
+    liveRows = liveRows.map((row) => ({ ...row, state: "open" }));
+    return { ok: true };
+  },
+});
+await settle();
+assert.equal(liveHost.querySelectorAll(".paired-c4-thread-reply").length, 1);
+assert.equal(liveHost.querySelector(".paired-c4-thread-resolve").textContent, "Resolve");
+
+const replyDraft = liveHost.querySelector(".paired-c4-thread-reply-body-input");
+replyDraft.value = "preserve this reply";
+replyDraft.dispatchEvent({ type: "input" });
+liveRows.push({
+  id: "semantic-reply-incoming", parent: "semantic-root", body: "incoming reply",
+  author: "agent", state: "open", blocking: false,
+  created: "2026-11-10T00:02:00Z",
+});
+await liveReview.refresh();
+assert.equal(liveHost.querySelectorAll(".paired-c4-thread-reply").length, 2);
+assert.equal(
+  liveHost.querySelector(".paired-c4-thread-reply-body-input").value,
+  "preserve this reply",
+  "incoming refresh preserves the local reply draft"
+);
+liveHost.querySelector(".paired-c4-thread-reply-form").dispatchEvent({ type: "submit" });
+await settle();
+assert.equal(lifecycleCalls[0][0], "reply");
+assert.equal(lifecycleCalls[0][1].parent, "semantic-root");
+assert.equal(lifecycleCalls[0][1].body, "preserve this reply");
+assert.equal(liveHost.querySelectorAll(".paired-c4-thread-reply").length, 3);
+
+liveHost.querySelector(".paired-c4-thread-resolve").click();
+await settle();
+assert.equal(lifecycleCalls[1][0], "resolve");
+assert.equal(lifecycleCalls[1][1].doc_id, payload.owner_work_id);
+assert.equal(liveHost.querySelector(".paired-c4-thread-reopen").textContent, "Reopen");
+liveHost.querySelector(".paired-c4-thread-reopen").click();
+await settle();
+assert.equal(lifecycleCalls[2][0], "reopen");
+assert.ok(liveHost.querySelector(".paired-c4-thread-resolve"));
+
+// A composer opened in an old tab keeps its draft, but tuple replacement
+// disables submission until the reviewer explicitly rebinds the same target.
+liveHost.querySelector(".paired-c4-comment-target").click();
+const rootDraft = liveHost.querySelector(".paired-c4-thread-body");
+rootDraft.value = "draft from the old tuple";
+rootDraft.dispatchEvent({ type: "input" });
+liveReview.navigation.select("element", "system.shop", "proposed");
+refreshedPayload = {
+  ...livePayload,
+  review_unit_id: "review-next",
+  reviewed_tuple_digest: "tuple-next",
+};
+await liveReview.refresh();
+assert.equal(liveReview.selection().semantic_id, "system.shop");
+assert.equal(liveReview.draftState().body, "draft from the old tuple");
+assert.equal(liveReview.draftState().needs_review, true);
+assert.equal(liveHost.querySelector(".paired-c4-thread-send").disabled, true);
+assert.ok(liveHost.querySelector(".paired-c4-thread-review-target"));
+liveHost.querySelector(".paired-c4-thread-review-target").click();
+assert.equal(liveReview.draftState().needs_review, false);
+assert.equal(liveReview.draftState().anchor.reviewed_tuple_digest, "tuple-next");
+liveHost.querySelector(".paired-c4-thread-compose").dispatchEvent({ type: "submit" });
+await settle();
+assert.equal(lifecycleCalls[3][0], "create");
+assert.equal(lifecycleCalls[3][1].body, "draft from the old tuple");
+assert.equal(lifecycleCalls[3][1].semantic_anchor.reviewed_tuple_digest, "tuple-next");
+
+liveRows[0] = { ...liveRows[0], state: "open", freshness: "outdated", outdated_reason: "review_tuple_mismatch" };
+await liveReview.refresh();
+assert.ok(liveHost.querySelector(".paired-c4-thread-outdated-blocking"));
+liveReview.stopRefresh();
+
+const grouped = createSemanticThreadModel(livePayload, createPairedNavigation(livePayload), {
+  loadThreads() { return liveRows; },
+});
+await grouped.load();
+assert.equal(grouped.state.threads.length, 1, "Markdown roots are excluded from semantic discussion");
+assert.equal(grouped.state.threads[0].replies.length, 3);
+
+console.log("paired_c4_review cases ok");
 

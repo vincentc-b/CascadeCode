@@ -403,7 +403,10 @@ body {
 
 .paired-c4-comment-target,
 .paired-c4-thread-compose button,
-.paired-c4-thread-open {
+.paired-c4-thread-open,
+.paired-c4-thread-reply-form button,
+.paired-c4-thread-resolve,
+.paired-c4-thread-reopen {
   font: inherit;
 }
 
@@ -449,6 +452,55 @@ body {
   white-space: pre-wrap;
 }
 
+.paired-c4-thread-tuple,
+.paired-c4-thread-review-message,
+.paired-c4-thread-reply-meta {
+  margin: 0.3rem 0;
+  color: var(--plan-muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.paired-c4-thread-draft-review,
+.paired-c4-thread-outdated-blocking {
+  margin: 0.4rem 0;
+  color: #8a4b00;
+  font-weight: 600;
+}
+
+.paired-c4-thread-replies {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.55rem 0;
+}
+
+.paired-c4-thread-reply {
+  padding-left: 0.65rem;
+  border-left: 2px solid var(--plan-border);
+}
+
+.paired-c4-thread-reply-body {
+  margin: 0.2rem 0;
+  white-space: pre-wrap;
+}
+
+.paired-c4-thread-reply-form {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.paired-c4-thread-reply-form textarea {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+}
+
+.paired-c4-thread-resolve,
+.paired-c4-thread-reopen {
+  margin-top: 0.45rem;
+}
+
 .paired-c4-thread-outdated,
 .paired-c4-thread-error {
   color: #8a4b00;
@@ -478,6 +530,18 @@ body {
 
   .paired-c4-svg {
     height: clamp(15rem, 75vw, 28rem);
+  }
+
+  .paired-c4-thread-shortcuts,
+  .paired-c4-thread-compose,
+  .paired-c4-thread-reply-form {
+    min-width: 0;
+  }
+
+  .paired-c4-thread-shortcuts button,
+  .paired-c4-thread-compose button,
+  .paired-c4-thread-reply-form button {
+    width: 100%;
   }
 }
 
