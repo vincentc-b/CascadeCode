@@ -60,6 +60,20 @@
     });
   }
 
+  function documentationContextUrl(snapshotId, view, selection) {
+    var params = new URLSearchParams();
+    params.set("view", view.key);
+    params.set("level", view.level);
+    if (selection && selection.semantic_id) {
+      params.set("kind", selection.kind);
+      params.set("target", selection.semantic_id);
+    } else {
+      params.set("kind", "view");
+    }
+    return "/api/architecture/snapshots/" + encodeURIComponent(snapshotId) +
+      "/context?" + params.toString();
+  }
+
   function createController(options) {
     options = options || {};
     var win = options.window || window;
@@ -80,6 +94,8 @@
       viewer: null,
       headTimer: null,
       pendingTimer: null,
+      contextRequest: 0,
+      resourceRequest: 0,
     };
 
     function byId(id) { return doc.getElementById(id); }
@@ -109,6 +125,14 @@
       viewer: byId("architecture-viewer"),
       targetDetail: byId("architecture-target-detail"),
       sourceList: byId("architecture-source-list"),
+      documentationContext: byId("architecture-documentation-context"),
+      documentationStatus: byId("architecture-documentation-status"),
+      documentationContent: byId("architecture-documentation-content"),
+      documentPreview: byId("architecture-document-preview"),
+      documentPreviewHeading: byId("architecture-document-preview-heading"),
+      documentPreviewProvenance: byId("architecture-document-preview-provenance"),
+      documentPreviewBody: byId("architecture-document-preview-body"),
+      documentPreviewClose: byId("architecture-document-preview-close"),
     };
 
     function setStatus(message, error) {
@@ -136,6 +160,228 @@
         throw error;
       }
       return value;
+    }
+
+    function clearDocumentationContext(message) {
+      state.contextRequest += 1;
+      state.resourceRequest += 1;
+      el.documentationContent.replaceChildren();
+      el.documentationStatus.textContent = message || "";
+      el.documentationStatus.classList.remove("error");
+      el.documentPreview.hidden = true;
+      el.documentPreviewBody.replaceChildren();
+    }
+
+    function sourceLabel(source) {
+      if (!source) return "Source location unavailable";
+      var section = source.section ? "#" + source.section : "";
+      return source.repository_key + " · " + source.revision + " · " +
+        source.path + section;
+    }
+
+    function addContextActions(container, resources, title, provenance) {
+      var actions = doc.createElement("div");
+      actions.className = "architecture-context-actions";
+      [
+        ["section_url", "Open source section"],
+        ["document_url", "Open full document"],
+      ].forEach(function (choice) {
+        var url = resources && resources[choice[0]];
+        if (!url) return;
+        var button = doc.createElement("button");
+        button.type = "button";
+        button.textContent = choice[1];
+        button.addEventListener("click", function () {
+          openDocumentResource(url, title + " · " + choice[1], provenance);
+        });
+        actions.appendChild(button);
+      });
+      if (actions.children.length) container.appendChild(actions);
+    }
+
+    function contextState(row) {
+      var badge = doc.createElement("span");
+      badge.className = "architecture-context-state " + (row.state || "available");
+      badge.textContent = row.state || "available";
+      return badge;
+    }
+
+    function renderContextLink(row) {
+      var item = doc.createElement("li");
+      item.className = "architecture-context-row";
+      var name = doc.createElement("strong");
+      name.textContent = (row.kind === "decision" ? "Decision " : "Requirement ") +
+        row.document_id + (row.title ? " — " + row.title : "");
+      item.appendChild(name);
+      item.appendChild(contextState(row));
+      var source = doc.createElement("p");
+      source.className = "architecture-context-row-meta";
+      source.textContent = sourceLabel(row.source);
+      item.appendChild(source);
+      if (row.reason) {
+        var reason = doc.createElement("p");
+        reason.textContent = "Reference unavailable: " + row.reason;
+        item.appendChild(reason);
+      }
+      var evidence = (row.provenance || []).map(function (value) {
+        return value.relation + " · " + value.evidence_id;
+      }).join("; ");
+      if (evidence) {
+        var proof = doc.createElement("p");
+        proof.className = "architecture-context-row-meta";
+        proof.textContent = "Evidence: " + evidence;
+        item.appendChild(proof);
+      }
+      addContextActions(item, row.resources, row.document_id, sourceLabel(row.source));
+      return item;
+    }
+
+    function renderDesignContext(row) {
+      var item = doc.createElement("li");
+      item.className = "architecture-context-row";
+      var name = doc.createElement("strong");
+      name.textContent = row.design_owner_directory === "." ?
+        "Repository design" : "Design owner: " + row.design_owner_directory;
+      item.appendChild(name);
+      item.appendChild(contextState(row));
+      var directories = doc.createElement("p");
+      directories.textContent = "Code context: " + row.code_directory;
+      item.appendChild(directories);
+      var source = doc.createElement("p");
+      source.className = "architecture-context-row-meta";
+      source.textContent = sourceLabel(row.source);
+      item.appendChild(source);
+      if (row.reason) {
+        var reason = doc.createElement("p");
+        reason.textContent = "Design unavailable: " + row.reason;
+        item.appendChild(reason);
+      }
+      addContextActions(item, { document_url: row.document_url },
+        row.design_owner_directory + "/DESIGN.md", sourceLabel(row.source));
+      return item;
+    }
+
+    function addContextGroup(title, description, rows, renderer, emptyMessage) {
+      var section = doc.createElement("section");
+      section.className = "architecture-context-group";
+      var heading = doc.createElement("h4");
+      heading.textContent = title;
+      section.appendChild(heading);
+      if (description) {
+        var note = doc.createElement("p");
+        note.textContent = description;
+        section.appendChild(note);
+      }
+      if (rows && rows.length) {
+        var list = doc.createElement("ul");
+        list.className = "architecture-context-list";
+        rows.forEach(function (row) { list.appendChild(renderer(row)); });
+        section.appendChild(list);
+      } else if (emptyMessage) {
+        var empty = doc.createElement("p");
+        empty.textContent = emptyMessage;
+        section.appendChild(empty);
+      }
+      el.documentationContent.appendChild(section);
+    }
+
+    function renderDocumentationContext(payload, selection) {
+      el.documentationContent.replaceChildren();
+      var hasTarget = !!(selection && selection.semantic_id);
+      var selectedLabel = hasTarget ? selection.kind + " " + selection.semantic_id :
+        "view " + state.view.key;
+      el.documentationStatus.textContent = "Pinned context for " + selectedLabel + ".";
+      el.documentationStatus.classList.remove("error");
+      if (hasTarget) {
+        addContextGroup(
+          "Explicit target links",
+          "Only verified mappings count as coverage for this target.",
+          payload.explicit_target_links || [],
+          renderContextLink,
+          payload.mapping_state === "unmapped" ?
+            "Unmapped target — no verified explicit requirement or decision link exists." :
+            "No explicit links were returned."
+        );
+      }
+      addContextGroup(
+        "View links",
+        hasTarget ? "Links for the enclosing view; these do not claim target coverage." :
+          "Verified requirements and decisions linked to this view.",
+        payload.view_links || [],
+        renderContextLink,
+        "No verified requirements or decisions are linked to this view."
+      );
+      addContextGroup(
+        "Owning designs",
+        "Ownership context only; it is not an inferred requirement mapping.",
+        payload.owner_context || [],
+        renderDesignContext,
+        "No owning design is available at the pinned documentation revision."
+      );
+      if (!hasTarget) {
+        addContextGroup(
+          "Broader design index",
+          "Broader navigation for the selected view; entries are not explicit coverage.",
+          payload.broader_index || [],
+          renderDesignContext,
+          "No broader design index entries are recorded for this snapshot."
+        );
+      }
+    }
+
+    async function loadDocumentationContext() {
+      if (!state.payload || state.payload.state !== "ready" || !state.view) return;
+      var requestId = ++state.contextRequest;
+      var snapshotId = state.payload.snapshot_id;
+      var view = state.view;
+      var selection = state.selection && {
+        kind: state.selection.kind,
+        semantic_id: state.selection.semantic_id,
+      };
+      state.resourceRequest += 1;
+      el.documentPreview.hidden = true;
+      el.documentationContent.replaceChildren();
+      el.documentationStatus.textContent = "Loading verified requirements and decisions…";
+      el.documentationStatus.classList.remove("error");
+      try {
+        var payload = await json(documentationContextUrl(snapshotId, view, selection));
+        if (requestId !== state.contextRequest || !state.payload ||
+            state.payload.snapshot_id !== snapshotId || state.view !== view) return;
+        renderDocumentationContext(payload, selection);
+      } catch (error) {
+        if (requestId !== state.contextRequest) return;
+        el.documentationContent.replaceChildren();
+        el.documentationStatus.textContent = error.message ||
+          "Could not load requirements and decisions.";
+        el.documentationStatus.classList.add("error");
+      }
+    }
+
+    async function openDocumentResource(url, title, provenance) {
+      var requestId = ++state.resourceRequest;
+      el.documentPreview.hidden = false;
+      el.documentPreviewHeading.textContent = title;
+      el.documentPreviewProvenance.textContent = provenance;
+      el.documentPreviewBody.textContent = "Loading pinned document…";
+      try {
+        var response = await request(url);
+        if (!response.ok) throw new Error("Document request failed (HTTP " + response.status + ")");
+        var body = await response.text();
+        if (requestId !== state.resourceRequest) return;
+        var html = viewerApi && typeof viewerApi.markdownToHtml === "function" ?
+          viewerApi.markdownToHtml(body) : null;
+        el.documentPreviewBody.replaceChildren();
+        if (html != null) {
+          el.documentPreviewBody.innerHTML = html;
+        } else {
+          var pre = doc.createElement("pre");
+          pre.textContent = body;
+          el.documentPreviewBody.appendChild(pre);
+        }
+      } catch (error) {
+        if (requestId !== state.resourceRequest) return;
+        el.documentPreviewBody.textContent = error.message || "Could not open pinned document.";
+      }
     }
 
     function currentLink() {
@@ -515,6 +761,8 @@
     }
 
     function renderSnapshot(payload, requestedSelection) {
+      clearDocumentationContext(payload.state === "ready" ? "" :
+        "Requirements and decisions are available when the snapshot is ready.");
       el.snapshot.hidden = false;
       el.updateIndicator.hidden = true;
       el.refreshSnapshot.hidden = true;
@@ -672,6 +920,7 @@
           }
         },
       });
+      loadDocumentationContext();
     }
 
     function handlePopState() {
@@ -739,6 +988,11 @@
         renderViewer();
         writeLink("pushState");
       });
+      el.documentPreviewClose.addEventListener("click", function () {
+        state.resourceRequest += 1;
+        el.documentPreview.hidden = true;
+        el.documentPreviewBody.replaceChildren();
+      });
       win.addEventListener("popstate", handlePopState);
       var initial = currentLink();
       if (initial.tab !== "board" && initial.tab !== "architecture") {
@@ -766,6 +1020,7 @@
   return {
     applyLinkState: applyLinkState,
     createController: createController,
+    documentationContextUrl: documentationContextUrl,
     init: init,
     linkState: linkState,
     sortedChoices: sortedChoices,
