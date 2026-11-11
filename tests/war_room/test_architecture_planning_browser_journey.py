@@ -11,7 +11,6 @@ import tempfile
 import threading
 import time
 import urllib.request
-from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -310,7 +309,7 @@ def _proposal(
         proposed_model=model,
         requirement_citations=("REQ-ARCH-REVIEW",),
         decision_citations=("DEC-REAL-RENDERER",),
-        view_citations=("portal-context",),
+        view_citations=("portal-context", "portal-containers"),
         affected_work_ids=(feature_id,),
         architecture_impact="diagram_change",
         impact_reason="The portal description changes in the reviewed system context.",
@@ -388,6 +387,11 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
         feature.meta.models = {
             role: "offered" for role in ("feature_lead", "feature_architect", "swe")
         }
+        feature.body += (
+            "\n## Verified architecture context\n\n"
+            "- `REQ-ARCH-REVIEW` — Reviewers can open revision-pinned evidence.\n"
+            "- `DEC-REAL-RENDERER` — Use the real renderer for browser acceptance.\n"
+        )
         write_doc(feature, root=root)
         monkeypatch.setattr(
             "cascade.approvals.get_provider_inventory", lambda: _inventory("offered")
@@ -462,6 +466,10 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 repo_root=root,
                 collector=collector,
                 role="feature_architect",
+            )
+            planned.body = planned.body.replace(
+                "Reviewers can open revision-pinned evidence.",
+                "Reviewers can open current, proposed, and diff evidence.",
             )
             planned.body += "\nThe proposed portal copy is revision pinned.\n"
             dispatch_planning_tool(
@@ -580,6 +588,82 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                     ".paired-c4-side-proposed .paired-c4-revision"
                 ).inner_text()
 
+                # Context stays lazy until requested, then exposes both cited
+                # documents for each cited view from the exact reviewed tuple.
+                assert page.locator(".paired-c4-context-document").count() == 0
+                page.locator(".paired-c4-context-toggle").click()
+                page.locator(
+                    '.paired-c4-context-document[data-document-id="REQ-ARCH-REVIEW"]'
+                ).wait_for()
+                context_documents = page.locator(".paired-c4-context-document")
+                assert context_documents.count() == 2
+                requirement_card = page.locator(
+                    '.paired-c4-context-document[data-document-id="REQ-ARCH-REVIEW"]'
+                )
+                assert second.plan.revision in requirement_card.locator(
+                    ".paired-c4-context-source"
+                ).inner_text()
+                requirement_card.locator(
+                    ".paired-c4-context-preview"
+                ).click()
+                requirement_card.locator(
+                    ".paired-c4-context-markdown",
+                    has_text="current, proposed, and diff evidence",
+                ).wait_for()
+                resources = {
+                    link.inner_text(): link.get_attribute("href")
+                    for link in requirement_card.locator(
+                        ".paired-c4-context-link"
+                    ).all()
+                }
+                assert {
+                    "Open source section",
+                    "Open current document",
+                    "Open proposed document",
+                    "Open current/proposed diff",
+                } <= resources.keys()
+                assert b"Reviewers can open revision-pinned evidence" in _get(
+                    restarted_base + resources["Open current document"]
+                )
+                assert b"current, proposed, and diff evidence" in _get(
+                    restarted_base + resources["Open proposed document"]
+                )
+                assert b"- `REQ-ARCH-REVIEW` \xe2\x80\x94 Reviewers can open revision-pinned evidence" in _get(
+                    restarted_base + resources["Open current/proposed diff"]
+                )
+
+                page.locator(
+                    ".paired-c4-context-side", has_text="current"
+                ).click()
+                current_requirement = page.locator(
+                    '.paired-c4-context-document[data-document-id="REQ-ARCH-REVIEW"]'
+                )
+                current_requirement.locator(
+                    ".paired-c4-context-source", has_text=first.plan.revision
+                ).wait_for()
+                page.locator(
+                    ".paired-c4-context-side", has_text="proposed"
+                ).click()
+
+                # The same requirement and decision are linked to both review
+                # views: a browser-level many-to-many example.
+                page.locator(".paired-c4-view-select").select_option(
+                    index=next(
+                        index
+                        for index, label in enumerate(
+                            page.locator(
+                                ".paired-c4-view-select option"
+                            ).all_text_contents()
+                        )
+                        if label.startswith("portal-containers ")
+                    )
+                )
+                page.locator(
+                    '.paired-c4-context-document[data-document-id="DEC-REAL-RENDERER"]'
+                ).wait_for()
+                assert page.locator(".paired-c4-context-document").count() == 2
+                page.locator(".paired-c4-view-select").select_option(index=context_index)
+
                 proposed_target = page.locator(
                     '.paired-c4-side-proposed [aria-label="element element.system.portal"]'
                 )
@@ -588,6 +672,13 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 assert page.locator(".paired-c4-target-selected").count() == 2
                 assert "element element.system.portal" in page.locator(
                     ".paired-c4-status"
+                ).inner_text()
+                page.locator(
+                    ".paired-c4-context-unmapped",
+                    has_text="Unmapped target",
+                ).wait_for()
+                assert "context, not coverage" in page.locator(
+                    ".paired-c4-context"
                 ).inner_text()
 
                 current_target = page.locator(
