@@ -705,11 +705,16 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if epic_id is None:
             return
         from cascade.approvals import ApprovalSelectionError, approve_epic_plan
+        from cascade.workspace.architecture_review import ReviewApprovalContext
         from cascade.epic.planning_signoffs import PlanSignOffError
         from cascade.planning_action_dependencies import DependencyActionRefused
 
         try:
-            payload = approve_epic_plan(epic_id, root=self.server.root)
+            context = ReviewApprovalContext.from_dict(body["review_context"]) \
+                if "review_context" in body else None
+            payload = approve_epic_plan(
+                epic_id, root=self.server.root, review_context=context
+            )
         except ApprovalSelectionError as exc:
             self._json_response(HTTPStatus.CONFLICT, exc.to_dict())
             return
@@ -728,7 +733,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         except PlanSignOffError as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
-        except (ValueError, BoardError, OSError) as exc:
+        except (ValueError, BoardError, WorkspaceError, OSError) as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(HTTPStatus.OK, payload)
@@ -775,10 +780,15 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if feature_id is None:
             return
         from cascade.approvals import ApprovalSelectionError, approve_feature
+        from cascade.workspace.architecture_review import ReviewApprovalContext
         from cascade.planning_action_dependencies import DependencyActionRefused
 
         try:
-            payload = approve_feature(feature_id, root=self.server.root)
+            context = ReviewApprovalContext.from_dict(body["review_context"]) \
+                if "review_context" in body else None
+            payload = approve_feature(
+                feature_id, root=self.server.root, review_context=context
+            )
         except ApprovalSelectionError as exc:
             self._json_response(HTTPStatus.CONFLICT, exc.to_dict())
             return
@@ -794,7 +804,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 },
             )
             return
-        except (ValueError, BoardError, OSError) as exc:
+        except (ValueError, BoardError, WorkspaceError, OSError) as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(HTTPStatus.OK, payload)

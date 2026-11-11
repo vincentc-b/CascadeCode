@@ -319,6 +319,7 @@ for (const [state, expected] of [
   ["empty", /No paired diagram views.*empty/],
   ["removed", /No paired diagram views.*removed/],
   ["unchanged", /No diagram changes/],
+  ["partial_acceptance", /Partial acceptance remains pending.*proposal/],
 ]) {
   const stateHost = createElement("section");
   initPairedC4Review({

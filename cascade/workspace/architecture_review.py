@@ -58,6 +58,51 @@ class ArchitectureProposalError(WorkspaceError):
 
 
 @dataclass(frozen=True)
+class ReviewApprovalContext:
+    """The exact architecture evidence displayed before human approval."""
+
+    owner_work_id: str
+    target_repository_key: str
+    plan_revision: str
+    review_unit_id: str
+    reviewed_tuple_digest: str
+    accepted_baseline_generation: int | None
+
+    def __post_init__(self) -> None:
+        _nonblank(self.owner_work_id, "review approval owner")
+        _nonblank(self.target_repository_key, "review approval repository")
+        _revision(self.plan_revision, "review approval plan")
+        _nonblank(self.review_unit_id, "review approval unit")
+        _digest(self.reviewed_tuple_digest, "review approval tuple")
+        _generation(
+            self.accepted_baseline_generation,
+            "review approval baseline generation",
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, value: object) -> "ReviewApprovalContext":
+        row = _mapping(value, {
+            "owner_work_id", "target_repository_key", "plan_revision",
+            "review_unit_id", "reviewed_tuple_digest",
+            "accepted_baseline_generation",
+        })
+        strings = (
+            "owner_work_id", "target_repository_key", "plan_revision",
+            "review_unit_id", "reviewed_tuple_digest",
+        )
+        if not all(isinstance(row[field], str) for field in strings):
+            raise WorkspaceError("invalid review approval context")
+        return cls(
+            row["owner_work_id"], row["target_repository_key"],
+            row["plan_revision"], row["review_unit_id"],
+            row["reviewed_tuple_digest"], row["accepted_baseline_generation"],
+        )
+
+
+@dataclass(frozen=True)
 class PinnedDocumentRef:
     repository_key: str
     repository_role: RepositoryRole
@@ -692,6 +737,7 @@ class ArchitectureReviewStore:
                 raise WorkspaceError("architecture review status must use the review operation")
             return identity
         state["review_units"][identity] = encoded
+        state["review_order"].append(identity)
         self._write(state)
         return identity
 
@@ -774,6 +820,8 @@ class ArchitectureReviewStore:
             raise WorkspaceError("architecture review semantic diff changed")
         state["review_units"][identity] = encoded_unit
         state["diffs"][identity] = encoded_diff
+        if existing is None:
+            state["review_order"].append(identity)
         self._write(state)
         return identity
 
@@ -784,8 +832,7 @@ class ArchitectureReviewStore:
         _nonblank(work_id, "owner work ID")
         _nonblank(lineage, "integration lineage")
         matches: list[ArchitectureReviewUnit] = []
-        for value in self._read()["review_units"].values():
-            unit = ArchitectureReviewUnit.from_dict(value)
+        for unit in self._units_in_order():
             if unit.owner_work_id == work_id and unit.integration_lineage == lineage:
                 if unit.authorized_owner != owner:
                     raise ArchitectureProposalError(
@@ -1278,13 +1325,21 @@ class ArchitectureReviewStore:
 
     def units_affecting(self, work_id: str) -> tuple[ArchitectureReviewUnit, ...]:
         _nonblank(work_id, "review gate work ID")
-        units = tuple(
-            ArchitectureReviewUnit.from_dict(value)
-            for value in self._read()["review_units"].values()
-        )
+        units = self._units_in_order()
         return tuple(
             unit for unit in units
             if unit.owner_work_id == work_id or work_id in unit.affected_work_ids
+        )
+
+    def _units_in_order(self) -> tuple[ArchitectureReviewUnit, ...]:
+        state = self._read()
+        order = list(state["review_order"])
+        order.extend(
+            unit_id for unit_id in state["review_units"] if unit_id not in order
+        )
+        return tuple(
+            ArchitectureReviewUnit.from_dict(state["review_units"][unit_id])
+            for unit_id in order
         )
 
     def resolve_current(self, lineage: str, *, lineage_revision: str | None = None) -> AcceptedLineage | None:
@@ -1399,6 +1454,7 @@ class ArchitectureReviewStore:
             return {
                 "version": _SCHEMA_VERSION,
                 "review_units": {},
+                "review_order": [],
                 "lineages": {},
                 "reviews": {},
                 "diffs": {},
@@ -1418,13 +1474,14 @@ class ArchitectureReviewStore:
             raise WorkspaceError(f"invalid architecture review store: {self.path}") from exc
         if (not isinstance(state, dict) or
                 not {"version", "review_units", "lineages"}.issubset(state) or
-                not set(state).issubset({"version", "review_units", "lineages", "reviews", "diffs",
+                not set(state).issubset({"version", "review_units", "review_order", "lineages", "reviews", "diffs",
                                          "invalidations", "gate_rollout", "promotions",
                                          "promotion_reservations"}) or
                 state["version"] != _SCHEMA_VERSION or not isinstance(state["review_units"], dict) or
                 not isinstance(state["lineages"], dict)):
             raise WorkspaceError(f"unsupported architecture review store: {self.path}")
         state.setdefault("reviews", {})
+        state.setdefault("review_order", [])
         state.setdefault("diffs", {})
         state.setdefault("invalidations", {})
         state.setdefault("promotions", {})
@@ -1439,6 +1496,10 @@ class ArchitectureReviewStore:
         state["gate_rollout"].setdefault("name", _REVIEW_GATE_NAME)
         state["gate_rollout"].setdefault("acceptance_holds", {})
         if (not isinstance(state["reviews"], dict) or not isinstance(state["diffs"], dict) or
+                not isinstance(state["review_order"], list) or
+                len(state["review_order"]) != len(set(state["review_order"])) or
+                not all(isinstance(item, str) and item in state["review_units"]
+                        for item in state["review_order"]) or
                 not isinstance(state["invalidations"], dict) or
                 not isinstance(state["promotions"], dict) or
                 not isinstance(state["promotion_reservations"], dict) or
@@ -1742,6 +1803,7 @@ def validate_review_gate(
     lineage_revision: str | None = None,
     blocking_work_ids: Sequence[str] = (),
     semantic_blockers: Sequence[BlockingScope] = (),
+    approval_context: ReviewApprovalContext | None = None,
 ) -> ReviewGateResult:
     """Apply one revision-bound policy at every safe lifecycle boundary.
 
@@ -1778,15 +1840,10 @@ def validate_review_gate(
         return ReviewGateResult(
             work_id, boundary, _REVIEW_GATE_NAME, 0, None, None
         )
-    if policy is None:
+    if policy is None and boundary != "approval":
         policy = review_store.bind_gate_policy(
-            work_id, active if boundary in {"approval", "dispatch"} else 0
+            work_id, active if boundary == "dispatch" else 0
         )
-    elif boundary == "approval" and active is not None and policy < active:
-        # A fresh approval is the explicit signal that a proposal was materially
-        # revised; already executing work never reaches this path implicitly.
-        policy = review_store.rebind_gate_policy(work_id, active)
-
     blockers = tuple(dict.fromkeys(item for item in blocking_work_ids if item.strip()))
     if blockers:
         raise ArchitectureProposalError(
@@ -1794,29 +1851,39 @@ def validate_review_gate(
             "open blocking review threads affect: " + ", ".join(blockers),
         )
 
-    candidates = tuple(
-        unit for unit in review_store.units_affecting(work_id)
-        if unit.rollout_version == policy
-    )
-    if policy == 0:
+    effective_policy = policy
+    if effective_policy is None:
+        effective_policy = active if boundary in {"approval", "dispatch"} else 0
+    elif boundary == "approval" and active is not None and effective_policy < active:
+        # A fresh approval is the explicit signal that a proposal was materially
+        # revised; already executing work never reaches this path implicitly.
+        effective_policy = active
+
+    if effective_policy == 0:
         # A rollout exception never legalizes a claimed diagram without a model.
         for unit in review_store.units_affecting(work_id):
             _validate_claimed_model(project, unit)
+        if policy is None:
+            review_store.bind_gate_policy(work_id, 0)
         return ReviewGateResult(
             work_id, boundary, _REVIEW_GATE_NAME, 0, None, None
         )
-    if not candidates:
-        raise ArchitectureProposalError(
-            "review_required",
-            f"work is bound to architecture review rollout v{policy} but has no proposal",
-        )
-    unit = candidates[-1]
-    refreshed = review_store.refresh(unit.review_unit_id, lineage_revision=lineage_revision)
+    refreshed = resolve_review_gate_unit(
+        review_store,
+        work_id=work_id,
+        policy=effective_policy,
+        lineage_revision=lineage_revision,
+        approval_context=approval_context if boundary == "approval" else None,
+    )
     if refreshed.status == "stale":
         reasons = review_store.get_invalidation_reasons(refreshed.review_unit_id)
         code = reasons[-1] if reasons else "artifact_changed"
         raise ArchitectureProposalError(code, "approved architecture review tuple is stale")
     _validate_claimed_model(project, refreshed)
+    if policy is None:
+        policy = review_store.bind_gate_policy(work_id, effective_policy)
+    elif policy != effective_policy:
+        policy = review_store.rebind_gate_policy(work_id, effective_policy)
     if boundary == "approval":
         refreshed = review_store.approve_review_unit(refreshed.review_unit_id)
     elif refreshed.status != "approved":
@@ -1830,6 +1897,46 @@ def validate_review_gate(
         policy,
         refreshed.review_unit_id,
         refreshed.reviewed_tuple_digest,
+    )
+
+
+def resolve_review_gate_unit(
+    store: ArchitectureReviewStore,
+    *,
+    work_id: str,
+    policy: int,
+    lineage_revision: str | None = None,
+    approval_context: ReviewApprovalContext | None = None,
+) -> ArchitectureReviewUnit:
+    """Resolve the same current affected tuple for every lifecycle boundary."""
+
+    candidates = tuple(
+        unit for unit in store.units_affecting(work_id)
+        if unit.rollout_version == policy
+    )
+    if not candidates:
+        raise ArchitectureProposalError(
+            "review_required",
+            f"work is bound to architecture review rollout v{policy} but has no proposal",
+        )
+    authoritative = candidates[-1]
+    if approval_context is not None:
+        actual = ReviewApprovalContext(
+            authoritative.owner_work_id,
+            authoritative.target_repository_key,
+            authoritative.plan.revision,
+            authoritative.review_unit_id,
+            authoritative.reviewed_tuple_digest,
+            authoritative.baseline_generation,
+        )
+        if approval_context != actual:
+            raise ArchitectureProposalError(
+                "stale_review_context",
+                "displayed architecture review tuple is no longer authoritative",
+            )
+    return store.refresh(
+        authoritative.review_unit_id,
+        lineage_revision=lineage_revision,
     )
 
 

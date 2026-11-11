@@ -726,7 +726,9 @@
       chrome.errorElement.hidden = true;
       chrome.errorElement.textContent = "";
       chrome.approveButton.disabled = true;
-      postJson("/api/approve_epic_plan", { id: workId })
+      var request = { id: workId };
+      if (options.reviewContext) request.review_context = options.reviewContext;
+      postJson("/api/approve_epic_plan", request)
         .then(function (body) {
           if (!body || body.ok !== true) {
             throw new Error("Unexpected approval response");
@@ -2974,9 +2976,16 @@
         return;
       }
       if (!navigation.views.length) {
+        var emptyMessage = payload.state === "unchanged" ?
+          "No diagram changes." :
+          "No paired diagram views are available (" + payload.state + ").";
+        if (payload.state === "partial_acceptance") {
+          emptyMessage = "Partial acceptance remains pending. " +
+            (payload.summary || "Code and documentation have not both landed.");
+        }
         host.appendChild(node(
           "p", "paired-c4-empty",
-          payload.state === "unchanged" ? "No diagram changes." : "No paired diagram views are available (" + payload.state + ")."
+          emptyMessage
         ));
         appendDiffs(host);
         renderThreadPanel();
@@ -3249,7 +3258,9 @@
           }
           var readinessMount = null;
           if (meta.tier === "epic" && doc.plan_readiness) {
-            readinessMount = initEpicPlanReadinessChrome(workId, doc.plan_readiness);
+            readinessMount = initEpicPlanReadinessChrome(workId, doc.plan_readiness, {
+              reviewContext: doc.paired_review && doc.paired_review.approval_context,
+            });
           }
           if (meta.tier === "epic" && meta.dependency_status) {
             initDependencyReviewChrome(

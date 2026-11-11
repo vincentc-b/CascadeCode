@@ -20,6 +20,7 @@ from cascade.board.context import get_project_context
 from cascade.workspace.architecture_review import (
     ArchitectureReviewStore,
     ArchitectureReviewUnit,
+    ReviewApprovalContext,
 )
 from cascade.workspace.c4_review import C4ReviewPayload, resolve_c4_review_payload
 from cascade.workspace.errors import WorkspaceError
@@ -50,12 +51,14 @@ def review_envelope(root: Path, work_id: str, tier: str) -> dict[str, object] | 
         message = payload.reason or payload.summary or "Architecture review is unavailable."
         unit_id = payload.review_unit_id or None
         digest = payload.reviewed_tuple_digest or None
+        approval_context = _approval_context(root, payload) if unit_id else None
     except Exception as exc:  # The plan and comments must remain readable.
         state, code = "unavailable", "unavailable"
         message = str(exc) or "Architecture review is unavailable."
         unit_id = digest = None
+        approval_context = None
     retryable = state in {"pending", "render_failed", "unavailable"}
-    return {
+    envelope = {
         "schema_version": 1,
         "resource_url": f"/api/architecture/reviews/{work_id}",
         "state": state,
@@ -68,6 +71,9 @@ def review_envelope(root: Path, work_id: str, tier: str) -> dict[str, object] | 
             "retry_after_seconds": 5 if retryable else None,
         },
     }
+    if approval_context is not None:
+        envelope["approval_context"] = approval_context.to_dict()
+    return envelope
 
 
 def review_projection(
@@ -77,6 +83,10 @@ def review_projection(
         raise ArchitectureHTTPError(400, "invalid review pagination")
     payload = _resolve(root, work_id)
     value = payload.to_dict()
+    value["approval_context"] = (
+        _approval_context(root, payload).to_dict()
+        if payload.review_unit_id else None
+    )
     scope = payload.review_unit_id
     views = value.get("views") or []
     page = views[cursor:cursor + limit]
@@ -129,6 +139,22 @@ def resolve_review_context(root: Path, work_id: str) -> C4ReviewPayload:
     """Resolve the authoritative active review tuple for another HTTP slice."""
 
     return _resolve(root, work_id)
+
+
+def _approval_context(root: Path, payload: C4ReviewPayload) -> ReviewApprovalContext:
+    unit = _unit_for_scope(
+        root, payload.review_unit_id, work_id=payload.owner_work_id
+    )
+    if unit.reviewed_tuple_digest != payload.reviewed_tuple_digest:
+        raise ArchitectureHTTPError(409, "architecture review binding changed")
+    return ReviewApprovalContext(
+        unit.owner_work_id,
+        unit.target_repository_key,
+        unit.plan.revision,
+        unit.review_unit_id,
+        unit.reviewed_tuple_digest,
+        unit.baseline_generation,
+    )
 
 
 def artifact_bytes(root: Path, scope: str, artifact_id: str) -> tuple[bytes, str]:
