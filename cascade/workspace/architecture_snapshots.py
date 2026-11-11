@@ -164,6 +164,7 @@ class ArchitectureSnapshotStore:
         }
         try:
             owner_directory = _mapping_owner(mapping, code_directory, self.project.target_repository_key)
+            base["design_owner_directory"] = owner_directory
             references = _model_references(
                 self.project,
                 selection,

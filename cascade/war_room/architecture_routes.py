@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import difflib
 import json
+import re
 import subprocess
 import xml.etree.ElementTree as ET
 from dataclasses import replace
@@ -35,6 +36,16 @@ from cascade.workspace.architecture_snapshots import (
     _snapshot_id,
 )
 from cascade.workspace.c4_bindings import C4BindingError, validate_hit_target_manifest
+from cascade.workspace.c4_documentation import (
+    C4ContextSelection,
+    ContextDocument,
+    DesignContext,
+    PinnedContextRevision,
+    PinnedSourceSection,
+    resolve_c4_documentation_context,
+    review_documentation_evidence,
+    snapshot_documentation_evidence,
+)
 from cascade.workspace.c4_scheduler import C4RenderScheduler
 from cascade.workspace.c4_review import (
     _read_semantic_workspace,
@@ -216,6 +227,9 @@ def _snapshot_projection(
             "semantic_target": semantic_target,
         },
         "associated_review": _associated_review(store.project, snapshot),
+        "documentation_context_url": (
+            f"/api/architecture/snapshots/{snapshot.snapshot_id}/context"
+        ),
     }
     if snapshot.state != "ready":
         payload["pagination"] = {
@@ -487,6 +501,9 @@ def review_projection(
         }
         for row in resources
     ]
+    value["documentation_context_url"] = (
+        f"/api/architecture/reviews/{work_id}/context"
+    )
     if isinstance(value.get("diffs"), dict):
         value["diffs"]["resources"] = [
             {
@@ -499,6 +516,175 @@ def review_projection(
     if len(encoded) > MAX_METADATA_BYTES:
         raise ArchitectureHTTPError(413, "architecture review page exceeds 256 KiB")
     return value
+
+
+def review_documentation_projection(
+    root: Path,
+    work_id: str,
+    *,
+    side: str,
+    view_key: str,
+    level: str,
+    selection_kind: str = "view",
+    semantic_target: str | None = None,
+) -> dict[str, object]:
+    """Return bounded documentation metadata for one validated review selection."""
+
+    if side not in {"current", "proposed"}:
+        raise ArchitectureHTTPError(400, "invalid documentation review side")
+    if selection_kind not in {"view", "element", "relationship"}:
+        raise ArchitectureHTTPError(400, "invalid documentation selection kind")
+    if selection_kind == "view":
+        if semantic_target is not None:
+            raise ArchitectureHTTPError(400, "a view selection does not accept a target")
+        semantic_id = view_key
+    else:
+        if not semantic_target:
+            raise ArchitectureHTTPError(400, "a target selection requires a semantic ID")
+        semantic_id = semantic_target
+
+    active = _unit_for_work(root, work_id)
+    payload = _resolve_unit(root, active)
+    view = next(
+        (row for row in payload.views if row.key == view_key and row.level == level),
+        None,
+    )
+    selected_side = getattr(view, side, None) if view is not None else None
+    if selected_side is None:
+        raise ArchitectureHTTPError(400, "invalid documentation review view or side")
+    if selection_kind != "view" and not any(
+        row.semantic_id == semantic_id and row.kind == selection_kind
+        for row in selected_side.targets
+    ):
+        raise ArchitectureHTTPError(400, "invalid documentation semantic target")
+
+    source_unit = active if side == "proposed" else _baseline_unit(root, active)
+    documents = _review_context_documents(active, source_unit)
+    owner_context = (
+        (_design_context(source_unit),) if source_unit is not None else ()
+    )
+    evidence = review_documentation_evidence(
+        active,
+        documents,
+        owner_context=owner_context,
+    )
+    revisions = {
+        (row.repository_key, row.revision) for row in evidence.pinned_revisions
+    }
+    revisions.update(
+        (row.source.repository_key, row.source.revision)
+        for row in documents if row.source is not None
+    )
+    evidence = replace(
+        evidence,
+        pinned_revisions=tuple(
+            PinnedContextRevision(*row) for row in sorted(revisions)
+        ),
+    )
+    selection = C4ContextSelection(
+        selection_kind, semantic_id, view_key=view_key, level=level
+    )
+    value = resolve_c4_documentation_context(evidence, selection).to_dict()
+    value["side"] = side
+    descriptors = _context_resource_descriptors(root, active)
+    _attach_context_urls(value, active.review_unit_id, descriptors, side=side)
+    return _bounded_context_payload(value)
+
+
+def snapshot_documentation_projection(
+    root: Path,
+    snapshot_id: str,
+    *,
+    view_key: str,
+    level: str,
+    selection_kind: str = "view",
+    semantic_target: str | None = None,
+    scheduler: C4RenderScheduler | None = None,
+) -> dict[str, object]:
+    """Return documentation metadata bound to an immutable browsing snapshot."""
+
+    if selection_kind not in {"view", "element", "relationship"}:
+        raise ArchitectureHTTPError(400, "invalid documentation selection kind")
+    if selection_kind == "view":
+        if semantic_target is not None:
+            raise ArchitectureHTTPError(400, "a view selection does not accept a target")
+        semantic_id = view_key
+    else:
+        if not semantic_target:
+            raise ArchitectureHTTPError(400, "a target selection requires a semantic ID")
+        semantic_id = semantic_target
+
+    try:
+        with ArchitectureSnapshotStore(project_for(root), root, scheduler=scheduler) as store:
+            snapshot = _authorized_snapshot(store, snapshot_id)
+            if snapshot.state == "documentation_ref_required":
+                return {
+                    "schema_version": 1,
+                    "scope_kind": "snapshot",
+                    "scope_id": snapshot.snapshot_id,
+                    "state": "documentation_ref_required",
+                    "documentation_ref_required": True,
+                    "reason": snapshot.message,
+                }
+            projected = _snapshot_projection(
+                store,
+                snapshot,
+                cursor=0,
+                limit=MAX_BROWSING_VIEWS,
+                view_key=view_key,
+                level=level,
+                semantic_target=semantic_target,
+            )
+            if snapshot.state != "ready":
+                raise ArchitectureHTTPError(409, "architecture snapshot is not ready")
+            view = next(
+                (row for row in projected["views"] if row["key"] == view_key), None
+            )
+            if view is None:
+                raise ArchitectureHTTPError(400, "invalid documentation snapshot view")
+            if selection_kind != "view":
+                target = next(
+                    (
+                        row for row in projected["targets"]
+                        if row["semantic_id"] == semantic_id
+                    ),
+                    None,
+                )
+                if (
+                    target is None
+                    or target["kind"] != selection_kind
+                    or semantic_id not in view["target_ids"]
+                ):
+                    raise ArchitectureHTTPError(
+                        400, "invalid documentation semantic target"
+                    )
+            unit = _snapshot_associated_unit(store.project, snapshot)
+            documents = _review_context_documents(unit, unit) if unit else ()
+            associations = (
+                review_documentation_evidence(unit, documents).associations
+                if unit else ()
+            )
+            owner_context = _snapshot_owner_context(store.project, snapshot)
+            evidence = snapshot_documentation_evidence(
+                snapshot.snapshot_id,
+                snapshot.descriptor,
+                documents,
+                associations,
+                owner_context=owner_context,
+            )
+            value = resolve_c4_documentation_context(
+                evidence,
+                C4ContextSelection(
+                    selection_kind, semantic_id, view_key=view_key, level=level
+                ),
+            ).to_dict()
+            descriptors = _snapshot_context_resource_descriptors(
+                store.project, snapshot, unit
+            )
+            _attach_context_urls(value, snapshot.snapshot_id, descriptors)
+            return _bounded_context_payload(value)
+    except KeyError as exc:
+        raise ArchitectureHTTPError(404, "architecture snapshot not found") from exc
 
 
 def resolve_review_context(root: Path, work_id: str) -> C4ReviewPayload:
@@ -532,6 +718,309 @@ def resolve_review_context(root: Path, work_id: str) -> C4ReviewPayload:
             )
         public_views.append(replace(view, **sides))
     return replace(payload, views=tuple(public_views))
+
+
+def _unit_for_work(root: Path, work_id: str) -> ArchitectureReviewUnit:
+    units = [
+        unit
+        for unit in ArchitectureReviewStore(project_for(root)).units_affecting(work_id)
+        if unit.owner_work_id == work_id
+    ]
+    if not units:
+        raise ArchitectureHTTPError(404, "architecture review not found")
+    return units[-1]
+
+
+def _baseline_unit(
+    root: Path, unit: ArchitectureReviewUnit
+) -> ArchitectureReviewUnit | None:
+    baseline_id = unit.accepted_baseline.accepted_review_unit_id
+    return (
+        ArchitectureReviewStore(project_for(root)).get(baseline_id)
+        if baseline_id else None
+    )
+
+
+def _design_context(unit: ArchitectureReviewUnit) -> DesignContext:
+    artifact = unit.design
+    reference = artifact.reference
+    return DesignContext(
+        unit.code_directory,
+        unit.design_owner_directory,
+        PinnedSourceSection(
+            reference.destination_repository_key,
+            reference.revision,
+            reference.repository_path,
+            content_digest=artifact.content_digest,
+        ),
+    )
+
+
+def _review_context_documents(
+    association_unit: ArchitectureReviewUnit | None,
+    source_unit: ArchitectureReviewUnit | None,
+) -> tuple[ContextDocument, ...]:
+    """Project citations onto their pinned work-document source records."""
+
+    if association_unit is None:
+        return ()
+    rows: list[ContextDocument] = []
+    for kind, identifiers in (
+        ("requirement", association_unit.requirement_citations),
+        ("decision", association_unit.decision_citations),
+    ):
+        for document_id in identifiers:
+            source = None
+            if source_unit is not None:
+                # Requirement and decision citations are records in the pinned
+                # work plan.  DESIGN.md is ownership context, not citation
+                # provenance, and must never be reused for semantic anchors.
+                pinned = source_unit.plan
+                source = PinnedSourceSection(
+                    pinned.repository_key,
+                    pinned.revision,
+                    pinned.path,
+                    document_id,
+                    pinned.content_digest,
+                )
+            rows.append(
+                ContextDocument(
+                    document_id,
+                    kind,
+                    document_id,
+                    source,
+                    state="available" if source is not None else "missing",
+                    reason=None if source is not None else "counterpart_missing",
+                )
+            )
+    return tuple(rows)
+
+
+def _context_resource_descriptors(
+    root: Path, unit: ArchitectureReviewUnit
+) -> list[dict[str, object]]:
+    """Enumerate only resources derivable from the active reviewed tuple."""
+
+    sides = {
+        "proposed": unit,
+        "current": _baseline_unit(root, unit),
+    }
+    rows: list[dict[str, object]] = []
+    for side, source_unit in sides.items():
+        if source_unit is None:
+            continue
+        documents = _review_context_documents(unit, source_unit)
+        for document in documents:
+            assert document.source is not None
+            source = document.source
+            role = source_unit.plan.repository_role
+            base: dict[str, object] = {
+                "kind": "context_document",
+                "scope": unit.review_unit_id,
+                "side": side,
+                "document_id": document.document_id,
+                "document_kind": document.kind,
+                "repository_role": role,
+                "repository_key": source.repository_key,
+                "revision": source.revision,
+                "path": source.path.as_posix(),
+                "digest": source.content_digest,
+            }
+            rows.append({**base, "mode": "document"})
+            rows.append({**base, "mode": "section", "section": source.section})
+
+    for document_id in (*unit.requirement_citations, *unit.decision_citations):
+        proposed = next(
+            (
+                row for row in rows
+                if row["side"] == "proposed"
+                and row["document_id"] == document_id
+                and row["mode"] == "document"
+            ),
+            None,
+        )
+        current = next(
+            (
+                row for row in rows
+                if row["side"] == "current"
+                and row["document_id"] == document_id
+                and row["mode"] == "document"
+            ),
+            None,
+        )
+        if proposed is not None and current is not None:
+            rows.append({
+                **proposed,
+                "kind": "context_document_diff",
+                "mode": "diff",
+                "before_revision": current["revision"],
+                "before_path": current["path"],
+                "before_digest": current["digest"],
+                "before_repository_role": current["repository_role"],
+                "before_repository_key": current["repository_key"],
+            })
+    return rows
+
+
+def _snapshot_associated_unit(
+    project: ProjectContext, snapshot: ArchitectureBrowsingSnapshot
+) -> ArchitectureReviewUnit | None:
+    row = _associated_review(project, snapshot)
+    if row is None:
+        return None
+    unit = ArchitectureReviewStore(project).get(row["review_unit_id"])
+    if unit is None:
+        return None
+    descriptor = snapshot.descriptor
+    association = descriptor.get("association")
+    revisions = descriptor.get("revisions")
+    accepted = descriptor.get("accepted_lineage")
+    if not isinstance(association, dict) or not isinstance(revisions, dict):
+        return None
+    evidence_id = association.get("evidence_id")
+    if evidence_id == unit.review_unit_id:
+        return unit
+    if (
+        association.get("provenance") == "colocated"
+        and revisions.get("code") == revisions.get("documentation")
+    ):
+        return unit
+    if isinstance(accepted, dict) and accepted.get("review_unit_id") == unit.review_unit_id:
+        return unit
+    return None
+
+
+def _snapshot_owner_context(
+    project: ProjectContext, snapshot: ArchitectureBrowsingSnapshot
+) -> tuple[DesignContext, ...]:
+    descriptor = snapshot.descriptor
+    revisions = descriptor.get("revisions")
+    repositories = descriptor.get("repositories")
+    if not isinstance(revisions, dict) or not isinstance(repositories, dict):
+        return ()
+    code_directory = Path(str(descriptor.get("code_directory") or "."))
+    owner_directory = Path(
+        str(descriptor.get("design_owner_directory") or code_directory.as_posix())
+    )
+    # Snapshot creation has already resolved the directory through the pinned
+    # ownership mapping; the documentation path convention is deterministic.
+    if descriptor.get("architecture_destination") == "tracking":
+        path = (
+            Path("design") / project.target_repository_key /
+            owner_directory / "DESIGN.md"
+        )
+    else:
+        path = owner_directory / "DESIGN.md"
+    return (
+        DesignContext(
+            code_directory,
+            owner_directory,
+            PinnedSourceSection(
+                str(repositories["documentation"]),
+                str(revisions["documentation"]),
+                path,
+            ),
+        ),
+    )
+
+
+def _snapshot_context_resource_descriptors(
+    project: ProjectContext,
+    snapshot: ArchitectureBrowsingSnapshot,
+    unit: ArchitectureReviewUnit | None,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    repositories = snapshot.descriptor.get("repositories", {})
+    revisions = snapshot.descriptor.get("revisions", {})
+    pinned = {
+        (str(repositories.get(role)), str(revisions.get(role)))
+        for role in ("code", "documentation")
+    }
+    if unit is not None:
+        for row in _context_resource_descriptors_for_unit(unit):
+            if (str(row["repository_key"]), str(row["revision"])) in pinned:
+                rows.append({**row, "scope": snapshot.snapshot_id})
+    for design in _snapshot_owner_context(project, snapshot):
+        source = design.source
+        rows.append({
+            "kind": "context_design",
+            "scope": snapshot.snapshot_id,
+            "mode": "document",
+            "repository_role": snapshot.descriptor["architecture_destination"],
+            "repository_key": source.repository_key,
+            "revision": source.revision,
+            "path": source.path.as_posix(),
+            "digest": source.content_digest,
+        })
+    return rows
+
+
+def _context_resource_descriptors_for_unit(
+    unit: ArchitectureReviewUnit,
+) -> list[dict[str, object]]:
+    """Proposed-only form used when an exact review is attached to a snapshot."""
+
+    rows: list[dict[str, object]] = []
+    for document in _review_context_documents(unit, unit):
+        assert document.source is not None
+        source = document.source
+        role = unit.plan.repository_role
+        base = {
+            "kind": "context_document",
+            "scope": unit.review_unit_id,
+            "side": "proposed",
+            "document_id": document.document_id,
+            "document_kind": document.kind,
+            "repository_role": role,
+            "repository_key": source.repository_key,
+            "revision": source.revision,
+            "path": source.path.as_posix(),
+            "digest": source.content_digest,
+        }
+        rows.extend((
+            {**base, "mode": "document"},
+            {**base, "mode": "section", "section": source.section},
+        ))
+    return rows
+
+
+def _attach_context_urls(
+    value: dict[str, object],
+    scope: str,
+    descriptors: list[dict[str, object]],
+    *,
+    side: str | None = None,
+) -> None:
+    prefix = f"/api/architecture/resources/{scope}/"
+    by_document: dict[str, dict[str, str]] = {}
+    for row in descriptors:
+        document_id = row.get("document_id")
+        if not isinstance(document_id, str):
+            continue
+        mode = str(row.get("mode"))
+        row_side = row.get("side")
+        key = (
+            "diff_url" if mode == "diff"
+            else f"{row_side}_url" if mode == "document" and side is not None
+            else "document_url" if mode == "document"
+            else "section_url"
+        )
+        if mode == "section" and side is not None and row_side != side:
+            continue
+        by_document.setdefault(document_id, {})[key] = prefix + _opaque_id(row)
+    for collection in ("explicit_target_links", "view_links"):
+        for link in value.get(collection, []):
+            link["resources"] = by_document.get(link["document_id"], {})
+    design_rows = [row for row in descriptors if row.get("kind") == "context_design"]
+    for index, design in enumerate(value.get("owner_context", [])):
+        if index < len(design_rows):
+            design["document_url"] = prefix + _opaque_id(design_rows[index])
+
+
+def _bounded_context_payload(value: dict[str, object]) -> dict[str, object]:
+    if len(json.dumps(value, separators=(",", ":")).encode()) > MAX_METADATA_BYTES:
+        raise ArchitectureHTTPError(413, "architecture context exceeds 256 KiB")
+    return value
 
 
 def _approval_context(root: Path, payload: C4ReviewPayload) -> ReviewApprovalContext:
@@ -592,7 +1081,10 @@ def resource_bytes(
     if scope.startswith("architecture-snapshot-"):
         return _snapshot_resource_bytes(root, scope, resource_id, scheduler=scheduler)
     unit = _unit_for_scope(root, scope)
-    for descriptor in _all_resource_descriptors(root, unit):
+    for descriptor in (
+        *_all_resource_descriptors(root, unit),
+        *_context_resource_descriptors(root, unit),
+    ):
         if _opaque_id(descriptor) != resource_id:
             continue
         project = project_for(root)
@@ -605,6 +1097,12 @@ def resource_bytes(
                     "revision": descriptor["before_revision"],
                     "path": descriptor["before_path"],
                     "digest": descriptor["before_digest"],
+                    "repository_role": descriptor.get(
+                        "before_repository_role", descriptor["repository_role"]
+                    ),
+                    "repository_key": descriptor.get(
+                        "before_repository_key", descriptor["repository_key"]
+                    ),
                 }
                 before = _read_descriptor_blob(project, before_descriptor)
             try:
@@ -617,6 +1115,8 @@ def resource_bytes(
                 fromfile=str(descriptor.get("before_path") or "/dev/null"),
                 tofile=descriptor["path"],
             )).encode("utf-8")
+        if descriptor.get("mode") == "section":
+            body = _markdown_section(body, str(descriptor["section"]))
         if len(body) > MAX_RESOURCE_BYTES:
             raise ArchitectureHTTPError(413, "architecture resource exceeds 1 MiB")
         if descriptor.get("mode") == "diff":
@@ -695,10 +1195,16 @@ def _snapshot_resource_bytes(
     try:
         with ArchitectureSnapshotStore(project_for(root), root, scheduler=scheduler) as store:
             snapshot = _authorized_snapshot(store, snapshot_id)
-            for descriptor in _snapshot_resource_descriptors(snapshot):
+            unit = _snapshot_associated_unit(store.project, snapshot)
+            for descriptor in (
+                *_snapshot_resource_descriptors(snapshot),
+                *_snapshot_context_resource_descriptors(store.project, snapshot, unit),
+            ):
                 if _opaque_id(descriptor) != resource_id:
                     continue
                 body = _read_descriptor_blob(store.project, descriptor)
+                if descriptor.get("mode") == "section":
+                    body = _markdown_section(body, str(descriptor["section"]))
                 if len(body) > MAX_RESOURCE_BYTES:
                     raise ArchitectureHTTPError(413, "architecture resource exceeds 1 MiB")
                 suffix = Path(str(descriptor["path"])).suffix.lower()
@@ -837,24 +1343,39 @@ def _all_resource_descriptors(
 
 
 def _read_descriptor_blob(
-    project: ProjectContext, descriptor: dict[str, str]
+    project: ProjectContext, descriptor: dict[str, object]
 ) -> bytes:
     repository = _repository(project, descriptor)
+    object_name = f"{descriptor['revision']}:{descriptor['path']}"
+    sized = subprocess.run(
+        ["git", "cat-file", "-s", object_name],
+        cwd=repository.root, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True, check=False,
+    )
+    if sized.returncode != 0:
+        raise ArchitectureHTTPError(410, "pinned architecture resource is unavailable")
+    try:
+        size = int(sized.stdout.strip())
+    except ValueError as exc:
+        raise ArchitectureHTTPError(409, "pinned architecture resource size is invalid") from exc
+    if size > MAX_RESOURCE_BYTES:
+        raise ArchitectureHTTPError(413, "architecture resource exceeds 1 MiB")
     result = subprocess.run(
-        ["git", "show", f"{descriptor['revision']}:{descriptor['path']}"],
+        ["git", "show", object_name],
         cwd=repository.root, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         check=False,
     )
     if result.returncode != 0:
         raise ArchitectureHTTPError(410, "pinned architecture resource is unavailable")
     body = result.stdout
-    expected = str(descriptor["digest"]).removeprefix("sha256:")
-    if hashlib.sha256(body).hexdigest() != expected:
+    digest = descriptor.get("digest")
+    expected = str(digest).removeprefix("sha256:") if digest else None
+    if expected is not None and hashlib.sha256(body).hexdigest() != expected:
         raise ArchitectureHTTPError(409, "pinned architecture resource digest mismatch")
     return body
 
 
-def _repository(project: ProjectContext, descriptor: dict[str, str]) -> RepositoryContext:
+def _repository(project: ProjectContext, descriptor: dict[str, object]) -> RepositoryContext:
     role = descriptor["repository_role"]
     repository = project.target if role == "target" else project.tracking
     expected = repository.repository_key
@@ -863,6 +1384,48 @@ def _repository(project: ProjectContext, descriptor: dict[str, str]) -> Reposito
     if descriptor["repository_key"] != expected:
         raise ArchitectureHTTPError(409, "pinned repository identity changed")
     return repository
+
+
+def _markdown_section(body: bytes, section: str) -> bytes:
+    """Extract one identifier-bearing Markdown block without rendering HTML."""
+
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ArchitectureHTTPError(409, "pinned Markdown resource is not UTF-8") from exc
+    lines = text.splitlines(keepends=True)
+    token = re.compile(r"(?<![A-Za-z0-9_.:-])" + re.escape(section) + r"(?![A-Za-z0-9_.:-])")
+    start = next((index for index, line in enumerate(lines) if token.search(line)), None)
+    if start is None:
+        raise ArchitectureHTTPError(410, "pinned source section is unavailable")
+    heading = re.match(r"^(#{1,6})\s", lines[start])
+    if heading:
+        level = len(heading.group(1))
+        end = next(
+            (
+                index for index in range(start + 1, len(lines))
+                if (match := re.match(r"^(#{1,6})\s", lines[index]))
+                and len(match.group(1)) <= level
+            ),
+            len(lines),
+        )
+    elif item := re.match(r"^(\s*)(?:[-+*]|\d+[.)])\s", lines[start]):
+        indentation = len(item.group(1))
+        end = start + 1
+        while end < len(lines):
+            peer = re.match(r"^(\s*)(?:[-+*]|\d+[.)])\s", lines[end])
+            if peer and len(peer.group(1)) <= indentation:
+                break
+            if re.match(r"^#{1,6}\s", lines[end]):
+                break
+            end += 1
+    else:
+        end = start + 1
+        while end < len(lines) and lines[end].strip():
+            if re.match(r"^#{1,6}\s", lines[end]):
+                break
+            end += 1
+    return "".join(lines[start:end]).encode("utf-8")
 
 
 def _opaque_id(value: dict[str, object]) -> str:

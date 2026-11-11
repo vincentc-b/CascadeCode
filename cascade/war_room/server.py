@@ -1522,7 +1522,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             artifact_bytes,
             context_catalog,
             resource_bytes,
+            review_documentation_projection,
             review_projection,
+            snapshot_documentation_projection,
             snapshot_head_status,
             snapshot_projection,
         )
@@ -1541,6 +1543,35 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             if path.startswith("/api/architecture/snapshots/"):
                 suffix = path.removeprefix("/api/architecture/snapshots/").strip("/")
                 parts = suffix.split("/")
+                if len(parts) == 2 and parts[1] == "context":
+                    query = urllib.parse.parse_qs(
+                        urllib.parse.urlsplit(self.path).query,
+                        keep_blank_values=True,
+                        max_num_fields=8,
+                    )
+                    allowed = {"view", "level", "kind", "target"}
+                    if (
+                        set(query) - allowed
+                        or any(len(values) != 1 for values in query.values())
+                        or not query.get("view", [""])[0]
+                        or not query.get("level", [""])[0]
+                    ):
+                        raise ArchitectureHTTPError(
+                            400, "invalid snapshot documentation query"
+                        )
+                    self._json_response(
+                        HTTPStatus.OK,
+                        snapshot_documentation_projection(
+                            self.server.root,
+                            parts[0],
+                            view_key=query["view"][0],
+                            level=query["level"][0],
+                            selection_kind=query.get("kind", ["view"])[0],
+                            semantic_target=query.get("target", [None])[0],
+                            scheduler=self.server.architecture_scheduler(),
+                        ),
+                    )
+                    return
                 if len(parts) == 2 and parts[1] in {"status", "head", "head-status"}:
                     if urllib.parse.urlsplit(self.path).query:
                         raise ArchitectureHTTPError(
@@ -1587,7 +1618,39 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 self._json_response(HTTPStatus(status), payload)
                 return
             if path.startswith("/api/architecture/reviews/"):
-                work_id = path.removeprefix("/api/architecture/reviews/").strip("/")
+                suffix = path.removeprefix("/api/architecture/reviews/").strip("/")
+                parts = suffix.split("/")
+                if len(parts) == 2 and parts[1] == "context":
+                    query = urllib.parse.parse_qs(
+                        urllib.parse.urlsplit(self.path).query,
+                        keep_blank_values=True,
+                        max_num_fields=10,
+                    )
+                    allowed = {"side", "view", "level", "kind", "target"}
+                    if (
+                        set(query) - allowed
+                        or any(len(values) != 1 for values in query.values())
+                        or not query.get("side", [""])[0]
+                        or not query.get("view", [""])[0]
+                        or not query.get("level", [""])[0]
+                    ):
+                        raise ArchitectureHTTPError(
+                            400, "invalid review documentation query"
+                        )
+                    self._json_response(
+                        HTTPStatus.OK,
+                        review_documentation_projection(
+                            self.server.root,
+                            parts[0],
+                            side=query["side"][0],
+                            view_key=query["view"][0],
+                            level=query["level"][0],
+                            selection_kind=query.get("kind", ["view"])[0],
+                            semantic_target=query.get("target", [None])[0],
+                        ),
+                    )
+                    return
+                work_id = suffix
                 if not work_id or "/" in work_id:
                     raise ArchitectureHTTPError(404, "architecture review not found")
                 query = urllib.parse.parse_qs(
