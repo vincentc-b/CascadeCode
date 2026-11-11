@@ -266,7 +266,27 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         self._draining = draining if draining is not None else threading.Event()
         self._handler_threads: set[threading.Thread] = set()
         self._handler_threads_lock = threading.Lock()
+        self._architecture_scheduler = None
+        self._architecture_scheduler_lock = threading.Lock()
         super().__init__(server_address, RequestHandlerClass)
+
+    def architecture_scheduler(self):
+        """Return the one bounded browsing renderer owned by this server."""
+
+        from cascade.workspace.c4_scheduler import C4RenderScheduler
+
+        with self._architecture_scheduler_lock:
+            if self._architecture_scheduler is None:
+                self._architecture_scheduler = C4RenderScheduler(self.root)
+            return self._architecture_scheduler
+
+    def server_close(self) -> None:
+        with self._architecture_scheduler_lock:
+            scheduler = self._architecture_scheduler
+            self._architecture_scheduler = None
+        if scheduler is not None:
+            scheduler.close()
+        super().server_close()
 
     def is_draining(self) -> bool:
         return self._draining.is_set()
@@ -552,6 +572,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
         body = self._read_json_object(allow_empty=path == "/api/health/audit")
         if body is None:
+            return
+        if path == "/api/architecture/snapshots":
+            self._handle_architecture_snapshot_post(body)
             return
         if path == "/api/local_human_session":
             self._establish_local_human_session(body)
@@ -1497,14 +1520,72 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             ArchitectureHTTPError,
             MAX_METADATA_BYTES,
             artifact_bytes,
+            context_catalog,
             resource_bytes,
             review_projection,
+            snapshot_head_status,
+            snapshot_projection,
         )
 
         if len(self.path.encode("utf-8")) > MAX_METADATA_BYTES:
             self._json_error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "request exceeds 256 KiB")
             return
         try:
+            if path == "/api/architecture/contexts":
+                if urllib.parse.urlsplit(self.path).query:
+                    raise ArchitectureHTTPError(
+                        400, "architecture contexts do not accept query parameters"
+                    )
+                self._json_response(HTTPStatus.OK, context_catalog(self.server.root))
+                return
+            if path.startswith("/api/architecture/snapshots/"):
+                suffix = path.removeprefix("/api/architecture/snapshots/").strip("/")
+                parts = suffix.split("/")
+                if len(parts) == 2 and parts[1] in {"status", "head", "head-status"}:
+                    if urllib.parse.urlsplit(self.path).query:
+                        raise ArchitectureHTTPError(
+                            400, "snapshot status does not accept query parameters"
+                        )
+                    self._json_response(
+                        HTTPStatus.OK,
+                        snapshot_head_status(
+                            self.server.root,
+                            parts[0],
+                            scheduler=self.server.architecture_scheduler(),
+                        ),
+                    )
+                    return
+                if len(parts) != 1 or not parts[0]:
+                    raise ArchitectureHTTPError(404, "architecture snapshot not found")
+                query = urllib.parse.parse_qs(
+                    urllib.parse.urlsplit(self.path).query,
+                    keep_blank_values=True,
+                    max_num_fields=12,
+                )
+                allowed = {"cursor", "limit", "view", "level", "target", "semantic_target"}
+                if set(query) - allowed or any(len(values) != 1 for values in query.values()):
+                    raise ArchitectureHTTPError(400, "invalid snapshot query parameter")
+                if "target" in query and "semantic_target" in query:
+                    raise ArchitectureHTTPError(400, "duplicate semantic target")
+                try:
+                    cursor = int(query.get("cursor", ["0"])[0])
+                    limit = int(query.get("limit", ["25"])[0])
+                except (ValueError, IndexError) as exc:
+                    raise ArchitectureHTTPError(400, "invalid snapshot pagination") from exc
+                status, payload = snapshot_projection(
+                    self.server.root,
+                    parts[0],
+                    cursor=cursor,
+                    limit=limit,
+                    view_key=query.get("view", [None])[0],
+                    level=query.get("level", [None])[0],
+                    semantic_target=(
+                        query.get("semantic_target", query.get("target", [None]))[0]
+                    ),
+                    scheduler=self.server.architecture_scheduler(),
+                )
+                self._json_response(HTTPStatus(status), payload)
+                return
             if path.startswith("/api/architecture/reviews/"):
                 work_id = path.removeprefix("/api/architecture/reviews/").strip("/")
                 if not work_id or "/" in work_id:
@@ -1535,7 +1616,15 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 parts = path.removeprefix(prefix).strip("/").split("/")
                 if len(parts) != 2 or not all(parts):
                     raise ArchitectureHTTPError(404, "architecture resource not found")
-                loaded = loader(self.server.root, parts[0], parts[1])
+                loaded = loader(
+                    self.server.root,
+                    parts[0],
+                    parts[1],
+                    scheduler=(
+                        self.server.architecture_scheduler()
+                        if parts[0].startswith("architecture-snapshot-") else None
+                    ),
+                )
                 if loader is artifact_bytes:
                     body, etag = loaded
                     content_type = "image/svg+xml; charset=utf-8"
@@ -1557,6 +1646,37 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
             raise ArchitectureHTTPError(404, "architecture resource not found")
+        except ArchitectureHTTPError as exc:
+            self._json_error(HTTPStatus(exc.status), str(exc))
+        except (OSError, ValueError, WorkspaceError) as exc:
+            self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
+
+    def _handle_architecture_snapshot_post(self, body: dict[str, Any]) -> None:
+        from cascade.war_room.architecture_routes import (
+            ArchitectureHTTPError,
+            create_snapshot,
+        )
+
+        if urllib.parse.urlsplit(self.path).query:
+            self._json_error(HTTPStatus.BAD_REQUEST, "snapshot creation does not accept queries")
+            return
+        try:
+            status, payload = create_snapshot(
+                self.server.root,
+                body,
+                scheduler=self.server.architecture_scheduler(),
+            )
+            if status == HTTPStatus.TOO_MANY_REQUESTS:
+                encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+                self.send_response(HTTPStatus.TOO_MANY_REQUESTS)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Retry-After", "2")
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+                return
+            self._json_response(HTTPStatus(status), payload)
         except ArchitectureHTTPError as exc:
             self._json_error(HTTPStatus(exc.status), str(exc))
         except (OSError, ValueError, WorkspaceError) as exc:

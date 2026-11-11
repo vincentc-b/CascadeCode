@@ -107,6 +107,10 @@ from cascade.workspace.c4_scheduler import (
     C4ScheduledRenderOperation,
     render_identity,
 )
+from cascade.workspace.architecture_snapshots import (
+    ArchitectureBrowsingSnapshot,
+    ArchitectureSnapshotStore,
+)
 from cascade.workspace.c4_diff import (
     C4ContainmentChange,
     C4IdentityChange,
@@ -161,9 +165,29 @@ from cascade.workspace.historical_reconciliation import (
     write_reconciled_replay_ledger,
 )
 from cascade.workspace.up import prepare_up, up
+from cascade.workspace.architecture_browsing import (
+    ArchitectureBrowsingError,
+    ArchitectureCodeContext,
+    ArchitectureContextCatalog,
+    ArchitectureContextSelection,
+    KnownDocumentationRef,
+    architecture_context_catalog,
+    resolve_architecture_code_context,
+    resolve_architecture_context,
+)
 
 __all__ = [
     "WorkspaceError",
+    "ArchitectureBrowsingError",
+    "ArchitectureCodeContext",
+    "ArchitectureContextCatalog",
+    "ArchitectureContextSelection",
+    "KnownDocumentationRef",
+    "architecture_context_catalog",
+    "resolve_architecture_code_context",
+    "resolve_architecture_context",
+    "ArchitectureBrowsingSnapshot",
+    "ArchitectureSnapshotStore",
     "ProjectContext",
     "ProjectConfiguration",
     "PinnedDocumentRef",
