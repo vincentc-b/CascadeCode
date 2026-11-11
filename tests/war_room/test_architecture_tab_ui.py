@@ -43,3 +43,12 @@ def test_war_room_exposes_accessible_architecture_tab_and_shared_viewer() -> Non
     assert "cascade:architecture-selection" in script
     assert "/status" in script
     assert "Refresh whole snapshot" in template
+    assert "Requirements &amp; decisions" in template
+    assert 'id="architecture-document-preview"' in template
+    assert template.index("/static/vendor/marked.min.js") < template.index(
+        "/static/plan_viewer.js"
+    )
+    assert "/context?" in script
+    assert "Unmapped target" in script
+    assert "Broader design index" in script
+    assert "markdownToHtml" in script

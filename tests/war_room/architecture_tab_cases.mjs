@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { applyLinkState, linkState, sortedChoices } = require(
+const { applyLinkState, documentationContextUrl, linkState, sortedChoices } = require(
   join(repoRoot, "cascade/war_room/static/architecture_tab.js")
 );
 
@@ -22,6 +22,22 @@ assert.equal(
   deepLink,
   `/?unrelated=kept&tab=architecture&context=context-one&snapshot=${snapshot}` +
     "&view=payments&level=containerViews&target=container.payments.api"
+);
+
+assert.equal(
+  documentationContextUrl(snapshot, { key: "payments", level: "containerViews" }, null),
+  `/api/architecture/snapshots/${snapshot}/context?view=payments&level=containerViews&kind=view`,
+  "view context is bound to the opaque snapshot and verified view identity"
+);
+assert.equal(
+  documentationContextUrl(
+    snapshot,
+    { key: "payments", level: "containerViews" },
+    { kind: "relationship", semantic_id: "api calls ledger" }
+  ),
+  `/api/architecture/snapshots/${snapshot}/context?view=payments&level=containerViews` +
+    "&kind=relationship&target=api+calls+ledger",
+  "target context does not accept repository paths or revisions"
 );
 assert.deepEqual(linkState(deepLink.split("?", 2)[1]), {
   tab: "architecture",

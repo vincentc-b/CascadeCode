@@ -226,11 +226,104 @@ body {
   font: inherit;
 }
 
+.paired-c4-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
 .paired-c4-diagrams {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
+
+.paired-c4-context {
+  min-width: 0;
+  max-height: 54rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 5px;
+  background: var(--plan-code-bg);
+}
+
+.paired-c4-context-heading,
+.paired-c4-context-sides,
+.paired-c4-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.65rem;
+}
+
+.paired-c4-context-heading { justify-content: space-between; }
+
+.paired-c4-context-heading h3,
+.paired-c4-context-group-heading,
+.paired-c4-context-document-title { margin: 0; }
+
+.paired-c4-context button,
+.paired-c4-context a { font: inherit; }
+
+.paired-c4-context-lazy,
+.paired-c4-context-selection,
+.paired-c4-context-state,
+.paired-c4-context-source,
+.paired-c4-context-evidence,
+.paired-c4-context-empty,
+.paired-c4-context-document-name,
+.paired-c4-context-design-path {
+  margin: 0.35rem 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+
+.paired-c4-context-selection,
+.paired-c4-context-source,
+.paired-c4-context-evidence,
+.paired-c4-context-lazy,
+.paired-c4-context-empty { color: var(--plan-muted); }
+
+.paired-c4-context-group {
+  margin-top: 0.8rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--plan-border);
+}
+
+.paired-c4-context-document,
+.paired-c4-context-design {
+  margin-top: 0.55rem;
+  padding: 0.55rem;
+  border-left: 3px solid #238636;
+}
+
+.paired-c4-context-missing,
+.paired-c4-context-stale { border-left-color: #8a4b00; }
+
+.paired-c4-context-unmapped,
+.paired-c4-context-error,
+.paired-c4-context-missing .paired-c4-context-state,
+.paired-c4-context-stale .paired-c4-context-state {
+  color: #8a4b00;
+  font-weight: 600;
+}
+
+.paired-c4-context-actions { margin-top: 0.45rem; }
+
+.paired-c4-context-markdown {
+  max-height: 18rem;
+  overflow: auto;
+  margin-top: 0.55rem;
+  padding: 0.55rem;
+  border: 1px solid var(--plan-border);
+  background: var(--plan-code-bg);
+  font-size: 0.82rem;
+}
+
+.paired-c4-context-markdown > :first-child { margin-top: 0; }
+.paired-c4-context-markdown > :last-child { margin-bottom: 0; }
 
 .paired-c4-side {
   min-width: 0;
@@ -521,6 +614,8 @@ body {
   .plan-body {
     grid-column: 1;
   }
+
+  .paired-c4-workspace { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 48rem) {

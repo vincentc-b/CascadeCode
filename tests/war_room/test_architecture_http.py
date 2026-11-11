@@ -12,6 +12,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from types import SimpleNamespace
 
 from cascade.war_room.architecture_routes import _opaque_id, _resource_descriptors
 from cascade.war_room.server import serve
@@ -28,6 +29,7 @@ from cascade.workspace.architecture_review import (
     PinnedArchitectureArtifact,
     PinnedDocumentRef,
 )
+from cascade.workspace.architecture_snapshots import ArchitectureBrowsingSnapshot
 from cascade.workspace.types import ProjectContext
 from cascade.workspace.c4_render import C4ArtifactRenderer, C4RenderArtifact
 from tests.support import add_doc, make_repo
@@ -286,6 +288,24 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
         assert b"data-cascade-semantic-id" in svg_body
         assert headers["ETag"].startswith('"')
 
+        context_url = (
+            base + f"/api/architecture/snapshots/{snapshot_id}/context"
+            f"?view={payload['views'][0]['key']}"
+            f"&level={payload['views'][0]['level']}"
+        )
+        status, raw, _headers = _get(context_url)
+        assert status == 200
+        context = json.loads(raw)
+        assert context["scope_kind"] == "snapshot"
+        assert context["scope_id"] == snapshot_id
+        assert context["mapping_state"] == "unmapped"
+        assert context["owner_context"][0]["source"]["revision"] == (
+            payload["provenance"]["revisions"]["documentation"]
+        )
+        assert context["owner_context"][0]["document_url"].startswith(
+            f"/api/architecture/resources/{snapshot_id}/"
+        )
+
         status, raw, _headers = _get(
             base + f"/api/architecture/snapshots/{snapshot_id}?target=forged"
         )
@@ -335,14 +355,24 @@ def test_doc_always_exposes_small_envelope_and_lazy_missing_projection(tmp_path:
         _stop(server, thread)
 
 
-def test_opaque_resource_is_pinned_readable_bounded_and_tamper_safe(tmp_path: Path) -> None:
+def test_opaque_resource_is_pinned_readable_bounded_and_tamper_safe(
+    tmp_path: Path, monkeypatch,
+) -> None:
     root = make_repo(tmp_path)
     project = ProjectContext.colocated(root)
     resolve_design_ownership(project, ".")
     plan_path = root / "docs" / "features" / "1_backlog" / "feat_001_plan.md"
-    plan_path.write_text("# Pinned plan\n", encoding="utf-8")
+    plan_path.write_text(
+        "# Pinned plan\n\n"
+        "- `REQ-PINNED-001` — Keep reads pinned.\n"
+        "- `DEC-PINNED-001` — Use opaque resources.\n",
+        encoding="utf-8",
+    )
     design_path = root / "DESIGN.md"
-    design_path.write_text("# Pinned design\n", encoding="utf-8")
+    design_path.write_text(
+        "# Pinned design\n\nThis is ownership context, not a decision source.\n",
+        encoding="utf-8",
+    )
     architecture = project.editable_architecture_root
     architecture.mkdir(parents=True, exist_ok=True)
     contract_path = architecture / "workspace.contract.json"
@@ -383,7 +413,8 @@ def test_opaque_resource_is_pinned_readable_bounded_and_tamper_safe(tmp_path: Pa
         Path("."), Path("."), project.target.repository_key, "epic:epic_001",
         project.target_repository_key, "target", Path("."), None,
         ArchitectureBaseline.empty(), None, None, 1, "staged", plan, design, model,
-        (), (), (), ("feat_001",), "diagram_change", "Changes the model",
+        ("REQ-PINNED-001",), ("DEC-PINNED-001",), ("context",),
+        ("feat_001",), "diagram_change", "Changes the model",
     )
     ArchitectureReviewStore(project).save(unit)
     descriptor = _resource_descriptors(unit)[0]
@@ -394,7 +425,7 @@ def test_opaque_resource_is_pinned_readable_bounded_and_tamper_safe(tmp_path: Pa
         url = f"{base}/api/architecture/resources/{unit.review_unit_id}/{resource_id}"
         status, body, headers = _get(url)
         assert status == 200
-        assert body == b"# Pinned plan\n"
+        assert body == plan_path.read_bytes()
         assert headers["Content-Type"] == "text/markdown; charset=utf-8"
         assert headers["Cache-Control"] == "private, max-age=31536000, immutable"
         assert headers["ETag"].startswith('"')
@@ -419,6 +450,65 @@ def test_opaque_resource_is_pinned_readable_bounded_and_tamper_safe(tmp_path: Pa
         assert diff_headers["Content-Type"] == "text/x-diff; charset=utf-8"
         assert b"+# Pinned plan" in diff_body
 
+        # Context metadata validates against the selected review side, then
+        # exposes only tuple-derived opaque URLs. No path or revision is
+        # accepted from the request.
+        import cascade.war_room.architecture_routes as routes
+
+        side = SimpleNamespace(
+            targets=(SimpleNamespace(
+                semantic_id="element.api", kind="element"
+            ),)
+        )
+        monkeypatch.setattr(
+            routes,
+            "_resolve_unit",
+            lambda _root, _unit: SimpleNamespace(
+                views=(SimpleNamespace(
+                    key="context", level="systemContextViews",
+                    proposed=side, current=None,
+                ),)
+            ),
+        )
+        context_url = (
+            base + "/api/architecture/reviews/feat_001/context"
+            "?side=proposed&view=context&level=systemContextViews"
+            "&kind=element&target=element.api"
+        )
+        status, raw, _headers = _get(context_url)
+        assert status == 200
+        context = json.loads(raw)
+        assert context["scope_id"] == unit.review_unit_id
+        assert context["mapping_state"] == "unmapped"
+        assert [row["document_id"] for row in context["view_links"]] == [
+            "DEC-PINNED-001", "REQ-PINNED-001"
+        ]
+        requirement = next(
+            row for row in context["view_links"]
+            if row["document_id"] == "REQ-PINNED-001"
+        )
+        assert set(requirement["resources"]) == {"proposed_url", "section_url"}
+        assert revision not in requirement["resources"]["section_url"]
+        status, section, section_headers = _get(
+            base + requirement["resources"]["section_url"]
+        )
+        assert status == 200
+        assert section == b"- `REQ-PINNED-001` \xe2\x80\x94 Keep reads pinned.\n"
+        assert section_headers["Content-Type"] == "text/markdown; charset=utf-8"
+
+        decision = next(
+            row for row in context["view_links"]
+            if row["document_id"] == "DEC-PINNED-001"
+        )
+        assert decision["source"]["path"] == plan_path.relative_to(root).as_posix()
+        status, section, _headers = _get(base + decision["resources"]["section_url"])
+        assert status == 200
+        assert section == b"- `DEC-PINNED-001` \xe2\x80\x94 Use opaque resources.\n"
+
+        status, raw, _headers = _get(context_url.replace("element.api", "forged"))
+        assert status == 400
+        assert json.loads(raw)["error"] == "invalid documentation semantic target"
+
         status, raw, _headers = _get(url[:-1] + ("0" if url[-1] != "0" else "1"))
         assert status == 404
         assert json.loads(raw)["error"] == "architecture resource not found"
@@ -430,3 +520,55 @@ def test_opaque_resource_is_pinned_readable_bounded_and_tamper_safe(tmp_path: Pa
         assert json.loads(raw)["error"] == "architecture scope not found"
     finally:
         _stop(server, thread)
+
+
+def test_documentation_ref_required_context_does_not_resolve_or_fetch(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    root = make_repo(tmp_path)
+    project = ProjectContext.colocated(root)
+    snapshot = ArchitectureBrowsingSnapshot(
+        "architecture-snapshot-ref-required",
+        "documentation_ref_required",
+        {},
+        reason_code="documentation_ref_required",
+        message="select an exact known documentation revision",
+    )
+
+    import cascade.war_room.architecture_routes as routes
+
+    class Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.project = project
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            pass
+
+    monkeypatch.setattr(routes, "ArchitectureSnapshotStore", Store)
+    monkeypatch.setattr(routes, "_authorized_snapshot", lambda *_args: snapshot)
+    monkeypatch.setattr(
+        routes,
+        "snapshot_documentation_evidence",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("unpinned documentation evidence was resolved")
+        ),
+    )
+
+    context = routes.snapshot_documentation_projection(
+        root,
+        snapshot.snapshot_id,
+        view_key="unresolved",
+        level="unresolved",
+    )
+
+    assert context == {
+        "schema_version": 1,
+        "scope_kind": "snapshot",
+        "scope_id": snapshot.snapshot_id,
+        "state": "documentation_ref_required",
+        "documentation_ref_required": True,
+        "reason": snapshot.message,
+    }

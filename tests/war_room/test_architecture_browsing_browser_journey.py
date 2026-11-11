@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -18,7 +19,19 @@ import cascade.workspace.architecture_browsing as browsing
 from cascade.board.context import set_project_context
 from cascade.war_room.architecture_routes import context_catalog
 from cascade.war_room.server import serve
-from cascade.workspace import STRUCTURIZR_IMAGE, ProjectContext, resolve_design_ownership
+from cascade.workspace import (
+    ArchitectureBaseline,
+    ArchitectureModelBinding,
+    ArchitectureReviewStore,
+    ArchitectureReviewUnit,
+    PinnedArchitectureArtifact,
+    PinnedDocumentRef,
+    ProjectContext,
+    STRUCTURIZR_IMAGE,
+    create_architecture_artifact_ref,
+    create_architecture_model_ref,
+    resolve_design_ownership,
+)
 from cascade.workspace.integration_worktree import IntegrationWorktree, save_registry
 from tests.support import make_repo
 
@@ -35,6 +48,10 @@ def _commit(root: Path, message: str) -> str:
     subprocess.run(["git", "add", "."], cwd=root, check=True)
     subprocess.run(["git", "commit", "-qm", message], cwd=root, check=True)
     return _git(root, "rev-parse", "HEAD")
+
+
+def _digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _free_port() -> int:
@@ -97,6 +114,78 @@ def _add_worktree(root: Path, work_id: str, base: str) -> Path:
     return worktree
 
 
+def _record_context_review(
+    store_project: ProjectContext, branch: Path, revision: str
+) -> ArchitectureReviewUnit:
+    """Attach reviewed citations to the exact branch snapshot used by Chromium."""
+
+    project = ProjectContext.colocated(branch)
+    contract = create_architecture_model_ref(
+        project, ".", "workspace.contract.json", owning_work="feat_branch"
+    )
+    sources = tuple(
+        create_architecture_model_ref(
+            project, ".", name, owning_work="feat_branch"
+        )
+        for name in ("workspace.dsl", "model.dsl", "views.dsl")
+    )
+    binding = ArchitectureModelBinding(
+        PinnedArchitectureArtifact(
+            contract, _digest(branch / contract.repository_path)
+        ),
+        tuple(
+            PinnedArchitectureArtifact(
+                source, _digest(branch / source.repository_path)
+            )
+            for source in sources
+        ),
+        "1" * 64,
+        "2" * 64,
+        (),
+        "3" * 64,
+        "4" * 64,
+    )
+    plan_path = Path("FEATURE.md")
+    design = create_architecture_artifact_ref(
+        project, ".", owning_work="feat_branch"
+    )
+    unit = ArchitectureReviewUnit(
+        "feat_branch",
+        "feature_architect",
+        project.target_repository_key,
+        Path("."),
+        Path("."),
+        store_project.target.repository_key,
+        "epic:epic_browser",
+        project.target_repository_key,
+        "target",
+        Path("."),
+        None,
+        ArchitectureBaseline.empty(),
+        None,
+        None,
+        1,
+        "reviewed",
+        PinnedDocumentRef(
+            store_project.target.repository_key,
+            "target",
+            plan_path,
+            revision,
+            _digest(branch / plan_path),
+        ),
+        PinnedArchitectureArtifact(design, _digest(branch / design.repository_path)),
+        binding,
+        ("REQ-BRANCH-CONTEXT",),
+        ("DEC-BRANCH-PIN",),
+        ("cascade-context", "cascade-containers"),
+        ("feat_branch",),
+        "diagram_change",
+        "The branch snapshot carries its exact reviewed documentation context.",
+    )
+    ArchitectureReviewStore(store_project).save(unit)
+    return unit
+
+
 def _wait_for_snapshot(page, *, timeout: int = 140_000) -> None:  # type: ignore[no-untyped-def]
     page.locator("#architecture-ready:not([hidden])").wait_for(timeout=timeout)
     page.locator("#architecture-viewer .semantic-c4-svg").wait_for(timeout=20_000)
@@ -141,6 +230,16 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
 ) -> None:
     root = make_repo(tmp_path)
     root.joinpath(".gitignore").write_text(".cascade/\n", encoding="utf-8")
+    root.joinpath("FEATURE.md").write_text(
+        "# Branch architecture\n\n"
+        "- `REQ-BRANCH-CONTEXT` — Keep architecture context pinned.\n"
+        "- `DEC-BRANCH-PIN` — Never substitute tracking HEAD.\n",
+        encoding="utf-8",
+    )
+    root.joinpath("DESIGN.md").write_text(
+        "# Browser architecture design\n",
+        encoding="utf-8",
+    )
     main_project = _install_model(root)
     main_revision = _commit(root, "main architecture")
 
@@ -152,7 +251,14 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         ),
         encoding="utf-8",
     )
+    branch.joinpath("FEATURE.md").write_text(
+        "# Branch architecture\n\n"
+        "- `REQ-BRANCH-CONTEXT` — Open context from this branch revision.\n"
+        "- `DEC-BRANCH-PIN` — Never substitute tracking HEAD.\n",
+        encoding="utf-8",
+    )
     branch_revision = _commit(branch, "different branch architecture")
+    branch_review = _record_context_review(main_project, branch, branch_revision)
 
     detached = _add_worktree(root, "feat_detached", main_revision)
     subprocess.run(["git", "checkout", "--detach", main_revision], cwd=detached, check=True)
@@ -268,9 +374,76 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
             timeout=140_000,
         )
         _wait_for_snapshot(page)
+        branch_snapshot = re.search(r"snapshot=([^&]+)", page.url)
+        assert branch_snapshot
+        status, branch_payload = _request_json(
+            base + f"/api/architecture/snapshots/{branch_snapshot.group(1)}"
+        )
+        assert status == 200
+        assert branch_payload["associated_review"]["review_unit_id"] == (
+            branch_review.review_unit_id
+        )
         assert "Branch Atlas" in page.locator(
             '[aria-label="element element.system.cascade"]'
         ).get_attribute("aria-description")
+
+        # The Architecture tab resolves the same two reviewed documents for
+        # both cited views, and opens source/full Markdown only on demand.
+        view = page.locator("#architecture-view")
+        context_index = next(
+            index
+            for index, label in enumerate(view.locator("option").all_text_contents())
+            if "cascade-context" in label
+        )
+        view.select_option(index=context_index)
+        requirement = page.locator(
+            ".architecture-context-row", has_text="REQ-BRANCH-CONTEXT"
+        )
+        requirement.wait_for()
+        assert page.locator(
+            ".architecture-context-row", has_text="DEC-BRANCH-PIN"
+        ).count() == 1
+        assert branch_revision in requirement.inner_text()
+        requirement.locator("button", has_text="Open source section").click()
+        page.locator(
+            "#architecture-document-preview-body",
+            has_text="Open context from this branch revision",
+        ).wait_for()
+        requirement.locator("button", has_text="Open full document").click()
+        preview = page.locator("#architecture-document-preview-body")
+        preview.filter(has_text="Never substitute tracking HEAD").wait_for()
+        assert "Branch architecture" in preview.inner_text()
+
+        container_index = next(
+            index
+            for index, label in enumerate(view.locator("option").all_text_contents())
+            if "cascade-containers" in label
+        )
+        view.select_option(index=container_index)
+        page.locator(
+            ".architecture-context-row", has_text="REQ-BRANCH-CONTEXT"
+        ).wait_for()
+        assert page.locator(
+            ".architecture-context-row", has_text="DEC-BRANCH-PIN"
+        ).count() == 1
+        view.select_option(index=context_index)
+        cascade = page.locator('[aria-label="element element.system.cascade"]')
+        cascade.click()
+        page.locator(
+            "#architecture-documentation-content",
+            has_text="Unmapped target",
+        ).wait_for()
+        documentation_text = page.locator(
+            "#architecture-documentation-content"
+        ).inner_text()
+        assert "Ownership context only" in documentation_text
+        explicit_group = page.locator(".architecture-context-group").filter(
+            has=page.locator("h4", has_text="Explicit target links")
+        )
+        assert "REQ-BRANCH-CONTEXT" not in explicit_group.inner_text()
+        assert "REQ-BRANCH-CONTEXT" in documentation_text
+        assert "Links for the enclosing view" in documentation_text
+
         pinned_snapshot = re.search(r"snapshot=([^&]+)", page.url)
         assert pinned_snapshot
         old_snapshot_id = pinned_snapshot.group(1)
@@ -318,6 +491,12 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         )
         _wait_for_snapshot(page)
         assert old_snapshot_id not in page.url
+        assert page.locator(
+            ".architecture-context-row", has_text="REQ-BRANCH-CONTEXT"
+        ).count() == 0
+        assert refreshed_revision in page.locator(
+            "#architecture-documentation-content"
+        ).inner_text()
 
         # Detached/dirty metadata is honest and dirty model bytes never leak.
         _select_context(page, "feat_detached")

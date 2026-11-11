@@ -474,5 +474,128 @@ await grouped.load();
 assert.equal(grouped.state.threads.length, 1, "Markdown roots are excluded from semantic discussion");
 assert.equal(grouped.state.threads[0].replies.length, 3);
 
+// Context documents stay lazy, follow the exact side/view/target selection,
+// preserve coverage labels, and enter the existing authoritative requirement
+// thread composer without inventing a decision anchor.
+const contextHost = createElement("section");
+const contextCalls = [];
+const markdownCalls = [];
+const contextPayload = {
+  ...payload,
+  documentation_context_url: "/api/architecture/reviews/feat_034_004/context",
+  provenance: {
+    plan: {
+      repository_key: "plans",
+      revision: "p".repeat(40),
+      path: "docs/feature.md",
+    },
+  },
+};
+function contextDocument(id, kind, state = "available") {
+  return {
+    document_id: id,
+    kind,
+    title: id + " title",
+    state,
+    reason: state === "available" ? null : state + "_citation",
+    source: state === "missing" ? null : {
+      repository_key: "plans",
+      revision: "p".repeat(40),
+      path: "docs/feature.md",
+      section: id,
+    },
+    provenance: [{ relation: "reviewed_association", evidence_id: "review-exact" }],
+    resources: {
+      section_url: "/api/architecture/resources/review-exact/section-" + id,
+      current_url: "/api/architecture/resources/review-exact/current-" + id,
+      proposed_url: "/api/architecture/resources/review-exact/proposed-" + id,
+      diff_url: "/api/architecture/resources/review-exact/diff-" + id,
+    },
+  };
+}
+const contextReview = initPairedC4Review(contextPayload, {
+  document,
+  host: contextHost,
+  loadDocumentationContext(selection, url) {
+    contextCalls.push({ ...selection, url });
+    const selectedTarget = selection.kind !== "view";
+    return {
+      mapping_state: selectedTarget ? "unmapped" : "mapped",
+      explicit_target_links: selectedTarget ? [
+        contextDocument("REQ-MISSING", "requirement", "missing"),
+        contextDocument("DEC-STALE", "decision", "stale"),
+      ] : [],
+      view_links: [
+        contextDocument("REQ-7", "requirement"),
+        contextDocument("ADR-4", "decision"),
+      ],
+      owner_context: [{
+        code_directory: "cascade/war_room",
+        design_owner_directory: "cascade",
+        state: "available",
+        document_url: "/api/architecture/resources/review-exact/design",
+      }],
+      broader_index: selectedTarget ? [] : [{
+        code_directory: ".",
+        design_owner_directory: ".",
+        state: "available",
+      }],
+    };
+  },
+  loadDocumentationMarkdown(url) {
+    markdownCalls.push(url);
+    return "- `REQ-7` — Keep reads pinned.";
+  },
+});
+assert.equal(contextCalls.length, 0, "context metadata is not read during board render");
+contextHost.querySelector(".paired-c4-context-toggle").click();
+await settle();
+await settle();
+assert.equal(contextCalls.length, 1);
+assert.deepEqual(
+  [contextCalls[0].side, contextCalls[0].view_key, contextCalls[0].kind],
+  ["proposed", "context", "view"],
+  "the initial panel uses the proposed side and exact reviewed view"
+);
+assert.match(contextCalls[0].url, /side=proposed.*view=context.*kind=view/);
+assert.ok(contextHost.querySelector('[data-document-id="REQ-7"]'));
+assert.ok(descendants(contextHost).some((node) =>
+  node.textContent === "Owning designs (context, not coverage)"));
+assert.ok(descendants(contextHost).some((node) =>
+  node.textContent === "Broader context index"));
+assert.ok(descendants(contextHost).some((node) =>
+  node.textContent === "Open current/proposed diff"));
+
+contextHost.querySelector(".paired-c4-context-preview").click();
+await settle();
+assert.equal(markdownCalls.length, 1, "source Markdown loads only after explicit preview");
+
+const requirement = contextHost.querySelector('[data-document-id="REQ-7"]');
+requirement.querySelector(".paired-c4-comment-target").click();
+assert.equal(contextReview.draftState().anchor.kind, "requirement");
+assert.equal(contextReview.draftState().anchor.target_key, "REQ-7");
+assert.equal(contextReview.draftState().anchor.repository_key, "plans");
+assert.equal(contextReview.draftState().anchor.source_path, "docs/feature.md");
+assert.equal(contextReview.draftState().anchor.source_section, "REQ-7");
+assert.equal(contextReview.draftState().anchor.reviewed_tuple_digest, "tuple-exact");
+
+contextReview.navigation.select("element", "system.shop", "proposed");
+contextReview.render();
+await settle();
+await settle();
+assert.equal(contextCalls.at(-1).kind, "element");
+assert.equal(contextCalls.at(-1).target, "system.shop");
+assert.ok(descendants(contextHost).some((node) =>
+  node.textContent === "Unmapped target: no verified explicit requirement or decision link."));
+assert.ok(descendants(contextHost).some((node) => node.textContent === "missing · missing_citation"));
+assert.ok(descendants(contextHost).some((node) => node.textContent === "stale · stale_citation"));
+assert.equal(
+  contextHost.querySelector('[data-document-id="DEC-STALE"]')
+    .querySelector(".paired-c4-comment-target"),
+  null,
+  "decisions remain readable and linkable without a new thread anchor"
+);
+contextReview.stopRefresh();
+
 console.log("paired_c4_review cases ok");
 

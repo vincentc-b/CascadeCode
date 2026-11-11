@@ -104,7 +104,9 @@
 
 .architecture-provenance,
 .architecture-sources,
-.architecture-target-detail {
+.architecture-target-detail,
+.architecture-documentation-context,
+.architecture-document-preview {
   margin-top: 0.9rem;
   padding: 0.8rem;
   border: 1px solid var(--border);
@@ -242,6 +244,120 @@
 
 .architecture-target-detail code {
   overflow-wrap: anywhere;
+}
+
+.architecture-documentation-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+.architecture-documentation-title h3,
+.architecture-documentation-title h4,
+.architecture-documentation-title p {
+  margin: 0;
+}
+
+.architecture-documentation-title p,
+.architecture-documentation-status,
+.architecture-document-preview-provenance,
+.architecture-context-group > p {
+  color: var(--muted);
+}
+
+.architecture-documentation-status,
+.architecture-context-group > p {
+  margin: 0.45rem 0;
+}
+
+.architecture-documentation-status.error {
+  color: #ffb4a8;
+}
+
+.architecture-context-group {
+  margin-top: 0.85rem;
+}
+
+.architecture-context-group h4 {
+  margin: 0 0 0.25rem;
+}
+
+.architecture-context-list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.architecture-context-row {
+  padding: 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.architecture-context-row p {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.architecture-context-row-meta {
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.78rem;
+}
+
+.architecture-context-state {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 15%, var(--bg));
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.architecture-context-state.missing,
+.architecture-context-state.stale {
+  color: #ffb4a8;
+}
+
+.architecture-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.architecture-context-actions button {
+  font-size: 0.82rem;
+}
+
+.architecture-document-preview {
+  background: var(--bg);
+}
+
+.architecture-document-preview-provenance {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.78rem;
+}
+
+.architecture-document-preview-body {
+  max-height: 38rem;
+  overflow: auto;
+}
+
+.architecture-document-preview-body pre {
+  padding: 0.65rem;
+  overflow: auto;
+  background: color-mix(in srgb, var(--panel) 75%, black);
+  border-radius: 4px;
+  white-space: pre-wrap;
 }
 
 .architecture-source-list {

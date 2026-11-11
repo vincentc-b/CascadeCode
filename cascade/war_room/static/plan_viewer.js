@@ -2004,7 +2004,7 @@
       if (!repository || !source || typeof diff !== "string" || !diff) {
         return null;
       }
-      return {
+      var anchor = {
         version: 1,
         kind: kind,
         target_key: targetKey,
@@ -2018,6 +2018,14 @@
         original_source_reference: source,
         original_diff_link: diff,
       };
+      if (kind === "requirement") {
+        var plan = payload.provenance && payload.provenance.plan;
+        if (plan && typeof plan.path === "string" && plan.path) {
+          anchor.source_path = plan.path;
+          anchor.source_section = targetKey;
+        }
+      }
+      return anchor;
     }
 
     function reviewedReplacement(anchor) {
@@ -2505,6 +2513,14 @@
     var pendingThreadNeedsReview = false;
     var pendingThreadReviewMessage = "";
     var replyDrafts = {};
+    var documentation = {
+      open: false,
+      side: null,
+      loadingKey: null,
+      cache: {},
+      errors: {},
+      previews: {},
+    };
     var refreshTimer = null;
     var refreshInFlight = false;
     var stopped = false;
@@ -2598,6 +2614,302 @@
       var link = node("a", className, label);
       link.href = url;
       parent.appendChild(link);
+    }
+
+    function documentationSelection() {
+      var view = navigation.currentView();
+      if (!view) return null;
+      var selected = navigation.state.selection;
+      var side = selected && selected.source_side;
+      if (!side || !view[side]) side = documentation.side;
+      if (!side || !view[side]) side = view.proposed ? "proposed" : "current";
+      if (!view[side]) return null;
+      return {
+        side: side,
+        view_key: view.key,
+        level: view.level,
+        kind: selected ? selected.kind : "view",
+        target: selected ? selected.semantic_id : null,
+      };
+    }
+
+    function documentationKey(selection) {
+      return reviewTupleKey(payload) + "\u0000" + [
+        selection.side, selection.view_key, selection.level,
+        selection.kind, selection.target || "",
+      ].join("\u0000");
+    }
+
+    function documentationUrl(selection) {
+      var base = safeUrl(payload.documentation_context_url);
+      if (!base) return null;
+      var separator = base.indexOf("?") === -1 ? "?" : "&";
+      var query = [
+        ["side", selection.side],
+        ["view", selection.view_key],
+        ["level", selection.level],
+        ["kind", selection.kind],
+      ];
+      if (selection.target) query.push(["target", selection.target]);
+      return base + separator + query.map(function (row) {
+        return encodeURIComponent(row[0]) + "=" + encodeURIComponent(row[1]);
+      }).join("&");
+    }
+
+    function requestDocumentation(selection) {
+      var key = documentationKey(selection);
+      if (documentation.cache[key] || documentation.loadingKey === key) return;
+      var url = documentationUrl(selection);
+      if (!url) {
+        documentation.errors[key] = "Pinned documentation context is unavailable.";
+        return;
+      }
+      documentation.loadingKey = key;
+      delete documentation.errors[key];
+      var request = typeof options.loadDocumentationContext === "function" ?
+        options.loadDocumentationContext(selection, url, payload) :
+        fetch(url, { signal: pageLoadSignal() }).then(function (response) {
+          if (!response.ok) {
+            throw new Error("Failed to load documentation context (" + response.status + ")");
+          }
+          return response.json();
+        });
+      Promise.resolve(request).then(function (value) {
+        documentation.cache[key] = value;
+      }).catch(function (error) {
+        documentation.errors[key] = error && error.message ? error.message :
+          "Failed to load documentation context";
+      }).finally(function () {
+        if (documentation.loadingKey === key) documentation.loadingKey = null;
+        var active = documentationSelection();
+        if (!stopped && documentation.open && active && documentationKey(active) === key) render();
+      });
+    }
+
+    function previewMarkdown(url) {
+      var safe = safeUrl(url);
+      if (!safe || documentation.previews[safe]) return;
+      documentation.previews[safe] = { loading: true };
+      var request = typeof options.loadDocumentationMarkdown === "function" ?
+        options.loadDocumentationMarkdown(safe) :
+        fetch(safe, { signal: pageLoadSignal() }).then(function (response) {
+          if (!response.ok) throw new Error("Failed to load source (" + response.status + ")");
+          return response.text();
+        });
+      Promise.resolve(request).then(function (text) {
+        documentation.previews[safe] = { text: String(text) };
+      }).catch(function (error) {
+        documentation.previews[safe] = {
+          error: error && error.message ? error.message : "Failed to load source",
+        };
+      }).finally(function () { if (!stopped) render(); });
+    }
+
+    function appendDocumentationPreview(parent, url) {
+      var preview = documentation.previews[safeUrl(url)];
+      if (!preview) return;
+      if (preview.loading) {
+        parent.appendChild(node("p", "paired-c4-context-loading", "Loading source section…"));
+        return;
+      }
+      if (preview.error) {
+        parent.appendChild(node("p", "paired-c4-context-error", preview.error));
+        return;
+      }
+      var content = node("div", "paired-c4-context-markdown");
+      var rendered = markdownToHtml(preview.text);
+      if (rendered == null) content.textContent = preview.text;
+      else content.innerHTML = rendered;
+      parent.appendChild(content);
+    }
+
+    function appendContextDocument(parent, row, selection) {
+      var item = node("article", "paired-c4-context-document paired-c4-context-" +
+        (row.state || "missing"));
+      item.setAttribute("data-document-id", row.document_id || "");
+      item.appendChild(node(
+        "h5", "paired-c4-context-document-title",
+        (row.document_id || "Unknown") + " · " + (row.kind || "document")
+      ));
+      if (row.title && row.title !== row.document_id) {
+        item.appendChild(node("p", "paired-c4-context-document-name", row.title));
+      }
+      var stateText = row.state || "missing";
+      if (row.reason) stateText += " · " + row.reason;
+      item.appendChild(node("p", "paired-c4-context-state", stateText));
+      if (row.source) {
+        item.appendChild(node(
+          "p", "paired-c4-context-source",
+          row.source.repository_key + " @ " + row.source.revision + " · " +
+            row.source.path + (row.source.section ? " · § " + row.source.section : "")
+        ));
+      }
+      var evidence = (row.provenance || []).map(function (entry) {
+        return entry.relation + " · " + entry.evidence_id;
+      });
+      if (evidence.length) {
+        item.appendChild(node(
+          "p", "paired-c4-context-evidence", "Verified by " + evidence.join(", ")
+        ));
+      }
+      var resources = row.resources || {};
+      var actions = node("div", "paired-c4-context-actions");
+      [
+        ["section_url", "Open source section"],
+        ["current_url", "Open current document"],
+        ["proposed_url", "Open proposed document"],
+        ["document_url", "Open full document"],
+        ["diff_url", "Open current/proposed diff"],
+      ].forEach(function (entry) {
+        if (resources[entry[0]]) appendLink(
+          actions, "paired-c4-context-link", entry[1], resources[entry[0]]
+        );
+      });
+      if (resources.section_url && row.state !== "missing") {
+        var preview = node("button", "paired-c4-context-preview", "Preview source section");
+        preview.type = "button";
+        preview.addEventListener("click", function () { previewMarkdown(resources.section_url); });
+        actions.appendChild(preview);
+      }
+      if (row.kind === "requirement" && row.state === "available") {
+        var anchor = threadModel.buildAnchor(
+          "requirement", row.document_id, selection.side, null, null
+        );
+        anchorButton(actions, "Comment on requirement", anchor);
+      }
+      if (actions.children.length) item.appendChild(actions);
+      appendDocumentationPreview(item, resources.section_url);
+      parent.appendChild(item);
+    }
+
+    function appendContextCollection(parent, heading, rows, selection, emptyText) {
+      var section = node("section", "paired-c4-context-group");
+      section.appendChild(node("h4", "paired-c4-context-group-heading", heading));
+      if (!Array.isArray(rows) || !rows.length) {
+        section.appendChild(node("p", "paired-c4-context-empty", emptyText));
+      } else {
+        rows.forEach(function (row) { appendContextDocument(section, row, selection); });
+      }
+      parent.appendChild(section);
+    }
+
+    function appendDesignCollection(parent, heading, rows, emptyText) {
+      var section = node("section", "paired-c4-context-group");
+      section.appendChild(node("h4", "paired-c4-context-group-heading", heading));
+      if (!Array.isArray(rows) || !rows.length) {
+        section.appendChild(node("p", "paired-c4-context-empty", emptyText));
+      } else {
+        rows.forEach(function (row) {
+          var design = node("article", "paired-c4-context-design paired-c4-context-" +
+            (row.state || "missing"));
+          design.appendChild(node(
+            "p", "paired-c4-context-design-path",
+            (row.design_owner_directory || ".") + "/DESIGN.md · owns " +
+              (row.code_directory || ".")
+          ));
+          design.appendChild(node(
+            "p", "paired-c4-context-state",
+            (row.state || "missing") + (row.reason ? " · " + row.reason : "")
+          ));
+          if (row.document_url) appendLink(
+            design, "paired-c4-context-link", "Open owning design", row.document_url
+          );
+          section.appendChild(design);
+        });
+      }
+      parent.appendChild(section);
+    }
+
+    function renderDocumentationPanel(parent) {
+      var panel = node("aside", "paired-c4-context");
+      panel.setAttribute("aria-label", "Requirements and decisions");
+      var heading = node("div", "paired-c4-context-heading");
+      heading.appendChild(node("h3", "", "Requirements & decisions"));
+      var toggle = node(
+        "button", "paired-c4-context-toggle", documentation.open ? "Hide" : "Load context"
+      );
+      toggle.type = "button";
+      toggle.setAttribute("aria-expanded", documentation.open ? "true" : "false");
+      toggle.addEventListener("click", function () {
+        documentation.open = !documentation.open;
+        render();
+      });
+      heading.appendChild(toggle);
+      panel.appendChild(heading);
+      if (!documentation.open) {
+        panel.appendChild(node(
+          "p", "paired-c4-context-lazy",
+          "Pinned document metadata and Markdown load only when requested."
+        ));
+        parent.appendChild(panel);
+        return;
+      }
+      var selection = documentationSelection();
+      if (!selection) {
+        panel.appendChild(node("p", "paired-c4-context-error", "No reviewed side is available."));
+        parent.appendChild(panel);
+        return;
+      }
+      documentation.side = selection.side;
+      var sides = node("div", "paired-c4-context-sides");
+      ["current", "proposed"].forEach(function (sideName) {
+        var view = navigation.currentView();
+        if (!view || !view[sideName]) return;
+        var resolution = navigation.resolutions();
+        if (navigation.state.selection && resolution &&
+            resolution[sideName].state !== "present") return;
+        var button = node("button", "paired-c4-context-side", sideName);
+        button.type = "button";
+        button.disabled = sideName === selection.side;
+        button.addEventListener("click", function () {
+          documentation.side = sideName;
+          if (navigation.state.selection) navigation.state.selection.source_side = sideName;
+          render();
+        });
+        sides.appendChild(button);
+      });
+      panel.appendChild(sides);
+      panel.appendChild(node(
+        "p", "paired-c4-context-selection",
+        selection.side + " · " + selection.view_key + " · " + selection.level + " · " +
+          selection.kind + (selection.target ? " " + selection.target : "")
+      ));
+      var key = documentationKey(selection);
+      var value = documentation.cache[key];
+      if (!value && !documentation.errors[key]) requestDocumentation(selection);
+      if (!value) {
+        panel.appendChild(node(
+          "p",
+          documentation.errors[key] ? "paired-c4-context-error" : "paired-c4-context-loading",
+          documentation.errors[key] || "Loading pinned context…"
+        ));
+        parent.appendChild(panel);
+        return;
+      }
+      var targetSelected = selection.kind !== "view";
+      if (targetSelected && value.mapping_state === "unmapped") {
+        panel.appendChild(node(
+          "p", "paired-c4-context-unmapped",
+          "Unmapped target: no verified explicit requirement or decision link."
+        ));
+      }
+      if (targetSelected) appendContextCollection(
+        panel, "Explicit target links", value.explicit_target_links, selection,
+        "No explicit target coverage. View and ownership context remain separate."
+      );
+      appendContextCollection(
+        panel, "View links", value.view_links, selection,
+        "No verified documents are linked to this view."
+      );
+      appendDesignCollection(
+        panel, "Owning designs (context, not coverage)", value.owner_context,
+        "No owning design context is available."
+      );
+      if (!targetSelected || (value.broader_index || []).length) appendDesignCollection(
+        panel, "Broader context index", value.broader_index,
+        "No broader context is available in this bounded result."
+      );
+      parent.appendChild(panel);
     }
 
     function beginThread(anchor) {
@@ -3053,10 +3365,13 @@
       }
 
       var view = navigation.currentView();
+      var workspace = node("div", "paired-c4-workspace");
       var diagrams = node("div", "paired-c4-diagrams");
       renderSide(diagrams, view, "current", status);
       renderSide(diagrams, view, "proposed", status);
-      host.appendChild(diagrams);
+      workspace.appendChild(diagrams);
+      renderDocumentationPanel(workspace);
+      host.appendChild(workspace);
 
       var resolutions = navigation.resolutions();
       if (resolutions) {
