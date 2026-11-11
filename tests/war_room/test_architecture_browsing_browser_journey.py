@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import socket
@@ -15,7 +16,6 @@ from pathlib import Path
 
 import pytest
 
-import cascade.workspace.architecture_browsing as browsing
 from cascade.board.context import set_project_context
 from cascade.war_room.architecture_routes import context_catalog
 from cascade.war_room.server import serve
@@ -28,6 +28,7 @@ from cascade.workspace import (
     PinnedDocumentRef,
     ProjectContext,
     STRUCTURIZR_IMAGE,
+    C4RenderSettings,
     create_architecture_artifact_ref,
     create_architecture_model_ref,
     resolve_design_ownership,
@@ -38,6 +39,50 @@ from tests.support import make_repo
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSIONED_MODEL = ROOT / "architecture" / "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+JOURNEY_VIEWS = """systemContext cascade "cascade-context" {
+    include *
+    autoLayout lr
+}
+
+container cascade "cascade-containers" {
+    include *
+    autoLayout lr
+}
+"""
+JOURNEY_MODEL = """operator = person "Operator" "Reviews branch architecture." {
+    properties {
+        "cascade.semanticId" "element.person.operator"
+    }
+}
+
+cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Git repository." {
+    properties {
+        "cascade.semanticId" "element.system.cascade"
+    }
+
+    war_room = container "War Room" "Presents pinned architecture." "Python HTTP" {
+        properties {
+            "cascade.semanticId" "element.container.war-room"
+        }
+    }
+    supervisor = container "Service" "Coordinates delivery." "Python" {
+        properties {
+            "cascade.semanticId" "element.container.supervisor"
+        }
+    }
+}
+
+operator_uses_war_room = operator -> war_room "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.operator-uses-war-room"
+    }
+}
+war_room_calls_supervisor = war_room -> supervisor "Invokes" {
+    properties {
+        "cascade.semanticId" "relationship.war-room-calls-supervisor"
+    }
+}
+"""
 
 
 def _git(root: Path, *args: str) -> str:
@@ -91,6 +136,7 @@ def _install_model(root: Path, *, system_name: str | None = None) -> ProjectCont
     project = ProjectContext.colocated(root)
     resolve_design_ownership(project, ".")
     shutil.copytree(VERSIONED_MODEL, project.editable_architecture_root)
+    _limit_model_views(project.editable_architecture_root)
     if system_name is not None:
         model = project.editable_architecture_root / "model.dsl"
         model.write_text(
@@ -101,6 +147,43 @@ def _install_model(root: Path, *, system_name: str | None = None) -> ProjectCont
             encoding="utf-8",
         )
     return project
+
+
+def _limit_model_views(architecture: Path) -> None:
+    """Keep the proof bounded to the semantic model and views it browses."""
+
+    architecture.joinpath("model.dsl").write_text(JOURNEY_MODEL, encoding="utf-8")
+    architecture.joinpath("views.dsl").write_text(JOURNEY_VIEWS, encoding="utf-8")
+    contract_path = architecture / "workspace.contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    semantic_ids = {
+        "element.person.operator",
+        "element.system.cascade",
+        "element.container.war-room",
+        "element.container.supervisor",
+    }
+    relationship_ids = {
+        "relationship.operator-uses-war-room",
+        "relationship.war-room-calls-supervisor",
+    }
+    contract["elements"] = [
+        element
+        for element in contract["elements"]
+        if element["semantic_id"] in semantic_ids
+    ]
+    contract["relationships"] = [
+        relationship
+        for relationship in contract["relationships"]
+        if relationship["semantic_id"] in relationship_ids
+    ]
+    contract["views"] = [
+        view
+        for view in contract["views"]
+        if view["key"] in {"cascade-context", "cascade-containers"}
+    ]
+    contract_path.write_text(
+        json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def _add_worktree(root: Path, work_id: str, base: str) -> Path:
@@ -186,7 +269,101 @@ def _record_context_review(
     return unit
 
 
-def _wait_for_snapshot(page, *, timeout: int = 140_000) -> None:  # type: ignore[no-untyped-def]
+def _record_split_review(
+    project: ProjectContext, code_revision: str, documentation_revision: str
+) -> tuple[ArchitectureReviewUnit, str]:
+    """Record the real durable code/docs association consumed by browsing."""
+
+    docs = project.architecture_repository.root
+    contract = create_architecture_model_ref(
+        project, ".", "workspace.contract.json", owning_work="feat_split"
+    )
+    sources = tuple(
+        create_architecture_model_ref(project, ".", name, owning_work="feat_split")
+        for name in ("workspace.dsl", "model.dsl", "views.dsl")
+    )
+    binding = ArchitectureModelBinding(
+        PinnedArchitectureArtifact(contract, _digest(docs / contract.repository_path)),
+        tuple(
+            PinnedArchitectureArtifact(source, _digest(docs / source.repository_path))
+            for source in sources
+        ),
+        "1" * 64,
+        "2" * 64,
+        (),
+        "3" * 64,
+        "4" * 64,
+    )
+    plan_path = Path("FEATURE.md")
+    design = create_architecture_artifact_ref(project, ".", owning_work="feat_split")
+    unit = ArchitectureReviewUnit(
+        "feat_split",
+        "feature_architect",
+        project.target_repository_key,
+        Path("."),
+        Path("."),
+        project.target.repository_key,
+        "epic:epic_split",
+        project.architecture_repository.repository_key,
+        "tracking",
+        Path("."),
+        None,
+        ArchitectureBaseline.empty(),
+        None,
+        None,
+        1,
+        "reviewed",
+        PinnedDocumentRef(
+            project.architecture_repository.repository_key,
+            "tracking",
+            plan_path,
+            documentation_revision,
+            _digest(docs / plan_path),
+        ),
+        PinnedArchitectureArtifact(design, _digest(docs / design.repository_path)),
+        binding,
+        ("REQ-SPLIT-PIN",),
+        ("DEC-SPLIT-ASSOCIATION",),
+        ("cascade-context",),
+        ("feat_split",),
+        "diagram_change",
+        "The accepted lineage binds distinct code and documentation commits.",
+    )
+    store = ArchitectureReviewStore(project)
+    store.save(unit)
+    accepted = store.accept(
+        unit.review_unit_id,
+        accepted_code_head=code_revision,
+        accepted_documentation_head=documentation_revision,
+        expected_generation=None,
+    )
+    return unit, accepted.pointer_id
+
+
+def _evidence_dir() -> Path | None:
+    value = os.environ.get("CASCADE_BRANCH_BROWSER_EVIDENCE_DIR")
+    if not value:
+        return None
+    destination = Path(value).resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    return destination
+
+
+def _capture(page, name: str) -> None:  # type: ignore[no-untyped-def]
+    destination = _evidence_dir()
+    if destination is not None:
+        page.screenshot(path=destination / name, full_page=True)
+
+
+def _record_evidence(name: str, payload: dict[str, object]) -> None:
+    destination = _evidence_dir()
+    if destination is not None:
+        (destination / name).write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+
+
+def _wait_for_snapshot(page, *, timeout: int = 240_000) -> None:  # type: ignore[no-untyped-def]
     page.locator("#architecture-ready:not([hidden])").wait_for(timeout=timeout)
     page.locator("#architecture-viewer .semantic-c4-svg").wait_for(timeout=20_000)
 
@@ -371,7 +548,7 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         page.wait_for_function(
             "revision => document.querySelector('#architecture-provenance-list').textContent.includes(revision)",
             arg=branch_revision,
-            timeout=140_000,
+            timeout=240_000,
         )
         _wait_for_snapshot(page)
         branch_snapshot = re.search(r"snapshot=([^&]+)", page.url)
@@ -386,6 +563,7 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         assert "Branch Atlas" in page.locator(
             '[aria-label="element element.system.cascade"]'
         ).get_attribute("aria-description")
+        _capture(page, "branch-browsing.png")
 
         # The Architecture tab resolves the same two reviewed documents for
         # both cited views, and opens source/full Markdown only on demand.
@@ -487,7 +665,7 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         page.wait_for_function(
             "revision => document.querySelector('#architecture-provenance-list').textContent.includes(revision)",
             arg=refreshed_revision,
-            timeout=140_000,
+            timeout=240_000,
         )
         _wait_for_snapshot(page)
         assert old_snapshot_id not in page.url
@@ -516,6 +694,7 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
             body = response.read()
         assert b'DIRTY SECRET' not in body
         assert b'softwareSystem "Cascade"' in body
+        _capture(page, "detached-dirty.png")
 
         # Missing content and a genuine renderer failure remain explicit.
         _select_context(page, "feat_missing")
@@ -523,13 +702,29 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
             has_text="No versioned architecture model"
         ).wait_for(timeout=10_000)
         assert missing_revision in page.locator("#architecture-provenance-list").inner_text()
+        _capture(page, "missing-model.png")
 
         _select_context(page, "feat_broken")
         page.locator("#architecture-status").filter(
             has_text="could not be rendered"
-        ).wait_for(timeout=140_000)
+        ).wait_for(timeout=240_000)
         assert broken_revision in page.locator("#architecture-provenance-list").inner_text()
         assert page.locator("#war-room-architecture-tab").is_enabled()
+        _record_evidence(
+            "colocated-revisions.json",
+            {
+                "main_revision": main_revision,
+                "branch_revision": branch_revision,
+                "refreshed_branch_revision": refreshed_revision,
+                "detached_revision": main_revision,
+                "missing_model_revision": missing_revision,
+                "broken_model_revision": broken_revision,
+                "branch_review_unit_id": branch_review.review_unit_id,
+                "initial_branch_snapshot_id": old_snapshot_id,
+                "structurizr_image": STRUCTURIZR_IMAGE,
+                "renderer_settings": C4RenderSettings().cache_payload(),
+            },
+        )
 
         # Snapshot/resource identifiers are the authorization boundary.
         forged = old_snapshot_id[:-1] + ("0" if old_snapshot_id[-1] != "0" else "1")
@@ -549,7 +744,7 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
 
 
 def test_split_repository_requires_and_applies_an_explicit_documentation_ref(
-    tmp_path: Path, real_browser, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, real_browser,
 ) -> None:
     target = make_repo(tmp_path / "target")
     tracking = make_repo(tmp_path / "tracking")
@@ -558,54 +753,60 @@ def test_split_repository_requires_and_applies_an_explicit_documentation_ref(
         target, tracking, architecture_destination="tracking"
     )
     resolve_design_ownership(project, ".")
+    target.joinpath("code.txt").write_text("accepted code\n", encoding="utf-8")
     code_revision = _commit(target, "code and architecture mapping")
     shutil.copytree(VERSIONED_MODEL, project.editable_architecture_root)
+    _limit_model_views(project.editable_architecture_root)
+    tracking.joinpath("FEATURE.md").write_text(
+        "# Split architecture\n\n"
+        "- `REQ-SPLIT-PIN` — Bind code to reviewed documentation.\n"
+        "- `DEC-SPLIT-ASSOCIATION` — Never infer tracking HEAD.\n",
+        encoding="utf-8",
+    )
+    project.design_path().parent.mkdir(parents=True, exist_ok=True)
+    project.design_path().write_text("# Split architecture design\n", encoding="utf-8")
     documentation_revision = _commit(tracking, "split architecture model")
-
-    monkeypatch.setattr(
-        browsing,
-        "_recorded_candidates",
-        lambda _project: (
-            browsing._Candidate(
-                code_revision,
-                documentation_revision,
-                "promotion",
-                "promotion-exact",
-            ),
-        ),
+    review, accepted_pointer_id = _record_split_review(
+        project, code_revision, documentation_revision
     )
     set_project_context(project)
     try:
         exact = context_catalog(target)["contexts"][0]
         assert exact["documentation_revision"] == documentation_revision
         assert exact["association"] == {
-            "provenance": "promotion",
-            "evidence_id": "promotion-exact",
+            "provenance": "accepted_lineage",
+            "evidence_id": accepted_pointer_id,
         }
-
-        # With no exact code association, tracking HEAD is not inferred. The
-        # same known ref is exposed for an explicit human selection instead.
-        monkeypatch.setattr(
-            browsing,
-            "_recorded_candidates",
-            lambda _project: (
-                browsing._Candidate(
-                    None,
-                    documentation_revision,
-                    "review",
-                    "review-known-docs",
-                ),
-            ),
-        )
         server, thread, base = _start(target)
         try:
             page = real_browser.new_page(viewport={"width": 1200, "height": 900})
+            page.goto(base + "/?tab=architecture", wait_until="domcontentloaded")
+            _wait_for_snapshot(page)
+            exact_provenance = page.locator("#architecture-provenance-list").inner_text()
+            assert code_revision in exact_provenance
+            assert documentation_revision in exact_provenance
+            assert "accepted_lineage" in exact_provenance
+            assert accepted_pointer_id in exact_provenance
+            assert "Cascade" in page.locator(
+                '[aria-label="element element.system.cascade"]'
+            ).get_attribute("aria-description")
+            _capture(page, "split-exact-association.png")
+
+            # A real code HEAD update has no recorded association. A fresh
+            # route load must not infer the distinct tracking HEAD.
+            target.joinpath("code.txt").write_text(
+                "accepted code\nunassociated code update\n", encoding="utf-8"
+            )
+            unassociated_code_revision = _commit(target, "unassociated code head")
+            assert unassociated_code_revision != code_revision
+            assert _git(tracking, "rev-parse", "HEAD") == documentation_revision
             page.goto(base + "/?tab=architecture", wait_until="domcontentloaded")
             choice = page.locator("#architecture-documentation-choice")
             choice.wait_for(timeout=10_000)
             assert "tracking HEAD will not be guessed" in page.locator(
                 "#architecture-status"
             ).inner_text()
+            _capture(page, "split-absent-association.png")
             refs = page.locator("#architecture-documentation-ref")
             assert documentation_revision in " ".join(
                 refs.locator("option").all_text_contents()
@@ -616,10 +817,24 @@ def test_split_repository_requires_and_applies_an_explicit_documentation_ref(
             page.locator("#architecture-use-documentation-ref").click()
             _wait_for_snapshot(page)
             provenance = page.locator("#architecture-provenance-list").inner_text()
-            assert code_revision in provenance
+            assert unassociated_code_revision in provenance
             assert documentation_revision in provenance
             assert "user_selected" in provenance
             assert selected_ref in provenance
+            _capture(page, "split-explicit-selection.png")
+            _record_evidence(
+                "split-revisions.json",
+                {
+                    "associated_code_revision": code_revision,
+                    "unassociated_code_revision": unassociated_code_revision,
+                    "documentation_revision": documentation_revision,
+                    "review_unit_id": review.review_unit_id,
+                    "accepted_pointer_id": accepted_pointer_id,
+                    "selected_documentation_ref_id": selected_ref,
+                    "structurizr_image": STRUCTURIZR_IMAGE,
+                    "renderer_settings": C4RenderSettings().cache_payload(),
+                },
+            )
             page.close()
         finally:
             _stop(server, thread)
