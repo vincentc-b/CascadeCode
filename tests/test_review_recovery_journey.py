@@ -125,8 +125,13 @@ def test_exhausted_legacy_review_is_rearmed_without_erasing_attempts(tmp_path, m
                             metadata={'reason': 'repository_checks_timed_out'})
 
     resume_action(turn.action_id, root=root, execute=timed_out)
-    record_owner_decision(turn.action_id, 'legacy-decision', root=root, owner='feature_team')
-    record_owner_resolution(turn.action_id, 'legacy-decision', 'legacy-resolution', root=root)
+    # The old monitor resolved the next decision before discovering that its
+    # attempt budget was exhausted. Reusing an attempt-number ID then strands
+    # the rearmed action behind an already-resolved decision.
+    decision_id = f'review-resolution:{turn.action_id}:attempt:2'
+    record_owner_decision(turn.action_id, decision_id, root=root, owner='feature_team',
+                          metadata={'team_id': 'feat_035_001'})
+    record_owner_resolution(turn.action_id, decision_id, 'legacy-resolution', root=root)
     exhausted = resume_action(turn.action_id, root=root,
                               execute=lambda context: pytest.fail('budget must be exhausted'))
     assert exhausted['recovery_state'] == 'blocked'

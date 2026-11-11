@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import subprocess
 import tomllib
+import hashlib
+import json
 from pathlib import Path
 from typing import Literal, Mapping
 
@@ -190,13 +192,16 @@ def publish_team_review_resolution(
             if isinstance(item, Mapping) and item.get("state") != "resolved"
         ]
         if not decisions:
-            decision_id = f"review-resolution:{action_id}:attempt:{int(action.get('attempt_count') or 0) + 1}"
+            fingerprint = hashlib.sha256(
+                json.dumps(generation, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            decision_id = f"review-resolution:{action_id}:generation:{fingerprint}"
             action = record_owner_decision(
                 action_id,
                 decision_id,
                 root=trunk,
                 owner=team_kind,
-                metadata={"team_id": team_id},
+                metadata={"team_id": team_id, "publication_generation": generation},
             )
             decisions = [
                 item
@@ -214,7 +219,7 @@ def publish_team_review_resolution(
                 decision_id,
                 f"resolved-in-owned-worktree:{action_id}",
                 root=trunk,
-                metadata={"team_id": team_id},
+                metadata={"team_id": team_id, "publication_generation": generation},
             )
 
     def execute(_context: object) -> dict[str, object]:
