@@ -32,6 +32,7 @@ from cascade.workspace.architecture_review import (
 from cascade.workspace.architecture_snapshots import ArchitectureBrowsingSnapshot
 from cascade.workspace.types import ProjectContext
 from cascade.workspace.c4_render import C4ArtifactRenderer, C4RenderArtifact
+from cascade.workspace.c4_review import C4ReviewPayload
 from tests.support import add_doc, make_repo
 
 
@@ -351,6 +352,113 @@ def test_doc_always_exposes_small_envelope_and_lazy_missing_projection(tmp_path:
         )
         assert status == 400
         assert json.loads(raw)["error"] == "invalid review pagination"
+    finally:
+        _stop(server, thread)
+
+
+def test_review_failure_gate_states_keep_plan_http_available(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """Every non-ready review state remains explicit without hiding the plan.
+
+    Backend tests exercise how these states arise.  This focused matrix pins the
+    HTTP contract they share and guards the important failure boundary: a broken
+    or incomplete architecture review must not make unrelated plan content
+    unavailable.
+    """
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "plan"], cwd=root, check=True)
+
+    import cascade.war_room.architecture_routes as routes
+
+    state = {"value": "pending"}
+    reasons = {
+        "empty_baseline": "validated proposal uses an explicit empty baseline",
+        "no_diagram_change": "plan-only clarification is justified",
+        "missing_review": "legacy plan has no immutable review unit",
+        "pending": "renderer is still validating bounded evidence",
+        "render_failed": "renderer failed without a static fallback",
+        "invalid_artifact": "semantic SVG bindings are invalid",
+        "stale_revision": "accepted baseline advanced",
+        "missing_model": "pinned render artifact is missing",
+        "partial_acceptance": "code landed while documentation remains pending",
+    }
+
+    def resolve(_root: Path, work_id: str) -> C4ReviewPayload:
+        review_state = state["value"]
+        reason = reasons[review_state]
+        return C4ReviewPayload(
+            state=review_state,
+            owner_work_id=work_id,
+            authorized_owner="epic_architect",
+            review_unit_id="",
+            reviewed_tuple_digest="",
+            repositories=(),
+            views=(),
+            changed_views=(),
+            legend=(),
+            summary=reason,
+            requirements=(),
+            decisions=(),
+            diffs={"source": None, "model": None, "plan": None},
+            reason_code=review_state,
+            reason=reason,
+            error=(
+                reason
+                if review_state
+                not in {"pending", "empty_baseline", "no_diagram_change"}
+                else None
+            ),
+        )
+
+    monkeypatch.setattr(routes, "_resolve", resolve)
+    server, thread, base = _start(root)
+    try:
+        for review_state, reason in reasons.items():
+            state["value"] = review_state
+            status, raw, headers = _get(base + "/api/doc/epic_001")
+            assert status == 200
+            assert headers["Cache-Control"] == "no-store"
+            document = json.loads(raw)
+            assert document["meta"]["id"] == "epic_001"
+            assert document["meta"]["title"] == "Epic"
+            assert document["body"]
+            assert document["paired_review"]["state"] == review_state
+            assert document["paired_review"]["reason_code"] == review_state
+            assert document["paired_review"]["message"] == reason
+
+            status, raw, headers = _get(
+                base + "/api/architecture/reviews/epic_001"
+            )
+            assert status == 200
+            assert headers["Cache-Control"] == "no-store"
+            projection = json.loads(raw)
+            assert projection["state"] == review_state
+            assert projection["reason"] == reason
+            assert projection["views"] == []
+            assert projection["resources"] == []
+            assert projection["approval_context"] is None
+    finally:
+        _stop(server, thread)
+
+    # An unexpected resolver failure is isolated to the review envelope.  The
+    # plan and its other controls remain readable for unrelated work.
+    monkeypatch.setattr(
+        routes,
+        "_resolve",
+        lambda _root, _work_id: (_ for _ in ()).throw(RuntimeError("review store offline")),
+    )
+    server, thread, base = _start(root)
+    try:
+        status, raw, _headers = _get(base + "/api/doc/epic_001")
+        assert status == 200
+        document = json.loads(raw)
+        assert document["meta"]["id"] == "epic_001"
+        assert document["body"]
+        assert document["paired_review"]["state"] == "unavailable"
+        assert document["paired_review"]["message"] == "review store offline"
     finally:
         _stop(server, thread)
 

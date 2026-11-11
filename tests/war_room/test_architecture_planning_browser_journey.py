@@ -242,10 +242,14 @@ def _binding(project: ProjectContext, feature_id: str) -> ArchitectureModelBindi
         closure = materialize_c4_source_closure(
             project, contract_ref, source_refs, Path(directory) / "source"
         )
-        settings = C4RenderSettings()
+        # This journey runs validation, three exports and one native-browser
+        # binding pass per view through the pinned container.  Keep its exact
+        # persisted production setting explicit and allow slower CI hosts enough
+        # aggregate time to reach the browser assertions.
+        settings = C4RenderSettings(timeout_seconds=180)
         rendered = C4ArtifactRenderer(
             project.target.root / ".cascade" / "c4-render-cache"
-        ).submit(closure, settings).wait(timeout=120)
+        ).submit(closure, settings).wait(timeout=210)
     assert rendered.status == "ready", rendered
     assert rendered.semantic_workspace is not None
     semantic_digest = _digest(rendered.semantic_workspace)
@@ -725,6 +729,23 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 page.locator(".paired-c4-view-select").select_option(index=context_index)
 
                 proposed_svg = page.locator(".paired-c4-side-proposed .paired-c4-svg")
+                current_box = page.locator(".paired-c4-side-current").bounding_box()
+                proposed_box = page.locator(".paired-c4-side-proposed").bounding_box()
+                assert current_box is not None and proposed_box is not None
+                assert proposed_box["x"] >= current_box["x"] + current_box["width"] - 2
+                assert page.evaluate(
+                    "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+                )
+
+                native_hit_target = page.locator(
+                    '.paired-c4-side-proposed '
+                    '[data-cascade-semantic-id="element.system.portal"]'
+                )
+                assert native_hit_target.evaluate(
+                    "node => node.ownerSVGElement === node.closest('svg')"
+                )
+                assert native_hit_target.get_attribute("role") == "button"
+                assert native_hit_target.get_attribute("tabindex") == "0"
                 fitted_view_box = proposed_svg.get_attribute("viewBox")
                 page.locator(
                     '.paired-c4-side-proposed .semantic-c4-toolbar button',
@@ -751,6 +772,14 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 proposed_box = page.locator(".paired-c4-side-proposed").bounding_box()
                 assert current_box is not None and proposed_box is not None
                 assert proposed_box["y"] > current_box["y"] + current_box["height"] - 2
+                assert page.evaluate(
+                    "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+                )
+                assert page.locator(
+                    '.paired-c4-side-proposed .semantic-c4-toolbar button',
+                    has_text="Fit",
+                ).is_visible()
+                assert native_hit_target.is_visible()
                 page.set_viewport_size({"width": 1440, "height": 1000})
 
                 def post_thread(shortcut: str, body: str, *, blocking: bool = False) -> None:

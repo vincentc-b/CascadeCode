@@ -367,6 +367,10 @@ def _publish_validated(
     origin = str(row["originating_work_id"])
     actor = str(row["actor"])
     generation = row["expected_generation"]
+    render_settings = (
+        C4RenderSettings(**dict(unit.proposed_model.renderer_settings))
+        if unit.proposed_model is not None else None
+    )
     if origin != unit.owner_work_id:
         result = stage_owned_architecture_change(
             project,
@@ -375,6 +379,7 @@ def _publish_validated(
             renderer=C4ArtifactRenderer(
                 project.target.root / ".cascade" / "c4-render-cache"
             ),
+            render_settings=render_settings,
             baseline_artifact=baseline_artifact,
         )
         assert result.amendment is not None
@@ -393,6 +398,7 @@ def _publish_validated(
         renderer=C4ArtifactRenderer(
             project.target.root / ".cascade" / "c4-render-cache"
         ),
+        render_settings=render_settings,
         baseline_artifact=baseline_artifact,
     )
     assert staged.unit is not None
