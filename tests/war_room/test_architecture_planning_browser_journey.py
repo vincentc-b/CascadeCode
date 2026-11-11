@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -88,7 +89,9 @@ def _get(url: str) -> bytes:
         return response.read()
 
 
-def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> tuple[Path, ...]:
+def _write_model(
+    project: ProjectContext, feature_id: str, *, revised: bool
+) -> tuple[Path, ...]:
     architecture = project.editable_architecture_root
     architecture.mkdir(parents=True, exist_ok=True)
     contract = architecture / "workspace.contract.json"
@@ -121,12 +124,31 @@ def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> 
                         "fragment": "model.dsl",
                     },
                     *(
-                        [{
-                            "dsl_identifier": "audit",
-                            "semantic_id": "element.container.audit",
-                            "fragment": "model.dsl",
-                        }]
-                        if revised else []
+                        [
+                            {
+                                "dsl_identifier": "audit",
+                                "semantic_id": "element.container.audit",
+                                "fragment": "model.dsl",
+                            },
+                            {
+                                "dsl_identifier": "coordinator",
+                                "semantic_id": "element.component.coordinator",
+                                "fragment": "model.dsl",
+                            },
+                        ]
+                        if revised
+                        else []
+                    ),
+                    *(
+                        [
+                            {
+                                "dsl_identifier": "legacy",
+                                "semantic_id": "element.component.legacy",
+                                "fragment": "model.dsl",
+                            }
+                        ]
+                        if not revised
+                        else []
                     ),
                 ],
                 "relationships": [
@@ -138,19 +160,35 @@ def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> 
                         "fragment": "model.dsl",
                     },
                     *(
-                        [{
-                            "dsl_identifier": "api_records_audit",
-                            "semantic_id": "relationship.api-records-audit",
-                            "source": "api",
-                            "destination": "audit",
-                            "fragment": "model.dsl",
-                        }]
-                        if revised else []
+                        [
+                            {
+                                "dsl_identifier": "coordinator_records_audit",
+                                "semantic_id": "relationship.coordinator-records-audit",
+                                "source": "coordinator",
+                                "destination": "audit",
+                                "fragment": "model.dsl",
+                            },
+                        ]
+                        if revised
+                        else []
+                    ),
+                    *(
+                        [
+                            {
+                                "dsl_identifier": "reviewer_uses_legacy",
+                                "semantic_id": "relationship.reviewer-uses-legacy",
+                                "source": "reviewer",
+                                "destination": "legacy",
+                                "fragment": "model.dsl",
+                            }
+                        ]
+                        if not revised
+                        else []
                     ),
                 ],
                 "views": [
                     {"key": "portal-context", "fragment": "views.dsl"},
-                    {"key": "portal-containers", "fragment": "views.dsl"},
+                    {"key": "portal-components", "fragment": "views.dsl"},
                 ],
                 "renames": [],
             },
@@ -185,7 +223,20 @@ def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> 
         "}\n"
         f'portal = softwareSystem "Review portal" "{description}" {{\n'
         '  api = container "Review API" "Serves pinned reviews." {\n'
-        "    properties {\n"
+        + (
+            '    coordinator = component "Review coordinator" "Coordinates pinned reviews." {\n'
+            "      properties {\n"
+            '        "cascade.semanticId" "element.component.coordinator"\n'
+            "      }\n"
+            "    }\n"
+            if revised
+            else '    legacy = component "Legacy review adapter" "Supports the old review flow." {\n'
+            "      properties {\n"
+            '        "cascade.semanticId" "element.component.legacy"\n'
+            "      }\n"
+            "    }\n"
+        )
+        + "    properties {\n"
         '      "cascade.semanticId" "element.container.api"\n'
         "    }\n"
         "  }\n"
@@ -195,7 +246,8 @@ def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> 
             '      "cascade.semanticId" "element.container.audit"\n'
             "    }\n"
             "  }\n"
-            if revised else ""
+            if revised
+            else ""
         )
         + "  properties {\n"
         '    "cascade.semanticId" "element.system.portal"\n'
@@ -207,12 +259,22 @@ def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> 
         "  }\n"
         "}\n"
         + (
-            'api_records_audit = api -> audit "Records" {\n'
+            'coordinator_records_audit = coordinator -> audit "Records" {\n'
             "  properties {\n"
-            '    "cascade.semanticId" "relationship.api-records-audit"\n'
+            '    "cascade.semanticId" "relationship.coordinator-records-audit"\n'
             "  }\n"
             "}\n"
-            if revised else ""
+            if revised
+            else ""
+        )
+        + (
+            'reviewer_uses_legacy = reviewer -> legacy "Uses legacy review" {\n'
+            "  properties {\n"
+            '    "cascade.semanticId" "relationship.reviewer-uses-legacy"\n'
+            "  }\n"
+            "}\n"
+            if not revised
+            else ""
         ),
         encoding="utf-8",
     )
@@ -221,7 +283,7 @@ def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> 
         "  include *\n"
         "  autoLayout lr\n"
         "}\n"
-        'container portal "portal-containers" {\n'
+        'component api "portal-components" {\n'
         "  include *\n"
         "  autoLayout lr\n"
         "}\n",
@@ -238,7 +300,9 @@ def _binding(project: ProjectContext, feature_id: str) -> ArchitectureModelBindi
         create_architecture_model_ref(project, ".", name, owning_work=feature_id)
         for name in ("workspace.dsl", "model.dsl", "views.dsl")
     )
-    with tempfile.TemporaryDirectory(prefix="architecture-browser-binding-") as directory:
+    with tempfile.TemporaryDirectory(
+        prefix="architecture-browser-binding-"
+    ) as directory:
         closure = materialize_c4_source_closure(
             project, contract_ref, source_refs, Path(directory) / "source"
         )
@@ -282,9 +346,7 @@ def _proposal(
     feature = read_doc(feature_id, root=project.target.root)
     assert feature.sha is not None
     plan_path = feature.meta.path.relative_to(project.target.root)
-    design_ref = create_architecture_artifact_ref(
-        project, ".", owning_work=feature_id
-    )
+    design_ref = create_architecture_artifact_ref(project, ".", owning_work=feature_id)
     return ArchitectureReviewUnit(
         owner_work_id="caller-cannot-select-owner",
         authorized_owner="caller-cannot-select-actor",
@@ -309,11 +371,13 @@ def _proposal(
             feature.sha,
             _digest(feature.meta.path),
         ),
-        design=PinnedArchitectureArtifact(design_ref, _digest(project.target.root / "DESIGN.md")),
+        design=PinnedArchitectureArtifact(
+            design_ref, _digest(project.target.root / "DESIGN.md")
+        ),
         proposed_model=model,
         requirement_citations=("REQ-ARCH-REVIEW",),
         decision_citations=("DEC-REAL-RENDERER",),
-        view_citations=("portal-context", "portal-containers"),
+        view_citations=("portal-context", "portal-components"),
         affected_work_ids=(feature_id,),
         architecture_impact="diagram_change",
         impact_reason="The portal description changes in the reviewed system context.",
@@ -322,9 +386,11 @@ def _proposal(
 
 def _publish(
     root: Path,
-    feature_id: str,
+    work_id: str,
     proposal: ArchitectureReviewUnit,
     generation: int | None,
+    *,
+    tier: str = "feature",
 ) -> tuple[dict[str, object], tuple[str, ...]]:
     collector = ToolEffectCollector()
     arguments = {
@@ -336,13 +402,13 @@ def _publish(
     deadline = time.monotonic() + 20
     while True:
         result = dispatch_planning_tool(
-            "feature",
+            tier,
             "publish_architecture_review",
             arguments,
-            scope_id=feature_id,
+            scope_id=work_id,
             repo_root=root,
             collector=collector,
-            role="feature_architect",
+            role=f"{tier}_architect",
         )
         assert isinstance(result, dict)
         operation_ids.append(str(result["operation_id"]))
@@ -403,8 +469,15 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
         project = ProjectContext.colocated(root)
         set_project_context(project)
         resolve_design_ownership(project, ".")
+        epic_scope = root / "epic-scope"
+        epic_scope.mkdir()
+        resolve_design_ownership(project, "epic-scope")
         design_path = root / "DESIGN.md"
         design_path.write_text("# Review portal design\n", encoding="utf-8")
+        epic_design_path = epic_scope / "DESIGN.md"
+        epic_design_path.write_text(
+            "# Epic architecture acceptance\n", encoding="utf-8"
+        )
         model_paths = _write_model(project, feature_id, revised=False)
         feature_path = read_doc(feature_id, root=root).meta.path
         ownership_path = project.design_ownership_path
@@ -412,10 +485,16 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
             root,
             "plan baseline architecture review",
             feature_path,
-            root / "docs" / "epics" / "2_active" / next(
-                path.name for path in (root / "docs" / "epics" / "2_active").glob("epic_001_*.md")
+            root
+            / "docs"
+            / "epics"
+            / "2_active"
+            / next(
+                path.name
+                for path in (root / "docs" / "epics" / "2_active").glob("epic_001_*.md")
             ),
             design_path,
+            epic_design_path,
             ownership_path,
             *model_paths,
         )
@@ -444,7 +523,10 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 )
                 assert first_projection["state"] == "empty_baseline"
                 assert first_projection["views"][0]["current"] is None
-                assert first_projection["views"][0]["proposed"]["revision"] == baseline_revision
+                assert (
+                    first_projection["views"][0]["proposed"]["revision"]
+                    == baseline_revision
+                )
             finally:
                 _stop(first_server, first_thread)
 
@@ -505,7 +587,10 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
             )
             assert second_result["status"] == "ready"
             assert len(set(repeated_requests)) == 1
-            assert second_result["render_operation_id"] != first_result["render_operation_id"]
+            assert (
+                second_result["render_operation_id"]
+                != first_result["render_operation_id"]
+            )
             second_unit_id = str(second_result["review_unit_id"])
             store.record_review(
                 second_unit_id,
@@ -516,7 +601,9 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
             enable_review_gate(project, version=1, store=store)
 
             ledger = json.loads(
-                (root / ".cascade" / "c4-render-operations.json").read_text(encoding="utf-8")
+                (root / ".cascade" / "c4-render-operations.json").read_text(
+                    encoding="utf-8"
+                )
             )
             for operation_id in (
                 first_result["render_operation_id"],
@@ -527,12 +614,16 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
             server, thread, base = _start(root)
             try:
                 doc_before = _get(base + f"/api/doc/{feature_id}")
-                projection_before = _get(base + f"/api/architecture/reviews/{feature_id}")
+                projection_before = _get(
+                    base + f"/api/architecture/reviews/{feature_id}"
+                )
             finally:
                 _stop(server, thread)
             restarted, restarted_thread, restarted_base = _start(root)
             try:
-                assert json.loads(_get(restarted_base + f"/api/doc/{feature_id}")) == json.loads(doc_before)
+                assert json.loads(
+                    _get(restarted_base + f"/api/doc/{feature_id}")
+                ) == json.loads(doc_before)
                 projection_raw = _get(
                     restarted_base + f"/api/architecture/reviews/{feature_id}"
                 )
@@ -540,7 +631,10 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 assert projection == json.loads(projection_before)
                 assert projection["state"] == "ready"
                 assert projection["review_unit_id"] == second_result["review_unit_id"]
-                assert projection["reviewed_tuple_digest"] == second_result["reviewed_tuple_digest"]
+                assert (
+                    projection["reviewed_tuple_digest"]
+                    == second_result["reviewed_tuple_digest"]
+                )
                 assert len(projection["changed_views"]) == 2
                 assert len(projection_raw) < MAX_METADATA_BYTES
 
@@ -550,6 +644,12 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 assert sides["state"] == "changed"
                 assert projection["diffs"]["model"]["identities"]
                 assert projection["views"][0]["proposed"]["targets"]
+                assert {
+                    "design",
+                    "model",
+                    "plan",
+                    "source",
+                } <= {row["kind"] for row in projection["resources"]}
 
                 for side_name in ("current", "proposed"):
                     svg = _get(restarted_base + sides[side_name]["svg"])
@@ -563,17 +663,31 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
 
                 page = browser.new_page(viewport={"width": 1440, "height": 1000})
                 page.goto(
-                    restarted_base + f"/plan/{feature_id}", wait_until="domcontentloaded"
+                    restarted_base + f"/plan/{feature_id}",
+                    wait_until="domcontentloaded",
                 )
                 page.locator("#plan-body:not([hidden])").wait_for()
-                page.locator(".paired-c4-side-current .paired-c4-svg").wait_for(timeout=20_000)
+                page.locator(".paired-c4-side-current .paired-c4-svg").wait_for(
+                    timeout=20_000
+                )
                 page.locator(".paired-c4-side-proposed .paired-c4-svg").wait_for()
+                evidence_dir = Path(
+                    os.environ.get(
+                        "CASCADE_ACCEPTANCE_ARTIFACT_DIR",
+                        str(tmp_path / "paired-c4-acceptance"),
+                    )
+                )
+                evidence_dir.mkdir(parents=True, exist_ok=True)
+                paired_screenshot = evidence_dir / "01-paired-review.png"
+                page.screenshot(path=str(paired_screenshot), full_page=True)
+                assert paired_screenshot.stat().st_size > 1_000
                 revisions = page.locator(".paired-c4-revision").all_text_contents()
                 assert any(baseline_revision in value for value in revisions)
                 assert any(proposed_revision in value for value in revisions)
-                assert page.locator(
-                    '[aria-label="element element.system.portal"]'
-                ).count() == 2
+                assert (
+                    page.locator('[aria-label="element element.system.portal"]').count()
+                    == 2
+                )
                 view_select = page.locator(".paired-c4-view-select")
                 context_index = next(
                     index
@@ -588,9 +702,12 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 diff_text = page.locator(".paired-c4-diff-list").inner_text()
                 assert '"state": "changed"' in diff_text
                 assert '"properties"' in diff_text
-                assert proposed_revision in page.locator(
-                    ".paired-c4-side-proposed .paired-c4-revision"
-                ).inner_text()
+                assert (
+                    proposed_revision
+                    in page.locator(
+                        ".paired-c4-side-proposed .paired-c4-revision"
+                    ).inner_text()
+                )
 
                 # Context stays lazy until requested, then exposes both cited
                 # documents for each cited view from the exact reviewed tuple.
@@ -604,12 +721,13 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 requirement_card = page.locator(
                     '.paired-c4-context-document[data-document-id="REQ-ARCH-REVIEW"]'
                 )
-                assert second.plan.revision in requirement_card.locator(
-                    ".paired-c4-context-source"
-                ).inner_text()
-                requirement_card.locator(
-                    ".paired-c4-context-preview"
-                ).click()
+                assert (
+                    second.plan.revision
+                    in requirement_card.locator(
+                        ".paired-c4-context-source"
+                    ).inner_text()
+                )
+                requirement_card.locator(".paired-c4-context-preview").click()
                 requirement_card.locator(
                     ".paired-c4-context-markdown",
                     has_text="current, proposed, and diff evidence",
@@ -632,22 +750,19 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 assert b"current, proposed, and diff evidence" in _get(
                     restarted_base + resources["Open proposed document"]
                 )
-                assert b"- `REQ-ARCH-REVIEW` \xe2\x80\x94 Reviewers can open revision-pinned evidence" in _get(
-                    restarted_base + resources["Open current/proposed diff"]
+                assert (
+                    b"- `REQ-ARCH-REVIEW` \xe2\x80\x94 Reviewers can open revision-pinned evidence"
+                    in _get(restarted_base + resources["Open current/proposed diff"])
                 )
 
-                page.locator(
-                    ".paired-c4-context-side", has_text="current"
-                ).click()
+                page.locator(".paired-c4-context-side", has_text="current").click()
                 current_requirement = page.locator(
                     '.paired-c4-context-document[data-document-id="REQ-ARCH-REVIEW"]'
                 )
                 current_requirement.locator(
                     ".paired-c4-context-source", has_text=first.plan.revision
                 ).wait_for()
-                page.locator(
-                    ".paired-c4-context-side", has_text="proposed"
-                ).click()
+                page.locator(".paired-c4-context-side", has_text="proposed").click()
 
                 # The same requirement and decision are linked to both review
                 # views: a browser-level many-to-many example.
@@ -659,14 +774,16 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                                 ".paired-c4-view-select option"
                             ).all_text_contents()
                         )
-                        if label.startswith("portal-containers ")
+                        if label.startswith("portal-components ")
                     )
                 )
                 page.locator(
                     '.paired-c4-context-document[data-document-id="DEC-REAL-RENDERER"]'
                 ).wait_for()
                 assert page.locator(".paired-c4-context-document").count() == 2
-                page.locator(".paired-c4-view-select").select_option(index=context_index)
+                page.locator(".paired-c4-view-select").select_option(
+                    index=context_index
+                )
 
                 proposed_target = page.locator(
                     '.paired-c4-side-proposed [aria-label="element element.system.portal"]'
@@ -674,16 +791,18 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 proposed_target.click()
                 page.locator(".paired-c4-target-selected").first.wait_for()
                 assert page.locator(".paired-c4-target-selected").count() == 2
-                assert "element element.system.portal" in page.locator(
-                    ".paired-c4-status"
-                ).inner_text()
+                assert (
+                    "element element.system.portal"
+                    in page.locator(".paired-c4-status").inner_text()
+                )
                 page.locator(
                     ".paired-c4-context-unmapped",
                     has_text="Unmapped target",
                 ).wait_for()
-                assert "context, not coverage" in page.locator(
-                    ".paired-c4-context"
-                ).inner_text()
+                assert (
+                    "context, not coverage"
+                    in page.locator(".paired-c4-context").inner_text()
+                )
 
                 current_target = page.locator(
                     '.paired-c4-side-current [aria-label="element element.system.portal"]'
@@ -692,41 +811,74 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 current_target.press("Enter")
                 assert current_target.get_attribute("aria-pressed") == "true"
 
-                # A system target has verified descendants in the container view,
+                # A system target has verified descendants in the component view,
                 # so native double-click offers deterministic drill destinations.
                 # Dispatch the native double-click without Playwright's leading
                 # click pair: the first click intentionally rebuilds both SVGs.
                 current_target.dispatch_event("dblclick")
                 page.locator(
-                    ".paired-c4-drill-choice", has_text="portal-containers"
+                    ".paired-c4-drill-choice", has_text="portal-components"
                 ).click()
-                assert "portal-containers" in page.locator(
-                    ".paired-c4-view-select"
-                ).input_value()
+                assert (
+                    "portal-components"
+                    in page.locator(".paired-c4-view-select").input_value()
+                )
                 page.locator(".paired-c4-back").click()
-                assert "portal-context" in page.locator(
-                    ".paired-c4-view-select"
-                ).input_value()
-                container_index = next(
+                assert (
+                    "portal-context"
+                    in page.locator(".paired-c4-view-select").input_value()
+                )
+                component_index = next(
                     index
                     for index, label in enumerate(
-                        page.locator(".paired-c4-view-select option").all_text_contents()
+                        page.locator(
+                            ".paired-c4-view-select option"
+                        ).all_text_contents()
                     )
-                    if label.startswith("portal-containers ")
+                    if label.startswith("portal-components ")
                 )
-                page.locator(".paired-c4-view-select").select_option(index=container_index)
-                assert page.locator(
-                    '.paired-c4-side-proposed '
-                    '[aria-label="element element.container.audit"]'
-                ).get_attribute("data-cascade-diff-state") == "added"
+                page.locator(".paired-c4-view-select").select_option(
+                    index=component_index
+                )
+                assert (
+                    page.locator(
+                        ".paired-c4-side-proposed "
+                        '[aria-label="element element.container.audit"]'
+                    ).get_attribute("data-cascade-diff-state")
+                    == "added"
+                )
                 page.locator(
-                    '.paired-c4-side-proposed '
+                    ".paired-c4-side-proposed "
                     '[aria-label="element element.container.audit"]'
                 ).click()
-                assert "current: absent, proposed: present" in page.locator(
-                    ".paired-c4-status"
-                ).inner_text()
-                page.locator(".paired-c4-view-select").select_option(index=context_index)
+                assert (
+                    "current: absent, proposed: present"
+                    in page.locator(".paired-c4-status").inner_text()
+                )
+
+                removed_component = page.locator(
+                    ".paired-c4-side-current "
+                    '[aria-label="element element.component.legacy"]'
+                )
+                assert (
+                    removed_component.get_attribute("data-cascade-diff-state")
+                    == "removed"
+                )
+                removed_component.click()
+                assert (
+                    "current: present, proposed: absent"
+                    in page.locator(".paired-c4-status").inner_text()
+                )
+                assert (
+                    page.locator(
+                        ".paired-c4-side-current "
+                        '[aria-label="relationship relationship.reviewer-uses-legacy"]'
+                    ).get_attribute("data-cascade-diff-state")
+                    == "removed"
+                )
+                page.locator(".paired-c4-view-select").select_option(
+                    index=context_index
+                )
 
                 proposed_svg = page.locator(".paired-c4-side-proposed .paired-c4-svg")
                 current_box = page.locator(".paired-c4-side-current").bounding_box()
@@ -748,24 +900,27 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 assert native_hit_target.get_attribute("tabindex") == "0"
                 fitted_view_box = proposed_svg.get_attribute("viewBox")
                 page.locator(
-                    '.paired-c4-side-proposed .semantic-c4-toolbar button',
+                    ".paired-c4-side-proposed .semantic-c4-toolbar button",
                     has_text="Zoom in",
                 ).click()
                 assert proposed_svg.get_attribute("viewBox") != fitted_view_box
                 page.locator(
-                    '.paired-c4-side-proposed .semantic-c4-toolbar button',
+                    ".paired-c4-side-proposed .semantic-c4-toolbar button",
                     has_text="Fit",
                 ).click()
                 assert proposed_svg.get_attribute("viewBox") == fitted_view_box
 
                 relationship = page.locator(
-                    '.paired-c4-side-proposed '
+                    ".paired-c4-side-proposed "
                     '[aria-label="relationship relationship.reviewer-uses-portal"]'
                 )
                 relationship.click()
-                assert page.locator(
-                    ".paired-c4-side-proposed .semantic-c4-relationship-details"
-                ).count() >= 1
+                assert (
+                    page.locator(
+                        ".paired-c4-side-proposed .semantic-c4-relationship-details"
+                    ).count()
+                    >= 1
+                )
 
                 page.set_viewport_size({"width": 700, "height": 1000})
                 current_box = page.locator(".paired-c4-side-current").bounding_box()
@@ -782,10 +937,10 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 assert native_hit_target.is_visible()
                 page.set_viewport_size({"width": 1440, "height": 1000})
 
-                def post_thread(shortcut: str, body: str, *, blocking: bool = False) -> None:
-                    page.locator(
-                        ".paired-c4-comment-target", has_text=shortcut
-                    ).click()
+                def post_thread(
+                    shortcut: str, body: str, *, blocking: bool = False
+                ) -> None:
+                    page.locator(".paired-c4-comment-target", has_text=shortcut).click()
                     page.locator(".paired-c4-thread-body").fill(body)
                     if blocking:
                         page.locator(
@@ -797,18 +952,38 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                           '.paired-c4-thread-body-text')).some(node =>
                           node.textContent.includes(body)) ||
                           !!document.querySelector('.paired-c4-thread-error')""",
-                            arg=body,
+                        arg=body,
                     )
                     error = page.locator(".paired-c4-thread-error")
-                    assert error.count() == 0, error.inner_text() if error.count() else ""
+                    assert error.count() == 0, (
+                        error.inner_text() if error.count() else ""
+                    )
 
                 post_thread(
                     "Comment on REQ-ARCH-REVIEW (proposed)",
                     "Requirement evidence is pinned.",
                 )
                 post_thread("Comment on proposed view", "View composition is reviewed.")
+
+                # A target removed by this exact proposal remains reviewable on
+                # the current side and can intentionally block acceptance.
+                page.locator(".paired-c4-view-select").select_option(
+                    index=component_index
+                )
+                page.locator(
+                    ".paired-c4-side-current "
+                    '[aria-label="element element.component.legacy"]'
+                ).click()
+                post_thread(
+                    "Comment on selected element",
+                    "Removed legacy component needs explicit acknowledgement.",
+                    blocking=True,
+                )
+                page.locator(".paired-c4-view-select").select_option(
+                    index=context_index
+                )
                 proposed_target = page.locator(
-                    '.paired-c4-side-proposed '
+                    ".paired-c4-side-proposed "
                     '[aria-label="element element.system.portal"]'
                 )
                 proposed_target.click()
@@ -818,21 +993,27 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                     blocking=True,
                 )
                 page.locator(
-                    '.paired-c4-side-proposed '
+                    ".paired-c4-side-proposed "
                     '[aria-label="relationship relationship.reviewer-uses-portal"]'
                 ).click()
                 post_thread(
                     "Comment on selected relationship",
                     "Relationship direction is intentional.",
                 )
-                assert page.locator(".paired-c4-thread").count() == 4
+                assert page.locator(".paired-c4-thread").count() == 5
+                assert {
+                    title.split()[0]
+                    for title in page.locator(
+                        ".paired-c4-thread-title"
+                    ).all_text_contents()
+                } == {"requirement", "view", "element", "relationship"}
 
                 requirement_thread = page.locator(
                     ".paired-c4-thread", has_text="Requirement evidence is pinned."
                 )
-                requirement_thread.locator(
-                    ".paired-c4-thread-reply-body-input"
-                ).fill("Reviewer reply from the live page.")
+                requirement_thread.locator(".paired-c4-thread-reply-body-input").fill(
+                    "Reviewer reply from the live page."
+                )
                 requirement_thread.locator(".paired-c4-thread-reply-send").click()
                 requirement_thread.locator(
                     ".paired-c4-thread-reply-body",
@@ -859,7 +1040,66 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                     has_text="Incoming reply from another reviewer.",
                 ).wait_for(timeout=20_000)
 
+                # Publish a normal follow-up Feature proposal so the persisted
+                # roots from the displayed tuple become genuinely outdated.
+                # This proves stale review handling without editing comment or
+                # review storage behind the production planning surface.
+                stale_approval_context = projection["approval_context"]
+                changed_proposed_revision = proposed_revision
+                refreshed_plan = dispatch_planning_tool(
+                    "feature",
+                    "read_doc",
+                    {"work_id": feature_id},
+                    scope_id=feature_id,
+                    repo_root=root,
+                    collector=collector,
+                    role="feature_architect",
+                )
+                refreshed_plan.body += (
+                    "\nThe reviewer refresh preserves the proposed C4 structure.\n"
+                )
+                dispatch_planning_tool(
+                    "feature",
+                    "write_doc",
+                    {"doc": refreshed_plan},
+                    scope_id=feature_id,
+                    repo_root=root,
+                    collector=collector,
+                    role="feature_architect",
+                )
+                proposed_revision = _git(root, "rev-parse", "HEAD")
+                final_proposal = _proposal(
+                    project,
+                    feature_id,
+                    _binding(project, feature_id),
+                    accepted.baseline,
+                    accepted.pointer_id,
+                    accepted.generation,
+                )
+                final_result, refresh_requests = _publish(
+                    root, feature_id, final_proposal, accepted.generation
+                )
+                assert final_result["status"] == "ready"
+                assert len(set(refresh_requests)) == 1
+                assert final_result["review_unit_id"] != second_result["review_unit_id"]
+                store.record_review(
+                    str(final_result["review_unit_id"]),
+                    reviewer="human",
+                    decision="reviewed",
+                    reviewed_at=datetime.now(timezone.utc).isoformat(),
+                )
+                projection = json.loads(
+                    _get(restarted_base + f"/api/architecture/reviews/{feature_id}")
+                )
+                assert projection["review_unit_id"] == final_result["review_unit_id"]
                 approval_context = projection["approval_context"]
+                page.reload(wait_until="domcontentloaded")
+                page.locator("#plan-body:not([hidden])").wait_for()
+                page.locator(
+                    ".paired-c4-thread-reply-body",
+                    has_text="Incoming reply from another reviewer.",
+                ).wait_for(timeout=20_000)
+
                 blocked_approval = page.evaluate(
                     """async ([id, review_context]) => {
                       const response = await fetch('/api/approve_feature', {
@@ -890,8 +1130,23 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                     ".paired-c4-thread", has_text="Blocking portal decision."
                 ).locator(".paired-c4-thread-reopen").wait_for()
 
-                stale_context = dict(approval_context)
-                stale_context["reviewed_tuple_digest"] = "0" * 64
+                removed_thread = page.locator(
+                    ".paired-c4-thread",
+                    has_text="Removed legacy component needs explicit acknowledgement.",
+                )
+                assert (
+                    "outdated"
+                    in removed_thread.locator(".paired-c4-thread-state").inner_text()
+                )
+                assert (
+                    "remains blocking until it is resolved"
+                    in removed_thread.locator(
+                        ".paired-c4-thread-outdated-blocking"
+                    ).inner_text()
+                )
+                removed_thread.locator(".paired-c4-thread-resolve").click()
+                removed_thread.locator(".paired-c4-thread-reopen").wait_for()
+
                 stale_approval = page.evaluate(
                     """async ([id, review_context]) => {
                       const response = await fetch('/api/approve_feature', {
@@ -900,10 +1155,30 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                       });
                       return {status: response.status, body: await response.json()};
                     }""",
-                    [feature_id, stale_context],
+                    [feature_id, stale_approval_context],
                 )
                 assert stale_approval["status"] == 409
-                assert "displayed architecture review tuple" in stale_approval["body"]["error"]
+                assert (
+                    "displayed architecture review tuple"
+                    in stale_approval["body"]["error"]
+                )
+
+                removed_thread.locator(".paired-c4-thread-reopen").click()
+                removed_thread.locator(".paired-c4-thread-resolve").wait_for()
+                still_blocked = page.evaluate(
+                    """async ([id, review_context]) => {
+                      const response = await fetch('/api/approve_feature', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id, review_context})
+                      });
+                      return {status: response.status, body: await response.json()};
+                    }""",
+                    [feature_id, approval_context],
+                )
+                assert still_blocked["status"] == 409
+                assert "blocking review thread" in still_blocked["body"]["error"]
+                removed_thread.locator(".paired-c4-thread-resolve").click()
+                removed_thread.locator(".paired-c4-thread-reopen").wait_for()
                 approved = page.evaluate(
                     """async ([id, review_context]) => {
                       const response = await fetch('/api/approve_feature', {
@@ -916,11 +1191,104 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 )
                 assert approved["status"] == 200
                 assert approved["body"]["newly_approved"] is True
-                assert "resolved" in page.locator(
-                    ".paired-c4-thread", has_text="Blocking portal decision."
-                ).locator(".paired-c4-thread-state").inner_text()
+                assert (
+                    "resolved"
+                    in page.locator(
+                        ".paired-c4-thread", has_text="Blocking portal decision."
+                    )
+                    .locator(".paired-c4-thread-state")
+                    .inner_text()
+                )
+
+                approved_screenshot = evidence_dir / "02-approved-review.png"
+                page.screenshot(path=str(approved_screenshot), full_page=True)
+                assert approved_screenshot.stat().st_size > 1_000
+
+                evidence = {
+                    "browser": browser.version,
+                    "renderer_image": STRUCTURIZR_IMAGE,
+                    "renderer_digest": STRUCTURIZR_IMAGE_DIGEST,
+                    "renderer_settings": dict(C4RenderSettings().cache_payload()),
+                    "baseline_revision": baseline_revision,
+                    "changed_proposed_revision": changed_proposed_revision,
+                    "proposed_revision": proposed_revision,
+                    "baseline_review_unit_id": first_result["review_unit_id"],
+                    "changed_review_unit_id": second_result["review_unit_id"],
+                    "review_unit_id": final_result["review_unit_id"],
+                    "reviewed_tuple_digest": final_result["reviewed_tuple_digest"],
+                    "plan_revision": final_proposal.plan.revision,
+                    "code_revision": final_proposal.proposed_model.contract.reference.revision,
+                    "documentation_revision": final_proposal.plan.revision,
+                    "publication_operation_ids": {
+                        "baseline": list(first_requests),
+                        "changed": list(repeated_requests),
+                        "refreshed": list(refresh_requests),
+                    },
+                    "screenshots": [paired_screenshot.name, approved_screenshot.name],
+                    "result": "pass",
+                }
 
                 page.close()
+
+                # Prove the same registered planning surface also accepts an
+                # epic-owned proposal; this is intentionally no-change so the
+                # paired feature proposal remains the primary rendered journey.
+                epic = read_doc("epic_001", root=root)
+                assert epic.sha is not None
+                epic_design_ref = create_architecture_artifact_ref(
+                    project, "epic-scope", owning_work="epic_001"
+                )
+                epic_proposal = ArchitectureReviewUnit(
+                    owner_work_id="caller-cannot-select-owner",
+                    authorized_owner="caller-cannot-select-actor",
+                    target_repository_key=project.target_repository_key,
+                    code_directory=Path("epic-scope"),
+                    design_owner_directory=Path("epic-scope"),
+                    code_repository_key=project.target.repository_key,
+                    integration_lineage="epic:epic_001",
+                    documentation_repository_key=project.target_repository_key,
+                    documentation_repository_role="target",
+                    documentation_destination_path=Path("."),
+                    proposed_ancestor_context=None,
+                    accepted_baseline=accepted.baseline,
+                    baseline_pointer_id=accepted.pointer_id,
+                    baseline_generation=accepted.generation,
+                    rollout_version=1,
+                    status="draft",
+                    plan=PinnedDocumentRef(
+                        project.target.repository_key,
+                        "target",
+                        epic.meta.path.relative_to(root),
+                        epic.sha,
+                        _digest(epic.meta.path),
+                    ),
+                    design=PinnedArchitectureArtifact(
+                        epic_design_ref, _digest(epic_design_path)
+                    ),
+                    proposed_model=None,
+                    requirement_citations=("REQ-EPIC-ARCHITECTURE",),
+                    decision_citations=("DEC-EPIC-ACCEPTANCE",),
+                    view_citations=(),
+                    affected_work_ids=("epic_001",),
+                    architecture_impact="no_diagram_change",
+                    impact_reason="The epic confirms the accepted feature model without a diagram change.",
+                )
+                epic_result, epic_requests = _publish(
+                    root,
+                    "epic_001",
+                    epic_proposal,
+                    accepted.generation,
+                    tier="epic",
+                )
+                assert epic_result["status"] == "no_diagram_change"
+                assert len(set(epic_requests)) == 1
+                evidence["epic_review_unit_id"] = epic_result["review_unit_id"]
+                evidence["epic_status"] = epic_result["status"]
+                evidence["publication_operation_ids"]["epic"] = list(epic_requests)
+                (evidence_dir / "evidence.json").write_text(
+                    json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
             finally:
                 _stop(restarted, restarted_thread)
         finally:
