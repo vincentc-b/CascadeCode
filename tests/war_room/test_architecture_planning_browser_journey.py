@@ -19,7 +19,7 @@ import pytest
 
 from cascade.agent.mcp_wrappers import ToolEffectCollector, dispatch_planning_tool
 from cascade.board.context import set_project_context
-from cascade.board.store import read_doc
+from cascade.board.store import read_doc, write_doc
 from cascade.war_room.architecture_routes import (
     MAX_METADATA_BYTES,
     MAX_RESOURCE_BYTES,
@@ -36,6 +36,7 @@ from cascade.workspace import (
     PinnedArchitectureArtifact,
     PinnedDocumentRef,
     ProjectContext,
+    enable_review_gate,
     create_architecture_artifact_ref,
     create_architecture_model_ref,
     materialize_c4_source_closure,
@@ -44,6 +45,7 @@ from cascade.workspace import (
 from cascade.workspace.c4_render import STRUCTURIZR_IMAGE, STRUCTURIZR_IMAGE_DIGEST
 from cascade.workspace.c4_scheduler import render_identity
 from tests.support import add_doc, declare_no_dependencies, make_repo
+from tests.test_approval_selection_gate import _inventory
 
 
 def _digest(path: Path) -> str:
@@ -114,6 +116,19 @@ def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> 
                         "semantic_id": "element.system.portal",
                         "fragment": "model.dsl",
                     },
+                    {
+                        "dsl_identifier": "api",
+                        "semantic_id": "element.container.api",
+                        "fragment": "model.dsl",
+                    },
+                    *(
+                        [{
+                            "dsl_identifier": "audit",
+                            "semantic_id": "element.container.audit",
+                            "fragment": "model.dsl",
+                        }]
+                        if revised else []
+                    ),
                 ],
                 "relationships": [
                     {
@@ -122,9 +137,22 @@ def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> 
                         "source": "reviewer",
                         "destination": "portal",
                         "fragment": "model.dsl",
-                    }
+                    },
+                    *(
+                        [{
+                            "dsl_identifier": "api_records_audit",
+                            "semantic_id": "relationship.api-records-audit",
+                            "source": "api",
+                            "destination": "audit",
+                            "fragment": "model.dsl",
+                        }]
+                        if revised else []
+                    ),
                 ],
-                "views": [{"key": "portal-context", "fragment": "views.dsl"}],
+                "views": [
+                    {"key": "portal-context", "fragment": "views.dsl"},
+                    {"key": "portal-containers", "fragment": "views.dsl"},
+                ],
                 "renames": [],
             },
             indent=2,
@@ -157,7 +185,20 @@ def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> 
         "  }\n"
         "}\n"
         f'portal = softwareSystem "Review portal" "{description}" {{\n'
-        "  properties {\n"
+        '  api = container "Review API" "Serves pinned reviews." {\n'
+        "    properties {\n"
+        '      "cascade.semanticId" "element.container.api"\n'
+        "    }\n"
+        "  }\n"
+        + (
+            '  audit = container "Audit log" "Records review decisions." {\n'
+            "    properties {\n"
+            '      "cascade.semanticId" "element.container.audit"\n'
+            "    }\n"
+            "  }\n"
+            if revised else ""
+        )
+        + "  properties {\n"
         '    "cascade.semanticId" "element.system.portal"\n'
         "  }\n"
         "}\n"
@@ -165,11 +206,23 @@ def _write_model(project: ProjectContext, feature_id: str, *, revised: bool) -> 
         "  properties {\n"
         '    "cascade.semanticId" "relationship.reviewer-uses-portal"\n'
         "  }\n"
-        "}\n",
+        "}\n"
+        + (
+            'api_records_audit = api -> audit "Records" {\n'
+            "  properties {\n"
+            '    "cascade.semanticId" "relationship.api-records-audit"\n'
+            "  }\n"
+            "}\n"
+            if revised else ""
+        ),
         encoding="utf-8",
     )
     views.write_text(
         'systemContext portal "portal-context" {\n'
+        "  include *\n"
+        "  autoLayout lr\n"
+        "}\n"
+        'container portal "portal-containers" {\n'
         "  include *\n"
         "  autoLayout lr\n"
         "}\n",
@@ -298,6 +351,7 @@ def _publish(
 
 def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chromium(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     playwright = pytest.importorskip("playwright.sync_api")
     if shutil.which("docker") is None:
@@ -329,6 +383,15 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
             role="epic_manager",
         )
         assert isinstance(feature_id, str)
+        feature = read_doc(feature_id, root=root)
+        feature.meta.provider = "codex"
+        feature.meta.models = {
+            role: "offered" for role in ("feature_lead", "feature_architect", "swe")
+        }
+        write_doc(feature, root=root)
+        monkeypatch.setattr(
+            "cascade.approvals.get_provider_inventory", lambda: _inventory("offered")
+        )
         project = ProjectContext.colocated(root)
         set_project_context(project)
         resolve_design_ownership(project, ".")
@@ -415,7 +478,7 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 root,
                 "plan proposed architecture review",
                 feature_path,
-                project.editable_architecture_root / "model.dsl",
+                *model_paths,
             )
             second = _proposal(
                 project,
@@ -431,6 +494,14 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
             assert second_result["status"] == "ready"
             assert len(set(repeated_requests)) == 1
             assert second_result["render_operation_id"] != first_result["render_operation_id"]
+            second_unit_id = str(second_result["review_unit_id"])
+            store.record_review(
+                second_unit_id,
+                reviewer="human",
+                decision="reviewed",
+                reviewed_at=datetime.now(timezone.utc).isoformat(),
+            )
+            enable_review_gate(project, version=1, store=store)
 
             ledger = json.loads(
                 (root / ".cascade" / "c4-render-operations.json").read_text(encoding="utf-8")
@@ -458,6 +529,7 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 assert projection["state"] == "ready"
                 assert projection["review_unit_id"] == second_result["review_unit_id"]
                 assert projection["reviewed_tuple_digest"] == second_result["reviewed_tuple_digest"]
+                assert len(projection["changed_views"]) == 2
                 assert len(projection_raw) < MAX_METADATA_BYTES
 
                 sides = projection["views"][0]
@@ -490,9 +562,16 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 assert page.locator(
                     '[aria-label="element element.system.portal"]'
                 ).count() == 2
-                assert "portal-context" in page.locator(
-                    ".paired-c4-view-select"
-                ).input_value()
+                view_select = page.locator(".paired-c4-view-select")
+                context_index = next(
+                    index
+                    for index, label in enumerate(
+                        view_select.locator("option").all_text_contents()
+                    )
+                    if label.startswith("portal-context ")
+                )
+                view_select.select_option(index=context_index)
+                assert "portal-context" in view_select.input_value()
                 page.locator(".paired-c4-diffs summary").click()
                 diff_text = page.locator(".paired-c4-diff-list").inner_text()
                 assert '"state": "changed"' in diff_text
@@ -500,6 +579,227 @@ def test_fresh_planning_publication_survives_restart_and_opens_real_pair_in_chro
                 assert proposed_revision in page.locator(
                     ".paired-c4-side-proposed .paired-c4-revision"
                 ).inner_text()
+
+                proposed_target = page.locator(
+                    '.paired-c4-side-proposed [aria-label="element element.system.portal"]'
+                )
+                proposed_target.click()
+                page.locator(".paired-c4-target-selected").first.wait_for()
+                assert page.locator(".paired-c4-target-selected").count() == 2
+                assert "element element.system.portal" in page.locator(
+                    ".paired-c4-status"
+                ).inner_text()
+
+                current_target = page.locator(
+                    '.paired-c4-side-current [aria-label="element element.system.portal"]'
+                )
+                current_target.focus()
+                current_target.press("Enter")
+                assert current_target.get_attribute("aria-pressed") == "true"
+
+                # A system target has verified descendants in the container view,
+                # so native double-click offers deterministic drill destinations.
+                # Dispatch the native double-click without Playwright's leading
+                # click pair: the first click intentionally rebuilds both SVGs.
+                current_target.dispatch_event("dblclick")
+                page.locator(
+                    ".paired-c4-drill-choice", has_text="portal-containers"
+                ).click()
+                assert "portal-containers" in page.locator(
+                    ".paired-c4-view-select"
+                ).input_value()
+                page.locator(".paired-c4-back").click()
+                assert "portal-context" in page.locator(
+                    ".paired-c4-view-select"
+                ).input_value()
+                container_index = next(
+                    index
+                    for index, label in enumerate(
+                        page.locator(".paired-c4-view-select option").all_text_contents()
+                    )
+                    if label.startswith("portal-containers ")
+                )
+                page.locator(".paired-c4-view-select").select_option(index=container_index)
+                assert page.locator(
+                    '.paired-c4-side-proposed '
+                    '[aria-label="element element.container.audit"]'
+                ).get_attribute("data-cascade-diff-state") == "added"
+                page.locator(
+                    '.paired-c4-side-proposed '
+                    '[aria-label="element element.container.audit"]'
+                ).click()
+                assert "current: absent, proposed: present" in page.locator(
+                    ".paired-c4-status"
+                ).inner_text()
+                page.locator(".paired-c4-view-select").select_option(index=context_index)
+
+                proposed_svg = page.locator(".paired-c4-side-proposed .paired-c4-svg")
+                fitted_view_box = proposed_svg.get_attribute("viewBox")
+                page.locator(
+                    '.paired-c4-side-proposed .semantic-c4-toolbar button',
+                    has_text="Zoom in",
+                ).click()
+                assert proposed_svg.get_attribute("viewBox") != fitted_view_box
+                page.locator(
+                    '.paired-c4-side-proposed .semantic-c4-toolbar button',
+                    has_text="Fit",
+                ).click()
+                assert proposed_svg.get_attribute("viewBox") == fitted_view_box
+
+                relationship = page.locator(
+                    '.paired-c4-side-proposed '
+                    '[aria-label="relationship relationship.reviewer-uses-portal"]'
+                )
+                relationship.click()
+                assert page.locator(
+                    ".paired-c4-side-proposed .semantic-c4-relationship-details"
+                ).count() >= 1
+
+                page.set_viewport_size({"width": 700, "height": 1000})
+                current_box = page.locator(".paired-c4-side-current").bounding_box()
+                proposed_box = page.locator(".paired-c4-side-proposed").bounding_box()
+                assert current_box is not None and proposed_box is not None
+                assert proposed_box["y"] > current_box["y"] + current_box["height"] - 2
+                page.set_viewport_size({"width": 1440, "height": 1000})
+
+                def post_thread(shortcut: str, body: str, *, blocking: bool = False) -> None:
+                    page.locator(
+                        ".paired-c4-comment-target", has_text=shortcut
+                    ).click()
+                    page.locator(".paired-c4-thread-body").fill(body)
+                    if blocking:
+                        page.locator(
+                            '.paired-c4-thread-blocking input[type="checkbox"]'
+                        ).check()
+                    page.locator(".paired-c4-thread-send").click()
+                    page.wait_for_function(
+                        """body => Array.from(document.querySelectorAll(
+                          '.paired-c4-thread-body-text')).some(node =>
+                          node.textContent.includes(body)) ||
+                          !!document.querySelector('.paired-c4-thread-error')""",
+                            arg=body,
+                    )
+                    error = page.locator(".paired-c4-thread-error")
+                    assert error.count() == 0, error.inner_text() if error.count() else ""
+
+                post_thread(
+                    "Comment on REQ-ARCH-REVIEW (proposed)",
+                    "Requirement evidence is pinned.",
+                )
+                post_thread("Comment on proposed view", "View composition is reviewed.")
+                proposed_target = page.locator(
+                    '.paired-c4-side-proposed '
+                    '[aria-label="element element.system.portal"]'
+                )
+                proposed_target.click()
+                post_thread(
+                    "Comment on selected element",
+                    "Blocking portal decision.",
+                    blocking=True,
+                )
+                page.locator(
+                    '.paired-c4-side-proposed '
+                    '[aria-label="relationship relationship.reviewer-uses-portal"]'
+                ).click()
+                post_thread(
+                    "Comment on selected relationship",
+                    "Relationship direction is intentional.",
+                )
+                assert page.locator(".paired-c4-thread").count() == 4
+
+                requirement_thread = page.locator(
+                    ".paired-c4-thread", has_text="Requirement evidence is pinned."
+                )
+                requirement_thread.locator(
+                    ".paired-c4-thread-reply-body-input"
+                ).fill("Reviewer reply from the live page.")
+                requirement_thread.locator(".paired-c4-thread-reply-send").click()
+                requirement_thread.locator(
+                    ".paired-c4-thread-reply-body",
+                    has_text="Reviewer reply from the live page.",
+                ).wait_for()
+                requirement_id = requirement_thread.get_attribute("data-thread-id")
+                assert requirement_id
+                incoming = page.evaluate(
+                    """async ([docId, parent]) => {
+                      const response = await fetch('/api/comment', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({doc_id: docId, parent,
+                          body: 'Incoming reply from another reviewer.'})
+                      });
+                      return {status: response.status, body: await response.json()};
+                    }""",
+                    [feature_id, requirement_id],
+                )
+                assert incoming["status"] == 202
+                page.reload(wait_until="domcontentloaded")
+                page.locator("#plan-body:not([hidden])").wait_for()
+                page.locator(
+                    ".paired-c4-thread-reply-body",
+                    has_text="Incoming reply from another reviewer.",
+                ).wait_for(timeout=20_000)
+
+                approval_context = projection["approval_context"]
+                blocked_approval = page.evaluate(
+                    """async ([id, review_context]) => {
+                      const response = await fetch('/api/approve_feature', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id, review_context})
+                      });
+                      return {status: response.status, body: await response.json()};
+                    }""",
+                    [feature_id, approval_context],
+                )
+                assert blocked_approval["status"] == 409
+                assert "Blocking portal decision" not in json.dumps(blocked_approval)
+                assert "blocking review thread" in blocked_approval["body"]["error"]
+
+                blocking_thread = page.locator(
+                    ".paired-c4-thread", has_text="Blocking portal decision."
+                )
+                blocking_thread.locator(".paired-c4-thread-resolve").click()
+                blocking_thread = page.locator(
+                    ".paired-c4-thread", has_text="Blocking portal decision."
+                )
+                blocking_thread.locator(".paired-c4-thread-reopen").click()
+                blocking_thread = page.locator(
+                    ".paired-c4-thread", has_text="Blocking portal decision."
+                )
+                blocking_thread.locator(".paired-c4-thread-resolve").click()
+                page.locator(
+                    ".paired-c4-thread", has_text="Blocking portal decision."
+                ).locator(".paired-c4-thread-reopen").wait_for()
+
+                stale_context = dict(approval_context)
+                stale_context["reviewed_tuple_digest"] = "0" * 64
+                stale_approval = page.evaluate(
+                    """async ([id, review_context]) => {
+                      const response = await fetch('/api/approve_feature', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id, review_context})
+                      });
+                      return {status: response.status, body: await response.json()};
+                    }""",
+                    [feature_id, stale_context],
+                )
+                assert stale_approval["status"] == 409
+                assert "displayed architecture review tuple" in stale_approval["body"]["error"]
+                approved = page.evaluate(
+                    """async ([id, review_context]) => {
+                      const response = await fetch('/api/approve_feature', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id, review_context})
+                      });
+                      return {status: response.status, body: await response.json()};
+                    }""",
+                    [feature_id, approval_context],
+                )
+                assert approved["status"] == 200
+                assert approved["body"]["newly_approved"] is True
+                assert "resolved" in page.locator(
+                    ".paired-c4-thread", has_text="Blocking portal decision."
+                ).locator(".paired-c4-thread-state").inner_text()
+
                 page.close()
             finally:
                 _stop(restarted, restarted_thread)

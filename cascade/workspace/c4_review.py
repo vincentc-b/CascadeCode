@@ -618,7 +618,9 @@ def _review_targets(
     proposed_views: dict[tuple[str, str], _LoadedView],
 ) -> tuple[C4ReviewTarget, ...]:
     changes = {item.semantic_id: item.state for item in diff.identities}
-    view_identities = sorted(set(current_views) | set(proposed_views))
+    view_identities = sorted(
+        set(current_views) | set(proposed_views), key=lambda identity: (identity[1], identity[0])
+    )
     memberships: dict[str, set[str]] = {}
     for view in diff.views:
         for semantic_id in (

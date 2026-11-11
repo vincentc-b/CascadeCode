@@ -35,6 +35,7 @@ function classListFor(el) {
 }
 
 function createElement(tag) {
+  const listeners = {};
   const el = {
     tagName: String(tag).toUpperCase(),
     nodeType: 1,
@@ -52,7 +53,23 @@ function createElement(tag) {
     attributes: {},
     classList: null,
     childNodes: null,
-    addEventListener() {},
+    addEventListener(type, listener) {
+      if (!listeners[type]) listeners[type] = [];
+      listeners[type].push(listener);
+    },
+    dispatchEvent(event) {
+      const value = event || {};
+      value.type = value.type || "";
+      value.target = value.target || el;
+      value.currentTarget = el;
+      value.preventDefault = value.preventDefault || (() => {});
+      value.stopPropagation = value.stopPropagation || (() => {});
+      for (const listener of listeners[value.type] || []) listener.call(el, value);
+      return true;
+    },
+    click() {
+      el.dispatchEvent({ type: "click" });
+    },
     remove() {
       if (!el.parentNode) return;
       const idx = el.parentNode.children.indexOf(el);

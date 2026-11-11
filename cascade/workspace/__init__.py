@@ -49,6 +49,7 @@ from cascade.workspace.architecture_review import (
     ReviewBaselineStatus,
     ReviewGateBoundary,
     ReviewGateResult,
+    ReviewApprovalContext,
     enable_review_gate,
     promote_or_resume,
     read_architecture_state,
@@ -57,6 +58,7 @@ from cascade.workspace.architecture_review import (
     review_architecture_proposal,
     stage_architecture_proposal,
     validate_review_gate,
+    resolve_review_gate_unit,
 )
 from cascade.workspace.architecture_authoring import (
     ArchitectureAuthoringIntent,
@@ -169,6 +171,8 @@ __all__ = [
     "ReviewBaselineStatus",
     "ReviewGateBoundary",
     "ReviewGateResult",
+    "ReviewApprovalContext",
+    "resolve_review_gate_unit",
     "ReconciledDesign",
     "ReconciliationReceipt",
     "ReconciliationReceiptStore",

@@ -41,6 +41,10 @@ class NotARoot(CommentStoreError):
     """Resolve applies to open root comments only."""
 
 
+class ReopenNotAllowed(CommentStoreError):
+    """Only the human may reopen a thread."""
+
+
 def comment(
     doc_id: str,
     section: str,
@@ -218,6 +222,67 @@ def resolve_comment(
         ),
         root=trunk,
     )
+
+
+def reopen_comment(
+    doc_id: str,
+    comment_id: str,
+    *,
+    author: str,
+    root: Path,
+) -> None:
+    """Reopen a resolved root and its descendants through the durable store."""
+
+    if author != "human":
+        raise ReopenNotAllowed("reopen is allowed only when author=human")
+
+    trunk = locate_trunk(resolve_root(root))
+    repo = _comment_repo(doc_id, root=root)
+    owning = _owning_graph(doc_id, trunk)
+    changed = False
+
+    def mutate(comments: list[Comment]) -> None:
+        nonlocal changed
+        root_row = next((row for row in comments if row.id == comment_id), None)
+        if root_row is None:
+            raise CommentNotFound(comment_id)
+        if root_row.parent is not None:
+            raise NotARoot(comment_id)
+        targets = _thread_ids(comments, comment_id)
+        for index, row in enumerate(comments):
+            if row.id not in targets or row.state == "open":
+                continue
+            comments[index] = Comment(
+                id=row.id,
+                doc_id=row.doc_id,
+                section=row.section,
+                anchor=row.anchor,
+                line_start=row.line_start,
+                line_end=row.line_end,
+                doc_sha=row.doc_sha,
+                blocks=row.blocks,
+                semantic_anchor=row.semantic_anchor,
+                author=row.author,
+                body=row.body,
+                parent=row.parent,
+                state="open",
+                blocking=row.blocking,
+                created=row.created,
+            )
+            changed = True
+
+    _update_sidecar(doc_id, mutate, root=repo)
+    if changed:
+        append_event(
+            owning,
+            Event(
+                type="CommentReopened",
+                ts=datetime.now(timezone.utc),
+                payload={"doc_id": doc_id, "comment_id": comment_id},
+                dest=owning,
+            ),
+            root=trunk,
+        )
 
 
 def read_comments(doc_id: str, *, root: Path, board=None, readonly: bool = False) -> list[Comment]:

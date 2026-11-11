@@ -250,8 +250,8 @@ def test_semantic_inventory_has_side_state_and_deterministic_drill_choices(
     assert payload.targets[0].current == "present"
     assert payload.targets[0].proposed == "present"
     assert payload.targets[0].drill_choices == (
-        {"view_key": "context", "level": "systemContextViews", "label": "context (systemContextViews)"},
         {"view_key": "detail", "level": "containerViews", "label": "detail (containerViews)"},
+        {"view_key": "context", "level": "systemContextViews", "label": "context (systemContextViews)"},
     )
     assert payload.views[1].current_state == "absent"
     assert payload.views[1].proposed_state == "present"

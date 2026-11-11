@@ -164,6 +164,14 @@ def test_opaque_resource_is_pinned_readable_bounded_and_tamper_safe(tmp_path: Pa
         status, raw, _headers = _get(base + "/api/architecture/reviews/feat_001")
         assert status == 200
         projection = json.loads(raw)
+        assert projection["approval_context"] == {
+            "owner_work_id": "feat_001",
+            "target_repository_key": project.target_repository_key,
+            "plan_revision": revision,
+            "review_unit_id": unit.review_unit_id,
+            "reviewed_tuple_digest": unit.reviewed_tuple_digest,
+            "accepted_baseline_generation": None,
+        }
         plan_diff = next(
             row for row in projection["diffs"]["resources"]
             if row["kind"] == "plan_diff"

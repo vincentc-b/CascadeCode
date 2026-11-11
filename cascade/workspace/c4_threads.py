@@ -97,7 +97,7 @@ def build_semantic_thread_anchor(
 ) -> SemanticThreadAnchor:
     """Build an anchor only from exact data exposed by a pinned review payload."""
 
-    side = _repository_side(payload, source_side)
+    side = _anchor_repository(payload, kind, source_side)
     exact_view_key = target_key if kind == "view" else view_key
     source_reference = _validate_target(
         payload, kind, target_key, source_side, view_key=exact_view_key, level=level
@@ -184,7 +184,7 @@ def _validate_anchor(payload: C4ReviewPayload, anchor: SemanticThreadAnchor) -> 
         or anchor.reviewed_tuple_digest != payload.reviewed_tuple_digest
     ):
         raise WorkspaceError("semantic thread anchor names a different reviewed tuple")
-    side = _repository_side(payload, anchor.source_side)
+    side = _anchor_repository(payload, anchor.kind, anchor.source_side)
     if anchor.repository_key != side["repository_key"] or anchor.revision != side["revision"]:
         raise WorkspaceError("semantic thread anchor names a different repository revision")
     expected_source = _validate_target(
@@ -205,7 +205,7 @@ def _resolve_freshness(
     payload: C4ReviewPayload, anchor: SemanticThreadAnchor
 ) -> tuple[AnchorFreshness, str | None]:
     try:
-        side = _repository_side(payload, anchor.source_side)
+        side = _anchor_repository(payload, anchor.kind, anchor.source_side)
     except WorkspaceError:
         return "outdated", "source_side_missing"
     if anchor.repository_key != side["repository_key"]:
@@ -221,13 +221,18 @@ def _resolve_freshness(
             view_key=anchor.view_key,
             level=anchor.level,
         )
-        return "current", None
     except WorkspaceError:
         if anchor.kind in {"element", "relationship"} and _has_reviewed_continuity(
             payload, anchor
         ):
             return "current", None
         return "outdated", "target_missing_or_renamed"
+    if (
+        anchor.review_unit_id != payload.review_unit_id
+        or anchor.reviewed_tuple_digest != payload.reviewed_tuple_digest
+    ):
+        return "outdated", "review_tuple_mismatch"
+    return "current", None
 
 
 def _repository_side(payload: C4ReviewPayload, source_side: AnchorSide) -> dict[str, str]:
@@ -238,6 +243,28 @@ def _repository_side(payload: C4ReviewPayload, source_side: AnchorSide) -> dict[
             if repository and revision:
                 return row
     raise WorkspaceError(f"review payload has no {source_side} repository revision")
+
+
+def _anchor_repository(
+    payload: C4ReviewPayload, kind: AnchorKind, source_side: AnchorSide
+) -> dict[str, str]:
+    """Return the pinned repository which actually owns an anchor target.
+
+    Requirements live in the pinned plan document, not in either rendered model
+    repository.  Older direct-composer payloads did not expose plan provenance,
+    so retain their side-based behavior for compatibility; store-backed HTTP
+    payloads always carry the complete plan descriptor.
+    """
+
+    if kind == "requirement":
+        provenance = payload.provenance
+        plan = provenance.get("plan") if isinstance(provenance, dict) else None
+        if isinstance(plan, dict):
+            repository = plan.get("repository_key")
+            revision = plan.get("revision")
+            if isinstance(repository, str) and repository and isinstance(revision, str) and revision:
+                return {"repository_key": repository, "revision": revision}
+    return _repository_side(payload, source_side)
 
 
 def _validate_target(
