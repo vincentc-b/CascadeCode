@@ -9,6 +9,22 @@ import tempfile
 import tomllib
 
 
+def review_validation_command(root: Path) -> tuple[str, ...]:
+    """Use the repository's review gate, preserving the task/full-suite default."""
+    from cascade.validation_command import validation_command
+
+    path = root / 'cascade.toml'
+    config = tomllib.loads(path.read_text()) if path.exists() else {}
+    command = config.get('validation', {}).get('review_command')
+    if command is None:
+        return validation_command(root)
+    if not isinstance(command, list) or not command or not all(
+        isinstance(arg, str) and arg.strip() for arg in command
+    ):
+        raise ValueError('validation.review_command must be a nonempty argv array')
+    return tuple(command)
+
+
 def review_validation_timeout(root: Path) -> float:
     path = root / 'cascade.toml'
     config = tomllib.loads(path.read_text()) if path.exists() else {}
@@ -20,11 +36,15 @@ def review_validation_timeout(root: Path) -> float:
 
 def run_review_validation(command: tuple[str, ...], *, cwd: Path, timeout: float) -> subprocess.CompletedProcess:
     # Files avoid unbounded in-memory capture; report only bounded diagnostic tails.
+    def tail(handle):
+        handle.seek(max(0, handle.tell() - 65536))
+        return handle.read(65536).decode('utf-8', errors='replace')
+
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
         process = subprocess.Popen(command, cwd=cwd, stdout=stdout, stderr=stderr, start_new_session=True)
         try:
             process.wait(timeout=timeout)
-        except BaseException:
+        except BaseException as error:
             # Kill the whole check group, including children that outlive the
             # initial command. Never leave validators mutating a preserved checkout.
             try:
@@ -32,10 +52,9 @@ def run_review_validation(command: tuple[str, ...], *, cwd: Path, timeout: float
             except ProcessLookupError:
                 pass
             process.wait()
+            if isinstance(error, subprocess.TimeoutExpired):
+                error.output, error.stderr = tail(stdout), tail(stderr)
             raise
-        def tail(handle):
-            handle.seek(max(0, handle.tell() - 65536))
-            return handle.read(65536).decode('utf-8', errors='replace')
         return subprocess.CompletedProcess(command, process.returncode, tail(stdout), tail(stderr))
 
 

@@ -289,7 +289,7 @@ def test_end_to_end_clean_owned_rebase_records_evidence_and_updates_only_review_
         "push",
         "origin",
         f"--force-with-lease=refs/heads/{turn.source_ref}:{turn.observed_source_sha}",
-        f"HEAD:refs/heads/{turn.source_ref}",
+        f"{publication.source_head}:refs/heads/{turn.source_ref}",
     ) in commands
 
 
@@ -472,7 +472,7 @@ def test_recovery_blocks_a_remote_target_race_without_publication(
         "blocker", "remote_head_changed"
     )
     assert recovered.reconciliation.remote_head == advanced_target
-    assert not any(command[-1] == f"HEAD:refs/heads/{turn.source_ref}" for command in pushes)
+    assert not any(command[-1].endswith(f":refs/heads/{turn.source_ref}") for command in pushes)
     action = load_action(turn.action_id, root=root)
     assert action is not None
     assert action["last_reconciliation"] == recovered.reconciliation.as_dict()

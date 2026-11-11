@@ -25,7 +25,7 @@ from cascade.comments.store import read_comments
 from cascade.epic.plan_readiness import compute_epic_plan_readiness
 from cascade.epic.planning_signoffs import canonical_plan_revision
 from cascade.epic.wiring import load_epic_tools
-from tests.support import add_doc, commit_board, make_repo
+from tests.support import add_doc, commit_board, declare_no_dependencies, make_repo
 
 
 @pytest.fixture
@@ -40,6 +40,9 @@ def epic_board(tmp_path: Path) -> dict[str, object]:
         status="backlog",
         parent="epic_001",
     )
+    # These tests exercise ordinary planning after the declaration phase.
+    # Missing-manifest behavior is covered by test_dependency_declaration_phase.
+    declare_no_dependencies("epic_001", root=root)
     return {"root": root, "epic": epic}
 
 

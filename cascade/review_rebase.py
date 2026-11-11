@@ -34,7 +34,7 @@ _ALLOWED_OPERATIONS = (
     "push_source_with_force_with_lease",
 )
 
-from cascade.validation_command import validation_command
+from cascade.review_validation import review_validation_command as validation_command
 from cascade.review_validation import review_validation_timeout, run_review_validation, validate_publication_board
 
 
@@ -241,10 +241,11 @@ def check_and_publish_review_rebase(
         command = validation_command(locate_trunk(worktree))
         timeout = review_validation_timeout(locate_trunk(worktree))
         check_result = run_review_validation(command, cwd=worktree, timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         return _publication_blocked(
             "checks", "repository_checks_timed_out",
             f"Repository checks exceeded {timeout:g} seconds; validation processes were stopped and the checkout preserved.", worktree,
+            checks=(ReviewRebaseCheck(command, 124, str(exc.output or ""), str(exc.stderr or "")),),
         )
     except (OSError, ValueError) as exc:
         return _publication_blocked(
@@ -265,6 +266,20 @@ def check_and_publish_review_rebase(
         return _publication_blocked(
             "worktree_clean", "dirty_paths_after_checks",
             "Repository checks changed the authorized worktree; publication was not attempted.",
+            worktree, checks=(check,),
+        )
+
+    if (validation_command(locate_trunk(worktree)) != command
+            or review_validation_timeout(locate_trunk(worktree)) != timeout):
+        return _publication_blocked(
+            "checks", "validation_policy_changed",
+            "The repository validation policy changed during checks; run the new policy before publication.",
+            worktree, checks=(check,),
+        )
+    if _git(worktree, "rev-parse", "--verify", "HEAD^{commit}") != execution.source_head:
+        return _publication_blocked(
+            "source_head", "source_head_changed",
+            "The source head changed during checks; the new head must be validated before publication.",
             worktree, checks=(check,),
         )
 
@@ -297,7 +312,7 @@ def check_and_publish_review_rebase(
         [
             "git", "push", turn.remote,
             f"--force-with-lease=refs/heads/{turn.source_ref}:{source_remote_sha}",
-            f"HEAD:refs/heads/{turn.source_ref}",
+            f"{execution.source_head}:refs/heads/{turn.source_ref}",
         ],
         cwd=worktree, capture_output=True, text=True, encoding="utf-8",
     )

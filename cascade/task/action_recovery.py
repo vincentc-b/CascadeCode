@@ -1887,6 +1887,65 @@ def acknowledge_team_recovery(work_id: str, *, root: Path) -> None:
             _write_payload(repo, payload)
 
 
+def admit_review_publication_generation(
+    action_id: str, generation: Mapping[str, Any], *, root: Path,
+    allow_legacy_policy_upgrade: bool = False,
+) -> tuple[dict[str, Any], bool]:
+    """Admit one check run per resolved head and repository validation policy.
+
+    Called only after the owning review adapter verifies its admitted refs and
+    clean resolution. Preserve all old attempts; a materially new generation
+    can extend an exhausted budget by one, never reset it or waive a human gate.
+    """
+    identity = _validate_metadata(generation, field="review publication generation")
+    repo = resolve_root(root)
+    with task_lifecycle_lock(root=repo):
+        payload = _read_payload(repo)
+        action = _actions(payload)[action_id]
+        if action.get("action_kind") != "review_rebase":
+            raise ActionRecoveryError("not a review publication action")
+        state = action.get("recovery_state")
+        if state in {"completed", "running", "resuming", "repairing", "awaiting_human_gate"}:
+            return _copy(action), False
+        if (action.get("recovery") or {}).get("human_blocker"):
+            return _copy(action), False
+        generations = action.get("review_publication_generations", [])
+        existing_generation = any(row.get("identity") == identity for row in generations)
+        if existing_generation:
+            attempted = any(
+                (attempt.get("completion_metadata") or {}).get("publication_generation") == identity
+                for attempt in action.get("attempts", [])
+            )
+            # Admission may have been interrupted before resume_action claimed
+            # an attempt. It is safe to reach that atomic claim again.
+            return _copy(action), not attempted
+        if state == "blocked":
+            attempts = action.get("attempts") or []
+            latest = attempts[-1] if attempts else {}
+            reason = (latest.get("completion_metadata") or {}).get("reason")
+            if (
+                int(action.get("attempt_count") or 0) < int(action.get("attempt_bound") or 0)
+                or latest.get("classification") != "owner_decision"
+                or reason not in {"repository_checks_timed_out", "repository_checks_failed", "repository_checks_unavailable"}
+                or (not generations and not allow_legacy_policy_upgrade)
+            ):
+                return _copy(action), False
+            action["recovery_state"] = "awaiting_owner_decision"
+            action["failure_classification"] = "owner_decision"
+        action.setdefault("review_publication_generations", []).append({
+            "identity": identity, "at": _iso(None), "previous_state": state,
+            "previous_attempt_count": int(action.get("attempt_count") or 0),
+        })
+        action["attempt_bound"] = max(
+            int(action.get("attempt_bound") or 1), int(action.get("attempt_count") or 0) + 1
+        )
+        action["updated_at"] = _iso(None)
+        _refresh_incident(action)
+        payload["actions"][action_id] = action
+        _write_payload(repo, payload)
+        return _copy(action), True
+
+
 def rearm_validated_task_action(
     task_id: str, evidence: Mapping[str, str], *, root: Path
 ) -> dict[str, Any]:
@@ -1980,6 +2039,10 @@ def _refresh_incident(action: dict[str, Any], *, now: datetime | None = None) ->
         "checkpoint": action.get("checkpoint"),
         "delivery_generations": action.get("delivery_generations"),
     }
+    if action.get("review_publication_generations"):
+        evidence["review_publication_generation"] = (
+            action["review_publication_generations"][-1].get("identity")
+        )
     # Capability authority is part of the generation: a previously successful
     # action must be reconsidered when registration, owner scope, reachability,
     # locking, or retry policy changes even if lifecycle evidence is unchanged.
