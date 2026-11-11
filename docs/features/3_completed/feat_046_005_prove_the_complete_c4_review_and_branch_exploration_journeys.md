@@ -9,6 +9,7 @@ children:
 - task_046_005_002
 - task_046_005_003
 - task_046_005_004
+- task_046_005_005
 depends_on:
 - feat_046_004
 owners:
@@ -76,6 +77,7 @@ flowchart TD
 ```
 
 ## Task breakdown
+- task_046_005_005
 - task_046_005_001 — Prove the live paired C4 review journey in a fresh project.
 - task_046_005_002 — Prove real branch architecture browsing and context recovery.
 - task_046_005_003 — Verify architecture failure gates and responsive SVG interaction.
