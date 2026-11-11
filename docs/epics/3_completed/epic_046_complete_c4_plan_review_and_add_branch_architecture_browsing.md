@@ -2,7 +2,7 @@
 id: epic_046
 title: Complete C4 plan review and add branch architecture browsing
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_046_001
@@ -18,7 +18,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-10'
-updated: '2026-11-10'
+updated: '2026-11-11'
 provider: codex
 flex_mode: false
 models:
