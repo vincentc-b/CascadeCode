@@ -41,7 +41,10 @@ def test_real_pinned_renderer_publishes_one_validated_handoff_and_cache(
     renderer = C4ArtifactRenderer(tmp_path / "cache")
 
     assert C4RenderArtifact.first().status == "first"
-    result = renderer.submit(closure).wait(timeout=120)
+    settings = C4RenderSettings()
+    result = renderer.submit(closure, settings).wait(
+        timeout=settings.timeout_seconds + 5
+    )
 
     assert result.status == "ready", result
     assert result.cache_hit is False

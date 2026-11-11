@@ -77,7 +77,11 @@ FailureCode = Literal[
 class C4RenderSettings:
     """Artifact-affecting settings and hard execution bounds."""
 
-    timeout_seconds: float = 90.0
+    # A full interactive render performs validation, semantic/static export,
+    # and one trusted binding export per view.  The pinned runtime can exceed
+    # 90 seconds on a cold or contended host even for two views, so retain a
+    # hard bound with enough room for the supported production pipeline.
+    timeout_seconds: float = 180.0
     memory: str = "1536m"
     cpus: str = "2"
     pids_limit: int = 256

@@ -1,0 +1,18 @@
+{
+  "branch_review_unit_id": "architecture-review-46364a66da0a8fa0fb5de73dc1e6995660808631213c43b8a053ab059c8a3daf",
+  "branch_revision": "f562ebc5be3ba4ba7177b77ff74e1be70367abf6",
+  "broken_model_revision": "538b9c2effaebbe7c8be42e71b106cb0525b33ea",
+  "detached_revision": "acf8760da40dc572594a614b5e8933208e63196a",
+  "initial_branch_snapshot_id": "architecture-snapshot-26f0efbb0d25542fe1a544dcb3b5f403e62f0d6860f54ff4cdf910f827a8e3aa",
+  "main_revision": "acf8760da40dc572594a614b5e8933208e63196a",
+  "missing_model_revision": "c03dbcc0ac139ee556d57af2eaba5e297de7f2b1",
+  "refreshed_branch_revision": "4a0708ad9bbbbc6c3b66a13b81132f191438cf13",
+  "renderer_settings": {
+    "cpus": "2",
+    "memory": "1536m",
+    "pids_limit": 256,
+    "timeout_seconds": 180.0,
+    "tmpfs_size": "512m"
+  },
+  "structurizr_image": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c"
+}
