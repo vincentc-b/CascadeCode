@@ -1497,6 +1497,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             ArchitectureHTTPError,
             MAX_METADATA_BYTES,
             artifact_bytes,
+            context_catalog,
             resource_bytes,
             review_projection,
         )
@@ -1505,6 +1506,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             self._json_error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "request exceeds 256 KiB")
             return
         try:
+            if path == "/api/architecture/contexts":
+                if urllib.parse.urlsplit(self.path).query:
+                    raise ArchitectureHTTPError(
+                        400, "architecture contexts do not accept query parameters"
+                    )
+                self._json_response(HTTPStatus.OK, context_catalog(self.server.root))
+                return
             if path.startswith("/api/architecture/reviews/"):
                 work_id = path.removeprefix("/api/architecture/reviews/").strip("/")
                 if not work_id or "/" in work_id:

@@ -42,6 +42,14 @@ def project_for(root: Path) -> ProjectContext:
     return get_project_context() or ProjectContext.colocated(root)
 
 
+def context_catalog(root: Path) -> dict[str, object]:
+    """Return only the War Room target and its registered project worktrees."""
+
+    from cascade.workspace.architecture_browsing import architecture_context_catalog
+
+    return architecture_context_catalog(project_for(root), root).to_dict()
+
+
 def review_envelope(root: Path, work_id: str, tier: str) -> dict[str, object] | None:
     if tier not in {"epic", "feature"}:
         return None

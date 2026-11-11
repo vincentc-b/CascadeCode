@@ -161,9 +161,25 @@ from cascade.workspace.historical_reconciliation import (
     write_reconciled_replay_ledger,
 )
 from cascade.workspace.up import prepare_up, up
+from cascade.workspace.architecture_browsing import (
+    ArchitectureBrowsingError,
+    ArchitectureCodeContext,
+    ArchitectureContextCatalog,
+    ArchitectureContextSelection,
+    KnownDocumentationRef,
+    architecture_context_catalog,
+    resolve_architecture_context,
+)
 
 __all__ = [
     "WorkspaceError",
+    "ArchitectureBrowsingError",
+    "ArchitectureCodeContext",
+    "ArchitectureContextCatalog",
+    "ArchitectureContextSelection",
+    "KnownDocumentationRef",
+    "architecture_context_catalog",
+    "resolve_architecture_context",
     "ProjectContext",
     "ProjectConfiguration",
     "PinnedDocumentRef",

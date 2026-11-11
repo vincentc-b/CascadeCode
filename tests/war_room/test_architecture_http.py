@@ -57,6 +57,48 @@ def _stop(server, thread) -> None:
     thread.join(timeout=5)
 
 
+def test_context_catalog_exposes_session_target_without_accepting_queries(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    root.joinpath("README.md").write_text("# Product\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "product"], cwd=root, check=True)
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    server, thread, base = _start(root)
+    try:
+        status, raw, headers = _get(base + "/api/architecture/contexts")
+        assert status == 200
+        assert headers["Cache-Control"] == "no-store"
+        payload = json.loads(raw)
+        assert payload["schema_version"] == 1
+        context = payload["contexts"][0]["context"]
+        assert payload["default_context_id"] == context["context_id"]
+        assert context == {
+            "context_id": payload["default_context_id"],
+            "kind": "session_target",
+            "label": "Session target",
+            "repository_key": context["repository_key"],
+            "revision": revision,
+            "branch": "main",
+            "detached": False,
+            "dirty": False,
+            "work_id": None,
+        }
+        assert payload["contexts"][0]["documentation_revision"] == revision
+        assert payload["contexts"][0]["association"]["provenance"] == "colocated"
+
+        status, raw, _headers = _get(base + "/api/architecture/contexts?path=/tmp")
+        assert status == 400
+        assert json.loads(raw)["error"] == (
+            "architecture contexts do not accept query parameters"
+        )
+    finally:
+        _stop(server, thread)
+
+
 def test_doc_always_exposes_small_envelope_and_lazy_missing_projection(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic")
