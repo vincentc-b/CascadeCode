@@ -13,6 +13,7 @@ import difflib
 import json
 import subprocess
 import xml.etree.ElementTree as ET
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -138,7 +139,34 @@ def review_projection(
 def resolve_review_context(root: Path, work_id: str) -> C4ReviewPayload:
     """Resolve the authoritative active review tuple for another HTTP slice."""
 
-    return _resolve(root, work_id)
+    payload = _resolve(root, work_id)
+    public_views = []
+    for view in payload.views:
+        sides = {}
+        for side_name in ("current", "proposed"):
+            side = getattr(view, side_name)
+            if side is None:
+                sides[side_name] = None
+                continue
+            descriptor = {
+                "kind": "svg",
+                "scope": payload.review_unit_id,
+                "tuple": payload.reviewed_tuple_digest,
+                "view": view.key,
+                "level": view.level,
+                "side": side_name,
+                "revision": side.revision,
+                "repository_key": side.repository_key,
+            }
+            sides[side_name] = replace(
+                side,
+                svg=(
+                    f"/api/architecture/artifacts/{payload.review_unit_id}/"
+                    f"{_opaque_id(descriptor)}"
+                ),
+            )
+        public_views.append(replace(view, **sides))
+    return replace(payload, views=tuple(public_views))
 
 
 def _approval_context(root: Path, payload: C4ReviewPayload) -> ReviewApprovalContext:
