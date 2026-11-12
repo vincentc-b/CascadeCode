@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_045_001
+- feat_045_002
 depends_on: []
 owners:
 - epic_manager
@@ -79,6 +80,7 @@ Additional validation: reproduce 034_008 approved + dependencies satisfied + sup
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_045_002
 - feat_045_001
 
 The Epic Team will create and sequence feature plans here.
