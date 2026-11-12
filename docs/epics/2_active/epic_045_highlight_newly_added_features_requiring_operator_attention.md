@@ -164,6 +164,11 @@ No unresolved product-scope choice blocks Epic Manager review. Resolve implement
   Chose Declare and verify the existing local Python, Git, Node and browser-test prerequisites in manifest revision 1; use the observed host deliberately as the local-check target, not as a deployment assumption..
   Rationale: All ten exact installed prerequisites passed automatic checks, including browser launch. The design extends existing Python/static-JavaScript infrastructure and needs no new installation or external service. Preserve exact inherited Codex defaults.
   Honors: Dependency declaration before planning, full target identity, no installation authority inferred from verification..
+
+- `dec_005` · 2026-11-12 · Epic Manager · **Feature breakdown**
+  Chose Add feat_045_003 as a bounded, independently approved orchestration repair for architecture publication from the authorized planning worktree; retain Features 001/002 as the only product slices and keep 002 dependent on 001..
+  Rationale: Fresh canonical audit evidence now resolves the plan and reports expected_wait/plan_approval, but durable publication evidence and Git ancestry confirm a separate worktree-lineage validation defect. No duplicate live repair was found. Repair must preserve exact artifact/repository validation and support recovery of terminal publication attempts; minting does not constitute a fix or execution authorization.
+  Honors: Audit investigation investigation_4ca123bb9bd945fb98958705e01035af; scoped SWE repair, normal human approval and installation boundaries, unchanged product acceptance and scheduling policy; renewed role sign-offs on the revised epic..
 ## Amendment log
 
 _(none)_
