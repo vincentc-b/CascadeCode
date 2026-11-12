@@ -25,6 +25,7 @@ from cascade.workspace.architecture_review import (
     ArchitectureReviewStore,
     ArchitectureReviewUnit,
     stage_architecture_proposal,
+    review_lineage_revision,
 )
 from cascade.workspace.c4_closure import materialize_c4_source_closure
 from cascade.workspace.c4_diff import C4SemanticModelArtifact
@@ -136,9 +137,10 @@ def discover_architecture_publication(
                 project, row, "pending", reason_code="acceptance_pending",
                 message="waiting for partial architecture acceptance to finish",
             )
-        current = store.resolve_current(unit.integration_lineage)
+        lineage_revision = review_lineage_revision(project, unit.owner_work_id)
+        current = store.resolve_current(unit.integration_lineage, lineage_revision=lineage_revision)
         generation = current.generation if current else None
-        if generation != row["expected_generation"] or store.baseline_status(unit).stale:
+        if generation != row["expected_generation"] or store.baseline_status(unit, lineage_revision=lineage_revision).stale:
             return _terminal(
                 project, store, row, "superseded", "stale_baseline",
                 "accepted architecture baseline changed before publication",
@@ -202,9 +204,10 @@ def discover_architecture_publication(
             project, unit, work_id=str(row["originating_work_id"]),
             expected_revision=str(row["expected_plan_revision"]), root=Path(root),
         )
-        current = store.resolve_current(unit.integration_lineage)
+        lineage_revision = review_lineage_revision(project, unit.owner_work_id)
+        current = store.resolve_current(unit.integration_lineage, lineage_revision=lineage_revision)
         generation = current.generation if current else None
-        if generation != row["expected_generation"] or store.baseline_status(unit).stale:
+        if generation != row["expected_generation"] or store.baseline_status(unit, lineage_revision=lineage_revision).stale:
             return _terminal(
                 project, store, row, "superseded", "stale_baseline",
                 "accepted architecture baseline changed during rendering",
@@ -400,6 +403,7 @@ def _publish_validated(
         ),
         render_settings=render_settings,
         baseline_artifact=baseline_artifact,
+        lineage_revision=review_lineage_revision(project, unit.owner_work_id),
     )
     assert staged.unit is not None
     return _terminal(

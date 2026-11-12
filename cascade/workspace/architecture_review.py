@@ -2303,6 +2303,18 @@ def _read_architecture_bytes(project: ProjectContext, reference: ArchitectureArt
                      "architecture artifact")
 
 
+def review_lineage_revision(project: ProjectContext, work_id: str) -> str:
+    """Use the owning registered checkout, preserving repository identities."""
+    from cascade.workspace.doc_root import resolve_doc_worktree
+    from cascade.board.errors import NotFound
+
+    try:
+        checkout = resolve_doc_worktree(work_id, root=project.target.root, readonly=True)
+    except NotFound:
+        checkout = project.target.root
+    return _head(checkout)
+
+
 def _validate_current_artifacts(
     project: ProjectContext,
     unit: ArchitectureReviewUnit,
@@ -2316,7 +2328,10 @@ def _validate_current_artifacts(
     )
     plan_head = (
         lineage_revision
-        if lineage_revision is not None and unit.plan.repository_role == "target"
+        if lineage_revision is not None and (
+            unit.plan.repository_role == "target"
+            or plan_repository.repository_key == project.target.repository_key
+        )
         else _head(plan_repository.root)
     )
     _verify_current_blob(
