@@ -105,3 +105,28 @@ backlog, and the current action boundary correctly raises `dependency_unmet`.
 Feature 001 must update those fixtures to establish approval through a legitimate
 dependency-satisfied state before exercising later waiting states; these cases are
 not passing baseline evidence. No product code changed in this review.
+
+### Publication repair reviewed with plan revision 693476b
+
+Decision `dec_005` adds `feat_045_003`, an independent orchestration repair, while
+retaining 001 and 002 as the two product slices. The publication path currently
+stages without the owned lineage, and current-artifact validation resolves a
+tracking-role plan against the configured repository HEAD. A committed plan on
+the authorized planning branch can consequently fail ancestry validation before
+trunk integration. The repair belongs in the existing workspace architecture
+publication/review services; it adds no actor, service or C4 relationship and
+does not change this review's **no diagram change** decision.
+
+Resolve each artifact's current head from its authorized repository and registered
+owning lineage. Preserve distinct tracking/product revisions for split roots and
+all ownership, destination, generation, ancestry and byte-digest checks. Feature
+003 must define supported retry for a terminal publication while retaining failure
+history and exact proposal evidence. It must cover valid branch-local artifacts
+and changed, unrelated, missing or stale artifacts in colocated and split roots.
+Do not relabel repository roles, edit ledgers or require an early trunk merge.
+
+This is reviewed repair scope, not an implemented fix. Completion requires an
+accepted SWE repair and a successful canonical architect publication against the
+then-reviewed exact plan/design tuple. The old proposal remains historical
+evidence; the newly reviewed plan requires its own pinned publication. Normal
+human approval and dispatch boundaries remain in force.
