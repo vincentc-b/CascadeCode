@@ -24,6 +24,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-12T02:56:32.875028+00:00'
 ---
 # Highlight newly added features with durable explicit acknowledgement
 
