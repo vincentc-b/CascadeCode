@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_045_001
 - feat_045_002
+- feat_045_003
 depends_on: []
 owners:
 - epic_manager
@@ -112,6 +113,7 @@ Verified installed versions: Python 3.12.8; PyYAML 6.0.3; cursor-sdk 1.0.37; lan
 Feature 002 depends on Feature 001's canonical explanation/actions. Neither feature depends on epic_044; preserve compatibility with its separation of present problems and history through additive projections and focused shared-file review. The 034 IDs and PR reference are regression fixtures, not live dependencies or targets for modification. Preserve inherited Codex role/model/reasoning defaults; do not alter workspace provider configuration.
 
 ## Feature breakdown
+- feat_045_003
 
 | Feature | Shippable outcome | Depends on | Epic criteria |
 | --- | --- | --- | --- |
