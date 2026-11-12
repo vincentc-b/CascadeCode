@@ -18,6 +18,12 @@
       "plan_revision": "693476beb0accecbcfb4ab1f36ac9f9a4e84fd59",
       "signed_at": "2026-11-12T02:12:27.074182+00:00",
       "evidence_snapshot_id": "evidence_e757aa69fda540f695133049509bda5c"
+    },
+    {
+      "role": "epic_architect",
+      "plan_revision": "693476beb0accecbcfb4ab1f36ac9f9a4e84fd59",
+      "signed_at": "2026-11-12T02:14:50.478041+00:00",
+      "evidence_snapshot_id": "evidence_1a2d047090f3475ea0384772295e20fb"
     }
   ]
 }
