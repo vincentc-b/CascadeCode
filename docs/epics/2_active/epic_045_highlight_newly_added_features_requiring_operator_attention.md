@@ -133,6 +133,10 @@ No unresolved product-scope choice blocks Epic Manager review. Resolve implement
 
 - 2026-11-10 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-12 · Epic Manager · **Feature breakdown**
+  Chose Deliver two complete slices: feat_045_001 for authoritative activation explanations and board UI, then feat_045_002 for durable new-work discovery and acknowledgement using 001's action contract..
+  Rationale: Each slice has a visible user outcome and owns its own regression coverage. The single dependency prevents duplicate next-action logic; no separate plumbing/test-only feature or unnecessary epic_044 dependency.
+  Honors: Epic success criteria 1–16; minimal scope, unchanged approval and scheduling boundaries..
 ## Amendment log
 
 _(none)_
