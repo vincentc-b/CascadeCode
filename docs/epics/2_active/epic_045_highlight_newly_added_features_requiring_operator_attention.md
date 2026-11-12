@@ -142,6 +142,11 @@ No unresolved product-scope choice blocks Epic Manager review. Resolve implement
   Chose Keep activation summaries additive to canonical readiness, distinguish fresh human action, unknown evidence, external waits and ready-awaiting-dispatch, and retain actual sibling/refusal identities without changing scheduling gates..
   Rationale: Current readiness contains string blockers and drops sibling identity; provider evidence is already cached. Shared predicates and explicit freshness explain the 034_008/009 case without inventing dependencies, approvals or start promises.
   Honors: Success criteria 1–5; canonical gate reuse, bounded polling, serial/stacked compatibility..
+
+- `dec_003` · 2026-11-12 · Epic Manager · **Macro-architecture**
+  Chose Use workspace-shared durable attention keyed by stable feature identity, authenticated explicit Mark seen with actor provenance, and a one-time baseline that exposes pending backlog under active epics while suppressing historical work..
+  Rationale: The current authentication identifies a local operator rather than separate viewer accounts. Shared state matches that deployment, survives restart/replay and avoids adding accounts. Explicit acknowledgement stays independent of approval; conservative rollout captures pending corrective additions without historical badge floods.
+  Honors: Success criteria 6–16; split-root ownership, approval separation, deterministic bootstrap and accessible quiet UI..
 ## Amendment log
 
 _(none)_
