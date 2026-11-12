@@ -505,6 +505,26 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_ef20e760908b1bef7f7c07f0fc241f6a304421f5f7447a5e5a5d8acfc59ac0b5",
+      "dependency_id": "dep_playwright",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:d8dbfa1164ba55277e9ea74526f171447c7b24661f7affaf46230131677d9b88",
+      "recipe_revision": "sha256:aa432a82b5c9d84033fbe036e86a86b8824db9c5be21694177357c0f6a456f49",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'playwright'\"'\"'); assert d.version=='\"'\"'1.64.0'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"'); print(\"success\"); from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(headless=True,args=[\"--no-sandbox\"]); assert b.version==\"156.0.8078.4\"; b.close(); p.stop()'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-12T01:45:42.113326+00:00",
+      "selected_version": "1.64.0",
+      "integrity_reference": "sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8",
+      "lock_references": [
+        "tests/war_room"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
