@@ -63,7 +63,33 @@ Keep the existing workflow and approval boundaries. This is an explanation and d
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+Two features deliver complete user-facing slices. Keep activation eligibility, operational attention and lifecycle status separate.
+
+### Activation explanation boundary
+
+Extend the canonical Python evaluation and serialization path, principally `cascade/feature/readiness.py`, `cascade/stacked_dispatch.py`, dispatch/Boss refusal evidence and `cascade/war_room/serialize.py`. Existing `approved` and `blockers` consumers remain compatible. Add a versioned explanation object containing summary state, primary reason, all reasons, satisfied prerequisites, evaluation time/snapshot identity, evidence freshness and optional last actual dispatch attempt. Each reason carries a stable code, readable explanation, owner (operator/other work/system), affected work IDs, available existing actions/review links, and its evidence source/freshness. Feature planning pins the exact field names and source map before task execution.
+
+Use the same canonical predicates at explanation and action boundaries. Extract sibling identities from `epic_blocks_feature_dispatch` and related merge predicates rather than reimplementing serial/stacked rules. Dependencies retain the existing canonical projection; unknown dependency evidence is not satisfied. Approval includes revision-bound review requirements, not merely a timestamp. Provider compatibility uses the existing bounded inventory snapshot; action-time preflight remains authoritative. Parent state, review threads, merge state and dispatch-base selection keep their existing owners.
+
+Primary-summary ordering: a current actionable human blocker comes first; otherwise missing/stale required evidence yields readiness unavailable; otherwise a current work/system blocker yields waiting; only a complete, current passing evaluation yields ready awaiting dispatch. Preserve all additional reasons, including uncertainty, behind expansion. Use a stable source-code/work-ID ordering within those groups. Passing gates never means running. An actual refusal retains its attempted-at evidence and actionable details; distinguish it from a newer readiness evaluation rather than allowing a stale refusal to masquerade as the current blocker. Do not promise a start time.
+
+Acquire reusable evidence once per board response. Reuse cached provider and dispatch-base evidence; do not add discovery, Git probes or per-row expensive checks to browser polling. Missing cached facts surface as unknown/rechecking. Record attempts only at actual dispatch boundaries. Explanation reads do not dispatch, mutate lifecycle state, or grant any authority.
+
+### Attention state and acknowledgement boundary
+
+Use stable feature ID within the canonical tracking workspace as identity. Store versioned durable attention records independently of plan content and lifecycle, with creation/discovery provenance, rollout baseline, acknowledgement actor/time and a monotonic state revision. Reuse existing atomic persistence/process-lock conventions; all managed worktrees and split product/tracking roots must resolve the same tracking-owned state. No acknowledgement file belongs in the product repository or in transient browser-only state.
+
+New creation registration consumes canonical `FeatureMinted` evidence, with idempotent reconciliation for legitimately discovered IDs not present in the ledger. A durable first-discovery record is provenance for that fallback, not a heuristic over filenames, order, mutable dates or status. Register baseline/discovery through startup/mint/reconciliation boundaries; GET, rendering and expansion never acknowledge. Replayed events and already-known IDs cannot reset an acknowledgement.
+
+Choose workspace-shared acknowledgement for the current local-operator deployment, and disclose that scope. The existing `HumanIdentityVerifier` authenticates explicit Mark seen and supplies the recorded actor; no new accounts or unauthenticated write endpoint. Mark seen is idempotent and clears only attention. Approval does not implicitly acknowledge in this slice. Reject invalid/unauthorized writes; preserve acknowledgements under concurrent requests and out-of-order poll responses. A corrupt/unavailable ledger is an unavailable attention projection, not permission to reset the baseline.
+
+On first rollout, atomically record all known feature identities. Mark currently open backlog/ready-to-plan features under active, non-cancelling epics unseen, regardless of approval; this captures pending corrective additions without resetting approvals. Other preexisting features form the historical baseline and receive no New badge. Persist the rollout marker so restarts cannot rerun bootstrap. Features created after that baseline remain unseen until explicit acknowledgement. Exclude completed/cancelled/retired work from pending-attention aggregates while retaining provenance and prior acknowledgement. Returning an existing identity to backlog or revising its plan must not recreate newness.
+
+### Presentation and acceptance
+
+Render the canonical activation summary/actions in normal board views, with expandable secondary blockers and satisfied prerequisites. Reuse the dependency display and existing review/provider controls. Feature rows show accessible New text separately from lifecycle; collapsed epic rows show an aggregate with a keyboard-operable reveal/navigation action. New work displays its actual next action, including a normal scheduler wait when already approved. Keep updates stable, readable and quiet.
+
+Use focused backend/API integration tests for gate parity and attention invariants, lightweight existing Node UI cases where useful, and a real-browser journey for the motivating discovery/approval workflow. Reuse `tests/war_room/test_board_feature_readiness.py`, `test_provider_readiness_projection.py`, `test_late_mint_feature_approval_e2e.py` and `tests/test_stacked_dispatch_integration.py` as relevant. Feature 001 verifies the approved-008/waiting-for-009 transition, all blocker families, stale/unavailable evidence and real refusal freshness; Feature 002 verifies bootstrap/replay/restart/concurrency/split roots and the two-corrective-feature journey. Assertions must show that reads/acknowledgement cannot change approvals, blockers, lifecycle or scheduling policy. Do not add a separate testing feature or redundant unit suites.
 
 ## Cross-module constraints
 
@@ -77,17 +103,31 @@ Additional validation: reproduce 034_008 approved + dependencies satisfied + sup
 
 ## Core dependencies
 
-To be identified during epic planning.
+Dependency manifest revision 1 was declared before planning changes and automatically verified successfully on 2026-11-12. It declares existing prerequisites, not an empty/no-software decision, and grants no installation authority.
+
+Local validation target: host `ip-172-31-37-14`, Linux x86_64, repository/check-executor root `/home/ubuntu/dev/CascadeCode`, runtime `/opt/conda/bin/python3.12`, host sandbox, no container. The owned implementation worktree is `/home/ubuntu/dev/CascadeCode/.cascade/worktrees/epic_epic_045`; its code checks run there. The manifest identifies the host-level verification executor, not a production deployment target.
+
+Verified installed versions: Python 3.12.8; PyYAML 6.0.3; cursor-sdk 1.0.37; langgraph 1.2.14; langgraph-checkpoint-sqlite 3.1.1; pytest 9.0.3; Git 2.34.1; Node 20.20.2; Playwright 1.64.0 and its Chromium 156.0.8078.4. The manifest pins executable or installed-distribution RECORD digests and read-only verification recipes. Python project requirements come from `pyproject.toml`; Node and Playwright/Chromium support existing UI/browser validation patterns. Chromium launch was verified. These are local installed-artifact fingerprints, not claims about upstream download provenance. No package installation, upgrade, new runtime service or production infrastructure is required by this design.
+
+Feature 002 depends on Feature 001's canonical explanation/actions. Neither feature depends on epic_044; preserve compatibility with its separation of present problems and history through additive projections and focused shared-file review. The 034 IDs and PR reference are regression fixtures, not live dependencies or targets for modification. Preserve inherited Codex role/model/reasoning defaults; do not alter workspace provider configuration.
 
 ## Feature breakdown
-- feat_045_002
-- feat_045_001
 
-The Epic Team will create and sequence feature plans here.
+| Feature | Shippable outcome | Depends on | Epic criteria |
+| --- | --- | --- | --- |
+| feat_045_001 — Explain feature activation readiness and actual dispatch waits | Canonical structured reasons, sibling identities, freshness/refusal evidence and board UI with next actions | None | 1–5; activation-specific validation and accessibility |
+| feat_045_002 — Highlight newly added features with durable explicit acknowledgement | Durable discovery/seen state, conservative rollout, authenticated Mark seen, collapsed counts and complete operator journey | feat_045_001 | 6–16; consumes 001 for criterion 8 |
+
+Both are backlog plans with explicit acceptance scope. Child teams refine schemas/tasks within these contracts after normal approval/dispatch; neither minting nor this plan approves or starts them. Integrate and validate 001 before 002 so new-feature UI consumes the real explanation contract. Each feature includes its own tests and documentation; no third integration-only feature.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+No unresolved product-scope choice blocks Epic Manager review. Resolve implementation detail within the following explicit constraints before the respective feature starts coding:
+
+- Feature 001 must publish its fact-source/freshness table and verify parity with the actual dispatch predicates, especially serial versus stacked review waits and revision-bound approval. Unknown evidence remains unknown; lack of a cache is not grounds to run heavy probes per poll.
+- Feature 001 must locate existing attempt/refusal evidence and extend the actual boundary minimally if needed; no speculative dispatch, historical-refusal-as-current behavior, or change to scheduling policy.
+- Feature 002 must pin tracking-root resolution, atomic bootstrap/reconciliation and acknowledgement concurrency before implementation. Test a mint concurrent with first bootstrap and stale polling after acknowledgement; a baseline must not lose new additions or reset seen records.
+- Epic Architect reviews these boundaries and the current plan revision independently. Any material contract change requires updating this epic and renewing affected sign-offs before approval.
 
 ## Decision log
 
