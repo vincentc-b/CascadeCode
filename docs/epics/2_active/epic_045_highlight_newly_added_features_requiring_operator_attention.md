@@ -4,7 +4,8 @@ title: Explain feature activation requirements and highlight newly added work
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_045_001
 depends_on: []
 owners:
 - epic_manager
@@ -78,6 +79,7 @@ Additional validation: reproduce 034_008 approved + dependencies satisfied + sup
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_045_001
 
 The Epic Team will create and sequence feature plans here.
 
