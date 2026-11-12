@@ -120,7 +120,17 @@ Feature 002 depends on Feature 001's canonical explanation/actions. Neither feat
 | feat_045_001 — Explain feature activation readiness and actual dispatch waits | Canonical structured reasons, sibling identities, freshness/refusal evidence and board UI with next actions | None | 1–5; activation-specific validation and accessibility |
 | feat_045_002 — Highlight newly added features with durable explicit acknowledgement | Durable discovery/seen state, conservative rollout, authenticated Mark seen, collapsed counts and complete operator journey | feat_045_001 | 6–16; consumes 001 for criterion 8 |
 
-Both are backlog plans with explicit acceptance scope. Child teams refine schemas/tasks within these contracts after normal approval/dispatch; neither minting nor this plan approves or starts them. Integrate and validate 001 before 002 so new-feature UI consumes the real explanation contract. Each feature includes its own tests and documentation; no third integration-only feature.
+Features 001 and 002 are backlog product plans with explicit acceptance scope. Child teams refine schemas/tasks within these contracts after normal approval/dispatch; neither minting nor this plan approves or starts them. Integrate and validate 001 before 002 so new-feature UI consumes the real explanation contract. Each feature includes its own tests and documentation; no third integration-only feature.
+
+### Audit-discovered publication repair
+
+`feat_045_003` — Repair architecture publication for owned planning worktree lineage — is a separately scoped backlog orchestration repair, with no dependency on 001/002. It restores publication of this epic's committed architecture review before trunk integration. It is not a third product or integration-only slice; the two user-facing slices and their acceptance scope remain unchanged.
+
+Investigation `investigation_4ca123bb9bd945fb98958705e01035af` confirmed the original missing-document-revision evidence is no longer reproducible: a fresh bounded canonical audit read found plan `48c4ce6`, owned HEAD `d6148184`, no evidence errors and `expected_wait / plan_approval`. The persistent separate failure is architecture publication `architecture-publication-8c50299f2d09024614cc747b5675c39fee6fd8faefa3622c2aa3b8c9a193e936`, superseded with `artifact_changed` because validation used tracking trunk history rather than the owned planning lineage. The exact old proposal and design commit `470b4063` remain recovery evidence; any later publication must pin the then-current plan revision rather than reuse an outdated approval or proposal blindly.
+
+Feature 003 must assign a bounded SWE repair after normal approval, preserve revision/digest/ownership and destination checks, cover colocated and split roots, and provide supported retry of terminal publication failures without editing ledgers. Tests and review publication belong to that repair. Accepted code and a successful authorized Epic Architect publication retry are required before calling the publication defect fixed. No installation or approval bypass is authorized. Existing verified prerequisites suffice.
+
+Adding this repair renews the epic plan review requirement. Epic Manager and Epic Architect must sign the final revised plan; human approval remains outstanding. Product implementation has not started. Audit timeouts remain historical observations, not evidence that this expected approval wait is a stuck implementation.
 
 ## Open questions
 
