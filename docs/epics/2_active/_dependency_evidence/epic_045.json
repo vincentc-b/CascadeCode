@@ -469,6 +469,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_dd4687b4c82264d1c7a399c8938247ae0670a1479ffd364add400bb5c86ae741",
+      "dependency_id": "dep_pytest",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:60883c8257418c53929d201e37e906b6ea1e07075bad4308949df2b7e768c77e",
+      "recipe_revision": "sha256:69c5e59883239ea0d2fd9dee06bf7169e909f3f49a016b63f78db2a6cf9d7310",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"'); print(\"success\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-12T01:45:39.663196+00:00",
+      "completed_at": "2026-11-12T01:45:41.047320+00:00",
+      "result": "succeeded",
+      "redacted_output": "success\n",
+      "selected_version": "9.0.3",
+      "integrity_reference": "sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
