@@ -245,6 +245,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_db80c903e04de297d947ad84596cce8c5a427648191a120b7a1d0c0d7e2a71e6",
+      "dependency_id": "dep_pyyaml",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:d4348017b4ac3609c1fd8fb4bc7a5178d9972d89833cc4c29379372f792c0542",
+      "recipe_revision": "sha256:4a05d667484a888ecc555dadf7da5c84dc7a534fe48575dbd109cf9c48b186c7",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"'); print(\"success\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-12T01:45:29.329757+00:00",
+      "completed_at": "2026-11-12T01:45:30.710842+00:00",
+      "result": "succeeded",
+      "redacted_output": "success\n",
+      "selected_version": "6.0.3",
+      "integrity_reference": "sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
