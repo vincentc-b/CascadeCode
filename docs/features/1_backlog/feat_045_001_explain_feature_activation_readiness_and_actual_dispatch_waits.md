@@ -23,6 +23,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-12T02:56:32.285722+00:00'
 ---
 # Explain feature activation readiness and actual dispatch waits
 
