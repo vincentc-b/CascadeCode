@@ -133,6 +133,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_481d63df8e4632029fe9f479ed3dfbb5fa644acf3da39d6881b19179f1e207f1",
+      "dependency_id": "dep_node",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:de82e30fe6f30eff7da025334b0a59708d9a21015935499faca0671c9c9e5617",
+      "recipe_revision": "sha256:6e7bc90c5c432d3215350f65f6e8157bb645a70d49915891cad2f04de887f63d",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/node'\"'\"').read_bytes()).hexdigest()=='\"'\"'6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"'; assert '\"'\"'20.20.2'\"'\"' in subprocess.check_output(['\"'\"'/usr/bin/node'\"'\"', '\"'\"'--version'\"'\"'],text=True); print(\"success\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-12T01:45:23.821237+00:00",
+      "completed_at": "2026-11-12T01:45:24.984784+00:00",
+      "result": "succeeded",
+      "redacted_output": "success\n",
+      "selected_version": "20.20.2",
+      "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+      "lock_references": [
+        "tests/war_room"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
