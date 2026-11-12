@@ -137,6 +137,11 @@ No unresolved product-scope choice blocks Epic Manager review. Resolve implement
   Chose Deliver two complete slices: feat_045_001 for authoritative activation explanations and board UI, then feat_045_002 for durable new-work discovery and acknowledgement using 001's action contract..
   Rationale: Each slice has a visible user outcome and owns its own regression coverage. The single dependency prevents duplicate next-action logic; no separate plumbing/test-only feature or unnecessary epic_044 dependency.
   Honors: Epic success criteria 1–16; minimal scope, unchanged approval and scheduling boundaries..
+
+- `dec_002` · 2026-11-12 · Epic Manager · **Macro-architecture**
+  Chose Keep activation summaries additive to canonical readiness, distinguish fresh human action, unknown evidence, external waits and ready-awaiting-dispatch, and retain actual sibling/refusal identities without changing scheduling gates..
+  Rationale: Current readiness contains string blockers and drops sibling identity; provider evidence is already cached. Shared predicates and explicit freshness explain the 034_008/009 case without inventing dependencies, approvals or start promises.
+  Honors: Success criteria 1–5; canonical gate reuse, bounded polling, serial/stacked compatibility..
 ## Amendment log
 
 _(none)_
