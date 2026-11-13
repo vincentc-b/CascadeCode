@@ -370,7 +370,7 @@ def preflight_integration_sync(
 
 
 def preflight_lifecycle_merge_target(
-    work_id: str, *, root: Path | None = None
+    work_id: str, *, source_work_id: str | None = None, root: Path | None = None
 ) -> BranchSyncUpdateResult:
     """Preflight the integration checkout that will receive a lifecycle merge."""
 
@@ -388,7 +388,34 @@ def preflight_lifecycle_merge_target(
     # Derived monitoring blockage must not prevent the child integration
     # which resolves it. Manual blockage and unrelated lifecycle gates remain.
     derived = meta.status == "blocked" and any(b.blocked_supervisor for b in meta.monitoring_blockers)
-    if column_for_status(meta.status) != "active" or (meta.status != "active" and not derived):
+    # A Feature can enter the completed column when its PR is opened. An
+    # explicitly minted repair Task may finish before that PR is merged. Admit
+    # only that owned, active child while the Feature has no terminal rollup.
+    completed_feature_repair = False
+    if (
+        meta.tier == "feature"
+        and meta.status == "completed"
+        and meta.path.parent.name == "3_completed"
+        and source_work_id in meta.children
+    ):
+        source = board.by_id.get(source_work_id)
+        if (
+            source is not None
+            and source.tier == "task"
+            and source.parent == work_id
+            and source.status == "active"
+            and source.path.parent.name == "2_active"
+            and meta.parent
+        ):
+            from cascade.boss.rollup import feature_completed_recorded
+
+            completed_feature_repair = not feature_completed_recorded(
+                work_id, meta.parent, root=trunk
+            )
+    if not completed_feature_repair and (
+        column_for_status(meta.status) != "active"
+        or (meta.status != "active" and not derived)
+    ):
         return BranchSyncUpdateResult(ok=False, reason="not_active")
 
     work_branch = integration_branch(kind, work_id)
@@ -455,7 +482,9 @@ def merge_lifecycle_source(
         return BranchSyncUpdateResult(ok=False, reason="not_a_git_repo")
 
     with process_lock:
-        preflight = preflight_lifecycle_merge_target(checkout_work_id, root=trunk)
+        preflight = preflight_lifecycle_merge_target(
+            checkout_work_id, source_work_id=source_work_id, root=trunk
+        )
         if not preflight.ok:
             return preflight
 

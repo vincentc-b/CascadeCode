@@ -21,7 +21,7 @@ from cascade.workspace.branch_synchronization import (
     inspect_branch_synchronization,
     update_integration_branch,
 )
-from cascade.workspace.integration_worktree import integration_branch, integration_worktree_path
+from cascade.workspace.integration_worktree import create_integration_worktree, integration_branch, integration_worktree_path
 from tests.support import add_doc, approve_board_feature, make_repo
 
 
@@ -89,6 +89,53 @@ def test_already_current_is_no_op(tmp_path: Path) -> None:
     result = update_integration_branch("feat_001", root=root)
     assert result.ok
     assert result.no_op is True
+
+
+def test_completed_feature_can_receive_its_active_repair_before_rollup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import datetime, timezone
+
+    from cascade.watchdog.events import append_event
+    from cascade.watchdog.types import Event
+    from cascade.workspace.branch_synchronization import (
+        merge_lifecycle_source,
+        preflight_lifecycle_merge_target,
+    )
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", status="active",
+            parent="epic_001", children=["task_001"])
+    add_doc(root, id="task_001", title="Repair", tier="task", status="active",
+            parent="feat_001")
+    feature = create_integration_worktree("feature", "feat_001", branch="feat/feat_001",
+                                          base_ref="HEAD", trunk=root)
+    task = create_integration_worktree("task", "task_001", branch="task/task_001",
+                                       base_ref=feature.branch, trunk=root)
+    (task.path / "repair.py").write_text("fixed = True\n", encoding="utf-8")
+    subprocess.run(["git", "add", "repair.py"], cwd=task.path, check=True)
+    subprocess.run(["git", "commit", "-m", "Repair review snapshot"], cwd=task.path,
+                   check=True, capture_output=True)
+    monkeypatch.setattr("cascade.stacked_dispatch.refusal_if_feature_completion_without_pr",
+                        lambda *args, **kwargs: None)
+    move_doc("feat_001", "completed", root=feature.path)
+    move_doc("feat_001", "completed", root=root)
+
+    assert not preflight_lifecycle_merge_target("feat_001", root=root).ok
+    assert preflight_lifecycle_merge_target(
+        "feat_001", source_work_id="task_001", root=root
+    ).ok
+    merged = merge_lifecycle_source("feat_001", "task/task_001",
+                                    source_work_id="task_001", root=root)
+    assert merged.ok
+    assert (feature.path / "repair.py").read_text() == "fixed = True\n"
+
+    append_event("epic_001", Event(type="FeatureCompleted", ts=datetime.now(timezone.utc),
+                                   payload={"feature_id": "feat_001"}, dest="epic_001"), root=root)
+    assert preflight_lifecycle_merge_target(
+        "feat_001", source_work_id="task_001", root=root
+    ).reason == "not_active"
 
 
 def test_epic_update_keeps_live_spec_over_managed_trunk_pointer(tmp_path: Path) -> None:
