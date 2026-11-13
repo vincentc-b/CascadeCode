@@ -67,6 +67,7 @@ _DISPATCH_BLOCKER_ORDER = (
     "parent_cancellation_pending",
     "unmet_deps",
     "not_approved",
+    "approval_status_unavailable",
     "feature_awaiting_merge",
     "sibling_blocked",
     "dispatch_base_unavailable",
@@ -79,6 +80,7 @@ _REASON_PRECEDENCE = {
     "review_threads_blocking": 10,
     # Unknown required evidence.
     "dependency_status_unavailable": 20,
+    "approval_status_unavailable": 20,
     "dispatch_base_unavailable": 20,
     "not_in_backlog": 20,
     # Known work waits.  Keep execution ahead of review, dependencies, parent.
@@ -97,6 +99,8 @@ def compute_feature_readiness(
     board: BoardIndex | None = None,
     pending_review_ids: frozenset[str] | None = None,
     review_refusals: Mapping[str, str | None] | None = None,
+    approval_state: Literal["current", "stale", "unknown"] | None = None,
+    bounded_dispatch_base: bool = True,
 ) -> FeatureReadiness | None:
     """Return approval and stable blocker codes for a backlog/open feature."""
 
@@ -105,7 +109,7 @@ def compute_feature_readiness(
     if meta is None or meta.tier != "feature":
         return None
 
-    approved = meta.approved_at is not None
+    approved = meta.approved_at is not None and approval_state in (None, "current")
     blockers: list[str] = []
 
     if meta.status not in _OPEN:
@@ -169,7 +173,12 @@ def compute_feature_readiness(
             )
         )
 
-    if not approved:
+    if approval_state == "unknown" and meta.approved_at is not None:
+        blockers.append("approval_status_unavailable")
+        reasons.append(
+            _reason("approval_status_unavailable", affected_work_ids=(feature_id,))
+        )
+    elif not approved:
         blockers.append("not_approved")
         reasons.append(_reason("not_approved", affected_work_ids=(feature_id,)))
     else:
@@ -216,6 +225,7 @@ def compute_feature_readiness(
     parent = board.by_id.get(meta.parent)
     if parent is not None:
         from cascade.cancellation_feedback import cancellation_dispatch_gated
+
         if cancellation_dispatch_gated(parent):
             blockers.append("parent_cancellation_pending")
             reasons.append(
@@ -241,23 +251,24 @@ def compute_feature_readiness(
             )
         )
 
-    dispatch_reason = _dispatch_base_unavailable(feature_id, meta, board, root=root)
-    if dispatch_reason is not None:
-        blockers.append(f"dispatch_base_unavailable:{dispatch_reason}")
-        reasons.append(
-            _reason(
-                "dispatch_base_unavailable",
-                affected_work_ids=(feature_id,),
+    if bounded_dispatch_base:
+        dispatch_reason = _dispatch_base_unavailable(feature_id, meta, board, root=root)
+        if dispatch_reason is not None:
+            blockers.append(f"dispatch_base_unavailable:{dispatch_reason}")
+            reasons.append(
+                _reason(
+                    "dispatch_base_unavailable",
+                    affected_work_ids=(feature_id,),
+                )
             )
-        )
-    else:
-        satisfied.append(
-            SatisfiedPrerequisite(
-                code="dispatch_base_available",
-                message="A dispatch base is available.",
-                affected_work_ids=(feature_id,),
+        else:
+            satisfied.append(
+                SatisfiedPrerequisite(
+                    code="dispatch_base_available",
+                    message="A dispatch base is available.",
+                    affected_work_ids=(feature_id,),
+                )
             )
-        )
 
     review_refusal: str | None = None
     if review_refusals is None:
@@ -308,6 +319,8 @@ def dispatch_refusal_from_readiness(readiness: FeatureReadiness) -> str | None:
             return readiness.review_refusal or "bad_state"
         if code == "unmet_deps":
             return "unmet_deps"
+        if code == "approval_status_unavailable":
+            return "not_approved"
         return code
     return None
 
@@ -324,16 +337,54 @@ def _dispatch_base_unavailable(
     feature_id: str, meta: WorkMeta, board: BoardIndex, *, root: Path
 ) -> str | None:
     from cascade.stacked_dispatch import (
-        plan_feature_dispatch,
+        direct_feature_predecessors,
         read_feature_dispatch_selection,
     )
 
-    if read_feature_dispatch_selection(feature_id, root=root) is not None:
-        return None
-    plan = plan_feature_dispatch(feature_id, meta, board, root=root)
-    if plan.ok:
-        return None
-    return plan.reason or "bad_state"
+    selection = read_feature_dispatch_selection(feature_id, root=root)
+    # A plain Epic base is deterministic board evidence. A single predecessor
+    # is also bounded by the existing review registry. Multi-head selection is
+    # an action-boundary Git ancestry operation and must never run on a poll.
+    if any(dep_id not in board.by_id for dep_id in meta.depends_on):
+        return "dispatch_base_evidence_required"
+    predecessors = direct_feature_predecessors(meta, board)
+    if not predecessors:
+        expected = f"epic/{meta.parent}" if meta.parent else None
+        if selection is None or (
+            selection.base_branch == expected and selection.predecessor_id is None
+        ):
+            return None
+        return "stale_dispatch_selection"
+    if len(predecessors) > 1:
+        return "dispatch_base_evidence_required"
+    from cascade.review import review_enabled, review_record_for_feature
+    from cascade.workspace.integration_worktree import locate_trunk
+
+    record = review_record_for_feature(predecessors[0], root=root)
+    if record is not None and record.get("closed"):
+        expected_base = f"epic/{meta.parent}"
+        expected_predecessor = None
+    elif record is not None and record.get("source_branch"):
+        expected_base = str(record["source_branch"])
+        expected_predecessor = predecessors[0]
+    else:
+        expected_base = None
+        expected_predecessor = None
+    if expected_base is not None:
+        if selection is None or (
+            selection.base_branch == expected_base
+            and selection.predecessor_id == expected_predecessor
+        ):
+            return None
+        return "stale_dispatch_selection"
+    if record is None and not review_enabled(locate_trunk(root)):
+        expected = f"epic/{meta.parent}"
+        if selection is None or (
+            selection.base_branch == expected and selection.predecessor_id is None
+        ):
+            return None
+        return "stale_dispatch_selection"
+    return "missing_predecessor_pr_identity"
 
 
 def _has_blocker(blockers: list[str], code: str) -> bool:
@@ -356,9 +407,7 @@ def _approval_satisfied(feature_id: str) -> SatisfiedPrerequisite:
     )
 
 
-def _reason(
-    code: str, *, affected_work_ids: tuple[str, ...] = ()
-) -> ReadinessReason:
+def _reason(code: str, *, affected_work_ids: tuple[str, ...] = ()) -> ReadinessReason:
     details: dict[str, tuple[ReasonKind, str, ReasonActor | None, str | None]] = {
         "not_approved": (
             "human_action",
@@ -375,6 +424,12 @@ def _reason(
         "dependency_status_unavailable": (
             "unknown",
             "Dependency status is unavailable and is being rechecked.",
+            "system",
+            None,
+        ),
+        "approval_status_unavailable": (
+            "unknown",
+            "Approval evidence cannot be matched to the current feature plan.",
             "system",
             None,
         ),
