@@ -2,7 +2,7 @@
 id: feat_045_003
 title: Repair architecture publication for owned planning worktree lineage
 tier: feature
-status: active
+status: completed
 parent: epic_045
 children:
 - task_045_003_001
