@@ -6,6 +6,10 @@ task_parallelism = 4
 [worker]
 drain_seconds = 120
 
+[validation]
+# The full review gate collects more than 2,400 tests.
+review_timeout_seconds = 1200
+
 # Once an epic is activated, dependency-ready feature and task plans run without
 # separate dispatch clicks. The watchdog also fast-forwards the checked-out
 # product trunk to discover merged brief MRs.
