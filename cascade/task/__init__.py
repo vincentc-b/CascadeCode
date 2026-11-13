@@ -1,14 +1,30 @@
-"""Task Team LangGraph runtime (local checkpoint, boot hook)."""
+"""Task Team LangGraph runtime (local checkpoint, boot hook).
 
-from cascade.task.boot import (
-    boot_task,
-    fail_closed_boot,
-    install_task_boot_hook,
-    last_fail_closed_boot,
-)
-from cascade.task.graph import ensure_task_graph, ingest_queue, invoke_tool
+Keep graph and boot imports lazy: audit observers import task.lifecycle_lock
+while watchdog.model_resolve is still initializing in a fresh process.
+"""
+
+from importlib import import_module
+
 from cascade.task.registry import clear_task_tools, register_task_tool, task_tools
 from cascade.task.state import TaskGraphState
+
+_LAZY_EXPORTS = {
+    "boot_task": "boot",
+    "fail_closed_boot": "boot",
+    "install_task_boot_hook": "boot",
+    "last_fail_closed_boot": "boot",
+    "ensure_task_graph": "graph",
+    "ingest_queue": "graph",
+    "invoke_tool": "graph",
+}
+
+
+def __getattr__(name: str):
+    module = _LAZY_EXPORTS.get(name)
+    if module is None:
+        raise AttributeError(name)
+    return getattr(import_module(f"cascade.task.{module}"), name)
 
 __all__ = [
     "TaskGraphState",

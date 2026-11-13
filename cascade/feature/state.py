@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import operator
 from typing import Annotated, NotRequired, TypedDict
+
+from cascade.agent.message_history import append_recent_messages
 
 
 class FeatureGraphState(TypedDict):
     feature_id: str
-    messages: Annotated[list[dict], operator.add]
+    messages: Annotated[list[dict], append_recent_messages]
     last_queue_offset: int
     model_id: NotRequired[str]
     model_ids: NotRequired[dict[str, str]]

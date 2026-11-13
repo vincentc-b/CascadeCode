@@ -1,5 +1,7 @@
 """Workspace contract: init and up against a git root."""
 
+from importlib import import_module
+
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.init import init_workspace
 from cascade.workspace.project_config import (
@@ -144,14 +146,6 @@ from cascade.workspace.c4_documentation import (
     review_documentation_evidence,
     snapshot_documentation_evidence,
 )
-from cascade.workspace.c4_threads import (
-    SemanticThread,
-    SemanticThreadAnchor,
-    build_semantic_thread_anchor,
-    create_semantic_thread,
-    read_semantic_threads,
-)
-from cascade.workspace.blocking_scope import BlockingScope, affected_blocking_threads
 from cascade.workspace.reconciliation import (
     ReconciledDesign,
     ReconciliationReceipt,
@@ -192,6 +186,23 @@ from cascade.workspace.architecture_browsing import (
     resolve_architecture_code_context,
     resolve_architecture_context,
 )
+
+_THREAD_EXPORTS = {
+    "BlockingScope",
+    "affected_blocking_threads",
+    "SemanticThread",
+    "SemanticThreadAnchor",
+    "build_semantic_thread_anchor",
+    "create_semantic_thread",
+    "read_semantic_threads",
+}
+
+
+def __getattr__(name: str):
+    if name not in _THREAD_EXPORTS:
+        raise AttributeError(name)
+    module = "blocking_scope" if name in {"BlockingScope", "affected_blocking_threads"} else "c4_threads"
+    return getattr(import_module(f"cascade.workspace.{module}"), name)
 
 __all__ = [
     "WorkspaceError",

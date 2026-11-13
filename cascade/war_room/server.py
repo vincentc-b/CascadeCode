@@ -1363,25 +1363,28 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
     def _handle_board(self) -> None:
         try:
-            board = merged_board(self.server.root)
-            with merged_board_snapshot(self.server.root, board):
-                payload = board_view_from_index(board, root=self.server.root)
-                priorities = read_backlog_priorities(board, root=self.server.root)
-                payload["backlog_feature_priorities"] = {
-                    epic_id: _backlog_priority_to_dict(priority)
-                    for epic_id, priority in priorities.items()
-                }
-                _order_backlog_feature_rows(
-                    payload["features"]["1_backlog"], priorities
-                )
-                epic_priority = read_backlog_epic_priority(board, root=self.server.root)
-                payload["backlog_epic_priority"] = _backlog_epic_priority_to_dict(epic_priority)
-                epic_rows = payload["epics"]["1_backlog"]
-                by_id = {row["id"]: row for row in epic_rows}
-                ranked_ids = set(epic_priority.epic_ids)
-                payload["epics"]["1_backlog"] = [
-                    by_id[epic_id] for epic_id in epic_priority.epic_ids if epic_id in by_id
-                ] + [row for row in epic_rows if row["id"] not in ranked_ids]
+            from cascade.board.store import board_scan_snapshot
+
+            with board_scan_snapshot():
+                board = merged_board(self.server.root)
+                with merged_board_snapshot(self.server.root, board):
+                    payload = board_view_from_index(board, root=self.server.root)
+                    priorities = read_backlog_priorities(board, root=self.server.root)
+                    payload["backlog_feature_priorities"] = {
+                        epic_id: _backlog_priority_to_dict(priority)
+                        for epic_id, priority in priorities.items()
+                    }
+                    _order_backlog_feature_rows(
+                        payload["features"]["1_backlog"], priorities
+                    )
+                    epic_priority = read_backlog_epic_priority(board, root=self.server.root)
+                    payload["backlog_epic_priority"] = _backlog_epic_priority_to_dict(epic_priority)
+                    epic_rows = payload["epics"]["1_backlog"]
+                    by_id = {row["id"]: row for row in epic_rows}
+                    ranked_ids = set(epic_priority.epic_ids)
+                    payload["epics"]["1_backlog"] = [
+                        by_id[epic_id] for epic_id in epic_priority.epic_ids if epic_id in by_id
+                    ] + [row for row in epic_rows if row["id"] not in ranked_ids]
         except (BoardError, BacklogPriorityStorageError, BacklogEpicPriorityStorageError, OSError) as exc:
             self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, f"Board unavailable: {exc}")
             return
