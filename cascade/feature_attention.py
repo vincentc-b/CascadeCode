@@ -105,6 +105,33 @@ class AttentionTransaction:
         self.snapshot = self._commit(ledger)
         return self.snapshot
 
+    def mark_seen(
+        self,
+        feature_id: str,
+        actor: str,
+        *,
+        seen_at: datetime | None = None,
+    ) -> AttentionSnapshot:
+        """Persist the first authenticated acknowledgement, idempotently."""
+
+        ledger = self._writable_ledger()
+        record = ledger["features"].get(feature_id)
+        if record is None:
+            raise KeyError(feature_id)
+        if not isinstance(actor, str) or not actor.strip():
+            raise ValueError("acknowledgement actor is required")
+        if record["seen"] is not None:
+            return self.snapshot
+        when = seen_at or _now()
+        if not isinstance(when, datetime) or when.tzinfo is None:
+            raise ValueError("seen_at must be timezone-aware")
+        record["seen"] = {
+            "actor": actor.strip(),
+            "at": when.astimezone(timezone.utc).isoformat(),
+        }
+        self.snapshot = self._commit(ledger)
+        return self.snapshot
+
     def _writable_ledger(self) -> dict[str, Any]:
         if self.snapshot.state != "available" or self.snapshot.ledger is None:
             raise AttentionUnavailable(self.snapshot.reason or "attention unavailable")
@@ -153,20 +180,92 @@ def read_feature_attention(root: Path) -> AttentionSnapshot:
 
     paths = feature_attention_paths(root)
     with _locked(paths.lock):
-        marker_state = _marker_state(paths.marker)
-        if not paths.ledger.exists():
-            reason = (
-                "ledger_missing_after_initialization"
-                if marker_state == "valid"
-                else "uninitialized"
-            )
-            return AttentionSnapshot("unavailable", reason=reason)
-        ledger, reason = _load_ledger(paths.ledger)
-        if ledger is None:
-            return AttentionSnapshot("unavailable", reason=reason)
-        if marker_state != "valid":
-            return AttentionSnapshot("unavailable", reason="initialization_incomplete")
-        return AttentionSnapshot("available", ledger=ledger)
+        return _read_locked(paths)
+
+
+def mark_feature_seen(
+    root: Path,
+    feature_id: str,
+    actor: str,
+    *,
+    seen_at: datetime | None = None,
+) -> AttentionSnapshot:
+    """Acknowledge one already-recorded Feature under the shared state lock.
+
+    Unlike startup and mint transactions, this boundary never bootstraps or
+    reconciles state. A missing/corrupt ledger therefore fails closed instead
+    of turning an acknowledgement request into discovery.
+    """
+
+    paths = feature_attention_paths(root)
+    with _locked(paths.lock):
+        snapshot = _read_locked(paths)
+        if snapshot.state != "available":
+            raise AttentionUnavailable(snapshot.reason or "attention unavailable")
+        transaction = AttentionTransaction(paths, snapshot)
+        return transaction.mark_seen(feature_id, actor, seen_at=seen_at)
+
+
+def project_feature_attention(
+    snapshot: AttentionSnapshot,
+    board: BoardIndex,
+) -> dict[str, Any]:
+    """Project one ledger snapshot against the request's current board."""
+
+    payload: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "state": snapshot.state,
+        "revision": snapshot.revision,
+        "features": {},
+        "epic_new_counts": {},
+    }
+    if snapshot.state != "available" or snapshot.ledger is None:
+        payload["reason"] = snapshot.reason or "attention unavailable"
+        return payload
+
+    counts: dict[str, int] = {}
+    features: dict[str, dict[str, Any]] = {}
+    for feature_id, record in snapshot.ledger["features"].items():
+        meta = board.by_id.get(feature_id)
+        is_new = bool(
+            record["attention_eligible"]
+            and record["seen"] is None
+            and meta is not None
+            and meta.tier == "feature"
+            and meta.status not in {"completed", "cancelled"}
+        )
+        projected = json.loads(json.dumps(record))
+        projected["new"] = is_new
+        features[feature_id] = projected
+        if not is_new:
+            continue
+        parent = board.by_id.get(record["epic_id"])
+        if (
+            parent is not None
+            and parent.tier == "epic"
+            and parent.status in _ACTIVE_EPIC_STATUSES
+        ):
+            counts[parent.id] = counts.get(parent.id, 0) + 1
+    payload["features"] = features
+    payload["epic_new_counts"] = counts
+    return payload
+
+
+def _read_locked(paths: AttentionPaths) -> AttentionSnapshot:
+    marker_state = _marker_state(paths.marker)
+    if not paths.ledger.exists():
+        reason = (
+            "ledger_missing_after_initialization"
+            if marker_state == "valid"
+            else "uninitialized"
+        )
+        return AttentionSnapshot("unavailable", reason=reason)
+    ledger, reason = _load_ledger(paths.ledger)
+    if ledger is None:
+        return AttentionSnapshot("unavailable", reason=reason)
+    if marker_state != "valid":
+        return AttentionSnapshot("unavailable", reason="initialization_incomplete")
+    return AttentionSnapshot("available", ledger=ledger)
 
 
 def _initialize_locked(
@@ -435,5 +534,7 @@ __all__ = [
     "feature_attention_paths",
     "feature_attention_transaction",
     "initialize_feature_attention",
+    "mark_feature_seen",
+    "project_feature_attention",
     "read_feature_attention",
 ]

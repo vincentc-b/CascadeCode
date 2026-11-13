@@ -19,6 +19,7 @@ from cascade.feature_attention import (
     feature_attention_paths,
     feature_attention_transaction,
     initialize_feature_attention,
+    project_feature_attention,
     read_feature_attention,
 )
 from cascade.workspace.types import ProjectContext
@@ -324,3 +325,34 @@ def test_reconciliation_preserves_seen_and_first_provenance(tmp_path: Path) -> N
     assert record["provenance"] == "baseline"
     assert record["attention_eligible"] is True
     assert replayed.revision == initialized.revision
+
+
+def test_projection_excludes_terminal_children_and_nonactive_parents(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001_001",
+        title="Feature",
+        tier="feature",
+        parent="epic_001",
+    )
+    snapshot = initialize_feature_attention(root)
+    board = list_board(root)
+
+    projected = project_feature_attention(snapshot, board)
+    assert projected["features"]["feat_001_001"]["new"] is True
+    assert projected["epic_new_counts"] == {"epic_001": 1}
+
+    board.by_id["feat_001_001"].status = "completed"
+    completed = project_feature_attention(snapshot, board)
+    assert completed["features"]["feat_001_001"]["new"] is False
+    assert completed["epic_new_counts"] == {}
+
+    board.by_id["feat_001_001"].status = "backlog"
+    board.by_id["epic_001"].status = "cancelling"
+    cancelling_parent = project_feature_attention(snapshot, board)
+    assert cancelling_parent["features"]["feat_001_001"]["new"] is True
+    assert cancelling_parent["epic_new_counts"] == {}
