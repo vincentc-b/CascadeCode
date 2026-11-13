@@ -34,6 +34,12 @@ from cascade.workspace.c4_render import (
 from cascade.workspace.c4_scheduler import render_identity
 from cascade.workspace.c4_source import C4SourceError
 from cascade.workspace.errors import WorkspaceError
+from cascade.workspace.integration_worktree import (
+    integration_branch,
+    integration_worktree_path,
+    load_registry_readonly,
+    locate_trunk,
+)
 from cascade.workspace.types import ProjectContext, RepositoryContext
 
 _SCHEMA_VERSION = 1
@@ -1600,6 +1606,7 @@ def stage_architecture_proposal(
     render_settings: C4RenderSettings | None = None,
     baseline_artifact: C4SemanticModelArtifact | None = None,
     lineage_revision: str | None = None,
+    plan_work_id: str | None = None,
 ) -> ArchitectureProposalState:
     """Stage committed proposal bytes after validating their pinned C4 evidence."""
 
@@ -1631,7 +1638,12 @@ def stage_architecture_proposal(
         raise ArchitectureProposalError(
             "stale_baseline", "proposal is not based on the current accepted architecture"
         )
-    _validate_store_inputs(review_store, staged, lineage_revision=lineage_revision)
+    _validate_store_inputs(
+        review_store,
+        staged,
+        lineage_revision=lineage_revision,
+        plan_work_id=plan_work_id,
+    )
     semantic_diff = _validate_proposed_model(
         project,
         staged,
@@ -1963,10 +1975,16 @@ def _validate_store_inputs(
     unit: ArchitectureReviewUnit,
     *,
     lineage_revision: str | None = None,
+    plan_work_id: str | None = None,
 ) -> None:
     try:
         store._validate_unit_inputs(unit)
-        _validate_current_artifacts(store.project, unit, lineage_revision=lineage_revision)
+        _validate_current_artifacts(
+            store.project,
+            unit,
+            lineage_revision=lineage_revision,
+            plan_work_id=plan_work_id,
+        )
     except WorkspaceError as exc:
         detail = str(exc)
         code = "destination_changed" if "destination" in detail else "artifact_changed"
@@ -2308,20 +2326,28 @@ def _validate_current_artifacts(
     unit: ArchitectureReviewUnit,
     *,
     lineage_revision: str | None,
+    plan_work_id: str | None = None,
 ) -> None:
     """Ensure every reviewed path still has its pinned bytes at the active heads."""
 
     plan_repository = _repository(
         project, unit.plan.repository_role, unit.plan.repository_key
     )
-    plan_head = (
-        lineage_revision
-        if lineage_revision is not None and unit.plan.repository_role == "target"
-        else _head(plan_repository.root)
+    registered_plan = _registered_owner_checkout(
+        plan_repository, plan_work_id or unit.owner_work_id
     )
+    if registered_plan is not None:
+        plan_head, plan_checkout = registered_plan
+    else:
+        plan_head = (
+            lineage_revision
+            if lineage_revision is not None and unit.plan.repository_role == "target"
+            else _head(plan_repository.root)
+        )
+        plan_checkout = plan_repository.root
     _verify_current_blob(
         plan_repository, unit.plan.revision, plan_head, unit.plan.path,
-        unit.plan.content_digest, "review plan",
+        unit.plan.content_digest, "review plan", checkout=plan_checkout,
     )
 
     artifacts = [unit.design]
@@ -2334,14 +2360,21 @@ def _validate_current_artifacts(
             reference.destination_repository_role,
             reference.destination_repository_key,
         )
-        current_head = (
-            lineage_revision
-            if lineage_revision is not None and reference.destination_repository_role == "target"
-            else _head(repository.root)
+        registered_artifact = _registered_owner_checkout(
+            repository, reference.owning_work
         )
+        if registered_artifact is not None:
+            current_head, checkout = registered_artifact
+        else:
+            current_head = (
+                lineage_revision
+                if lineage_revision is not None and reference.destination_repository_role == "target"
+                else _head(repository.root)
+            )
+            checkout = repository.root
         _verify_current_blob(
             repository, reference.revision, current_head, reference.repository_path,
-            artifact.content_digest, "architecture artifact",
+            artifact.content_digest, "architecture artifact", checkout=checkout,
         )
 
 
@@ -2352,6 +2385,8 @@ def _verify_current_blob(
     path: Path,
     content_digest: str,
     field: str,
+    *,
+    checkout: Path,
 ) -> None:
     _require_commit(repository.root, current_revision, f"current {field}")
     if not _is_ancestor(repository.root, pinned_revision, current_revision):
@@ -2377,12 +2412,65 @@ def _verify_current_blob(
     # also reviewable state.  This mirrors Feature A's pinning rule and catches
     # an edit or deletion before it is committed.  A caller validating another
     # lineage revision must only inspect that commit, not an unrelated checkout.
-    if current_revision == _head(repository.root):
+    if current_revision == _head(checkout):
         try:
-            working_bytes = (repository.root / path).read_bytes()
+            working_bytes = (checkout / path).read_bytes()
         except OSError as exc:
             raise WorkspaceError(f"current {field} working bytes are not readable") from exc
         _verify_digest(working_bytes, content_digest)
+
+
+def resolve_registered_owner_revision(
+    repository: RepositoryContext, work_id: str
+) -> str:
+    """Return the committed head for one registered owner, or repository trunk."""
+
+    return _registered_owner_head(repository, work_id)[0]
+
+
+def _registered_owner_head(
+    repository: RepositoryContext, work_id: str
+) -> tuple[str, Path]:
+    """Resolve only a canonical registered checkout owned by ``work_id``."""
+
+    registered = _registered_owner_checkout(repository, work_id)
+    if registered is not None:
+        return registered
+    return _head(repository.root), repository.root
+
+
+def _registered_owner_checkout(
+    repository: RepositoryContext, work_id: str
+) -> tuple[str, Path] | None:
+    """Return the validated owner checkout without substituting repository HEAD."""
+
+    trunk = locate_trunk(repository.root).resolve()
+    matches = [
+        entry for entry in load_registry_readonly(trunk)
+        if entry.work_id == work_id
+    ]
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise WorkspaceError(f"multiple registered lineages own {work_id}")
+    entry = matches[0]
+    expected_branch = integration_branch(entry.kind, work_id)
+    expected_path = integration_worktree_path(entry.kind, work_id, trunk=trunk)
+    if entry.branch != expected_branch or entry.path.resolve() != expected_path:
+        raise WorkspaceError(f"registered lineage ownership changed for {work_id}")
+    if not entry.path.is_dir():
+        raise WorkspaceError(f"registered lineage checkout is missing for {work_id}")
+    branch = subprocess.run(
+        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+        cwd=entry.path,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if branch.returncode != 0 or branch.stdout.strip() != entry.branch:
+        raise WorkspaceError(f"registered lineage branch changed for {work_id}")
+    return _head(entry.path), entry.path
 
 
 def _head(repository: Path) -> str:

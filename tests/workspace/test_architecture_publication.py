@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -29,7 +30,10 @@ from cascade.workspace.architecture_review import (
     ArchitectureReviewUnit,
     PinnedArchitectureArtifact,
     PinnedDocumentRef,
+    review_architecture_proposal,
+    stage_architecture_proposal,
 )
+from cascade.workspace.integration_worktree import IntegrationWorktree, save_registry
 from cascade.workspace.types import ProjectContext
 from tests.support import add_doc, commit_board, make_repo
 
@@ -149,6 +153,200 @@ def test_publication_is_registered_schema_bound_and_architect_only(tmp_path: Pat
         )
 
 
+def test_owned_branch_publication_retries_changed_bytes_and_refreshes_stale_review(
+    tmp_path: Path,
+) -> None:
+    root, project, _, proposal = _publication_repo(tmp_path)
+    worktree = _owner_worktree(root, "feature", "feat_046_001")
+    plan_path = next(worktree.glob("docs/features/2_active/feat_046_001_*.md"))
+    plan_path.write_text(plan_path.read_text(encoding="utf-8") + "\nOwned revision.\n", encoding="utf-8")
+    (worktree / "DESIGN.md").write_text("# Owned feature design\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=worktree, check=True)
+    subprocess.run(["git", "commit", "-m", "owned architecture inputs"], cwd=worktree, check=True)
+    owned_head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=worktree, text=True
+    ).strip()
+    plan = replace(
+        proposal.plan,
+        revision=owned_head,
+        content_digest=hashlib.sha256(plan_path.read_bytes()).hexdigest(),
+    )
+    design = replace(
+        proposal.design,
+        reference=replace(proposal.design.reference, revision=owned_head),
+        content_digest=hashlib.sha256((worktree / "DESIGN.md").read_bytes()).hexdigest(),
+    )
+    owned = replace(proposal, plan=plan, design=design)
+    set_project_context(project)
+    args = {
+        "proposal": owned.to_dict(),
+        "expected_plan_revision": owned_head,
+        "expected_generation": None,
+    }
+    original_design = (worktree / "DESIGN.md").read_bytes()
+    (worktree / "DESIGN.md").write_text("# Uncommitted replacement\n", encoding="utf-8")
+
+    failed = dispatch_planning_tool(
+        "feature", "publish_architecture_review", args,
+        scope_id="feat_046_001", repo_root=worktree,
+        collector=ToolEffectCollector(), role="feature_architect",
+    )
+    assert failed["status"] == "superseded"
+    assert failed["reason_code"] == "artifact_changed"
+    failed_proposal = json.loads(
+        (root / ".cascade" / "architecture-publications.json").read_text(encoding="utf-8")
+    )["operations"][failed["operation_id"]]["proposal"]
+
+    (worktree / "DESIGN.md").write_bytes(original_design)
+    retried = dispatch_planning_tool(
+        "feature", "publish_architecture_review", args,
+        scope_id="feat_046_001", repo_root=worktree,
+        collector=ToolEffectCollector(), role="feature_architect",
+    )
+    assert retried["operation_id"] == failed["operation_id"]
+    assert retried["status"] == "no_diagram_change"
+    ledger = json.loads(
+        (root / ".cascade" / "architecture-publications.json").read_text(encoding="utf-8")
+    )
+    row = ledger["operations"][retried["operation_id"]]
+    assert row["proposal"] == failed_proposal
+    assert row["failure_history"][-1]["reason_code"] == "artifact_changed"
+
+    reviewed = review_architecture_proposal(
+        project,
+        owner="feature_architect",
+        unit_id=str(retried["review_unit_id"]),
+        expected_tuple_digest=str(retried["reviewed_tuple_digest"]),
+        decision="reviewed",
+        reviewed_at="2026-11-13T00:00:00+00:00",
+    )
+    assert reviewed.unit is not None and reviewed.unit.status == "reviewed"
+
+    (root / "unrelated.txt").write_text("trunk movement\n", encoding="utf-8")
+    subprocess.run(["git", "add", "unrelated.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "unrelated trunk movement"], cwd=root, check=True)
+    trunk_head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    unchanged = ArchitectureReviewStore(project).refresh(
+        str(retried["review_unit_id"]), lineage_revision=trunk_head
+    )
+    assert unchanged.status == "reviewed"
+
+    (worktree / "DESIGN.md").write_text("# Later design refresh\n", encoding="utf-8")
+    subprocess.run(["git", "add", "DESIGN.md"], cwd=worktree, check=True)
+    subprocess.run(["git", "commit", "-m", "refresh design"], cwd=worktree, check=True)
+    refreshed = ArchitectureReviewStore(project).refresh(
+        str(retried["review_unit_id"]), lineage_revision=trunk_head
+    )
+    assert refreshed.status == "stale"
+    assert ArchitectureReviewStore(project).get_invalidation_reasons(
+        refreshed.review_unit_id
+    ) == ("artifact_changed",)
+
+
+def test_split_owned_heads_keep_tracking_plan_and_product_design_distinct(
+    tmp_path: Path,
+) -> None:
+    target_parent = tmp_path / "target"
+    tracking_parent = tmp_path / "tracking"
+    target_parent.mkdir()
+    tracking_parent.mkdir()
+    target = make_repo(target_parent)
+    tracking = make_repo(tracking_parent)
+    project = ProjectContext.split(target, tracking)
+    resolve_design_ownership(project, ".")
+    (target / "DESIGN.md").write_text("# Trunk design\n", encoding="utf-8")
+    commit_board(target, "target architecture base")
+    commit_board(tracking, "tracking base")
+    target_worktree = _owner_worktree(target, "feature", "feat_046_001")
+    tracking_worktree = _owner_worktree(tracking, "feature", "feat_046_001")
+    (target_worktree / "DESIGN.md").write_text("# Owned product design\n", encoding="utf-8")
+    subprocess.run(["git", "add", "DESIGN.md"], cwd=target_worktree, check=True)
+    subprocess.run(["git", "commit", "-m", "owned product design"], cwd=target_worktree, check=True)
+    plan_path = tracking_worktree / "plans" / "feat_046_001.md"
+    plan_path.parent.mkdir()
+    plan_path.write_text("# Owned tracking plan\n", encoding="utf-8")
+    subprocess.run(["git", "add", "plans/feat_046_001.md"], cwd=tracking_worktree, check=True)
+    subprocess.run(["git", "commit", "-m", "owned tracking plan"], cwd=tracking_worktree, check=True)
+    product_head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=target_worktree, text=True
+    ).strip()
+    tracking_head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=tracking_worktree, text=True
+    ).strip()
+    plan = PinnedDocumentRef(
+        project.tracking.repository_key,
+        "tracking",
+        Path("plans/feat_046_001.md"),
+        tracking_head,
+        hashlib.sha256(plan_path.read_bytes()).hexdigest(),
+    )
+    design_reference = create_architecture_artifact_ref(
+        project, ".", owning_work="feat_046_001"
+    )
+    design = PinnedArchitectureArtifact(
+        replace(design_reference, revision=product_head),
+        hashlib.sha256((target_worktree / "DESIGN.md").read_bytes()).hexdigest(),
+    )
+    proposal = ArchitectureReviewUnit(
+        owner_work_id="feat_046_001",
+        authorized_owner="feature_architect",
+        target_repository_key=project.target_repository_key,
+        code_directory=Path("."),
+        design_owner_directory=Path("."),
+        code_repository_key=project.target.repository_key,
+        integration_lineage="epic:epic_046",
+        documentation_repository_key=project.target_repository_key,
+        documentation_repository_role="target",
+        documentation_destination_path=Path("."),
+        proposed_ancestor_context=None,
+        accepted_baseline=ArchitectureBaseline.empty(),
+        baseline_pointer_id=None,
+        baseline_generation=None,
+        rollout_version=1,
+        status="draft",
+        plan=plan,
+        design=design,
+        proposed_model=None,
+        requirement_citations=("REQ-046-001",),
+        decision_citations=("DEC-046-001",),
+        view_citations=(),
+        affected_work_ids=("feat_046_001",),
+        architecture_impact="no_diagram_change",
+        impact_reason="The split-repository change does not alter diagrams.",
+    )
+
+    staged = stage_architecture_proposal(
+        project,
+        owner="feature_architect",
+        work_id="feat_046_001",
+        proposal=proposal,
+        expected_generation=None,
+        lineage_revision=product_head,
+        plan_work_id="feat_046_001",
+    )
+    assert staged.unit is not None
+    assert staged.unit.plan.revision == tracking_head
+    assert staged.unit.design.reference.revision == product_head
+    reviewed = review_architecture_proposal(
+        project,
+        owner="feature_architect",
+        unit_id=staged.unit.review_unit_id,
+        expected_tuple_digest=staged.unit.reviewed_tuple_digest,
+        decision="reviewed",
+        reviewed_at="2026-11-13T00:00:00+00:00",
+    )
+    assert reviewed.unit is not None and reviewed.unit.status == "reviewed"
+
+    plan_path.write_text("# Changed tracking plan\n", encoding="utf-8")
+    refreshed = ArchitectureReviewStore(project).refresh(staged.unit.review_unit_id)
+    assert refreshed.status == "stale"
+    assert ArchitectureReviewStore(project).get_invalidation_reasons(
+        refreshed.review_unit_id
+    ) == ("artifact_changed",)
+
+
 def _publication_repo(
     tmp_path: Path,
 ) -> tuple[Path, ProjectContext, str, ArchitectureReviewUnit]:
@@ -207,3 +405,19 @@ def _publication_repo(
         impact_reason="The committed plan changes delivery only, not the C4 model.",
     )
     return root, project, revision, proposal
+
+
+def _owner_worktree(root: Path, kind: str, work_id: str) -> Path:
+    prefix = {"epic": "epic", "feature": "feat", "task": "task"}[kind]
+    branch = f"{prefix}/{work_id}"
+    worktree = root / ".cascade" / "worktrees" / f"{prefix}_{work_id}"
+    worktree.parent.mkdir(parents=True, exist_ok=True)
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    subprocess.run(
+        ["git", "worktree", "add", "-qb", branch, str(worktree)], cwd=root, check=True
+    )
+    save_registry(
+        root,
+        [IntegrationWorktree(kind, work_id, branch, worktree, base)],
+    )
+    return worktree
