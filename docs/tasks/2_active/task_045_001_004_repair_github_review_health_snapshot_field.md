@@ -2,7 +2,7 @@
 id: task_045_001_004
 title: Repair GitHub review-health snapshot field
 tier: task
-status: backlog
+status: active
 parent: feat_045_001
 children: []
 depends_on: []
