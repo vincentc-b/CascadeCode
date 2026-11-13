@@ -34,6 +34,7 @@ from cascade.boss.view import BossView, compute_boss_view
 from cascade.epic.boot import install_epic_boot_hook
 from cascade.epic.dependency_approvals import AuthenticatedHuman
 from cascade.feature.boot import install_feature_boot_hook
+from cascade.feature_attention import initialize_feature_attention
 from cascade.task.boot import install_task_boot_hook
 from cascade.epic.wiring import load_epic_tools
 from cascade.feature.wiring import load_feature_tools
@@ -252,6 +253,10 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         self.dependency_executor = dependency_executor
         self.health_audit_request = health_audit_request
         self._listen_socket = listen_socket
+        # This is the only automatic reconciliation boundary. Board reads stay
+        # pure, while a failed/corrupt ledger leaves the server live and exposes
+        # an explicit unavailable state to attention consumers.
+        self.feature_attention = initialize_feature_attention(self.root)
         install_epic_boot_hook(self.root)
         install_feature_boot_hook(self.root)
         install_task_boot_hook(self.root)
