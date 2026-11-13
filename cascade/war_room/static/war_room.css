@@ -517,6 +517,52 @@ body {
   font-weight: 600;
 }
 
+.feature-attention-disclosure,
+.feature-attention-status {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.feature-attention-status.error,
+.feature-attention-feedback.error {
+  color: #fecaca;
+}
+
+.feature-new-marker,
+.epic-new-count {
+  display: inline-block;
+  margin: 0 0 0.35rem;
+  padding: 0.12rem 0.4rem;
+  border: 1px solid #60a5fa;
+  border-radius: 999px;
+  background: #172554;
+  color: #dbeafe;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.epic-new-count {
+  cursor: pointer;
+}
+
+.feature-new-marker {
+  width: fit-content;
+}
+
+.feature-attention-feedback {
+  display: block;
+  min-height: 1em;
+  margin: 0 0 0.3rem;
+  font-size: 0.72rem;
+}
+
+.epic-new-count:focus-visible,
+.board-row-actions button:focus-visible {
+  outline: 2px solid #bfdbfe;
+  outline-offset: 2px;
+}
+
 .feature-readiness {
   margin: 0 0 0.45rem;
   padding: 0.4rem 0.5rem;
