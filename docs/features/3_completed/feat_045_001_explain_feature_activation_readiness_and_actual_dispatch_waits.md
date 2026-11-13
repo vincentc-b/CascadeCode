@@ -8,6 +8,7 @@ children:
 - task_045_001_001
 - task_045_001_002
 - task_045_001_003
+- task_045_001_004
 depends_on: []
 owners:
 - feature_lead
@@ -128,6 +129,7 @@ flowchart TD
 Primary ordering: fresh human-action blockers first (approval/reapproval, blocking review thread, known provider correction); then unknown required evidence; then known work waits (active sibling execution before merge/review, dependencies, inactive/cancelling parent); then system waits; then `ready_awaiting_dispatch` when every required gate is known and satisfied. Within a class use stable code and work ID ordering. Summary derives from the selected class. A missing required fact cannot yield ready. Fresh human action remains the primary reason when a work wait or unknown source also exists; all secondary reasons remain visible.
 
 ## Task breakdown
+- task_045_001_004
 - task_045_001_003
 - task_045_001_002
 - task_045_001_001
