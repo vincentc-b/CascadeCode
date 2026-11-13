@@ -2,7 +2,7 @@
 id: feat_045_002
 title: Highlight newly added features with durable explicit acknowledgement
 tier: feature
-status: active
+status: completed
 parent: epic_045
 children:
 - task_045_002_001
