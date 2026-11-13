@@ -13,7 +13,7 @@ Dates are ISO-8601 strings; paths are repo-relative or absolute posix strings.
 
 from __future__ import annotations
 
-from datetime import date, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -670,8 +670,186 @@ def brief_provider_inventory_to_dict(
     }
 
 
-def feature_readiness_to_dict(readiness: "FeatureReadiness") -> dict[str, Any]:
-    return {"approved": readiness.approved, "blockers": list(readiness.blockers)}
+_REASON_SOURCES = {
+    "not_approved": ("board", "approval"),
+    "approval_status_unavailable": ("board", "approval"),
+    "dependency_unmet": ("board", "dependencies"),
+    "dependency_status_unavailable": ("board", "dependencies"),
+    "sibling_active_execution": ("board",),
+    "feature_awaiting_merge": ("board", "review"),
+    "review_threads_blocking": ("board", "review"),
+    "epic_inactive": ("board",),
+    "parent_cancellation_pending": ("board",),
+    "not_in_backlog": ("board",),
+    "dispatch_base_unavailable": ("board", "review", "dispatch_base"),
+}
+
+
+def feature_readiness_to_dict(
+    readiness: "FeatureReadiness",
+    *,
+    meta: WorkMeta | None = None,
+    board: BoardIndex | None = None,
+    root: Path | None = None,
+    approval_state: str = "unknown",
+    approval_revision: str | None = None,
+    provider_readiness: dict[str, object] | None = None,
+    pending_review_ids: frozenset[str] = frozenset(),
+    review_refusal: str | None = None,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "approved": readiness.approved,
+        "blockers": list(readiness.blockers),
+    }
+    if readiness.explanation is None or meta is None or board is None or root is None:
+        return result
+    from cascade.feature.readiness_evidence import (
+        SOURCES,
+        board_revision,
+        dependency_revision,
+        dispatch_base_revision,
+        provider_revision,
+        read_dispatch_attempt,
+        review_revision,
+        source_history,
+    )
+
+    reasons = [
+        {
+            "code": reason.code,
+            "kind": reason.kind,
+            "message": reason.message,
+            "actor": reason.actor,
+            "next_action": reason.next_action,
+            "affected_work_ids": list(reason.affected_work_ids),
+            "links": _readiness_reason_links(
+                reason.code, reason.affected_work_ids, board
+            ),
+            "source_ids": list(_REASON_SOURCES.get(reason.code, ("board",))),
+        }
+        for reason in readiness.explanation.reasons
+    ]
+    freshness = (provider_readiness or {}).get("inventory_freshness")
+    provider_stale = (
+        not isinstance(freshness, dict) or freshness.get("stale") is not False
+    )
+    provider_outcome = (provider_readiness or {}).get("outcome")
+    if provider_stale or provider_outcome in {None, "transient"}:
+        reasons.append(
+            {
+                "code": "provider_evidence_unavailable",
+                "kind": "unknown",
+                "message": "Provider compatibility evidence is unavailable or stale.",
+                "actor": "system",
+                "next_action": None,
+                "affected_work_ids": [meta.id],
+                "links": [],
+                "source_ids": ["board", "provider"],
+            }
+        )
+    elif provider_outcome != "supported":
+        reasons.append(
+            {
+                "code": "provider_configuration_unsupported",
+                "kind": "human_action",
+                "message": "The selected provider configuration must be corrected.",
+                "actor": "human",
+                "next_action": "Choose a supported provider configuration.",
+                "affected_work_ids": [meta.id],
+                "links": [],
+                "source_ids": ["board", "provider"],
+            }
+        )
+    priority = {"human_action": 0, "unknown": 1, "work_wait": 2, "system_wait": 3}
+    reasons.sort(
+        key=lambda row: (
+            priority.get(str(row["kind"]), 4),
+            str(row["code"]),
+            tuple(row["affected_work_ids"]),
+        )
+    )
+    provider_identity = provider_revision(
+        (provider_readiness or {}).get("selection_fingerprint"), freshness
+    )
+    sources: dict[str, dict[str, str | None]] = {
+        "board": {"state": "current", "revision": board_revision(board)},
+        "approval": {"state": approval_state, "revision": approval_revision},
+        "dependencies": {
+            "state": "unknown"
+            if any(r["code"] == "dependency_status_unavailable" for r in reasons)
+            else "current",
+            "revision": dependency_revision(meta, board),
+        },
+        "review": {
+            "state": "current",
+            "revision": review_revision(pending_review_ids, review_refusal),
+        },
+        "provider": {
+            "state": "stale" if provider_stale else "current",
+            "revision": provider_identity,
+        },
+        "dispatch_base": {
+            "state": "unknown"
+            if any(r["code"] == "dispatch_base_unavailable" for r in reasons)
+            else "current",
+            "revision": dispatch_base_revision(meta, root=root),
+        },
+    }
+    primary = reasons[0] if reasons else None
+    summary = (
+        "ready_awaiting_dispatch"
+        if primary is None
+        else {
+            "human_action": "needs_action",
+            "unknown": "unavailable",
+            "work_wait": "waiting",
+            "system_wait": "waiting",
+        }[str(primary["kind"])]
+    )
+    result["explanation"] = {
+        "version": 1,
+        "summary": summary,
+        "primary_reason_code": primary["code"] if primary else None,
+        "reasons": reasons,
+        "satisfied": [
+            {
+                "code": item.code,
+                "message": item.message,
+                "affected_work_ids": list(item.affected_work_ids),
+            }
+            for item in readiness.explanation.satisfied
+        ],
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "sources": {key: sources[key] for key in SOURCES},
+        "last_dispatch_attempt": source_history(
+            read_dispatch_attempt(meta.id, root=root), sources
+        ),
+    }
+    return result
+
+
+def _readiness_reason_links(
+    code: str, affected_work_ids: tuple[str, ...], board: BoardIndex
+) -> list[dict[str, str]]:
+    """Use only the existing local plan route; missing work has no dead link."""
+
+    linkable = {
+        "not_approved",
+        "approval_status_unavailable",
+        "dependency_unmet",
+        "sibling_active_execution",
+        "feature_awaiting_merge",
+        "review_threads_blocking",
+        "epic_inactive",
+        "parent_cancellation_pending",
+    }
+    if code not in linkable:
+        return []
+    return [
+        {"label": f"Open {work_id} plan", "href": f"/plan/{work_id}"}
+        for work_id in affected_work_ids
+        if work_id in board.by_id
+    ]
 
 
 def _backlog_open_feature(meta: WorkMeta) -> bool:
@@ -780,6 +958,9 @@ def board_view_from_index(board, *, root: Path) -> dict:
     }
     compatibility_cache: dict[str, ProviderCompatibilityEvidence] = {}
     for meta in metas:
+        feature_readiness = None
+        approval_state = "unknown"
+        approval_revision = None
         key = _TIER_TO_VIEW_KEY[meta.tier]
         folder = column_folder_for_meta(meta, root=root)
         item = work_meta_to_dict(
@@ -812,16 +993,18 @@ def board_view_from_index(board, *, root: Path) -> dict:
                 ).to_dict()
         if _backlog_open_feature(meta):
             from cascade.feature.readiness import compute_feature_readiness
+            from cascade.feature.readiness_evidence import approval_evidence
 
-            readiness = compute_feature_readiness(
+            approval_state, approval_revision = approval_evidence(meta, root=root)
+
+            feature_readiness = compute_feature_readiness(
                 meta.id,
                 root=root,
                 board=board,
                 pending_review_ids=pending_review_ids,
                 review_refusals=review_refusals,
+                approval_state=approval_state,
             )
-            if readiness is not None:
-                item["readiness"] = feature_readiness_to_dict(readiness)
         if meta.tier == "epic" and folder == "2_active":
             # The row consumes the exact evaluator serialization used by the
             # command boundary.  Keep this read-only: command execution always
@@ -857,9 +1040,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
                     isinstance(close_review, dict)
                     and close_review.get("close_stage") != "completed"
                 )
-                or (
-                    close_review is None and staged_epics.get(meta.id, False)
-                )
+                or (close_review is None and staged_epics.get(meta.id, False))
             )
         ):
             # The reviewed source doc is staged in completed before the forge
@@ -876,6 +1057,18 @@ def board_view_from_index(board, *, root: Path) -> dict:
                 compatibility_cache=compatibility_cache,
             )
             item["provider_readiness"] = provider_readiness
+            if feature_readiness is not None:
+                item["readiness"] = feature_readiness_to_dict(
+                    feature_readiness,
+                    meta=meta,
+                    board=board,
+                    root=root,
+                    approval_state=approval_state,
+                    approval_revision=approval_revision,
+                    provider_readiness=provider_readiness,
+                    pending_review_ids=pending_review_ids,
+                    review_refusal=review_refusals.get(meta.id),
+                )
             if provider_recovery is not None:
                 # The incident remains durable until a fresh execution-boundary
                 # recheck resolves it.  Live diagnostics may change after a

@@ -35,20 +35,34 @@ def test_find_merge_request_reuses_matching_open_review(
     assert mr.draft is True
 
 
-def test_merged_review_snapshot_exposes_immutable_merge_commit(tmp_path: Path) -> None:
+def test_github_snapshot_uses_supported_query_and_last_commit_as_source_revision(
+    tmp_path: Path,
+) -> None:
     mr = tracking.MergeRequest(
         url="https://github.com/example/project/pull/7", number="7", forge="github",
         source_branch="epic/epic_001", target_branch="main", draft=False,
     )
     sha = "a" * 40
     source_sha = "b" * 40
+    previous_sha = "c" * 40
 
     def runner(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
         assert root == tmp_path
         if args[:3] == ["gh", "pr", "view"]:
+            assert args == [
+                "gh", "pr", "view", mr.url, "--json",
+                (
+                    "state,isDraft,comments,reviews,url,baseRefName,commits,body,"
+                    "mergeCommit,mergeable,mergeStateStatus"
+                ),
+            ]
             return subprocess.CompletedProcess(args, 0, json.dumps({
                 "state": "MERGED", "baseRefName": "main", "mergeCommit": {"oid": sha},
-                "headRefOid": source_sha, "body": "Review description",
+                "commits": [
+                    {"oid": previous_sha, "messageHeadline": "First commit"},
+                    {"oid": source_sha, "messageHeadline": "PR head commit"},
+                ],
+                "body": "Review description",
                 "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN",
                 "comments": [], "reviews": [],
             }), "")

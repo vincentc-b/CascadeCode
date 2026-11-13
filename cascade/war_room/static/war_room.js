@@ -17,6 +17,7 @@
   const BacklogPriorityUiApi = globalThis.BacklogPriorityUi;
   const BranchSyncUiApi = globalThis.BranchSyncUi;
   const EpicPlanReadinessUi = globalThis.EpicPlanReadinessUi;
+  const FeatureReadinessUi = globalThis.FeatureReadinessUi;
   const DependencyReviewUi = globalThis.DependencyReviewUi;
   const DependencyStatusUi = globalThis.DependencyStatusUi;
   const BriefDefaultsUi = globalThis.BriefDefaultsUi;
@@ -892,6 +893,13 @@
   function appendFeatureReadinessUi(row, actions, item) {
     const readiness = item.readiness;
     if (!readiness) return;
+
+    if (FeatureReadinessUi && readiness.explanation) {
+      const readinessUi = FeatureReadinessUi.render(document, readiness, item.id);
+      if (readinessUi) row.appendChild(readinessUi);
+      if (!readiness.approved) actions.appendChild(featureApproveActionButton(item));
+      return;
+    }
 
     if (!readiness.approved) {
       const approvalStatus = document.createElement("span");
