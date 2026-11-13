@@ -2,7 +2,7 @@
 id: epic_045
 title: Explain feature activation requirements and highlight newly added work
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_045_001
@@ -15,7 +15,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-10'
-updated: '2026-11-12'
+updated: '2026-11-13'
 provider: codex
 flex_mode: false
 models:
