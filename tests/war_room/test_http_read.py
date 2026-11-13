@@ -141,6 +141,8 @@ def test_get_board_shape(war_room_server):
         "tasks",
         "board",
         "backlog_feature_priorities",
+        "backlog_epic_priority",
+        "feature_attention",
     }
     assert payload["board"]["completed_epic_display_limit"] == 10
     for tier in ("epics", "features", "tasks"):

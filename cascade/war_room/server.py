@@ -34,6 +34,7 @@ from cascade.boss.view import BossView, compute_boss_view
 from cascade.epic.boot import install_epic_boot_hook
 from cascade.epic.dependency_approvals import AuthenticatedHuman
 from cascade.feature.boot import install_feature_boot_hook
+from cascade.feature_attention import initialize_feature_attention, read_feature_attention
 from cascade.task.boot import install_task_boot_hook
 from cascade.epic.wiring import load_epic_tools
 from cascade.feature.wiring import load_feature_tools
@@ -80,6 +81,10 @@ from cascade.war_room.provider_routes import (
     try_handle_provider_post,
 )
 from cascade.war_room.health_routes import register_health_routes
+from cascade.war_room.feature_attention_routes import (
+    attention_projection,
+    register_feature_attention_routes,
+)
 from cascade.war_room.human_auth import (
     HumanIdentityVerifier,
     LocalHumanIdentityVerifier,
@@ -252,6 +257,10 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         self.dependency_executor = dependency_executor
         self.health_audit_request = health_audit_request
         self._listen_socket = listen_socket
+        # This is the only automatic reconciliation boundary. Board reads stay
+        # pure, while a failed/corrupt ledger leaves the server live and exposes
+        # an explicit unavailable state to attention consumers.
+        self.feature_attention = initialize_feature_attention(self.root)
         install_epic_boot_hook(self.root)
         install_feature_boot_hook(self.root)
         install_task_boot_hook(self.root)
@@ -1376,6 +1385,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 )
                 epic_priority = read_backlog_epic_priority(board, root=self.server.root)
                 payload["backlog_epic_priority"] = _backlog_epic_priority_to_dict(epic_priority)
+                payload["feature_attention"] = attention_projection(
+                    read_feature_attention(self.server.root), board
+                )
                 epic_rows = payload["epics"]["1_backlog"]
                 by_id = {row["id"]: row for row in epic_rows}
                 ranked_ids = set(epic_priority.epic_ids)
@@ -1937,6 +1949,7 @@ register_review_routes(WarRoomRequestHandler)
 register_room_settings_routes(WarRoomRequestHandler)
 register_health_routes(WarRoomRequestHandler)
 register_dependency_routes(WarRoomRequestHandler)
+register_feature_attention_routes(WarRoomRequestHandler)
 
 if __name__ == "__main__":
     main()
