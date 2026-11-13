@@ -60,8 +60,13 @@ def _write_parentless_feature(root, *, id: str, title: str) -> None:
 
 
 @pytest.fixture
-def war_room_server(tmp_path):
+def war_room_server(tmp_path, monkeypatch: pytest.MonkeyPatch):
     root = make_repo(tmp_path, git=False)
+    # Provider selection is outside this projection fixture. Keep the approval
+    # action's dependency boundary real while isolating its unrelated preflight.
+    monkeypatch.setattr(
+        "cascade.approvals._require_approval_selections", lambda *_args, **_kwargs: ()
+    )
     add_doc(root, id="epic_001", title="Active epic", tier="epic", status="active")
     add_doc(
         root,
@@ -93,7 +98,11 @@ def war_room_server(tmp_path):
         parent="epic_001",
     )
     _write_parentless_feature(root, id="feat_005", title="No parent epic")
+    # Approval is an action boundary: establish the dependency as satisfied,
+    # approve the current plan, then restore the waiting state projected here.
+    move_doc("feat_002", "completed", root=root)
     approve_board_feature(root, "feat_003")
+    move_doc("feat_002", "backlog", root=root)
     approve_board_feature(root, "feat_004")
     port = _free_port()
     server = serve(root=root, host="127.0.0.1", port=port)
