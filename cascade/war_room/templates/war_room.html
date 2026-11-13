@@ -39,13 +39,13 @@
     </style>
     <link
       rel="stylesheet"
-      href="/static/war_room.css?v=20261109"
+      href="/static/war_room.css?v=20261113-feature-attention"
       media="print"
       onload="this.media='all'; this.onload=null;"
     />
     <link rel="stylesheet" href="/static/dependency_review.css?v=20261109" />
     <link rel="stylesheet" href="/static/architecture_tab.css?v=20261111" />
-    <noscript><link rel="stylesheet" href="/static/war_room.css?v=20261109" /></noscript>
+    <noscript><link rel="stylesheet" href="/static/war_room.css?v=20261113-feature-attention" /></noscript>
   </head>
   <body>
     <div id="war-room-app" data-default-epic-graph-id="${epic_graph_id}">
@@ -180,6 +180,16 @@
         <div class="war-room-layout">
         <section id="war-room-board" class="board-panel" aria-label="Board">
           <h2>Board</h2>
+          <p class="feature-attention-disclosure">
+            New feature attention and Mark seen acknowledgements are shared by everyone using this workspace.
+          </p>
+          <p
+            id="feature-attention-status"
+            class="feature-attention-status error"
+            role="status"
+            aria-live="polite"
+            hidden
+          ></p>
           ${boss_panel_markup}
           <div class="board-columns">
             <div class="board-tier" data-tier="epics">
@@ -551,6 +561,7 @@
     <script src="/static/branch_sync_ui.js"></script>
     <script src="/static/epic_close_review_ui.js"></script>
     <script src="/static/epic_plan_readiness_ui.js"></script>
+    <script src="/static/feature_readiness_ui.js?v=20261113"></script>
     <script src="/static/dependency_review_ui.js?v=20261110-declaration"></script>
     <script src="/static/dependency_status_ui.js"></script>
     <script src="/static/brief_defaults_ui.js?v=20261025"></script>
@@ -560,6 +571,6 @@
     <script src="/static/vendor/marked.min.js"></script>
     <script src="/static/plan_viewer.js?v=20261111-semantic-viewer"></script>
     <script src="/static/architecture_tab.js?v=20261111-document-context"></script>
-    <script src="/static/war_room.js?v=20261110-refresh-performance"></script>
+    <script src="/static/war_room.js?v=20261113-feature-attention"></script>
   </body>
 </html>

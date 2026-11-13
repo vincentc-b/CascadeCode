@@ -17,6 +17,7 @@
   const BacklogPriorityUiApi = globalThis.BacklogPriorityUi;
   const BranchSyncUiApi = globalThis.BranchSyncUi;
   const EpicPlanReadinessUi = globalThis.EpicPlanReadinessUi;
+  const FeatureReadinessUi = globalThis.FeatureReadinessUi;
   const DependencyReviewUi = globalThis.DependencyReviewUi;
   const DependencyStatusUi = globalThis.DependencyStatusUi;
   const BriefDefaultsUi = globalThis.BriefDefaultsUi;
@@ -24,6 +25,8 @@
   const AuditStatusUi = globalThis.AuditStatusUi;
   let boardFocus = BoardFocusApi ? BoardFocusApi.defaultBoardFocus() : null;
   let lastBoardView = null;
+  let attentionHighWaterRevision = null;
+  let featureAttentionProjection = null;
   let branchSyncRowHelpers = null;
   let backlogPriorityUi = null;
   let backlogEpicPriorityUi = null;
@@ -693,6 +696,156 @@
     return BoardFocusApi.applyBoardLens(view, boardFocus);
   }
 
+  function reconcileFeatureAttention(view) {
+    if (!view || !view.feature_attention) return view;
+    const incoming = view.feature_attention;
+    const revision = incoming.state === "available" && Number.isInteger(incoming.revision)
+      ? incoming.revision : null;
+    if (
+      revision !== null &&
+      attentionHighWaterRevision !== null &&
+      revision < attentionHighWaterRevision &&
+      featureAttentionProjection
+    ) {
+      view.feature_attention = featureAttentionProjection;
+      return view;
+    }
+    if (revision !== null) {
+      attentionHighWaterRevision = revision;
+      featureAttentionProjection = incoming;
+    } else {
+      featureAttentionProjection = incoming;
+    }
+    return view;
+  }
+
+  function featureAttention(featureId) {
+    const projection = featureAttentionProjection;
+    return projection && projection.state === "available" && projection.features
+      ? projection.features[featureId] : null;
+  }
+
+  function updateAttentionStatus() {
+    const status = document.getElementById("feature-attention-status");
+    if (!status) return;
+    const projection = featureAttentionProjection;
+    const unavailable = projection && projection.state !== "available";
+    status.hidden = !unavailable;
+    status.textContent = unavailable
+      ? "New feature attention is unavailable. Mark seen is disabled until storage recovers."
+      : "";
+    status.title = unavailable && projection.reason ? projection.reason : "";
+  }
+
+  function applyMarkSeenResponse(featureId, body) {
+    if (!body || !Number.isInteger(body.revision) || !body.attention) return;
+    if (attentionHighWaterRevision !== null && body.revision < attentionHighWaterRevision) return;
+    const current = featureAttentionProjection;
+    if (!current || current.state !== "available") return;
+    const next = Object.assign({}, current, {
+      revision: body.revision,
+      features: Object.assign({}, current.features),
+      epic_new_counts: Object.assign({}, current.epic_new_counts),
+    });
+    next.features[featureId] = body.attention;
+    const epicId = body.attention.epic_id;
+    if (epicId && next.epic_new_counts[epicId]) {
+      const remaining = next.epic_new_counts[epicId] - 1;
+      if (remaining > 0) next.epic_new_counts[epicId] = remaining;
+      else delete next.epic_new_counts[epicId];
+    }
+    attentionHighWaterRevision = body.revision;
+    featureAttentionProjection = next;
+    if (lastBoardView) lastBoardView.feature_attention = next;
+  }
+
+  function focusFeatureAction(featureId, label) {
+    if (!el.board) return;
+    const row = Array.from(el.board.querySelectorAll('.board-row[data-tier="feature"]')).find(
+      function (candidate) { return candidate.dataset.id === featureId; }
+    );
+    if (!row) return;
+    const target = Array.from(row.querySelectorAll("button, a")).find(function (candidate) {
+      return candidate.textContent === label;
+    });
+    if (target && typeof target.focus === "function") target.focus();
+  }
+
+  function appendFeatureAttention(row, actions, item) {
+    const attention = featureAttention(item.id);
+    if (!attention || attention.new !== true) return;
+    const marker = document.createElement("span");
+    marker.className = "feature-new-marker";
+    marker.textContent = "New";
+    marker.setAttribute("aria-label", "New feature: " + item.id);
+    row.appendChild(marker);
+
+    const feedback = document.createElement("span");
+    feedback.className = "feature-attention-feedback";
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    row.appendChild(feedback);
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Mark seen";
+    button.setAttribute(
+      "aria-label",
+      "Mark " + item.id + " seen for everyone using this workspace"
+    );
+    button.addEventListener("click", async function (ev) {
+      ev.stopPropagation();
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = "Marking…";
+      feedback.textContent = "Saving workspace acknowledgement…";
+      feedback.classList.remove("error");
+      try {
+        const response = await apiPost("/api/feature_attention/mark_seen", {
+          feature_id: item.id,
+        });
+        applyMarkSeenResponse(item.id, response.body);
+        renderBoard(lastBoardView);
+        focusFeatureAction(item.id, "View plan");
+      } catch (err) {
+        feedback.textContent = "Mark seen failed: " + (err.message || String(err));
+        feedback.classList.add("error");
+        button.disabled = false;
+        button.textContent = "Mark seen";
+        button.focus();
+      }
+    });
+    actions.appendChild(button);
+  }
+
+  function appendEpicAttention(row, actions, item) {
+    const projection = featureAttentionProjection;
+    const count = projection && projection.state === "available" && projection.epic_new_counts
+      ? projection.epic_new_counts[item.id] : 0;
+    if (!count) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "epic-new-count";
+    button.textContent = count + (count === 1 ? " New feature" : " New features");
+    button.setAttribute("aria-expanded", boardFocus && boardFocus.selected_epic_id === item.id ? "true" : "false");
+    button.setAttribute("aria-label", "Reveal " + count + " New " + (count === 1 ? "feature" : "features") + " in " + item.id);
+    button.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      if (!boardFocus || !BoardFocusApi || !lastBoardView) return;
+      if (boardFocus.selected_epic_id !== item.id) {
+        boardFocus = BoardFocusApi.toggleEpicSelection(boardFocus, item.id, lastBoardView);
+      }
+      renderBoard(lastBoardView);
+      const first = el.board.querySelector('.board-row[data-tier="feature"] .feature-new-marker');
+      const firstRow = first && first.closest(".board-row");
+      const plan = firstRow && Array.from(firstRow.querySelectorAll("button")).find(function (candidate) {
+        return candidate.textContent === "View plan";
+      });
+      if (plan && typeof plan.focus === "function") plan.focus();
+    });
+    actions.appendChild(button);
+  }
+
   function renderFeaturesLensEmpty(tierEl, empty) {
     if (!tierEl) return;
     const msg = tierEl.querySelector("[data-board-features-lens-empty]");
@@ -771,7 +924,9 @@
 
   function renderBoard(view) {
     const renderStartedAt = performance.now();
+    reconcileFeatureAttention(view);
     lastBoardView = view;
+    updateAttentionStatus();
     renderCurrentDependencySummary(view);
     if ((backlogPriorityUi && backlogPriorityUi.isDragging()) ||
         (backlogEpicPriorityUi && backlogEpicPriorityUi.isDragging())) return;
@@ -892,6 +1047,13 @@
   function appendFeatureReadinessUi(row, actions, item) {
     const readiness = item.readiness;
     if (!readiness) return;
+
+    if (FeatureReadinessUi && readiness.explanation) {
+      const readinessUi = FeatureReadinessUi.render(document, readiness, item.id);
+      if (readinessUi) row.appendChild(readinessUi);
+      if (!readiness.approved) actions.appendChild(featureApproveActionButton(item));
+      return;
+    }
 
     if (!readiness.approved) {
       const approvalStatus = document.createElement("span");
@@ -1652,6 +1814,9 @@
       }
     }
     if (tier === "features") {
+      if (typeof appendFeatureAttention === "function") {
+        appendFeatureAttention(row, actions, item);
+      }
       appendFeatureReadinessUi(row, actions, item);
       if (column === "2_active") {
         actions.appendChild(actionButton("Open team", function () {
@@ -1680,6 +1845,9 @@
       }
     }
     if (tier === "epics") {
+      if (typeof appendEpicAttention === "function") {
+        appendEpicAttention(row, actions, item);
+      }
       if (globalThis.EpicCloseReviewUi && globalThis.EpicCloseReviewUi.append) {
         globalThis.EpicCloseReviewUi.append(document, row, actions, item.implementation_review, {
           actionLink: actionLink,

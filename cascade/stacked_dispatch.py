@@ -32,6 +32,29 @@ class FeatureDispatchPlan:
     selection: FeatureDispatchSelection | None = None
 
 
+@dataclass(frozen=True)
+class FeatureDispatchBlockers:
+    """Feature identities currently occupying serial dispatch gates.
+
+    Execution and review are deliberately separate: an active sibling is work
+    in progress, while a completed/backlog feature with an open review is
+    waiting for merge/review.  ``pending_review_ids`` can also contain a
+    declared feature dependency outside this Epic because that review is a
+    canonical merge gate, but only same-Epic IDs appear in
+    ``pending_sibling_review_ids``.
+    """
+
+    active_execution_ids: tuple[str, ...] = ()
+    pending_review_ids: tuple[str, ...] = ()
+    pending_sibling_review_ids: tuple[str, ...] = ()
+
+    @property
+    def blocking_sibling_ids(self) -> tuple[str, ...]:
+        return tuple(
+            sorted(set(self.active_execution_ids) | set(self.pending_sibling_review_ids))
+        )
+
+
 def _state_path(trunk: Path) -> Path:
     return trunk / ".cascade" / "feature_dispatch.json"
 
@@ -167,33 +190,77 @@ def feature_merge_gated(
 ) -> bool:
     """True when merge-gated dispatch rules block this feature (stacked opt-in off)."""
 
+    if not meta.parent:
+        return True
+    return bool(
+        feature_dispatch_blockers(
+            meta, board, root=root, pending_review_ids=pending_review_ids
+        ).pending_review_ids
+    )
+
+
+def feature_dispatch_blockers(
+    meta: WorkMeta,
+    board: BoardIndex,
+    *,
+    root: Path,
+    pending_review_ids: frozenset[str] | None = None,
+) -> FeatureDispatchBlockers:
+    """Return all feature IDs blocking serial execution or merge/review.
+
+    A caller-owned review snapshot avoids repeated registry reads during board
+    polling.  This projection performs no Git ancestry or provider probes.
+    """
+
     epic_id = meta.parent or ""
     if not epic_id:
-        return True
-    if effective_stacked_pr_enabled(meta.id, epic_id, root=root):
-        return False
-    if pending_review_ids is not None:
-        if any(
-            dep_id in pending_review_ids
-            for dep_id in meta.depends_on
-            if (dep := board.by_id.get(dep_id)) is not None and dep.tier == "feature"
-        ):
-            return True
-        return any(
-            feature.id in pending_review_ids
-            for feature in board.by_id.values()
-            if feature.tier == "feature" and feature.parent == epic_id
+        return FeatureDispatchBlockers()
+
+    siblings = tuple(
+        feature
+        for feature in board.by_id.values()
+        if feature.id != meta.id
+        and feature.tier == "feature"
+        and feature.parent == epic_id
+    )
+    active_ids = tuple(
+        sorted(
+            feature.id
+            for feature in siblings
+            if feature.path.parent.name == "2_active" and feature.status != "completed"
         )
+    )
 
-    from cascade.review import epic_has_pending_feature_review, feature_review_pending
+    if effective_stacked_pr_enabled(meta.id, epic_id, root=root):
+        return FeatureDispatchBlockers(active_execution_ids=active_ids)
 
+    candidates = {feature.id: feature for feature in siblings}
+    candidates.setdefault(meta.id, meta)
     for dep_id in meta.depends_on:
         dep = board.by_id.get(dep_id)
-        if dep is not None and dep.tier == "feature" and feature_review_pending(
-            dep_id, root=root
-        ):
-            return True
-    return epic_has_pending_feature_review(epic_id, root=root)
+        if dep is not None and dep.tier == "feature" and dep.id != meta.id:
+            candidates.setdefault(dep.id, dep)
+
+    if pending_review_ids is None:
+        from cascade.review import feature_review_pending
+
+        review_ids = {
+            feature_id
+            for feature_id in candidates
+            if feature_review_pending(feature_id, root=root)
+        }
+    else:
+        review_ids = set(candidates).intersection(pending_review_ids)
+
+    # An executing sibling's primary wait is execution.  Do not describe the
+    # same identity a second time as a review wait until execution has ended.
+    review_ids.difference_update(active_ids)
+    sibling_ids = {feature.id for feature in siblings}
+    return FeatureDispatchBlockers(
+        active_execution_ids=active_ids,
+        pending_review_ids=tuple(sorted(review_ids)),
+        pending_sibling_review_ids=tuple(sorted(review_ids.intersection(sibling_ids))),
+    )
 
 
 def feature_dispatch_blocked_by_sibling(
@@ -203,21 +270,12 @@ def feature_dispatch_blocked_by_sibling(
     root: Path,
     pending_review_ids: frozenset[str] | None = None,
 ) -> bool:
-    epic_id = meta.parent or ""
-    if not epic_id:
+    if not meta.parent:
         return True
-    for sibling in board.by_id.values():
-        if sibling.id == meta.id:
-            continue
-        if epic_blocks_feature_dispatch(
-            sibling,
-            root=root,
-            epic_id=epic_id,
-            dispatching_feature_id=meta.id,
-            pending_review_ids=pending_review_ids,
-        ):
-            return True
-    return False
+    blockers = feature_dispatch_blockers(
+        meta, board, root=root, pending_review_ids=pending_review_ids
+    )
+    return bool(blockers.blocking_sibling_ids)
 
 
 def plan_feature_dispatch(

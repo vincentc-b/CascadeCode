@@ -355,8 +355,14 @@ def _known_checkouts(
             ):
                 # A stale or tampered registry row is not a selectable identity.
                 continue
-            dirty = bool(
-                _git_text(path, "status", "--porcelain", "--untracked-files=all")
+            # Serving the War Room creates local runtime sidecars. They do not
+            # change the selected source revision or its inspectable content.
+            status = _git_text(path, "status", "--porcelain", "--untracked-files=all")
+            runtime_prefixes = (".cascade/", "docs/_queue/", "docs/_comments/", "docs/_war_room/")
+            dirty = any(
+                not line[3:].split(" -> ")[-1].strip('"').startswith(runtime_prefixes)
+                for line in status.splitlines()
+                if len(line) >= 4
             )
         except ArchitectureBrowsingError:
             continue

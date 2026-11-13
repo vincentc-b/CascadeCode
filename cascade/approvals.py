@@ -335,6 +335,9 @@ def _set_feature_approved(feature_id: str, *, root: Path) -> bool:
         return False
     doc.meta.approved_at = datetime.now(timezone.utc)
     write_doc(doc, root=root)
+    from cascade.feature.readiness_evidence import write_approval_evidence
+
+    write_approval_evidence(doc.meta, root=root)
     return True
 
 

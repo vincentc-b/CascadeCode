@@ -71,7 +71,31 @@ def dispatch_feature(
     from cascade.task.lifecycle_lock import task_lifecycle_lock
 
     with task_lifecycle_lock(root=repo):
-        result = _dispatch_feature(work_id, by, repo, expected_parent=expected_parent)
+        attempt_evidence: dict[str, object] = {}
+        result = _dispatch_feature(
+            work_id,
+            by,
+            repo,
+            expected_parent=expected_parent,
+            attempt_evidence=attempt_evidence,
+        )
+        board = attempt_evidence.get("board")
+        if not isinstance(board, BoardIndex):
+            try:
+                board = merged_board(repo)
+            except Exception:
+                board = BoardIndex(by_id={})
+        meta = attempt_evidence.get("meta")
+        from cascade.feature.readiness_evidence import record_feature_dispatch_result
+
+        record_feature_dispatch_result(
+            work_id,
+            root=repo,
+            board=board,
+            meta=meta if isinstance(meta, WorkMeta) else None,
+            result=result,
+            provider_preflight=attempt_evidence.get("provider_preflight"),
+        )
     return _boot_after(result, "feature", work_id, by, repo)
 
 
@@ -239,6 +263,7 @@ def _dispatch_feature(
     root: Path,
     *,
     expected_parent: str | None = None,
+    attempt_evidence: dict[str, object] | None = None,
 ) -> DispatchResult:
     if by not in ("human", "boss"):
         return _fail("unauthorized")
@@ -250,6 +275,10 @@ def _dispatch_feature(
     assert dependency_evidence.board is not None
     board = dependency_evidence.board
     meta = dependency_evidence.owner
+    if attempt_evidence is not None:
+        attempt_evidence["board"] = board
+        if meta is not None:
+            attempt_evidence["meta"] = meta
     if meta is None:
         return _fail("not_found")
     if meta.tier != "feature" or meta.status not in _OPEN:
@@ -264,13 +293,23 @@ def _dispatch_feature(
         compute_feature_readiness,
         dispatch_refusal_from_readiness,
     )
+    from cascade.feature.readiness_evidence import approval_evidence
 
-    readiness = compute_feature_readiness(work_id, root=root, board=board)
+    approval_state, _approval_revision = approval_evidence(meta, root=root)
+    readiness = compute_feature_readiness(
+        work_id,
+        root=root,
+        board=board,
+        approval_state=approval_state,
+        bounded_dispatch_base=False,
+    )
     if readiness is None:
         return _fail("not_found")
     if reason := dispatch_refusal_from_readiness(readiness):
         return _fail(reason)
-    if refusal := _provider_preflight_refusal(meta, by=by, root=root):
+    if refusal := _provider_preflight_refusal(
+        meta, by=by, root=root, evidence=attempt_evidence
+    ):
         return refusal
     from cascade.lifecycle_review_gate import require_lifecycle_review_gate
     from cascade.workspace.architecture_review import ArchitectureProposalError
@@ -664,6 +703,7 @@ def _provider_preflight_refusal(
     *,
     by: str,
     root: Path,
+    evidence: dict[str, object] | None = None,
 ) -> DispatchResult | None:
     """Check every role the dispatch will start before any durable work begins.
 
@@ -712,6 +752,8 @@ def _provider_preflight_refusal(
             action=action,
         )
     result = evaluated.result
+    if evidence is not None:
+        evidence["provider_preflight"] = result
     if result.supported:
         return None
     if action_kind is not None:
