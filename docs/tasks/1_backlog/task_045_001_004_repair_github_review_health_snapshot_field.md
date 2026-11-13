@@ -9,7 +9,7 @@ depends_on: []
 owners:
 - swe
 skills: []
-parent_rev: 3bc4e1f56cda412db235617d09cb458a1ed6eefe
+parent_rev: 967e4afcaed5db9f8429aeca080ff93fefe877f3
 created: '2026-11-13'
 updated: '2026-11-13'
 provider: codex
