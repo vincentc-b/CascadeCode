@@ -2,7 +2,7 @@
 id: feat_045_001
 title: Explain feature activation readiness and actual dispatch waits
 tier: feature
-status: active
+status: completed
 parent: epic_045
 children:
 - task_045_001_001
