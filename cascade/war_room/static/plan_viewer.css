@@ -8,6 +8,26 @@
   --plan-mono: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
 }
 
+.review-diff-scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--plan-border); }
+.review-document-diff { border-collapse: collapse; width: 100%; font-family: var(--plan-mono); font-size: .85rem; line-height: 1.5; }
+.review-document-diff td { padding: 0 8px; vertical-align: top; }
+.review-document-diff code { white-space: pre; background: transparent; color: inherit; padding: 0; }
+.review-diff-line-number { width: 1%; min-width: 3ch; text-align: right; opacity: .7; user-select: none; }
+.review-diff-added { background: #dafbe1; color: #143b22; }
+.review-diff-removed { background: #ffebe9; color: #5c1a1a; }
+.review-diff-header { background: #ddf4ff; color: #174267; }
+.review-diff-added .review-diff-inline { background: #8ee9a1; }
+.review-diff-removed .review-diff-inline { background: #ffb3ad; }
+.review-design-changes,
+.paired-c4-resource-links { min-width: 0; overflow-wrap: anywhere; }
+@media (prefers-color-scheme: dark) {
+  .review-diff-added { background: #163422; color: #b7f5c5; }
+  .review-diff-removed { background: #412020; color: #ffd2cc; }
+  .review-diff-header { background: #182d40; color: #b9dcff; }
+  .review-diff-added .review-diff-inline { background: #255c35; }
+  .review-diff-removed .review-diff-inline { background: #793333; }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --plan-text: #e8e8e8;
@@ -607,12 +627,14 @@ body {
 
 @media (max-width: 76rem) {
   .plan-content-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .paired-c4-review,
   .plan-body {
     grid-column: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .paired-c4-workspace { grid-template-columns: 1fr; }

@@ -1,5 +1,7 @@
 """Filesystem board. move_doc does not enforce dispatch law."""
 
+from importlib import import_module
+
 from cascade.board.errors import (
     BoardError,
     CycleError,
@@ -26,13 +28,6 @@ from cascade.board.store import (
     read_doc,
     write_doc,
 )
-from cascade.board.backlog_migration import (
-    BacklogMigrationApplyError,
-    BacklogMigrationPlan,
-    BacklogMigrationValidationError,
-    apply_backlog_migration,
-    build_backlog_migration_plan,
-)
 from cascade.board.work_ids import allocate_hierarchical_id
 from cascade.board.types import (
     BoardIndex,
@@ -44,6 +39,20 @@ from cascade.board.types import (
     WorkTier,
 )
 from cascade.board.validate import validate_doc
+
+_MIGRATION_EXPORTS = {
+    "BacklogMigrationApplyError",
+    "BacklogMigrationPlan",
+    "BacklogMigrationValidationError",
+    "apply_backlog_migration",
+    "build_backlog_migration_plan",
+}
+
+
+def __getattr__(name: str):
+    if name not in _MIGRATION_EXPORTS:
+        raise AttributeError(name)
+    return getattr(import_module("cascade.board.backlog_migration"), name)
 
 __all__ = [
     "BoardError",

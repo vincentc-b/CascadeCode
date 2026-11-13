@@ -295,3 +295,20 @@ def test_list_board_reuses_unchanged_frontmatter_but_sees_edits_and_deletes(
 
     path.unlink()
     assert "epic_001" not in list_board(root).by_id
+
+
+def test_board_scan_snapshot_is_limited_to_one_read(tmp_path: Path) -> None:
+    from cascade.board.store import board_scan_snapshot
+
+    root = make_repo(tmp_path, git=False)
+    path = add_doc(root, id="epic_001", title="Original", tier="epic").meta.path
+
+    with board_scan_snapshot():
+        first = list_board(root)
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("Original", "Modified"),
+            encoding="utf-8",
+        )
+        assert list_board(root) is first
+
+    assert list_board(root).by_id["epic_001"].title == "Modified"

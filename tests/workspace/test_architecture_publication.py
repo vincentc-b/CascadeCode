@@ -80,6 +80,48 @@ def test_feature_architect_publishes_explicit_no_change_idempotently(
     assert ArchitectureReviewStore(project).acceptance_hold("feat_046_001") is None
 
 
+def test_publication_and_http_review_use_owning_worktree_lineage(tmp_path: Path) -> None:
+    from cascade.workspace.integration_worktree import create_integration_worktree
+    from cascade.war_room.architecture_routes import review_projection
+
+    root, project, _revision, proposal = _publication_repo(tmp_path)
+    record = create_integration_worktree(
+        "feature", "feat_046_001", branch="feat/feat_046_001", base_ref="HEAD", trunk=root,
+    )
+    plan_path = record.path / proposal.plan.path
+    plan_path.write_text(plan_path.read_text() + "\nWorktree-only plan change.\n")
+    design_path = record.path / "DESIGN.md"
+    design_path.write_text("# Feature design\n\nWorktree-only design change.\n")
+    subprocess.run(["git", "add", "."], cwd=record.path, check=True)
+    subprocess.run(["git", "commit", "-qm", "worktree architecture"], cwd=record.path, check=True)
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=record.path, text=True).strip()
+    proposal = replace(
+        proposal,
+        # Colocated planning tools can identify a plan by either repository role.
+        plan=replace(proposal.plan, repository_role="tracking", revision=revision,
+                     content_digest=hashlib.sha256(plan_path.read_bytes()).hexdigest()),
+        design=replace(proposal.design, reference=replace(proposal.design.reference, revision=revision),
+                       content_digest=hashlib.sha256(design_path.read_bytes()).hexdigest()),
+    )
+    set_project_context(project)
+    result = dispatch_planning_tool(
+        "feature", "publish_architecture_review",
+        {"proposal": proposal.to_dict(), "expected_plan_revision": revision, "expected_generation": None},
+        scope_id="feat_046_001", repo_root=record.path, collector=ToolEffectCollector(), role="feature_architect",
+    )
+    assert result["status"] == "no_diagram_change", result
+    projection = review_projection(root, "feat_046_001")
+    assert projection["state"] == "no_diagram_change"
+    assert projection["architecture_impact"] == "no_diagram_change"
+    assert projection["approval_context"]["review_unit_id"] == result["review_unit_id"]
+
+    # The fix must still reject a genuinely changed artifact on that branch.
+    design_path.write_text("# Changed after publication\n")
+    subprocess.run(["git", "add", "."], cwd=record.path, check=True)
+    subprocess.run(["git", "commit", "-qm", "invalidate design"], cwd=record.path, check=True)
+    assert review_projection(root, "feat_046_001")["state"] == "stale_revision"
+
+
 def test_publication_rejects_stale_plan_before_persisting_intent(tmp_path: Path) -> None:
     root, project, revision, proposal = _publication_repo(tmp_path)
     set_project_context(project)

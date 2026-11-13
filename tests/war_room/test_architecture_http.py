@@ -14,6 +14,8 @@ import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from cascade.war_room.architecture_routes import _opaque_id, _resource_descriptors
 from cascade.war_room.server import serve
 from cascade.workspace.architecture import (
@@ -461,6 +463,103 @@ def test_review_failure_gate_states_keep_plan_http_available(
         assert document["paired_review"]["message"] == "review store offline"
     finally:
         _stop(server, thread)
+
+
+@pytest.mark.parametrize("state", ["pending", "stale_revision", "render_failed"])
+def test_unregistered_publication_preserves_review_diagnostic(
+    tmp_path: Path, monkeypatch, state: str,
+) -> None:
+    import cascade.war_room.architecture_routes as routes
+    from cascade.workspace.c4_review import _state_payload
+
+    root = make_repo(tmp_path)
+    payload = _state_payload(
+        state, "epic_architect", "epic_045", "artifact_changed",
+        "pinned review plan revision is not in the current lineage",
+    )
+    from dataclasses import replace
+    payload = replace(
+        payload, review_unit_id="architecture-review-unregistered",
+        reviewed_tuple_digest="publication-tuple",
+    )
+    monkeypatch.setattr(routes, "_resolve", lambda *_args: payload)
+
+    envelope = routes.review_envelope(root, "epic_045", "epic")
+    assert envelope["state"] == state
+    assert envelope["message"] == payload.reason
+    assert "approval_context" not in envelope
+    assert envelope["retry"]["retryable"] == (state != "stale_revision")
+    projection = routes.review_projection(root, "epic_045")
+    assert projection["state"] == state
+    assert projection["reason"] == payload.reason
+    assert projection["approval_context"] is None
+    assert projection["resources"] == []
+    # Missing publication IDs still cannot authorize resource access.
+    with pytest.raises(routes.ArchitectureHTTPError) as error:
+        routes._unit_for_scope(root, payload.review_unit_id)
+    assert error.value.status == 404
+
+
+def test_superseded_publication_design_remains_pinned_and_read_only(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    from dataclasses import replace
+    import cascade.war_room.architecture_routes as routes
+    from cascade.workspace.c4_review import _state_payload
+
+    root = make_repo(tmp_path)
+    project = ProjectContext.colocated(root)
+    resolve_design_ownership(project, ".")
+    design_path = root / "DESIGN.md"
+    design_path.write_text("# Published design\n\nProposed activation explanations.\n")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "published design"], cwd=root, check=True)
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    expected = design_path.read_bytes()
+    design = PinnedArchitectureArtifact(
+        create_architecture_artifact_ref(project, ".", owning_work="epic_045"),
+        hashlib.sha256(expected).hexdigest(),
+    )
+    unit = ArchitectureReviewUnit(
+        "epic_045", "epic_architect", project.target_repository_key,
+        Path("."), Path("."), project.target.repository_key, "epic:epic_045",
+        project.target_repository_key, "target", Path("."), None,
+        ArchitectureBaseline.empty(), None, None, 1, "staged",
+        PinnedDocumentRef(project.target.repository_key, "target", Path("plan.md"), revision, "0" * 64),
+        design, None, (), (), (), ("epic_045",), "no_diagram_change", "Existing boundaries remain accurate.",
+    )
+    ledger_path = root / ".cascade" / "architecture-publications.json"
+    ledger_path.parent.mkdir(exist_ok=True)
+    ledger_path.write_text(json.dumps({"version": 1, "operations": {
+        "publication": {"status": "superseded", "proposal": unit.to_dict()},
+    }}))
+    payload = replace(
+        _state_payload("stale_revision", "epic_architect", "epic_045", "artifact_changed", "Plan moved"),
+        review_unit_id=unit.review_unit_id, reviewed_tuple_digest=unit.reviewed_tuple_digest,
+    )
+    monkeypatch.setattr(routes, "_resolve", lambda *_args: payload)
+    design_path.write_text("# Uncommitted replacement\n")
+    projection = routes.review_projection(root, "epic_045")
+    assert projection["approval_context"] is None
+    assert projection["architecture_impact"] == "no_diagram_change"
+    resource = next(row for row in projection["resources"] if row["kind"] == "design")
+    assert resource["kind"] == "design" and resource["historical"] is True
+    body, content_type, _etag = routes.resource_bytes(
+        root, unit.review_unit_id, resource["url"].rsplit("/", 1)[-1],
+    )
+    assert body == expected
+    assert content_type == "text/markdown; charset=utf-8"
+    diff_resource = next(row for row in projection["resources"] if row["kind"] == "design_diff")
+    diff_body, diff_type, _etag = routes.resource_bytes(
+        root, unit.review_unit_id, diff_resource["url"].rsplit("/", 1)[-1],
+    )
+    assert b"+Proposed activation explanations." in diff_body
+    assert diff_type == "text/x-diff; charset=utf-8"
+    assert ArchitectureReviewStore(project).get(unit.review_unit_id) is None
+    with pytest.raises(routes.ArchitectureHTTPError):
+        routes._unit_for_scope(root, unit.review_unit_id)
+    with pytest.raises(routes.ArchitectureHTTPError):
+        routes.resource_bytes(root, unit.review_unit_id, "tampered")
 
 
 def test_opaque_resource_is_pinned_readable_bounded_and_tamper_safe(

@@ -23,6 +23,7 @@ from cascade.workspace.architecture_review import (
     ArchitectureReviewStore,
     ArchitectureReviewUnit,
     ReviewApprovalContext,
+    review_lineage_revision,
 )
 from cascade.workspace.c4_review import C4ReviewPayload, resolve_c4_review_payload
 from cascade.workspace.errors import WorkspaceError
@@ -463,9 +464,9 @@ def review_projection(
         raise ArchitectureHTTPError(400, "invalid review pagination")
     payload = _resolve(root, work_id)
     value = payload.to_dict()
+    approval_context = _approval_context(root, payload) if payload.review_unit_id else None
     value["approval_context"] = (
-        _approval_context(root, payload).to_dict()
-        if payload.review_unit_id else None
+        approval_context.to_dict() if approval_context is not None else None
     )
     scope = payload.review_unit_id
     views = value.get("views") or []
@@ -490,13 +491,26 @@ def review_projection(
         "next_cursor": cursor + len(page) if cursor + len(page) < len(views) else None,
     }
     resources = []
-    if scope:
+    if scope and value["approval_context"] is not None:
         unit = _unit_for_scope(root, scope, work_id=work_id)
         resources = _all_resource_descriptors(root, unit)
+        value["architecture_impact"] = unit.architecture_impact
+        value["impact_reason"] = unit.impact_reason
+    elif scope:
+        unit = _publication_unit_for_scope(root, scope, work_id=work_id)
+        if unit is not None:
+            # A superseded publication remains useful evidence, but cannot
+            # authorize approval or imply a diff against the current plan.
+            resources = _published_design_descriptors(root, unit)
+            value["architecture_impact"] = unit.architecture_impact
+            value["impact_reason"] = unit.impact_reason
     value["resources"] = [
         {
             "kind": row["kind"], "side": row.get("side"), "path": row["path"],
             "revision": row["revision"],
+            "historical": value["approval_context"] is None or payload.state == "stale_revision",
+            "baseline_kind": row.get("baseline_kind"),
+            "before_revision": row.get("before_revision"),
             "url": f"/api/architecture/resources/{scope}/{_opaque_id(row)}",
         }
         for row in resources
@@ -1023,7 +1037,15 @@ def _bounded_context_payload(value: dict[str, object]) -> dict[str, object]:
     return value
 
 
-def _approval_context(root: Path, payload: C4ReviewPayload) -> ReviewApprovalContext:
+def _approval_context(root: Path, payload: C4ReviewPayload) -> ReviewApprovalContext | None:
+    # Publication failures can retain a proposal ID before it enters the review
+    # store. Preserve that diagnostic without advertising an actionable scope.
+    if (
+        payload.state not in {"ready", "no_diagram_change"}
+        and not payload.views
+        and ArchitectureReviewStore(project_for(root)).get(payload.review_unit_id) is None
+    ):
+        return None
     unit = _unit_for_scope(
         root, payload.review_unit_id, work_id=payload.owner_work_id
     )
@@ -1080,11 +1102,19 @@ def resource_bytes(
 ) -> tuple[bytes, str, str]:
     if scope.startswith("architecture-snapshot-"):
         return _snapshot_resource_bytes(root, scope, resource_id, scheduler=scheduler)
-    unit = _unit_for_scope(root, scope)
-    for descriptor in (
-        *_all_resource_descriptors(root, unit),
-        *_context_resource_descriptors(root, unit),
-    ):
+    unit = ArchitectureReviewStore(project_for(root)).get(scope)
+    if unit is not None:
+        unit = _unit_for_scope(root, scope)
+        descriptors = [
+            *_all_resource_descriptors(root, unit),
+            *_context_resource_descriptors(root, unit),
+        ]
+    else:
+        unit = _publication_unit_for_scope(root, scope)
+        if unit is None:
+            raise ArchitectureHTTPError(404, "architecture scope not found")
+        descriptors = _published_design_descriptors(root, unit)
+    for descriptor in descriptors:
         if _opaque_id(descriptor) != resource_id:
             continue
         project = project_for(root)
@@ -1236,7 +1266,30 @@ def _resolve_unit(root: Path, unit: ArchitectureReviewUnit) -> C4ReviewPayload:
     return resolve_c4_review_payload(
         project_for(root), owner=unit.authorized_owner, work_id=unit.owner_work_id,
         lineage=unit.integration_lineage,
+        lineage_revision=review_lineage_revision(project_for(root), unit.owner_work_id),
     )
+
+
+def _publication_unit_for_scope(
+    root: Path, scope: str, *, work_id: str | None = None,
+) -> ArchitectureReviewUnit | None:
+    """Resolve read-only design evidence from a durable publication descriptor."""
+    if not scope or len(scope) > 160:
+        return None
+    path = project_for(root).target.root / ".cascade" / "architecture-publications.json"
+    try:
+        ledger = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    if ledger.get("version") != 1 or not isinstance(ledger.get("operations"), dict):
+        raise ArchitectureHTTPError(409, "architecture publication ledger is invalid")
+    for row in ledger["operations"].values():
+        unit = ArchitectureReviewUnit.from_dict(row["proposal"])
+        if unit.review_unit_id == scope:
+            if work_id is not None and unit.owner_work_id != work_id:
+                raise ArchitectureHTTPError(403, "architecture scope is not authorized for this work")
+            return unit
+    return None
 
 
 def _unit_for_scope(root: Path, scope: str, *, work_id: str | None = None) -> ArchitectureReviewUnit:
@@ -1311,6 +1364,8 @@ def _all_resource_descriptors(
             "before_revision": current["revision"] if current else "",
             "before_path": current["path"] if current else "",
             "before_digest": current["digest"] if current else "",
+            "before_repository_role": current["repository_role"] if current else proposed["repository_role"],
+            "before_repository_key": current["repository_key"] if current else proposed["repository_key"],
         })
         rows.append(row)
 
@@ -1327,7 +1382,25 @@ def _all_resource_descriptors(
         current_design = next(
             row for row in _resource_descriptors(baseline) if row["kind"] == "design"
         )
+    else:
+        # Without an accepted design, show the proposal commit's actual Git
+        # change rather than presenting the entire existing file as an addition.
+        repository = _repository(project_for(root), proposed_design)
+        parent = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{proposed_design['revision']}^"],
+            cwd=repository.root, capture_output=True, text=True, check=False,
+        )
+        if parent.returncode == 0:
+            descriptor = {**proposed_design, "revision": parent.stdout.strip(), "digest": None}
+            try:
+                before = _read_descriptor_blob(project_for(root), descriptor)
+            except ArchitectureHTTPError as exc:
+                if exc.status != 410:
+                    raise
+            else:
+                current_design = {**descriptor, "digest": hashlib.sha256(before).hexdigest()}
     diff("design", proposed_design, current_design)
+    rows[-1]["baseline_kind"] = "accepted_design" if baseline else "proposal_parent"
 
     proposed_model = [
         row for row in rows
@@ -1340,6 +1413,10 @@ def _all_resource_descriptors(
     for proposed in proposed_model:
         diff(proposed["kind"], proposed, current_model.get(proposed["path"]))
     return rows
+
+
+def _published_design_descriptors(root: Path, unit: ArchitectureReviewUnit) -> list[dict[str, str]]:
+    return [row for row in _all_resource_descriptors(root, unit) if row["kind"] in {"design", "design_diff"}]
 
 
 def _read_descriptor_blob(

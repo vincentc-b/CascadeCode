@@ -170,8 +170,10 @@ def format_turn_prompt(
 ) -> str:
     """Serialize graph messages into a single role prompt."""
 
+    from cascade.agent.message_history import append_recent_messages
+
     lines: list[str] = []
-    for message in messages:
+    for message in append_recent_messages([], messages):
         role = message.get("role", "unknown")
         content = str(message.get("content", ""))
         if not content.strip():
@@ -240,6 +242,11 @@ def startup_error_message(role: RoleId, exc: CursorAgentError) -> str:
 
 def run_error_message(role: RoleId, result: RoleResult) -> str:
     detail = result.text.strip() if result.text else "run failed"
+    # Provider failures may echo the entire submitted prompt. Persisting that
+    # echo in graph messages makes every later prompt and checkpoint grow again.
+    # The actionable transport error is usually at the end of the output.
+    if len(detail) > 4_000:
+        detail = "[provider output truncated]\n" + detail[-4_000:]
     return f"{role}: turn failed — {detail}"
 
 

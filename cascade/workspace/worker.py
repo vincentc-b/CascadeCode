@@ -384,10 +384,10 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     try:
         audit_config = read_health_audit_config(ws.path)
         audit_recovery = AuditRecoveryWorker(ws.path)
-        audit_investigations = AuditInvestigationWorker(
-            ws.path, interval_seconds=audit_config.interval_seconds,
-            enabled=audit_config.enabled,
-        ).start()
+        if audit_config.enabled:
+            audit_investigations = AuditInvestigationWorker(
+                ws.path, interval_seconds=audit_config.interval_seconds,
+            ).start()
         audit_lane = HealthAuditLane(
             root=ws.path,
             config=audit_config,
@@ -403,7 +403,6 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
         # Invalid periodic settings fail closed for scheduling, but the
         # authenticated manual diagnostic remains available to the operator.
         audit_recovery = AuditRecoveryWorker(ws.path)
-        audit_investigations = AuditInvestigationWorker(ws.path, enabled=False).start()
         audit_lane = HealthAuditLane(
             root=ws.path,
             config=HealthAuditConfig(enabled=False),

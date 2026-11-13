@@ -30,6 +30,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+plan_approved_at: '2026-11-12T02:56:33.439952+00:00'
 ---
 # Explain feature activation requirements and highlight newly added work
 

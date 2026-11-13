@@ -2086,7 +2086,9 @@
       state.loading = true;
       state.error = null;
       var request;
-      if (Array.isArray(payload.semantic_threads)) {
+      if (!payload.owner_work_id || payload.approval_context === null) {
+        request = Promise.resolve([]);
+      } else if (Array.isArray(payload.semantic_threads)) {
         request = Promise.resolve(payload.semantic_threads);
       } else if (options.loadThreads) {
         request = Promise.resolve(options.loadThreads(payload));
@@ -2499,6 +2501,60 @@
     return api;
   }
 
+  function renderUnifiedDiff(doc, text) {
+    var table = doc.createElement("table");
+    table.className = "review-document-diff";
+    table.setAttribute("aria-label", "Document changes: minus marks removals, plus marks additions");
+    var lines = String(text).split("\n");
+    var oldLine = 0, newLine = 0;
+    var marks = {};
+    // Pair replacement lines within a hunk. Highlight the changed characters,
+    // retaining their common prefix and suffix for small edits.
+    for (var i = 0; i < lines.length; i += 1) {
+      if (lines[i][0] !== "-" || lines[i].slice(0, 3) === "---") continue;
+      var removed = [], added = [], end = i;
+      while (end < lines.length && lines[end][0] === "-") removed.push(end++);
+      while (end < lines.length && lines[end][0] === "+") added.push(end++);
+      for (var j = 0; j < Math.min(removed.length, added.length); j += 1) {
+        var a = lines[removed[j]].slice(1), b = lines[added[j]].slice(1);
+        var prefix = 0, suffix = 0;
+        while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix += 1;
+        while (suffix < a.length - prefix && suffix < b.length - prefix &&
+            a[a.length - suffix - 1] === b[b.length - suffix - 1]) suffix += 1;
+        marks[removed[j]] = [prefix, a.length - suffix];
+        marks[added[j]] = [prefix, b.length - suffix];
+      }
+      i = end - 1;
+    }
+    lines.forEach(function (line, index) {
+      if (index === lines.length - 1 && !line) return;
+      var hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+      var header = hunk || /^(---|\+\+\+|\\)/.test(line);
+      if (hunk) { oldLine = Number(hunk[1]); newLine = Number(hunk[2]); }
+      var kind = header ? "header" : line[0] === "+" ? "added" : line[0] === "-" ? "removed" : "context";
+      var row = doc.createElement("tr");
+      row.className = "review-diff-" + kind;
+      [header || kind === "added" ? "" : oldLine++,
+        header || kind === "removed" ? "" : newLine++].forEach(function (number) {
+        var cell = doc.createElement("td"); cell.className = "review-diff-line-number";
+        cell.textContent = String(number); row.appendChild(cell);
+      });
+      var content = doc.createElement("td");
+      var code = doc.createElement("code");
+      var change = marks[index];
+      if (change && change[0] !== change[1]) {
+        [line.slice(0, change[0] + 1), line.slice(change[0] + 1, change[1] + 1),
+          line.slice(change[1] + 1)].forEach(function (part, position) {
+          var span = doc.createElement("span"); span.textContent = part;
+          if (position === 1) span.className = "review-diff-inline";
+          code.appendChild(span);
+        });
+      } else code.textContent = line;
+      content.appendChild(code); row.appendChild(content); table.appendChild(row);
+    });
+    return table;
+  }
+
   function initPairedC4Review(payload, options) {
     options = options || {};
     var doc = options.document || document;
@@ -2520,6 +2576,7 @@
       cache: {},
       errors: {},
       previews: {},
+      diffs: {},
     };
     var refreshTimer = null;
     var refreshInFlight = false;
@@ -2557,6 +2614,9 @@
     }
 
     function appendDiffs(parent) {
+      var diffs = payload.diffs || {};
+      if (!["source", "model", "plan"].some(function (key) { return diffs[key] != null; }) &&
+          !(Array.isArray(diffs.resources) && diffs.resources.length)) return;
       var details = node("details", "paired-c4-diffs");
       details.appendChild(node("summary", "", "Reviewed diffs"));
       var list = node("dl", "paired-c4-diff-list");
@@ -2574,6 +2634,7 @@
       if (Array.isArray(resources) && resources.length) {
         var links = node("ul", "paired-c4-resource-links");
         resources.forEach(function (resource) {
+          if (resource.kind === "design_diff") return;
           var item = node("li", "");
           appendLink(
             item,
@@ -2594,15 +2655,68 @@
       details.appendChild(node("summary", "", "Pinned readable resources"));
       var links = node("ul", "paired-c4-resource-links");
       payload.resources.forEach(function (resource) {
+        if (resource.kind === "design_diff") return;
         var item = node("li", "");
         var label = "Open " + (resource.kind || "resource");
         if (resource.side) label += " (" + resource.side + ")";
         if (resource.path) label += " — " + resource.path;
+        if (resource.historical) label += " (published version; review is stale)";
         appendLink(item, "paired-c4-resource-link", label, resource.url);
+        item.appendChild(node("p", "paired-c4-revision", "Revision: " + resource.revision));
+        if (resource.kind === "design") {
+          var preview = node("button", "paired-c4-context-preview", "Read published design");
+          preview.type = "button";
+          preview.addEventListener("click", function () { previewMarkdown(resource.url); });
+          item.appendChild(preview);
+          appendDocumentationPreview(item, resource.url);
+        }
         links.appendChild(item);
       });
       details.appendChild(links);
+      details.open = true;
       parent.appendChild(details);
+    }
+
+    function appendDesignDiff(parent) {
+      var resource = (payload.resources || []).find(function (row) { return row.kind === "design_diff"; });
+      if (!resource) return;
+      var url = safeUrl(resource.url);
+      if (!url) return;
+      var section = node("section", "review-design-changes");
+      section.appendChild(node("h3", "", "Design document changes"));
+      section.appendChild(node("p", "paired-c4-revision", resource.path + " · " +
+        (resource.before_revision || "empty file") + " → " + resource.revision));
+      if (resource.baseline_kind === "proposal_parent") {
+        section.appendChild(node("p", "", "Compared with the proposal commit’s parent; no accepted design baseline is recorded."));
+      }
+      if (resource.historical) section.appendChild(node("p", "", "Published proposal — this review needs republication."));
+      var result = documentation.diffs[url];
+      if (!result) {
+        documentation.diffs[url] = { loading: true };
+        Promise.resolve().then(function () {
+          return typeof options.loadDocumentationMarkdown === "function" ?
+            options.loadDocumentationMarkdown(url) :
+            fetch(url, { signal: pageLoadSignal() }).then(function (response) {
+              if (!response.ok) throw new Error("Unable to load document changes (" + response.status + ")");
+              return response.text();
+            });
+        }).then(function (text) {
+          documentation.diffs[url] = { text: String(text) };
+        }).catch(function (error) {
+          documentation.diffs[url] = { error: error.message || "Unable to load document changes." };
+        }).finally(function () { if (!stopped) render(); });
+        result = documentation.diffs[url];
+      }
+      if (result.loading) section.appendChild(node("p", "", "Loading document changes…"));
+      else if (result.error) section.appendChild(node("p", "paired-c4-context-error", result.error));
+      else if (!result.text.trim()) section.appendChild(node("p", "", "No changes to this design document."));
+      else {
+        var scroll = node("div", "review-diff-scroll");
+        scroll.setAttribute("tabindex", "0");
+        scroll.appendChild(renderUnifiedDiff(doc, result.text));
+        section.appendChild(scroll);
+      }
+      parent.appendChild(section);
     }
 
     function appendLink(parent, className, label, href) {
@@ -2965,6 +3079,7 @@
     }
 
     function renderThreadPanel() {
+      if (payload.approval_context === null) return;
       var panel = node("section", "paired-c4-threads");
       panel.appendChild(node("h3", "paired-c4-threads-heading", "Semantic review threads"));
 
@@ -3196,7 +3311,7 @@
         }
         list.appendChild(item);
       });
-      if (!threadModel.state.loading && !threadModel.state.threads.length) {
+      if (!threadModel.state.loading && !threadModel.state.error && !threadModel.state.threads.length) {
         list.appendChild(node("p", "paired-c4-thread-empty", "No semantic threads yet."));
       }
       panel.appendChild(list);
@@ -3274,7 +3389,11 @@
       var heading = node("div", "paired-c4-heading");
       var title = node("div", "");
       title.appendChild(node("h2", "", "Architecture change review"));
-      title.appendChild(node("p", "paired-c4-summary", payload.summary || "No semantic summary supplied."));
+      var noDiagramChange = payload.architecture_impact === "no_diagram_change" ||
+        payload.state === "no_diagram_change";
+      title.appendChild(node("p", "paired-c4-summary", noDiagramChange ?
+        "No C4 diagram changes proposed." : payload.state === "stale_revision" ?
+          "Architecture review needs republication." : payload.summary || "No semantic summary supplied."));
       heading.appendChild(title);
       host.appendChild(heading);
       var status = node("p", "paired-c4-status");
@@ -3284,21 +3403,39 @@
       if (payload.state === "error") {
         host.appendChild(node("p", "paired-c4-error", payload.error || "Paired diagram review is unavailable."));
         appendDiffs(host);
+        appendResources(host);
+        appendDesignDiff(host);
         renderThreadPanel();
         return;
       }
       if (!navigation.views.length) {
         var emptyMessage = payload.state === "unchanged" ?
           "No diagram changes." :
-          "No paired diagram views are available (" + payload.state + ").";
+          (payload.reason || payload.message ||
+            "No paired diagram views are available (" + payload.state + ").");
         if (payload.state === "partial_acceptance") {
           emptyMessage = "Partial acceptance remains pending. " +
             (payload.summary || "Code and documentation have not both landed.");
         }
-        host.appendChild(node(
-          "p", "paired-c4-empty",
-          emptyMessage
-        ));
+        if (payload.state === "stale_revision") {
+          emptyMessage = "This review must be republished against the current plan. " +
+            "Any published design below is historical evidence, not an approved current design.";
+        } else if (noDiagramChange) {
+          emptyMessage = "";
+        }
+        if (emptyMessage === (payload.summary || "")) emptyMessage = "";
+        if (emptyMessage) {
+          host.appendChild(node(
+            "p", "paired-c4-empty",
+            emptyMessage
+          ));
+        }
+        if (noDiagramChange) {
+          host.appendChild(node("p", "paired-c4-impact", payload.impact_reason ||
+            payload.reason || "The proposal updates documentation without changing the C4 model."));
+        }
+        appendDesignDiff(host);
+        appendResources(host);
         appendDiffs(host);
         renderThreadPanel();
         return;
@@ -3395,6 +3532,7 @@
       appendResources(meta);
       appendDiffs(meta);
       host.appendChild(meta);
+      appendDesignDiff(host);
       renderThreadPanel();
     }
 
@@ -3561,6 +3699,8 @@
                 .catch(function (error) {
                   initPairedC4Review({
                     state: "error",
+                    owner_work_id: workId,
+                    approval_context: null,
                     summary: envelope.message || "Architecture review is unavailable.",
                     error: (envelope.message || error.message || "Architecture review is unavailable.") +
                       (envelope.retry && envelope.retry.retryable ? " Retry shortly." : ""),
@@ -3642,5 +3782,6 @@
     createPairedNavigation: createPairedNavigation,
     createSemanticThreadModel: createSemanticThreadModel,
     initPairedC4Review: initPairedC4Review,
+    renderUnifiedDiff: renderUnifiedDiff,
   };
 });

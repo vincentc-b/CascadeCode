@@ -372,6 +372,9 @@ def test_corrective_features_attention_browser_journey_survives_stale_poll_and_r
                     name="Mark feat_001_003 seen for everyone using this workspace",
                 ).click()
                 second.get_by_role("button", name="View plan").wait_for()
+                page.wait_for_function(
+                    "document.querySelectorAll('.feature-new-marker').length === 0"
+                )
                 assert page.locator(".feature-new-marker").count() == 0
                 assert page.locator(".epic-new-count").count() == 0
                 page.unroute("**/api/board?*")
