@@ -182,3 +182,60 @@ def test_board_snapshot_preserves_pending_review_blockers(war_room_server) -> No
     sibling = _feature_row(payload, "feat_004")
     assert _has_blocker(dependent["readiness"]["blockers"], "feature_awaiting_merge")
     assert _has_blocker(sibling["readiness"]["blockers"], "sibling_blocked")
+
+
+def test_approved_feature_waits_for_sibling_then_refreshes_without_reapproval(
+    war_room_server,
+) -> None:
+    playwright = pytest.importorskip("playwright.sync_api")
+    base, root, _server = war_room_server
+    move_doc("feat_002", "active", root=root)
+
+    with playwright.sync_playwright() as runtime:
+        try:
+            browser = runtime.chromium.launch(headless=True)
+        except playwright.Error as exc:
+            pytest.skip(f"chromium is unavailable: {exc}")
+        page = browser.new_page()
+        approval_requests: list[str] = []
+        page.on(
+            "request",
+            lambda request: approval_requests.append(request.url)
+            if "/api/approve_feature" in request.url
+            else None,
+        )
+        try:
+            page.goto(base, wait_until="domcontentloaded")
+            row = page.locator('.board-row[data-id="feat_004"]')
+            row.wait_for(state="visible")
+
+            readiness = row.locator(".feature-readiness")
+            assert readiness.get_attribute("aria-label") == "Activation readiness for feat_004"
+            disclosure = readiness.locator("summary")
+            disclosure.press("Enter")
+            assert readiness.locator("details").evaluate("element => element.open") is True
+            assert "Another feature in this Epic is actively executing." in readiness.inner_text()
+            assert "Affected: feat_002." in readiness.inner_text()
+            assert "The feature is approved." in readiness.inner_text()
+            assert readiness.locator('a[href="/plan/feat_002"]').count() == 1
+            assert row.get_by_role("button", name="Approve feature").count() == 0
+
+            move_doc("feat_002", "completed", root=root)
+            page.wait_for_function(
+                """() => {
+                  const row = document.querySelector('.board-row[data-id="feat_004"]');
+                  return row && !row.textContent.includes('Another feature in this Epic is actively executing.');
+                }""",
+                timeout=10_000,
+            )
+
+            refreshed = page.locator('.board-row[data-id="feat_004"] .feature-readiness')
+            refreshed.locator("summary").press("Enter")
+            assert "No sibling feature is actively executing." in refreshed.inner_text()
+            assert "The feature is approved." in refreshed.inner_text()
+            assert page.locator(
+                '.board-row[data-id="feat_004"] button', has_text="Approve feature"
+            ).count() == 0
+            assert approval_requests == []
+        finally:
+            browser.close()
