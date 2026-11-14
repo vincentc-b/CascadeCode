@@ -55,6 +55,15 @@ detail allowance; they retain a reference and selected identity/state fields,
 not evidence objects, provider prompts, credentials, arbitrary result payloads,
 or hidden reasoning.
 
+`REQ-WATCHDOG-005`: Each immutable manifest publishes section row totals and a
+bounded coverage aggregate so a consumer can report completeness without
+opening every page. `DEC-WATCHDOG-005`: Coverage counts are grouped by
+verification status and by at most 64 most-common reason strings; the remaining
+reason count is explicit in `other_reasons`. Status and reason totals must each
+equal the coverage section row total. Section page/row totals must also agree
+with the 100-row page ceiling. A pass with a legacy schema-2 manifest lacking
+these fields republishes even when its projected rows are otherwise unchanged.
+
 A modern source row qualifies as a current candidate only when its `work_id` is typed and
 unambiguous (including agreement with nested `work.work_id`), its generation is
 a complete SHA-256 incident identity, its failure class is nonempty, and its
@@ -148,3 +157,7 @@ invalid pages.
 bounds, restart reconciliation, unchanged publication, corrupt pages, and an
 interrupted pointer swap. `tests/watchdog/test_audit_lane.py` verifies that a
 publication failure leaves the pass pending.
+
+The bounded War Room consumer is owned by
+`cascade/war_room/audit_projection_reader.py`; it does not call the full-epoch
+`read_projection_manifest` publication check.

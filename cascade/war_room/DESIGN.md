@@ -6,6 +6,24 @@ Evidence: `cascade/war_room/` and `tests/war_room/` at baseline `d932f48764cc0ce
 
 Known gaps: forge descriptions unavailable in Task 001 remain explicit gaps.
 
+## Bounded health-audit projection reads
+
+`REQ-WARROOM-AUDIT-001`: Dashboard consumers read only the current projection
+pointer, its one immutable manifest, and the requested current, coverage, or
+history pages. Regular-file no-follow opens cap total source bytes at 1 MiB,
+rows at 100, and the serialized result at 256 KiB. Missing, stale, corrupt,
+incompatible, or wrong product/tracking evidence is typed `pending`; it never
+becomes an empty healthy result.
+
+`DEC-WARROOM-AUDIT-001`: `audit_projection_reader.py` validates the bounded
+manifest header and each page it actually visits instead of calling the
+producer's full-epoch validator. Filters are normalized exact work ID, owner,
+verification status, and UTC occurrence bounds. Opaque cursors bind those
+filters to section, epoch, page, and row offset and contain no path. A newer
+pointer returns an explicit epoch restart. Budget exhaustion returns an
+incomplete page and continuation while preserving producer `source_ref`,
+legacy provenance, and `detail_truncated` without opening a recovery ledger.
+
 ## Refresh latency and coherent read projections
 
 `REQ-WARROOM-REFRESH-001`: first board rendering must not wait for independent
