@@ -315,16 +315,50 @@
     }
   }
 
-  async function pollAuditStatus() {
-    if (!el.auditStatus || !AuditStatusUi) return;
-    try {
-      AuditStatusUi.render(el.auditStatus, await apiGet("/api/health/audit"));
-    } catch (err) {
-      AuditStatusUi.render(el.auditStatus, {
-        unavailable_evidence: [{ source: "audit_status", reason: err.message || "Unavailable" }],
-        incidents: []
+  const auditUiState = {};
+  let auditStatusInFlight = null;
+
+  function auditPagePath(section, cursor, filters) {
+    const params = new URLSearchParams();
+    params.set("limit", "50");
+    if (cursor) params.set("cursor", cursor);
+    Object.keys(filters || {}).forEach(function (name) {
+      let value = filters[name];
+      if (!value) return;
+      if ((name === "from" || name === "to") && !/[zZ]|[+-]\d\d:\d\d$/.test(value)) {
+        value += "Z";
+      }
+      params.set(name, value);
+    });
+    return "/api/health/audit/" + section + "?" + params.toString();
+  }
+
+  function pollAuditStatus(options) {
+    if (!el.auditStatus || !AuditStatusUi) return Promise.resolve();
+    if (document.hidden && !(options && options.force)) return Promise.resolve();
+    if (auditStatusInFlight) return auditStatusInFlight;
+    auditStatusInFlight = apiGet("/api/health/audit")
+      .then(function (payload) {
+        AuditStatusUi.render(el.auditStatus, payload, {
+          state: auditUiState,
+          loadCoverage: function (cursor) {
+            return apiGet(auditPagePath("coverage", cursor));
+          },
+          loadHistory: function (cursor, filters) {
+            return apiGet(auditPagePath("history", cursor, filters));
+          }
+        });
+      })
+      .catch(function (err) {
+        AuditStatusUi.render(el.auditStatus, {
+          unavailable_evidence: [{ source: "audit_status", reason: err.message || "Unavailable" }],
+          incidents: []
+        }, { state: auditUiState });
+      })
+      .finally(function () {
+        auditStatusInFlight = null;
       });
-    }
+    return auditStatusInFlight;
   }
 
   async function apiGet(path) {
@@ -3379,7 +3413,7 @@
       button: el.btnRunHealthAudit,
       status: el.auditRunStatus,
       request: function () { return apiPost("/api/health/audit"); },
-      refresh: pollAuditStatus,
+      refresh: function () { return pollAuditStatus({ force: true }); },
     });
   }
 

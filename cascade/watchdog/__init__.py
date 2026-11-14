@@ -1,5 +1,10 @@
 """Watchdog, append-only queues, and dispatch law."""
 
+# Publish the queue primitives before importing modules that may traverse the
+# workspace package and re-enter ``cascade.watchdog`` through comment delivery.
+# This also keeps spawned audit observers importable from a clean interpreter.
+from cascade.watchdog.events import append_event, read_events
+
 from cascade.watchdog.config import (
     AutomationConfig,
     ConfigError,

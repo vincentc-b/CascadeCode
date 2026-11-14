@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import time
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -797,7 +797,7 @@ def test_resolution_action_without_review_registry_is_unavailable(
     tmp_path: Path, action_request: dict[str, str]
 ) -> None:
     root = make_repo(tmp_path)
-    add_doc(root, id="epic_001", title="Old epic", tier="epic", status="completed")
+    doc = add_doc(root, id="epic_001", title="Old epic", tier="epic", status="completed")
     _commit(root)
     sidecar = root / ".cascade" / "resolution_actions.json"
     sidecar.write_text(
@@ -813,7 +813,9 @@ def test_resolution_action_without_review_registry_is_unavailable(
         encoding="utf-8",
     )
 
-    page = select_audit_candidates(root=root, today=date(2026, 11, 20))
+    # Canonical writes stamp today's date. Keep the fixture outside the recent
+    # completion window regardless of the calendar date on the test runner.
+    page = select_audit_candidates(root=root, today=doc.meta.updated + timedelta(days=8))
     observation = project_audit_observation("epic_001", root=root)
 
     assert not page.candidates

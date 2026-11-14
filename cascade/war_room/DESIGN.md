@@ -4,7 +4,26 @@ Purpose: expose the loopback operator UI/API for status, approvals, chat attachm
 
 Evidence: `cascade/war_room/` and `tests/war_room/` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: forge descriptions unavailable in Task 001 remain explicit gaps.
+Known gaps: unavailable forge descriptions limit historical attribution. Local
+audit fixtures do not establish post-deployment live acceptance.
+
+## Bounded health-audit projection reads
+
+`REQ-WARROOM-AUDIT-001`: Dashboard consumers read only the current projection
+pointer, its one immutable manifest, and the requested current, coverage, or
+history pages. Regular-file no-follow opens cap total source bytes at 1 MiB,
+rows at 100, and the serialized result at 256 KiB. Missing, stale, corrupt,
+incompatible, or wrong product/tracking evidence is typed `pending`; it never
+becomes an empty healthy result.
+
+`DEC-WARROOM-AUDIT-001`: `audit_projection_reader.py` validates the bounded
+manifest header and each page it actually visits instead of calling the
+producer's full-epoch validator. Filters are normalized exact work ID, owner,
+verification status, and UTC occurrence bounds. Opaque cursors bind those
+filters to section, epoch, page, and row offset and contain no path. A newer
+pointer returns an explicit epoch restart. Budget exhaustion returns an
+incomplete page and continuation while preserving producer `source_ref`,
+legacy provenance, and `detail_truncated` without opening a recovery ledger.
 
 ## Refresh latency and coherent read projections
 
@@ -41,92 +60,97 @@ request rereads the registries, and existing locks and standalone action-boundar
 reads remain unchanged. `tests/war_room/test_projection_batching.py` verifies the
 read count, empty snapshots, and refresh across requests.
 
-## Planned feature activation explanations and new-work attention
+## Health-audit HTTP consumer
 
-Epic `epic_045` specifies two successive slices, `feat_045_001` and
-`feat_045_002`. This section records the reviewed design; implementation and its
-acceptance evidence remain with those features. Epic success criteria 1–5 and
-decision `dec_002` govern activation explanations; criteria 6–16 and `dec_003`
-govern durable attention. Decision `dec_001` sequences the two slices.
+`REQ-WARROOM-AUDIT-002`: `GET /api/health/audit` exposes verified current incidents,
+producer-published aggregate coverage, freshness, and bounded receipt/failure
+metadata. `GET /api/health/audit/coverage` and `/api/health/audit/history` serve
+epoch-pinned pages with a default of 50 and maximum of 100 rows. Exact work ID,
+owner, status, and UTC occurrence-time filters preserve unknown and unverifiable
+evidence as nonmatches. Malformed query input is a 400; a changed epoch or cursor
+filter mismatch gives a bounded restart response. Each response names the epoch,
+continuation, and completeness, stays within 256 KiB serialized bytes, and
+preserves stable source references instead of reading large raw details. An empty
+verified-current page with incomplete coverage does not claim health.
 
-Activation explanations extend the existing Python readiness projection while
-preserving `approved` and `blockers` consumers. Canonical dispatch predicates
-retain blocking sibling identities and distinguish execution from merge/review.
-The board receives a versioned summary, all reasons, satisfied prerequisites,
-owners, existing actions, observation freshness and optional actual dispatch
-attempt evidence. A fresh human-action blocker takes precedence, followed by
-unknown required evidence, known work/system waits, and fully evaluated readiness
-awaiting dispatch. Passing gates never claims execution. Historical refusals stay
-separate from a newer evaluation. Revision approval, dependencies, parent state,
-review threads, provider inventory and dispatch-base facts retain their current
-owners; feature planning must pin each source and its invalidation policy.
+`DEC-WARROOM-AUDIT-002`: GET routes use the
+[bounded projection reader](#bounded-health-audit-projection-reads)
+at the resolved product repository root. They do not inspect recovery ledgers,
+canonical board/worktrees, Git, providers, or schedule audit/recovery work.
+`POST /api/health/audit` remains the authenticated manual admission route.
+Repository identity, freshness and read-budget failures are visible as pending or
+unknown status. The shared boundary is owned by
+[the package design](../DESIGN.md#health-audit-read-boundary).
 
-Acquire reusable facts once per board response. Missing cached evidence remains
-unknown; polling must not introduce provider discovery, expensive per-feature Git
-probes, dispatch, or lifecycle mutation. Actual actions re-evaluate their gates.
-The browser renders reasons and actions without implementing eligibility rules.
+Verification locations: [route tests](../../tests/war_room/test_health_audit_routes.py)
+and [reader tests](../../tests/war_room/test_audit_projection_reader.py) cover filtered pagination,
+epoch/filter restart, stale and corrupt evidence, and strict source/response
+budgets. The [integrated fixture](../../tests/war_room/test_audit_integrated_experience.py) follows real
+producer output through the loopback routes across a new epoch and split
+product/tracking roots, while the [browser race harness](../../tests/war_room/war_room_refresh_races.mjs) verifies
+single-flight, read-only browser refreshes. The [GET benchmark](../../tests/war_room/benchmark_audit_get.py)
+records warm loopback GET p95 and actual source/response bytes for a representative
+10,000-attempt fixture. Local smoke evidence is not post-deployment acceptance.
 
-Attention uses a separate versioned ledger keyed by canonical tracking workspace
-and stable feature ID. Mint/startup reconciliation records creation or durable
-first discovery; rendering never acknowledges. Workspace-shared Mark seen uses
-the existing request-scoped human verifier and records actor/time. It is idempotent
-and does not approve, dispatch, edit plans, or clear blockers. Resolve one shared
-tracking-owned store across managed worktrees and split repositories, with atomic
-persistence and cross-process locking. A monotonic state revision prevents an old
-poll response from undoing an acknowledged marker in the UI.
+## Feature activation explanations and new-work attention
 
-First rollout atomically records known identities and exposes only open
-backlog/ready-to-plan children of active, non-cancelling epics as unseen. Historical
-identities are baselined; later additions remain unseen until explicit Mark seen.
+`REQ-WARROOM-READINESS-001`: Activation explanations preserve `approved` and
+`blockers` consumers. The board exposes a versioned summary, reasons, satisfied
+prerequisites, owners, existing actions, observation freshness and actual dispatch
+attempt evidence when available. A fresh human-action blocker takes precedence,
+followed by unknown required evidence, known work/system waits, and evaluated
+readiness awaiting dispatch. Passing gates never claims execution; historical
+refusals remain separate from a newer evaluation. The browser renders these
+projections without implementing eligibility rules.
+
+`DEC-WARROOM-READINESS-001`: Board responses reuse request-scoped facts. Missing
+cached evidence remains unknown; polling does not discover providers, perform
+expensive per-feature Git probes, dispatch, or mutate lifecycle state. Action
+boundaries re-evaluate their gates. This preserves truthful explanations without
+turning browser refreshes into execution or repeated discovery.
+
+`REQ-WARROOM-ATTENTION-001`: New-feature markers and collapsed-epic counts remain
+separate from lifecycle and activation summaries. Viewing or rendering a feature
+never acknowledges it. Workspace-shared **Mark seen** requires the request-scoped
+human verifier, records actor/time, and does not approve, dispatch, edit plans or
+clear blockers. Keyboard navigation, contrast and screen-reader labels support
+both markers and actions.
+
+`DEC-WARROOM-ATTENTION-001`: The UI consumes the canonical tracking-workspace
+attention ledger through `feature_attention_routes.py`. A monotonic revision
+prevents an older poll response from undoing an acknowledgement. Unavailable or
+corrupt state remains visibly unavailable and disables acknowledgement; it never
+silently resets the baseline. Ledger persistence belongs to
+[`feature_attention.py`](../feature_attention.py), which shares state across
+managed worktrees and split repositories using atomic writes and locking.
 Completed, cancelled and retired children leave pending-attention aggregates
-without deleting provenance. Replay, plan edits and status/path changes cannot
-recreate acknowledged newness. Unavailable or corrupt state must remain visibly
-unavailable, never silently reset the baseline. Feature 002 must pin bootstrap,
-concurrent mint and crash-recovery behavior before coding.
+without deleting provenance; replay and plan edits do not recreate acknowledged
+newness.
 
-New text and collapsed-epic counts remain separate from lifecycle and activation
-summaries, with keyboard navigation, readable contrast and screen-reader labels.
-Focused API/integration coverage owns state and gate invariants; a browser journey
-proves discovery of two corrective features, explicit acknowledgement and refresh
-persistence. Neither slice changes scheduling or human approval policy.
+Verification: [readiness evidence](../../tests/war_room/test_feature_readiness_evidence.py),
+[board readiness](../../tests/war_room/test_board_feature_readiness.py), and
+[attention API/browser scenarios](../../tests/war_room/test_feature_attention_api.py)
+cover missing/stale evidence, explicit acknowledgement, concurrent revisions,
+refresh persistence and storage failure.
 
-Architecture impact: **no diagram change**. These additions stay inside the
-existing War Room, supervisor/team readiness and workspace/repository persistence
-boundaries represented by `element.container.war-room`,
-`element.container.supervisor` and `element.container.repository`. They add no
-deployment unit, external service, actor, or C4 relationship. The existing
-`cascade-containers` and `cascade-supervisor-components` views retain their meaning;
-the ledger schema and explanation fields belong in the child feature contracts.
+## Architecture review boundary
 
-Planning validation (2026-11-12): the four reconstructed-design checks passed.
-The three existing board-feature-readiness cases failed during fixture setup:
-`approve_board_feature` attempts approval while a declared dependency is still
-backlog, and the current action boundary correctly raises `dependency_unmet`.
-Feature 001 must update those fixtures to establish approval through a legitimate
-dependency-satisfied state before exercising later waiting states; these cases are
-not passing baseline evidence. No product code changed in this review.
+The War Room presents revision-pinned architecture resources and review state.
+Publication, artifact ownership, destination, generation, ancestry and byte-digest
+validation belong to the [workspace design](../workspace/DESIGN.md), specifically
+[REQ-WORKSPACE-001](../workspace/DESIGN.md),
+[REQ-WORKSPACE-002](../workspace/DESIGN.md) and
+[DEC-WORKSPACE-001](../workspace/DESIGN.md). Registered owning
+lineage determines each artifact's current revision; tracking and product
+revisions remain distinct in split repositories. The UI does not grant permission
+to publish or accept a stale review. Supported retries retain failure history and
+exact proposal evidence.
 
-### Publication repair reviewed with plan revision 693476b
-
-Decision `dec_005` adds `feat_045_003`, an independent orchestration repair, while
-retaining 001 and 002 as the two product slices. The publication path currently
-stages without the owned lineage, and current-artifact validation resolves a
-tracking-role plan against the configured repository HEAD. A committed plan on
-the authorized planning branch can consequently fail ancestry validation before
-trunk integration. The repair belongs in the existing workspace architecture
-publication/review services; it adds no actor, service or C4 relationship and
-does not change this review's **no diagram change** decision.
-
-Resolve each artifact's current head from its authorized repository and registered
-owning lineage. Preserve distinct tracking/product revisions for split roots and
-all ownership, destination, generation, ancestry and byte-digest checks. Feature
-003 must define supported retry for a terminal publication while retaining failure
-history and exact proposal evidence. It must cover valid branch-local artifacts
-and changed, unrelated, missing or stale artifacts in colocated and split roots.
-Do not relabel repository roles, edit ledgers or require an early trunk merge.
-
-This is reviewed repair scope, not an implemented fix. Completion requires an
-accepted SWE repair and a successful canonical architect publication against the
-then-reviewed exact plan/design tuple. The old proposal remains historical
-evidence; the newly reviewed plan requires its own pinned publication. Normal
-human approval and dispatch boundaries remain in force.
+The repository-owned [C4 model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+is authoritative; its [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+represent the War Room, supervisor and repository boundaries. Readiness,
+attention and audit presentation stay within these components.
+[Architecture HTTP tests](../../tests/war_room/test_architecture_http.py) and
+[tab UI tests](../../tests/war_room/test_architecture_tab_ui.py) verify the local
+consumer boundary; [publication tests](../../tests/workspace/test_architecture_publication.py)
+verify owner-lineage and exact-revision enforcement.

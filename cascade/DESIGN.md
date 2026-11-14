@@ -22,6 +22,32 @@ at the refreshed baseline recorded in the reconciliation report. Historical rows
 with unavailable or ambiguous evidence remain unresolved and do not override the
 current code/test contract.
 
+## Health-audit read boundary
+
+`REQ-CASCADE-002`: Dashboard audit reads consume a bounded, immutable projection
+epoch. The Watchdog owns source classification, reconciliation, aggregate coverage,
+and publication; the War Room owns HTTP pagination and presentation. A dashboard
+read cannot invoke lifecycle observation, recovery, Git, or provider work. A
+missing, invalid, expired, or repository-mismatched epoch is pending or unknown,
+never proof of health or authority for repair.
+
+`DEC-CASCADE-002`: Keep producer and consumer within the existing Watchdog and
+War Room components, using the product repository projection root as their shared
+local interface. This preserves one source of incident authority and one read
+budget at the UI boundary without a new service or C4 relationship. The producer
+contract is owned by [Watchdog](watchdog/DESIGN.md#health-audit-projection-contract)
+and the route contract by [War Room](war_room/DESIGN.md#health-audit-http-consumer).
+The repository-owned architecture source remains
+[`architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/`](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/README.md).
+
+Verification locations: [producer tests](../tests/watchdog/test_audit_projection.py)
+and [consumer tests](../tests/war_room/test_health_audit_routes.py) cover each side
+of the boundary. The [integrated fixture](../tests/war_room/test_audit_integrated_experience.py) verifies the shared interface
+from retained recovery sources through an immutable epoch and loopback HTTP reads.
+The representative large-ledger work and byte counts are recorded by
+the [producer benchmark](../tests/watchdog/benchmark_audit_producer.py) and
+[GET benchmark](../tests/war_room/benchmark_audit_get.py).
+
 ## Review publication safeguards
 
 `REQ-REVIEW-PUBLISH-001`: a Git conflict resolution is not publishable until its

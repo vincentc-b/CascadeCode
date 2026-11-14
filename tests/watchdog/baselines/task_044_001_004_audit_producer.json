@@ -1,0 +1,31 @@
+{
+  "command": "python tests/watchdog/benchmark_audit_producer.py",
+  "enforced_ceilings": {
+    "candidate_seconds": 2,
+    "candidates_per_pass": 100,
+    "pass_seconds": 60
+  },
+  "environment": {
+    "platform": "Linux-6.8.0-1021-aws-x86_64-with-glibc2.35",
+    "processor": "x86_64",
+    "python": "3.12.8"
+  },
+  "fixture": {
+    "attempts": 10000,
+    "generations": 100,
+    "incident_rows": 100,
+    "malformed_rows": 20,
+    "owners": 17,
+    "source_bytes": 853013
+  },
+  "limitations": [
+    "Local filesystem measurement; not a cross-platform latency guarantee.",
+    "Ceilings are verified by focused tests; elapsed time is recorded, not asserted."
+  ],
+  "measured_at": "2026-11-14T03:52:36Z",
+  "producer": {
+    "elapsed_seconds": 0.3556139719985367,
+    "pages": 3,
+    "serialized_page_bytes": 127754
+  }
+}

@@ -2,34 +2,47 @@ from __future__ import annotations
 
 import json
 import socket
-import subprocess
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
-from types import SimpleNamespace
+from pathlib import Path
 
-from cascade.watchdog.audit_lane import AuditPassResult, HealthAuditLane
-from cascade.watchdog.audit_lane import audit_receipt_path
+from cascade.watchdog.audit_lane import (
+    AuditPassResult,
+    HealthAuditLane,
+    audit_receipt_path,
+)
+from cascade.watchdog.audit_investigation import follow_up_snapshot_path
+from cascade.watchdog.audit_projection import (
+    CoverageSummary,
+    CurrentSummary,
+    HistorySummary,
+    ProjectionManifest,
+    SourceRef,
+    projection_repository_identities,
+    projection_root,
+)
 from cascade.watchdog.config import HealthAuditConfig
-from cascade.watchdog.incidents import authoritative_generation, incident_record
-from cascade.war_room.audit_status import health_audit_status
 from cascade.war_room.human_auth import LocalHumanIdentityVerifier
 from cascade.war_room.server import serve
-from tests.support import add_doc, make_repo
+from tests.support import make_repo
 
 
-def _post(
+def _request(
     url: str,
     *,
+    method: str = "GET",
     token: str | None = None,
-    body: bytes = b"",
+    body: bytes | None = None,
 ) -> tuple[int, dict[str, object]]:
     request = urllib.request.Request(
         url,
         data=body,
-        method="POST",
+        method=method,
         headers={
             "Content-Type": "application/json",
             **({"Authorization": f"Bearer {token}"} if token else {}),
@@ -43,32 +56,175 @@ def _post(
         return response.status, json.loads(response.read().decode())
 
 
-def _get(url: str) -> tuple[int, dict[str, object]]:
-    with urllib.request.urlopen(url) as response:
-        return response.status, json.loads(response.read().decode())
+def _post(url: str, *, token: str | None = None, body: bytes = b""):
+    return _request(url, method="POST", token=token, body=body)
+
+
+def _get(url: str):
+    return _request(url)
+
+
+@contextmanager
+def _server(root: Path, **kwargs):
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = serve(root=root, host="127.0.0.1", port=port, **kwargs)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(2)
+
+
+def _write(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")))
+
+
+def _publish(
+    root: Path, *, epoch: str = "epoch-one", observed: datetime | None = None
+) -> None:
+    observed = observed or datetime.now(timezone.utc)
+    generation = "sha256:" + "a" * 64
+    current = [
+        CurrentSummary(
+            SourceRef("action_recovery", "current-blocker"),
+            "task_002",
+            "feature_team:feat_001",
+            generation,
+            "blocked_task_failed",
+            observed.isoformat(),
+            observed.isoformat(),
+            observed.isoformat(),
+            "proven_incident",
+            "fresh authoritative blocker",
+        ).as_dict()
+    ]
+    coverage = [
+        CoverageSummary(
+            SourceRef("action_recovery", "current-blocker"),
+            "task_002",
+            "feature_team:feat_001",
+            generation,
+            "blocked_task_failed",
+            observed.isoformat(),
+            observed.isoformat(),
+            observed.isoformat(),
+            "proven_incident",
+            "fresh authoritative blocker",
+        ).as_dict(),
+        CoverageSummary(
+            SourceRef("orphan_delivery", "deferred"),
+            "task_003",
+            "feature_team:feat_001",
+            None,
+            "delivery_timeout",
+            observed.isoformat(),
+            observed.isoformat(),
+            None,
+            "pending",
+            "observation_timeout",
+        ).as_dict(),
+    ]
+    history = [
+        HistorySummary(
+            SourceRef("remediation_dispositions", f"legacy-{index}"),
+            "task_001",
+            "feature_team:feat_001",
+            None,
+            "old_failure",
+            (observed - timedelta(days=index + 1)).isoformat(),
+            None,
+            None,
+            "unverifiable",
+            "legacy_attempt",
+            provenance={"legacy": "true"},
+        ).as_dict()
+        for index in range(2)
+    ]
+    sections = {"current": current, "coverage": coverage, "history": history}
+    product, tracking = projection_repository_identities(root)
+    manifest = ProjectionManifest(
+        epoch=epoch,
+        observed_at=observed.isoformat(),
+        interval_seconds=60,
+        fresh_until=(observed + timedelta(minutes=3)).isoformat(),
+        product_identity=product,
+        tracking_identity=tracking,
+        page_counts={name: 1 for name in sections},
+        row_counts={name: len(rows) for name, rows in sections.items()},
+        coverage_by_status={"proven_incident": 1, "pending": 1},
+        coverage_by_reason={"fresh authoritative blocker": 1, "observation_timeout": 1},
+    ).as_dict()
+    base = projection_root(root)
+    for name, rows in sections.items():
+        _write(
+            base / epoch / name / "000000.json",
+            {
+                "schema_version": 2,
+                "projection_kind": name,
+                "epoch": epoch,
+                "rows": rows,
+            },
+        )
+    _write(base / epoch / "manifest.json", manifest)
+    _write(base / "current.json", {"schema_version": 2, "epoch": epoch})
+
+
+def _publish_follow_ups(root: Path) -> None:
+    _write(
+        follow_up_snapshot_path(root),
+        {
+            "version": 1,
+            "published_at": "2026-11-14T12:00:00+00:00",
+            "source": {"kind": "audit_investigation_cases", "identity": "tracking:test"},
+            "state": "available",
+            "truncated": False,
+            "unavailable_count": 0,
+            "rows": [
+                {
+                    "source": {
+                        "kind": "audit_investigation_case",
+                        "case_id": "investigation_" + "a" * 32,
+                        "request_id": "request-1",
+                        "delivery_generation": 1,
+                    },
+                    "available": True,
+                    "work_id": "task_002",
+                    "owner_id": "feat_001",
+                    "reason": "unknown_failure",
+                    "request": {"state": "delivered", "delivered_at": "2026-11-14T11:58:00+00:00", "error": None},
+                    "acknowledgement": {"state": "acknowledged", "acknowledged_at": "2026-11-14T11:59:00+00:00"},
+                    "latest_report": {
+                        "reported_at": "2026-11-14T11:59:00+00:00",
+                        "outcome": "reported_fixed",
+                        "finding": "Repair reported; verification pending",
+                        "references": ["https://forge/pull/123"],
+                        "detail_truncated": False,
+                    },
+                    "pending_reassessment": {"pending": True, "next_at": "2026-11-14T12:00:00+00:00"},
+                    "detail_truncated": False,
+                }
+            ],
+        },
+    )
 
 
 def test_manual_audit_requires_human_and_coalesces_duplicate_request(tmp_path) -> None:
     root = make_repo(tmp_path, git=False)
     token = "manual-audit-secret"
-    verifier = LocalHumanIdentityVerifier("local:test", token)
     admissions = iter((True, False))
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    server = serve(
-        root=root,
-        host="127.0.0.1",
-        port=port,
-        human_identity_verifier=verifier,
+    with _server(
+        root,
+        human_identity_verifier=LocalHumanIdentityVerifier("local:test", token),
         health_audit_request=lambda: next(admissions),
-    )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    url = f"http://127.0.0.1:{port}/api/health/audit"
-    try:
-        status, _ = _post(url)
-        assert status == HTTPStatus.UNAUTHORIZED
+    ) as base:
+        url = f"{base}/api/health/audit"
+        assert _post(url)[0] == HTTPStatus.UNAUTHORIZED
         assert _post(url, token=token) == (
             HTTPStatus.ACCEPTED,
             {"ok": True, "status": "admitted"},
@@ -81,13 +237,9 @@ def test_manual_audit_requires_human_and_coalesces_duplicate_request(tmp_path) -
             HTTPStatus.BAD_REQUEST,
             {"error": "manual audit accepts no body"},
         )
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(2)
 
 
-def test_stopped_lane_rejects_manual_audit(tmp_path) -> None:
+def test_stopped_or_missing_lane_rejects_manual_audit(tmp_path) -> None:
     root = make_repo(tmp_path, git=False)
     lane = HealthAuditLane(
         root=root,
@@ -96,61 +248,24 @@ def test_stopped_lane_rejects_manual_audit(tmp_path) -> None:
     )
     lane.stop()
     token = "manual-audit-secret"
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    server = serve(
-        root=root,
-        host="127.0.0.1",
-        port=port,
-        human_identity_verifier=LocalHumanIdentityVerifier("local:test", token),
-        health_audit_request=lane.request_manual_pass,
-    )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        status, payload = _post(
-            f"http://127.0.0.1:{port}/api/health/audit", token=token
-        )
-        assert status == HTTPStatus.SERVICE_UNAVAILABLE
-        assert payload == {"error": "health audit unavailable"}
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(2)
-
-
-def test_missing_lane_rejects_manual_audit(tmp_path) -> None:
-    root = make_repo(tmp_path, git=False)
-    token = "manual-audit-secret"
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    server = serve(
-        root=root,
-        host="127.0.0.1",
-        port=port,
-        human_identity_verifier=LocalHumanIdentityVerifier("local:test", token),
-    )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        status, payload = _post(
-            f"http://127.0.0.1:{port}/api/health/audit", token=token
-        )
-        assert status == HTTPStatus.SERVICE_UNAVAILABLE
-        assert payload == {"error": "health audit unavailable"}
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(2)
+    verifier = LocalHumanIdentityVerifier("local:test", token)
+    for request in (lane.request_manual_pass, None):
+        with _server(
+            root, human_identity_verifier=verifier, health_audit_request=request
+        ) as base:
+            assert _post(f"{base}/api/health/audit", token=token) == (
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"error": "health audit unavailable"},
+            )
 
 
 def test_route_runs_disabled_lane_without_moving_periodic_deadline(tmp_path) -> None:
     root = make_repo(tmp_path, git=False)
-    entered = threading.Event()
-    release = threading.Event()
-    completed = threading.Event()
+    entered, release, completed = (
+        threading.Event(),
+        threading.Event(),
+        threading.Event(),
+    )
 
     def run_pass(*_args) -> AuditPassResult:
         entered.set()
@@ -165,347 +280,157 @@ def test_route_runs_disabled_lane_without_moving_periodic_deadline(tmp_path) -> 
     ).start()
     deadline = lane.deadline
     token = "manual-audit-secret"
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    server = serve(
-        root=root,
-        host="127.0.0.1",
-        port=port,
-        human_identity_verifier=LocalHumanIdentityVerifier("local:test", token),
-        health_audit_request=lane.request_manual_pass,
-    )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    url = f"http://127.0.0.1:{port}/api/health/audit"
     try:
-        assert _post(url, token=token) == (
-            HTTPStatus.ACCEPTED,
-            {"ok": True, "status": "admitted"},
-        )
-        assert entered.wait(2)
-        assert _post(url, token=token) == (
-            HTTPStatus.ACCEPTED,
-            {"ok": True, "status": "coalesced"},
-        )
-        release.set()
-        assert completed.wait(2)
-        assert lane.deadline == deadline
+        with _server(
+            root,
+            human_identity_verifier=LocalHumanIdentityVerifier("local:test", token),
+            health_audit_request=lane.request_manual_pass,
+        ) as base:
+            url = f"{base}/api/health/audit"
+            assert _post(url, token=token)[1]["status"] == "admitted"
+            assert entered.wait(2)
+            assert _post(url, token=token)[1]["status"] == "coalesced"
+            release.set()
+            assert completed.wait(2)
+            assert lane.deadline == deadline
     finally:
         release.set()
-        server.shutdown()
-        server.server_close()
-        thread.join(2)
         lane.stop(timeout=2)
 
 
-def test_get_audit_projects_receipt_and_truthful_durable_incident(
-    tmp_path, monkeypatch
-) -> None:
-    root = make_repo(tmp_path, git=False)
-    receipt = audit_receipt_path(root)
-    receipt.parent.mkdir(parents=True, exist_ok=True)
-    receipt.write_text(
-        json.dumps(
-            {
-                "last_completed_at": "2026-11-08T12:00:00+00:00",
-                "next_scheduled_at": "2026-11-08T12:30:00+00:00",
-                "interval_seconds": 1800,
-                "duration_seconds": 2.25,
-                "counts": {
-                    "healthy": 2,
-                    "proven_incident": 1,
-                    "tier.task.healthy": 2,
-                    "tier.feature.proven_incident": 1,
-                },
-                "next_cursor": None,
-            }
-        ),
-        encoding="utf-8",
-    )
-    generation = authoritative_generation(
-        work_id="feat_001",
-        tier="feature",
-        evidence={"status": "active"},
-        capability="resume_planning_owner",
-    )
-    incident = incident_record(
-        work_id="feat_001",
-        tier="feature",
-        accountable_owner="feature_team:feat_001",
-        failure_class="stalled_owner",
-        generation=generation,
-        evidence={"status": "active", "branch": "feat/feat_001"},
-        selected_capability="resume_planning_owner",
-        request={
-            "reservation_id": "feat_001:health_reservation:one",
-            "claim_token": "token",
-            "operation": "resume_planning_owner",
-        },
-        attempts=[{"attempt": 1, "claim_token": "token", "accepted_at": "2026-11-08T12:00:01+00:00"}],
-        outcome="claimed",
-        now=datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc),
-    )
-    monkeypatch.setattr(
-        "cascade.watchdog.audit.project_audit_observation",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            classification="proven_incident",
-            incident=SimpleNamespace(failure_class="stalled_owner"),
-            generation=generation,
-        ),
-    )
-    ledger = root / ".cascade" / "executions.json"
-    ledger.write_text(
-        json.dumps({"actions": {"reservation": {"incident": incident}}}),
-        encoding="utf-8",
-    )
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    server = serve(root=root, host="127.0.0.1", port=port)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        status, payload = _get(f"http://127.0.0.1:{port}/api/health/audit")
-        assert status == HTTPStatus.OK
-        assert payload["last_run"] == "2026-11-08T12:00:00+00:00"
-        assert payload["next_due"] == "2026-11-08T12:30:00+00:00"
-        assert payload["duration_seconds"] == 2.25
-        assert payload["counts"]["by_outcome"]["healthy"] == 2
-        assert payload["counts"]["by_tier"]["feature"]["proven_incident"] == 1
-        projected = payload["incidents"][0]
-        assert projected["owner"] == "feature_team:feat_001"
-        assert projected["evidence"] == {
-            "available": True,
-            "value": {"branch": "feat/feat_001", "status": "active"},
-        }
-        assert projected["request"]["state"] == "acknowledged"
-        assert projected["acknowledgement"] == {
-            "available": True,
-            "value": {
-                "accepted_at": "2026-11-08T12:00:01+00:00",
-                "attempt": 1,
-            },
-        }
-        assert projected["result"] == {"available": False, "value": None}
-        assert projected["resume_action"] == {
-            "operation": "resume_planning_owner",
-            "owner": "feature_team:feat_001",
-        }
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(2)
-
-
-def test_get_audit_exposes_unavailable_evidence_without_inventing_state(
-    tmp_path, monkeypatch
-) -> None:
-    root = make_repo(tmp_path, git=False)
-    generation = authoritative_generation(
-        work_id="task_001",
-        tier="task",
-        evidence={},
-        capability="retry_task",
-    )
-    incident = incident_record(
-        work_id="task_001",
-        tier="task",
-        accountable_owner="feature_team:feat_001",
-        failure_class="blocked_task_failed",
-        generation=generation,
-        evidence={},
-        selected_capability="retry_task",
-        outcome="deferred",
-    )
-    monkeypatch.setattr(
-        "cascade.watchdog.audit.project_audit_observation",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            classification="proven_incident",
-            incident=SimpleNamespace(failure_class="blocked_task_failed"),
-            generation=generation,
-        ),
-    )
-    ledger = root / ".cascade" / "executions.json"
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    ledger.write_text(
-        json.dumps({"actions": {"reservation": {"incident": incident}}}),
-        encoding="utf-8",
-    )
-    payload = health_audit_status(root=root)
-    projected = payload["incidents"][0]
-    assert projected["evidence"] == {"available": False, "value": None}
-    assert projected["request"]["state"] == "unavailable"
-    assert "investigating" not in json.dumps(projected)
-
-
-def test_reserved_claim_is_not_reported_as_delivered_pending_request(
-    tmp_path, monkeypatch
-) -> None:
-    root = make_repo(tmp_path, git=False)
-    generation = authoritative_generation(
-        work_id="task_001", tier="task", evidence={}, capability="retry_task"
-    )
-    incident = incident_record(
-        work_id="task_001",
-        tier="task",
-        accountable_owner="feature_team:feat_001",
-        failure_class="blocked_task_failed",
-        generation=generation,
-        evidence={},
-        selected_capability="retry_task",
-        request={"reservation_id": "reservation", "claim_token": "token", "operation": "retry_task"},
-        attempts=[
-            {"attempt": 1, "claim_token": "previous", "accepted_at": "2026-11-08T12:00:00+00:00"},
-            {"attempt": 2, "claim_token": "token", "started_at": "2026-11-08T12:01:00+00:00"},
-        ],
-        outcome="claimed",
-    )
-    monkeypatch.setattr(
-        "cascade.watchdog.audit.project_audit_observation",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            classification="proven_incident",
-            incident=SimpleNamespace(failure_class="blocked_task_failed"),
-            generation=generation,
-        ),
-    )
-    ledger = root / ".cascade" / "executions.json"
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    ledger.write_text(
-        json.dumps({"actions": {"reservation": {"incident": incident}}}),
-        encoding="utf-8",
-    )
-    projected = health_audit_status(root=root)["incidents"][0]
-    assert projected["request"]["state"] == "reserved"
-    assert projected["acknowledgement"]["available"] is False
-
-
-def test_stale_or_superseded_incident_is_not_reported_active(
-    tmp_path,
-) -> None:
-    root = make_repo(tmp_path)
-    add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
-    add_doc(
-        root,
-        id="feat_001",
-        title="Feature",
-        tier="feature",
-        status="completed",
-        parent="epic_001",
-    )
-    add_doc(
-        root,
-        id="task_001",
-        title="Task",
-        tier="task",
-        status="completed",
-        parent="feat_001",
-    )
-    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
-    subprocess.run(["git", "commit", "-m", "terminal lifecycle"], cwd=root, check=True)
-    generation = authoritative_generation(
-        work_id="task_001", tier="task", evidence={}, capability="retry_task"
-    )
-    incident = incident_record(
-        work_id="task_001",
-        tier="task",
-        accountable_owner="feature_team:feat_001",
-        failure_class="blocked_task_failed",
-        generation=generation,
-        evidence={"status": "blocked"},
-        selected_capability="retry_task",
-        outcome="deferred",
-    )
-    ledger = root / ".cascade" / "remediation_dispositions.json"
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    ledger.write_text(
-        json.dumps({"dispositions": {"historical": {"incident": incident}}}),
-        encoding="utf-8",
-    )
-
-    payload = health_audit_status(root=root)
-
-    assert payload["incidents"] == []
-    assert ledger.exists()
-
-
-def test_malformed_and_missing_receipts_are_distinct_unavailable_evidence(
+def test_get_status_uses_verified_projection_and_bounded_runtime_metadata(
     tmp_path,
 ) -> None:
     root = make_repo(tmp_path, git=False)
-
-    missing = health_audit_status(root=root)
+    _publish(root)
+    _publish_follow_ups(root)
     receipt = audit_receipt_path(root)
-    receipt.parent.mkdir(parents=True, exist_ok=True)
-    receipt.write_text("{broken", encoding="utf-8")
-    malformed = health_audit_status(root=root)
-
-    assert missing["last_run"] is None
-    assert missing["unavailable_evidence"][0] == {
-        "source": "audit_receipt",
-        "reason": "no completed audit receipt",
-    }
-    assert malformed["last_run"] is None
-    assert malformed["counts"]["by_outcome"]["healthy"] == 0
-    assert malformed["unavailable_evidence"][0] == {
-        "source": "audit_receipt",
-        "reason": "audit receipt is malformed or incomplete",
-    }
-
-
-def test_incident_rechecks_share_one_fresh_observation_per_work(tmp_path, monkeypatch):
-    from cascade.war_room.audit_status import _active_incidents
-
-    root = make_repo(tmp_path, git=False)
-    (root / ".cascade").mkdir()
-    incident = {
-        "work_id": "feat_001", "tier": "feature",
-        "accountable_owner": "feature_team:feat_001",
-        "failure_class": "stalled_owner", "authoritative_generation": "current",
-    }
-    (root / ".cascade" / "executions.json").write_text(json.dumps({
-        "actions": {
-            "old": {"incident": {**incident, "authoritative_generation": "old"}},
-            "current": {"incident": incident},
+    _write(
+        receipt,
+        {
+            "last_completed_at": "2026-11-14T12:00:00+00:00",
+            "next_scheduled_at": "2026-11-14T12:01:00+00:00",
+            "interval_seconds": 60,
+            "duration_seconds": 1.25,
+            "counts": {"proven_incident": 1, "tier.task.proven_incident": 1},
+            "next_cursor": "opaque",
+            "secret_extra": "not exposed",
         },
-    }))
-    calls = []
-    def observe(work_id, **kwargs):
-        calls.append(work_id)
-        return SimpleNamespace(
-            classification="proven_incident", generation="current",
-            incident=SimpleNamespace(failure_class="stalled_owner"),
+    )
+    with _server(root) as base:
+        status, payload = _get(f"{base}/api/health/audit")
+    assert status == HTTPStatus.OK
+    assert payload["state"] == "ready"
+    assert payload["snapshot"]["epoch"] == "epoch-one"
+    assert payload["current"]["returned"] == 1
+    assert payload["coverage"]["by_status"] == {"pending": 1, "proven_incident": 1}
+    assert payload["incidents"][0]["work_id"] == "task_002"
+    assert payload["incidents"][0]["source_ref"]["row_key"] == "current-blocker"
+    assert payload["receipt"].get("secret_extra") is None
+    assert payload["counts"]["by_tier"]["task"]["proven_incident"] == 1
+    assert payload["investigation_snapshot"]["state"] == "available"
+    follow_up = payload["investigations"][0]
+    assert follow_up["request"]["state"] == "delivered"
+    assert follow_up["acknowledgement"]["state"] == "acknowledged"
+    assert follow_up["latest_report"]["outcome"] == "reported_fixed"
+    assert follow_up["pending_reassessment"]["pending"] is True
+
+
+def test_get_status_reports_missing_stale_and_corrupt_snapshots_as_pending(
+    tmp_path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    assert _get_status(root)["snapshot"]["reason"] == "pointer_missing"
+    _publish(root, observed=datetime.now(timezone.utc) - timedelta(hours=1))
+    assert _get_status(root)["snapshot"]["reason"] == "snapshot_stale"
+    projection_root(root).joinpath("current.json").write_text("{broken")
+    assert _get_status(root)["snapshot"]["reason"] == "pointer_malformed"
+
+
+def test_get_status_keeps_unavailable_follow_up_evidence_pending(tmp_path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _publish(root)
+    missing = _get_status(root)
+    assert missing["investigation_snapshot"] == {
+        "state": "pending",
+        "reason": "snapshot_missing",
+    }
+    follow_up_snapshot_path(root).parent.mkdir(parents=True, exist_ok=True)
+    follow_up_snapshot_path(root).write_text("{")
+    corrupt = _get_status(root)
+    assert corrupt["investigation_snapshot"] == {
+        "state": "pending",
+        "reason": "snapshot_malformed",
+    }
+    assert corrupt["investigations"] == []
+
+
+def _get_status(root: Path) -> dict[str, object]:
+    with _server(root) as base:
+        return _get(f"{base}/api/health/audit")[1]
+
+
+def test_paginated_routes_filter_continue_and_reject_bad_queries(tmp_path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _publish(root)
+    with _server(root) as base:
+        status, first = _get(
+            f"{base}/api/health/audit/history?limit=1&status=unverifiable"
         )
-    monkeypatch.setattr("cascade.watchdog.audit.project_audit_observation", observe)
-    incidents, errors = _active_incidents(root)
-    assert calls == ["feat_001"]
-    assert not errors
-    assert [row["incident_id"] for row in incidents] == ["current"]
-    _active_incidents(root)
-    assert calls == ["feat_001", "feat_001"]  # No cache across requests.
+        assert status == HTTPStatus.OK
+        assert first["page"]["returned"] == 1
+        assert first["page"]["complete"] is False
+        cursor = urllib.parse.quote(first["page"]["next_cursor"], safe="")
+        status, second = _get(
+            f"{base}/api/health/audit/history?limit=1&status=unverifiable&cursor={cursor}"
+        )
+        assert status == HTTPStatus.OK
+        assert second["page"]["complete"] is True
+        status, coverage = _get(f"{base}/api/health/audit/coverage?work_id=task_003")
+        assert status == HTTPStatus.OK
+        assert coverage["page"]["rows"][0]["reason"] == "observation_timeout"
+        assert (
+            _get(f"{base}/api/health/audit/history?limit=101")[0]
+            == HTTPStatus.BAD_REQUEST
+        )
+        assert (
+            _get(f"{base}/api/health/audit/history?owner=")[0] == HTTPStatus.BAD_REQUEST
+        )
+        mismatch = _get(f"{base}/api/health/audit/history?limit=2&cursor={cursor}")
+        assert mismatch == (
+            HTTPStatus.CONFLICT,
+            {"state": "pending", "reason": "cursor_mismatch", "restart": True},
+        )
 
 
-def test_unavailable_current_observation_is_not_silently_hidden(tmp_path, monkeypatch):
-    from cascade.war_room.audit_status import _active_incidents
-
+def test_repeated_concurrent_gets_do_not_mutate_or_probe_runtime_state(
+    tmp_path, monkeypatch
+) -> None:
     root = make_repo(tmp_path, git=False)
-    (root / ".cascade").mkdir()
-    incident = {
-        "work_id": "feat_001", "authoritative_generation": "old",
-        "failure_class": "stalled_owner",
-    }
-    (root / ".cascade" / "executions.json").write_text(json.dumps({
-        "actions": {"old": {"incident": incident}},
-    }))
+    _publish(root)
+    _publish_follow_ups(root)
+    files = sorted(path for path in projection_root(root).rglob("*") if path.is_file())
+    files.append(follow_up_snapshot_path(root))
+    before = {path: (path.stat().st_mtime_ns, path.read_bytes()) for path in files}
     monkeypatch.setattr(
         "cascade.watchdog.audit.project_audit_observation",
-        lambda *args, **kwargs: SimpleNamespace(
-            classification="unavailable_evidence", reason="reconciliation:unavailable",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("GET probed lifecycle")
         ),
     )
-    incidents, errors = _active_incidents(root)
-    assert not incidents
-    assert errors == [{
-        "source": "action_recovery:old",
-        "reason": "current lifecycle evidence unavailable: reconciliation:unavailable",
-    }]
+    with _server(root) as base:
+        results: list[int] = []
+        threads = [
+            threading.Thread(
+                target=lambda: results.append(_get(f"{base}/api/health/audit")[0])
+            )
+            for _ in range(12)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(3)
+    assert results == [HTTPStatus.OK] * 12
+    assert before == {
+        path: (path.stat().st_mtime_ns, path.read_bytes()) for path in files
+    }

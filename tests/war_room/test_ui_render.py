@@ -66,6 +66,20 @@ def test_get_home_is_server_rendered_html(ui_server):
         assert 'id="branch-label-example">task_001<' in html
         assert "Timed out after 10s" in html
         assert "load-deadline-banner" in html
+        # The shared page must load both audit and architecture dependencies
+        # before starting the board; each script must execute only once.
+        scripts = (
+            "/static/audit_status_ui.js",
+            "/static/vendor/marked.min.js",
+            "/static/plan_viewer.js",
+            "/static/architecture_tab.js",
+            "/static/war_room.js",
+        )
+        for script in scripts:
+            assert html.count('src="' + script) == 1
+        assert [html.index(script) for script in scripts] == sorted(
+            html.index(script) for script in scripts
+        )
 
 
 def test_default_epic_from_active_column(ui_server):

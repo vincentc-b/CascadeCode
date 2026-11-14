@@ -2,9 +2,12 @@
 id: epic_044
 title: Make health audit actionable while retaining recovery history
 tier: epic
-status: backlog
+status: completed
 parent: null
-children: []
+children:
+- feat_044_001
+- feat_044_002
+- feat_044_003
 depends_on: []
 owners:
 - epic_manager
@@ -68,7 +71,29 @@ Current problems: compact, actionable entries backed by current evidence, identi
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+The supervisor owns reassessment and projection production; the War Room reads published evidence only. Reuse the existing audit lane, candidate observers, recovery adapters and investigation store rather than introduce a second scheduler or recovery system.
+
+### Projection and authority contract
+
+Maintain separate current incidents, verification coverage and historical attempts. Each projected record carries a stable source-record reference, work/owner identity where known, observed authoritative generation, occurrence time, last attempted and successful verification, verification outcome/reason, freshness deadline and next scheduled attempt. Publish a versioned snapshot with product/tracking identity, snapshot epoch and observation time atomically. Pages belong to a snapshot epoch so refresh/pagination cannot silently mix generations.
+
+A current incident requires an authoritative observation proving the same generation and failure class. A later authoritative generation supersedes an old attempt but does not resolve the new generation. Resolution requires fresh evidence that the relevant obligation is satisfied, including publication/integration on completed work. Missing, unreadable, changed, deleted or rerouted work is unknown/pending until reassessed. Stale evidence retains its previous observation and timestamp but loses the current-verified label. Repair and admission always reobserve authoritative state; UI snapshots never grant authority.
+
+Keep raw ledgers immutable for this work. Build disposable derived projections and bounded indexes for history/coverage; original references survive reindexing. The six observed legacy remediation rows have incident keys child_id, observed_child_sha and supervisor_id, plus outer action/result/reason/observed_at. These are not the modern work_id/authoritative_generation/failure_class contract. Display their durable identity as historical/unverifiable with provenance; do not equate a child SHA to an authoritative generation or invent a failure class. No in-place migration is required.
+
+### Scheduling, freshness and bounds
+
+Persist rotation and pending coverage across restart. Coalesce observations by work/root identity within a pass while retaining each historical generation. Reserve at least one in four admitted checks for historical unresolved work when both pools are nonempty; rotate within each pool. A timeout advances the cursor and records a retry, rather than monopolizing later passes. Reuse immutable board evidence within a pass and isolate bounded candidate probes; no long-held lifecycle lock across probes.
+
+Retain configured audit cadence and authenticated manual admission/coalescing. Initial worker ceilings are 100 candidates and 60 seconds per pass, with at most 2 seconds per candidate and explicit deferred coverage when limits are reached. A snapshot observation expires after two configured intervals plus one pass allowance; this is a display freshness policy, never repair authorization. Manual requests join the same worker and do not create browser-specific scans.
+
+Dashboard responses read only bounded projection/index pages: default 50 rows, maximum 100; at most 1 MiB of source bytes and 256 KiB of serialized response per request, with explicit truncation/continuation. Do not rescan raw ledgers for history filters. Target warm local GET p95 under 250 ms on a 10,000-attempt fixture; record environment and measurements rather than make noisy latency tests the sole acceptance evidence. Exercise many generations, owners and malformed rows, not duplicated trivial records. Preserve safe regular-file handling and explicit pending/unknown on corrupt, missing or incompatible snapshots. Feature design must document how these ceilings are enforced and how larger records are referenced safely.
+
+### Presentation and rollout
+
+Render current verified blockers prominently, aggregate coverage once, and fetch bounded history/detail pages on demand. Keep investigation delivery, acknowledgements and reported_fixed visible as follow-up state, independently of verified resolution. Reuse the existing investigation cooldown/coalescing machinery. Browser polling must not overlap or trigger reassessment.
+
+Deploy the producer before or with the snapshot consumer. Missing producer output renders pending; it must not fall back to expensive GET probes. Preserve source ledgers and existing authenticated manual audit behavior. Verify the existing split tracking/product root rules through producer, consumer and repair boundaries.
 
 ## Cross-module constraints
 
@@ -82,20 +107,41 @@ Likely code areas: cascade/war_room/audit_status.py; static/audit_status_ui.js a
 
 ## Core dependencies
 
-To be identified during epic planning.
+Use the existing workspace toolchain only: Python 3.12.8, pytest 9.0.3, Node 20.20.2, Git 2.34.1 and the repository's installed PyYAML 6.0.3, cursor-sdk 1.0.37, langgraph 1.2.14 and langgraph-checkpoint-sqlite 3.1.1. Dependency manifest revision 1 pins installed sources, fingerprints and the complete local host environment; canonical read-only verification succeeded for all eight entries. No installation or upgrade is requested. New dependencies require a revised declaration and exact human installation authorization.
+
+No external epic dependency is required. The deployed MCP startup repair 8c609bb7 enables planning; it is not product acceptance evidence for this epic.
 
 ## Feature breakdown
 
-The Epic Team will create and sequence feature plans here.
+| Feature | Shippable responsibility | Prerequisite | Acceptance ownership |
+| --- | --- | --- | --- |
+| feat_044_001 | Durable projection contract and fair, bounded background reassessment | Epic plan approval | Criteria 1, 3, 4, 8, 9; producer regressions in 10–11 |
+| feat_044_002 | Bounded read-only snapshot, coverage and history APIs | feat_044_001 | Criteria 2, 5, 7, 8; API regressions in 10–11 |
+| feat_044_003 | Actionable current/coverage/history UI and integrated acceptance evidence | feat_044_002 | Criteria 5–7, 9–12 |
+
+All three features are minted in backlog with explicit dependency edges and inherited provider/model/reasoning settings. Feature 1 establishes shared schema fixtures and budgets before consumers start. Each feature owns its focused regressions; feature 3 assembles cross-boundary and live evidence rather than duplicating every lower-level test.
+
+Completion requires the observed failure pattern, concurrency/restart/manual-audit/split-root cases and representative large-ledger budgets to pass, plus live War Room evidence after normal deployment. A live validation prerequisite that is unavailable must remain explicit and cannot be marked passed. Historical problems need not all resolve for this epic to succeed; their verification state must be truthful.
+
+Out of scope: deleting or compacting history, changing repair policy, adding a new scheduler/service/frontend framework, modifying workspace provider defaults, or treating completion/acknowledgement as proof of resolution.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+No product scope question remains. The architecture review must confirm the shared state transitions, fairness and byte/time ceilings on this revision before plan approval. Feature 1 must demonstrate candidate timeout isolation, snapshot publication consistency and legacy mapping against fixtures before handing its contract to consumers. Any change to these epic-level contracts returns through the amendment workflow.
 
 ## Decision log
 
 - 2026-11-10 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-10 · Epic Manager · **Macro-architecture**
+  Chose Separate supervisor-produced current/coverage/history projections from read-only dashboard consumption; retain authoritative rechecks at repair boundaries. Deliver feat_044_001 → feat_044_002 → feat_044_003..
+  Rationale: The existing GET repeats expensive historical observation under a shared budget. A producer/consumer contract removes poll-triggered scans while preserving genuine current incidents and existing repair authority. Sequential slices constrain scope and give consumers tested schema fixtures.
+  Honors: Success criteria 1–12; normal team/review workflow; immutable forensic history; configured cadence and manual audit semantics..
+
+- `dec_002` · 2026-11-10 · Epic Manager · **Macro-architecture**
+  Chose Keep legacy remediation rows with child_id/observed_child_sha/supervisor_id as historical/unverifiable unless unambiguous authoritative evidence establishes modern identity; do not migrate source ledgers. Use the existing verified toolchain without new installations..
+  Rationale: Inspected six durable rows: child SHA and supervisor identity alone do not establish authoritative generation or failure class. Preserving provenance avoids false incidents and false resolution. All eight declared toolchain entries passed canonical read-only checks.
+  Honors: Success criteria 4, 7, 8; dependency installation gates; no fabricated validation or evidence deletion..
 ## Amendment log
 
 _(none)_
