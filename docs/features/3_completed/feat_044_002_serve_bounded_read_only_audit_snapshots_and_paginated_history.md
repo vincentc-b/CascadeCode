@@ -2,7 +2,7 @@
 id: feat_044_002
 title: Serve bounded read-only audit snapshots and paginated history
 tier: feature
-status: active
+status: completed
 parent: epic_044
 children:
 - task_044_002_001
