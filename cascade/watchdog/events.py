@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import BinaryIO
 
-from cascade.board.context import resolve_root
-from cascade.watchdog.lock import process_lock
 from cascade.watchdog.types import Event
 
 
 def append_event(dest: str, event: Event, *, root: Path | None = None) -> None:
     """Append one event line. Prior lines are not rewritten."""
 
-    repo = resolve_root(root)
+    repo = _resolve_root(root)
     queue_dest = _safe_dest(dest)
     if event.ts.tzinfo is None or event.ts.utcoffset() is None:
         raise ValueError("event.ts must be timezone-aware")
@@ -27,7 +26,7 @@ def append_event(dest: str, event: Event, *, root: Path | None = None) -> None:
     )
     line = (_encode(stored) + "\n").encode("utf-8")
     path = _queue_path(repo, queue_dest)
-    with process_lock:
+    with _process_lock():
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("ab") as handle:
             handle.write(line)
@@ -45,10 +44,10 @@ def read_events(
     The returned offset advances past skipped lines so they are not read again.
     """
 
-    repo = resolve_root(root)
+    repo = _resolve_root(root)
     queue_dest = _safe_dest(dest)
     path = _queue_path(repo, queue_dest)
-    with process_lock:
+    with _process_lock():
         try:
             with path.open("rb") as handle:
                 return _decode_stream(handle, after_offset)
@@ -69,10 +68,10 @@ def remove_queue_if_unchanged(
     A queue that gained another event is deliberately left intact.
     """
 
-    repo = resolve_root(root)
+    repo = _resolve_root(root)
     queue_dest = _safe_dest(dest)
     path = _queue_path(repo, queue_dest)
-    with process_lock:
+    with _process_lock():
         try:
             if path.stat().st_size != expected_size:
                 return False
@@ -92,7 +91,7 @@ def prune_completed_work_queues(*, root: Path | None = None) -> list[str]:
     decision. Special feeds (``boss`` and ``war_room``) have their own lifecycle.
     """
 
-    repo = resolve_root(root)
+    repo = _resolve_root(root)
     queue_dir = repo / "docs" / "_queue"
     if not queue_dir.is_dir():
         return []
@@ -129,7 +128,7 @@ def prune_completed_work_queues(*, root: Path | None = None) -> list[str]:
         removable.append(work_id)
 
     removed: list[str] = []
-    with process_lock:
+    with _process_lock():
         # Recheck under the unlink lock so a concurrently routed recovery cannot
         # lose the queue that authorized its owning-team turn.
         pending_recovery = pending_recovery_team_ids(root=repo)
@@ -147,6 +146,23 @@ def prune_completed_work_queues(*, root: Path | None = None) -> list[str]:
 
 def _queue_path(root: Path, dest: str) -> Path:
     return root / "docs" / "_queue" / f"{dest}.jsonl"
+
+
+def _resolve_root(root: Path | None) -> Path:
+    # Queue primitives are exported while the watchdog package initializes.
+    # Delay the board package import so a clean spawned worker cannot re-enter
+    # the half-initialized watchdog through workspace/comment modules.
+    from cascade.board.context import resolve_root
+
+    return resolve_root(root)
+
+
+@contextmanager
+def _process_lock():
+    from cascade.watchdog.lock import process_lock
+
+    with process_lock:
+        yield
 
 
 def _safe_dest(dest: str) -> str:

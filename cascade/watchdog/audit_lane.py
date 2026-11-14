@@ -19,6 +19,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,6 +33,7 @@ from cascade.board.context import get_project_context, resolve_root
 from cascade.board.gitutil import inherited_git_process_group
 from cascade.watchdog.audit import (
     CandidateBudget,
+    _canonical_repositories,
     _restore_parent_observation_episodes,
     _snapshot_parent_observation_episodes,
     project_audit_observation,
@@ -48,6 +50,7 @@ _CLAIM_NAME = "pass.lock"
 _BUSY_RETRY_SECONDS = 1.0
 _PASS_MAX_ITEMS = 100
 _PASS_MAX_SECONDS = 60.0
+_CANDIDATE_MAX_SECONDS = 2.0
 _OBSERVER_CANCEL_GRACE_SECONDS = 0.25
 _OBSERVER_COORDINATION_RESERVE_SECONDS = 0.8
 
@@ -81,13 +84,17 @@ class AuditPassResult:
     next_cursor: str | None = None
     counts: Mapping[str, int] = field(default_factory=dict)
     incident_work_ids: tuple[str, ...] = ()
+    recovery_requests: tuple[dict[str, str], ...] = ()
     timed_out_candidates: tuple[str, ...] = ()
     reassessed_candidates: tuple[str, ...] = ()
     investigation_requests: tuple[dict[str, Any], ...] = ()
+    candidate_failures: tuple[dict[str, Any], ...] = ()
+    coverage_deferred: bool = False
+    projection_observations: tuple[dict[str, Any], ...] = ()
 
 
 AuditPass = Callable[[str | None, threading.Event], AuditPassResult]
-AuditHandoff = Callable[[tuple[str, ...]], None]
+AuditHandoff = Callable[[tuple[dict[str, str], ...]], None]
 
 
 class AuditPassTimedOut(TimeoutError):
@@ -306,9 +313,7 @@ def _audit_observer_process(
     max_items: int,
     deadline: float,
     context_payload: object,
-    parent_observation_episodes: tuple[
-        tuple[str, str, str, str, float, int], ...
-    ],
+    parent_observation_episodes: tuple[tuple[str, str, str, str, float, int], ...],
 ) -> None:
     """Run observer work in a process that the claim owner can always reap."""
 
@@ -412,6 +417,18 @@ def _run_bounded_audit_pass_inline(
         cancel_event=cancel_event,
     )
     remaining("selection")
+    board_snapshot = None
+    try:
+        from cascade.workspace.integration_worktree import merged_board_readonly
+
+        _, tracking = _canonical_repositories(root)
+        board_snapshot = merged_board_readonly(tracking)
+    except Exception:
+        # Selection has already produced a bounded page.  If a shared snapshot
+        # cannot be built, each observation reports its own canonical evidence
+        # failure instead of turning a completed partial pass into a failure.
+        pass
+    remaining("board_snapshot")
     counts: dict[str, int] = {
         "selected": len(page.candidates),
         "observed": 0,
@@ -429,19 +446,28 @@ def _run_bounded_audit_pass_inline(
         ):
             counts[f"tier.{tier}.{outcome}"] = 0
     incident_work_ids: list[str] = []
+    recovery_requests: list[dict[str, str]] = []
     completed_cursor = cursor
     timed_out_candidates: list[str] = []
     reassessed_candidates: list[str] = []
     investigation_requests: list[dict[str, Any]] = []
+    candidate_failures: list[dict[str, Any]] = []
+    projection_observations: list[dict[str, Any]] = []
 
-    def completed(next_cursor: str | None) -> AuditPassResult:
+    def completed(
+        next_cursor: str | None, *, coverage_deferred: bool = False
+    ) -> AuditPassResult:
         return AuditPassResult(
             next_cursor=next_cursor,
             counts=counts,
             incident_work_ids=tuple(incident_work_ids),
+            recovery_requests=tuple(recovery_requests),
             timed_out_candidates=tuple(timed_out_candidates),
             reassessed_candidates=tuple(reassessed_candidates),
             investigation_requests=tuple(investigation_requests),
+            candidate_failures=tuple(candidate_failures),
+            coverage_deferred=coverage_deferred,
+            projection_observations=tuple(projection_observations),
         )
 
     for index, candidate in enumerate(page.candidates):
@@ -452,10 +478,27 @@ def _run_bounded_audit_pass_inline(
             continuations[index] if index < len(continuations) else page.next_cursor
         )
         if not candidate.evidence_available:
-            investigation_requests.append({
-                "work_id": work_id, "reason": "audit_evidence_unavailable",
-                "evidence": {"classification": "unavailable_evidence"},
-            })
+            evidence_errors = tuple(getattr(candidate, "evidence_errors", ()))
+            retry_reason = (
+                evidence_errors[0] if evidence_errors else "audit_evidence_unavailable"
+            )
+            investigation_requests.append(
+                {
+                    "work_id": work_id,
+                    "reason": "audit_evidence_unavailable",
+                    "evidence": {
+                        "classification": "unavailable_evidence",
+                        "retry_reason": retry_reason,
+                    },
+                }
+            )
+            candidate_failures.append(
+                {
+                    "work_id": work_id,
+                    "reason": retry_reason,
+                    "retryable": True,
+                }
+            )
             # Selection already proved this identity cannot currently be
             # projected.  Count it as unavailable evidence and advance the
             # exact selector cursor so one malformed reference cannot pin the
@@ -466,17 +509,22 @@ def _run_bounded_audit_pass_inline(
                 counts[f"tier.{tier}.unavailable_evidence"] += 1
             completed_cursor = candidate_cursor
             if monotonic() - started >= max_seconds:
-                return completed(completed_cursor)
+                return completed(completed_cursor, coverage_deferred=True)
             continue
-        allowance = remaining(f"observation:{work_id}")
+        allowance = min(
+            _CANDIDATE_MAX_SECONDS,
+            remaining(f"observation:{work_id}"),
+        )
         try:
-            observation = project_audit_observation(
-                work_id,
-                root=root,
-                timeout_seconds=allowance,
-                cancel_event=cancel_event,
-                monotonic=monotonic,
-            )
+            with _candidate_observation_deadline(allowance):
+                observation = project_audit_observation(
+                    work_id,
+                    root=root,
+                    timeout_seconds=allowance,
+                    cancel_event=cancel_event,
+                    monotonic=monotonic,
+                    board_snapshot=board_snapshot,
+                )
         except InterruptedError as exc:
             raise AuditPassCancelled(
                 f"health audit cancelled while observing {work_id}"
@@ -489,14 +537,27 @@ def _run_bounded_audit_pass_inline(
             if tier in {"task", "feature", "epic"}:
                 counts[f"tier.{tier}.unavailable_evidence"] += 1
             timed_out_candidates.append(work_id)
-            investigation_requests.append({
-                "work_id": work_id, "reason": "audit_observation_timeout",
-                "evidence": {"classification": "unavailable_evidence", "observation_error": "TimeoutExpired"},
-            })
+            candidate_failures.append(
+                {
+                    "work_id": work_id,
+                    "reason": "audit_observation_timeout",
+                    "retryable": True,
+                }
+            )
+            investigation_requests.append(
+                {
+                    "work_id": work_id,
+                    "reason": "audit_observation_timeout",
+                    "evidence": {
+                        "classification": "unavailable_evidence",
+                        "observation_error": "TimeoutExpired",
+                    },
+                }
+            )
             completed_cursor = candidate_cursor
             _log.warning("health audit observation timed out for %s: %s", work_id, exc)
             if monotonic() - started >= max_seconds:
-                return completed(completed_cursor)
+                return completed(completed_cursor, coverage_deferred=True)
             continue
         except Exception as exc:
             # An unfamiliar observation failure is investigation input, not
@@ -504,13 +565,23 @@ def _run_bounded_audit_pass_inline(
             counts["unavailable_evidence"] += 1
             if tier in {"task", "feature", "epic"}:
                 counts[f"tier.{tier}.unavailable_evidence"] += 1
-            investigation_requests.append({
-                "work_id": work_id, "reason": "audit_observation_error",
-                "evidence": {"observation_error": type(exc).__name__},
-            })
+            investigation_requests.append(
+                {
+                    "work_id": work_id,
+                    "reason": "audit_observation_error",
+                    "evidence": {"observation_error": type(exc).__name__},
+                }
+            )
+            candidate_failures.append(
+                {
+                    "work_id": work_id,
+                    "reason": f"audit_observation_error:{type(exc).__name__}",
+                    "retryable": True,
+                }
+            )
             completed_cursor = candidate_cursor
             if monotonic() - started >= max_seconds:
-                return completed(completed_cursor)
+                return completed(completed_cursor, coverage_deferred=True)
             continue
         counts["observed"] += 1
         counts[observation.classification] += 1
@@ -518,17 +589,47 @@ def _run_bounded_audit_pass_inline(
             counts[f"tier.{tier}.{observation.classification}"] += 1
         if observation.classification == "proven_incident":
             incident_work_ids.append(work_id)
+            recovery_requests.append(
+                {
+                    "work_id": work_id,
+                    "authoritative_generation": str(observation.generation),
+                    "failure_class": str(observation.incident.failure_class),
+                }
+            )
         if observation.classification in {"proven_incident", "unavailable_evidence"}:
-            investigation_requests.append({
-                "work_id": work_id, "reason": "audit_requires_investigation",
-                "evidence": {
-                    "classification": observation.classification,
-                    "reason": str(getattr(observation, "reason", "unknown"))[:240],
-                    "generation": str(getattr(observation, "generation", ""))[:160],
-                },
-            })
+            investigation_requests.append(
+                {
+                    "work_id": work_id,
+                    "reason": "audit_requires_investigation",
+                    "evidence": {
+                        "classification": observation.classification,
+                        "reason": str(getattr(observation, "reason", "unknown"))[:240],
+                        "generation": str(getattr(observation, "generation", ""))[:160],
+                    },
+                }
+            )
         if observation.classification != "unavailable_evidence":
             reassessed_candidates.append(work_id)
+        projection_observations.append(
+            {
+                "work_id": work_id,
+                "owner": str(
+                    getattr(getattr(observation, "identity", None), "parent_id")
+                )
+                if getattr(getattr(observation, "identity", None), "parent_id", None)
+                else None,
+                "authoritative_generation": str(getattr(observation, "generation", "")),
+                "failure_class": getattr(
+                    getattr(observation, "incident", None), "failure_class", None
+                )
+                if getattr(observation, "incident", None) is not None
+                else None,
+                "classification": observation.classification,
+                "reason": str(
+                    getattr(observation, "reason", observation.classification)
+                ),
+            }
+        )
         completed_cursor = candidate_cursor
 
         if cancel_event.is_set():
@@ -538,8 +639,38 @@ def _run_bounded_audit_pass_inline(
         if monotonic() - started >= max_seconds:
             # The observation completed successfully. Persist its exact selector
             # continuation and leave the unobserved suffix for the next pass.
-            return completed(completed_cursor)
-    return completed(page.next_cursor)
+            return completed(completed_cursor, coverage_deferred=True)
+    return completed(
+        page.next_cursor,
+        coverage_deferred=bool(getattr(page, "deferred", False)),
+    )
+
+
+@contextmanager
+def _candidate_observation_deadline(seconds: float):
+    """Interrupt one synchronous observation without consuming the pass suffix."""
+
+    can_interrupt = (
+        threading.current_thread() is threading.main_thread()
+        and hasattr(signal, "setitimer")
+        and signal.getitimer(signal.ITIMER_REAL)[0] == 0
+    )
+    if not can_interrupt:
+        yield
+        return
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def expired(_signum, _frame) -> None:
+        raise subprocess.TimeoutExpired("audit observation", seconds)
+
+    signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 class _WorkspaceClaim:
@@ -712,6 +843,30 @@ class HealthAuditLane:
                 return False
             finished_mono = self._monotonic()
             finished_utc = self._aware_utc_now()
+            from cascade.watchdog.audit_projection import publish_audit_projection
+
+            try:
+                publish_audit_projection(
+                    self.root,
+                    result,
+                    interval_seconds=self.config.interval_seconds,
+                    observed_at=finished_utc,
+                )
+            except Exception as exc:
+                _write_failure(
+                    self.root,
+                    {
+                        "failed_at": finished_utc.isoformat(),
+                        "code": "projection_publication_failed",
+                        "message": str(exc) or type(exc).__name__,
+                        "next_action": (
+                            "Inspect the unreferenced projection epoch; the prior "
+                            "current epoch remains readable and the pass will retry."
+                        ),
+                        "cursor": cursor,
+                    },
+                )
+                raise
             if manual:
                 self._deadline = periodic_deadline
                 next_scheduled = finished_utc + timedelta(
@@ -760,7 +915,10 @@ class HealthAuditLane:
             claim.release()
         if completed is not None and self._handoff is not None:
             try:
-                self._handoff(completed.incident_work_ids)
+                requests = completed.recovery_requests or tuple(
+                    {"work_id": work_id} for work_id in completed.incident_work_ids
+                )
+                self._handoff(requests)
             except Exception:
                 # Observation is complete even if a supervised repair worker
                 # cannot currently accept its durable handoff.
