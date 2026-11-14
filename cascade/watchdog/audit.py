@@ -317,6 +317,7 @@ class AuditCandidate:
     registered_worktree: Path | None = None
     evidence_available: bool = True
     evidence_errors: tuple[str, ...] = ()
+    source_references: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,10 +326,12 @@ class CandidatePage:
     next_cursor: str
     unavailable_evidence: tuple[str, ...] = ()
     continuation_cursors: tuple[str, ...] = ()
+    deferred: bool = False
 
 
-_CANDIDATE_CURSOR_VERSION = 1
+_CANDIDATE_CURSOR_VERSION = 2
 _CANDIDATE_TIERS: tuple[WorkTier, ...] = ("task", "feature", "epic")
+_CANDIDATE_POOLS = ("ongoing", "historical")
 _UNRESOLVED_SOURCES = (
     ("action", "executions.json"),
     ("review", "reviews.json"),
@@ -355,13 +358,19 @@ _completed_cache: OrderedDict[
         dict[str, WorkMeta],
         date,
         dict[str, WorkMeta],
+        dict[tuple[WorkTier, str], set[str]],
     ],
 ] = OrderedDict()
 
 
 def _candidate_board(
     tracking: Path, cutoff: date
-) -> tuple[dict[str, WorkMeta], dict[str, WorkMeta], dict[str, WorkMeta]]:
+) -> tuple[
+    dict[str, WorkMeta],
+    dict[str, WorkMeta],
+    dict[str, WorkMeta],
+    dict[tuple[WorkTier, str], set[str]],
+]:
     """Read live metadata and reuse completed metadata until a directory changes.
 
     Canonical board writes replace files, which changes the containing directory.
@@ -386,6 +395,7 @@ def _candidate_board(
         if cached is not None and cached[0] == stamps:
             _completed_cache.move_to_end(tracking)
             completed = cached[1]
+            completed_malformed = cached[4]
             recent = (
                 cached[3]
                 if cached[2] == cutoff
@@ -397,8 +407,11 @@ def _candidate_board(
             )
         else:
             completed = {}
+            completed_malformed = {}
             for directory in directories:
-                _scan_candidate_directory(directory, completed)
+                _scan_candidate_directory(
+                    directory, completed, completed_malformed
+                )
             recent = {
                 work_id: meta
                 for work_id, meta in completed.items()
@@ -407,22 +420,40 @@ def _candidate_board(
             # A concurrent canonical write may have changed a directory while
             # it was scanned. Return this read, but do not cache it.
         if stamps == tuple(signature(path) for path in directories):
-            _completed_cache[tracking] = (stamps, completed, cutoff, recent)
+            _completed_cache[tracking] = (
+                stamps,
+                completed,
+                cutoff,
+                recent,
+                completed_malformed,
+            )
             _completed_cache.move_to_end(tracking)
             while len(_completed_cache) > _COMPLETED_CACHE_LIMIT:
                 _completed_cache.popitem(last=False)
 
     live: dict[str, WorkMeta] = {}
+    live_malformed: dict[tuple[WorkTier, str], set[str]] = {}
     for dirname in ("tasks", "features", "epics"):
         for column in ("1_backlog", "2_active"):
-            _scan_candidate_directory(tracking / "docs" / dirname / column, live)
+            _scan_candidate_directory(
+                tracking / "docs" / dirname / column,
+                live,
+                live_malformed,
+            )
     if live.keys() & completed.keys():
         duplicate = next(iter(live.keys() & completed.keys()))
         raise SchemaError(f"duplicate id {duplicate} in live and completed board")
-    return live, completed, recent
+    malformed = {**completed_malformed, **live_malformed}
+    for meta in (*live.values(), *completed.values()):
+        malformed.pop((meta.tier, meta.id), None)
+    return live, completed, recent, malformed
 
 
-def _scan_candidate_directory(directory: Path, output: dict[str, WorkMeta]) -> None:
+def _scan_candidate_directory(
+    directory: Path,
+    output: dict[str, WorkMeta],
+    malformed: dict[tuple[WorkTier, str], set[str]] | None = None,
+) -> None:
     if not directory.is_dir():
         return
     for path in sorted(directory.glob("*.md")):
@@ -431,6 +462,9 @@ def _scan_candidate_directory(directory: Path, output: dict[str, WorkMeta]) -> N
         try:
             meta = _scan_meta(path)
         except (SchemaError, OSError, UnicodeDecodeError):
+            identity = _candidate_identity_from_filename(path.name)
+            if malformed is not None and identity is not None:
+                malformed.setdefault(identity, set()).add("malformed_document")
             continue
         if meta.id in output:
             raise SchemaError(
@@ -439,9 +473,27 @@ def _scan_candidate_directory(directory: Path, output: dict[str, WorkMeta]) -> N
         output[meta.id] = meta
 
 
+def _candidate_identity_from_filename(
+    filename: str,
+) -> tuple[WorkTier, str] | None:
+    match = re.match(r"^(task|feat|epic)_([0-9]+)(?:_|\.md$)", filename)
+    if match is None:
+        return None
+    prefix = match.group(1)
+    tier: WorkTier = (
+        "feature" if prefix == "feat" else "task" if prefix == "task" else "epic"
+    )
+    return tier, f"{prefix}_{match.group(2)}"
+
+
 def _canonical_candidate_board(
     tracking: Path, cutoff: date
-) -> tuple[dict[str, WorkMeta], dict[str, WorkMeta], dict[str, WorkMeta]]:
+) -> tuple[
+    dict[str, WorkMeta],
+    dict[str, WorkMeta],
+    dict[str, WorkMeta],
+    dict[tuple[WorkTier, str], set[str]],
+]:
     """Apply canonical checkout precedence while caching completed inventories.
 
     Only tracking checkouts own lifecycle documents in a split workspace.
@@ -452,7 +504,7 @@ def _canonical_candidate_board(
     )
     from cascade.workspace.backlog_snapshot import read_provenance, snapshot_board
 
-    live, completed, _recent = _candidate_board(tracking, cutoff)
+    live, completed, _recent, malformed = _candidate_board(tracking, cutoff)
     by_id = {**completed, **live}
     closed_epics = {
         work_id for work_id, meta in completed.items()
@@ -465,7 +517,11 @@ def _canonical_candidate_board(
         if checkout in seen or not checkout.is_dir():
             continue
         seen.add(checkout)
-        child_live, child_completed, _ = _candidate_board(checkout, cutoff)
+        child_live, child_completed, _, child_malformed = _candidate_board(
+            checkout, cutoff
+        )
+        for key, failures in child_malformed.items():
+            malformed.setdefault(key, set()).update(failures)
         for work_id, meta in {**child_completed, **child_live}.items():
             current = by_id.get(work_id)
             if work_id not in closed_epics and (
@@ -491,7 +547,9 @@ def _canonical_candidate_board(
         work_id: meta for work_id, meta in completed.items()
         if meta.status == "completed" and meta.updated >= cutoff
     }
-    return live, completed, recent
+    for meta in by_id.values():
+        malformed.pop((meta.tier, meta.id), None)
+    return live, completed, recent, malformed
 
 
 def select_audit_candidates(
@@ -539,22 +597,34 @@ def _select_audit_candidates(
     # ``merged_board`` acquires the product registry's file lock.  Candidate
     # selection needs lifecycle truth from tracking and reads product-worktree
     # provenance separately, so avoid even that incidental lock-file write.
-    positions, next_tier = _decode_candidate_cursor(cursor)
+    pool_states, ongoing_admissions = _decode_candidate_cursor(cursor)
     cutoff = (today or date.today()) - timedelta(days=7)
-    live, completed, recent = _canonical_candidate_board(tracking, cutoff)
+    live, completed, recent, malformed = _canonical_candidate_board(
+        tracking, cutoff
+    )
     reasons: dict[tuple[WorkTier, str], set[str]] = {}
+    ongoing_keys: set[tuple[WorkTier, str]] = set()
+    historical_keys: set[tuple[WorkTier, str]] = set()
+    source_references: dict[tuple[WorkTier, str], list[str]] = {}
     errors: dict[tuple[WorkTier, str], set[str]] = {}
+
+    for key, failures in malformed.items():
+        reasons.setdefault(key, set()).add("malformed_document")
+        errors.setdefault(key, set()).update(failures)
+        ongoing_keys.add(key)
 
     for meta in live.values():
         key = (meta.tier, meta.id)
         if meta.status not in {"completed", "cancelled"}:
             reasons.setdefault(key, set()).add("nonterminal")
+            ongoing_keys.add(key)
     for meta in recent.values():
         key = (meta.tier, meta.id)
         reasons.setdefault(key, set()).add("recently_completed")
+        ongoing_keys.add(key)
 
     unresolved, unavailable = _unresolved_candidate_references(product)
-    for source, work_id in unresolved:
+    for ordinal, (source, work_id) in enumerate(unresolved):
         try:
             typed_id, tier = _typed_work_id(work_id)
         except AuditIdentityError:
@@ -562,7 +632,15 @@ def _select_audit_candidates(
             continue
         key = (tier, str(typed_id))
         reasons.setdefault(key, set()).add(f"unresolved_{source}")
+        source_references.setdefault(key, []).append(f"{source}:{ordinal}")
+        historical_keys.add(key)
         meta = live.get(str(typed_id)) or completed.get(str(typed_id))
+        if meta is not None and meta.status in {"completed", "cancelled"}:
+            # An unresolved retained source is the scheduling obligation for a
+            # terminal work item.  Route that identity through the historical
+            # pool even if the document itself also falls in the recent window.
+            reasons[key].discard("recently_completed")
+            ongoing_keys.discard(key)
         if meta is None or meta.tier != tier:
             errors.setdefault(key, set()).add("canonical_document_unavailable")
 
@@ -576,30 +654,63 @@ def _select_audit_candidates(
         if meta is None or meta.tier != key[0]:
             reasons.setdefault(key, set()).add("unresolved_cleanup")
             errors.setdefault(key, set()).add("canonical_document_unavailable")
+            historical_keys.add(key)
         elif meta.status in {"completed", "cancelled"}:
             reasons.setdefault(key, set()).add("unresolved_cleanup")
-    lanes: dict[WorkTier, list[str]] = {
-        tier: sorted(
-            work_id for candidate_tier, work_id in reasons if candidate_tier == tier
-        )
-        for tier in _CANDIDATE_TIERS
+            historical_keys.add(key)
+    # A current work item can have many retained historical generations.  Keep
+    # all of those references on its one candidate, but observe it through the
+    # ongoing pool so the two pools remain disjoint within a pass.
+    historical_keys.difference_update(ongoing_keys)
+    pool_keys = {
+        "ongoing": ongoing_keys,
+        "historical": historical_keys,
+    }
+    lanes: dict[str, dict[WorkTier, list[str]]] = {
+        pool: {
+            tier: sorted(
+                work_id for candidate_tier, work_id in keys if candidate_tier == tier
+            )
+            for tier in _CANDIDATE_TIERS
+        }
+        for pool, keys in pool_keys.items()
     }
     selected: list[AuditCandidate] = []
     continuation_cursors: list[str] = []
     selected_keys: set[tuple[WorkTier, str]] = set()
-    tier_index = next_tier
-    empty_turns = 0
-    while len(selected) < limit.max_items and empty_turns < len(_CANDIDATE_TIERS):
+    while len(selected) < limit.max_items:
         if monotonic() - started >= limit.max_seconds:
             break
-        tier = _CANDIDATE_TIERS[tier_index]
-        tier_index = (tier_index + 1) % len(_CANDIDATE_TIERS)
-        work_id = _next_candidate_id(lanes[tier], positions[tier], selected_keys, tier)
+        ongoing_available = _pool_has_candidate(
+            lanes["ongoing"], selected_keys
+        )
+        historical_available = _pool_has_candidate(
+            lanes["historical"], selected_keys
+        )
+        if not ongoing_available and not historical_available:
+            break
+        pool = (
+            "historical"
+            if historical_available
+            and (not ongoing_available or ongoing_admissions >= 3)
+            else "ongoing"
+        )
+        tier, work_id = _next_pool_candidate(
+            lanes[pool], pool_states[pool], selected_keys
+        )
         if work_id is None:
-            empty_turns += 1
-            continue
-        empty_turns = 0
-        positions[tier] = work_id
+            # The preferred pool wrapped entirely within this page.  The other
+            # pool may still contain candidates not admitted in this pass.
+            pool = "historical" if pool == "ongoing" else "ongoing"
+            tier, work_id = _next_pool_candidate(
+                lanes[pool], pool_states[pool], selected_keys
+            )
+            if work_id is None:
+                break
+        if pool == "historical":
+            ongoing_admissions = 0
+        elif historical_available:
+            ongoing_admissions = min(3, ongoing_admissions + 1)
         key = (tier, work_id)
         selected_keys.add(key)
         typed_id, _ = _typed_work_id(work_id)
@@ -614,14 +725,18 @@ def _select_audit_candidates(
                 registered_worktree=worktrees.get(key),
                 evidence_available=not candidate_errors,
                 evidence_errors=candidate_errors,
+                source_references=tuple(source_references.get(key, ())),
             )
         )
-        continuation_cursors.append(_encode_candidate_cursor(positions, tier_index))
+        continuation_cursors.append(
+            _encode_candidate_cursor(pool_states, ongoing_admissions)
+        )
     return CandidatePage(
         candidates=tuple(selected),
-        next_cursor=_encode_candidate_cursor(positions, tier_index),
+        next_cursor=_encode_candidate_cursor(pool_states, ongoing_admissions),
         unavailable_evidence=tuple(sorted(set(unavailable))),
         continuation_cursors=tuple(continuation_cursors),
+        deferred=len(selected_keys) < len(ongoing_keys | historical_keys),
     )
 
 
@@ -666,13 +781,53 @@ def _next_candidate_id(
     return next((item for item in ordered if (tier, item) not in selected), None)
 
 
+def _pool_has_candidate(
+    lanes: Mapping[WorkTier, list[str]],
+    selected: set[tuple[WorkTier, str]],
+) -> bool:
+    return any(
+        (tier, work_id) not in selected
+        for tier, work_ids in lanes.items()
+        for work_id in work_ids
+    )
+
+
+def _next_pool_candidate(
+    lanes: Mapping[WorkTier, list[str]],
+    state: dict[str, Any],
+    selected: set[tuple[WorkTier, str]],
+) -> tuple[WorkTier, str | None]:
+    tier_index = state["next_tier"]
+    for _ in _CANDIDATE_TIERS:
+        tier = _CANDIDATE_TIERS[tier_index]
+        tier_index = (tier_index + 1) % len(_CANDIDATE_TIERS)
+        work_id = _next_candidate_id(
+            lanes[tier], state["after"][tier], selected, tier
+        )
+        if work_id is not None:
+            state["after"][tier] = work_id
+            state["next_tier"] = tier_index
+            return tier, work_id
+    state["next_tier"] = tier_index
+    return _CANDIDATE_TIERS[tier_index], None
+
+
 def _encode_candidate_cursor(
-    positions: Mapping[WorkTier, str | None], next_tier: int
+    pool_states: Mapping[str, Mapping[str, Any]], ongoing_admissions: int
 ) -> str:
     payload = {
         "v": _CANDIDATE_CURSOR_VERSION,
-        "after": {tier: positions[tier] for tier in _CANDIDATE_TIERS},
-        "next_tier": next_tier,
+        "pools": {
+            pool: {
+                "after": {
+                    tier: pool_states[pool]["after"][tier]
+                    for tier in _CANDIDATE_TIERS
+                },
+                "next_tier": pool_states[pool]["next_tier"],
+            }
+            for pool in _CANDIDATE_POOLS
+        },
+        "ongoing_admissions": ongoing_admissions,
     }
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
@@ -680,10 +835,18 @@ def _encode_candidate_cursor(
 
 def _decode_candidate_cursor(
     cursor: str | None,
-) -> tuple[dict[WorkTier, str | None], int]:
-    empty: dict[WorkTier, str | None] = {tier: None for tier in _CANDIDATE_TIERS}
+) -> tuple[dict[str, dict[str, Any]], int]:
+    def empty_state() -> dict[str, dict[str, Any]]:
+        return {
+            pool: {
+                "after": {tier: None for tier in _CANDIDATE_TIERS},
+                "next_tier": 0,
+            }
+            for pool in _CANDIDATE_POOLS
+        }
+
     if cursor is None:
-        return empty, 0
+        return empty_state(), 0
     if not isinstance(cursor, str) or not cursor:
         raise ValueError("candidate cursor must be a nonempty opaque string")
     if len(cursor) > 4096:
@@ -691,17 +854,29 @@ def _decode_candidate_cursor(
     try:
         padding = "=" * (-len(cursor) % 4)
         payload = json.loads(base64.urlsafe_b64decode(cursor + padding))
-        after = payload["after"]
-        next_tier = payload["next_tier"]
-        if payload["v"] != _CANDIDATE_CURSOR_VERSION:
+        version = payload["v"]
+        if version == 1:
+            # Version 1 had one position per tier.  Seed both new pools from
+            # those positions so an upgrade neither replays the lowest IDs nor
+            # loses unresolved historical work.
+            after = _decode_cursor_positions(payload["after"])
+            next_tier = _decode_cursor_tier(payload["next_tier"])
+            states = empty_state()
+            for pool in _CANDIDATE_POOLS:
+                states[pool] = {"after": dict(after), "next_tier": next_tier}
+            return states, 0
+        if version != _CANDIDATE_CURSOR_VERSION:
             raise ValueError
-        if type(next_tier) is not int or not 0 <= next_tier < len(_CANDIDATE_TIERS):
+        pools = payload["pools"]
+        ongoing_admissions = payload["ongoing_admissions"]
+        if type(ongoing_admissions) is not int or not 0 <= ongoing_admissions <= 3:
             raise ValueError
-        positions = {
-            tier: after[tier]
-            if after[tier] is None or isinstance(after[tier], str)
-            else (_raise_invalid_cursor())
-            for tier in _CANDIDATE_TIERS
+        states = {
+            pool: {
+                "after": _decode_cursor_positions(pools[pool]["after"]),
+                "next_tier": _decode_cursor_tier(pools[pool]["next_tier"]),
+            }
+            for pool in _CANDIDATE_POOLS
         }
     except (
         KeyError,
@@ -712,7 +887,24 @@ def _decode_candidate_cursor(
         json.JSONDecodeError,
     ) as exc:
         raise ValueError("invalid candidate continuation cursor") from exc
-    return positions, next_tier
+    return states, ongoing_admissions
+
+
+def _decode_cursor_positions(value: object) -> dict[WorkTier, str | None]:
+    if not isinstance(value, Mapping):
+        _raise_invalid_cursor()
+    return {
+        tier: value[tier]
+        if value[tier] is None or isinstance(value[tier], str)
+        else (_raise_invalid_cursor())
+        for tier in _CANDIDATE_TIERS
+    }
+
+
+def _decode_cursor_tier(value: object) -> int:
+    if type(value) is not int or not 0 <= value < len(_CANDIDATE_TIERS):
+        _raise_invalid_cursor()
+    return value
 
 
 def _raise_invalid_cursor() -> None:
@@ -1241,6 +1433,7 @@ def project_audit_observation(
     timeout_seconds: float | None = None,
     cancel_event: threading.Event | None = None,
     monotonic: Callable[[], float] = time.monotonic,
+    board_snapshot: BoardIndex | None = None,
 ) -> AuditObservation:
     """Project one canonical work item without invoking any mutation path."""
 
@@ -1256,6 +1449,7 @@ def project_audit_observation(
                 timeout_seconds=timeout_seconds,
                 cancel_event=cancel_event,
                 monotonic=monotonic,
+                board_snapshot=board_snapshot,
             )
     return _project_audit_observation(
         work_id,
@@ -1263,6 +1457,7 @@ def project_audit_observation(
         timeout_seconds=timeout_seconds,
         cancel_event=cancel_event,
         monotonic=monotonic,
+        board_snapshot=board_snapshot,
     )
 
 
@@ -1273,6 +1468,7 @@ def _project_audit_observation(
     timeout_seconds: float | None,
     cancel_event: threading.Event | None,
     monotonic: Callable[[], float],
+    board_snapshot: BoardIndex | None,
 ) -> AuditObservation:
     """Implementation kept inside the caller's whole-chain Git budget."""
 
@@ -1280,7 +1476,7 @@ def _project_audit_observation(
         None if timeout_seconds is None else monotonic() + timeout_seconds
     )
     product, tracking = _canonical_repositories(root)
-    board = merged_board_readonly(tracking)
+    board = board_snapshot or merged_board_readonly(tracking)
     doc = _read_canonical_doc(work_id, board)
     return _project_doc(
         doc,

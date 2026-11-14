@@ -19,6 +19,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,6 +33,7 @@ from cascade.board.context import get_project_context, resolve_root
 from cascade.board.gitutil import inherited_git_process_group
 from cascade.watchdog.audit import (
     CandidateBudget,
+    _canonical_repositories,
     _restore_parent_observation_episodes,
     _snapshot_parent_observation_episodes,
     project_audit_observation,
@@ -48,6 +50,7 @@ _CLAIM_NAME = "pass.lock"
 _BUSY_RETRY_SECONDS = 1.0
 _PASS_MAX_ITEMS = 100
 _PASS_MAX_SECONDS = 60.0
+_CANDIDATE_MAX_SECONDS = 2.0
 _OBSERVER_CANCEL_GRACE_SECONDS = 0.25
 _OBSERVER_COORDINATION_RESERVE_SECONDS = 0.8
 
@@ -84,6 +87,8 @@ class AuditPassResult:
     timed_out_candidates: tuple[str, ...] = ()
     reassessed_candidates: tuple[str, ...] = ()
     investigation_requests: tuple[dict[str, Any], ...] = ()
+    candidate_failures: tuple[dict[str, Any], ...] = ()
+    coverage_deferred: bool = False
 
 
 AuditPass = Callable[[str | None, threading.Event], AuditPassResult]
@@ -412,6 +417,18 @@ def _run_bounded_audit_pass_inline(
         cancel_event=cancel_event,
     )
     remaining("selection")
+    board_snapshot = None
+    try:
+        from cascade.workspace.integration_worktree import merged_board_readonly
+
+        _, tracking = _canonical_repositories(root)
+        board_snapshot = merged_board_readonly(tracking)
+    except Exception:
+        # Selection has already produced a bounded page.  If a shared snapshot
+        # cannot be built, each observation reports its own canonical evidence
+        # failure instead of turning a completed partial pass into a failure.
+        pass
+    remaining("board_snapshot")
     counts: dict[str, int] = {
         "selected": len(page.candidates),
         "observed": 0,
@@ -433,8 +450,11 @@ def _run_bounded_audit_pass_inline(
     timed_out_candidates: list[str] = []
     reassessed_candidates: list[str] = []
     investigation_requests: list[dict[str, Any]] = []
+    candidate_failures: list[dict[str, Any]] = []
 
-    def completed(next_cursor: str | None) -> AuditPassResult:
+    def completed(
+        next_cursor: str | None, *, coverage_deferred: bool = False
+    ) -> AuditPassResult:
         return AuditPassResult(
             next_cursor=next_cursor,
             counts=counts,
@@ -442,6 +462,8 @@ def _run_bounded_audit_pass_inline(
             timed_out_candidates=tuple(timed_out_candidates),
             reassessed_candidates=tuple(reassessed_candidates),
             investigation_requests=tuple(investigation_requests),
+            candidate_failures=tuple(candidate_failures),
+            coverage_deferred=coverage_deferred,
         )
 
     for index, candidate in enumerate(page.candidates):
@@ -452,9 +474,23 @@ def _run_bounded_audit_pass_inline(
             continuations[index] if index < len(continuations) else page.next_cursor
         )
         if not candidate.evidence_available:
+            evidence_errors = tuple(getattr(candidate, "evidence_errors", ()))
+            retry_reason = (
+                evidence_errors[0]
+                if evidence_errors
+                else "audit_evidence_unavailable"
+            )
             investigation_requests.append({
                 "work_id": work_id, "reason": "audit_evidence_unavailable",
-                "evidence": {"classification": "unavailable_evidence"},
+                "evidence": {
+                    "classification": "unavailable_evidence",
+                    "retry_reason": retry_reason,
+                },
+            })
+            candidate_failures.append({
+                "work_id": work_id,
+                "reason": retry_reason,
+                "retryable": True,
             })
             # Selection already proved this identity cannot currently be
             # projected.  Count it as unavailable evidence and advance the
@@ -466,17 +502,22 @@ def _run_bounded_audit_pass_inline(
                 counts[f"tier.{tier}.unavailable_evidence"] += 1
             completed_cursor = candidate_cursor
             if monotonic() - started >= max_seconds:
-                return completed(completed_cursor)
+                return completed(completed_cursor, coverage_deferred=True)
             continue
-        allowance = remaining(f"observation:{work_id}")
+        allowance = min(
+            _CANDIDATE_MAX_SECONDS,
+            remaining(f"observation:{work_id}"),
+        )
         try:
-            observation = project_audit_observation(
-                work_id,
-                root=root,
-                timeout_seconds=allowance,
-                cancel_event=cancel_event,
-                monotonic=monotonic,
-            )
+            with _candidate_observation_deadline(allowance):
+                observation = project_audit_observation(
+                    work_id,
+                    root=root,
+                    timeout_seconds=allowance,
+                    cancel_event=cancel_event,
+                    monotonic=monotonic,
+                    board_snapshot=board_snapshot,
+                )
         except InterruptedError as exc:
             raise AuditPassCancelled(
                 f"health audit cancelled while observing {work_id}"
@@ -489,6 +530,11 @@ def _run_bounded_audit_pass_inline(
             if tier in {"task", "feature", "epic"}:
                 counts[f"tier.{tier}.unavailable_evidence"] += 1
             timed_out_candidates.append(work_id)
+            candidate_failures.append({
+                "work_id": work_id,
+                "reason": "audit_observation_timeout",
+                "retryable": True,
+            })
             investigation_requests.append({
                 "work_id": work_id, "reason": "audit_observation_timeout",
                 "evidence": {"classification": "unavailable_evidence", "observation_error": "TimeoutExpired"},
@@ -496,7 +542,7 @@ def _run_bounded_audit_pass_inline(
             completed_cursor = candidate_cursor
             _log.warning("health audit observation timed out for %s: %s", work_id, exc)
             if monotonic() - started >= max_seconds:
-                return completed(completed_cursor)
+                return completed(completed_cursor, coverage_deferred=True)
             continue
         except Exception as exc:
             # An unfamiliar observation failure is investigation input, not
@@ -508,9 +554,14 @@ def _run_bounded_audit_pass_inline(
                 "work_id": work_id, "reason": "audit_observation_error",
                 "evidence": {"observation_error": type(exc).__name__},
             })
+            candidate_failures.append({
+                "work_id": work_id,
+                "reason": f"audit_observation_error:{type(exc).__name__}",
+                "retryable": True,
+            })
             completed_cursor = candidate_cursor
             if monotonic() - started >= max_seconds:
-                return completed(completed_cursor)
+                return completed(completed_cursor, coverage_deferred=True)
             continue
         counts["observed"] += 1
         counts[observation.classification] += 1
@@ -538,8 +589,38 @@ def _run_bounded_audit_pass_inline(
         if monotonic() - started >= max_seconds:
             # The observation completed successfully. Persist its exact selector
             # continuation and leave the unobserved suffix for the next pass.
-            return completed(completed_cursor)
-    return completed(page.next_cursor)
+            return completed(completed_cursor, coverage_deferred=True)
+    return completed(
+        page.next_cursor,
+        coverage_deferred=bool(getattr(page, "deferred", False)),
+    )
+
+
+@contextmanager
+def _candidate_observation_deadline(seconds: float):
+    """Interrupt one synchronous observation without consuming the pass suffix."""
+
+    can_interrupt = (
+        threading.current_thread() is threading.main_thread()
+        and hasattr(signal, "setitimer")
+        and signal.getitimer(signal.ITIMER_REAL)[0] == 0
+    )
+    if not can_interrupt:
+        yield
+        return
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def expired(_signum, _frame) -> None:
+        raise subprocess.TimeoutExpired("audit observation", seconds)
+
+    signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 class _WorkspaceClaim:

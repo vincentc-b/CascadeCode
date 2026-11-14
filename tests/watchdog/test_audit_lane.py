@@ -463,6 +463,91 @@ def test_candidate_timeout_advances_unavailable_candidate_without_stalling_prefi
     assert attempts == ["task_001", "task_002", "feat_001"]
 
 
+def test_observations_share_snapshot_and_each_receive_two_second_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.workspace import integration_worktree
+
+    snapshot = object()
+    monkeypatch.setattr(
+        audit_lane_module,
+        "select_audit_candidates",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            candidates=tuple(
+                SimpleNamespace(work_id=work_id, evidence_available=True)
+                for work_id in ("task_001", "feat_001")
+            ),
+            next_cursor="done",
+            unavailable_evidence=(),
+            continuation_cursors=("after-task", "done"),
+            deferred=False,
+        ),
+    )
+    monkeypatch.setattr(
+        integration_worktree, "merged_board_readonly", lambda _root: snapshot
+    )
+    calls = []
+
+    def observe(work_id, **kwargs):
+        calls.append((work_id, kwargs["timeout_seconds"], kwargs["board_snapshot"]))
+        return SimpleNamespace(classification="healthy")
+
+    monkeypatch.setattr(audit_lane_module, "project_audit_observation", observe)
+
+    result = _run_bounded_audit_pass_inline(
+        tmp_path,
+        None,
+        threading.Event(),
+        max_items=100,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+
+    assert result.counts["healthy"] == 2
+    assert [call[0] for call in calls] == ["task_001", "feat_001"]
+    assert all(0 < call[1] <= 2 for call in calls)
+    assert all(call[2] is snapshot for call in calls)
+
+
+def test_partial_page_records_deferred_coverage_and_distinct_retry_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        audit_lane_module,
+        "select_audit_candidates",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            candidates=(
+                SimpleNamespace(
+                    work_id="task_999",
+                    evidence_available=False,
+                    evidence_errors=("canonical_document_unavailable",),
+                ),
+            ),
+            next_cursor="after-missing",
+            unavailable_evidence=(),
+            continuation_cursors=("after-missing",),
+            deferred=True,
+        ),
+    )
+
+    result = _run_bounded_audit_pass_inline(
+        tmp_path,
+        None,
+        threading.Event(),
+        max_items=1,
+        max_seconds=60,
+        monotonic=time.monotonic,
+    )
+
+    assert result.coverage_deferred
+    assert result.next_cursor == "after-missing"
+    assert result.candidate_failures == ({
+        "work_id": "task_999",
+        "reason": "canonical_document_unavailable",
+        "retryable": True,
+    },)
+
+
 def test_repeated_first_candidate_timeout_still_reaches_later_tiers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

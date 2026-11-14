@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import subprocess
 from datetime import date
@@ -125,7 +126,65 @@ def test_cursor_is_bounded_fair_and_eventually_covers_old_unresolved_work(
         "unresolved_review",
     )
     assert old.evidence_errors == ("registered_worktree_unavailable",)
+    assert len(old.source_references) >= 2
     assert cursor
+
+
+def test_both_pools_reserve_every_fourth_admission_for_history(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root, id="feat_001", title="Feature", tier="feature",
+        status="active", parent="epic_001",
+    )
+    for index in range(1, 6):
+        add_doc(
+            root, id=f"task_{index:03d}", title=f"Current {index}", tier="task",
+            status="active", parent="feat_001",
+        )
+    add_doc(
+        root, id="task_900", title="Historical", tier="task",
+        status="completed", parent="feat_001",
+    )
+    _commit(root)
+    (root / ".cascade" / "executions.json").write_text(
+        json.dumps({
+            "actions": {
+                "old": {
+                    "affected_work_id": "task_900",
+                    "recovery_state": "retryable",
+                }
+            }
+        }),
+        encoding="utf-8",
+    )
+
+    page = select_audit_candidates(
+        budget=CandidateBudget(max_items=4), root=root, today=date(2099, 1, 1)
+    )
+
+    assert _ids(page)[:3] == ["task_001", "feat_001", "epic_001"]
+    assert _ids(page)[3] == "task_900"
+    assert len(set(_ids(page))) == 4
+    assert page.deferred
+
+
+def test_version_one_cursor_migrates_to_independent_pool_positions() -> None:
+    payload = {
+        "v": 1,
+        "after": {"task": "task_009", "feature": None, "epic": "epic_002"},
+        "next_tier": 1,
+    }
+    cursor = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":")).encode()
+    ).decode().rstrip("=")
+
+    states, admitted = audit._decode_candidate_cursor(cursor)
+
+    assert admitted == 0
+    assert states["ongoing"] == states["historical"]
+    assert states["ongoing"]["after"]["task"] == "task_009"
+    assert states["ongoing"]["next_tier"] == 1
 
 
 def test_split_repository_projection_uses_tracking_docs_and_product_worktrees(
@@ -200,6 +259,26 @@ def test_unreadable_sources_and_missing_canonical_documents_are_unavailable(
     assert missing.evidence_errors == ("canonical_document_unavailable",)
     assert (sidecars / "executions.json").read_bytes() == before
     assert not (sidecars / "worktrees.lock").exists()
+
+
+def test_malformed_named_document_remains_a_retryable_candidate(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root, id="feat_001", title="Feature", tier="feature",
+        status="active", parent="epic_001",
+    )
+    malformed = root / "docs" / "tasks" / "2_active" / "task_777_broken.md"
+    malformed.parent.mkdir(parents=True, exist_ok=True)
+    malformed.write_text("---\nid: [not valid\n---\n", encoding="utf-8")
+    _commit(root)
+
+    page = select_audit_candidates(root=root)
+    candidate = next(row for row in page.candidates if str(row.work_id) == "task_777")
+
+    assert candidate.reasons == ("malformed_document",)
+    assert candidate.evidence_errors == ("malformed_document",)
+    assert not candidate.evidence_available
 
 
 def test_unchanged_passes_reuse_completed_inventory_and_new_completion_is_seen(
