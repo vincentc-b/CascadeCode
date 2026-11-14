@@ -29,6 +29,9 @@ from cascade.workspace.integration_worktree import locate_trunk, merged_board_re
 DEFAULT_COOLDOWN_SECONDS = 1800
 _MAX_FILE = 65536
 _MAX_QUEUE_SCAN = 2 * 1024 * 1024
+FOLLOW_UP_SNAPSHOT_VERSION = 1
+MAX_FOLLOW_UP_ROWS = 50
+MAX_FOLLOW_UP_SNAPSHOT_BYTES = 65536
 _SAFE_FIELDS = frozenset({
     "type", "work_id", "tier", "classification", "status", "phase", "reason",
     "failure_class", "errors", "error", "code", "gates", "blockers", "generation",
@@ -101,6 +104,12 @@ def _case_path(root: Path, case_id: str) -> Path:
     if not re.fullmatch(r"investigation_[0-9a-f]{32}", case_id):
         raise ValueError("invalid investigation case ID")
     return _home(root) / (case_id + ".json")
+
+
+def follow_up_snapshot_path(root: Path) -> Path:
+    """Return the compact consumer artifact without resolving product Git state."""
+
+    return lifecycle_root(resolve_root(root)) / ".cascade" / "audit_investigations" / "follow_up_snapshot.json"
 
 
 def _owner(work_id: str, tracking: Path) -> tuple[str, dict]:
@@ -202,6 +211,163 @@ def _write(path: Path, case: dict) -> None:
             os.unlink(name)
 
 
+def _follow_up_row(case: Mapping) -> dict:
+    reports = case.get("reports")
+    reports = reports if isinstance(reports, list) else []
+    latest = reports[-1] if reports and isinstance(reports[-1], Mapping) else None
+    report = {"available": False, "reason": "not_reported"}
+    if latest is not None:
+        references = latest.get("references")
+        report = {
+            "available": True,
+            "reported_at": latest.get("reported_at"),
+            "outcome": latest.get("outcome"),
+            "finding": _text(str(latest.get("finding") or ""), 256),
+            "references": [
+                _text(reference, 128)
+                for reference in (references if isinstance(references, list) else [])[:2]
+                if isinstance(reference, str)
+            ],
+            "detail_truncated": (
+                len(str(latest.get("finding") or "").encode()) > 256
+                or len(references if isinstance(references, list) else []) > 2
+            ),
+        }
+    status = case.get("status")
+    delivered_at = case.get("delivered_at")
+    acknowledged_at = case.get("acknowledged_at") or (
+        latest.get("reported_at") if latest is not None else None
+    )
+    return {
+        "source": {
+            "kind": "audit_investigation_case",
+            "case_id": case.get("case_id"),
+            "request_id": case.get("request_id"),
+            "delivery_generation": case.get("delivery_generation"),
+        },
+        "available": True,
+        "work_id": case.get("work_id"),
+        "owner_id": case.get("owner_id"),
+        "reason": case.get("reason"),
+        "request": {
+            "state": "delivered" if status in {"delivered", "reassess"} and delivered_at else "pending",
+            "requested_at": case.get("updated_at") or case.get("created_at"),
+            "delivered_at": delivered_at,
+            "error": case.get("delivery_error"),
+        },
+        "acknowledgement": {
+            "state": "acknowledged" if acknowledged_at else "pending",
+            "acknowledged_at": acknowledged_at,
+        },
+        "latest_report": report,
+        "pending_reassessment": {
+            "pending": True,
+            "next_at": case.get("next_reassessment_at"),
+        },
+        "detail_truncated": bool(report.get("detail_truncated")),
+    }
+
+
+def _publish_follow_up_snapshot(root: Path, published_at: datetime) -> None:
+    """Publish a bounded summary; case files remain the durable source evidence."""
+
+    home = _home(root)
+    paths = list(islice(home.glob("investigation_*.json"), MAX_FOLLOW_UP_ROWS + 1))
+    selected = paths[:MAX_FOLLOW_UP_ROWS]
+    rows = []
+    unavailable = 0
+    for path in selected:
+        try:
+            case = _read(path)
+            if case is None:
+                raise InvestigationUnavailable("investigation case unavailable")
+            rows.append(_follow_up_row(case))
+        except (InvestigationUnavailable, OSError):
+            unavailable += 1
+            rows.append({
+                "source": {"kind": "audit_investigation_case", "case_id": path.stem},
+                "available": False,
+                "reason": "case_unavailable",
+                "request": {"state": "unavailable", "requested_at": None, "delivered_at": None, "error": "case_unavailable"},
+                "acknowledgement": {"state": "unavailable", "acknowledged_at": None},
+                "latest_report": {"available": False, "reason": "case_unavailable"},
+                "pending_reassessment": {"pending": True, "next_at": None},
+                "detail_truncated": False,
+            })
+    snapshot = {
+        "version": FOLLOW_UP_SNAPSHOT_VERSION,
+        "published_at": published_at.isoformat(),
+        "source": {
+            "kind": "audit_investigation_cases",
+            "identity": "tracking:" + hashlib.sha256(
+                str(lifecycle_root(resolve_root(root))).encode()
+            ).hexdigest()[:24],
+        },
+        "state": "available",
+        "truncated": len(paths) > MAX_FOLLOW_UP_ROWS,
+        "unavailable_count": unavailable,
+        "rows": rows,
+    }
+    data = json.dumps(snapshot, sort_keys=True, allow_nan=False).encode()
+    if len(data) > MAX_FOLLOW_UP_SNAPSHOT_BYTES:
+        snapshot["truncated"] = True
+        while snapshot["rows"] and len(json.dumps(snapshot, sort_keys=True).encode()) > MAX_FOLLOW_UP_SNAPSHOT_BYTES:
+            snapshot["rows"].pop(0)
+    _write_json_snapshot(follow_up_snapshot_path(root), snapshot)
+
+
+def _write_json_snapshot(path: Path, value: Mapping) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = json.dumps(value, sort_keys=True, allow_nan=False).encode()
+    fd, name = tempfile.mkstemp(prefix=".follow-up-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(name, path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
+
+
+def read_follow_up_snapshot(*, root: Path) -> dict:
+    """Read one producer artifact; never walk cases or canonical lifecycle state."""
+
+    from cascade.watchdog.audit_lane import _read_runtime_json
+
+    path = follow_up_snapshot_path(root)
+    try:
+        raw = _read_runtime_json(path)
+    except OSError as exc:
+        return {"state": "pending", "reason": type(exc).__name__, "rows": []}
+    if raw is None:
+        return {"state": "pending", "reason": "snapshot_missing", "rows": []}
+    if len(raw) > MAX_FOLLOW_UP_SNAPSHOT_BYTES:
+        return {"state": "pending", "reason": "snapshot_oversized", "rows": []}
+    try:
+        value = json.loads(raw)
+        if (
+            not isinstance(value, dict)
+            or value.get("version") != FOLLOW_UP_SNAPSHOT_VERSION
+            or value.get("state") != "available"
+            or not isinstance(value.get("published_at"), str)
+            or datetime.fromisoformat(value["published_at"]).utcoffset() is None
+            or not isinstance(value.get("source"), dict)
+            or not isinstance(value.get("rows"), list)
+            or len(value["rows"]) > MAX_FOLLOW_UP_ROWS
+        ):
+            raise ValueError
+        return value
+    except (ValueError, TypeError, UnicodeError):
+        return {"state": "pending", "reason": "snapshot_malformed", "rows": []}
+
+
 def _prompt(case: dict) -> str:
     return (
         f"Audit investigation {case['case_id']} for {case['work_id']}: {case['reason']}.\n"
@@ -233,6 +399,7 @@ def _deliver(case: dict, path: Path, product: Path, now: datetime, owner_state: 
     if canonical["owner_status"] in {"completed", "cancelled"}:
         case.update(status="reassess", delivery_error="owning_team_retired")
         _write(path, case)
+        _publish_follow_up_snapshot(path.parent.parent.parent, now)
         return
     queue = product / "docs" / "_queue" / (owner + ".jsonl")
     if "queue_offset" not in case:
@@ -271,6 +438,7 @@ def _deliver(case: dict, path: Path, product: Path, now: datetime, owner_state: 
             os.fsync(handle.fileno())
     case.update(status="delivered", delivered_at=now.isoformat(), delivery_error=None, delivery_error_detail=None)
     _write(path, case)
+    _publish_follow_up_snapshot(path.parent.parent.parent, now)
 
 
 def request_investigation(
@@ -318,6 +486,7 @@ def request_investigation(
             case["delivery_error"] = type(exc).__name__
             case["delivery_error_detail"] = str(exc) if isinstance(exc, InvestigationUnavailable) else "delivery failed; retained for replay"
             _write(path, case)
+            _publish_follow_up_snapshot(root, when)
             raise
         return {**case, "deduplicated": False}
 
@@ -366,6 +535,7 @@ def replay_pending_investigations(*, root: Path, limit: int = 100, now: datetime
                     case["delivery_error"] = type(exc).__name__
                     case["delivery_error_detail"] = str(exc) if isinstance(exc, InvestigationUnavailable) else "delivery failed; retained for replay"
                     _write(path, case)
+                    _publish_follow_up_snapshot(root, _now(now))
                 results.append(case)
         if len(results) >= limit:
             break
@@ -405,9 +575,11 @@ def report_audit_investigation(
         if len(json.dumps(report["evidence"]).encode()) > 1500:
             report["evidence"] = {"errors": ["report evidence exceeds bounded snippet; use path references"]}
         case["reports"] = [*case.get("reports", [])[-7:], report]
+        case.setdefault("acknowledged_at", when.isoformat())
         case.update(status="reassess", latest_outcome=outcome, updated_at=when.isoformat(),
                     next_reassessment_at=(when if outcome == "reported_fixed" else when + timedelta(seconds=case["cooldown_seconds"])).isoformat())
         while len(case["reports"]) > 1 and len(json.dumps(case).encode()) > _MAX_FILE - 1024:
             case["reports"].pop(0)
         _write(path, case)
+        _publish_follow_up_snapshot(root, when)
         return case

@@ -16,6 +16,7 @@ from cascade.watchdog.audit_lane import (
     HealthAuditLane,
     audit_receipt_path,
 )
+from cascade.watchdog.audit_investigation import follow_up_snapshot_path
 from cascade.watchdog.audit_projection import (
     CoverageSummary,
     CurrentSummary,
@@ -174,6 +175,45 @@ def _publish(
     _write(base / "current.json", {"schema_version": 2, "epoch": epoch})
 
 
+def _publish_follow_ups(root: Path) -> None:
+    _write(
+        follow_up_snapshot_path(root),
+        {
+            "version": 1,
+            "published_at": "2026-11-14T12:00:00+00:00",
+            "source": {"kind": "audit_investigation_cases", "identity": "tracking:test"},
+            "state": "available",
+            "truncated": False,
+            "unavailable_count": 0,
+            "rows": [
+                {
+                    "source": {
+                        "kind": "audit_investigation_case",
+                        "case_id": "investigation_" + "a" * 32,
+                        "request_id": "request-1",
+                        "delivery_generation": 1,
+                    },
+                    "available": True,
+                    "work_id": "task_002",
+                    "owner_id": "feat_001",
+                    "reason": "unknown_failure",
+                    "request": {"state": "delivered", "delivered_at": "2026-11-14T11:58:00+00:00", "error": None},
+                    "acknowledgement": {"state": "acknowledged", "acknowledged_at": "2026-11-14T11:59:00+00:00"},
+                    "latest_report": {
+                        "reported_at": "2026-11-14T11:59:00+00:00",
+                        "outcome": "reported_fixed",
+                        "finding": "Repair reported; verification pending",
+                        "references": ["https://forge/pull/123"],
+                        "detail_truncated": False,
+                    },
+                    "pending_reassessment": {"pending": True, "next_at": "2026-11-14T12:00:00+00:00"},
+                    "detail_truncated": False,
+                }
+            ],
+        },
+    )
+
+
 def test_manual_audit_requires_human_and_coalesces_duplicate_request(tmp_path) -> None:
     root = make_repo(tmp_path, git=False)
     token = "manual-audit-secret"
@@ -263,6 +303,7 @@ def test_get_status_uses_verified_projection_and_bounded_runtime_metadata(
 ) -> None:
     root = make_repo(tmp_path, git=False)
     _publish(root)
+    _publish_follow_ups(root)
     receipt = audit_receipt_path(root)
     _write(
         receipt,
@@ -287,6 +328,12 @@ def test_get_status_uses_verified_projection_and_bounded_runtime_metadata(
     assert payload["incidents"][0]["source_ref"]["row_key"] == "current-blocker"
     assert payload["receipt"].get("secret_extra") is None
     assert payload["counts"]["by_tier"]["task"]["proven_incident"] == 1
+    assert payload["investigation_snapshot"]["state"] == "available"
+    follow_up = payload["investigations"][0]
+    assert follow_up["request"]["state"] == "delivered"
+    assert follow_up["acknowledgement"]["state"] == "acknowledged"
+    assert follow_up["latest_report"]["outcome"] == "reported_fixed"
+    assert follow_up["pending_reassessment"]["pending"] is True
 
 
 def test_get_status_reports_missing_stale_and_corrupt_snapshots_as_pending(
@@ -298,6 +345,24 @@ def test_get_status_reports_missing_stale_and_corrupt_snapshots_as_pending(
     assert _get_status(root)["snapshot"]["reason"] == "snapshot_stale"
     projection_root(root).joinpath("current.json").write_text("{broken")
     assert _get_status(root)["snapshot"]["reason"] == "pointer_malformed"
+
+
+def test_get_status_keeps_unavailable_follow_up_evidence_pending(tmp_path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _publish(root)
+    missing = _get_status(root)
+    assert missing["investigation_snapshot"] == {
+        "state": "pending",
+        "reason": "snapshot_missing",
+    }
+    follow_up_snapshot_path(root).parent.mkdir(parents=True, exist_ok=True)
+    follow_up_snapshot_path(root).write_text("{")
+    corrupt = _get_status(root)
+    assert corrupt["investigation_snapshot"] == {
+        "state": "pending",
+        "reason": "snapshot_malformed",
+    }
+    assert corrupt["investigations"] == []
 
 
 def _get_status(root: Path) -> dict[str, object]:
@@ -343,7 +408,9 @@ def test_repeated_concurrent_gets_do_not_mutate_or_probe_runtime_state(
 ) -> None:
     root = make_repo(tmp_path, git=False)
     _publish(root)
+    _publish_follow_ups(root)
     files = sorted(path for path in projection_root(root).rglob("*") if path.is_file())
+    files.append(follow_up_snapshot_path(root))
     before = {path: (path.stat().st_mtime_ns, path.read_bytes()) for path in files}
     monkeypatch.setattr(
         "cascade.watchdog.audit.project_audit_observation",

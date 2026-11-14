@@ -118,6 +118,8 @@ def test_split_roots_store_cases_in_tracking_and_queue_in_product(tmp_path):
     try:
         result = request(product)
         assert (tracking / ".cascade/audit_investigations" / (result["case_id"] + ".json")).exists()
+        assert module.follow_up_snapshot_path(product).parent == tracking / ".cascade/audit_investigations"
+        assert module.read_follow_up_snapshot(root=product)["rows"][0]["work_id"] == "task_001"
         assert len(read_events("feat_001", 0, root=product)[0]) == 1
         assert not (tracking / "docs/_queue/feat_001.jsonl").exists()
         assert module.read_investigation_cases(root=tracking)[0]["case_id"] == result["case_id"]
@@ -139,6 +141,65 @@ def test_reports_are_owner_scoped_and_fixed_is_only_a_reassessment(tmp_path):
     assert fresh["reports"][0]["outcome"] == "reported_fixed"
     with pytest.raises(ValueError):
         module.report_audit_investigation(case["case_id"], "done", "resolved", root=root, feature_id="feat_001")
+
+
+def test_compact_follow_up_snapshot_separates_delivery_ack_and_reported_fix(tmp_path):
+    root = board(tmp_path)
+    case = request(root)
+    delivered = module.read_follow_up_snapshot(root=root)
+    assert delivered["version"] == module.FOLLOW_UP_SNAPSHOT_VERSION
+    assert delivered["source"]["kind"] == "audit_investigation_cases"
+    assert delivered["truncated"] is False
+    row = delivered["rows"][0]
+    assert row["source"] == {
+        "kind": "audit_investigation_case",
+        "case_id": case["case_id"],
+        "request_id": case["request_id"],
+        "delivery_generation": 1,
+    }
+    assert row["request"]["state"] == "delivered"
+    assert row["acknowledgement"]["state"] == "pending"
+    assert row["latest_report"] == {"available": False, "reason": "not_reported"}
+    assert row["pending_reassessment"]["pending"] is True
+
+    module.report_audit_investigation(
+        case["case_id"],
+        "Repair published; canonical verification is still required",
+        "reported_fixed",
+        references=["https://forge/pull/123"],
+        root=root,
+        feature_id="feat_001",
+        now=NOW,
+    )
+    reported = module.read_follow_up_snapshot(root=root)["rows"][0]
+    assert reported["acknowledgement"] == {
+        "state": "acknowledged",
+        "acknowledged_at": NOW.isoformat(),
+    }
+    assert reported["latest_report"]["outcome"] == "reported_fixed"
+    assert reported["latest_report"]["available"] is True
+    assert reported["latest_report"]["references"] == ["https://forge/pull/123"]
+    assert reported["pending_reassessment"] == {
+        "pending": True,
+        "next_at": NOW.isoformat(),
+    }
+
+
+def test_missing_or_corrupt_follow_up_snapshot_is_explicitly_pending(tmp_path):
+    root = board(tmp_path)
+    assert module.read_follow_up_snapshot(root=root) == {
+        "state": "pending",
+        "reason": "snapshot_missing",
+        "rows": [],
+    }
+    path = module.follow_up_snapshot_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{")
+    assert module.read_follow_up_snapshot(root=root) == {
+        "state": "pending",
+        "reason": "snapshot_malformed",
+        "rows": [],
+    }
 
 
 def test_retired_feature_escalates_and_retired_epic_is_not_awakened(tmp_path):
