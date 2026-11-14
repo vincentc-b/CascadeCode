@@ -942,10 +942,15 @@
           var choices = (detail.choices || sortedChoices(detail.target)).filter(function (choice) {
             return !!findView(choice.view_key, choice.level);
           });
-          if (choices.length === 1) {
+          // Open the broadest next-level view directly. Focused alternatives
+          // remain available in the view selector without another required click.
+          choices.sort(function (left, right) {
+            return (findView(right.view_key, right.level).target_ids || []).length -
+              (findView(left.view_key, left.level).target_ids || []).length ||
+              left.view_key.localeCompare(right.view_key);
+          });
+          if (choices.length) {
             showView(findView(choices[0].view_key, choices[0].level), null, true);
-          } else if (choices.length > 1) {
-            chooseDrill(detail.target, choices);
           }
         },
       });

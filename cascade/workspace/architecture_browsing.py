@@ -219,7 +219,7 @@ def resolve_architecture_code_context(
     with the revision already pinned in the snapshot.
     """
 
-    contexts = _known_checkouts(project, session_target)
+    contexts = _known_checkouts(project, session_target, context_id=context_id)
     try:
         return next(item for item in contexts if item.context_id == context_id)
     except StopIteration as exc:
@@ -322,7 +322,7 @@ def _resolve_known_context(
 
 
 def _known_checkouts(
-    project: ProjectContext, session_target: Path
+    project: ProjectContext, session_target: Path, *, context_id: str | None = None,
 ) -> tuple[ArchitectureCodeContext, ...]:
     session = Path(session_target).resolve()
     target = project.target.root.resolve()
@@ -336,6 +336,11 @@ def _known_checkouts(
     ]
     seen = {session}
     for entry in load_registry_readonly(locate_trunk(target)):
+        identity = f"work:{entry.work_id}:{entry.branch}"
+        if context_id is not None and context_id != _opaque_id(
+            "context", project.target.repository_key, identity
+        ):
+            continue
         path = entry.path.resolve()
         if path in seen or not path.is_dir() or not _same_repository(path, target):
             continue
@@ -344,6 +349,11 @@ def _known_checkouts(
 
     contexts: list[ArchitectureCodeContext] = []
     for path, kind, label, work_id, registered_branch in rows:
+        identity = "session" if kind == "session_target" else f"work:{work_id}:{registered_branch}"
+        if context_id is not None and context_id != _opaque_id(
+            "context", project.target.repository_key, identity
+        ):
+            continue
         try:
             revision = _git_text(path, "rev-parse", "--verify", "HEAD^{commit}")
             branch_result = _git(path, "symbolic-ref", "--quiet", "--short", "HEAD")
@@ -380,7 +390,7 @@ def _known_checkouts(
                 work_id,
             )
         )
-    if not contexts:
+    if not contexts and context_id is None:
         raise ArchitectureBrowsingError(
             "unavailable_context", "War Room session target has no committed Git revision"
         )

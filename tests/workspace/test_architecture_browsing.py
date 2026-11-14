@@ -235,3 +235,20 @@ def test_split_accepted_lineage_store_provides_exact_association(
     assert selection.association_provenance == "accepted_lineage"
     assert selection.association_evidence_id == accepted.pointer_id
     assert selection.mapping_revision == code_revision
+
+
+def test_selected_context_checks_only_selected_worktree(tmp_path: Path, monkeypatch) -> None:
+    root, project, main_revision, _ = _registered_contexts(tmp_path)
+    context_id = architecture_context_catalog(project, root).default_context_id
+    original = browsing._git
+    checked = []
+
+    def tracked(path, *args):
+        checked.append(Path(path).resolve())
+        return original(path, *args)
+
+    monkeypatch.setattr(browsing, "_git", tracked)
+    context = browsing.resolve_architecture_code_context(project, root, context_id)
+    assert context.revision == main_revision
+    assert checked
+    assert set(checked) == {root.resolve()}
