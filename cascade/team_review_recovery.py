@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import subprocess
+import tomllib
+import hashlib
+import json
 from pathlib import Path
 from typing import Literal, Mapping
 
@@ -19,6 +22,7 @@ from cascade.task.action_recovery import (
     record_owner_decision,
     record_owner_resolution,
     resume_action,
+    admit_review_publication_generation,
 )
 from cascade.team_branch_recovery import retry_team_integration_branch_update
 from cascade.workspace.integration_worktree import locate_trunk
@@ -152,6 +156,35 @@ def publish_team_review_resolution(
         if owner != {"kind": team_kind, "work_id": team_id}:
             raise PermissionError("durable review recovery belongs to a different team")
 
+    # A clean local merge is not a new owner decision on every health poll.
+    # Bind retries to the actual resolution and the operator-owned check policy.
+    from cascade.review_rebase import validation_command
+    from cascade.review_validation import review_validation_timeout
+
+    generation = {
+        "source_head": _git(worktree, "rev-parse", "HEAD"),
+        "observed_heads": list(heads),
+        "validation_command": list(validation_command(trunk)),
+        "validation_timeout_seconds": review_validation_timeout(trunk),
+    }
+    config_path = trunk / "cascade.toml"
+    config = tomllib.loads(config_path.read_text()) if config_path.exists() else {}
+    policy = config.get("validation", {})
+    action, admitted_generation = admit_review_publication_generation(
+        action_id, generation, root=trunk,
+        allow_legacy_policy_upgrade=(
+            "review_command" in policy or "review_timeout_seconds" in policy
+        ),
+    )
+    if not admitted_generation:
+        return {
+            "action_id": action_id,
+            "recovery_state": action.get("recovery_state"),
+            "attempt_count": action.get("attempt_count"),
+            "reason": None if action.get("recovery_state") == "completed"
+            else "publication_generation_unchanged_or_blocked",
+        }
+
     if action.get("recovery_state") == "awaiting_owner_decision":
         decisions = [
             item
@@ -159,13 +192,16 @@ def publish_team_review_resolution(
             if isinstance(item, Mapping) and item.get("state") != "resolved"
         ]
         if not decisions:
-            decision_id = f"review-resolution:{action_id}:attempt:{int(action.get('attempt_count') or 0) + 1}"
+            fingerprint = hashlib.sha256(
+                json.dumps(generation, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            decision_id = f"review-resolution:{action_id}:generation:{fingerprint}"
             action = record_owner_decision(
                 action_id,
                 decision_id,
                 root=trunk,
                 owner=team_kind,
-                metadata={"team_id": team_id},
+                metadata={"team_id": team_id, "publication_generation": generation},
             )
             decisions = [
                 item
@@ -183,7 +219,7 @@ def publish_team_review_resolution(
                 decision_id,
                 f"resolved-in-owned-worktree:{action_id}",
                 root=trunk,
-                metadata={"team_id": team_id},
+                metadata={"team_id": team_id, "publication_generation": generation},
             )
 
     def execute(_context: object) -> dict[str, object]:
@@ -196,18 +232,19 @@ def publish_team_review_resolution(
                 metadata={
                     "reason": blocker.code
                     if blocker is not None
-                    else "preflight_failed"
+                    else "preflight_failed",
+                    "publication_generation": generation,
                 },
             )
         turn = preflight.turn
         local_head = _git(worktree, "rev-parse", "--verify", "HEAD^{commit}")
-        if not local_head or not all(
+        if not local_head or local_head != generation["source_head"] or not all(
             _is_ancestor(worktree, head, local_head) for head in heads
         ):
             raise ActionFailure(
                 "owner_decision",
                 "The owned branch no longer contains both admitted review heads.",
-                metadata={"reason": "local_resolution_not_ready"},
+                metadata={"reason": "local_resolution_not_ready", "publication_generation": generation},
             )
         modified = tuple(
             path
@@ -227,7 +264,13 @@ def publish_team_review_resolution(
                 metadata={
                     "reason": blocker.code
                     if blocker is not None
-                    else "publication_failed"
+                    else "publication_failed",
+                    "publication_generation": generation,
+                    "checks": [
+                        {"command": list(check.command), "returncode": check.returncode,
+                         "stdout": check.stdout[-8192:], "stderr": check.stderr[-8192:]}
+                        for check in publication.checks
+                    ],
                 },
             )
         return {
@@ -235,6 +278,12 @@ def publish_team_review_resolution(
                 "published_head": publication.source_head,
                 "review_id": turn.review_id,
                 "source_ref": source_ref,
+                "publication_generation": generation,
+                "checks": [
+                    {"command": list(check.command), "returncode": check.returncode,
+                     "stdout": check.stdout[-8192:], "stderr": check.stderr[-8192:]}
+                    for check in publication.checks
+                ],
             }
         }
 

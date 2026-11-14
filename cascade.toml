@@ -3,6 +3,22 @@
 
 task_parallelism = 4
 
+# Review conflict publication has a bounded regression gate. This does not
+# replace the full Task suite or the Epic's real-renderer/browser acceptance.
+[validation]
+review_timeout_seconds = 900
+review_command = [
+    "python3", "-m", "pytest", "-q",
+    "tests/test_resolution_actions.py",
+    "tests/test_review_rebase.py",
+    "tests/test_review_health.py",
+    "tests/agent/test_dependency_declaration_phase.py",
+    "tests/agent/test_planning_dependency_projection.py",
+    "tests/agent/test_planning_sandbox.py",
+    "tests/war_room/test_ui_render.py",
+    "tests/war_room/test_plan_viewer.py",
+]
+
 [worker]
 drain_seconds = 120
 

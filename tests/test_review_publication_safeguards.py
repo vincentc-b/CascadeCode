@@ -186,20 +186,20 @@ def test_malformed_board_document_is_not_silently_omitted(tmp_path):
         validate_publication_board(tmp_path)
 
 
-def test_repeated_failed_owner_publication_can_be_resolved_again(tmp_path, monkeypatch):
+def test_unchanged_failed_publication_waits_until_policy_changes(tmp_path, monkeypatch):
     from cascade.feature.review_recovery import publish_review_resolution
     root, turn = _execution_ready_turn(tmp_path)
     (root / '.git/info/exclude').write_text('.cascade/\ndocs/_queue/\n')
     _git(root, 'merge', 'epic/epic_035', '--no-edit')
     monkeypatch.setattr(review_rebase, 'validation_command', lambda r: (sys.executable, '-c', 'raise SystemExit(1)'))
-    for attempt in (1, 2):
+    for _ in range(2):
         result = publish_review_resolution(turn.action_id, feature_id='feat_035_001', root=root)
         assert result['recovery_state'] == 'awaiting_owner_decision'
-        assert actions.load_action(turn.action_id, root=root)['attempt_count'] == attempt
+        assert actions.load_action(turn.action_id, root=root)['attempt_count'] == 1
     monkeypatch.setattr(review_rebase, 'validation_command', lambda r: (sys.executable, '-c', ''))
     result = publish_review_resolution(turn.action_id, feature_id='feat_035_001', root=root)
     assert result['recovery_state'] == 'completed'
-    assert actions.load_action(turn.action_id, root=root)['attempt_count'] == 3
+    assert actions.load_action(turn.action_id, root=root)['attempt_count'] == 2
 
 
 def test_dead_claim_check_precedes_failing_board_projection(tmp_path, monkeypatch):
