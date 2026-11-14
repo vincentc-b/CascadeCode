@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -32,6 +32,8 @@ class SemanticThreadAnchor:
     reviewed_tuple_digest: str
     original_source_reference: str
     original_diff_link: str
+    source_path: str | None = None
+    source_section: str | None = None
 
     def __post_init__(self) -> None:
         if self.version != 1:
@@ -56,9 +58,39 @@ class SemanticThreadAnchor:
                 raise WorkspaceError("view anchor requires its exact view key and level")
         elif self.view_key is not None or self.level is not None:
             raise WorkspaceError("only view anchors carry view key and level")
+        if self.kind == "requirement":
+            if (self.source_path is None) != (self.source_section is None):
+                raise WorkspaceError(
+                    "requirement anchor source path and section must be supplied together"
+                )
+            for value, field in (
+                (self.source_path, "source path"),
+                (self.source_section, "source section"),
+            ):
+                if value is not None and not value.strip():
+                    raise WorkspaceError(f"semantic thread anchor {field} must be nonempty")
+        elif self.source_path is not None or self.source_section is not None:
+            raise WorkspaceError("only requirement anchors carry document source fields")
 
     def to_dict(self) -> dict[str, object]:
-        return asdict(self)
+        value: dict[str, object] = {
+            "version": self.version,
+            "kind": self.kind,
+            "target_key": self.target_key,
+            "view_key": self.view_key,
+            "level": self.level,
+            "source_side": self.source_side,
+            "repository_key": self.repository_key,
+            "revision": self.revision,
+            "review_unit_id": self.review_unit_id,
+            "reviewed_tuple_digest": self.reviewed_tuple_digest,
+            "original_source_reference": self.original_source_reference,
+            "original_diff_link": self.original_diff_link,
+        }
+        if self.source_path is not None:
+            value["source_path"] = self.source_path
+            value["source_section"] = self.source_section
+        return value
 
     @classmethod
     def from_dict(cls, raw: object) -> "SemanticThreadAnchor":
@@ -69,7 +101,8 @@ class SemanticThreadAnchor:
             "repository_key", "revision", "review_unit_id", "reviewed_tuple_digest",
             "original_source_reference", "original_diff_link",
         }
-        if set(raw) != fields:
+        optional = {"source_path", "source_section"}
+        if frozenset(raw) not in {frozenset(fields), frozenset(fields | optional)}:
             raise WorkspaceError("invalid semantic thread anchor fields")
         return cls(**raw)  # type: ignore[arg-type]
 
@@ -97,7 +130,7 @@ def build_semantic_thread_anchor(
 ) -> SemanticThreadAnchor:
     """Build an anchor only from exact data exposed by a pinned review payload."""
 
-    side = _repository_side(payload, source_side)
+    side = _anchor_repository(payload, kind, source_side)
     exact_view_key = target_key if kind == "view" else view_key
     source_reference = _validate_target(
         payload, kind, target_key, source_side, view_key=exact_view_key, level=level
@@ -105,6 +138,13 @@ def build_semantic_thread_anchor(
     diff_link = payload.diffs.get("source")
     if not isinstance(diff_link, str) or not diff_link.strip():
         raise WorkspaceError("review payload has no exact source diff")
+    source_path = None
+    source_section = None
+    if kind == "requirement" and isinstance(payload.provenance, dict):
+        plan = payload.provenance.get("plan")
+        if isinstance(plan, dict) and isinstance(plan.get("path"), str):
+            source_path = plan["path"]
+            source_section = target_key
     return SemanticThreadAnchor(
         version=1,
         kind=kind,
@@ -118,6 +158,8 @@ def build_semantic_thread_anchor(
         reviewed_tuple_digest=payload.reviewed_tuple_digest,
         original_source_reference=source_reference,
         original_diff_link=diff_link,
+        source_path=source_path,
+        source_section=source_section,
     )
 
 
@@ -184,7 +226,7 @@ def _validate_anchor(payload: C4ReviewPayload, anchor: SemanticThreadAnchor) -> 
         or anchor.reviewed_tuple_digest != payload.reviewed_tuple_digest
     ):
         raise WorkspaceError("semantic thread anchor names a different reviewed tuple")
-    side = _repository_side(payload, anchor.source_side)
+    side = _anchor_repository(payload, anchor.kind, anchor.source_side)
     if anchor.repository_key != side["repository_key"] or anchor.revision != side["revision"]:
         raise WorkspaceError("semantic thread anchor names a different repository revision")
     expected_source = _validate_target(
@@ -199,13 +241,19 @@ def _validate_anchor(payload: C4ReviewPayload, anchor: SemanticThreadAnchor) -> 
         raise WorkspaceError("semantic thread anchor source reference is not pinned")
     if anchor.original_diff_link != payload.diffs.get("source"):
         raise WorkspaceError("semantic thread anchor diff link is not pinned")
+    if anchor.kind == "requirement" and anchor.source_path is not None:
+        provenance = payload.provenance
+        plan = provenance.get("plan") if isinstance(provenance, dict) else None
+        expected_path = plan.get("path") if isinstance(plan, dict) else None
+        if anchor.source_path != expected_path or anchor.source_section != anchor.target_key:
+            raise WorkspaceError("semantic thread anchor document source is not pinned")
 
 
 def _resolve_freshness(
     payload: C4ReviewPayload, anchor: SemanticThreadAnchor
 ) -> tuple[AnchorFreshness, str | None]:
     try:
-        side = _repository_side(payload, anchor.source_side)
+        side = _anchor_repository(payload, anchor.kind, anchor.source_side)
     except WorkspaceError:
         return "outdated", "source_side_missing"
     if anchor.repository_key != side["repository_key"]:
@@ -221,13 +269,18 @@ def _resolve_freshness(
             view_key=anchor.view_key,
             level=anchor.level,
         )
-        return "current", None
     except WorkspaceError:
         if anchor.kind in {"element", "relationship"} and _has_reviewed_continuity(
             payload, anchor
         ):
             return "current", None
         return "outdated", "target_missing_or_renamed"
+    if (
+        anchor.review_unit_id != payload.review_unit_id
+        or anchor.reviewed_tuple_digest != payload.reviewed_tuple_digest
+    ):
+        return "outdated", "review_tuple_mismatch"
+    return "current", None
 
 
 def _repository_side(payload: C4ReviewPayload, source_side: AnchorSide) -> dict[str, str]:
@@ -238,6 +291,28 @@ def _repository_side(payload: C4ReviewPayload, source_side: AnchorSide) -> dict[
             if repository and revision:
                 return row
     raise WorkspaceError(f"review payload has no {source_side} repository revision")
+
+
+def _anchor_repository(
+    payload: C4ReviewPayload, kind: AnchorKind, source_side: AnchorSide
+) -> dict[str, str]:
+    """Return the pinned repository which actually owns an anchor target.
+
+    Requirements live in the pinned plan document, not in either rendered model
+    repository.  Older direct-composer payloads did not expose plan provenance,
+    so retain their side-based behavior for compatibility; store-backed HTTP
+    payloads always carry the complete plan descriptor.
+    """
+
+    if kind == "requirement":
+        provenance = payload.provenance
+        plan = provenance.get("plan") if isinstance(provenance, dict) else None
+        if isinstance(plan, dict):
+            repository = plan.get("repository_key")
+            revision = plan.get("revision")
+            if isinstance(repository, str) and repository and isinstance(revision, str) and revision:
+                return {"repository_key": repository, "revision": revision}
+    return _repository_side(payload, source_side)
 
 
 def _validate_target(

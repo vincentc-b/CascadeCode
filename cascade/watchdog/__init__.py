@@ -36,6 +36,7 @@ from cascade.watchdog.role_skills import (
     load_role_skills_context,
     resolve_effective_skills,
 )
+from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.dispatch import activate_epic, dispatch_feature, dispatch_task
 from cascade.watchdog.blockage import (
     BlockagePropagationResult,

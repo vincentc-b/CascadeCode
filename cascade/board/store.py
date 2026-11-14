@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import os
 import tempfile
+from contextlib import contextmanager
+from contextvars import ContextVar
 from collections import OrderedDict
-from copy import deepcopy
+from copy import copy, deepcopy
 from datetime import date
 from pathlib import Path
 from threading import RLock
@@ -36,6 +38,35 @@ _TIER_DIRS = (("epic", "epics"), ("feature", "features"), ("task", "tasks"))
 _SCAN_META_CACHE_LIMIT = 8192
 _scan_meta_cache: OrderedDict[Path, tuple[tuple[int, ...], WorkMeta]] = OrderedDict()
 _scan_meta_cache_lock = RLock()
+_board_scan_snapshot: ContextVar[dict[Path, BoardIndex] | None] = ContextVar(
+    "board_scan_snapshot", default=None
+)
+
+
+@contextmanager
+def board_scan_snapshot():
+    """Reuse board scans within one read-only response, never across requests."""
+
+    token = _board_scan_snapshot.set({})
+    try:
+        yield
+    finally:
+        _board_scan_snapshot.reset(token)
+
+
+def _copy_meta(meta: WorkMeta) -> WorkMeta:
+    """Copy mutable frontmatter without recursively copying immutable values."""
+
+    result = copy(meta)
+    for name in ("children", "depends_on", "owners", "skills", "cites", "monitoring_blockers"):
+        setattr(result, name, list(getattr(meta, name)))
+    # Cancellation feedback contains a mutable list of available dispositions.
+    result.cancellation_feedback = deepcopy(meta.cancellation_feedback)
+    for name in ("models", "reasoning"):
+        value = getattr(meta, name)
+        if value is not None:
+            setattr(result, name, value.copy())
+    return result
 
 
 def _scan_meta(path: Path) -> WorkMeta:
@@ -47,7 +78,7 @@ def _scan_meta(path: Path) -> WorkMeta:
         cached = _scan_meta_cache.get(path)
         if cached is not None and cached[0] == version:
             _scan_meta_cache.move_to_end(path)
-            return deepcopy(cached[1])
+            return _copy_meta(cached[1])
 
     meta = parse_doc(path).meta
     # A concurrent writer can replace the file during parsing. Return this
@@ -55,7 +86,7 @@ def _scan_meta(path: Path) -> WorkMeta:
     after = path.stat()
     if version == (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
         with _scan_meta_cache_lock:
-            _scan_meta_cache[path] = (version, deepcopy(meta))
+            _scan_meta_cache[path] = (version, _copy_meta(meta))
             _scan_meta_cache.move_to_end(path)
             if len(_scan_meta_cache) > _SCAN_META_CACHE_LIMIT:
                 _scan_meta_cache.popitem(last=False)
@@ -91,6 +122,9 @@ def list_board(root: Path) -> BoardIndex:
     """Scan board directories, reusing frontmatter from unchanged files."""
 
     repo = resolve_tracking_root(root)
+    snapshot = _board_scan_snapshot.get()
+    if snapshot is not None and repo in snapshot:
+        return snapshot[repo]
     by_id = {}
     for _tier, dirname in _TIER_DIRS:
         for folder in _COLUMNS:
@@ -108,7 +142,10 @@ def list_board(root: Path) -> BoardIndex:
                     other = by_id[meta.id].path
                     raise SchemaError(f"duplicate id {meta.id} at {path} and {other}")
                 by_id[meta.id] = meta
-    return BoardIndex(by_id=by_id)
+    board = BoardIndex(by_id=by_id)
+    if snapshot is not None:
+        snapshot[repo] = board
+    return board
 
 
 def allocate_id(

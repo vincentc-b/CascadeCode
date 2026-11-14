@@ -15,6 +15,7 @@ import socket
 import sys
 import threading
 import time
+import urllib.parse
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -33,6 +34,7 @@ from cascade.boss.view import BossView, compute_boss_view
 from cascade.epic.boot import install_epic_boot_hook
 from cascade.epic.dependency_approvals import AuthenticatedHuman
 from cascade.feature.boot import install_feature_boot_hook
+from cascade.feature_attention import initialize_feature_attention, read_feature_attention
 from cascade.task.boot import install_task_boot_hook
 from cascade.epic.wiring import load_epic_tools
 from cascade.feature.wiring import load_feature_tools
@@ -79,6 +81,10 @@ from cascade.war_room.provider_routes import (
     try_handle_provider_post,
 )
 from cascade.war_room.health_routes import register_health_routes
+from cascade.war_room.feature_attention_routes import (
+    attention_projection,
+    register_feature_attention_routes,
+)
 from cascade.war_room.human_auth import (
     HumanIdentityVerifier,
     LocalHumanIdentityVerifier,
@@ -106,7 +112,9 @@ from cascade.comments.store import (
     CommentNotFound,
     CommentStoreError,
     NotARoot,
+    ReopenNotAllowed,
     read_comments,
+    reopen_comment,
     reply_comment,
     resolve_comment,
 )
@@ -116,7 +124,11 @@ from cascade.watchdog import activate_epic, append_event, dispatch_feature, disp
 from cascade.watchdog.types import Event
 from cascade.board.errors import BoardError, GitError
 from cascade.workspace.errors import WorkspaceError
-from cascade.workspace.c4_threads import SemanticThreadAnchor
+from cascade.workspace.c4_threads import (
+    SemanticThreadAnchor,
+    create_semantic_thread,
+    read_semantic_threads,
+)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SKILLS_INVALID = object()
@@ -245,6 +257,10 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         self.dependency_executor = dependency_executor
         self.health_audit_request = health_audit_request
         self._listen_socket = listen_socket
+        # This is the only automatic reconciliation boundary. Board reads stay
+        # pure, while a failed/corrupt ledger leaves the server live and exposes
+        # an explicit unavailable state to attention consumers.
+        self.feature_attention = initialize_feature_attention(self.root)
         install_epic_boot_hook(self.root)
         install_feature_boot_hook(self.root)
         install_task_boot_hook(self.root)
@@ -259,7 +275,27 @@ class WarRoomHTTPServer(ThreadingHTTPServer):
         self._draining = draining if draining is not None else threading.Event()
         self._handler_threads: set[threading.Thread] = set()
         self._handler_threads_lock = threading.Lock()
+        self._architecture_scheduler = None
+        self._architecture_scheduler_lock = threading.Lock()
         super().__init__(server_address, RequestHandlerClass)
+
+    def architecture_scheduler(self):
+        """Return the one bounded browsing renderer owned by this server."""
+
+        from cascade.workspace.c4_scheduler import C4RenderScheduler
+
+        with self._architecture_scheduler_lock:
+            if self._architecture_scheduler is None:
+                self._architecture_scheduler = C4RenderScheduler(self.root)
+            return self._architecture_scheduler
+
+    def server_close(self) -> None:
+        with self._architecture_scheduler_lock:
+            scheduler = self._architecture_scheduler
+            self._architecture_scheduler = None
+        if scheduler is not None:
+            scheduler.close()
+        super().server_close()
 
     def is_draining(self) -> bool:
         return self._draining.is_set()
@@ -482,6 +518,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = self.path.split("?", 1)[0]
+        if path.startswith("/api/architecture/"):
+            self._handle_architecture_get(path)
+            return
         if path in self._exact_get_routes():
             self._exact_get_routes()[path](self)
             return
@@ -542,6 +581,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
         body = self._read_json_object(allow_empty=path == "/api/health/audit")
         if body is None:
+            return
+        if path == "/api/architecture/snapshots":
+            self._handle_architecture_snapshot_post(body)
             return
         if path == "/api/local_human_session":
             self._establish_local_human_session(body)
@@ -624,6 +666,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/boss_drain": lambda h, b: h._handle_boss_drain(b),
             "/api/comment": lambda h, b: h._handle_comment(b),
             "/api/comment/resolve": lambda h, b: h._handle_comment_resolve(b),
+            "/api/comment/reopen": lambda h, b: h._handle_comment_reopen(b),
             "/api/briefs": lambda h, b: h._handle_create_brief(b),
             "/api/sync/pull": lambda h, b: h._handle_sync_pull(b),
             "/api/approve_epic_plan": lambda h, b: h._handle_approve_epic_plan(b),
@@ -694,11 +737,16 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if epic_id is None:
             return
         from cascade.approvals import ApprovalSelectionError, approve_epic_plan
+        from cascade.workspace.architecture_review import ReviewApprovalContext
         from cascade.epic.planning_signoffs import PlanSignOffError
         from cascade.planning_action_dependencies import DependencyActionRefused
 
         try:
-            payload = approve_epic_plan(epic_id, root=self.server.root)
+            context = ReviewApprovalContext.from_dict(body["review_context"]) \
+                if "review_context" in body else None
+            payload = approve_epic_plan(
+                epic_id, root=self.server.root, review_context=context
+            )
         except ApprovalSelectionError as exc:
             self._json_response(HTTPStatus.CONFLICT, exc.to_dict())
             return
@@ -717,7 +765,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         except PlanSignOffError as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
-        except (ValueError, BoardError, OSError) as exc:
+        except (ValueError, BoardError, WorkspaceError, OSError) as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(HTTPStatus.OK, payload)
@@ -764,10 +812,15 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if feature_id is None:
             return
         from cascade.approvals import ApprovalSelectionError, approve_feature
+        from cascade.workspace.architecture_review import ReviewApprovalContext
         from cascade.planning_action_dependencies import DependencyActionRefused
 
         try:
-            payload = approve_feature(feature_id, root=self.server.root)
+            context = ReviewApprovalContext.from_dict(body["review_context"]) \
+                if "review_context" in body else None
+            payload = approve_feature(
+                feature_id, root=self.server.root, review_context=context
+            )
         except ApprovalSelectionError as exc:
             self._json_response(HTTPStatus.CONFLICT, exc.to_dict())
             return
@@ -783,7 +836,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 },
             )
             return
-        except (ValueError, BoardError, OSError) as exc:
+        except (ValueError, BoardError, WorkspaceError, OSError) as exc:
             self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(HTTPStatus.OK, payload)
@@ -915,7 +968,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         )
 
     def _handle_return_epic_to_backlog(self, body: dict[str, Any]) -> None:
-        """Human-only command boundary; it has no transition implementation yet."""
+        """Return the complete preserved Epic graph through the human command."""
 
         epic_id = self._require_work_id(body, key="epic_id")
         if epic_id is None:
@@ -983,6 +1036,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 self._json_error(HTTPStatus.BAD_REQUEST, "invalid parent")
                 return
             try:
+                self._authorize_semantic_thread_operation(doc_id.strip(), parent.strip())
                 comment_id = reply_comment(
                     doc_id.strip(),
                     parent.strip(),
@@ -992,6 +1046,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 )
             except CommentNotFound:
                 self._json_error(HTTPStatus.NOT_FOUND, "parent not found")
+                return
+            except WorkspaceError as exc:
+                self._json_error(HTTPStatus.CONFLICT, str(exc))
                 return
             except CommentStoreError as exc:
                 self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -1003,12 +1060,10 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
 
         semantic_anchor_raw = body.get("semantic_anchor")
-        semantic_anchor: dict[str, object] | None = None
+        semantic_anchor: SemanticThreadAnchor | None = None
         if semantic_anchor_raw is not None:
             try:
-                semantic_anchor = SemanticThreadAnchor.from_dict(
-                    semantic_anchor_raw
-                ).to_dict()
+                semantic_anchor = SemanticThreadAnchor.from_dict(semantic_anchor_raw)
             except (TypeError, WorkspaceError) as exc:
                 self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
                 return
@@ -1065,23 +1120,38 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 return
             blocks = list(blocks_raw)
         try:
-            comment_id = post_comment(
-                doc_id.strip(),
-                section,
-                text,
-                anchor=anchor,
-                blocking=blocking,
-                line_start=line_start,
-                line_end=line_end,
-                doc_sha=doc_sha,
-                blocks=blocks,
-                semantic_anchor=semantic_anchor,
-                author="human",
-                root=self.server.root,
-                is_attached=self.server.attachment.is_attached,
-            )
+            if semantic_anchor is not None:
+                payload = self._semantic_review_context(doc_id.strip())
+                comment_id = create_semantic_thread(
+                    payload,
+                    semantic_anchor,
+                    text,
+                    blocking,
+                    owner=payload.authorized_owner,
+                    author="human",
+                    root=self.server.root,
+                )
+            else:
+                comment_id = post_comment(
+                    doc_id.strip(),
+                    section,
+                    text,
+                    anchor=anchor,
+                    blocking=blocking,
+                    line_start=line_start,
+                    line_end=line_end,
+                    doc_sha=doc_sha,
+                    blocks=blocks,
+                    semantic_anchor=None,
+                    author="human",
+                    root=self.server.root,
+                    is_attached=self.server.attachment.is_attached,
+                )
         except CommentStoreError as exc:
             self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except WorkspaceError as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(
             HTTPStatus.ACCEPTED,
@@ -1098,6 +1168,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             self._json_error(HTTPStatus.BAD_REQUEST, "missing comment_id")
             return
         try:
+            self._authorize_semantic_thread_operation(
+                doc_id.strip(), comment_id.strip()
+            )
             resolve_comment(
                 doc_id.strip(),
                 comment_id.strip(),
@@ -1112,6 +1185,40 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
         except CommentStoreError as exc:
             self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except WorkspaceError as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        self._json_response(
+            HTTPStatus.ACCEPTED,
+            {"ok": True, "comment_id": comment_id.strip()},
+        )
+
+    def _handle_comment_reopen(self, body: dict[str, Any]) -> None:
+        doc_id = body.get("doc_id")
+        comment_id = body.get("comment_id")
+        if not isinstance(doc_id, str) or not doc_id.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing doc_id")
+            return
+        if not isinstance(comment_id, str) or not comment_id.strip():
+            self._json_error(HTTPStatus.BAD_REQUEST, "missing comment_id")
+            return
+        try:
+            self._authorize_semantic_thread_operation(doc_id.strip(), comment_id.strip())
+            reopen_comment(
+                doc_id.strip(), comment_id.strip(), author="human", root=self.server.root
+            )
+        except CommentNotFound:
+            self._json_error(HTTPStatus.NOT_FOUND, "comment not found")
+            return
+        except (NotARoot, ReopenNotAllowed) as exc:
+            self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except CommentStoreError as exc:
+            self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except WorkspaceError as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._json_response(
             HTTPStatus.ACCEPTED,
@@ -1131,10 +1238,71 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             )
             return
         rows = read_comments(doc_id, root=self.server.root)
+        freshness: dict[str, tuple[str, str | None]] = {}
+        if any(row.semantic_anchor is not None for row in rows):
+            try:
+                payload = self._semantic_review_context(doc_id)
+                freshness = {
+                    thread.id: (thread.freshness, thread.outdated_reason)
+                    for thread in read_semantic_threads(
+                        payload, owner=payload.authorized_owner, root=self.server.root
+                    )
+                }
+                semantic_root_ids = {
+                    row.id for row in rows
+                    if row.parent is None and row.semantic_anchor is not None
+                }
+                if semantic_root_ids != set(freshness):
+                    raise WorkspaceError("stored semantic review anchor is invalid")
+            except WorkspaceError as exc:
+                self._json_error(HTTPStatus.CONFLICT, str(exc))
+                return
+        projected = []
+        for row in rows:
+            value = comment_to_dict(row)
+            if row.id in freshness:
+                value["freshness"], value["outdated_reason"] = freshness[row.id]
+            projected.append(value)
         self._json_response(
             HTTPStatus.OK,
-            {"doc_id": doc_id, "comments": [comment_to_dict(row) for row in rows]},
+            {"doc_id": doc_id, "comments": projected},
         )
+
+    def _semantic_review_context(self, doc_id: str):
+        from cascade.war_room.architecture_routes import resolve_review_context
+
+        payload = resolve_review_context(self.server.root, doc_id)
+        if payload.owner_work_id != doc_id or not payload.review_unit_id:
+            raise WorkspaceError("semantic review context is not active for this work")
+        return payload
+
+    def _authorize_semantic_thread_operation(
+        self, doc_id: str, comment_id: str
+    ) -> None:
+        """Apply review ownership to replies and lifecycle changes when semantic."""
+
+        rows = read_comments(doc_id, root=self.server.root)
+        by_id = {row.id: row for row in rows}
+        row = by_id.get(comment_id)
+        if row is None:
+            raise CommentNotFound(comment_id)
+        seen: set[str] = set()
+        while row.parent is not None:
+            if row.id in seen:
+                raise WorkspaceError("semantic review thread ancestry is invalid")
+            seen.add(row.id)
+            parent = by_id.get(row.parent)
+            if parent is None:
+                raise WorkspaceError("semantic review thread parent is missing")
+            row = parent
+        if row.semantic_anchor is None:
+            return
+        payload = self._semantic_review_context(doc_id)
+        threads = read_semantic_threads(
+            payload, owner=payload.authorized_owner, root=self.server.root
+        )
+        if not any(thread.id == row.id for thread in threads):
+            raise WorkspaceError("semantic review thread anchor is invalid")
 
     def _handle_ask_boss_dispatch(self, body: dict[str, Any]) -> None:
         kind = body.get("kind")
@@ -1204,25 +1372,31 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
     def _handle_board(self) -> None:
         try:
-            board = merged_board(self.server.root)
-            with merged_board_snapshot(self.server.root, board):
-                payload = board_view_from_index(board, root=self.server.root)
-                priorities = read_backlog_priorities(board, root=self.server.root)
-                payload["backlog_feature_priorities"] = {
-                    epic_id: _backlog_priority_to_dict(priority)
-                    for epic_id, priority in priorities.items()
-                }
-                _order_backlog_feature_rows(
-                    payload["features"]["1_backlog"], priorities
-                )
-                epic_priority = read_backlog_epic_priority(board, root=self.server.root)
-                payload["backlog_epic_priority"] = _backlog_epic_priority_to_dict(epic_priority)
-                epic_rows = payload["epics"]["1_backlog"]
-                by_id = {row["id"]: row for row in epic_rows}
-                ranked_ids = set(epic_priority.epic_ids)
-                payload["epics"]["1_backlog"] = [
-                    by_id[epic_id] for epic_id in epic_priority.epic_ids if epic_id in by_id
-                ] + [row for row in epic_rows if row["id"] not in ranked_ids]
+            from cascade.board.store import board_scan_snapshot
+
+            with board_scan_snapshot():
+                board = merged_board(self.server.root)
+                with merged_board_snapshot(self.server.root, board):
+                    payload = board_view_from_index(board, root=self.server.root)
+                    priorities = read_backlog_priorities(board, root=self.server.root)
+                    payload["backlog_feature_priorities"] = {
+                        epic_id: _backlog_priority_to_dict(priority)
+                        for epic_id, priority in priorities.items()
+                    }
+                    _order_backlog_feature_rows(
+                        payload["features"]["1_backlog"], priorities
+                    )
+                    epic_priority = read_backlog_epic_priority(board, root=self.server.root)
+                    payload["backlog_epic_priority"] = _backlog_epic_priority_to_dict(epic_priority)
+                    payload["feature_attention"] = attention_projection(
+                        read_feature_attention(self.server.root), board
+                    )
+                    epic_rows = payload["epics"]["1_backlog"]
+                    by_id = {row["id"]: row for row in epic_rows}
+                    ranked_ids = set(epic_priority.epic_ids)
+                    payload["epics"]["1_backlog"] = [
+                        by_id[epic_id] for epic_id in epic_priority.epic_ids if epic_id in by_id
+                    ] + [row for row in epic_rows if row["id"] not in ranked_ids]
         except (BoardError, BacklogPriorityStorageError, BacklogEpicPriorityStorageError, OSError) as exc:
             self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, f"Board unavailable: {exc}")
             return
@@ -1335,6 +1509,12 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             return
         payload = work_doc_to_dict(doc, root=self.server.root)
         meta = doc.meta
+        if meta.tier in {"epic", "feature"}:
+            from cascade.war_room.architecture_routes import review_envelope
+
+            payload["paired_review"] = review_envelope(
+                self.server.root, work_id, meta.tier
+            )
         if (
             meta.tier == "epic"
             and meta.plan_approved_at is None
@@ -1349,6 +1529,236 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             if readiness is not None:
                 payload["plan_readiness"] = epic_plan_readiness_to_dict(readiness)
         self._json_response(HTTPStatus.OK, payload)
+
+    def _handle_architecture_get(self, path: str) -> None:
+        from cascade.war_room.architecture_routes import (
+            ArchitectureHTTPError,
+            MAX_METADATA_BYTES,
+            artifact_bytes,
+            context_catalog,
+            resource_bytes,
+            review_documentation_projection,
+            review_projection,
+            snapshot_documentation_projection,
+            snapshot_head_status,
+            snapshot_projection,
+        )
+
+        if len(self.path.encode("utf-8")) > MAX_METADATA_BYTES:
+            self._json_error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "request exceeds 256 KiB")
+            return
+        try:
+            if path == "/api/architecture/contexts":
+                if urllib.parse.urlsplit(self.path).query:
+                    raise ArchitectureHTTPError(
+                        400, "architecture contexts do not accept query parameters"
+                    )
+                self._json_response(HTTPStatus.OK, context_catalog(self.server.root))
+                return
+            if path.startswith("/api/architecture/snapshots/"):
+                suffix = path.removeprefix("/api/architecture/snapshots/").strip("/")
+                parts = suffix.split("/")
+                if len(parts) == 2 and parts[1] == "context":
+                    query = urllib.parse.parse_qs(
+                        urllib.parse.urlsplit(self.path).query,
+                        keep_blank_values=True,
+                        max_num_fields=8,
+                    )
+                    allowed = {"view", "level", "kind", "target"}
+                    if (
+                        set(query) - allowed
+                        or any(len(values) != 1 for values in query.values())
+                        or not query.get("view", [""])[0]
+                        or not query.get("level", [""])[0]
+                    ):
+                        raise ArchitectureHTTPError(
+                            400, "invalid snapshot documentation query"
+                        )
+                    self._json_response(
+                        HTTPStatus.OK,
+                        snapshot_documentation_projection(
+                            self.server.root,
+                            parts[0],
+                            view_key=query["view"][0],
+                            level=query["level"][0],
+                            selection_kind=query.get("kind", ["view"])[0],
+                            semantic_target=query.get("target", [None])[0],
+                            scheduler=self.server.architecture_scheduler(),
+                        ),
+                    )
+                    return
+                if len(parts) == 2 and parts[1] in {"status", "head", "head-status"}:
+                    if urllib.parse.urlsplit(self.path).query:
+                        raise ArchitectureHTTPError(
+                            400, "snapshot status does not accept query parameters"
+                        )
+                    self._json_response(
+                        HTTPStatus.OK,
+                        snapshot_head_status(
+                            self.server.root,
+                            parts[0],
+                            scheduler=self.server.architecture_scheduler(),
+                        ),
+                    )
+                    return
+                if len(parts) != 1 or not parts[0]:
+                    raise ArchitectureHTTPError(404, "architecture snapshot not found")
+                query = urllib.parse.parse_qs(
+                    urllib.parse.urlsplit(self.path).query,
+                    keep_blank_values=True,
+                    max_num_fields=12,
+                )
+                allowed = {"cursor", "limit", "view", "level", "target", "semantic_target"}
+                if set(query) - allowed or any(len(values) != 1 for values in query.values()):
+                    raise ArchitectureHTTPError(400, "invalid snapshot query parameter")
+                if "target" in query and "semantic_target" in query:
+                    raise ArchitectureHTTPError(400, "duplicate semantic target")
+                try:
+                    cursor = int(query.get("cursor", ["0"])[0])
+                    limit = int(query.get("limit", ["25"])[0])
+                except (ValueError, IndexError) as exc:
+                    raise ArchitectureHTTPError(400, "invalid snapshot pagination") from exc
+                status, payload = snapshot_projection(
+                    self.server.root,
+                    parts[0],
+                    cursor=cursor,
+                    limit=limit,
+                    view_key=query.get("view", [None])[0],
+                    level=query.get("level", [None])[0],
+                    semantic_target=(
+                        query.get("semantic_target", query.get("target", [None]))[0]
+                    ),
+                    scheduler=self.server.architecture_scheduler(),
+                )
+                self._json_response(HTTPStatus(status), payload)
+                return
+            if path.startswith("/api/architecture/reviews/"):
+                suffix = path.removeprefix("/api/architecture/reviews/").strip("/")
+                parts = suffix.split("/")
+                if len(parts) == 2 and parts[1] == "context":
+                    query = urllib.parse.parse_qs(
+                        urllib.parse.urlsplit(self.path).query,
+                        keep_blank_values=True,
+                        max_num_fields=10,
+                    )
+                    allowed = {"side", "view", "level", "kind", "target"}
+                    if (
+                        set(query) - allowed
+                        or any(len(values) != 1 for values in query.values())
+                        or not query.get("side", [""])[0]
+                        or not query.get("view", [""])[0]
+                        or not query.get("level", [""])[0]
+                    ):
+                        raise ArchitectureHTTPError(
+                            400, "invalid review documentation query"
+                        )
+                    self._json_response(
+                        HTTPStatus.OK,
+                        review_documentation_projection(
+                            self.server.root,
+                            parts[0],
+                            side=query["side"][0],
+                            view_key=query["view"][0],
+                            level=query["level"][0],
+                            selection_kind=query.get("kind", ["view"])[0],
+                            semantic_target=query.get("target", [None])[0],
+                        ),
+                    )
+                    return
+                work_id = suffix
+                if not work_id or "/" in work_id:
+                    raise ArchitectureHTTPError(404, "architecture review not found")
+                query = urllib.parse.parse_qs(
+                    urllib.parse.urlsplit(self.path).query,
+                    keep_blank_values=True,
+                    max_num_fields=8,
+                )
+                if set(query) - {"cursor", "limit"}:
+                    raise ArchitectureHTTPError(400, "unknown review query parameter")
+                try:
+                    cursor = int(query.get("cursor", ["0"])[0])
+                    limit = int(query.get("limit", ["25"])[0])
+                except (ValueError, IndexError) as exc:
+                    raise ArchitectureHTTPError(400, "invalid review pagination") from exc
+                self._json_response(
+                    HTTPStatus.OK,
+                    review_projection(self.server.root, work_id, cursor=cursor, limit=limit),
+                )
+                return
+            for prefix, loader in (
+                ("/api/architecture/artifacts/", artifact_bytes),
+                ("/api/architecture/resources/", resource_bytes),
+            ):
+                if not path.startswith(prefix):
+                    continue
+                parts = path.removeprefix(prefix).strip("/").split("/")
+                if len(parts) != 2 or not all(parts):
+                    raise ArchitectureHTTPError(404, "architecture resource not found")
+                loaded = loader(
+                    self.server.root,
+                    parts[0],
+                    parts[1],
+                    scheduler=(
+                        self.server.architecture_scheduler()
+                        if parts[0].startswith("architecture-snapshot-") else None
+                    ),
+                )
+                if loader is artifact_bytes:
+                    body, etag = loaded
+                    content_type = "image/svg+xml; charset=utf-8"
+                else:
+                    body, content_type, etag = loaded
+                if self.headers.get("If-None-Match") == etag:
+                    self.send_response(HTTPStatus.NOT_MODIFIED)
+                    self.send_header("ETag", etag)
+                    self.send_header("Cache-Control", "private, max-age=31536000, immutable")
+                    self.end_headers()
+                    return
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Cache-Control", "private, max-age=31536000, immutable")
+                self.send_header("ETag", etag)
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            raise ArchitectureHTTPError(404, "architecture resource not found")
+        except ArchitectureHTTPError as exc:
+            self._json_error(HTTPStatus(exc.status), str(exc))
+        except (OSError, ValueError, WorkspaceError) as exc:
+            self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
+
+    def _handle_architecture_snapshot_post(self, body: dict[str, Any]) -> None:
+        from cascade.war_room.architecture_routes import (
+            ArchitectureHTTPError,
+            create_snapshot,
+        )
+
+        if urllib.parse.urlsplit(self.path).query:
+            self._json_error(HTTPStatus.BAD_REQUEST, "snapshot creation does not accept queries")
+            return
+        try:
+            status, payload = create_snapshot(
+                self.server.root,
+                body,
+                scheduler=self.server.architecture_scheduler(),
+            )
+            if status == HTTPStatus.TOO_MANY_REQUESTS:
+                encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+                self.send_response(HTTPStatus.TOO_MANY_REQUESTS)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Retry-After", "2")
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+                return
+            self._json_response(HTTPStatus(status), payload)
+        except ArchitectureHTTPError as exc:
+            self._json_error(HTTPStatus(exc.status), str(exc))
+        except (OSError, ValueError, WorkspaceError) as exc:
+            self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
 
     def end_headers(self) -> None:
         """Finish the response and tell the browser not to wait on this connection."""
@@ -1433,6 +1843,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/doc/"):
             work_id = path.removeprefix("/api/doc/").strip("/")
             return bool(work_id and "/" not in work_id)
+        if path.startswith("/api/architecture/"):
+            return True
         if path.startswith("/api/comments/"):
             doc_id = path.removeprefix("/api/comments/").strip("/")
             return bool(doc_id and "/" not in doc_id)
@@ -1540,6 +1952,7 @@ register_review_routes(WarRoomRequestHandler)
 register_room_settings_routes(WarRoomRequestHandler)
 register_health_routes(WarRoomRequestHandler)
 register_dependency_routes(WarRoomRequestHandler)
+register_feature_attention_routes(WarRoomRequestHandler)
 
 if __name__ == "__main__":
     main()

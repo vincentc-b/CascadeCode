@@ -30,6 +30,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+plan_approved_at: '2026-11-14T02:09:04.154410+00:00'
 ---
 # Make health audit actionable while retaining recovery history
 

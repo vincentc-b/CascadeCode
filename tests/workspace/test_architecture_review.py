@@ -45,6 +45,7 @@ from cascade.workspace import (
     PromotionHeads,
     ProjectContext,
     ProposedAncestorContext,
+    ReviewApprovalContext,
     WorkspaceError,
     create_architecture_artifact_ref,
     create_architecture_model_ref,
@@ -54,6 +55,7 @@ from cascade.workspace import (
     resolve_design_ownership,
     read_architecture_state,
     rebase_architecture_proposal,
+    render_identity,
     reserve_promotion,
     review_architecture_proposal,
     stage_architecture_proposal,
@@ -908,8 +910,9 @@ def test_approval_pins_reviewed_tuple_for_all_lifecycle_boundaries(tmp_path: Pat
     approved = validate_review_gate(
         project, work_id="feat_034_003", boundary="approval", store=store
     )
+    restarted = ArchitectureReviewStore(project)
     dispatched = validate_review_gate(
-        project, work_id="task_034_003_004", boundary="dispatch", store=store
+        project, work_id="task_034_003_004", boundary="dispatch", store=restarted
     )
     merged = validate_review_gate(
         project, work_id="feat_034_003", boundary="merge", store=store
@@ -918,7 +921,100 @@ def test_approval_pins_reviewed_tuple_for_all_lifecycle_boundaries(tmp_path: Pat
     assert approved.review_unit_id == proposal.review_unit_id
     assert dispatched.review_unit_id == proposal.review_unit_id
     assert merged.tuple_digest == proposal.reviewed_tuple_digest
-    assert store.get(proposal.review_unit_id).status == "approved"
+    assert restarted.get(proposal.review_unit_id).status == "approved"
+
+
+@pytest.mark.parametrize(
+    "field,replacement",
+    (
+        ("owner_work_id", "feat_forged"),
+        ("target_repository_key", "repository-forged"),
+        ("reviewed_tuple_digest", "f" * 64),
+        ("plan_revision", "e" * 40),
+        ("accepted_baseline_generation", 7),
+    ),
+)
+def test_approval_rejects_forged_displayed_review_context(
+    tmp_path: Path, field: str, replacement: object,
+) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    proposal = replace(
+        _unit(project, plan, design, model),
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        impact_reason="No diagram change",
+    )
+    store = ArchitectureReviewStore(project)
+    store.save(proposal)
+    store.record_review(
+        proposal.review_unit_id,
+        reviewer="feature-team",
+        decision="reviewed",
+        reviewed_at="2026-11-09T12:00:00+00:00",
+    )
+    enable_review_gate(project, version=1, store=store)
+    displayed = ReviewApprovalContext(
+        proposal.owner_work_id,
+        proposal.target_repository_key,
+        proposal.plan.revision,
+        proposal.review_unit_id,
+        proposal.reviewed_tuple_digest,
+        proposal.baseline_generation,
+    )
+
+    with pytest.raises(ArchitectureProposalError) as refusal:
+        validate_review_gate(
+            project,
+            work_id="feat_034_003",
+            boundary="approval",
+            store=store,
+            approval_context=replace(displayed, **{field: replacement}),
+        )
+
+    assert refusal.value.code == "stale_review_context"
+    assert store.get(proposal.review_unit_id).status == "reviewed"
+
+
+def test_replacement_between_display_and_approval_is_rejected(tmp_path: Path) -> None:
+    project, plan, design, model = _review_repository(tmp_path)
+    original = replace(
+        _unit(project, plan, design, model),
+        proposed_model=None,
+        architecture_impact="no_diagram_change",
+        impact_reason="Original tuple",
+    )
+    replacement = replace(original, impact_reason="Replacement tuple")
+    store = ArchitectureReviewStore(project)
+    for proposal in (original, replacement):
+        store.save(proposal)
+        store.record_review(
+            proposal.review_unit_id,
+            reviewer="feature-team",
+            decision="reviewed",
+            reviewed_at="2026-11-09T12:00:00+00:00",
+        )
+    enable_review_gate(project, version=1, store=store)
+    displayed = ReviewApprovalContext(
+        original.owner_work_id,
+        original.target_repository_key,
+        original.plan.revision,
+        original.review_unit_id,
+        original.reviewed_tuple_digest,
+        original.baseline_generation,
+    )
+
+    with pytest.raises(ArchitectureProposalError) as refusal:
+        validate_review_gate(
+            project,
+            work_id="feat_034_003",
+            boundary="approval",
+            store=store,
+            approval_context=displayed,
+        )
+
+    assert refusal.value.code == "stale_review_context"
+    assert store.get(original.review_unit_id).status == "reviewed"
+    assert store.get(replacement.review_unit_id).status == "reviewed"
 
 
 def test_gate_revalidates_diagram_model_binding_before_approval(tmp_path: Path) -> None:
@@ -1465,6 +1561,7 @@ def test_diagram_change_runs_pinned_closure_and_render_validation(tmp_path: Path
         renderer_image_digest="sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
         renderer_settings=tuple(sorted(settings.cache_payload().items())),
         semantic_artifact_digest=semantic_digest,
+        render_identity=render_identity(closure.digest, settings),
     )
     plan = PinnedDocumentRef(
         project.target.repository_key,
@@ -1487,6 +1584,10 @@ def test_diagram_change_runs_pinned_closure_and_render_validation(tmp_path: Path
     )
 
     assert staged.semantic_diff and staged.semantic_diff.state == "empty_baseline"
+    assert staged.unit and staged.unit.proposed_model
+    assert staged.unit.proposed_model.render_identity == render_identity(
+        closure.digest, settings
+    )
     inspected = read_architecture_state(
         project,
         owner="feature-team",

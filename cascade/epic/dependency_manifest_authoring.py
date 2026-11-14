@@ -134,9 +134,12 @@ def _result(
     """Build one JSON-safe response while the dependency lock is held."""
 
     software_status = project_dependency_status(epic_id, root=root)
+    from cascade.epic.dependency_declaration import authoring_context
+    authoring = authoring_context(epic_id, root=root)
     return {
         "manifest": snapshot.to_dict() if snapshot is not None else None,
         "manifest_revision": snapshot.revision if snapshot is not None else 0,
+        "authoring": authoring,
         "software_dependency_status": software_status,
         "plan_readiness": software_status["planning_readiness"],
     }

@@ -42,7 +42,9 @@ class LifecycleGate:
                 raise LifecycleTurnRejected(
                     f"lifecycle transition is quiescing {self._blocked_by_member[member_id]}"
                 )
-            self._active_by_member[member_id] = self._active_by_member.get(member_id, 0) + 1
+            self._active_by_member[member_id] = (
+                self._active_by_member.get(member_id, 0) + 1
+            )
         try:
             yield
         finally:
@@ -67,6 +69,11 @@ class LifecycleGate:
                 member_id not in self._blocked_by_member
                 and self._active_by_member.get(member_id, 0) == 0
             )
+
+    def turns_quiesced(self, member_id: str) -> bool:
+        """Read active turns independently of a transition's admission hold."""
+        with self._condition:
+            return self._active_by_member.get(member_id, 0) == 0
 
     @contextmanager
     def transition(
@@ -113,7 +120,8 @@ class LifecycleGate:
             # boundary.  The caller treats this as an unsafe, non-mutating
             # refusal and obtains a fresh graph snapshot on retry.
             if any(
-                (owner := self._blocked_by_member.get(member)) is not None and owner != epic_id
+                (owner := self._blocked_by_member.get(member)) is not None
+                and owner != epic_id
                 for member in members
             ):
                 return False

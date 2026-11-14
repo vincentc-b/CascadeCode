@@ -25,6 +25,7 @@ def load_feature_tools() -> None:
     import cascade.feature.recovery as recovery_mod
     import cascade.feature.review_recovery as review_recovery_mod
     import cascade.planning_dependency_tools as dependency_tools_mod
+    from cascade.planning_architecture_tools import publish_feature_architecture_review
     from cascade.review import reply_feature_review
 
     from cascade.feature.registry import feature_tools, register_feature_tool
@@ -38,6 +39,9 @@ def load_feature_tools() -> None:
     register_feature_tool("read_historical_evidence", read_feature_historical_evidence)
     register_feature_tool(
         "read_architecture_amendments", read_feature_architecture_amendments
+    )
+    register_feature_tool(
+        "publish_architecture_review", publish_feature_architecture_review
     )
     from cascade.watchdog.audit_investigation import report_audit_investigation
     register_feature_tool("report_audit_investigation", report_audit_investigation)
@@ -57,6 +61,7 @@ def load_feature_tools() -> None:
         "reconcile_completion_rollup",
         "read_historical_evidence",
         "read_architecture_amendments",
+        "publish_architecture_review",
     )
     if all(name in feature_tools() for name in expected):
         return

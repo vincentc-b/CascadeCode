@@ -8,7 +8,10 @@ from cascade.board.store import list_board, move_doc
 from cascade.epic.return_command import return_epic_to_backlog
 from cascade.epic.return_eligibility import ReturnEligibilityInput, ReturnGraphMember
 from cascade.war_room.serialize import board_view_from_index
-from cascade.workspace.integration_worktree import ensure_integration_worktree, merged_board
+from cascade.workspace.integration_worktree import (
+    ensure_integration_worktree,
+    merged_board,
+)
 from tests.support import add_doc, make_repo
 
 
@@ -23,16 +26,15 @@ def test_active_epic_row_and_command_share_return_eligibility(tmp_path):
 
     assert result.eligibility is not None
     assert row["return_to_backlog"] == result.eligibility.to_dict()
-    assert row["return_to_backlog"]["eligible"] is False
-    assert row["return_to_backlog"]["reason_codes"] == [
-        "epic_transition_in_progress",
-        "conflicting_lifecycle_operation",
-        "source_brief_missing",
-        "graph_unavailable",
-    ]
+    assert row["return_to_backlog"]["eligible"] is True
+    assert row["return_to_backlog"]["reason_codes"] == []
+    assert result.ok
+    assert merged_board(root).by_id["epic_030"].status == "backlog"
 
 
-def test_return_eligibility_reads_active_integration_copy_over_stale_trunk_backlog(tmp_path):
+def test_return_eligibility_reads_active_integration_copy_over_stale_trunk_backlog(
+    tmp_path,
+):
     root = make_repo(tmp_path)
     add_doc(root, id="epic_028", title="Returnable", tier="epic")
     worktree = ensure_integration_worktree(
@@ -96,7 +98,5 @@ def test_failed_provider_startup_without_mutation_remains_eligible_in_row_and_co
         "reason_codes": [],
         "refusals": [],
     }
-    # Feature 030_002 owns the transition, so the eligible command still makes
-    # no mutation while that capability is intentionally unavailable.
-    assert result.error_code == "transition_unavailable"
-    assert list_board(root).by_id["epic_030"].status == "active"
+    assert result.ok
+    assert merged_board(root).by_id["epic_030"].status == "backlog"

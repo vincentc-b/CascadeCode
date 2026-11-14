@@ -21,6 +21,7 @@ from cascade.board.types import WorkMeta
 from cascade.epic.plan_readiness import require_epic_plan_ready_for_approval
 from cascade.planning_action_dependencies import require_action_dependencies
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
+from cascade.workspace.architecture_review import ReviewApprovalContext
 from cascade.watchdog.events import append_event
 from cascade.watchdog.types import DispatchResult, Event
 
@@ -88,6 +89,7 @@ def approve_feature(
     *,
     root: Path,
     inventory: ProviderInventoryResult | None = None,
+    review_context: ReviewApprovalContext | None = None,
 ) -> dict[str, object]:
     repo = resolve_root(root)
     with process_lock:
@@ -115,7 +117,12 @@ def approve_feature(
                 )
                 from cascade.lifecycle_review_gate import require_lifecycle_review_gate
 
-                require_lifecycle_review_gate(feature_id, "approval", root=repo)
+                require_lifecycle_review_gate(
+                    feature_id,
+                    "approval",
+                    root=repo,
+                    approval_context=review_context,
+                )
             newly = _set_feature_approved(feature_id, root=repo)
     result: dict[str, object] = {
         "ok": True, "feature_id": feature_id, "newly_approved": newly
@@ -129,6 +136,7 @@ def approve_epic_plan(
     *,
     root: Path,
     inventory: ProviderInventoryResult | None = None,
+    review_context: ReviewApprovalContext | None = None,
 ) -> dict[str, object]:
     repo = resolve_root(root)
     with process_lock:
@@ -192,7 +200,12 @@ def approve_epic_plan(
                     )
 
                     require_corrective_feature_ready_for_approval(feature_id, root=repo)
-                    require_lifecycle_review_gate(feature_id, "approval", root=repo)
+                    require_lifecycle_review_gate(
+                        feature_id,
+                        "approval",
+                        root=repo,
+                        approval_context=review_context,
+                    )
             for feature_id in children:
                 _set_feature_approved(feature_id, root=repo)
             # The epic timestamp durably indicates that the whole plan was approved.
@@ -322,6 +335,9 @@ def _set_feature_approved(feature_id: str, *, root: Path) -> bool:
         return False
     doc.meta.approved_at = datetime.now(timezone.utc)
     write_doc(doc, root=root)
+    from cascade.feature.readiness_evidence import write_approval_evidence
+
+    write_approval_evidence(doc.meta, root=root)
     return True
 
 

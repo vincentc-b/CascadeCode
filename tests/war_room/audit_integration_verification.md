@@ -55,3 +55,33 @@ The GET benchmark started the production War Room server on an ephemeral
 loopback port, completed one warm-up plus 30 status requests, and shut it down
 cleanly. The focused HTTP/UI tests also load the local UI and audit routes. This
 local smoke does not establish normal post-deployment live acceptance.
+
+## Review conflict recovery verification
+
+PR #243 recovery action
+`resolution:v1:8bacbfcc9a7211006229507469fdc5acee119cee28d8e41dc0a356cdb60a1404`
+combines source `888256e1bae97312bb3c152e87e2f0c78c37a0d3` and target
+`7366d9595152dc9f17b498d776ae9c2d98cbcf3e` in the owned epic branch. The
+resolution retains the audit scripts and the target's architecture viewer scripts,
+with one board-script load after its dependencies. The War Room design retains
+both current contracts, removes planning narration, and restores its pinned
+evidence and explicit attribution/live-acceptance gaps. The C4 model is unchanged:
+script composition and documentation reconciliation remain within existing
+component boundaries.
+
+Recovery checks (2026-11-14):
+
+- Physical publication-board validation passed, retaining unique completed work
+  identities. The diff against the admitted target contains only this epic's
+  board records.
+- The eight-file focused command above, plus architecture-tab, feature-attention,
+  board-readiness, readiness-evidence, review-rebase, publication-safeguard and
+  reconstructed-design suites: 146 passed, one design-evidence failure in 68.91s.
+- Restored the missing design evidence and known-gap notes; the affected
+  `tests/architecture/test_reconstructed_design.py` rerun passed all four tests.
+- Added shared-page script uniqueness/order assertions to the existing rendered
+  home-page test. Audit refresh races and the neighboring attention/architecture
+  UI paths passed in the focused run. `git diff --check` passed.
+
+These checks establish local merge compatibility, not remote merge approval,
+post-deployment acceptance, or resolution of retained historical audit timeouts.

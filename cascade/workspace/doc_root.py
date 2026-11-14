@@ -33,6 +33,11 @@ def resolve_doc_worktree(work_id: WorkId, *, root: Path, board=None, readonly: b
         raise NotFound(work_id)
     meta = board.by_id[work_id]
     tier = meta.tier
+    from cascade.epic.return_graph import returned_root_for_path
+
+    returned = returned_root_for_path(trunk, meta.path)
+    if returned is not None:
+        return returned
 
     if tier == "epic":
         if (

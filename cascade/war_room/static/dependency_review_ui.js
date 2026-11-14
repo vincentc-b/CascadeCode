@@ -289,6 +289,10 @@
 
   function renderInto(document, host, projection, options) {
     options = options || {};
+    var declarationPending = (projection.errors || []).some(function (error) {
+      return error.code === "missing_manifest";
+    });
+    var statusLabel = declarationPending ? "Awaiting Epic Team declaration" : stateLabel(projection.status);
     host.replaceChildren();
     host.className = "dependency-review-panel dependency-review-status-" + String(projection.status || "blocked");
     host.setAttribute("role", "region");
@@ -302,7 +306,7 @@
       heading,
       "span",
       "dependency-review-badge",
-      stateLabel(projection.status)
+      statusLabel
     );
     host.appendChild(heading);
 
@@ -316,7 +320,7 @@
 
     var overview = document.createElement("dl");
     overview.className = "dependency-review-fields dependency-review-overview";
-    appendField(document, overview, "Verification status", stateLabel(projection.status));
+    appendField(document, overview, "Verification status", statusLabel);
     appendField(document, overview, "Responsible actor", projection.responsible_actor || "None");
     appendField(
       document,
@@ -359,7 +363,7 @@
     }
 
     (projection.errors || []).forEach(function (error) {
-      appendText(document, body, "p", "dependency-review-warning", error.code + ": " + error.detail);
+      appendText(document, body, "p", "dependency-review-warning", error.code === "missing_manifest" ? "Waiting for the Epic Team to declare software prerequisites. Plan approval remains unavailable until declaration and verification are complete." : error.code + ": " + error.detail);
     });
 
     if ((projection.errors || []).some(function (error) { return error.code === "missing_manifest"; })) {

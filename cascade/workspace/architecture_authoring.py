@@ -24,6 +24,8 @@ from cascade.workspace.architecture_review import (
     _validate_store_inputs,
     stage_architecture_proposal,
 )
+from cascade.workspace.c4_diff import C4SemanticModelArtifact
+from cascade.workspace.c4_render import C4ArtifactRenderer, C4RenderSettings
 from cascade.workspace.doc_root import read_doc_resolved
 from cascade.workspace.types import ProjectContext
 
@@ -134,6 +136,11 @@ def stage_owned_architecture_change(
     intent: ArchitectureAuthoringIntent,
     *,
     store: ArchitectureReviewStore | None = None,
+    renderer: C4ArtifactRenderer | None = None,
+    render_settings: C4RenderSettings | None = None,
+    baseline_artifact: C4SemanticModelArtifact | None = None,
+    lineage_revision: str | None = None,
+    plan_work_id: str | None = None,
 ) -> ArchitectureAuthoringResult:
     """Stage an owned proposal or route an ancestor-owned proposal to its owner.
 
@@ -146,7 +153,12 @@ def stage_owned_architecture_change(
     _require_nonblank(intent.originating_work_id, "originating work ID")
     _require_nonblank(intent.actor, "authoring actor")
     review_store = store or ArchitectureReviewStore(project)
-    _validate_intent(project, intent, review_store)
+    _validate_intent(
+        project, intent, review_store, renderer=renderer,
+        render_settings=render_settings, baseline_artifact=baseline_artifact,
+        lineage_revision=lineage_revision,
+        plan_work_id=plan_work_id,
+    )
 
     if intent.originating_work_id == proposal.owner_work_id:
         staged = stage_architecture_proposal(
@@ -156,6 +168,11 @@ def stage_owned_architecture_change(
             proposal=proposal,
             expected_generation=intent.expected_generation,
             store=review_store,
+            renderer=renderer,
+            render_settings=render_settings,
+            baseline_artifact=baseline_artifact,
+            lineage_revision=lineage_revision,
+            plan_work_id=plan_work_id,
         )
         return ArchitectureAuthoringResult("owner_staged_review", staged=staged)
 
@@ -180,6 +197,12 @@ def _validate_intent(
     project: ProjectContext,
     intent: ArchitectureAuthoringIntent,
     store: ArchitectureReviewStore,
+    *,
+    renderer: C4ArtifactRenderer | None,
+    render_settings: C4RenderSettings | None,
+    baseline_artifact: C4SemanticModelArtifact | None,
+    lineage_revision: str | None,
+    plan_work_id: str | None,
 ) -> None:
     proposal = intent.proposal
     origin = _read_work(project, intent.originating_work_id)
@@ -217,23 +240,30 @@ def _validate_intent(
             "owner_denied", "architecture proposal is outside the caller's owner scope"
         )
 
-    current = store.resolve_current(proposal.integration_lineage)
+    current = store.resolve_current(
+        proposal.integration_lineage, lineage_revision=lineage_revision
+    )
     generation = current.generation if current else None
     if generation != intent.expected_generation:
         raise ArchitectureProposalError(
             "stale_baseline", "accepted architecture baseline generation changed"
         )
-    if store.baseline_status(proposal).stale:
+    if store.baseline_status(proposal, lineage_revision=lineage_revision).stale:
         raise ArchitectureProposalError(
             "stale_baseline", "proposal is not based on the current accepted architecture"
         )
-    _validate_store_inputs(store, proposal)
+    _validate_store_inputs(
+        store,
+        proposal,
+        lineage_revision=lineage_revision,
+        plan_work_id=plan_work_id,
+    )
     _validate_proposed_model(
         project,
         proposal,
-        renderer=None,
-        settings=None,
-        baseline_artifact=None,
+        renderer=renderer,
+        settings=render_settings,
+        baseline_artifact=baseline_artifact,
     )
 
 

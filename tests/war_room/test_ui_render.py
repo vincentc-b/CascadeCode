@@ -66,6 +66,20 @@ def test_get_home_is_server_rendered_html(ui_server):
         assert 'id="branch-label-example">task_001<' in html
         assert "Timed out after 10s" in html
         assert "load-deadline-banner" in html
+        # The shared page must load both audit and architecture dependencies
+        # before starting the board; each script must execute only once.
+        scripts = (
+            "/static/audit_status_ui.js",
+            "/static/vendor/marked.min.js",
+            "/static/plan_viewer.js",
+            "/static/architecture_tab.js",
+            "/static/war_room.js",
+        )
+        for script in scripts:
+            assert html.count('src="' + script) == 1
+        assert [html.index(script) for script in scripts] == sorted(
+            html.index(script) for script in scripts
+        )
 
 
 def test_default_epic_from_active_column(ui_server):
@@ -178,6 +192,14 @@ def test_war_room_js_renders_toast_body():
     assert "EPIC_CLOSE_DEADLINE_MS = 60000" in source
     assert 'setStatus("Closing epic " + epicId + "…", false)' in source
     assert '"Epic close timed out after 60s"' in source
+
+
+def test_feature_readiness_ui_cases():
+    if shutil.which("node") is None:
+        pytest.skip("node is required for browser-side UI contract tests")
+    cases = Path(__file__).with_name("feature_readiness_ui_cases.mjs")
+    result = subprocess.run(["node", str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_war_room_js_renders_canonical_recovery_incident_once_per_transition():

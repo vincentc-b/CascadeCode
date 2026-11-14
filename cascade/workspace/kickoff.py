@@ -150,6 +150,9 @@ def _run_kickoff(reason: KickoffReason, repo: Path) -> None:
     # locked eligibility recheck.
     try:
         with lifecycle_gate().turn(reason.work_id), _graph_lock(reason.work_id):
+            from cascade.epic.return_graph import holds_turn
+            if holds_turn(reason.work_id, root=repo):
+                return
             token = _model_turn_authorized.set(True)
             try:
                 turn_handed_off = _kickoff_turn(reason, repo)
@@ -282,6 +285,8 @@ def resume_inflight_graphs(root: Path) -> None:
     from cascade.task.action_recovery import pending_recovery_team_ids
 
     board = merged_board(repo)
+    from cascade.epic.return_graph import recover_returns
+    recover_returns(root=repo)
     pending_recovery = pending_recovery_team_ids(root=repo)
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
@@ -355,6 +360,8 @@ def deliver_queue_kickoffs(root: Path) -> None:
     from cascade.task.action_recovery import pending_recovery_team_ids
 
     board = merged_board(repo)
+    from cascade.epic.return_graph import recover_returns
+    recover_returns(root=repo)
     pending_recovery = pending_recovery_team_ids(root=repo)
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
@@ -590,6 +597,9 @@ def _run_queue_delivery_locked(
         ):
             return
 
+    from cascade.epic.return_graph import holds_turn
+    if holds_turn(work_id, root=repo):
+        return
     _resume_inflight_turn_if_needed(work_id, tier, repo, feature_id)
     _service_child_deliveries_between_turns(work_id, tier, repo)
 

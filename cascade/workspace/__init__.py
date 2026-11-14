@@ -1,5 +1,7 @@
 """Workspace contract: init and up against a git root."""
 
+from importlib import import_module
+
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.init import init_workspace
 from cascade.workspace.project_config import (
@@ -49,6 +51,7 @@ from cascade.workspace.architecture_review import (
     ReviewBaselineStatus,
     ReviewGateBoundary,
     ReviewGateResult,
+    ReviewApprovalContext,
     enable_review_gate,
     promote_or_resume,
     read_architecture_state,
@@ -57,6 +60,7 @@ from cascade.workspace.architecture_review import (
     review_architecture_proposal,
     stage_architecture_proposal,
     validate_review_gate,
+    resolve_review_gate_unit,
 )
 from cascade.workspace.architecture_authoring import (
     ArchitectureAuthoringIntent,
@@ -64,6 +68,10 @@ from cascade.workspace.architecture_authoring import (
     ArchitectureOwnerAmendment,
     read_owner_amendments,
     stage_owned_architecture_change,
+)
+from cascade.workspace.architecture_publication import (
+    discover_architecture_publication,
+    publish_architecture_review,
 )
 from cascade.workspace.c4_source import (
     C4Element,
@@ -94,6 +102,17 @@ from cascade.workspace.c4_render import (
     C4RenderOperation,
     C4RenderSettings,
 )
+from cascade.workspace.c4_scheduler import (
+    C4RenderAdmissionError,
+    C4RenderScheduler,
+    C4ScheduledRender,
+    C4ScheduledRenderOperation,
+    render_identity,
+)
+from cascade.workspace.architecture_snapshots import (
+    ArchitectureBrowsingSnapshot,
+    ArchitectureSnapshotStore,
+)
 from cascade.workspace.c4_diff import (
     C4ContainmentChange,
     C4IdentityChange,
@@ -108,15 +127,25 @@ from cascade.workspace.c4_review import (
     C4ReviewTarget,
     C4ReviewView,
     compose_c4_review_payload,
+    resolve_c4_review_payload,
 )
-from cascade.workspace.c4_threads import (
-    SemanticThread,
-    SemanticThreadAnchor,
-    build_semantic_thread_anchor,
-    create_semantic_thread,
-    read_semantic_threads,
+from cascade.workspace.c4_documentation import (
+    MAX_CONTEXT_ASSOCIATIONS,
+    MAX_CONTEXT_DESIGNS,
+    MAX_CONTEXT_DOCUMENTS,
+    C4ContextAssociation,
+    C4ContextSelection,
+    C4DocumentationEvidence,
+    ContextDocument,
+    DesignContext,
+    PinnedContextRevision,
+    PinnedSourceSection,
+    ResolvedC4DocumentationContext,
+    ResolvedContextLink,
+    resolve_c4_documentation_context,
+    review_documentation_evidence,
+    snapshot_documentation_evidence,
 )
-from cascade.workspace.blocking_scope import BlockingScope, affected_blocking_threads
 from cascade.workspace.reconciliation import (
     ReconciledDesign,
     ReconciliationReceipt,
@@ -147,9 +176,46 @@ from cascade.workspace.historical_reconciliation import (
     write_reconciled_replay_ledger,
 )
 from cascade.workspace.up import prepare_up, up
+from cascade.workspace.architecture_browsing import (
+    ArchitectureBrowsingError,
+    ArchitectureCodeContext,
+    ArchitectureContextCatalog,
+    ArchitectureContextSelection,
+    KnownDocumentationRef,
+    architecture_context_catalog,
+    resolve_architecture_code_context,
+    resolve_architecture_context,
+)
+
+_THREAD_EXPORTS = {
+    "BlockingScope",
+    "affected_blocking_threads",
+    "SemanticThread",
+    "SemanticThreadAnchor",
+    "build_semantic_thread_anchor",
+    "create_semantic_thread",
+    "read_semantic_threads",
+}
+
+
+def __getattr__(name: str):
+    if name not in _THREAD_EXPORTS:
+        raise AttributeError(name)
+    module = "blocking_scope" if name in {"BlockingScope", "affected_blocking_threads"} else "c4_threads"
+    return getattr(import_module(f"cascade.workspace.{module}"), name)
 
 __all__ = [
     "WorkspaceError",
+    "ArchitectureBrowsingError",
+    "ArchitectureCodeContext",
+    "ArchitectureContextCatalog",
+    "ArchitectureContextSelection",
+    "KnownDocumentationRef",
+    "architecture_context_catalog",
+    "resolve_architecture_code_context",
+    "resolve_architecture_context",
+    "ArchitectureBrowsingSnapshot",
+    "ArchitectureSnapshotStore",
     "ProjectContext",
     "ProjectConfiguration",
     "PinnedDocumentRef",
@@ -157,6 +223,8 @@ __all__ = [
     "ReviewBaselineStatus",
     "ReviewGateBoundary",
     "ReviewGateResult",
+    "ReviewApprovalContext",
+    "resolve_review_gate_unit",
     "ReconciledDesign",
     "ReconciliationReceipt",
     "ReconciliationReceiptStore",
@@ -174,6 +242,8 @@ __all__ = [
     "ArchitectureAuthoringIntent",
     "ArchitectureAuthoringResult",
     "ArchitectureOwnerAmendment",
+    "discover_architecture_publication",
+    "publish_architecture_review",
     "AcceptedArchitecturePointer",
     "AcceptedLineage",
     "ArchitectureBaseline",
@@ -204,6 +274,11 @@ __all__ = [
     "C4RenderFailure",
     "C4RenderOperation",
     "C4RenderSettings",
+    "C4RenderAdmissionError",
+    "C4RenderScheduler",
+    "C4ScheduledRender",
+    "C4ScheduledRenderOperation",
+    "render_identity",
     "C4ContainmentChange",
     "C4IdentityChange",
     "C4SemanticDiff",
@@ -213,6 +288,18 @@ __all__ = [
     "C4ReviewSide",
     "C4ReviewTarget",
     "C4ReviewView",
+    "MAX_CONTEXT_ASSOCIATIONS",
+    "MAX_CONTEXT_DESIGNS",
+    "MAX_CONTEXT_DOCUMENTS",
+    "C4ContextAssociation",
+    "C4ContextSelection",
+    "C4DocumentationEvidence",
+    "ContextDocument",
+    "DesignContext",
+    "PinnedContextRevision",
+    "PinnedSourceSection",
+    "ResolvedC4DocumentationContext",
+    "ResolvedContextLink",
     "SemanticThread",
     "SemanticThreadAnchor",
     "BlockingScope",
@@ -261,8 +348,12 @@ __all__ = [
     "materialize_c4_source_closure",
     "validate_hit_target_manifest",
     "verify_and_sanitize_hit_targets",
+    "resolve_c4_documentation_context",
+    "review_documentation_evidence",
+    "snapshot_documentation_evidence",
     "compute_c4_semantic_diff",
     "compose_c4_review_payload",
+    "resolve_c4_review_payload",
     "build_semantic_thread_anchor",
     "create_semantic_thread",
     "read_semantic_threads",

@@ -170,8 +170,10 @@ def format_turn_prompt(
 ) -> str:
     """Serialize graph messages into a single role prompt."""
 
+    from cascade.agent.message_history import append_recent_messages
+
     lines: list[str] = []
-    for message in messages:
+    for message in append_recent_messages([], messages):
         role = message.get("role", "unknown")
         content = str(message.get("content", ""))
         if not content.strip():
@@ -240,6 +242,11 @@ def startup_error_message(role: RoleId, exc: CursorAgentError) -> str:
 
 def run_error_message(role: RoleId, result: RoleResult) -> str:
     detail = result.text.strip() if result.text else "run failed"
+    # Provider failures may echo the entire submitted prompt. Persisting that
+    # echo in graph messages makes every later prompt and checkpoint grow again.
+    # The actionable transport error is usually at the end of the output.
+    if len(detail) > 4_000:
+        detail = "[provider output truncated]\n" + detail[-4_000:]
     return f"{role}: turn failed — {detail}"
 
 
@@ -476,6 +483,14 @@ def _append_planning_tool_directive(
     if scope_id:
         parts.append(_scope_line(role, scope_id))
     parts.append(_PLANNING_TOOL_DIRECTIVE)
+    parts.append(
+        "Before signing off or publishing a plan, review its DESIGN.md edits. "
+        "Describe current design as matter of fact: no epic/feature/task IDs, "
+        "delivery-history references, previous requirements, or implementation chronology. "
+        "Keep those in work records. Rewrite violations before sign-off or publication. "
+        "Domain concepts such as epics and features may appear when describing current "
+        "product behavior; they must not serve as historical attribution."
+    )
     if role in _EPIC_PLANNING_ROLES:
         parts.append(
             "For CommentPosted events, call read_comment with the comment_id to get the "
@@ -485,6 +500,16 @@ def _append_planning_tool_directive(
             "Sign off only for your own role, after all requested changes and open "
             "question threads have been handled. If the other role edits the plan "
             "after your sign-off, review the new revision and sign off again."
+        )
+    if role in {"epic_architect", "feature_architect"}:
+        parts.append(
+            "When the plan's architecture decision is complete, call "
+            "publish_architecture_review with its exact committed plan, design, and "
+            "model references and accepted-lineage generation. Use "
+            "architecture_impact=no_diagram_change with a concrete rationale only when "
+            "that is the reviewed decision; omitting publication does not mean no change. "
+            "A pending result is durable: repeat the identical call on a later turn to "
+            "discover completion, and never substitute newer unreviewed references."
         )
     if (
         role in _FEATURE_PLANNING_ROLES

@@ -2,6 +2,11 @@
 
 Purpose: expose the loopback operator UI/API for status, approvals, chat attachment, review, recovery, and diagnostics. Interfaces are `serve`, route modules, serializers/views, authenticated human actions, and static/template assets covered by this owner. Owns `REQ-WARROOM-001` (operator actions are explicit) and `DEC-WARROOM-001` (the UI projects canonical services rather than owning state).
 
+Evidence: `cascade/war_room/` and `tests/war_room/` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
+
+Known gaps: unavailable forge descriptions limit historical attribution. Local
+audit fixtures do not establish post-deployment live acceptance.
+
 ## Bounded health-audit projection reads
 
 `REQ-WARROOM-AUDIT-001`: Dashboard consumers read only the current projection
@@ -86,3 +91,66 @@ product/tracking roots, while the [browser race harness](../../tests/war_room/wa
 single-flight, read-only browser refreshes. The [GET benchmark](../../tests/war_room/benchmark_audit_get.py)
 records warm loopback GET p95 and actual source/response bytes for a representative
 10,000-attempt fixture. Local smoke evidence is not post-deployment acceptance.
+
+## Feature activation explanations and new-work attention
+
+`REQ-WARROOM-READINESS-001`: Activation explanations preserve `approved` and
+`blockers` consumers. The board exposes a versioned summary, reasons, satisfied
+prerequisites, owners, existing actions, observation freshness and actual dispatch
+attempt evidence when available. A fresh human-action blocker takes precedence,
+followed by unknown required evidence, known work/system waits, and evaluated
+readiness awaiting dispatch. Passing gates never claims execution; historical
+refusals remain separate from a newer evaluation. The browser renders these
+projections without implementing eligibility rules.
+
+`DEC-WARROOM-READINESS-001`: Board responses reuse request-scoped facts. Missing
+cached evidence remains unknown; polling does not discover providers, perform
+expensive per-feature Git probes, dispatch, or mutate lifecycle state. Action
+boundaries re-evaluate their gates. This preserves truthful explanations without
+turning browser refreshes into execution or repeated discovery.
+
+`REQ-WARROOM-ATTENTION-001`: New-feature markers and collapsed-epic counts remain
+separate from lifecycle and activation summaries. Viewing or rendering a feature
+never acknowledges it. Workspace-shared **Mark seen** requires the request-scoped
+human verifier, records actor/time, and does not approve, dispatch, edit plans or
+clear blockers. Keyboard navigation, contrast and screen-reader labels support
+both markers and actions.
+
+`DEC-WARROOM-ATTENTION-001`: The UI consumes the canonical tracking-workspace
+attention ledger through `feature_attention_routes.py`. A monotonic revision
+prevents an older poll response from undoing an acknowledgement. Unavailable or
+corrupt state remains visibly unavailable and disables acknowledgement; it never
+silently resets the baseline. Ledger persistence belongs to
+[`feature_attention.py`](../feature_attention.py), which shares state across
+managed worktrees and split repositories using atomic writes and locking.
+Completed, cancelled and retired children leave pending-attention aggregates
+without deleting provenance; replay and plan edits do not recreate acknowledged
+newness.
+
+Verification: [readiness evidence](../../tests/war_room/test_feature_readiness_evidence.py),
+[board readiness](../../tests/war_room/test_board_feature_readiness.py), and
+[attention API/browser scenarios](../../tests/war_room/test_feature_attention_api.py)
+cover missing/stale evidence, explicit acknowledgement, concurrent revisions,
+refresh persistence and storage failure.
+
+## Architecture review boundary
+
+The War Room presents revision-pinned architecture resources and review state.
+Publication, artifact ownership, destination, generation, ancestry and byte-digest
+validation belong to the [workspace design](../workspace/DESIGN.md), specifically
+[REQ-WORKSPACE-001](../workspace/DESIGN.md),
+[REQ-WORKSPACE-002](../workspace/DESIGN.md) and
+[DEC-WORKSPACE-001](../workspace/DESIGN.md). Registered owning
+lineage determines each artifact's current revision; tracking and product
+revisions remain distinct in split repositories. The UI does not grant permission
+to publish or accept a stale review. Supported retries retain failure history and
+exact proposal evidence.
+
+The repository-owned [C4 model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+is authoritative; its [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+represent the War Room, supervisor and repository boundaries. Readiness,
+attention and audit presentation stay within these components.
+[Architecture HTTP tests](../../tests/war_room/test_architecture_http.py) and
+[tab UI tests](../../tests/war_room/test_architecture_tab_ui.py) verify the local
+consumer boundary; [publication tests](../../tests/workspace/test_architecture_publication.py)
+verify owner-lineage and exact-revision enforcement.

@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "epic_id": "epic_045",
+  "snapshots": [
+    {
+      "revision": 1,
+      "recorded_at": "2026-11-12T01:45:17.857472+00:00",
+      "scope": {
+        "manifest_revision": 1,
+        "entries": [
+          {
+            "dependency_id": "dep_python",
+            "source": "Existing executable /opt/conda/bin/python3.12",
+            "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/bin/python3.12'\"'\"').read_bytes()).hexdigest()=='\"'\"'0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'; assert '\"'\"'3.12.8'\"'\"' in subprocess.check_output(['\"'\"'/opt/conda/bin/python3.12'\"'\"', '\"'\"'--version'\"'\"'],text=True); print(\"success\")'",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/bin/python3.12'\"'\"').read_bytes()).hexdigest()=='\"'\"'0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'; assert '\"'\"'3.12.8'\"'\"' in subprocess.check_output(['\"'\"'/opt/conda/bin/python3.12'\"'\"', '\"'\"'--version'\"'\"'],text=True); print(\"success\")'",
+            "paths": [
+              "/opt/conda/bin/python3.12"
+            ],
+            "destination": "/opt/conda/bin/python3.12",
+            "cleanup": "No installation or upgrade authorized or performed; retain existing installation. Test-owned temporary data is removed by test fixtures."
+          },
+          {
+            "dependency_id": "dep_git",
+            "source": "Existing executable /usr/bin/git",
+            "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/git'\"'\"').read_bytes()).hexdigest()=='\"'\"'07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'; assert '\"'\"'2.34.1'\"'\"' in subprocess.check_output(['\"'\"'/usr/bin/git'\"'\"', '\"'\"'--version'\"'\"'],text=True); print(\"success\")'",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/git'\"'\"').read_bytes()).hexdigest()=='\"'\"'07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'; assert '\"'\"'2.34.1'\"'\"' in subprocess.check_output(['\"'\"'/usr/bin/git'\"'\"', '\"'\"'--version'\"'\"'],text=True); print(\"success\")'",
+            "paths": [
+              "/usr/bin/git"
+            ],
+            "destination": "/usr/bin/git",
+            "cleanup": "No installation or upgrade authorized or performed; retain existing installation. Test-owned temporary data is removed by test fixtures."
+          },
+          {
+            "dependency_id": "dep_node",
+            "source": "Existing executable /usr/bin/node",
+            "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/node'\"'\"').read_bytes()).hexdigest()=='\"'\"'6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"'; assert '\"'\"'20.20.2'\"'\"' in subprocess.check_output(['\"'\"'/usr/bin/node'\"'\"', '\"'\"'--version'\"'\"'],text=True); print(\"success\")'",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/node'\"'\"').read_bytes()).hexdigest()=='\"'\"'6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"'; assert '\"'\"'20.20.2'\"'\"' in subprocess.check_output(['\"'\"'/usr/bin/node'\"'\"', '\"'\"'--version'\"'\"'],text=True); print(\"success\")'",
+            "paths": [
+              "/usr/bin/node"
+            ],
+            "destination": "/usr/bin/node",
+            "cleanup": "No installation or upgrade authorized or performed; retain existing installation. Test-owned temporary data is removed by test fixtures."
+          },
+          {
+            "dependency_id": "dep_chromium",
+            "source": "Existing executable /home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome",
+            "integrity_reference": "sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"').read_bytes()).hexdigest()=='\"'\"'377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025'\"'\"'; assert '\"'\"'156.0.8078.4'\"'\"' in subprocess.check_output(['\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"', '\"'\"'--version'\"'\"'],text=True); print(\"success\")'",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"').read_bytes()).hexdigest()=='\"'\"'377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025'\"'\"'; assert '\"'\"'156.0.8078.4'\"'\"' in subprocess.check_output(['\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"', '\"'\"'--version'\"'\"'],text=True); print(\"success\")'",
+            "paths": [
+              "/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome"
+            ],
+            "destination": "/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome",
+            "cleanup": "No installation or upgrade authorized or performed; retain existing installation. Test-owned temporary data is removed by test fixtures."
+          },
+          {
+            "dependency_id": "dep_pyyaml",
+            "source": "Existing installed Python distribution PyYAML at /opt/conda/lib/python3.12/site-packages",
+            "integrity_reference": "sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"'); print(\"success\")'",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"'); print(\"success\")'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "No installation or upgrade authorized or performed; retain existing installation. Test-owned temporary data is removed by test fixtures."
+          },
+          {
+            "dependency_id": "dep_cursor_sdk",
+            "source": "Existing installed Python distribution cursor-sdk at /opt/conda/lib/python3.12/site-packages",
+            "integrity_reference": "sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'cursor-sdk'\"'\"'); assert d.version=='\"'\"'1.0.37'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638'\"'\"'; importlib.import_module('\"'\"'cursor_sdk'\"'\"'); print(\"success\")'",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'cursor-sdk'\"'\"'); assert d.version=='\"'\"'1.0.37'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638'\"'\"'; importlib.import_module('\"'\"'cursor_sdk'\"'\"'); print(\"success\")'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "No installation or upgrade authorized or performed; retain existing installation. Test-owned temporary data is removed by test fixtures."
+          },
+          {
+            "dependency_id": "dep_langgraph",
+            "source": "Existing installed Python distribution langgraph at /opt/conda/lib/python3.12/site-packages",
+            "integrity_reference": "sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph'\"'\"'); assert d.version=='\"'\"'1.2.14'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"'); print(\"success\")'",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph'\"'\"'); assert d.version=='\"'\"'1.2.14'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"'); print(\"success\")'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "No installation or upgrade authorized or performed; retain existing installation. Test-owned temporary data is removed by test fixtures."
+          },
+          {
+            "dependency_id": "dep_langgraph_checkpoint_sqlite",
+            "source": "Existing installed Python distribution langgraph-checkpoint-sqlite at /opt/conda/lib/python3.12/site-packages",
+            "integrity_reference": "sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph-checkpoint-sqlite'\"'\"'); assert d.version=='\"'\"'3.1.1'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"'); print(\"success\")'",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph-checkpoint-sqlite'\"'\"'); assert d.version=='\"'\"'3.1.1'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"'); print(\"success\")'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "No installation or upgrade authorized or performed; retain existing installation. Test-owned temporary data is removed by test fixtures."
+          },
+          {
+            "dependency_id": "dep_pytest",
+            "source": "Existing installed Python distribution pytest at /opt/conda/lib/python3.12/site-packages",
+            "integrity_reference": "sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"'); print(\"success\")'",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"'); print(\"success\")'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "No installation or upgrade authorized or performed; retain existing installation. Test-owned temporary data is removed by test fixtures."
+          },
+          {
+            "dependency_id": "dep_playwright",
+            "source": "Existing installed Python distribution playwright at /home/ubuntu/.local/lib/python3.12/site-packages",
+            "integrity_reference": "sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8",
+            "setup_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'playwright'\"'\"'); assert d.version=='\"'\"'1.64.0'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"'); print(\"success\"); from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(headless=True,args=[\"--no-sandbox\"]); assert b.version==\"156.0.8078.4\"; b.close(); p.stop()'",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'playwright'\"'\"'); assert d.version=='\"'\"'1.64.0'\"'\"'; assert hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"'); print(\"success\"); from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(headless=True,args=[\"--no-sandbox\"]); assert b.version==\"156.0.8078.4\"; b.close(); p.stop()'",
+            "paths": [
+              "/home/ubuntu/.local/lib/python3.12/site-packages"
+            ],
+            "destination": "/home/ubuntu/.local/lib/python3.12/site-packages",
+            "cleanup": "No installation or upgrade authorized or performed; retain existing installation. Test-owned temporary data is removed by test fixtures."
+          }
+        ],
+        "feasibility_artifacts": [],
+        "limits": {
+          "timeout_seconds": 180,
+          "max_attempts": 5,
+          "max_output_bytes": 32768,
+          "memory_bytes": null
+        }
+      },
+      "authorization": null,
+      "checking": false,
+      "feasibility_results": [],
+      "blockers": []
+    }
+  ]
+}

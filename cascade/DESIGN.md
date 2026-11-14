@@ -60,10 +60,12 @@ Duplicate backlog/completed copies are rejected without choosing or deleting one
 This check establishes document consistency, not full Epic acceptance.
 
 `DEC-REVIEW-PUBLISH-001`: `review_rebase.check_and_publish_review_rebase` checks the
-board before spawning validation. Repository-owned `validation.command` remains
-unchanged. `validation.review_timeout_seconds` defaults to 300 seconds and accepts
-1–3600 seconds. Validation runs without a shell in its own process group, with
-file-backed output and bounded 64 KiB diagnostic tails. Timeout or cancellation
+board before spawning validation. Review publication uses changed Python test files,
+direct tests for changed modules, and the review publication safeguard tests.
+An explicit repository-owned `validation.command` takes precedence; Task validation
+keeps its existing command. `validation.review_timeout_seconds` defaults to 300
+seconds and accepts 1–3600 seconds. Validation runs without a shell in its own
+process group, with file-backed output and bounded 64 KiB diagnostic tails. Timeout or cancellation
 kills the check group and reaps its leader. Failure preserves the checkout and
 returns a typed blocker; it never falls back to weaker checks or publishes anyway.
 A hard kill of the hosting process can still orphan validator children; the owning

@@ -776,6 +776,9 @@ def _merged_board_uncached(trunk: Path, *, readonly: bool = False) -> BoardIndex
     for work_id, approved_at in plan_approvals.items():
         if work_id in by_id:
             by_id[work_id] = replace(by_id[work_id], plan_approved_at=approved_at)
+    from cascade.epic.return_graph import project_returns
+
+    project_returns(trunk, BoardIndex(by_id=by_id))
     from cascade.workspace.backlog_snapshot import read_provenance, snapshot_board
 
     if read_provenance(trunk) is not None:
@@ -810,6 +813,11 @@ def doc_filesystem_root(work_id: str, *, trunk: Path) -> Path:
 
     meta = _best_meta_for_id(work_id, trunk=trunk)
     path = meta.path.resolve()
+    from cascade.epic.return_graph import returned_root_for_path
+
+    returned = returned_root_for_path(trunk, path)
+    if returned is not None:
+        return returned
     from cascade.workspace.backlog_snapshot import snapshot_root
 
     snap = snapshot_root(trunk).resolve()
