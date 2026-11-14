@@ -2,7 +2,7 @@
 id: feat_044_001
 title: Persist fair background audit reassessment and truthful incident projections
 tier: feature
-status: active
+status: completed
 parent: epic_044
 children:
 - task_044_001_001
