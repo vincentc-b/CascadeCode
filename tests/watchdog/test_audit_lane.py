@@ -1174,23 +1174,40 @@ def test_recovery_handoff_runs_after_workspace_claim_is_released(
     tmp_path: Path,
 ) -> None:
     acquired = []
+    received = []
 
-    def handoff(_ids: tuple[str, ...]) -> None:
+    def handoff(requests: tuple[dict[str, str], ...]) -> None:
         claim = _WorkspaceClaim(tmp_path)
         acquired.append(claim.acquire())
         claim.release()
+        received.extend(requests)
 
     lane = HealthAuditLane(
         root=tmp_path,
         config=HealthAuditConfig(enabled=True, interval_seconds=60),
         run_pass=lambda *_args: AuditPassResult(
-            counts={"proven_incident": 1}, incident_work_ids=("task_001",)
+            counts={"proven_incident": 1},
+            incident_work_ids=("task_001",),
+            recovery_requests=(
+                {
+                    "work_id": "task_001",
+                    "authoritative_generation": "sha256:" + "1" * 64,
+                    "failure_class": "blocked_task_failed",
+                },
+            ),
         ),
         handoff=handoff,
         jitter=lambda *_args: 0.0,
     )
     assert lane.run_due_pass() is True
     assert acquired == [True]
+    assert received == [
+        {
+            "work_id": "task_001",
+            "authoritative_generation": "sha256:" + "1" * 64,
+            "failure_class": "blocked_task_failed",
+        }
+    ]
 
 
 def test_lane_cleanup_does_not_set_caller_stop_but_observes_it(

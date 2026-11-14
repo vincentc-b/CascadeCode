@@ -2,7 +2,7 @@
 id: task_044_001_003
 title: Publish atomic current coverage and history projections
 tier: task
-status: active
+status: completed
 parent: feat_044_001
 children: []
 depends_on:

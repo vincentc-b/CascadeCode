@@ -2,7 +2,7 @@
 id: task_044_001_004
 title: Integrate projection production with audit and recovery handoff
 tier: task
-status: backlog
+status: completed
 parent: feat_044_001
 children: []
 depends_on:
@@ -10,7 +10,7 @@ depends_on:
 owners:
 - swe
 skills: []
-parent_rev: babe005c9d1d103ee9b23d75c702aa675d415405
+parent_rev: b06beabcf813e4cddb4d312cd80cd95f29ffd5af
 created: '2026-11-14'
 updated: '2026-11-14'
 provider: codex

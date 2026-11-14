@@ -84,6 +84,7 @@ class AuditPassResult:
     next_cursor: str | None = None
     counts: Mapping[str, int] = field(default_factory=dict)
     incident_work_ids: tuple[str, ...] = ()
+    recovery_requests: tuple[dict[str, str], ...] = ()
     timed_out_candidates: tuple[str, ...] = ()
     reassessed_candidates: tuple[str, ...] = ()
     investigation_requests: tuple[dict[str, Any], ...] = ()
@@ -93,7 +94,7 @@ class AuditPassResult:
 
 
 AuditPass = Callable[[str | None, threading.Event], AuditPassResult]
-AuditHandoff = Callable[[tuple[str, ...]], None]
+AuditHandoff = Callable[[tuple[dict[str, str], ...]], None]
 
 
 class AuditPassTimedOut(TimeoutError):
@@ -445,6 +446,7 @@ def _run_bounded_audit_pass_inline(
         ):
             counts[f"tier.{tier}.{outcome}"] = 0
     incident_work_ids: list[str] = []
+    recovery_requests: list[dict[str, str]] = []
     completed_cursor = cursor
     timed_out_candidates: list[str] = []
     reassessed_candidates: list[str] = []
@@ -459,6 +461,7 @@ def _run_bounded_audit_pass_inline(
             next_cursor=next_cursor,
             counts=counts,
             incident_work_ids=tuple(incident_work_ids),
+            recovery_requests=tuple(recovery_requests),
             timed_out_candidates=tuple(timed_out_candidates),
             reassessed_candidates=tuple(reassessed_candidates),
             investigation_requests=tuple(investigation_requests),
@@ -586,6 +589,13 @@ def _run_bounded_audit_pass_inline(
             counts[f"tier.{tier}.{observation.classification}"] += 1
         if observation.classification == "proven_incident":
             incident_work_ids.append(work_id)
+            recovery_requests.append(
+                {
+                    "work_id": work_id,
+                    "authoritative_generation": str(observation.generation),
+                    "failure_class": str(observation.incident.failure_class),
+                }
+            )
         if observation.classification in {"proven_incident", "unavailable_evidence"}:
             investigation_requests.append(
                 {
@@ -905,7 +915,10 @@ class HealthAuditLane:
             claim.release()
         if completed is not None and self._handoff is not None:
             try:
-                self._handoff(completed.incident_work_ids)
+                requests = completed.recovery_requests or tuple(
+                    {"work_id": work_id} for work_id in completed.incident_work_ids
+                )
+                self._handoff(requests)
             except Exception:
                 # Observation is complete even if a supervised repair worker
                 # cannot currently accept its durable handoff.

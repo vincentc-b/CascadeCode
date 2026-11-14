@@ -115,3 +115,36 @@ retry reason and do not turn missing evidence into a healthy result.
 references, split-root identity, unavailable evidence, and cursor continuation.
 `tests/watchdog/test_audit_lane.py` verifies observation deadlines, timeout
 advancement, partial-page continuation, snapshot reuse, and worker cleanup.
+
+## Projection publication
+
+`REQ-WATCHDOG-004`: A completed audit pass publishes consistent current,
+coverage, and history evidence without treating an interrupted write as a
+completed pass. A missing or invalid epoch is pending rather than healthy.
+`DEC-WATCHDOG-004`: Write immutable pages and a manifest before atomically
+replacing one epoch pointer. Readers pin the pointer's epoch so a concurrent
+publication cannot mix pages from different observations.
+
+The producer reconciles source attempts with canonical audit observations.
+Only a matching work ID, generation, and failure class can place an incident
+in `current`. Unmatched attempts and observation failures stay in `coverage`;
+prior current rows become stale coverage when their verification expires.
+History retains prior source attempts and legacy provenance across passes.
+Completed passes also carry forward pending coverage when a candidate was not
+reassessed. The manifest includes source revision and failure markers. The
+producer checks them again before writing and aborts if it detects a change.
+
+Each page contains at most 100 rows and 256 KiB of serialized JSON. The
+producer writes and syncs every page and its manifest under a new epoch,
+then replaces `current.json` and syncs the publication directory. An
+interruption before pointer replacement leaves the prior epoch readable and
+the incomplete directory unreferenced. The lane records publication failure
+without advancing its receipt cursor. An unchanged pass reuses the prior epoch
+and writes no projection files. `read_projection_manifest` checks the pinned
+epoch and returns a pending reason for missing, malformed, incompatible, or
+invalid pages.
+
+`tests/watchdog/test_audit_projection.py` verifies matching authority, page
+bounds, restart reconciliation, unchanged publication, corrupt pages, and an
+interrupted pointer swap. `tests/watchdog/test_audit_lane.py` verifies that a
+publication failure leaves the pass pending.

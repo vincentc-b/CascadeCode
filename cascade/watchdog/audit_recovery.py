@@ -65,7 +65,7 @@ class AuditRecoveryWorker:
         # off supervisor startup's critical path and resolve it in the worker.
         self.registry = registry
         self._stop = threading.Event()
-        self._pending: queue.Queue[tuple[str, ...] | object] = queue.Queue()
+        self._pending: queue.Queue[tuple[dict[str, str], ...] | object] = queue.Queue()
         self._thread = threading.Thread(
             target=self._run,
             name="health-audit-recovery",
@@ -73,9 +73,17 @@ class AuditRecoveryWorker:
         )
         self._thread.start()
 
-    def submit(self, work_ids: tuple[str, ...]) -> None:
-        if work_ids:
-            self._pending.put(tuple(dict.fromkeys(work_ids)))
+    def submit(self, requests: tuple[dict[str, str], ...] | tuple[str, ...]) -> None:
+        """Queue exact audit evidence, retaining compatibility with old callers."""
+
+        unique: dict[str, dict[str, str]] = {}
+        for request in requests:
+            item = {"work_id": request} if isinstance(request, str) else dict(request)
+            work_id = item.get("work_id")
+            if isinstance(work_id, str) and work_id:
+                unique[work_id] = item
+        if unique:
+            self._pending.put(tuple(unique.values()))
 
     def stop(self, timeout: float | None = None) -> None:
         self._stop.set()
@@ -89,11 +97,18 @@ class AuditRecoveryWorker:
                 if request is _STOP:
                     return
                 assert isinstance(request, tuple)
-                for work_id in request:
+                for recovery_request in request:
+                    work_id = recovery_request["work_id"]
                     try:
                         dispatch_audit_recovery(
                             self.root,
                             work_id,
+                            expected_generation=recovery_request.get(
+                                "authoritative_generation"
+                            ),
+                            expected_failure_class=recovery_request.get(
+                                "failure_class"
+                            ),
                             registry=self.registry,
                             cancel_event=self._stop,
                         )
@@ -112,6 +127,8 @@ def dispatch_audit_recovery(
     registry: CapabilityRegistry | None = None,
     timeout_seconds: float = _ADMISSION_TIMEOUT_SECONDS,
     cancel_event: threading.Event | None = None,
+    expected_generation: str | None = None,
+    expected_failure_class: str | None = None,
 ) -> bool:
     """Claim and execute the currently proven incident, if one remains."""
 
@@ -123,6 +140,8 @@ def dispatch_audit_recovery(
         selected,
         deadline=deadline,
         cancel_event=cancel_event,
+        expected_generation=expected_generation,
+        expected_failure_class=expected_failure_class,
     )
     if admitted is None:
         return False
@@ -172,6 +191,8 @@ def _bounded_admission(
     *,
     deadline: float,
     cancel_event: threading.Event | None,
+    expected_generation: str | None = None,
+    expected_failure_class: str | None = None,
 ) -> tuple[IncidentReservation, str, dict[str, Any], str] | None:
     """Run observation, probe and locked reservation in a killable process."""
 
@@ -202,6 +223,8 @@ def _bounded_admission(
             deadline,
             project_context_payload(),
             claim_token,
+            expected_generation,
+            expected_failure_class,
             _snapshot_parent_observation_episodes(),
         ),
         name="health-audit-admission",
@@ -326,6 +349,8 @@ def _admission_process(
     deadline: float,
     context_payload: object,
     claim_token: str,
+    expected_generation: str | None,
+    expected_failure_class: str | None,
     parent_observation_episodes: tuple[
         tuple[str, str, str, str, float, int], ...
     ],
@@ -342,6 +367,8 @@ def _admission_process(
                 deadline=deadline,
                 cancel_event=cancel_event,
                 claim_token=claim_token,
+                expected_generation=expected_generation,
+                expected_failure_class=expected_failure_class,
             )
         message = (True, payload)
     except BaseException as exc:
@@ -462,10 +489,30 @@ def _admit_inline(
     deadline: float,
     cancel_event: threading.Event | Any,
     claim_token: str | None = None,
+    expected_generation: str | None = None,
+    expected_failure_class: str | None = None,
 ) -> tuple[IncidentReservation, str, dict[str, Any], str] | None:
     observation = _bounded_observation(
         work_id, root=root, deadline=deadline, cancel_event=cancel_event
     )
+    # Audit projections and handoff queues are evidence, never authority.  Bind
+    # admission to the exact observation that requested recovery, then continue
+    # through the existing locked reserve-after-recheck path.  A changed,
+    # deleted, rerouted, or reclassified item therefore remains pending instead
+    # of repairing a newer generation under stale evidence.
+    if (
+        expected_generation is not None
+        and str(observation.generation) != expected_generation
+    ):
+        return None
+    if (
+        expected_failure_class is not None
+        and (
+            observation.incident is None
+            or observation.incident.failure_class != expected_failure_class
+        )
+    ):
+        return None
     target = _repair_target(
         observation, root=root, deadline=deadline, cancel_event=cancel_event
     )

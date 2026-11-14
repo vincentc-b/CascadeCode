@@ -108,3 +108,7 @@ Decision entries are recorded with `record_decision`.
   Chose Use persistent ongoing and historical candidate positions with at least one historical admission per four checks when both pools are populated; cap each observation at two seconds within a 100-item, 60-second pass..
   Rationale: Tier rotation alone can starve unresolved history, and an observation using all remaining pass time can hide a later current blocker. Independent positions and exact continuations make restart and timeout behavior reviewable.
   Honors: epic_044 criterion 3 and scheduling, freshness and bounds contract; existing audit lane and manual admission semantics..
+
+## Closeout
+
+Completed child work: `task_044_001_001` (Define versioned audit projection and source identity), `task_044_001_002` (Rotate audit candidates fairly and isolate observations), `task_044_001_003` (Publish atomic current coverage and history projections), `task_044_001_004` (Integrate projection production with audit and recovery handoff).
