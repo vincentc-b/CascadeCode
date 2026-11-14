@@ -72,3 +72,5 @@ preserved worktree before resuming the owning team. See
 Verification: [graph and lifecycle tests](../../tests/task/).
 
 Task graphs use one SWE node. Delivery additionally passes supervised validation and integration gates in [graph.py](graph.py); checkpoint cleanup is explicit in [checkpoint.py](checkpoint.py).
+
+Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).

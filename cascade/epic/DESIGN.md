@@ -68,3 +68,5 @@ preserved worktree before resuming the owning team. See
 Verification: [graph and lifecycle tests](../../tests/epic/).
 
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.
+
+Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).

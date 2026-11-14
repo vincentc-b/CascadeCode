@@ -50,5 +50,5 @@ def test_war_room_exposes_accessible_architecture_tab_and_shared_viewer() -> Non
     )
     assert "/context?" in script
     assert "Unmapped target" in script
-    assert "Broader design index" in script
+    assert "Implementation / code" in script
     assert "markdownToHtml" in script

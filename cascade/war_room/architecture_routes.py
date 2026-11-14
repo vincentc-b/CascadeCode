@@ -264,6 +264,27 @@ def _snapshot_projection(
     levels = _view_levels(workspace, render.view_keys)
     rows = {row["view_key"]: row for row in manifest["views"]}
     targets = _semantic_targets(workspace)
+    export_semantics = {}
+    def index_elements(value):
+        if isinstance(value, list):
+            for item in value:
+                index_elements(item)
+        elif isinstance(value, dict):
+            semantic = value.get("properties", {}).get("cascade.semanticId")
+            if semantic and "id" in value:
+                export_semantics[str(value["id"])] = semantic
+            for key, item in value.items():
+                if key != "properties":
+                    index_elements(item)
+    index_elements(workspace.get("model", {}))
+    view_scopes = {}
+    for group in workspace.get("views", {}).values():
+        if isinstance(group, list):
+            for item in group:
+                if isinstance(item, dict):
+                    scope = item.get("containerId", item.get("softwareSystemId"))
+                    if scope is not None:
+                        view_scopes[item.get("key")] = export_semantics.get(str(scope))
     memberships: dict[str, list[dict[str, str]]] = {}
     views: list[dict[str, object]] = []
     for key in render.view_keys:
@@ -290,6 +311,7 @@ def _snapshot_projection(
                 "view_key": key,
                 "level": levels[key],
                 "label": f"{key} ({levels[key]})",
+                "scope_id": view_scopes.get(key),
             })
     # A selected parent may drill to any view containing a descendant.  The
     # ancestry comes from the validated semantic workspace, never SVG labels.
@@ -685,6 +707,7 @@ def snapshot_documentation_projection(
                 documents,
                 associations,
                 owner_context=owner_context,
+                broader_index=_snapshot_design_index(store.project, snapshot),
             )
             value = resolve_c4_documentation_context(
                 evidence,
@@ -938,6 +961,36 @@ def _snapshot_owner_context(
     )
 
 
+
+def _snapshot_design_index(
+    project: ProjectContext, snapshot: ArchitectureBrowsingSnapshot,
+) -> tuple[DesignContext, ...]:
+    """Read design owners from the snapshot's pinned mapping, never live files."""
+    descriptor = snapshot.descriptor
+    mapping = descriptor.get("mapping")
+    if not isinstance(mapping, dict):
+        return ()
+    raw = _read_descriptor_blob(project, {
+        **mapping, "repository_role": "target", "digest": mapping.get("sha256"),
+    })
+    owners = sorted({
+        row["design_owner_directory"]
+        for row in json.loads(raw).get("designs", {}).values()
+        if isinstance(row, dict) and isinstance(row.get("design_owner_directory"), str)
+    })
+    rows = []
+    for owner in owners[:128]:
+        directory = Path(owner)
+        path = directory / "DESIGN.md"
+        if descriptor["architecture_destination"] == "tracking":
+            path = Path("design") / project.target_repository_key / path
+        rows.append(DesignContext(directory, directory, PinnedSourceSection(
+            descriptor["repositories"]["documentation"],
+            descriptor["revisions"]["documentation"], path,
+        )))
+    return tuple(rows)
+
+
 def _snapshot_context_resource_descriptors(
     project: ProjectContext,
     snapshot: ArchitectureBrowsingSnapshot,
@@ -954,7 +1007,8 @@ def _snapshot_context_resource_descriptors(
         for row in _context_resource_descriptors_for_unit(unit):
             if (str(row["repository_key"]), str(row["revision"])) in pinned:
                 rows.append({**row, "scope": snapshot.snapshot_id})
-    for design in _snapshot_owner_context(project, snapshot):
+    for design in (*_snapshot_owner_context(project, snapshot),
+                   *_snapshot_design_index(project, snapshot)):
         source = design.source
         rows.append({
             "kind": "context_design",
@@ -1026,9 +1080,14 @@ def _attach_context_urls(
         for link in value.get(collection, []):
             link["resources"] = by_document.get(link["document_id"], {})
     design_rows = [row for row in descriptors if row.get("kind") == "context_design"]
-    for index, design in enumerate(value.get("owner_context", [])):
-        if index < len(design_rows):
-            design["document_url"] = prefix + _opaque_id(design_rows[index])
+    for collection in ("owner_context", "broader_index"):
+        for design in value.get(collection, []):
+            source = design.get("source", {})
+            for row in design_rows:
+                if all(row.get(key) == source.get(key)
+                       for key in ("repository_key", "revision", "path")):
+                    design["document_url"] = prefix + _opaque_id(row)
+                    break
 
 
 def _bounded_context_payload(value: dict[str, object]) -> dict[str, object]:

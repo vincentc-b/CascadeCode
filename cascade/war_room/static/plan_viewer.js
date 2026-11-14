@@ -2247,6 +2247,7 @@
       var order = ["systemLandscapeViews", "systemContextViews", "containerViews", "componentViews"];
       var choices = sortedDrillChoices(target).filter(function (choice) {
         if (!options.view) return true;
+        if (choice.scope_id && choice.scope_id !== target.semantic_id) return false;
         return choice.view_key !== options.view.key &&
           (order.indexOf(choice.level) > order.indexOf(options.view.level));
       });

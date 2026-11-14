@@ -225,7 +225,7 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
                 "id": "1", "name": "System",
                 "properties": {"cascade.semanticId": element.semantic_id},
             }]},
-            "views": {"systemContextViews": [{"key": view.key}]},
+            "views": {"systemContextViews": [{"key": view.key, "softwareSystemId": "1"}]},
         }
         semantic = output / "workspace.json"
         semantic.write_text(json.dumps(workspace), encoding="utf-8")
@@ -285,6 +285,7 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
         target = payload["targets"][0]
         assert target["semantic_id"]
         assert target["drill_choices"][0]["view_key"] == payload["views"][0]["key"]
+        assert target["drill_choices"][0]["scope_id"] == target["semantic_id"]
 
         status, svg_body, headers = _get(base + payload["views"][0]["artifact_url"])
         assert status == 200
@@ -302,6 +303,10 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
         assert context["scope_kind"] == "snapshot"
         assert context["scope_id"] == snapshot_id
         assert context["mapping_state"] == "unmapped"
+        assert context["broader_index"], "Pinned design owners must be discoverable"
+        assert context["broader_index"][0]["document_url"].startswith(
+            f"/api/architecture/resources/{snapshot_id}/"
+        )
         assert context["owner_context"][0]["source"]["revision"] == (
             payload["provenance"]["revisions"]["documentation"]
         )

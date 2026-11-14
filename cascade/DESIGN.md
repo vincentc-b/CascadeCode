@@ -207,3 +207,49 @@ blindly repeating a Git publication or lifecycle transition is unsafe.
 [Team supervision](team_supervision.py), [branch action recovery](team_branch_recovery.py),
 and [review recovery](team_review_recovery.py) own the shared recovery boundaries.
 Per-tier designs link the graph, state, checkpoint, registry and wiring modules.
+
+## Team libraries, wiring, and isolation
+
+The team implementation uses Python, LangGraph's `StateGraph` for role sequencing,
+and `langgraph-checkpoint-sqlite`'s `SqliteSaver` for resumable state. Dependency
+constraints live in [pyproject.toml](../pyproject.toml). Graph compilation and
+checkpoint caching happen in each tier's `graph.py` and `checkpoint.py`.
+The graph invokes roles sequentially; parallel work comes from separately
+admitted work items, not parallel nodes within one team invocation.
+
+[Planning turns](agent/graph_turn.py) load role playbooks, construct the scoped
+prompt, and delegate to [provider execution](agent/planning_turn.py).
+[Task wiring](task/wiring.py) creates the worktree, loads SWE playbooks into
+checkpoint state, and installs lifecycle hooks. [SWE turns](task/swe_turn.py)
+construct a `RoleTurn` and expose the [SWE MCP tools](task/swe_mcp.py).
+Registries bind work IDs and repository roots to the permitted tools; provider
+adapters translate the turn into the configured SDK or CLI invocation.
+
+```mermaid
+flowchart TD
+    Graph["LangGraph StateGraph"] --> Prompt["RoleTurn: prompt, model, permissions"]
+    Skills["RoleSkillDefaults → playbook text"] --> Prompt
+    Prompt --> Provider["Provider SDK or CLI adapter"]
+    Provider --> MCP["Per-turn MCP tool host"]
+    MCP --> Guard["Work-ID and path guards"]
+    Guard --> Tree["Owned Git worktree / canonical work artifacts"]
+    Graph <--> SQLite["SqliteSaver: per-work checkpoints"]
+    Provider --> Native["Provider-native tools, subject to provider permissions"]
+```
+
+Isolation has several distinct boundaries:
+
+| Boundary | What it guarantees and what it does not |
+|---|---|
+| [Planning scratch directory](agent/planning_sandbox.py) | Materializes planning context into a temporary working directory. This is context isolation, not an OS security sandbox. |
+| [Task worktree](task/worktree.py) | Separates Git changes for a Task. A worktree does not isolate the host filesystem, processes, or network. |
+| [Task tool guard](task/guard.py) | Checks reads/writes through Cascade tools, rejects paths escaping the worktree and symlink bypasses, and restricts lifecycle document access. It does not mediate every provider-native shell operation. |
+| [Epic guard](epic/guard.py) / [Feature guard](feature/guard.py) | Restricts planning tool access to the owning work scope and permitted related documents. |
+| [Codex adapter](agent/codex_cli.py) | SWE uses `workspace-write` unless permission mode is `yolo`; `yolo` explicitly bypasses approvals and sandboxing. |
+| [Claude adapter](agent/claude_cli.py) | Supplies scoped MCP configuration and, in `yolo` mode, requests permission bypass. It does not establish a universal Cascade OS sandbox. |
+| [Preflight](agent/execution_preflight.py) | Checks provider capabilities before execution. It does not prove that every provider implements identical isolation. |
+
+Do not infer container-level isolation from a C4 container, a planning scratch
+directory, or a Task worktree. Actual native-tool restrictions depend on the
+selected provider and permission configuration. Supervised validation and
+delivery gates are correctness controls, separate from process isolation.

@@ -320,8 +320,8 @@
       );
       if (!hasTarget) {
         addContextGroup(
-          "Broader design index",
-          "Broader navigation for the selected view; entries are not explicit coverage.",
+          "Implementation / code",
+          "Source-linked implementation, libraries, wiring, persistence and isolation in the owning designs.",
           payload.broader_index || [],
           renderDesignContext,
           "No broader design index entries are recorded for this snapshot."
@@ -363,6 +363,7 @@
       el.documentPreviewHeading.textContent = title;
       el.documentPreviewProvenance.textContent = provenance;
       el.documentPreviewBody.textContent = "Loading pinned document…";
+      if (el.documentPreview.scrollIntoView) el.documentPreview.scrollIntoView({ block: "start", behavior: "smooth" });
       try {
         var response = await request(url);
         if (!response.ok) throw new Error("Document request failed (HTTP " + response.status + ")");
@@ -802,6 +803,15 @@
           row.key + " (" + row.level + ")");
         item.selected = state.view && row.key === state.view.key && row.level === state.view.level;
       });
+      var codeButton = byId("architecture-code");
+      if (codeButton) codeButton.onclick = function () {
+        state.selection = null;
+        renderTargetDetail(null);
+        if (state.viewer && state.viewer.selectTarget) state.viewer.selectTarget(null, null);
+        writeLink("replaceState");
+        loadDocumentationContext();
+        el.documentationContext.scrollIntoView({ block: "start", behavior: "smooth" });
+      };
       el.back.disabled = !viewerApi.parentViews(state.payload.views, state.view, state.payload.targets).length;
     }
 
@@ -864,6 +874,9 @@
         el.drillChoices.appendChild(button);
       });
       el.drillChoices.hidden = false;
+      if (el.drillChoices.scrollIntoView) el.drillChoices.scrollIntoView({ block: "center", behavior: "smooth" });
+      var first = el.drillChoices.querySelector("button");
+      if (first && first.focus) first.focus({ preventScroll: true });
     }
 
     function renderViewer() {
