@@ -228,6 +228,9 @@ def test_manifest_and_single_schema_cover_all_projection_artifacts() -> None:
         product_identity="product:/repo",
         tracking_identity="tracking:/repo",
         page_counts={"current": 1, "coverage": 1, "history": 2},
+        row_counts={"current": 1, "coverage": 1, "history": 2},
+        coverage_by_status={"pending": 1},
+        coverage_by_reason={"source_missing": 1},
         source_revisions={"action_recovery": "sha256:source"},
         source_failures={"remediation_dispositions": "source_missing"},
     ).as_dict()
@@ -237,9 +240,14 @@ def test_manifest_and_single_schema_cover_all_projection_artifacts() -> None:
     assert manifest["schema_version"] == PROJECTION_SCHEMA_VERSION == 2
     assert manifest["projection_kind"] == "manifest"
     assert manifest["sections"] == {
-        "current": {"page_count": 1},
-        "coverage": {"page_count": 1},
-        "history": {"page_count": 2},
+        "current": {"page_count": 1, "row_count": 1},
+        "coverage": {"page_count": 1, "row_count": 1},
+        "history": {"page_count": 2, "row_count": 2},
+    }
+    assert manifest["coverage_aggregates"] == {
+        "by_status": {"pending": 1},
+        "by_reason": {"source_missing": 1},
+        "other_reasons": 0,
     }
     assert schema["$id"].endswith("/v2")
     assert set(schema["$defs"]) == {"manifest", "current", "coverage", "history"}
@@ -286,6 +294,9 @@ def test_atomic_publisher_reconciles_matching_authority_and_bounds_pages(
     assert manifest["epoch"] == epoch
     assert manifest["fresh_until"] == (observed + timedelta(seconds=3660)).isoformat()
     assert manifest["sections"]["history"]["page_count"] == 2
+    assert manifest["sections"]["history"]["row_count"] == 102
+    aggregates = manifest["coverage_aggregates"]
+    assert sum(aggregates["by_status"].values()) == manifest["sections"]["coverage"]["row_count"]
     pointer = json.loads((projection_root(tmp_path) / "current.json").read_text())
     assert pointer == {"schema_version": 2, "epoch": epoch}
     current_page = json.loads(
@@ -298,6 +309,31 @@ def test_atomic_publisher_reconciles_matching_authority_and_bounds_pages(
         payload = json.loads(page.read_text())
         assert len(payload["rows"]) <= 100
         assert page.stat().st_size <= 256 * 1024
+
+
+def test_manifest_reason_aggregate_is_bounded_with_explicit_remainder(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / ".cascade"
+    _write(home / "executions.json", {"actions": {}})
+    _write(home / "orphan_delivery_recoveries.json", {"recoveries": {}})
+    _write(home / "remediation_dispositions.json", {"dispositions": {}})
+    failures = tuple(
+        {"work_id": f"task_{index:03d}", "reason": f"reason-{index:03d}"}
+        for index in range(70)
+    )
+
+    publish_audit_projection(
+        tmp_path,
+        AuditPassResult(candidate_failures=failures),
+        interval_seconds=60,
+        observed_at=datetime.fromisoformat(STAMP),
+    )
+    aggregates = read_projection_manifest(tmp_path)["coverage_aggregates"]
+
+    assert aggregates["by_status"] == {"pending": 70}
+    assert len(aggregates["by_reason"]) == 64
+    assert aggregates["other_reasons"] == 6
 
 
 def test_interrupted_pointer_swap_leaves_prior_epoch_readable_and_partial_unreferenced(

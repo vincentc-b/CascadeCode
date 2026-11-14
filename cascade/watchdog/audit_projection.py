@@ -30,6 +30,7 @@ MAX_DETAIL_BYTES = 4096
 MAX_PAGE_ROWS = 100
 MAX_PAGE_BYTES = 256 * 1024
 MAX_MANIFEST_BYTES = 64 * 1024
+MAX_AGGREGATE_REASONS = 64
 _EPOCH_RE = re.compile(r"^[a-zA-Z0-9._-]{1,128}$")
 
 StoreName = Literal["action_recovery", "orphan_delivery", "remediation_dispositions"]
@@ -58,6 +59,14 @@ def _text(value: object) -> str | None:
     return (
         value if isinstance(value, str) and value.strip() == value and value else None
     )
+
+
+def _bounded_reason(value: object) -> str:
+    reason = str(value)
+    encoded = reason.encode()
+    if len(encoded) <= 512:
+        return reason
+    return encoded[:512].decode("utf-8", errors="ignore")
 
 
 def _timestamp(value: object) -> str | None:
@@ -131,8 +140,8 @@ class AuditSummary:
     def __post_init__(self) -> None:
         if self.verification_status not in _STATUSES:
             raise ValueError(f"unknown verification status: {self.verification_status}")
-        if not _text(self.reason):
-            raise ValueError("projection reason must be nonempty")
+        if not _text(self.reason) or len(self.reason.encode()) > 512:
+            raise ValueError("projection reason must be a bounded nonempty string")
         for name in (
             "occurred_at",
             "last_attempted_at",
@@ -213,6 +222,10 @@ class ProjectionManifest:
     product_identity: str
     tracking_identity: str
     page_counts: Mapping[str, int]
+    row_counts: Mapping[str, int]
+    coverage_by_status: Mapping[str, int] = field(default_factory=dict)
+    coverage_by_reason: Mapping[str, int] = field(default_factory=dict)
+    coverage_other_reasons: int = 0
     source_revisions: Mapping[str, str | None] = field(default_factory=dict)
     source_failures: Mapping[str, str] = field(default_factory=dict)
 
@@ -233,6 +246,37 @@ class ProjectionManifest:
             raise ValueError(
                 "manifest page counts must cover current, coverage and history"
             )
+        if set(self.row_counts) != {"current", "coverage", "history"} or any(
+            type(value) is not int or value < 0 for value in self.row_counts.values()
+        ):
+            raise ValueError(
+                "manifest row counts must cover current, coverage and history"
+            )
+        for name in self.page_counts:
+            pages = self.page_counts[name]
+            rows = self.row_counts[name]
+            if (
+                (pages == 0) != (rows == 0)
+                or rows > pages * MAX_PAGE_ROWS
+                or (pages and rows < pages)
+            ):
+                raise ValueError("manifest page and row counts are inconsistent")
+        if (
+            set(self.coverage_by_status) - _STATUSES
+            or any(type(value) is not int or value < 0 for value in self.coverage_by_status.values())
+            or sum(self.coverage_by_status.values()) != self.row_counts["coverage"]
+        ):
+            raise ValueError("manifest coverage status aggregate is invalid")
+        if (
+            len(self.coverage_by_reason) > MAX_AGGREGATE_REASONS
+            or any(not _text(key) or len(key.encode()) > 512 for key in self.coverage_by_reason)
+            or any(type(value) is not int or value < 0 for value in self.coverage_by_reason.values())
+            or type(self.coverage_other_reasons) is not int
+            or self.coverage_other_reasons < 0
+            or sum(self.coverage_by_reason.values()) + self.coverage_other_reasons
+            != self.row_counts["coverage"]
+        ):
+            raise ValueError("manifest coverage reason aggregate is invalid")
         if any(
             name not in _STORE_NAMES
             for name in (*self.source_revisions, *self.source_failures)
@@ -252,8 +296,16 @@ class ProjectionManifest:
                 "tracking": self.tracking_identity,
             },
             "sections": {
-                name: {"page_count": self.page_counts[name]}
+                name: {
+                    "page_count": self.page_counts[name],
+                    "row_count": self.row_counts[name],
+                }
                 for name in ("current", "coverage", "history")
+            },
+            "coverage_aggregates": {
+                "by_status": dict(sorted(self.coverage_by_status.items())),
+                "by_reason": dict(sorted(self.coverage_by_reason.items())),
+                "other_reasons": self.coverage_other_reasons,
             },
             "sources": {
                 name: {
@@ -377,6 +429,7 @@ def publish_audit_projection(
     if (
         isinstance(prior_manifest.get("epoch"), str)
         and prior_rows == rows
+        and _manifest_has_aggregates(prior_manifest)
         and _manifest_source_markers(prior_manifest)
         == (source_revisions, source_failures)
     ):
@@ -392,6 +445,8 @@ def publish_audit_projection(
         product_identity=product_identity,
         tracking_identity=tracking_identity,
         page_counts={name: len(value) for name, value in pages.items()},
+        row_counts={name: len(value) for name, value in rows.items()},
+        **_coverage_aggregates(rows["coverage"]),
         source_revisions=source_revisions,
         source_failures=source_failures,
     ).as_dict()
@@ -431,6 +486,33 @@ def _repository_identities(root: Path) -> tuple[str, str]:
         "repository-" + hashlib.sha256(product.as_uri().encode()).hexdigest()[:24],
         "repository-" + hashlib.sha256(tracking.as_uri().encode()).hexdigest()[:24],
     )
+
+
+def projection_repository_identities(root: Path) -> tuple[str, str]:
+    """Return the product/tracking keys a consumer must find in a manifest."""
+
+    return _repository_identities(root)
+
+
+def _coverage_aggregates(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    statuses: dict[str, int] = {}
+    reasons: dict[str, int] = {}
+    for row in rows:
+        status = str(row["verification_status"])
+        reason = str(row["reason"])
+        statuses[status] = statuses.get(status, 0) + 1
+        reasons[reason] = reasons.get(reason, 0) + 1
+    ordered = sorted(reasons.items(), key=lambda item: (-item[1], item[0]))
+    retained = dict(ordered[:MAX_AGGREGATE_REASONS])
+    return {
+        "coverage_by_status": statuses,
+        "coverage_by_reason": retained,
+        "coverage_other_reasons": sum(
+            count for _reason, count in ordered[MAX_AGGREGATE_REASONS:]
+        ),
+    }
 
 
 def _source_markers(root: Path) -> tuple[dict[str, str], dict[str, str]]:
@@ -551,6 +633,19 @@ def _manifest_source_markers(
     return revisions, failures
 
 
+def _manifest_has_aggregates(manifest: Mapping[str, object]) -> bool:
+    sections = manifest.get("sections")
+    return (
+        isinstance(sections, Mapping)
+        and all(
+            isinstance(sections.get(name), Mapping)
+            and type(sections[name].get("row_count")) is int
+            for name in ("current", "coverage", "history")
+        )
+        and isinstance(manifest.get("coverage_aggregates"), Mapping)
+    )
+
+
 def _reconcile_projection(
     prior: Mapping[str, list[dict[str, object]]],
     sources: RecoveryProjection,
@@ -625,7 +720,9 @@ def _reconcile_projection(
                     verified,
                     verified,
                     "verified" if classification == "healthy" else "pending",
-                    str(observation.get("reason") or classification or "unknown"),
+                    _bounded_reason(
+                        observation.get("reason") or classification or "unknown"
+                    ),
                     fresh_until,
                     next_attempt_at if classification != "healthy" else None,
                 )
@@ -657,7 +754,7 @@ def _reconcile_projection(
                 now.isoformat(),
                 None,
                 "pending",
-                str(failure.get("reason") or "audit_observation_error"),
+                _bounded_reason(failure.get("reason") or "audit_observation_error"),
                 next_attempt_at=next_attempt_at,
             )
         )
@@ -1244,6 +1341,7 @@ def projection_json_schema() -> dict[str, object]:
                     "fresh_until": {"type": "string"},
                     "repository_identity": {"type": "object"},
                     "sections": {"type": "object"},
+                    "coverage_aggregates": {"type": "object"},
                     "sources": {"type": "object"},
                 },
                 "required": [
@@ -1255,6 +1353,7 @@ def projection_json_schema() -> dict[str, object]:
                     "fresh_until",
                     "repository_identity",
                     "sections",
+                    "coverage_aggregates",
                     "sources",
                 ],
                 "additionalProperties": False,
@@ -1272,6 +1371,8 @@ __all__ = [
     "MAX_DETAIL_BYTES",
     "MAX_PAGE_ROWS",
     "MAX_PAGE_BYTES",
+    "MAX_MANIFEST_BYTES",
+    "MAX_AGGREGATE_REASONS",
     "SourceRef",
     "AuditSummary",
     "CurrentSummary",
@@ -1280,6 +1381,7 @@ __all__ = [
     "ProjectionManifest",
     "RecoveryProjection",
     "projection_root",
+    "projection_repository_identities",
     "read_projection_manifest",
     "publish_audit_projection",
     "project_recovery_sources",

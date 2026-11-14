@@ -134,6 +134,24 @@ Completed passes also carry forward pending coverage when a candidate was not
 reassessed. The manifest includes source revision and failure markers. The
 producer checks them again before writing and aborts if it detects a change.
 
+`REQ-WATCHDOG-005`: The immutable schema-2 manifest carries bounded aggregate
+verification counts by status and reason, section row/page counts, observation
+and freshness times, interval, and product/tracking repository identities. These
+counts are produced with the epoch so consumers can report coverage without
+scanning all pages.
+
+`DEC-WATCHDOG-005`: Coverage counts are grouped by verification status and by
+at most 64 most-common reason strings; the remaining reason count is explicit
+in `other_reasons`. Status and reason totals each equal the coverage row total,
+and section page/row totals agree with the 100-row page ceiling. A pass with a
+legacy schema-2 manifest lacking these fields republishes even when its rows
+are unchanged. The full-epoch validator checks every page before declaring an
+epoch complete. The bounded dashboard reader is owned by
+[War Room](../war_room/DESIGN.md#bounded-health-audit-projection-reads) and
+validates the pinned header and only the requested pages. The shared
+[package boundary](../DESIGN.md#health-audit-read-boundary) keeps source
+classification with the producer.
+
 Each page contains at most 100 rows and 256 KiB of serialized JSON. The
 producer writes and syncs every page and its manifest under a new epoch,
 then replaces `current.json` and syncs the publication directory. An
@@ -148,3 +166,7 @@ invalid pages.
 bounds, restart reconciliation, unchanged publication, corrupt pages, and an
 interrupted pointer swap. `tests/watchdog/test_audit_lane.py` verifies that a
 publication failure leaves the pass pending.
+
+The bounded War Room consumer is owned by
+`cascade/war_room/audit_projection_reader.py`; it does not call the full-epoch
+`read_projection_manifest` publication check.
