@@ -491,6 +491,43 @@ body {
   font-weight: 700;
 }
 
+.audit-follow-up,
+.audit-coverage-group {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.audit-coverage-disclosure {
+  margin-top: 0.45rem;
+}
+
+.audit-coverage-disclosure > summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.25rem 0;
+}
+
+.audit-coverage-record + .audit-coverage-record {
+  border-top: 1px solid var(--border);
+  margin-top: 0.35rem;
+  padding-top: 0.25rem;
+}
+
+.audit-coverage-more {
+  margin-top: 0.45rem;
+  max-width: 100%;
+  white-space: normal;
+}
+
+@media (max-width: 720px) {
+  .audit-status-toolbar button,
+  .audit-coverage-more {
+    width: 100%;
+  }
+}
+
 .audit-unavailable {
   color: #fbbf24;
 }

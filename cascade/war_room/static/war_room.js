@@ -315,7 +315,12 @@
   async function pollAuditStatus() {
     if (!el.auditStatus || !AuditStatusUi) return;
     try {
-      AuditStatusUi.render(el.auditStatus, await apiGet("/api/health/audit"));
+      AuditStatusUi.render(el.auditStatus, await apiGet("/api/health/audit"), {
+        loadCoverage: function (cursor) {
+          return apiGet("/api/health/audit/coverage?limit=50" +
+            (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
+        }
+      });
     } catch (err) {
       AuditStatusUi.render(el.auditStatus, {
         unavailable_evidence: [{ source: "audit_status", reason: err.message || "Unavailable" }],

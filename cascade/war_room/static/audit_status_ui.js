@@ -41,6 +41,15 @@
     }).join(", ") : "Unavailable";
   }
 
+  function sourceReference(reference) {
+    if (!reference || typeof reference !== "object") return "Unavailable";
+    const parts = [text(reference.store, "unknown store"), text(reference.row_key, "unknown row")];
+    if (reference.incident_history_ordinal !== null && reference.incident_history_ordinal !== undefined) {
+      parts.push("incident " + String(reference.incident_history_ordinal));
+    }
+    return parts.join(" / ");
+  }
+
   function renderCounts(document, parent, counts) {
     const outcomes = counts && counts.by_outcome || {};
     appendLine(document, parent, "Outcomes", [
@@ -65,30 +74,173 @@
     const item = document.createElement("li");
     item.className = "audit-incident";
     appendLine(document, item, text(incident.work_id, "Unknown work"),
-      text(incident.failure_class, "Unavailable") + " · " + text(incident.outcome, "Unavailable"),
+      text(incident.failure_class, "Unavailable") + " · " + text(incident.verification_status, "Unavailable"),
       "audit-incident-heading");
     appendLine(document, item, "Owner", text(incident.owner, "Unavailable"));
-    const evidence = incident.evidence || {};
-    appendLine(document, item, "Evidence", evidence.available ? compact(evidence.value) : "Unavailable");
-    const request = incident.request || {};
-    appendLine(document, item, "Request", text(request.state, "unavailable") + " · " + compact(request.value));
-    const acknowledgement = incident.acknowledgement || {};
-    appendLine(document, item, "Acknowledgement", acknowledgement.available ? compact(acknowledgement.value) : "Unavailable");
-    const result = incident.result || {};
-    appendLine(document, item, "Result", result.available ? compact(result.value) : "Pending");
-    const retry = incident.retry || {};
-    appendLine(document, item, "Retry / cooldown",
-      text(retry.state, "Unavailable") + " until " + time(retry.cooldown_until) +
-      " · claim expires " + time(retry.claim_expires_at) +
-      " · reassess " + time(retry.next_reassessment_at) +
-      " · " + compact(retry.policy));
-    const resume = incident.resume_action || {};
-    appendLine(document, item, "Resume action",
-      text(resume.operation, "Unavailable") + " by " + text(resume.owner, "Unavailable"));
+    appendLine(document, item, "Impact / reason", text(incident.reason, "Unavailable"));
+    appendLine(document, item, "Occurred", time(incident.occurred_at));
+    appendLine(document, item, "Last attempted", time(incident.last_attempted_at));
+    appendLine(document, item, "Last verified", time(incident.last_verified_at));
+    appendLine(document, item, "Freshness", "fresh until " + time(incident.fresh_until));
+    if (incident.next_attempt_at) appendLine(document, item, "Next attempt", time(incident.next_attempt_at));
+    if (incident.provenance && incident.provenance.next_action) {
+      appendLine(document, item, "Next action", text(incident.provenance.next_action, "Unavailable"));
+    }
+    appendLine(document, item, "Source", sourceReference(incident.source_ref));
+    if (incident.detail_truncated) appendLine(document, item, "Detail", "Truncated at the published evidence bound");
     return item;
   }
 
-  function render(container, payload) {
+  function renderFollowUps(document, container, payload) {
+    const investigations = payload && Array.isArray(payload.investigations) ? payload.investigations : [];
+    const snapshot = payload && payload.investigation_snapshot || {};
+    const heading = document.createElement("h3");
+    heading.textContent = "Investigation follow-up (" + investigations.length + ")";
+    container.appendChild(heading);
+    appendLine(document, container, "Follow-up snapshot",
+      text(snapshot.state, "pending") +
+      (snapshot.published_at ? " · updated " + time(snapshot.published_at) : "") +
+      (snapshot.reason ? " · " + text(snapshot.reason, "Unavailable") : ""));
+    appendLine(document, container, "Status boundary",
+      "Requests, delivery, acknowledgement and reports coordinate investigation; only VERIFIED current incidents prove incident or resolution.");
+    investigations.forEach(function (item) {
+      const card = document.createElement("section");
+      card.className = "audit-follow-up";
+      appendLine(document, card, text(item.work_id, "Unknown work"),
+        "owner " + text(item.owner_id, "Unavailable") + " · " + text(item.reason, "Investigation"),
+        "audit-incident-heading");
+      const source = item.source || {};
+      appendLine(document, card, "Investigation request",
+        "case " + text(source.case_id, "Unavailable") + " · request " + text(source.request_id, "Unavailable"));
+      const request = item.request || {};
+      appendLine(document, card, "Delivery",
+        text(request.state, "pending") + (request.delivered_at ? " at " + time(request.delivered_at) : "") +
+        (request.error ? " · " + text(request.error, "Unavailable") : ""));
+      const acknowledgement = item.acknowledgement || {};
+      appendLine(document, card, "Acknowledgement",
+        text(acknowledgement.state, "pending") +
+        (acknowledgement.acknowledged_at ? " at " + time(acknowledgement.acknowledged_at) : ""));
+      const report = item.latest_report || {};
+      appendLine(document, card, "Latest reported outcome",
+        text(report.outcome, "none") + (report.reported_at ? " at " + time(report.reported_at) : ""));
+      if (report.finding) appendLine(document, card, "Latest finding", text(report.finding, "Unavailable"));
+      if (Array.isArray(report.references) && report.references.length) {
+        appendLine(document, card, "Report references", report.references.map(String).join(" · "));
+      }
+      const reassessment = item.pending_reassessment || {};
+      appendLine(document, card, "Next reassessment",
+        reassessment.pending ? time(reassessment.next_at) : "Not pending");
+      container.appendChild(card);
+    });
+  }
+
+  function renderCoverageRows(document, parent, rows) {
+    while (parent.firstChild) parent.removeChild(parent.firstChild);
+    if (!rows.length) {
+      appendLine(document, parent, "Coverage details", "No records in the loaded page");
+      return;
+    }
+    const groups = new Map();
+    rows.forEach(function (row) {
+      const label = row.work_id ? "Work " + String(row.work_id) : "Reason " + text(row.reason, "Unavailable");
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(row);
+    });
+    groups.forEach(function (records, label) {
+      const group = document.createElement("section");
+      group.className = "audit-coverage-group";
+      const heading = document.createElement("h4");
+      heading.textContent = label + " (" + records.length + ")";
+      group.appendChild(heading);
+      records.forEach(function (row) {
+        const record = document.createElement("div");
+        record.className = "audit-coverage-record";
+        appendLine(document, record, "Status", text(row.verification_status, "Unavailable") + " · " + text(row.reason, "Unavailable"));
+        appendLine(document, record, "Owner", text(row.owner, "Unavailable"));
+        appendLine(document, record, "Source", sourceReference(row.source_ref));
+        group.appendChild(record);
+      });
+      parent.appendChild(group);
+    });
+  }
+
+  function renderCoverage(document, container, payload, options) {
+    const coverage = payload && payload.coverage || {};
+    const statuses = coverage.by_status || {};
+    const receipt = payload && payload.receipt || {};
+    const snapshot = payload && payload.snapshot || {};
+    const heading = document.createElement("h3");
+    heading.textContent = "Verification coverage";
+    container.appendChild(heading);
+    appendLine(document, container, "Coverage",
+      "pending " + (statuses.pending || 0) + " · stale " + (statuses.stale || 0) +
+      " · unverifiable " + (statuses.unverifiable || 0));
+    appendLine(document, container, "Last completed check", time(receipt.last_completed_at || (payload && payload.last_run)));
+    appendLine(document, container, "Next scheduled check", time(receipt.next_scheduled_at || (payload && payload.next_due)));
+    appendLine(document, container, "Snapshot",
+      text(snapshot.state, "pending") + (snapshot.reason ? " · " + text(snapshot.reason, "Unavailable") : ""),
+      snapshot.state === "ready" ? "audit-status-line" : "audit-status-line audit-unavailable");
+    if (payload && payload.failure) {
+      appendLine(document, container, "Audit failure", compact(payload.failure), "audit-status-line audit-unavailable");
+    }
+
+    const disclosure = document.createElement("details");
+    disclosure.className = "audit-coverage-disclosure";
+    const summary = document.createElement("summary");
+    summary.textContent = "Show grouped coverage details";
+    disclosure.appendChild(summary);
+    const body = document.createElement("div");
+    body.className = "audit-coverage-details";
+    disclosure.appendChild(body);
+    container.appendChild(disclosure);
+    if (!options || typeof options.loadCoverage !== "function") {
+      appendLine(document, body, "Coverage details", "Unavailable");
+      return;
+    }
+    let loaded = false;
+    let loading = false;
+    let cursor = null;
+    const rows = [];
+    async function loadPage() {
+      if (loading) return;
+      loading = true;
+      appendLine(document, body, "Coverage details", "Loading…");
+      try {
+        const response = await options.loadCoverage(cursor);
+        if (!response || response.state !== "ready" || !response.page) {
+          while (body.firstChild) body.removeChild(body.firstChild);
+          appendLine(document, body, "Coverage details",
+            "Pending · " + text(response && response.reason, "snapshot unavailable"), "audit-status-line audit-unavailable");
+          return;
+        }
+        const pageRows = Array.isArray(response.page.rows) ? response.page.rows : [];
+        pageRows.forEach(function (row) { rows.push(row); });
+        cursor = response.page.next_cursor || null;
+        renderCoverageRows(document, body, rows);
+        if (cursor) {
+          const more = document.createElement("button");
+          more.type = "button";
+          more.className = "btn-secondary audit-coverage-more";
+          more.textContent = "Load next coverage page";
+          more.addEventListener("click", loadPage);
+          body.appendChild(more);
+        }
+      } catch (err) {
+        while (body.firstChild) body.removeChild(body.firstChild);
+        appendLine(document, body, "Coverage details", err && err.message ? err.message : "Unavailable", "audit-status-line audit-unavailable");
+      } finally {
+        loading = false;
+      }
+    }
+    disclosure.addEventListener("toggle", function () {
+      if (disclosure.open && !loaded) {
+        loaded = true;
+        loadPage();
+      }
+    });
+  }
+
+  function render(container, payload, options) {
     if (!container) return;
     const document = container.ownerDocument || globalThis.document;
     while (container.firstChild) container.removeChild(container.firstChild);
@@ -96,34 +248,8 @@
     appendLine(document, container, "Next due", time(payload && payload.next_due));
     appendLine(document, container, "Duration", duration(payload && payload.duration_seconds));
     renderCounts(document, container, payload && payload.counts);
-    const investigations = payload && Array.isArray(payload.investigations) ? payload.investigations : [];
-    const agentHeading = document.createElement("h3");
-    agentHeading.textContent = "Agent investigations (" + investigations.length + ")";
-    container.appendChild(agentHeading);
-    appendLine(document, container, "Agent review",
-      "Teams investigate progress, logs and unexpected failures. Delivery is not proof of repair.");
-    const agentSchedule = payload && payload.agent_schedule;
-    if (agentSchedule) {
-      const admission = agentSchedule.admission;
-      if (admission && admission.reason) appendLine(document, container, "Automatic agent review",
-        admission.reason === "no_live_work" ? "Idle: no active or blocked work" :
-        admission.reason === "grace_period" ? "Waiting: live work must be at least 20 minutes old" :
-        "Eligible: live work has passed the 20-minute grace period");
-      appendLine(document, container, "Next agent review", time(agentSchedule.next_due ? new Date(agentSchedule.next_due * 1000).toISOString() : null));
-      if (agentSchedule.last_error) appendLine(document, container, "Agent delivery issue", JSON.stringify(agentSchedule.last_error));
-    }
-    investigations.forEach(function (item) {
-      appendLine(document, container, text(item.work_id, "Unknown work"),
-        text(item.reason, "Investigation") + " · " + text(item.status, "pending") +
-        " · owner " + text(item.owner_id, "unavailable"));
-      const reports = Array.isArray(item.reports) ? item.reports : [];
-      const report = reports.length ? reports[reports.length - 1] : null;
-      if (report) appendLine(document, container, "Latest finding",
-        text(report.outcome, "investigating") + " · " + text(report.finding, "No finding recorded"));
-      if (item.delivery_error) appendLine(document, container, "Delivery issue", text(item.delivery_error, "Unavailable"));
-      appendLine(document, container, "Next reassessment", time(item.next_reassessment_at));
-    });
-    const incidents = payload && Array.isArray(payload.incidents) ? payload.incidents : [];
+    const current = payload && payload.current || {};
+    const incidents = Array.isArray(current.rows) ? current.rows : [];
     const heading = document.createElement("h3");
     heading.textContent = "VERIFIED current incidents (" + incidents.length + ")";
     container.appendChild(heading);
@@ -133,23 +259,25 @@
       incidents.forEach(function (incident) { list.appendChild(renderIncident(document, incident)); });
       container.appendChild(list);
     } else {
-      const snapshotReady = payload && payload.state === "ready";
-      const current = payload && payload.current;
+      const snapshotReady = payload && payload.snapshot && payload.snapshot.state === "ready";
       const statuses = payload && payload.coverage && payload.coverage.by_status || {};
-      const incomplete = !snapshotReady || (current && current.complete === false) ||
+      const incomplete = !snapshotReady || current.complete === false || !!current.next_cursor ||
         (statuses.pending || 0) + (statuses.stale || 0) + (statuses.unverifiable || 0) > 0;
       appendLine(document, container, "Incidents",
-        "No VERIFIED current incidents" + (incomplete ? " · coverage incomplete" : ""));
+        "No VERIFIED current incidents" + (incomplete ? "; coverage incomplete." : "."));
     }
+    if (current.complete === false || current.next_cursor) {
+      appendLine(document, container, "Current incidents", "Additional VERIFIED current incidents are available on a continuation page.",
+        "audit-status-line audit-unavailable");
+    }
+    renderCoverage(document, container, payload, options);
+    renderFollowUps(document, container, payload);
     const unavailable = payload && Array.isArray(payload.unavailable_evidence)
       ? payload.unavailable_evidence : [];
     if (unavailable.length) {
       appendLine(document, container, "Unavailable evidence",
         unavailable.map(function (item) { return text(item.source, "unknown") + ": " + text(item.reason, "Unavailable"); }).join(" · "),
         "audit-status-line audit-unavailable");
-    }
-    if (payload && payload.failure) {
-      appendLine(document, container, "Audit failure", compact(payload.failure), "audit-status-line audit-unavailable");
     }
   }
 
