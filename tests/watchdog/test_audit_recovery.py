@@ -8,6 +8,7 @@ import time
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -179,6 +180,46 @@ def test_dispatch_admission_is_bounded_by_fifo_and_lifecycle_lock(
     finally:
         release_lock.set()
         holder.join(1)
+
+
+@pytest.mark.parametrize(
+    ("expected_generation", "expected_failure_class"),
+    (
+        ("sha256:" + "2" * 64, "blocked_task_failed"),
+        ("sha256:" + "1" * 64, "validated_delivery_missing"),
+    ),
+)
+def test_admission_refuses_obsolete_handoff_before_repair_side_effects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    expected_generation: str,
+    expected_failure_class: str,
+) -> None:
+    current = SimpleNamespace(
+        generation="sha256:" + "1" * 64,
+        incident=SimpleNamespace(failure_class="blocked_task_failed"),
+    )
+    monkeypatch.setattr(
+        audit_recovery, "_bounded_observation", lambda *_a, **_k: current
+    )
+    monkeypatch.setattr(
+        audit_recovery,
+        "_repair_target",
+        lambda *_a, **_k: pytest.fail("stale handoff reached repair targeting"),
+    )
+
+    admitted = audit_recovery._admit_inline(
+        tmp_path,
+        "task_001",
+        CapabilityRegistry(()),
+        deadline=time.monotonic() + 1,
+        cancel_event=threading.Event(),
+        expected_generation=expected_generation,
+        expected_failure_class=expected_failure_class,
+    )
+
+    assert admitted is None
+    assert not (tmp_path / ".cascade").exists()
 
 
 def test_final_claim_acceptance_is_bounded_by_lock_and_fifo(tmp_path: Path) -> None:
