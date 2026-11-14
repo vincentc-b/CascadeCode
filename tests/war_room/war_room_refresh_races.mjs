@@ -201,6 +201,16 @@ async function testAuditRefreshIsVisibleAndSingleFlight() {
   assert.equal(requests.length, 2);
   requests[1].request.resolve({snapshot: {state: "ready", epoch: "two"}});
   await next;
+  const third = audit.pollAuditStatus();
+  assert.equal(requests.length, 3);
+  requests[2].request.resolve({snapshot: {state: "ready", epoch: "three"}});
+  await third;
+  assert.deepEqual(
+    requests.map(({path}) => path),
+    ["/api/health/audit", "/api/health/audit", "/api/health/audit"],
+    "browser refreshes remain read-only status requests and never repeat repair admission"
+  );
+  assert.equal(rendered.length, 3);
 
   assert.equal(
     audit.auditPagePath("history", "opaque cursor", {

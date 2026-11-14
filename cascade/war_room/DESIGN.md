@@ -2,10 +2,6 @@
 
 Purpose: expose the loopback operator UI/API for status, approvals, chat attachment, review, recovery, and diagnostics. Interfaces are `serve`, route modules, serializers/views, authenticated human actions, and static/template assets covered by this owner. Owns `REQ-WARROOM-001` (operator actions are explicit) and `DEC-WARROOM-001` (the UI projects canonical services rather than owning state).
 
-Evidence: `cascade/war_room/` and `tests/war_room/` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
-
-Known gaps: forge descriptions unavailable in Task 001 remain explicit gaps.
-
 ## Bounded health-audit projection reads
 
 `REQ-WARROOM-AUDIT-001`: Dashboard consumers read only the current projection
@@ -81,9 +77,12 @@ Repository identity, freshness and read-budget failures are visible as pending o
 unknown status. The shared boundary is owned by
 [the package design](../DESIGN.md#health-audit-read-boundary).
 
-Verification locations: `tests/war_room/test_health_audit_routes.py` and
-`tests/war_room/test_audit_projection_reader.py`. They cover filtered pagination,
-epoch/filter restart, stale and corrupt evidence, concurrent read-only access, and
-the strict source/response budgets. `tests/war_room/benchmark_audit_get.py` records
-warm loopback GET p95 on a representative 10,000-attempt fixture as environment
-evidence; it intentionally imposes no flaky latency threshold.
+Verification locations: [route tests](../../tests/war_room/test_health_audit_routes.py)
+and [reader tests](../../tests/war_room/test_audit_projection_reader.py) cover filtered pagination,
+epoch/filter restart, stale and corrupt evidence, and strict source/response
+budgets. The [integrated fixture](../../tests/war_room/test_audit_integrated_experience.py) follows real
+producer output through the loopback routes across a new epoch and split
+product/tracking roots, while the [browser race harness](../../tests/war_room/war_room_refresh_races.mjs) verifies
+single-flight, read-only browser refreshes. The [GET benchmark](../../tests/war_room/benchmark_audit_get.py)
+records warm loopback GET p95 and actual source/response bytes for a representative
+10,000-attempt fixture. Local smoke evidence is not post-deployment acceptance.
