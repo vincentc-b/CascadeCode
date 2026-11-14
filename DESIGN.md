@@ -94,12 +94,12 @@ duplicate recovery.
 
 ### 2.2 Health audit operations
 
-#### Epic 044 planned projection boundary
+#### Audit projection contract
 
-The reviewed plan in `epic_044` (decisions `dec_001` and `dec_002`, success
-criteria 1–12) separates supervisor-produced evidence from dashboard reads.
-This is a planned contract; implementation and live acceptance remain pending
-the normal plan approval and Feature delivery gates.
+`REQ-ROOT-AUDIT-001` — Supervisor-produced evidence and dashboard reads have
+separate responsibilities. This root design owns their shared contract; local
+behavior belongs to the [Watchdog design](cascade/watchdog/DESIGN.md) and
+[War Room design](cascade/war_room/DESIGN.md).
 
 The existing audit lane owns bounded reassessment and atomically publishes
 versioned current-incident, coverage and history projections. The War Room GET
@@ -109,31 +109,35 @@ missing, corrupt, incompatible or expired evidence is explicitly pending or
 unknown. An empty verified-incident list with incomplete coverage must not
 claim health. Raw recovery ledgers and stable source references are retained.
 
-Persist fair rotation across restarts, coalesce work/root observations, and
+`REQ-ROOT-AUDIT-002` — Persist fair rotation across restarts, coalesce work/root observations, and
 reserve at least one in four admitted checks for historical unresolved work
 when both candidate pools are nonempty. Advance past timed-out candidates.
 Initial ceilings are 100 candidates and 60 seconds per pass, with at most two
 seconds per candidate. Freshness expires after two configured audit intervals
 plus one pass allowance. Dashboard pages default to 50 rows, cap at 100, and
 read at most 1 MiB of source bytes with at most 256 KiB serialized responses.
-Feature delivery must demonstrate enforcement, safe large-record references,
+Verification must demonstrate enforcement, safe large-record references,
 and representative 10,000-attempt performance evidence.
 
-Current incidents and resolution require fresh authoritative evidence for the
+`REQ-ROOT-AUDIT-003` — Current incidents and resolution require fresh authoritative evidence for the
 relevant generation and obligation, including publication after work completes.
 Cached projections never authorize recovery. Legacy rows lacking unambiguous
 modern incident identity remain historical/unverifiable with provenance;
 reported fixes and acknowledgements remain follow-up evidence. Existing
 repair, investigation, manual admission and human approval gates still apply.
 
-Architecture impact: **no diagram change**. Reassessment remains inside the
-existing Watchdog component and presentation remains inside the War Room.
-The change introduces derived local evidence and changes read scheduling within
-these existing responsibilities; it adds no deployment unit, external service,
-actor or modeled component relationship. The current container and supervisor
-component views remain applicable. Features 001, 002 and 003 deliver producer,
-consumer APIs and UI/acceptance in sequence; any change to these boundaries
-returns through the architecture amendment workflow.
+`DEC-ROOT-AUDIT-001` — The audit lane owns reassessment; War Room consumes
+derived local evidence. Keeping these responsibilities within the existing
+Watchdog and War Room components avoids a second scheduler or recovery owner.
+The [container and supervisor component views](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+describe this boundary; the [model source](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+is authoritative.
+
+Verification locations: [audit tests](tests/watchdog/) cover production and
+authority; [War Room tests](tests/war_room/) cover consumption. These locations
+alone do not establish conformance to `REQ-ROOT-AUDIT-001` through
+`REQ-ROOT-AUDIT-003`: bounded producer/consumer integration, large-ledger
+performance and live behavior require inspectable evidence at the tested revision.
 
 The health audit is a supervisor safety net, not another lifecycle owner. It
 observes canonical board and recovery state, proves a concrete incident, and
