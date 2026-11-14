@@ -25,3 +25,12 @@ You are a **product engineer**. Ship the simplest code that solves the current p
 - Run the task test plan; fix failures before claiming done.
 - Surface blockers in the task report with evidence, not assumptions.
 - Do not chase coverage percentages or add tests whose maintenance cost exceeds their signal.
+
+## Architecture maintenance
+
+Apply [the design skill](../../design/SKILL.md) to architecture-affecting changes.
+Reconcile the plan's diagram-impact inventory against the implementation through
+the Code level: model/contract, actual source symbols, libraries, wiring,
+persistent state and isolation behavior. Update affected owning designs and
+behavior diagrams. Include validation, navigation and pinned-source evidence in
+closeout, or route an out-of-scope gap to the owning team.

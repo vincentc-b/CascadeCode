@@ -31,6 +31,8 @@ A flat todo list cannot express this. A single chat window cannot isolate it. Ca
 - `REQ-ROOT-008` — **Approval boundaries, automatic execution.** The human approves a brief by merging its MR, activates the resulting backlog epic, and reviews feature MRs. The watchdog automatically starts eligible Feature and Task teams between those boundaries.
 - `REQ-ROOT-009` — **Forge-backed review.** The runtime stays local, while GitHub or GitLab holds brief approvals, draft feature reviews, and reviewer discussion. Cascade uses the operator's authenticated `gh` or `glab` session.
 
+- `REQ-ROOT-010` — **Inspectable implementation architecture.** Operators can follow authored system, container and component views into integrated Structurizr code views, then inspect source from the same pinned revision. Navigation and source behavior are owned by [War Room](cascade/war_room/DESIGN.md#integrated-c4-exploration-and-source-inspection); model, rendering and identity guarantees are owned by [Workspace](cascade/workspace/DESIGN.md#c4-code-model-and-rendering-contract).
+
 Non-goals for v1:
 
 - Multi-user auth / hosted SaaS / any remote UI
@@ -664,7 +666,7 @@ No integer `rev` field. Plan edits are ordinary local commits.
 
 ### 9.4 Workspace supervisor
 
-Canonical feature spec: [`docs/features/3_completed/feat_014_workspace_contract.md`](docs/features/3_completed/feat_014_workspace_contract.md). Provider backends and credentials: [`docs/features/3_completed/feat_015_provider_backends.md`](docs/features/3_completed/feat_015_provider_backends.md). This section records the **implemented** operator contract (tasks 063–069, provider sync in task_076).
+The [workspace design](cascade/workspace/DESIGN.md) owns repository and architecture contracts. The [agent design](cascade/agent/DESIGN.md) owns provider execution and capability boundaries. This section describes the operator contract.
 
 Operator configuration, adoption, and recovery for optional split planning
 storage are documented in
@@ -1010,7 +1012,7 @@ At no point did the SWE agent see the memory-layout debate, and at no point did 
 | `DEC-ROOT-006` | Doc versioning | **Git commits.** Children pin `parent_rev` to a SHA. No integer rev counter. | Git already supplies immutable content revisions and avoids a second version authority. |
 | `DEC-ROOT-007` | Deployment | **Local runtime with forge review.** Local UI/checkpointers plus GitHub (`gh`) or GitLab (`glab`) for brief and feature MRs. | Local execution preserves workspace control while existing forge review supplies durable approval and discussion. |
 | `DEC-ROOT-008` | Comment severity | Default **non-blocking**. Human may mark `blocking`, which pauses `mint_task` only. Agents cannot set it. Open human threads still gate completion. | Discussion should continue delivery by default, while only the human can impose an early planning stop. |
-| `DEC-ROOT-009` | Task specialization | **No enum.** Optional in-repo `SKILL.md` paths on the Task. Empty = general SWE agent. Human/Boss may override the list at dispatch. Missing/out-of-repo paths fail dispatch. No classifier. | Repository playbooks are inspectable and extensible without a parallel specialization taxonomy. |
+| `DEC-ROOT-009` | Task specialization | **No enum.** Optional in-repo `SKILL.md` paths on the Task. Empty = general SWE agent with role-default playbooks, including design authoring/review. Human/Boss may override the list at dispatch. Missing/out-of-repo paths fail dispatch. No classifier. | Repository playbooks are inspectable and extensible without a parallel specialization taxonomy. |
 | `DEC-ROOT-010` | Failure policy | Live-run infra flakes retry **2** times. A pre-execution stale parent pin is refreshed and retried automatically. Spec/test misses fail closed and automatically wake the Feature Team, which can revise and retry its own blocked child; the blocked Task does **not** count toward the cap. | Bounded retries absorb transient failures, while specification failures return to the contract owner instead of looping execution. |
 
 All DESIGN.md §15 questions are locked.

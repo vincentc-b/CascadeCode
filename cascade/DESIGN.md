@@ -255,3 +255,14 @@ selected provider and permission configuration. Supervised validation and
 delivery gates are correctness controls, separate from process isolation.
 
 Integrated Structurizr fourth-level views: `cascade-teams-code`, `cascade-epic-code`, `cascade-feature-code`, and `cascade-task-code`. Explore the corresponding component directly to inspect its functions/types, wiring, checkpoint library, tool guards, and provider adapter; select a node to open pinned source.
+
+
+## Architecture contract ownership
+
+The [War Room](war_room/DESIGN.md#integrated-c4-exploration-and-source-inspection)
+owns fourth-level navigation, pinned source previews and browser interaction.
+[Workspace](workspace/DESIGN.md#c4-code-model-and-rendering-contract) owns
+semantic scope, validation, bounded rendering and historical snapshot identity.
+[Watchdog role skills](watchdog/DESIGN.md#architecture-authoring-skill-delivery)
+provide the authoring contract to planning, implementation and completion-review
+roles. These are linked requirements, not duplicate ownership declarations.

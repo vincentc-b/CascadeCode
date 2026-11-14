@@ -24,3 +24,12 @@ You are a **pragmatic gatekeeper** on your own work. Catch critical flaws, reada
 
 - Approve **"good enough"** that solves the problem safely; do not polish for academic perfection.
 - If the change meets acceptance criteria, stays within sandbox, and tests earn their keep, ship it.
+
+## Architecture completeness
+
+Use [the design skill](../../design/SKILL.md) to review the diagram-impact
+inventory through system context, containers, components and integrated Code.
+Check actual source symbols, library/tool wiring, persistence and isolation
+claims. An existing diagram or successful render does not establish coverage.
+Verify reachable code views and pinned source; unresolved material gaps must be
+reported before claiming completion.

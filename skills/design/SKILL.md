@@ -94,3 +94,40 @@ available, resolving source/design links, and tracing one normal and one
 failure/resume scenario against code. Record actual checks and limitations in the
 work record. Changes must not silently rewrite accepted snapshots or bypass the
 repository's revision-pinned architecture publication workflow.
+
+## Required depth and change-impact review
+
+For architecture-affecting work, include a diagram-impact inventory in the plan
+and reconcile it against the implemented diff at closeout. Record each affected
+view key, owning design, source symbols, required update and verification result.
+Check all levels below; an unchanged level needs a concrete reason grounded in
+the diff, not a blanket "no architecture impact" claim.
+
+| Level | What readers must be able to understand |
+|---|---|
+| Landscape / system context | People, systems, external dependencies and responsibility boundaries. |
+| Containers | Runtime/data boundaries, communication and persistence; do not imply OS isolation from a C4 container. |
+| Components | Significant responsibilities, collaborators, public interfaces and the owner of each code view. |
+| Code | Real implementation functions/types/modules, their relationships and entry points, framework/library use, state/checkpoint ownership, tool/provider wiring and enforceable isolation boundaries. Use focused views of significant components, not exhaustive class inventories. |
+| Supplementary behavior | Normal execution, state transitions, failure/recovery and restart/resume where static relationships alone cannot explain the subsystem. Keep these diagrams in the owning design and link them from the architecture documentation. |
+
+Epic planners assign ownership and budget work for affected levels, including
+Code; Feature planners make those updates part of Task acceptance criteria.
+Task implementers reconcile the model, source contract, code views and owning
+designs with actual code. Reviewers and Boss verify the inventory before
+recommending completion. If required edits exceed a Task's authorized scope,
+report the gap to its owning team rather than silently omitting it or bypassing
+guards.
+
+For Structurizr code views, verify an actual UI path from context through
+container and component to Code, Level up and deep-link restoration, and opening
+the pinned source for representative code nodes. Validate both normal and
+failure/isolation behavior against source. Test renamed/deleted symbols and
+changed component ownership for stale links. Verify warm navigation reuses
+artifacts and new views do not introduce per-view process startup or remove
+render bounds. Report measured performance as evidence, not a universal latency
+promise.
+
+A successful render alone is insufficient: disconnected code views, stale source
+symbols, documentation-only substitutes for required integrated views, and
+incorrect sandbox claims are material completion gaps.

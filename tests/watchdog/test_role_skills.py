@@ -206,6 +206,8 @@ def test_planning_roles_receive_current_design_review_rule(role: RoleId) -> None
 
     prompt = _append_planning_tool_directive(role, "Plan this work.")
     assert "Before signing off or publishing" in prompt
+    assert "integrated Structurizr Code views" in prompt
+    assert "Task acceptance criteria" in prompt
     assert "no epic/feature/task IDs" in prompt
     assert "Rewrite violations before sign-off or publication" in prompt
     assert "skills/design/SKILL.md" in default_role_skill_paths(role)

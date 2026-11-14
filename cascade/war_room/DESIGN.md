@@ -154,3 +154,42 @@ attention and audit presentation stay within these components.
 [tab UI tests](../../tests/war_room/test_architecture_tab_ui.py) verify the local
 consumer boundary; [publication tests](../../tests/workspace/test_architecture_publication.py)
 verify owner-lineage and exact-revision enforcement.
+
+## Integrated C4 exploration and source inspection
+
+- `REQ-WARROOM-C4-001`: Operators can navigate system context → containers →
+  components → authored Code views through verified semantic targets. Explore
+  opens the broadest available next-level view directly; the view selector retains
+  focused alternatives. Referencing an element in another view does not imply
+  that the view expands it. Level up chooses the broadest nearest parent;
+  browser history and deep links restore snapshot, view, level and selection.
+- `REQ-WARROOM-C4-002`: Selecting a code element exposes its source path and
+  symbol and an authorized source resource at the snapshot's code revision.
+  Source previews render plain text, never Markdown or executable HTML. Advancing
+  HEAD cannot change the bytes of an existing source URL. Invalid opaque resource
+  IDs fail rather than accepting caller-supplied paths.
+- `REQ-WARROOM-C4-003`: Repeated navigation reuses immutable SVG responses and
+  the bounded browser SVG cache. Selecting an element preserves the existing SVG
+  and zoom; destroyed viewers cannot install late responses. Implementation
+  designs are discoverable from the pinned ownership mapping, with Mermaid
+  rendering for supplementary behavior diagrams.
+
+`DEC-WARROOM-C4-001`: Native Structurizr custom views with validated component
+scope appear as `codeViews` in the API and Code in the selector. Code nodes remain
+verified SVG hit targets, not a separate documentation-only navigation system.
+Requirements links and ownership context remain distinct; a source link does not
+assert requirement coverage. Snapshot discovery/refresh is explicit, and diagrams
+exclude uncommitted changes.
+
+[architecture_routes.py](architecture_routes.py) projects authorized snapshots,
+view scopes, design resources and pinned code resources.
+[architecture_tab.js](static/architecture_tab.js) coordinates navigation and
+previews; [plan_viewer.js](static/plan_viewer.js) owns shared SVG interaction.
+Rendering and identity guarantees belong to
+[the workspace design](../workspace/DESIGN.md#c4-code-model-and-rendering-contract).
+
+Verification: [HTTP tests](../../tests/war_room/test_architecture_http.py),
+[tab tests](../../tests/war_room/test_architecture_tab_ui.py), and
+[paired-view navigation](../../tests/war_room/paired_c4_review_cases.mjs).
+The authored team views are in the repository
+[view inventory](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).

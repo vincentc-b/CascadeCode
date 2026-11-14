@@ -170,3 +170,37 @@ publication failure leaves the pass pending.
 The bounded War Room consumer is owned by
 `cascade/war_room/audit_projection_reader.py`; it does not call the full-epoch
 `read_projection_manifest` publication check.
+
+## Architecture authoring skill delivery
+
+`REQ-WATCHDOG-SKILLS-001`: Epic Manager, Epic Architect, Feature Lead, Feature
+Architect, SWE and Boss defaults include the repository design skill. Task-specific
+skills extend and deduplicate SWE defaults; missing or escaping skill paths fail
+validation. Planning and Boss prompts load effective playbook text; Task activation
+loads SWE playbooks into graph state for subsequent turns.
+
+`DEC-WATCHDOG-SKILLS-001`: [role_skills.py](role_skills.py) owns defaults and
+resolution. [The design skill](../../skills/design/SKILL.md) owns the authoring
+contract, including integrated component-to-code navigation, real source symbols,
+lifecycle/isolation detail and verification. Planning establishes architecture,
+SWE reconciles it with implementation, and review checks coverage. Planning prompts
+explicitly require an impact inventory through integrated Code views and Task
+acceptance criteria; SWE, self-review and Boss playbooks reference the same
+depth contract. Merely having
+a rendered diagram is not proof of completeness.
+
+Verification: [role defaults and loading](../../tests/watchdog/test_role_skills.py),
+[Task playbooks](../../tests/task/test_skills_context.py),
+[SWE prompt delivery](../../tests/task/test_swe_turn.py), and
+[Boss prompt delivery](../../tests/boss/test_model_turn.py).
+
+## Repository health-audit configuration
+
+The tracked [cascade.toml](../../cascade.toml) disables periodic health auditing
+with `automation.health_audit.enabled = false`. Normal work automation remains
+enabled independently. The authenticated manual audit entry point remains
+available; disabling the schedule does not certify health or erase previous
+audit evidence. [config.py](config.py) validates these independent settings;
+[worker.py](../workspace/worker.py) wires the lane and conditionally starts
+automatic investigations. This is a repository operational choice, not a
+requirement for responsive architecture rendering.

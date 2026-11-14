@@ -30,6 +30,10 @@ enabled = true
 poll_seconds = 15
 remote = "origin"
 
+# Periodic health audits are disabled; authenticated manual audits remain available.
+[automation.health_audit]
+enabled = false
+
 # Provider-specific model defaults. Boss uses the epic tier when omitted.
 [providers]
 default = "cursor"
