@@ -20,7 +20,7 @@ class Node {
   appendChild(child) { this.children.push(child); return child; }
   removeChild(child) { this.children.splice(this.children.indexOf(child), 1); }
   addEventListener(name, listener) { this.listeners[name] = listener; }
-  dispatch(name) { return this.listeners[name] && this.listeners[name](); }
+  dispatch(name, event) { return this.listeners[name] && this.listeners[name](event); }
   get firstChild() { return this.children[0] || null; }
   set textContent(value) { this._text = String(value); this.children = []; }
   get textContent() { return this._text + this.children.map((child) => child.textContent).join(""); }
@@ -180,3 +180,121 @@ ui.render(container, {
 assert.ok(container.textContent.includes("No VERIFIED current incidents; coverage incomplete."));
 assert.ok(container.textContent.includes("Snapshot: pending · pointer_malformed"));
 assert.ok(container.textContent.includes("Audit failure: code=snapshot_corrupt"));
+
+function findClass(node, className) {
+  if (node.className === className) return node;
+  for (const child of node.children) {
+    const found = findClass(child, className);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findName(node, name) {
+  if (node.name === name) return node;
+  for (const child of node.children) {
+    const found = findName(child, name);
+    if (found) return found;
+  }
+  return null;
+}
+
+const historyState = {};
+const historyRequests = [];
+let historyResponseEpoch = "epoch-history";
+function historyOptions() {
+  return {
+    state: historyState,
+    loadCoverage() { return Promise.resolve({state: "ready", page: {rows: [], complete: true}}); },
+    loadHistory(cursor, filters) {
+      historyRequests.push({cursor, filters});
+      return Promise.resolve({state: "ready", page: {
+        epoch: historyResponseEpoch, complete: false, reason: "limit", next_cursor: "opaque-next", rows: [{
+          work_id: "task_044", owner: "feature_team:feat_044", verification_status: "unverifiable",
+          occurred_at: "2026-11-14T10:00:00Z", last_attempted_at: "2026-11-14T10:05:00Z",
+          last_verified_at: "2026-11-14T10:10:00Z", reason: "legacy record <unsafe>",
+          source_ref: {store: "action_recovery", row_key: "row<unsafe>"},
+          provenance: {legacy: true, note: "reported_fixed is not resolution <script>"}
+        }]
+      }});
+    }
+  };
+}
+ui.render(container, {snapshot: {state: "ready", epoch: "epoch-history"}, current: {rows: []}, coverage: {by_status: {}}}, historyOptions());
+let historyDisclosure = findClass(container, "audit-history-disclosure");
+assert.ok(historyDisclosure, "history disclosure missing");
+assert.equal(historyDisclosure.open, false);
+assert.equal(historyRequests.length, 0, "collapsed history must not fetch");
+historyDisclosure.open = true;
+await historyDisclosure.dispatch("toggle");
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(historyRequests.length, 1);
+assert.equal(historyRequests[0].cursor, null);
+for (const expected of [
+  "Occurred: ", "Last attempted: ", "Last verified: ",
+  "Source: action_recovery / row<unsafe>", "Legacy provenance: legacy=true",
+  "Unverifiable previous attempt", "More matching history is available", "Reason: limit",
+  "Load next history page"
+]) assert.ok(container.textContent.includes(expected), expected + " missing from history");
+assert.equal(container.children.some((child) => child.tag === "script"), false);
+
+ui.render(container, {snapshot: {state: "ready", epoch: "epoch-history"}, current: {rows: []}, coverage: {by_status: {}}}, historyOptions());
+historyDisclosure = findClass(container, "audit-history-disclosure");
+assert.equal(historyDisclosure.open, true, "history disclosure survives status refresh");
+assert.ok(container.textContent.includes("task_044"), "loaded history survives status refresh");
+
+historyResponseEpoch = "epoch-new";
+ui.render(container, {snapshot: {state: "ready", epoch: "epoch-new"}, current: {rows: []}, coverage: {by_status: {}}}, historyOptions());
+await new Promise((resolve) => setImmediate(resolve));
+assert.ok(container.textContent.includes("restarted from the first page"), "epoch restart must be visible");
+
+const raceContainer = new Node("div", document);
+const raceState = {};
+const pendingHistory = [];
+const raceOptions = {
+  state: raceState,
+  loadCoverage() { return Promise.resolve({state: "ready", page: {rows: [], complete: true}}); },
+  loadHistory(cursor, filters) {
+    let resolve;
+    let reject;
+    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+    pendingHistory.push({cursor, filters, resolve, reject});
+    return promise;
+  }
+};
+ui.render(raceContainer, {snapshot: {state: "ready", epoch: "race-one"}, current: {rows: []}, coverage: {by_status: {}}}, raceOptions);
+const raceDisclosure = findClass(raceContainer, "audit-history-disclosure");
+raceDisclosure.open = true;
+raceDisclosure.dispatch("toggle");
+assert.equal(pendingHistory.length, 1);
+findName(raceDisclosure, "workId").value = "task_new";
+findName(raceDisclosure, "owner").value = "feature_team:new";
+findName(raceDisclosure, "status").value = "unverifiable";
+findClass(raceDisclosure, "audit-history-filters").dispatch("submit", {preventDefault() {}});
+assert.equal(pendingHistory.length, 1, "new filters wait for the active detail request");
+pendingHistory[0].resolve({state: "ready", page: {epoch: "race-one", complete: true, rows: [{work_id: "task_old"}]}});
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(pendingHistory.length, 2);
+assert.equal(pendingHistory[1].cursor, null);
+assert.equal(pendingHistory[1].filters.work_id, "task_new");
+assert.equal(pendingHistory[1].filters.owner, "feature_team:new");
+assert.equal(pendingHistory[1].filters.status, "unverifiable");
+pendingHistory[1].resolve({state: "ready", page: {epoch: "race-one", complete: false, reason: "limit", next_cursor: "opaque-race", rows: [{
+  work_id: "task_new", verification_status: "unverifiable"
+}]}});
+await new Promise((resolve) => setImmediate(resolve));
+assert.ok(raceContainer.textContent.includes("task_new"));
+assert.ok(!raceContainer.textContent.includes("task_old"), "stale filter reply must not render");
+findClass(raceContainer, "btn-secondary audit-history-more").dispatch("click");
+assert.equal(pendingHistory.length, 3);
+pendingHistory[2].reject(Object.assign(new Error("Conflict"), {body: {
+  restart: true, reason: "epoch_changed", epoch: "race-two"
+}}));
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(pendingHistory.length, 4, "409 automatically restarts at page one");
+assert.equal(pendingHistory[3].cursor, null);
+pendingHistory[3].resolve({state: "ready", page: {epoch: "race-two", complete: true, rows: [{work_id: "task_after_restart"}]}});
+await new Promise((resolve) => setImmediate(resolve));
+assert.ok(raceContainer.textContent.includes("epoch_changed"), "409 restart reason must remain visible");
+assert.ok(raceContainer.textContent.includes("task_after_restart"));
+assert.ok(!raceContainer.textContent.includes("task_new"), "pre-restart pages must be cleared");

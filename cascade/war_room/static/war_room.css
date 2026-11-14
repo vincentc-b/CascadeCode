@@ -492,7 +492,8 @@ body {
 }
 
 .audit-follow-up,
-.audit-coverage-group {
+.audit-coverage-group,
+.audit-history-row {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0.4rem;
@@ -503,7 +504,14 @@ body {
   margin-top: 0.45rem;
 }
 
-.audit-coverage-disclosure > summary {
+.audit-history-disclosure {
+  margin-top: 0.65rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.45rem;
+}
+
+.audit-coverage-disclosure > summary,
+.audit-history-disclosure > summary {
   cursor: pointer;
   font-weight: 700;
   padding: 0.25rem 0;
@@ -521,10 +529,49 @@ body {
   white-space: normal;
 }
 
+.audit-history-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0.45rem 0;
+}
+
+.audit-history-filters label {
+  color: var(--muted);
+}
+
+.audit-history-filters input,
+.audit-history-filters select {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.15rem;
+}
+
+.audit-history-filters button {
+  align-self: end;
+}
+
+.audit-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.35rem 0;
+}
+
+.audit-history-more {
+  max-width: 100%;
+  white-space: normal;
+}
+
 @media (max-width: 720px) {
   .audit-status-toolbar button,
-  .audit-coverage-more {
+  .audit-coverage-more,
+  .audit-history-more {
     width: 100%;
+  }
+
+  .audit-history-filters {
+    grid-template-columns: 1fr;
   }
 }
 

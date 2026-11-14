@@ -165,3 +165,50 @@ async function testSlowOptionalPanelsDoNotBlockStartupPolling() {
 
 await testBoardAndCancellationLookupRunInParallel();
 await testSlowOptionalPanelsDoNotBlockStartupPolling();
+
+async function testAuditRefreshIsVisibleAndSingleFlight() {
+  const requests = [];
+  const rendered = [];
+  const context = {
+    el: {auditStatus: {}},
+    AuditStatusUi: {render(_element, payload, options) { rendered.push({payload, options}); }},
+    document: {hidden: false},
+    URLSearchParams,
+    apiGet(path) {
+      const request = deferred();
+      requests.push({path, request});
+      return request.promise;
+    },
+  };
+  const audit = vm.runInNewContext(`
+    ${section("  const auditUiState = {};", "  async function apiGet(path)")}
+    ({ pollAuditStatus, auditPagePath });
+  `, context);
+
+  const first = audit.pollAuditStatus();
+  const duplicate = audit.pollAuditStatus();
+  assert.equal(requests.length, 1, "five-second refreshes share one status GET");
+  assert.equal(requests[0].path, "/api/health/audit");
+  requests[0].request.resolve({snapshot: {state: "ready", epoch: "one"}});
+  await Promise.all([first, duplicate]);
+  assert.equal(rendered.length, 1);
+
+  context.document.hidden = true;
+  await audit.pollAuditStatus();
+  assert.equal(requests.length, 1, "hidden tabs do not poll audit status");
+  context.document.hidden = false;
+  const next = audit.pollAuditStatus();
+  assert.equal(requests.length, 2);
+  requests[1].request.resolve({snapshot: {state: "ready", epoch: "two"}});
+  await next;
+
+  assert.equal(
+    audit.auditPagePath("history", "opaque cursor", {
+      work_id: "task_044", owner: "feature owner", status: "unverifiable",
+      from: "2026-11-14T10:00", to: "2026-11-14T11:00"
+    }),
+    "/api/health/audit/history?limit=50&cursor=opaque+cursor&work_id=task_044&owner=feature+owner&status=unverifiable&from=2026-11-14T10%3A00Z&to=2026-11-14T11%3A00Z"
+  );
+}
+
+await testAuditRefreshIsVisibleAndSingleFlight();

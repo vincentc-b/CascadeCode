@@ -197,47 +197,300 @@
       appendLine(document, body, "Coverage details", "Unavailable");
       return;
     }
-    let loaded = false;
-    let loading = false;
-    let cursor = null;
-    const rows = [];
+    const state = options.state || (options.state = {});
+    const epoch = payload && payload.snapshot && payload.snapshot.epoch || null;
+    if (state.epoch !== epoch) {
+      state.generation = (state.generation || 0) + 1;
+      state.epoch = epoch;
+      state.loaded = false;
+      state.cursor = null;
+      state.rows = [];
+      state.reloadPending = !!state.open;
+    }
+    state.rows = state.rows || [];
+    state.body = body;
+    disclosure.open = !!state.open;
+    function paint() {
+      renderCoverageRows(document, state.body, state.rows);
+      if (state.cursor) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "btn-secondary audit-coverage-more";
+        more.textContent = "Load next coverage page";
+        more.addEventListener("click", loadPage);
+        state.body.appendChild(more);
+      }
+    }
+    if (state.loaded) paint();
     async function loadPage() {
-      if (loading) return;
-      loading = true;
-      appendLine(document, body, "Coverage details", "Loading…");
+      if (state.loading) return;
+      state.loading = true;
+      state.reloadPending = false;
+      const generation = state.generation;
+      appendLine(document, state.body, "Coverage details", "Loading…");
       try {
-        const response = await options.loadCoverage(cursor);
+        const response = await options.loadCoverage(state.cursor);
+        if (generation !== state.generation) return;
         if (!response || response.state !== "ready" || !response.page) {
-          while (body.firstChild) body.removeChild(body.firstChild);
-          appendLine(document, body, "Coverage details",
+          while (state.body.firstChild) state.body.removeChild(state.body.firstChild);
+          appendLine(document, state.body, "Coverage details",
             "Pending · " + text(response && response.reason, "snapshot unavailable"), "audit-status-line audit-unavailable");
           return;
         }
-        const pageRows = Array.isArray(response.page.rows) ? response.page.rows : [];
-        pageRows.forEach(function (row) { rows.push(row); });
-        cursor = response.page.next_cursor || null;
-        renderCoverageRows(document, body, rows);
-        if (cursor) {
-          const more = document.createElement("button");
-          more.type = "button";
-          more.className = "btn-secondary audit-coverage-more";
-          more.textContent = "Load next coverage page";
-          more.addEventListener("click", loadPage);
-          body.appendChild(more);
+        if (response.page.epoch && state.epoch && response.page.epoch !== state.epoch) {
+          state.generation += 1;
+          state.epoch = response.page.epoch;
+          state.loaded = false;
+          state.cursor = null;
+          state.rows = [];
+          state.reloadPending = !!state.open;
+          return;
         }
+        const pageRows = Array.isArray(response.page.rows) ? response.page.rows : [];
+        pageRows.forEach(function (row) { state.rows.push(row); });
+        state.cursor = response.page.next_cursor || null;
+        state.loaded = true;
+        paint();
       } catch (err) {
-        while (body.firstChild) body.removeChild(body.firstChild);
-        appendLine(document, body, "Coverage details", err && err.message ? err.message : "Unavailable", "audit-status-line audit-unavailable");
+        while (state.body.firstChild) state.body.removeChild(state.body.firstChild);
+        appendLine(document, state.body, "Coverage details", err && err.message ? err.message : "Unavailable", "audit-status-line audit-unavailable");
       } finally {
-        loading = false;
+        state.loading = false;
+        if (state.reloadPending && state.open) loadPage();
       }
     }
     disclosure.addEventListener("toggle", function () {
-      if (disclosure.open && !loaded) {
-        loaded = true;
+      state.open = disclosure.open;
+      if (disclosure.open && !state.loaded) {
         loadPage();
       }
     });
+    if (state.open && state.reloadPending && !state.loading) loadPage();
+  }
+
+  const HISTORY_ROW_LIMIT = 100;
+
+  function historyFilters(state) {
+    return {
+      work_id: state.workId || "",
+      owner: state.owner || "",
+      status: state.status || "",
+      from: state.from || "",
+      to: state.to || ""
+    };
+  }
+
+  function renderHistoryRow(document, row) {
+    const item = document.createElement("li");
+    item.className = "audit-history-row";
+    appendLine(document, item, text(row.work_id, "Unknown work"),
+      text(row.verification_status, "Unavailable") + " · owner " + text(row.owner, "Unavailable"),
+      "audit-incident-heading");
+    appendLine(document, item, "Occurred", time(row.occurred_at));
+    appendLine(document, item, "Last attempted", time(row.last_attempted_at));
+    appendLine(document, item, "Last verified", time(row.last_verified_at));
+    appendLine(document, item, "Reason", text(row.reason, "Unavailable"));
+    appendLine(document, item, "Source", sourceReference(row.source_ref));
+    appendLine(document, item, "Legacy provenance", compact(row.provenance));
+    if (row.verification_status === "unverifiable") {
+      appendLine(document, item, "Historical meaning",
+        "Unverifiable previous attempt; this does not prove a current incident or verified resolution.",
+        "audit-status-line audit-unavailable");
+    } else {
+      appendLine(document, item, "Historical meaning",
+        "Previous attempt record; current incident and resolution status come from fresh VERIFIED evidence.");
+    }
+    if (row.detail_truncated) appendLine(document, item, "Detail", "Truncated at the published evidence bound");
+    return item;
+  }
+
+  function renderHistory(document, container, payload, options) {
+    if (!options || typeof options.loadHistory !== "function") return;
+    const state = options.state || (options.state = {});
+    state.rows = state.rows || [];
+    state.generation = state.generation || 0;
+    const snapshotEpoch = payload && payload.snapshot && payload.snapshot.epoch || null;
+    if (state.epoch !== undefined && state.epoch !== snapshotEpoch) {
+      state.generation += 1;
+      state.rows = [];
+      state.cursor = null;
+      state.complete = false;
+      state.notice = "Audit snapshot changed. History restarted from the first page.";
+      state.reloadPending = !!state.open;
+    }
+    state.epoch = snapshotEpoch;
+
+    const disclosure = document.createElement("details");
+    disclosure.className = "audit-history-disclosure";
+    disclosure.open = !!state.open;
+    const summary = document.createElement("summary");
+    summary.textContent = "Audit history";
+    disclosure.appendChild(summary);
+    const form = document.createElement("form");
+    form.className = "audit-history-filters";
+    function input(labelText, name, type) {
+      const label = document.createElement("label");
+      label.textContent = labelText;
+      const control = document.createElement("input");
+      control.name = name;
+      control.type = type || "text";
+      control.value = state[name] || "";
+      label.appendChild(control);
+      form.appendChild(label);
+      return control;
+    }
+    const controls = {
+      workId: input("Exact work ID", "workId"),
+      owner: input("Exact owner", "owner"),
+      from: input("Occurred from (UTC)", "from", "datetime-local"),
+      to: input("Occurred to (UTC)", "to", "datetime-local")
+    };
+    const statusLabel = document.createElement("label");
+    statusLabel.textContent = "Verification status";
+    const status = document.createElement("select");
+    status.name = "status";
+    ["", "proven_incident", "verified", "pending", "stale", "unverifiable"].forEach(function (value) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value || "Any";
+      option.selected = state.status === value;
+      status.appendChild(option);
+    });
+    status.value = state.status || "";
+    statusLabel.appendChild(status);
+    form.appendChild(statusLabel);
+    controls.status = status;
+    const apply = document.createElement("button");
+    apply.type = "submit";
+    apply.className = "btn-secondary";
+    apply.textContent = "Apply history filters";
+    form.appendChild(apply);
+    disclosure.appendChild(form);
+    const body = document.createElement("div");
+    body.className = "audit-history-results";
+    disclosure.appendChild(body);
+    container.appendChild(disclosure);
+    state.body = body;
+
+    function paint() {
+      while (state.body.firstChild) state.body.removeChild(state.body.firstChild);
+      if (state.notice) appendLine(document, state.body, "History", state.notice, "audit-status-line audit-unavailable");
+      if (state.rows.length) {
+        const list = document.createElement("ul");
+        list.className = "audit-history-list";
+        state.rows.forEach(function (row) { list.appendChild(renderHistoryRow(document, row)); });
+        state.body.appendChild(list);
+      } else if (state.loaded) {
+        appendLine(document, state.body, "History", "No records match the applied filters");
+      }
+      if (!state.complete) {
+        const reason = state.reason ? " Reason: " + state.reason + "." : "";
+        appendLine(document, state.body, "Continuation",
+          (state.cursor ? "More matching history is available." : "History read is incomplete.") + reason,
+          "audit-status-line audit-unavailable");
+      }
+      if (state.cursor && state.rows.length < HISTORY_ROW_LIMIT) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "btn-secondary audit-history-more";
+        more.textContent = "Load next history page";
+        more.addEventListener("click", requestPage);
+        state.body.appendChild(more);
+      } else if (state.cursor) {
+        appendLine(document, state.body, "Rendered row bound",
+          "100 rows shown. Refine the filters to continue safely.", "audit-status-line audit-unavailable");
+      }
+    }
+
+    async function requestPage() {
+      if (state.loading) {
+        state.reloadPending = true;
+        return;
+      }
+      state.loading = true;
+      state.reloadPending = false;
+      const generation = state.generation;
+      const cursor = state.cursor || null;
+      appendLine(document, state.body, "History", "Loading…");
+      try {
+        const response = await options.loadHistory(cursor, historyFilters(state));
+        if (generation !== state.generation) return;
+        if (response && response.restart) {
+          state.generation += 1;
+          if (response.epoch) state.epoch = response.epoch;
+          state.rows = [];
+          state.cursor = null;
+          state.complete = false;
+          state.notice = "Audit snapshot changed (" + text(response.reason, "epoch changed") + "). History restarted from the first page.";
+          state.reloadPending = true;
+          return;
+        }
+        if (!response || response.state !== "ready" || !response.page) {
+          state.loaded = true;
+          state.complete = false;
+          state.reason = text(response && response.reason, "snapshot unavailable");
+          paint();
+          return;
+        }
+        const page = response.page;
+        const rows = Array.isArray(page.rows) ? page.rows : [];
+        rows.slice(0, HISTORY_ROW_LIMIT - state.rows.length).forEach(function (row) { state.rows.push(row); });
+        state.cursor = page.next_cursor || null;
+        state.complete = page.complete === true;
+        state.reason = page.reason || null;
+        state.loaded = true;
+        if (page.epoch && state.epoch && page.epoch !== state.epoch) {
+          state.generation += 1;
+          state.epoch = page.epoch;
+          state.rows = [];
+          state.cursor = null;
+          state.complete = false;
+          state.notice = "Audit snapshot epoch changed. History restarted from the first page.";
+          state.reloadPending = true;
+          return;
+        }
+        paint();
+      } catch (err) {
+        if (generation !== state.generation) return;
+        if (err && err.body && err.body.restart) {
+          state.generation += 1;
+          if (err.body.epoch) state.epoch = err.body.epoch;
+          state.rows = [];
+          state.cursor = null;
+          state.complete = false;
+          state.notice = "Audit snapshot changed (" + text(err.body.reason, "epoch changed") + "). History restarted from the first page.";
+          state.reloadPending = true;
+        } else {
+          state.loaded = true;
+          state.complete = false;
+          state.reason = err && err.message ? err.message : "Unavailable";
+          paint();
+        }
+      } finally {
+        state.loading = false;
+        if (state.reloadPending && state.open) requestPage();
+      }
+    }
+
+    form.addEventListener("submit", function (event) {
+      if (event && event.preventDefault) event.preventDefault();
+      Object.keys(controls).forEach(function (name) { state[name] = controls[name].value || ""; });
+      state.generation += 1;
+      state.rows = [];
+      state.cursor = null;
+      state.complete = false;
+      state.loaded = false;
+      state.reason = null;
+      state.notice = "Applied new history filters; restarted from the first page.";
+      state.reloadPending = true;
+      if (!state.loading) requestPage();
+    });
+    disclosure.addEventListener("toggle", function () {
+      state.open = disclosure.open;
+      if (state.open && !state.loaded) requestPage();
+    });
+    if (state.loaded || state.notice) paint();
+    if (state.open && state.reloadPending && !state.loading) requestPage();
   }
 
   function render(container, payload, options) {
@@ -270,7 +523,14 @@
       appendLine(document, container, "Current incidents", "Additional VERIFIED current incidents are available on a continuation page.",
         "audit-status-line audit-unavailable");
     }
-    renderCoverage(document, container, payload, options);
+    options = options || {};
+    const uiState = options.state || (options.state = {});
+    uiState.coverage = uiState.coverage || {};
+    uiState.history = uiState.history || {};
+    renderCoverage(document, container, payload, {
+      loadCoverage: options.loadCoverage,
+      state: uiState.coverage
+    });
     renderFollowUps(document, container, payload);
     const unavailable = payload && Array.isArray(payload.unavailable_evidence)
       ? payload.unavailable_evidence : [];
@@ -279,6 +539,10 @@
         unavailable.map(function (item) { return text(item.source, "unknown") + ": " + text(item.reason, "Unavailable"); }).join(" · "),
         "audit-status-line audit-unavailable");
     }
+    renderHistory(document, container, payload, {
+      loadHistory: options.loadHistory,
+      state: uiState.history
+    });
   }
 
   function bindRunControl(options) {
@@ -320,5 +584,5 @@
     return { submit: submit };
   }
 
-  return { render: render, renderIncident: renderIncident, bindRunControl: bindRunControl };
+  return { render: render, renderIncident: renderIncident, renderHistoryRow: renderHistoryRow, bindRunControl: bindRunControl };
 });
