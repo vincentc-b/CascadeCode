@@ -2,7 +2,7 @@
 id: feat_044_003
 title: Present actionable health coverage and retained recovery history
 tier: feature
-status: active
+status: completed
 parent: epic_044
 children:
 - task_044_003_001
