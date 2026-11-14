@@ -85,3 +85,13 @@ Recovery checks (2026-11-14):
 
 These checks establish local merge compatibility, not remote merge approval,
 post-deployment acceptance, or resolution of retained historical audit timeouts.
+
+The first canonical publication was withheld by repository checks. Reproducing
+its selected suites exposed two pre-existing test assumptions: the missing-review
+fixture used a fixed future date that now falls within seven days of canonical
+writes, and descendant termination was asserted before asynchronous SIGKILL
+teardown completed. The fixture now selects a date eight days after its persisted
+update date. The process test allows at most one second for disappearance or a
+zombie state and still fails for a surviving child. All three affected parameterized
+cases passed in 2.46s after these test-only corrections; product behavior and
+publication gates are unchanged.

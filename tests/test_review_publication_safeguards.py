@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -91,7 +92,18 @@ def test_timeout_stops_validation_descendants(tmp_path):
         run_review_validation((sys.executable, '-c', script), cwd=tmp_path, timeout=1)
     pid = int((tmp_path / 'child.pid').read_text())
     stat = Path(f'/proc/{pid}/stat')
-    assert not stat.exists() or stat.read_text().split(') ')[1].split()[0] == 'Z'
+    # SIGKILL delivery and descendant teardown can lag the reaped group leader.
+    # Still fail if a child survives the bounded scheduler allowance.
+    deadline = time.monotonic() + 1
+    while True:
+        try:
+            state = stat.read_text().split(') ')[1].split()[0]
+        except FileNotFoundError:
+            break
+        if state == 'Z':
+            break
+        assert time.monotonic() < deadline, f'validation descendant still {state}'
+        time.sleep(0.01)
 
 
 def test_validation_output_is_bounded(tmp_path):
