@@ -55,15 +55,6 @@ detail allowance; they retain a reference and selected identity/state fields,
 not evidence objects, provider prompts, credentials, arbitrary result payloads,
 or hidden reasoning.
 
-`REQ-WATCHDOG-005`: Each immutable manifest publishes section row totals and a
-bounded coverage aggregate so a consumer can report completeness without
-opening every page. `DEC-WATCHDOG-005`: Coverage counts are grouped by
-verification status and by at most 64 most-common reason strings; the remaining
-reason count is explicit in `other_reasons`. Status and reason totals must each
-equal the coverage section row total. Section page/row totals must also agree
-with the 100-row page ceiling. A pass with a legacy schema-2 manifest lacking
-these fields republishes even when its projected rows are otherwise unchanged.
-
 A modern source row qualifies as a current candidate only when its `work_id` is typed and
 unambiguous (including agreement with nested `work.work_id`), its generation is
 a complete SHA-256 incident identity, its failure class is nonempty, and its
@@ -142,6 +133,24 @@ History retains prior source attempts and legacy provenance across passes.
 Completed passes also carry forward pending coverage when a candidate was not
 reassessed. The manifest includes source revision and failure markers. The
 producer checks them again before writing and aborts if it detects a change.
+
+`REQ-WATCHDOG-005`: The immutable schema-2 manifest carries bounded aggregate
+verification counts by status and reason, section row/page counts, observation
+and freshness times, interval, and product/tracking repository identities. These
+counts are produced with the epoch so consumers can report coverage without
+scanning all pages.
+
+`DEC-WATCHDOG-005`: Coverage counts are grouped by verification status and by
+at most 64 most-common reason strings; the remaining reason count is explicit
+in `other_reasons`. Status and reason totals each equal the coverage row total,
+and section page/row totals agree with the 100-row page ceiling. A pass with a
+legacy schema-2 manifest lacking these fields republishes even when its rows
+are unchanged. The full-epoch validator checks every page before declaring an
+epoch complete. The bounded dashboard reader is owned by
+[War Room](../war_room/DESIGN.md#bounded-health-audit-projection-reads) and
+validates the pinned header and only the requested pages. The shared
+[package boundary](../DESIGN.md#health-audit-read-boundary) keeps source
+classification with the producer.
 
 Each page contains at most 100 rows and 256 KiB of serialized JSON. The
 producer writes and syncs every page and its manifest under a new epoch,

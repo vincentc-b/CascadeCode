@@ -125,7 +125,7 @@
     });
     const incidents = payload && Array.isArray(payload.incidents) ? payload.incidents : [];
     const heading = document.createElement("h3");
-    heading.textContent = "Active incidents (" + incidents.length + ")";
+    heading.textContent = "VERIFIED current incidents (" + incidents.length + ")";
     container.appendChild(heading);
     if (incidents.length) {
       const list = document.createElement("ul");
@@ -133,7 +133,13 @@
       incidents.forEach(function (incident) { list.appendChild(renderIncident(document, incident)); });
       container.appendChild(list);
     } else {
-      appendLine(document, container, "Incidents", "None active");
+      const snapshotReady = payload && payload.state === "ready";
+      const current = payload && payload.current;
+      const statuses = payload && payload.coverage && payload.coverage.by_status || {};
+      const incomplete = !snapshotReady || (current && current.complete === false) ||
+        (statuses.pending || 0) + (statuses.stale || 0) + (statuses.unverifiable || 0) > 0;
+      appendLine(document, container, "Incidents",
+        "No VERIFIED current incidents" + (incomplete ? " · coverage incomplete" : ""));
     }
     const unavailable = payload && Array.isArray(payload.unavailable_evidence)
       ? payload.unavailable_evidence : [];

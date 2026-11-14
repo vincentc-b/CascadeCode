@@ -1,0 +1,28 @@
+{
+  "command": "python tests/war_room/benchmark_audit_get.py",
+  "environment": {
+    "platform": "Linux-6.8.0-1021-aws-x86_64-with-glibc2.35",
+    "processor": "x86_64",
+    "python": "3.12.8",
+    "transport": "loopback HTTP/1.1, one request per connection"
+  },
+  "fixture": {
+    "attempts": 10000,
+    "incident_rows": 100,
+    "owners": 17,
+    "source_bytes": 922913
+  },
+  "limitations": [
+    "Local warm-cache measurement; not a cross-platform latency guarantee.",
+    "Recorded evidence only; no flaky latency threshold is asserted."
+  ],
+  "measured_at": "2026-11-14T03:22:42.170803+00:00",
+  "measurement": {
+    "max_ms": 24.161,
+    "median_ms": 22.411,
+    "min_ms": 18.118,
+    "p95_ms": 23.941,
+    "response_bytes": 76034,
+    "warm_samples": 30
+  }
+}

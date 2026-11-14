@@ -50,7 +50,7 @@ ui.render(container, {
 
 const visible = container.textContent;
 for (const expected of [
-  "Last run", "Next due", "Duration", "Active incidents (1)", "feat_001",
+  "Last run", "Next due", "Duration", "VERIFIED current incidents (1)", "feat_001",
   "Owner: feature_team:feat_001", "Evidence: Unavailable",
   "Request: acknowledged", "Acknowledgement: worker=health-audit-recovery",
   "Result: Pending", "Retry / cooldown", "Resume action: resume_planning_owner",
@@ -122,3 +122,19 @@ ui.render(container, {agent_schedule: {admission: {reason: "no_live_work"}}});
 assert.ok(container.textContent.includes("Idle: no active or blocked work"));
 ui.render(container, {agent_schedule: {admission: {reason: "grace_period"}}});
 assert.ok(container.textContent.includes("20 minutes old"));
+
+ui.render(container, {
+  state: "ready",
+  current: {complete: true},
+  coverage: {by_status: {verified: 2}},
+  incidents: []
+});
+assert.ok(container.textContent.includes("No VERIFIED current incidents"));
+assert.ok(!container.textContent.includes("coverage incomplete"));
+ui.render(container, {
+  state: "ready",
+  current: {complete: true},
+  coverage: {by_status: {pending: 1}},
+  incidents: []
+});
+assert.ok(container.textContent.includes("coverage incomplete"));
