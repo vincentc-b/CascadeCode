@@ -80,6 +80,10 @@ def test_swe_prompt_includes_playbook_text_and_paths(tmp_path: Path) -> None:
             "text": "# Fixture playbook\nFIXTURE_SW_DEV_SIMPLICITY\n",
         },
     ]
+    playbooks.append({
+        "path": "skills/design/SKILL.md",
+        "text": "FIXTURE_DESIGN_IMPLEMENTATION_COVERAGE",
+    })
     apply_skill_playbooks(task_id, playbooks, root=root)
 
     captured: list[str] = []
@@ -108,6 +112,7 @@ def test_swe_prompt_includes_playbook_text_and_paths(tmp_path: Path) -> None:
     assert "--- skills/roles/frugal_engineering/SKILL.md ---" in prompt
     assert "FIXTURE_FRUGAL_PHILOSOPHY" in prompt
     assert "FIXTURE_SW_DEV_SIMPLICITY" in prompt
+    assert "FIXTURE_DESIGN_IMPLEMENTATION_COVERAGE" in prompt
     assert "implement feature" in prompt
     assert "Execute the Task below now" in prompt
     assert "MUST call Cascade's swe_run_tests tool" in prompt

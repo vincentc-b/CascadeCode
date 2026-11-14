@@ -126,3 +126,84 @@ unlisted children, parent mismatches, and trunk pointer Epics do not qualify.
 This is only a no-op for historical replay: no completion event or lifecycle
 transition is synthesized. Target-copy repair and stacked-gap checks still run
 first. The source board is acquired lazily once per reconciliation call.
+
+## Architecture navigation
+
+The authoritative [C4 source](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl)
+defines landscape, context, containers, supervisor components, and a focused
+`cascade-team-components` view. Static C4 describes boundaries; the owning
+designs below contain implementation and behavior.
+
+| Component | Implementation design |
+|---|---|
+| Tier teams | [Epic](epic/DESIGN.md#implementation-and-navigation), [Feature](feature/DESIGN.md#implementation-and-navigation), [Task](task/DESIGN.md#implementation-and-navigation) |
+| Agent runtime | [Agent design](agent/DESIGN.md) |
+| Lifecycle observation | [Watchdog design](watchdog/DESIGN.md) |
+| Completion and merge gates | [Boss design](boss/DESIGN.md) |
+| Canonical work state | [Board design](board/DESIGN.md) |
+| Repository and architecture services | [Workspace design](workspace/DESIGN.md) |
+| Operator HTTP and diagrams | [War Room design](war_room/DESIGN.md) |
+| Collaboration | [Comments](comments/DESIGN.md), [Amendments](amendments/DESIGN.md) |
+
+## Team execution
+
+A team is a persisted graph plus scoped tools, role configuration, and an owned
+work context. It is not a collection of permanently running independent agents.
+Epic and Feature graphs each sequence two role turns; Task graphs run one SWE
+turn. Repeated invocations continue a work item's checkpointed state.
+
+```mermaid
+flowchart TD
+    Input["Human message or durable queue event"] --> Kickoff["workspace/kickoff.py"]
+    Watchdog["watchdog: eligible work and recovery"] --> Kickoff
+    Kickoff --> Epic["epic/graph.py: ingest → manager → architect"]
+    Kickoff --> Feature["feature/graph.py: ingest → lead → architect"]
+    Kickoff --> Task["task/graph.py: ingest → SWE"]
+    Epic --> Runtime["agent/graph_turn.py and task SWE runtime"]
+    Feature --> Runtime
+    Task --> Runtime
+    Skills["watchdog/role_skills.py: role playbooks"] --> Runtime
+    Runtime --> Tools["Scoped registry and tool host"]
+    Runtime --> Provider["Configured model provider"]
+    Tools --> Evidence["Board, worktree, review and action evidence"]
+    Epic <--> State["Per-work SQLite checkpoints"]
+    Feature <--> State
+    Task <--> State
+    Evidence --> Gates["Review, validation and integration gates"]
+    Gates --> Next["Subsequent eligible work or completion"]
+```
+
+The graph's END is an invocation boundary. It does not replace lifecycle gates.
+Work creation tools establish the Epic → Feature → Task hierarchy; parent roles
+coordinate children through canonical artifacts and events, rather than calling
+a child graph as a nested function.
+
+```mermaid
+sequenceDiagram
+    participant Q as Durable queue / operator
+    participant K as Kickoff and supervision
+    participant G as Owning team graph
+    participant P as Provider and scoped tools
+    participant C as Checkpoint / action evidence
+    Q->>K: Work-scoped event
+    K->>G: Admit bounded invocation
+    G->>C: Load checkpoint and queue cursor
+    G->>P: Execute configured role turn
+    alt Successful role/tool result
+        P-->>G: Result and evidence
+        G->>C: Save state
+        G-->>K: Invocation ends
+    else Interrupted or failed operation
+        P-->>K: Failure or interruption
+        K->>C: Preserve recovery evidence
+        Q->>K: Recovery or later event
+        K->>C: Inspect checkpoint, receipts and worktree
+        K->>G: Resume eligible work
+    end
+```
+
+Recovery must distinguish a completed external action from a failed invocation;
+blindly repeating a Git publication or lifecycle transition is unsafe.
+[Team supervision](team_supervision.py), [branch action recovery](team_branch_recovery.py),
+and [review recovery](team_review_recovery.py) own the shared recovery boundaries.
+Per-tier designs link the graph, state, checkpoint, registry and wiring modules.

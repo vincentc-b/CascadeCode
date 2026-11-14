@@ -2245,11 +2245,16 @@
     var sideName = options.sideName || "view";
     function drillChoices(target) {
       var order = ["systemLandscapeViews", "systemContextViews", "containerViews", "componentViews"];
-      return sortedDrillChoices(target).filter(function (choice) {
+      var choices = sortedDrillChoices(target).filter(function (choice) {
         if (!options.view) return true;
         return choice.view_key !== options.view.key &&
           (order.indexOf(choice.level) > order.indexOf(options.view.level));
       });
+      if (!options.view) return choices;
+      var nearest = Math.min.apply(null, choices.map(function (choice) {
+        return order.indexOf(choice.level);
+      }));
+      return choices.filter(function (choice) { return order.indexOf(choice.level) === nearest; });
     }
     var destroyed = false;
     var svg = null;
@@ -2367,6 +2372,7 @@
         hit.setAttribute("aria-pressed", "false");
       }
       function choose(event) {
+        if (event) event.stopPropagation();
         if (event && event.type === "click" && event.detail > 1) return;
         if (drillChoices(target).length && typeof options.onDrill === "function") emitDrill(target);
         else emitSelection(target, "svg");
@@ -2409,6 +2415,7 @@
     }
 
     function install(raw) {
+      if (destroyed) return;
       var Parser = options.DOMParser ||
         (doc.defaultView && doc.defaultView.DOMParser) ||
         (typeof DOMParser !== "undefined" ? DOMParser : null);
@@ -2553,6 +2560,14 @@
         announce("Diagram interaction is unavailable; inspect the source diff below.", true);
         return api;
       }),
+      selectTarget: function (kind, semanticId) {
+        Object.keys(bound).forEach(function (key) {
+          var selected = key === targetKey(kind, semanticId);
+          bound[key].classList.toggle("semantic-c4-target-selected", selected);
+          bound[key].classList.toggle("paired-c4-target-selected", selected);
+          bound[key].setAttribute("aria-pressed", String(selected));
+        });
+      },
       fit: fit,
       zoomIn: function () { zoom(1.2); },
       zoomOut: function () { zoom(1 / 1.2); },

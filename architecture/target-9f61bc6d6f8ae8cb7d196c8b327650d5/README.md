@@ -82,3 +82,15 @@ records the real pinned Structurizr validation/export/render outputs under
 receipt-validator outcomes, and historical missing receipts. A successful
 render is evidence about the authored model bytes; it does not clear pending
 owner review, missing receipts, or material provenance gaps.
+
+## Reading the implementation
+
+Start with `cascade-landscape`, `cascade-context`, and `cascade-containers`.
+The supervisor overview is `cascade-supervisor-components`; choose
+`cascade-team-components` in the Architecture view selector for the team breakdown.
+[Package navigation and team execution](../../cascade/DESIGN.md#architecture-navigation)
+link the code-level structure, lifecycle, persistence, and recovery diagrams.
+[Epic](../../cascade/epic/DESIGN.md), [Feature](../../cascade/feature/DESIGN.md),
+and [Task](../../cascade/task/DESIGN.md) contain source-linked implementation views.
+These Mermaid diagrams complement static C4; they are not dynamic Structurizr
+views or separately deployed services.

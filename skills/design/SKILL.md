@@ -1,6 +1,6 @@
 ---
 name: design
-description: Create or reconcile hierarchical DESIGN.md files for code directories, preserving one owner for each requirement and decision.
+description: Author and review C4 architecture and implementation diagrams in hierarchical DESIGN.md files, with source links, lifecycle coverage, and one owner per requirement and decision.
 ---
 
 # Design documentation
@@ -53,3 +53,38 @@ Before finishing, check that:
 - every meaningful directory owns a design and every skipped directory has a clear covering parent;
 - architecture links and verification evidence exist and describe current, inspectable artifacts;
 - the document contains no task plan, speculative implementation detail, or stale generated inventory.
+
+## Implementation depth and team responsibilities
+
+A reader must be able to follow a significant subsystem from the system/context
+view through its container/component boundary to its implementation and lifecycle.
+A box named "teams", "runtime", or "service" is not sufficient detail for a
+subsystem with distinct roles, persistent state, or recovery behavior.
+
+For each affected significant subsystem:
+- Show its collaborating implementation modules or types in the owning design,
+  with checkout-relative links to real files and entry-point symbols.
+- Diagram the principal execution sequence or state transitions. Explain inputs,
+  outputs, persistent state, restart/resume behavior, and important failure gates.
+- Link the parent C4 view to the owning design and link the design back to the
+  model and relevant view keys. Use focused views to keep diagrams readable.
+- Keep stable semantic IDs and the source contract in sync with C4 edits.
+  Use only view types supported by the repository validator. Code-level and
+  behavioral Mermaid diagrams in DESIGN.md complement static C4; do not pretend
+  implementation modules are separately deployed containers.
+- Do not inventory every class or require diagrams for trivial helpers. An
+  unchanged model is acceptable only when existing views still explain the
+  changed behavior; record the concrete reason in closeout.
+
+Planning managers and architects establish boundaries, diagrams, ownership and
+implementation coverage before plan sign-off. SWE updates diagrams and links
+against the implemented code, including deviations from the plan. Reviewers and
+Boss check coverage and evidence before recommending completion; they must not
+claim completeness from the mere presence of a model or a successful render.
+Unresolved material gaps must be explicit and routed to the owning team.
+
+Verification includes source-contract validation, supported local rendering when
+available, resolving source/design links, and tracing one normal and one
+failure/resume scenario against code. Record actual checks and limitations in the
+work record. Changes must not silently rewrite accepted snapshots or bypass the
+repository's revision-pinned architecture publication workflow.

@@ -1025,3 +1025,12 @@ requests without blindly replaying Git. The detailed requirements, timeout setti
 legacy-owner limitations and evidence rules are maintained in
 [`cascade/DESIGN.md`](cascade/DESIGN.md#review-publication-safeguards), with durable
 attempt ownership in [`cascade/task/DESIGN.md`](cascade/task/DESIGN.md).
+
+
+## Implementation diagrams
+
+Follow [package architecture navigation](cascade/DESIGN.md#architecture-navigation)
+for subsystem designs and the [team execution diagrams](cascade/DESIGN.md#team-execution).
+The C4 `cascade-team-components` view distinguishes Epic, Feature, and Task graphs;
+their owning designs link the implementation modules and explain persistence and
+recovery.

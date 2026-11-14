@@ -205,6 +205,7 @@ _ROLE_SKILL_MARKERS = {
 }
 
 _ROLE_SKILL_EXTRA_FIXTURES = {
+    "skills/design/SKILL.md": "FIXTURE_DESIGN_IMPLEMENTATION_COVERAGE",
     "skills/roles/software_developer/SKILL.md": "FIXTURE_SW_DEV_SIMPLICITY",
     "skills/roles/code_reviewer/SKILL.md": "FIXTURE_CODE_REVIEW_SELF_CHECK",
 }

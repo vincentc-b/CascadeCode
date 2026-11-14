@@ -40,11 +40,13 @@ _LOCKED_DEFAULTS: dict[RoleId, list[str]] = {
     "boss": [
         "skills/roles/frugal_engineering/SKILL.md",
         "skills/roles/engineering_manager/SKILL.md",
+        "skills/design/SKILL.md",
     ],
     "swe": [
         "skills/roles/frugal_engineering/SKILL.md",
         "skills/roles/software_developer/SKILL.md",
         "skills/roles/code_reviewer/SKILL.md",
+        "skills/design/SKILL.md",
     ],
 }
 
@@ -98,6 +100,7 @@ def test_resolve_effective_skills_swe_unions_and_dedupes_defaults_first(
         "skills/roles/frugal_engineering/SKILL.md",
         "skills/roles/software_developer/SKILL.md",
         "skills/roles/code_reviewer/SKILL.md",
+        "skills/design/SKILL.md",
         "skills/task/extra/SKILL.md",
     ]
     assert resolved.count(duplicate) == 1
@@ -191,6 +194,7 @@ def test_load_role_skills_context_swe_includes_task_skills(tmp_path: Path) -> No
         "skills/roles/frugal_engineering/SKILL.md",
         "skills/roles/software_developer/SKILL.md",
         "skills/roles/code_reviewer/SKILL.md",
+        "skills/design/SKILL.md",
         "skills/custom/SKILL.md",
     ]
     assert playbooks[-1]["text"] == "custom playbook\n"

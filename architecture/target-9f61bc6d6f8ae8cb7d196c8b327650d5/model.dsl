@@ -35,6 +35,21 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.teams"
             }
         }
+        epic_team = component "Epic team" "Persistent manager and architect turns for strategic planning." "cascade.epic.graph" {
+            properties {
+                "cascade.semanticId" "element.component.epic-team"
+            }
+        }
+        feature_team = component "Feature team" "Persistent lead and architect turns for Task planning and integration." "cascade.feature.graph" {
+            properties {
+                "cascade.semanticId" "element.component.feature-team"
+            }
+        }
+        task_team = component "Task team" "Bounded SWE turns with scoped tools and supervised delivery." "cascade.task.graph" {
+            properties {
+                "cascade.semanticId" "element.component.task-team"
+            }
+        }
         watchdog_component = component "Watchdog" "Admits ready work and coordinates bounded recovery." "cascade.watchdog" {
             properties {
                 "cascade.semanticId" "element.component.watchdog"
@@ -156,5 +171,95 @@ boss_reads_board = boss_component -> board_component "Computes gates and rollups
 teams_use_workspace = team_component -> workspace_component "Use worktrees and architecture contracts" {
     properties {
         "cascade.semanticId" "relationship.teams-use-workspace"
+    }
+}
+
+teams_route_epic = team_component -> epic_team "Routes scoped work to" {
+    properties {
+        "cascade.semanticId" "relationship.teams-route-epic"
+    }
+}
+
+epic_runs_agent = epic_team -> agent_component "Executes role turns through" {
+    properties {
+        "cascade.semanticId" "relationship.epic-runs-agent"
+    }
+}
+
+epic_persists = epic_team -> repository "Persists checkpoints and work evidence in" {
+    properties {
+        "cascade.semanticId" "relationship.epic-persists"
+    }
+}
+
+teams_route_feature = team_component -> feature_team "Routes scoped work to" {
+    properties {
+        "cascade.semanticId" "relationship.teams-route-feature"
+    }
+}
+
+feature_runs_agent = feature_team -> agent_component "Executes role turns through" {
+    properties {
+        "cascade.semanticId" "relationship.feature-runs-agent"
+    }
+}
+
+feature_persists = feature_team -> repository "Persists checkpoints and work evidence in" {
+    properties {
+        "cascade.semanticId" "relationship.feature-persists"
+    }
+}
+
+teams_route_task = team_component -> task_team "Routes scoped work to" {
+    properties {
+        "cascade.semanticId" "relationship.teams-route-task"
+    }
+}
+
+task_runs_agent = task_team -> agent_component "Executes role turns through" {
+    properties {
+        "cascade.semanticId" "relationship.task-runs-agent"
+    }
+}
+
+task_persists = task_team -> repository "Persists checkpoints and work evidence in" {
+    properties {
+        "cascade.semanticId" "relationship.task-persists"
+    }
+}
+
+epic_coordinates_feature = epic_team -> feature_team "Plans and coordinates" {
+    properties {
+        "cascade.semanticId" "relationship.epic-coordinates-feature"
+    }
+}
+
+feature_coordinates_task = feature_team -> task_team "Creates and coordinates" {
+    properties {
+        "cascade.semanticId" "relationship.feature-coordinates-task"
+    }
+}
+
+operator_uses_cascade = operator -> cascade "Plans, reviews and approves delivery" {
+    properties {
+        "cascade.semanticId" "relationship.operator-uses-cascade"
+    }
+}
+
+cascade_uses_provider = cascade -> model_provider "Executes bounded role turns" {
+    properties {
+        "cascade.semanticId" "relationship.cascade-uses-provider"
+    }
+}
+
+cascade_uses_forge = cascade -> forge "Publishes and observes code reviews" {
+    properties {
+        "cascade.semanticId" "relationship.cascade-uses-forge"
+    }
+}
+
+cascade_uses_renderer = cascade -> structurizr "Validates and renders local architecture" {
+    properties {
+        "cascade.semanticId" "relationship.cascade-uses-renderer"
     }
 }

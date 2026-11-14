@@ -110,6 +110,7 @@ def test_load_role_skills_context_empty_task_skills_loads_swe_defaults(
         "skills/roles/frugal_engineering/SKILL.md",
         "skills/roles/software_developer/SKILL.md",
         "skills/roles/code_reviewer/SKILL.md",
+        "skills/design/SKILL.md",
     ]
 
 

@@ -6,6 +6,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
@@ -195,15 +196,29 @@ def validate_hit_target_manifest(
                 raise C4BindingError(f"view {view_key!r} target identity is stale")
             expected[renderer_id] = (kind, export_id)
             semantics.add(semantic_id)
-        tree = ET.parse(svg_path)
-        before = ET.tostring(tree.getroot(), encoding="utf-8")
-        _sanitize_svg(tree)
-        if ET.tostring(tree.getroot(), encoding="utf-8") != before:
-            raise C4BindingError(f"view {view_key!r} SVG is not sanitized")
-        if _svg_bindings(tree, view_key) != expected:
-            raise C4BindingError(f"view {view_key!r} SVG bindings are stale")
+        _validate_svg_bytes(svg_path.read_bytes(), view_key, tuple(sorted(expected.items())))
         svg_paths.append(svg_path)
     return tuple(svg_paths)
+
+
+
+@lru_cache(maxsize=32)
+def _validate_svg_bytes(
+    raw: bytes, view_key: str, expected: tuple[tuple[str, tuple[str, str]], ...],
+) -> None:
+    """Reuse successful validation only for identical bytes and bindings.
+
+    Read files on each request so edits, deletion and path confinement remain
+    checked; avoid repeated XML parsing and serialization of unchanged exports.
+    Exceptions are deliberately not cached.
+    """
+    tree = ET.ElementTree(ET.fromstring(raw))
+    before = ET.tostring(tree.getroot(), encoding="utf-8")
+    _sanitize_svg(tree)
+    if ET.tostring(tree.getroot(), encoding="utf-8") != before:
+        raise C4BindingError(f"view {view_key!r} SVG is not sanitized")
+    if _svg_bindings(tree, view_key) != dict(expected):
+        raise C4BindingError(f"view {view_key!r} SVG bindings are stale")
 
 
 def _confined_artifact_path(root: Path, value: object) -> Path:

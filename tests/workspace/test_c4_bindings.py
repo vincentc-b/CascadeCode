@@ -166,3 +166,19 @@ def _write_inputs(tmp_path: Path) -> tuple[Path, Path]:
         encoding="utf-8",
     )
     return bindings, svg
+
+
+def test_svg_validation_reuses_only_identical_content() -> None:
+    from cascade.workspace.c4_bindings import _validate_svg_bytes
+
+    _validate_svg_bytes.cache_clear()
+    raw = b'<svg xmlns="http://www.w3.org/2000/svg" />'
+    _validate_svg_bytes(raw, "context", ())
+    _validate_svg_bytes(raw, "context", ())
+    assert _validate_svg_bytes.cache_info().hits == 1
+    with pytest.raises(C4BindingError):
+        _validate_svg_bytes(
+            b'<svg xmlns="http://www.w3.org/2000/svg"><script>bad()</script></svg>',
+            "context", (),
+        )
+    assert _validate_svg_bytes.cache_info().currsize == 1

@@ -373,6 +373,12 @@
         el.documentPreviewBody.replaceChildren();
         if (html != null) {
           el.documentPreviewBody.innerHTML = html;
+          if (viewerApi.loadMermaidScript && viewerApi.runMermaidDiagrams &&
+              el.documentPreviewBody.querySelector(".mermaid")) {
+            await viewerApi.loadMermaidScript();
+            if (requestId !== state.resourceRequest) return;
+            await viewerApi.runMermaidDiagrams(el.documentPreviewBody);
+          }
         } else {
           var pre = doc.createElement("pre");
           pre.textContent = body;
@@ -899,7 +905,16 @@
           pushNavigation();
           state.selection = { kind: detail.kind, semantic_id: detail.semantic_id };
           renderViewOptions();
-          renderViewer();
+          if (state.viewer && state.viewer.selectTarget) {
+            state.viewer.selectTarget(detail.kind, detail.semantic_id);
+            var target = targetFor(detail.semantic_id);
+            renderTargetDetail(target);
+            el.selectionStatus.textContent = detail.kind + ": " +
+              (target && target.label || detail.semantic_id);
+            loadDocumentationContext();
+          } else {
+            renderViewer();
+          }
           writeLink("pushState");
           dispatch("cascade:architecture-selection", {
             context: state.payload.context,

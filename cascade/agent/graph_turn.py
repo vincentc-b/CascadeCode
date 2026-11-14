@@ -484,7 +484,9 @@ def _append_planning_tool_directive(
         parts.append(_scope_line(role, scope_id))
     parts.append(_PLANNING_TOOL_DIRECTIVE)
     parts.append(
-        "Before signing off or publishing a plan, review its DESIGN.md edits. "
+        "Before signing off or publishing a plan, review its DESIGN.md edits and follow "
+        "the design skill implementation-depth contract: source-linked structure, "
+        "execution flow, persistence and recovery, and navigable C4/design links. "
         "Describe current design as matter of fact: no epic/feature/task IDs, "
         "delivery-history references, previous requirements, or implementation chronology. "
         "Keep those in work records. Rewrite violations before sign-off or publication. "

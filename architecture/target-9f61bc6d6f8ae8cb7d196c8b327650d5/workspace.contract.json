@@ -15,7 +15,10 @@
     {"dsl_identifier": "forge", "semantic_id": "element.system.forge", "fragment": "model.dsl"},
     {"dsl_identifier": "model_provider", "semantic_id": "element.system.model-provider", "fragment": "model.dsl"},
     {"dsl_identifier": "structurizr", "semantic_id": "element.system.structurizr", "fragment": "model.dsl"},
-    {"dsl_identifier": "structurizr_cli", "semantic_id": "element.container.structurizr-cli", "fragment": "model.dsl"}
+    {"dsl_identifier": "structurizr_cli", "semantic_id": "element.container.structurizr-cli", "fragment": "model.dsl"},
+    {"dsl_identifier": "epic_team", "semantic_id": "element.component.epic-team", "fragment": "model.dsl"},
+    {"dsl_identifier": "feature_team", "semantic_id": "element.component.feature-team", "fragment": "model.dsl"},
+    {"dsl_identifier": "task_team", "semantic_id": "element.component.task-team", "fragment": "model.dsl"}
   ],
   "fragments": [
     {"path": "model.dsl", "owner": "task_034_007_002"},
@@ -35,7 +38,22 @@
     {"dsl_identifier": "teams_use_agent", "semantic_id": "relationship.teams-use-agent", "source": "team_component", "destination": "agent_component", "fragment": "model.dsl"},
     {"dsl_identifier": "teams_use_collaboration", "semantic_id": "relationship.teams-use-collaboration", "source": "team_component", "destination": "collaboration_component", "fragment": "model.dsl"},
     {"dsl_identifier": "boss_reads_board", "semantic_id": "relationship.boss-reads-board", "source": "boss_component", "destination": "board_component", "fragment": "model.dsl"},
-    {"dsl_identifier": "teams_use_workspace", "semantic_id": "relationship.teams-use-workspace", "source": "team_component", "destination": "workspace_component", "fragment": "model.dsl"}
+    {"dsl_identifier": "teams_use_workspace", "semantic_id": "relationship.teams-use-workspace", "source": "team_component", "destination": "workspace_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "teams_route_epic", "semantic_id": "relationship.teams-route-epic", "source": "team_component", "destination": "epic_team", "fragment": "model.dsl"},
+    {"dsl_identifier": "epic_runs_agent", "semantic_id": "relationship.epic-runs-agent", "source": "epic_team", "destination": "agent_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "epic_persists", "semantic_id": "relationship.epic-persists", "source": "epic_team", "destination": "repository", "fragment": "model.dsl"},
+    {"dsl_identifier": "teams_route_feature", "semantic_id": "relationship.teams-route-feature", "source": "team_component", "destination": "feature_team", "fragment": "model.dsl"},
+    {"dsl_identifier": "feature_runs_agent", "semantic_id": "relationship.feature-runs-agent", "source": "feature_team", "destination": "agent_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "feature_persists", "semantic_id": "relationship.feature-persists", "source": "feature_team", "destination": "repository", "fragment": "model.dsl"},
+    {"dsl_identifier": "teams_route_task", "semantic_id": "relationship.teams-route-task", "source": "team_component", "destination": "task_team", "fragment": "model.dsl"},
+    {"dsl_identifier": "task_runs_agent", "semantic_id": "relationship.task-runs-agent", "source": "task_team", "destination": "agent_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "task_persists", "semantic_id": "relationship.task-persists", "source": "task_team", "destination": "repository", "fragment": "model.dsl"},
+    {"dsl_identifier": "epic_coordinates_feature", "semantic_id": "relationship.epic-coordinates-feature", "source": "epic_team", "destination": "feature_team", "fragment": "model.dsl"},
+    {"dsl_identifier": "feature_coordinates_task", "semantic_id": "relationship.feature-coordinates-task", "source": "feature_team", "destination": "task_team", "fragment": "model.dsl"},
+    {"dsl_identifier": "operator_uses_cascade", "semantic_id": "relationship.operator-uses-cascade", "source": "operator", "destination": "cascade", "fragment": "model.dsl"},
+    {"dsl_identifier": "cascade_uses_provider", "semantic_id": "relationship.cascade-uses-provider", "source": "cascade", "destination": "model_provider", "fragment": "model.dsl"},
+    {"dsl_identifier": "cascade_uses_forge", "semantic_id": "relationship.cascade-uses-forge", "source": "cascade", "destination": "forge", "fragment": "model.dsl"},
+    {"dsl_identifier": "cascade_uses_renderer", "semantic_id": "relationship.cascade-uses-renderer", "source": "cascade", "destination": "structurizr", "fragment": "model.dsl"}
   ],
   "renames": [],
   "version": 1,
@@ -43,7 +61,8 @@
     {"key": "cascade-landscape", "fragment": "views.dsl"},
     {"key": "cascade-context", "fragment": "views.dsl"},
     {"key": "cascade-containers", "fragment": "views.dsl"},
-    {"key": "cascade-supervisor-components", "fragment": "views.dsl"}
+    {"key": "cascade-supervisor-components", "fragment": "views.dsl"},
+    {"key": "cascade-team-components", "fragment": "views.dsl"}
   ],
   "workspace": {"source": "workspace.dsl", "owner": "task_034_007_002"}
 }

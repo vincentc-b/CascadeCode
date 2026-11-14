@@ -122,6 +122,7 @@ def test_boss_prompt_includes_role_skills_and_paths(
     prompt = captured["prompt"]
     assert "FIXTURE_FRUGAL_PHILOSOPHY" in prompt
     assert "FIXTURE_EM_PROCESS_FRUGALITY" in prompt
+    assert "FIXTURE_DESIGN_IMPLEMENTATION_COVERAGE" in prompt
     assert "skills/roles/engineering_manager/SKILL.md" in prompt
     assert "Role skill paths:" in prompt
 

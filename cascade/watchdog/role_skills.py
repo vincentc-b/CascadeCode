@@ -21,8 +21,8 @@ RoleSkillDefaults: Final[dict[RoleId, list[str]]] = {
     "epic_architect": [_FRUGAL, _DESIGN],
     "feature_lead": [_FRUGAL, _PRODUCT, _DESIGN],
     "feature_architect": [_FRUGAL, _DESIGN],
-    "boss": [_FRUGAL, _ENG_MGR],
-    "swe": [_FRUGAL, _SW_DEV, _CODE_REV],
+    "boss": [_FRUGAL, _ENG_MGR, _DESIGN],
+    "swe": [_FRUGAL, _SW_DEV, _CODE_REV, _DESIGN],
 }
 
 

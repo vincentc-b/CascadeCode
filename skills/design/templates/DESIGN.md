@@ -37,7 +37,7 @@ Describe public and cross-directory inputs, outputs, formats, errors, compatibil
 
 ## Key Flows
 
-Describe only flows needed to understand behavior across components. Prefer a small Mermaid sequence, flow, or state diagram when it is clearer than prose.
+Show the collaborating implementation modules/types with relative source links. Diagram the main execution flow and explain persistent state, failure gates, and restart/resume behavior. Keep trivial helpers out of the diagram.
 
 ## Architecture Links
 
