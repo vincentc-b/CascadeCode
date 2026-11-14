@@ -380,3 +380,25 @@ def _diff(
         state, current.artifact_ref if current else None, proposed.artifact_ref,
         "git:model-a..model-b", (), (), views, changed, "two affected views", None,
     )
+
+
+def test_code_view_scope_and_source_metadata_are_semantic() -> None:
+    from cascade.workspace.c4_review import _semantic_targets, _view_levels
+    from cascade.workspace.c4_bindings import C4BindingError
+    workspace = {
+        "model": {"softwareSystems": [{"id": "1", "properties": {"cascade.semanticId": "system"},
+            "containers": [{"id": "2", "properties": {"cascade.semanticId": "container"},
+                "components": [{"id": "3", "properties": {"cascade.semanticId": "component"}}]}]}],
+            "customElements": [{"id": "4", "name": "graph", "properties": {
+                "cascade.semanticId": "code.graph", "cascade.parent": "component",
+                "cascade.sourcePath": "cascade/epic/graph.py", "cascade.sourceSymbol": "ensure_epic_graph",
+            }}]},
+        "views": {"customViews": [{"key": "code", "properties": {"cascade.codeComponent": "component"}}]},
+    }
+    assert _view_levels(workspace, ("code",)) == {"code": "codeViews"}
+    target = _semantic_targets(workspace)["code.graph"]
+    assert target.parent == "component"
+    assert target.source_path == "cascade/epic/graph.py"
+    workspace["views"]["customViews"][0]["properties"]["cascade.codeComponent"] = "system"
+    with pytest.raises(C4BindingError):
+        _view_levels(workspace, ("code",))

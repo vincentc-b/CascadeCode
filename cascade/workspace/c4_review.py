@@ -50,6 +50,8 @@ class C4ReviewTarget:
     source: str | None = None
     destination: str | None = None
     drill_choices: tuple[dict[str, str], ...] = ()
+    source_path: str | None = None
+    source_symbol: str | None = None
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,8 @@ class _SemanticTarget:
     source: str | None = None
     destination: str | None = None
 
+    source_path: str | None = None
+    source_symbol: str | None = None
 
 _LEGEND = (
     {"state": "added", "meaning": "present only in proposed"},
@@ -588,6 +592,21 @@ def _semantic_targets(workspace: dict[str, object]) -> dict[str, _SemanticTarget
             )
         raw_label = row.get("name") if not relationship else row.get("description")
         label = raw_label.strip() if isinstance(raw_label, str) and raw_label.strip() else semantic_id
+        properties = row.get("properties", {})
+        code_parent = properties.get("cascade.parent")
+        source_path = properties.get("cascade.sourcePath")
+        source_symbol = properties.get("cascade.sourceSymbol")
+        if code_parent is not None:
+            if code_parent not in _component_semantics(workspace):
+                raise C4BindingError("code element names an unknown component parent")
+            parent = code_parent
+        if source_path is not None:
+            if (not isinstance(source_path, str) or not source_path
+                    or Path(source_path).is_absolute() or "\\" in source_path or ":" in source_path
+                    or any(part in {"", ".", ".."} for part in source_path.split("/"))):
+                raise C4BindingError("code source path must be confined and repository-relative")
+            if not isinstance(source_symbol, str) or not source_symbol.strip():
+                raise C4BindingError("code source path requires a symbol")
         result[semantic_id] = _SemanticTarget(
             "relationship" if relationship else "element",
             semantic_id,
@@ -595,6 +614,8 @@ def _semantic_targets(workspace: dict[str, object]) -> dict[str, _SemanticTarget
             parent,
             source,
             destination,
+            source_path,
+            source_symbol,
         )
     return result
 
@@ -673,6 +694,8 @@ def _review_targets(
             target.source,
             target.destination,
             choices,
+            target.source_path,
+            target.source_symbol,
         ))
     return tuple(result)
 
@@ -718,6 +741,16 @@ def _read_semantic_workspace(artifact: C4SemanticModelArtifact) -> dict[str, obj
     return value
 
 
+
+def _component_semantics(workspace: dict[str, object]) -> set[str]:
+    return {
+        component.get("properties", {}).get("cascade.semanticId")
+        for system in workspace.get("model", {}).get("softwareSystems", [])
+        for container in system.get("containers", [])
+        for component in container.get("components", [])
+    } - {None}
+
+
 def _view_levels(
     workspace: dict[str, object], expected: tuple[str, ...]
 ) -> dict[str, str]:
@@ -734,7 +767,13 @@ def _view_levels(
             key = row.get("key") if isinstance(row, dict) else None
             if not isinstance(key, str) or not key or key in levels:
                 raise C4BindingError("semantic workspace has an ambiguous view binding")
-            levels[key] = level
+            code_component = row.get("properties", {}).get("cascade.codeComponent")
+            if code_component is not None:
+                if level != "customViews" or code_component not in _component_semantics(workspace):
+                    raise C4BindingError("code view must name an existing component")
+                levels[key] = "codeViews"
+            else:
+                levels[key] = level
     if set(levels) != set(expected):
         raise C4BindingError("semantic and rendered view inventories disagree")
     return levels

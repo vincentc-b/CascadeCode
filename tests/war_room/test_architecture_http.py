@@ -205,6 +205,8 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
         / "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
     )
     shutil.copytree(fixture, project.editable_architecture_root)
+    pinned_source = b'def example():\n    return "<script>not HTML</script>"\n'
+    (root / "example.py").write_bytes(pinned_source)
     subprocess.run(["git", "add", "."], cwd=root, check=True)
     subprocess.run(["git", "commit", "-qm", "architecture"], cwd=root, check=True)
 
@@ -227,6 +229,17 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
             }]},
             "views": {"systemContextViews": [{"key": view.key, "softwareSystemId": "1"}]},
         }
+        workspace["model"]["softwareSystems"][0]["containers"] = [{
+            "id": "2", "properties": {"cascade.semanticId": "element.container.supervisor"},
+            "components": [{"id": "3", "properties": {"cascade.semanticId": "element.component.epic-team"}}],
+        }]
+        workspace["model"]["customElements"] = [{
+            "id": "4", "name": "example", "properties": {
+                "cascade.semanticId": "element.code.epic.graph",
+                "cascade.parent": "element.component.epic-team",
+                "cascade.sourcePath": "example.py", "cascade.sourceSymbol": "example",
+            },
+        }]
         semantic = output / "workspace.json"
         semantic.write_text(json.dumps(workspace), encoding="utf-8")
         svg = output / "view.svg"
@@ -282,7 +295,7 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
             time.sleep(0.02)
         assert payload["state"] == "ready"
         assert payload["views"][0]["level"] == "systemContextViews"
-        target = payload["targets"][0]
+        target = next(row for row in payload["targets"] if row["semantic_id"] == "element.person.operator")
         assert target["semantic_id"]
         assert target["drill_choices"][0]["view_key"] == payload["views"][0]["key"]
         assert target["drill_choices"][0]["scope_id"] == target["semantic_id"]
@@ -313,6 +326,20 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
         assert context["owner_context"][0]["document_url"].startswith(
             f"/api/architecture/resources/{snapshot_id}/"
         )
+
+        code = next(row for row in payload["targets"] if row["source_path"] == "example.py")
+        assert code["source_symbol"] == "example"
+        status, raw, headers = _get(base + code["source_url"])
+        assert status == 200
+        assert raw == pinned_source
+        assert headers["Content-Type"].startswith("text/plain")
+        (root / "example.py").write_text("changed after snapshot\n")
+        subprocess.run(["git", "add", "example.py"], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "advance code"], cwd=root, check=True)
+        status, raw, _headers = _get(base + code["source_url"])
+        assert status == 200 and raw == pinned_source
+        status, _, _ = _get(base + f"/api/architecture/resources/{snapshot_id}/forged")
+        assert status == 404
 
         status, raw, _headers = _get(
             base + f"/api/architecture/snapshots/{snapshot_id}?target=forged"

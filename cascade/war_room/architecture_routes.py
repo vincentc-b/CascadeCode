@@ -285,6 +285,9 @@ def _snapshot_projection(
                     scope = item.get("containerId", item.get("softwareSystemId"))
                     if scope is not None:
                         view_scopes[item.get("key")] = export_semantics.get(str(scope))
+                    code_scope = item.get("properties", {}).get("cascade.codeComponent")
+                    if code_scope is not None:
+                        view_scopes[item.get("key")] = code_scope
     memberships: dict[str, list[dict[str, str]]] = {}
     views: list[dict[str, object]] = []
     for key in render.view_keys:
@@ -343,6 +346,13 @@ def _snapshot_projection(
             "source": target.source,
             "destination": target.destination,
             "drill_choices": memberships.get(target_id, []),
+            "source_path": target.source_path,
+            "source_symbol": target.source_symbol,
+            "source_url": (
+                f"/api/architecture/resources/{snapshot.snapshot_id}/"
+                f"{_opaque_id(_code_resource_descriptor(snapshot, target.source_path))}"
+                if target.source_path else None
+            ),
         })
     initial = next(
         (item for item in views if item["level"] in {"systemLandscapeViews", "systemContextViews"}),
@@ -364,6 +374,27 @@ def _snapshot_projection(
         },
     })
     return _bounded_snapshot_payload(payload)
+
+
+
+def _code_resource_descriptor(snapshot: ArchitectureBrowsingSnapshot, path: str) -> dict[str, object]:
+    return {
+        "kind": "code", "scope": snapshot.snapshot_id, "repository_role": "target",
+        "repository_key": snapshot.descriptor["repositories"]["code"],
+        "revision": snapshot.descriptor["revisions"]["code"], "path": path,
+        "digest": None,
+    }
+
+
+def _snapshot_code_resources(store, snapshot) -> list[dict[str, object]]:
+    if snapshot.state != "ready" or not snapshot.render_operation_id:
+        return []
+    artifact = store.scheduler.get_semantic_artifact(
+        snapshot.render_operation_id, artifact_ref=snapshot.snapshot_id
+    )
+    targets = _semantic_targets(_read_semantic_workspace(artifact))
+    return [_code_resource_descriptor(snapshot, path)
+            for path in sorted({target.source_path for target in targets.values() if target.source_path})]
 
 
 def _snapshot_resources(snapshot: ArchitectureBrowsingSnapshot) -> list[dict[str, object]]:
@@ -1289,6 +1320,7 @@ def _snapshot_resource_bytes(
             for descriptor in (
                 *_snapshot_resource_descriptors(snapshot),
                 *_snapshot_context_resource_descriptors(store.project, snapshot, unit),
+                *_snapshot_code_resources(store, snapshot),
             ):
                 if _opaque_id(descriptor) != resource_id:
                     continue

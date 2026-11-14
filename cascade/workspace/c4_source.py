@@ -30,7 +30,7 @@ _UNASSIGNED_RELATIONSHIP = re.compile(
     r"([A-Za-z_][A-Za-z0-9_]*)\b"
 )
 _VIEW = re.compile(
-    r'^\s*(systemLandscape|systemContext|container|component|dynamic|deployment)'
+    r'^\s*(systemLandscape|systemContext|container|component|dynamic|deployment|custom)'
     r'(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s+"([^"]*)"\s*\{'
 )
 _VIEW_DIRECTIVE = re.compile(
@@ -152,6 +152,7 @@ def validate_c4_workspace(root: Path | str) -> C4WorkspaceContract:
         )
 
     declarations, source_views = _scan_sources(closure)
+    _validate_code_metadata(closure)
     elements = _parse_elements(payload["elements"], root_path)
     relationships = _parse_relationships(payload["relationships"], root_path)
     views = _parse_views(payload["views"], root_path)
@@ -315,6 +316,56 @@ def _semantic_property(lines: list[str], start: int, fragment: Path) -> str:
             "cascade.semanticId property"
         )
     return matches[0]
+
+
+
+def _own_properties(lines: list[str], start: int) -> dict[str, str]:
+    depth = 0
+    result = {}
+    for line in lines[start:]:
+        depth += line.count("{") - line.count("}")
+        if depth == 2:
+            for key, value in re.findall(r'"(cascade\.[^"]+)"\s+"([^"]*)"', line):
+                if key in result:
+                    raise C4SourceError(f"duplicate property {key}")
+                result[key] = value
+        if depth == 0:
+            break
+    return result
+
+
+def _validate_code_metadata(closure: dict[Path, str]) -> None:
+    """Code scope is explicit semantic metadata, never guessed from a view name."""
+    components = set()
+    declarations = []
+    for text in closure.values():
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
+            element = _ELEMENT.match(line)
+            view = _VIEW.match(line)
+            if element or view:
+                props = _own_properties(lines, index)
+                kind = element.group(2) if element else view.group(1)
+                declarations.append((kind, props))
+                if kind == "component":
+                    components.add(props.get("cascade.semanticId"))
+    for kind, props in declarations:
+        parent = props.get("cascade.parent")
+        scope = props.get("cascade.codeComponent")
+        path = props.get("cascade.sourcePath")
+        symbol = props.get("cascade.sourceSymbol")
+        if parent is not None and (kind != "element" or parent not in components):
+            raise C4SourceError("code element parent must name an existing component semantic ID")
+        if scope is not None and (kind != "custom" or scope not in components):
+            raise C4SourceError("code view must be custom and name an existing component semantic ID")
+        if path is not None or symbol is not None:
+            if kind != "element" or parent is None:
+                raise C4SourceError("code source metadata requires a custom element with a component parent")
+            if (not path or Path(path).is_absolute() or "\\" in path or ":" in path
+                    or any(part in {"", ".", ".."} for part in path.split("/"))):
+                raise C4SourceError("code source path must be confined and repository-relative")
+            if not symbol or not re.fullmatch(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", symbol):
+                raise C4SourceError("code source symbol must be a qualified identifier")
 
 
 def _parse_elements(raw: object, root: Path) -> tuple[C4Element, ...]:

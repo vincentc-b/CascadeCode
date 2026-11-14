@@ -656,3 +656,14 @@ const hierarchy = [
 assert.deepEqual(parentViews(hierarchy, hierarchy[3]).map(v => v.key), ["containers"]);
 assert.deepEqual(parentViews(hierarchy, hierarchy[0]), []);
 assert.deepEqual(parentViews([hierarchy[0], hierarchy[3]], hierarchy[3]).map(v => v.key), ["context"]);
+
+// Code is a fourth-level destination and reverses to the component that owns it.
+const codeHierarchy = [
+  {key: "components", level: "componentViews", target_ids: ["team"]},
+  {key: "team-code", level: "codeViews", target_ids: ["team.graph"]},
+];
+const codeTargets = [{
+  kind: "element", semantic_id: "team",
+  drill_choices: [{view_key: "team-code", level: "codeViews"}],
+}];
+assert.deepEqual(parentViews(codeHierarchy, codeHierarchy[1], codeTargets).map(v => v.key), ["components"]);

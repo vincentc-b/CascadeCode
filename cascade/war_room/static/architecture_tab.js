@@ -46,6 +46,7 @@
       systemContextViews: 1,
       containerViews: 2,
       componentViews: 3,
+      codeViews: 4,
       dynamicViews: 4,
       deploymentViews: 5,
       customViews: 6,
@@ -357,7 +358,7 @@
       }
     }
 
-    async function openDocumentResource(url, title, provenance) {
+    async function openDocumentResource(url, title, provenance, plainText) {
       var requestId = ++state.resourceRequest;
       el.documentPreview.hidden = false;
       el.documentPreviewHeading.textContent = title;
@@ -369,7 +370,7 @@
         if (!response.ok) throw new Error("Document request failed (HTTP " + response.status + ")");
         var body = await response.text();
         if (requestId !== state.resourceRequest) return;
-        var html = viewerApi && typeof viewerApi.markdownToHtml === "function" ?
+        var html = !plainText && viewerApi && typeof viewerApi.markdownToHtml === "function" ?
           viewerApi.markdownToHtml(body) : null;
         el.documentPreviewBody.replaceChildren();
         if (html != null) {
@@ -800,7 +801,7 @@
       el.view.replaceChildren();
       (state.payload.views || []).forEach(function (row) {
         var item = option(el.view, row.key + "\u0000" + row.level,
-          row.key + " (" + row.level + ")");
+          row.key + " (" + (row.level === "codeViews" ? "Code" : row.level) + ")");
         item.selected = state.view && row.key === state.view.key && row.level === state.view.level;
       });
       var codeButton = byId("architecture-code");
@@ -851,6 +852,20 @@
       el.targetDetail.appendChild(heading);
       el.targetDetail.appendChild(label);
       el.targetDetail.appendChild(identity);
+      if (target.source_path) {
+        var source = doc.createElement("p");
+        source.textContent = target.source_path + " · " + (target.source_symbol || "");
+        el.targetDetail.appendChild(source);
+        if (target.source_url) {
+          var open = doc.createElement("button");
+          open.type = "button";
+          open.textContent = "Open pinned source";
+          open.addEventListener("click", function () {
+            openDocumentResource(target.source_url, target.source_path, target.source_symbol, true);
+          });
+          el.targetDetail.appendChild(open);
+        }
+      }
       if (target.kind === "relationship") {
         var endpoints = doc.createElement("p");
         endpoints.textContent = (target.source || "?") + " → " + (target.destination || "?");
@@ -922,6 +937,9 @@
             state.viewer.selectTarget(detail.kind, detail.semantic_id);
             var target = targetFor(detail.semantic_id);
             renderTargetDetail(target);
+            if (target && target.source_path && el.targetDetail.scrollIntoView) {
+              el.targetDetail.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
             el.selectionStatus.textContent = detail.kind + ": " +
               (target && target.label || detail.semantic_id);
             loadDocumentationContext();
@@ -1014,10 +1032,11 @@
       });
       el.back.addEventListener("click", function () {
         var parents = viewerApi.parentViews(state.payload.views, state.view, state.payload.targets);
-        if (parents.length === 1) showView(parents[0], null, true);
-        else if (parents.length > 1) chooseDrill({ label: "parent view" }, parents.map(function (view) {
-          return { view_key: view.key, level: view.level, label: view.key };
-        }));
+        parents.sort(function (left, right) {
+          return (right.target_ids || []).length - (left.target_ids || []).length ||
+            left.key.localeCompare(right.key);
+        });
+        if (parents.length) showView(parents[0], null, true);
       });
       el.documentPreviewClose.addEventListener("click", function () {
         state.resourceRequest += 1;

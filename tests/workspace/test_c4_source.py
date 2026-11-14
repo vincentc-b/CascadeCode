@@ -164,3 +164,31 @@ def _copy_workspace(tmp_path: Path) -> Path:
     destination = tmp_path / "architecture"
     shutil.copytree(_VERSIONED_WORKSPACE, destination)
     return destination
+
+
+@pytest.mark.parametrize("old,new", [
+    ('"cascade.sourcePath" "cascade/epic/graph.py"', '"cascade.sourcePath" "../secret.py"'),
+    ('"cascade.sourceSymbol" "ensure_epic_graph"', '"cascade.sourceSymbol" "not a symbol"'),
+    ('"cascade.parent" "element.component.epic-team"', '"cascade.parent" "element.missing"'),
+])
+def test_code_source_metadata_is_confined_and_scoped(tmp_path: Path, old: str, new: str) -> None:
+    workspace = _copy_workspace(tmp_path)
+    model = workspace / "model.dsl"
+    model.write_text(model.read_text().replace(old, new, 1))
+    with pytest.raises(C4SourceError):
+        validate_c4_workspace(workspace)
+
+
+def test_code_views_are_native_custom_views_with_component_scope(tmp_path: Path) -> None:
+    workspace = _copy_workspace(tmp_path)
+    contract = validate_c4_workspace(workspace)
+    assert {"cascade-epic-code", "cascade-feature-code", "cascade-task-code"} <= {
+        row.key for row in contract.views
+    }
+    views = workspace / "views.dsl"
+    views.write_text(views.read_text().replace(
+        '"cascade.codeComponent" "element.component.epic-team"',
+        '"cascade.codeComponent" "element.system.cascade"', 1,
+    ))
+    with pytest.raises(C4SourceError, match="existing component"):
+        validate_c4_workspace(workspace)

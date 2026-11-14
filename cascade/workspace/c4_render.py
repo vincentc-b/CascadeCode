@@ -57,7 +57,7 @@ javac -cp '/tmp/cascade-binding-lib/WEB-INF/lib/*' \
 java -cp '/tmp/cascade-binding-classes:/tmp/cascade-binding-lib/WEB-INF/lib/*' \
   RendererBindingAdapter "$@"
 """
-_ARTIFACT_VERSION = 3
+_ARTIFACT_VERSION = 4
 
 RenderStatus = Literal[
     "first", "running", "empty", "ready", "binding_error", "render_error", "cancelled"
@@ -77,10 +77,8 @@ FailureCode = Literal[
 class C4RenderSettings:
     """Artifact-affecting settings and hard execution bounds."""
 
-    # A full interactive render performs validation, semantic/static export,
-    # and one trusted binding export per view.  The pinned runtime can exceed
-    # 90 seconds on a cold or contended host even for two views, so retain a
-    # hard bound with enough room for the supported production pipeline.
+    # Validation and semantic/static exports are followed by one batch browser
+    # capture for all SVGs and bindings. Keep a hard bound for cold/contended hosts.
     timeout_seconds: float = 180.0
     memory: str = "1536m"
     cpus: str = "2"
@@ -322,18 +320,6 @@ class C4ArtifactRenderer:
                         "/output/static",
                     ],
                 ),
-                (
-                    "svg_export",
-                    [
-                        "export",
-                        "-workspace",
-                        source,
-                        "-format",
-                        "svg",
-                        "-output",
-                        "/output/svg",
-                    ],
-                ),
             )
             for stage, arguments in stages:
                 result = _run_process(
@@ -345,7 +331,7 @@ class C4ArtifactRenderer:
                     return _process_failure(closure, cache_key, stage, result)
 
             try:
-                view_keys = _validate_outputs(output)
+                view_keys = _validate_outputs(output, require_stock_svg=False)
                 embedded = _embedded_workspace(output / "static" / "workspace.js")
                 (output / "embedded-workspace.json").write_text(
                     json.dumps(embedded, sort_keys=True, separators=(",", ":")),
@@ -362,26 +348,17 @@ class C4ArtifactRenderer:
 
             source_diff_reference = _source_diff_reference(closure)
             binding_views: list[dict[str, object]] = []
+            if view_keys:
+                result = _run_process(
+                    self._binding_batch_command(closure, output, settings, view_keys),
+                    deadline, cancelled,
+                )
+                if result.kind:
+                    return _process_failure(closure, cache_key, "bindings", result)
             for index, view_key in enumerate(view_keys):
                 raw_bindings = output / "raw-bindings" / f"view-{index}.json"
                 raw_svg = output / "raw-bound-svg" / f"view-{index}.svg"
                 bound_svg = output / "bound-svg" / f"view-{index}.svg"
-                result = _run_process(
-                    self._binding_command(
-                        closure,
-                        output,
-                        settings,
-                        view_key=view_key,
-                        bindings=raw_bindings,
-                        svg=raw_svg,
-                    ),
-                    deadline,
-                    cancelled,
-                )
-                if result.kind:
-                    return _process_failure(
-                        closure, cache_key, f"binding:{view_key}", result
-                    )
                 try:
                     targets = verify_and_sanitize_hit_targets(
                         workspace=embedded,
@@ -501,6 +478,22 @@ class C4ArtifactRenderer:
                 view_key,
             ]
         )
+        return command
+
+    def _binding_batch_command(
+        self, closure: C4SourceClosure, output: Path,
+        settings: C4RenderSettings, view_keys: tuple[str, ...],
+    ) -> list[str]:
+        command = self._binding_command(
+            closure, output, settings, view_key=view_keys[0],
+            bindings=output / "raw-bindings" / "view-0.json",
+            svg=output / "raw-bound-svg" / "view-0.svg",
+        )
+        for index, key in enumerate(view_keys[1:], 1):
+            command.extend([
+                f"/output/raw-bindings/view-{index}.json",
+                f"/output/raw-bound-svg/view-{index}.svg", key,
+            ])
         return command
 
     def _container_command(

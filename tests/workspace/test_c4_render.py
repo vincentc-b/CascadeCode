@@ -48,12 +48,7 @@ def test_real_pinned_renderer_publishes_one_validated_handoff_and_cache(
 
     assert result.status == "ready", result
     assert result.cache_hit is False
-    assert result.view_keys == (
-        "cascade-containers",
-        "cascade-context",
-        "cascade-landscape",
-        "cascade-supervisor-components",
-    )
+    assert result.view_keys == tuple(sorted(view.key for view in closure.contract.views))
     assert result.semantic_workspace and result.semantic_workspace.is_file()
     assert result.embedded_workspace and result.embedded_workspace.is_file()
     assert result.static_directory

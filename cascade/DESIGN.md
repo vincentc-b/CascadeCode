@@ -253,3 +253,5 @@ Do not infer container-level isolation from a C4 container, a planning scratch
 directory, or a Task worktree. Actual native-tool restrictions depend on the
 selected provider and permission configuration. Supervised validation and
 delivery gates are correctness controls, separate from process isolation.
+
+Integrated Structurizr fourth-level views: `cascade-teams-code`, `cascade-epic-code`, `cascade-feature-code`, and `cascade-task-code`. Explore the corresponding component directly to inspect its functions/types, wiring, checkpoint library, tool guards, and provider adapter; select a node to open pinned source.

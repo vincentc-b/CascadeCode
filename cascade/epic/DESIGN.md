@@ -70,3 +70,5 @@ Verification: [graph and lifecycle tests](../../tests/epic/).
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.
 
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).
+
+The integrated Structurizr code view is `cascade-epic-code`. From the supervisor components view, Explore **Epic team**; select a code node for its pinned source. This view is the navigable implementation structure; the diagrams above supplement it with lifecycle context.

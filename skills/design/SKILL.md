@@ -69,9 +69,15 @@ For each affected significant subsystem:
 - Link the parent C4 view to the owning design and link the design back to the
   model and relevant view keys. Use focused views to keep diagrams readable.
 - Keep stable semantic IDs and the source contract in sync with C4 edits.
-  Use only view types supported by the repository validator. Code-level and
-  behavioral Mermaid diagrams in DESIGN.md complement static C4; do not pretend
-  implementation modules are separately deployed containers.
+  Use only view types supported by the repository validator. For significant
+  components in this Structurizr model, provide a native custom code view with
+  `cascade.codeComponent` naming the component semantic ID. Its custom code
+  elements use `cascade.parent`, `cascade.sourcePath`, and `cascade.sourceSymbol`
+  to identify real implementation and its owning component. Keep model and
+  contract declarations synchronized. Verify Explore reaches Code and Level up
+  returns to the component view; a document link alone does not satisfy this.
+  Behavioral Mermaid diagrams in DESIGN.md can supplement the integrated view.
+  Do not pretend implementation modules are separately deployed containers.
 - Do not inventory every class or require diagrams for trivial helpers. An
   unchanged model is acceptable only when existing views still explain the
   changed behavior; record the concrete reason in closeout.

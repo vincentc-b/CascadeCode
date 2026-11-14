@@ -246,3 +246,89 @@ def _closure(tmp_path: Path, name: str) -> C4SourceClosure:
         contract=validate_c4_workspace(root),
     )
     return replace(closure, digest=closure.computed_digest())
+
+
+def test_completed_render_keeps_pinned_identity_after_adapter_upgrade(tmp_path: Path, monkeypatch) -> None:
+    import cascade.workspace.c4_scheduler as module
+    root = _git_root(tmp_path)
+    renderer = _RecordingRenderer(tmp_path / "cache")
+    scheduler = C4RenderScheduler(root, renderer=renderer)
+    try:
+        closure = _closure(tmp_path, "pinned")
+        op = scheduler.admit(closure, owner="feature", snapshot_id="snapshot")
+        assert op.wait(2).status == "ready"
+        replacement = tmp_path / "new-adapter.java"
+        replacement.write_text("different adapter bytes")
+        monkeypatch.setattr(module, "_BINDING_ADAPTER", replacement)
+        monkeypatch.setattr(module, "_ARTIFACT_VERSION", 99)
+        artifact = scheduler.get_semantic_artifact(op.operation_id, artifact_ref="snapshot")
+        assert artifact.render.closure_digest == closure.digest
+        assert renderer.calls == 1
+        ledger = scheduler._read()
+        ledger["operations"][op.operation_id]["identity_inputs"]["adapter_sha256"] = "f" * 64
+        scheduler._write(ledger)
+        with pytest.raises(ValueError, match="identity"):
+            scheduler.get_semantic_artifact(op.operation_id, artifact_ref="snapshot")
+    finally:
+        scheduler.close()
+
+
+def test_legacy_completed_render_requires_original_provenance(tmp_path: Path) -> None:
+    import cascade.workspace.c4_scheduler as module
+    root = _git_root(tmp_path)
+    scheduler = C4RenderScheduler(root, renderer=_RecordingRenderer(tmp_path / "cache"))
+    try:
+        closure = _closure(tmp_path, "legacy")
+        op = scheduler.admit(closure, owner="feature", snapshot_id="snapshot")
+        assert op.wait(2).status == "ready"
+        ledger = scheduler._read()
+        row = ledger["operations"].pop(op.operation_id)
+        inputs = row.pop("identity_inputs")
+        inputs.update(artifact_version=3,
+            adapter_sha256="04a32a0141a2578724d6826b74d2192ba9bb94f971b00600350d1225d5ac3a2b")
+        identity = module._identity_digest(inputs)
+        operation_id = "c4-render-" + identity
+        row.update(operation_id=operation_id, render_identity=identity)
+        directory = tmp_path / "legacy-output"
+        directory.mkdir()
+        manifest = {
+            "version": 3, "closure_digest": closure.digest,
+            "image_digest": inputs["image_digest"], "settings": inputs["settings"],
+            "source_provenance": module._source_provenance(closure),
+        }
+        manifest_path = directory / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest))
+        row["artifact"]["artifact_directory"] = str(directory)
+        ledger["operations"][operation_id] = row
+        scheduler._write(ledger)
+        assert scheduler.get_semantic_artifact(operation_id, artifact_ref="snapshot")
+        manifest["closure_digest"] = "f" * 64
+        manifest_path.write_text(json.dumps(manifest))
+        with pytest.raises(ValueError, match="provenance"):
+            scheduler.get_semantic_artifact(operation_id, artifact_ref="snapshot")
+    finally:
+        scheduler.close()
+
+
+def test_pending_render_does_not_publish_new_adapter_under_old_identity(tmp_path: Path, monkeypatch) -> None:
+    import cascade.workspace.c4_scheduler as module
+    root = _git_root(tmp_path)
+    queued = C4RenderScheduler(root, start_worker=False)
+    closure = _closure(tmp_path, "queued")
+    operation = queued.admit(closure, owner="branch", snapshot_id="old")
+    queued.close()
+    replacement = tmp_path / "new-adapter.java"
+    replacement.write_text("new renderer")
+    monkeypatch.setattr(module, "_BINDING_ADAPTER", replacement)
+    renderer = _RecordingRenderer(tmp_path / "cache")
+    current = C4RenderScheduler(root, renderer=renderer)
+    try:
+        result = operation.wait(2)
+        assert result.status == "failed"
+        assert "refresh the architecture snapshot" in result.failure.message
+        assert renderer.calls == 0
+        refreshed = current.admit(closure, owner="branch", snapshot_id="new")
+        assert refreshed.operation_id != operation.operation_id
+        assert refreshed.wait(2).status == "ready"
+    finally:
+        current.close()

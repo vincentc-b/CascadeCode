@@ -48,9 +48,9 @@ public final class RendererBindingAdapter {
 
     public static void main(String[] args) throws Exception {
         Path staticSite = Path.of(args[0]).toAbsolutePath();
-        Path bindingsPath = Path.of(args[1]);
-        Path svgPath = Path.of(args[2]);
-        String viewKey = args[3];
+        if (args.length < 4 || (args.length - 1) % 3 != 0) {
+            throw new IllegalArgumentException("Expected static site followed by bindings/svg/view triplets");
+        }
 
         try (Playwright playwright = Playwright.create()) {
             Browser browser = playwright.chromium().launch(
@@ -62,28 +62,35 @@ public final class RendererBindingAdapter {
                     .setArgs(List.of("--no-sandbox"))
             );
             Page page = browser.newPage();
-            page.navigate(staticSite.resolve("index.html").toUri() + "?diagram=" + viewKey);
-            page.waitForFunction(
-                "key => window.structurizr && structurizr.diagram" +
-                    " && structurizr.diagram.getCurrentView()" +
-                    " && structurizr.diagram.getCurrentView().key === key" +
-                    " && document.querySelectorAll('#diagram .joint-cell').length > 0",
-                viewKey
-            );
+            for (int index = 1; index < args.length; index += 3) {
+                Path bindingsPath = Path.of(args[index]);
+                Path svgPath = Path.of(args[index + 1]);
+                String viewKey = args[index + 2];
+                // Keep the trusted browser alive across all views. Each navigation
+                // reloads the same immutable static export, never remote content.
+                page.navigate(staticSite.resolve("index.html").toUri() + "?diagram=" + viewKey);
+                page.waitForFunction(
+                    "key => window.structurizr && structurizr.diagram" +
+                        " && structurizr.diagram.getCurrentView()" +
+                        " && structurizr.diagram.getCurrentView().key === key" +
+                        " && document.querySelectorAll('#diagram .joint-cell').length > 0",
+                    viewKey
+                );
 
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> bindings =
-                (List<Map<String, Object>>) page.evaluate(CAPTURE);
-            String svg = (String) page.evaluate(
-                "() => structurizr.diagram.exportCurrentDiagramToSVG({" +
-                    "metadata: false, crop: false, dimensions: true" +
-                    "}).markup"
-            );
-            Files.writeString(
-                bindingsPath,
-                new GsonBuilder().serializeNulls().setPrettyPrinting().create().toJson(bindings)
-            );
-            Files.writeString(svgPath, svg);
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> bindings =
+                    (List<Map<String, Object>>) page.evaluate(CAPTURE);
+                String svg = (String) page.evaluate(
+                    "() => structurizr.diagram.exportCurrentDiagramToSVG({" +
+                        "metadata: false, crop: false, dimensions: true" +
+                        "}).markup"
+                );
+                Files.writeString(
+                    bindingsPath,
+                    new GsonBuilder().serializeNulls().setPrettyPrinting().create().toJson(bindings)
+                );
+                Files.writeString(svgPath, svg);
+            }
             browser.close();
         }
     }

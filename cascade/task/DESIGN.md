@@ -74,3 +74,5 @@ Verification: [graph and lifecycle tests](../../tests/task/).
 Task graphs use one SWE node. Delivery additionally passes supervised validation and integration gates in [graph.py](graph.py); checkpoint cleanup is explicit in [checkpoint.py](checkpoint.py).
 
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).
+
+The integrated Structurizr code view is `cascade-task-code`. From the supervisor components view, Explore **Task team**; select a code node for its pinned source. This view is the navigable implementation structure; the diagrams above supplement it with lifecycle context.

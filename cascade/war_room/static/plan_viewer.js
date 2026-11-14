@@ -1784,7 +1784,7 @@
       return row && typeof row.view_key === "string" && row.view_key &&
         typeof row.level === "string" && row.level;
     }).sort(function (a, b) {
-      var levels = ["systemLandscapeViews", "systemContextViews", "containerViews", "componentViews", "dynamicViews", "deploymentViews"];
+      var levels = ["systemLandscapeViews", "systemContextViews", "containerViews", "componentViews", "codeViews", "dynamicViews", "deploymentViews"];
       var level = levels.indexOf(a.level) - levels.indexOf(b.level);
       return level || a.view_key.localeCompare(b.view_key) ||
         String(a.label || "").localeCompare(String(b.label || ""));
@@ -1794,7 +1794,7 @@
   // Reverse verified drill links, choosing the nearest available C4 level.
   // Selection history is deliberately irrelevant to hierarchy navigation.
   function parentViews(views, current, targets) {
-    var levels = ["systemLandscapeViews", "systemContextViews", "containerViews", "componentViews"];
+    var levels = ["systemLandscapeViews", "systemContextViews", "containerViews", "componentViews", "codeViews"];
     var rank = current ? levels.indexOf(current.level) : -1;
     var candidates = (views || []).filter(function (view) {
       var depth = levels.indexOf(view.level);
@@ -2244,7 +2244,7 @@
     var side = options.side;
     var sideName = options.sideName || "view";
     function drillChoices(target) {
-      var order = ["systemLandscapeViews", "systemContextViews", "containerViews", "componentViews"];
+      var order = ["systemLandscapeViews", "systemContextViews", "containerViews", "componentViews", "codeViews"];
       var choices = sortedDrillChoices(target).filter(function (choice) {
         if (!options.view) return true;
         if (choice.scope_id && choice.scope_id !== target.semantic_id) return false;

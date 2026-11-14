@@ -263,3 +263,423 @@ cascade_uses_renderer = cascade -> structurizr "Validates and renders local arch
         "cascade.semanticId" "relationship.cascade-uses-renderer"
     }
 }
+
+code_epic_graph = element "epic: ensure_epic_graph" "Function" "Compiles sequential role nodes with LangGraph StateGraph." {
+    properties {
+        "cascade.semanticId" "element.code.epic.graph"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/epic/graph.py"
+        "cascade.sourceSymbol" "ensure_epic_graph"
+    }
+}
+
+code_epic_state = element "epic: EpicGraphState" "TypedDict" "Messages, queue cursor and role configuration survive turns." {
+    properties {
+        "cascade.semanticId" "element.code.epic.state"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/epic/state.py"
+        "cascade.sourceSymbol" "EpicGraphState"
+    }
+}
+
+code_epic_checkpoint = element "epic: get_checkpointer" "Function / SqliteSaver" "langgraph-checkpoint-sqlite stores one SQLite file per work ID." {
+    properties {
+        "cascade.semanticId" "element.code.epic.checkpoint"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/epic/checkpoint.py"
+        "cascade.sourceSymbol" "get_checkpointer"
+    }
+}
+
+code_epic_wiring = element "epic: load_epic_tools" "Function" "Registers scoped tools and lifecycle hooks." {
+    properties {
+        "cascade.semanticId" "element.code.epic.wiring"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/epic/wiring.py"
+        "cascade.sourceSymbol" "load_epic_tools"
+    }
+}
+
+code_epic_registry = element "epic: epic_tools" "Function" "Maps approved tool names to work-scoped callables." {
+    properties {
+        "cascade.semanticId" "element.code.epic.registry"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/epic/registry.py"
+        "cascade.sourceSymbol" "epic_tools"
+    }
+}
+
+code_epic_guard = element "epic: tool_guard" "Function" "Checks Cascade tool paths and work scope; not an OS sandbox." {
+    properties {
+        "cascade.semanticId" "element.code.epic.guard"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/epic/guard.py"
+        "cascade.sourceSymbol" "tool_guard"
+    }
+}
+
+code_epic_runtime = element "epic: run_planning_role_turn" "Function" "Builds bounded provider turns and MCP tools. Provider permissions govern native tools." {
+    properties {
+        "cascade.semanticId" "element.code.epic.runtime"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/agent/graph_turn.py"
+        "cascade.sourceSymbol" "run_planning_role_turn"
+    }
+}
+
+code_epic_provider = element "epic: build_codex_argv" "Provider adapter" "Planning uses provider-default permissions unless yolo bypasses sandboxing; other providers differ." {
+    properties {
+        "cascade.semanticId" "element.code.epic.provider"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/agent/codex_cli.py"
+        "cascade.sourceSymbol" "build_codex_argv"
+    }
+}
+
+code_epic_rel_29 = code_epic_graph -> code_epic_state "Uses typed state" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-graph-to-code-epic-state"
+    }
+}
+
+code_epic_rel_30 = code_epic_graph -> code_epic_checkpoint "Compiles with persistent checkpointer" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-graph-to-code-epic-checkpoint"
+    }
+}
+
+code_epic_rel_31 = code_epic_graph -> code_epic_runtime "Executes role turns sequentially" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-graph-to-code-epic-runtime"
+    }
+}
+
+code_epic_rel_32 = code_epic_wiring -> code_epic_registry "Registers tools" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-wiring-to-code-epic-registry"
+    }
+}
+
+code_epic_rel_33 = code_epic_runtime -> code_epic_registry "Exposes scoped tool calls" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-runtime-to-code-epic-registry"
+    }
+}
+
+code_epic_rel_34 = code_epic_registry -> code_epic_guard "Tool implementations enforce scope" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-registry-to-code-epic-guard"
+    }
+}
+
+code_epic_rel_35 = code_epic_runtime -> code_epic_provider "Dispatches through selected adapter" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-runtime-to-code-epic-provider"
+    }
+}
+
+code_feature_graph = element "feature: ensure_feature_graph" "Function" "Compiles sequential role nodes with LangGraph StateGraph." {
+    properties {
+        "cascade.semanticId" "element.code.feature.graph"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/graph.py"
+        "cascade.sourceSymbol" "ensure_feature_graph"
+    }
+}
+
+code_feature_state = element "feature: FeatureGraphState" "TypedDict" "Messages, queue cursor and role configuration survive turns." {
+    properties {
+        "cascade.semanticId" "element.code.feature.state"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/state.py"
+        "cascade.sourceSymbol" "FeatureGraphState"
+    }
+}
+
+code_feature_checkpoint = element "feature: get_checkpointer" "Function / SqliteSaver" "langgraph-checkpoint-sqlite stores one SQLite file per work ID." {
+    properties {
+        "cascade.semanticId" "element.code.feature.checkpoint"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/checkpoint.py"
+        "cascade.sourceSymbol" "get_checkpointer"
+    }
+}
+
+code_feature_wiring = element "feature: load_feature_tools" "Function" "Registers scoped tools and lifecycle hooks." {
+    properties {
+        "cascade.semanticId" "element.code.feature.wiring"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/wiring.py"
+        "cascade.sourceSymbol" "load_feature_tools"
+    }
+}
+
+code_feature_registry = element "feature: feature_tools" "Function" "Maps approved tool names to work-scoped callables." {
+    properties {
+        "cascade.semanticId" "element.code.feature.registry"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/registry.py"
+        "cascade.sourceSymbol" "feature_tools"
+    }
+}
+
+code_feature_guard = element "feature: tool_guard" "Function" "Checks Cascade tool paths and work scope; not an OS sandbox." {
+    properties {
+        "cascade.semanticId" "element.code.feature.guard"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/guard.py"
+        "cascade.sourceSymbol" "tool_guard"
+    }
+}
+
+code_feature_runtime = element "feature: run_planning_role_turn" "Function" "Builds bounded provider turns and MCP tools. Provider permissions govern native tools." {
+    properties {
+        "cascade.semanticId" "element.code.feature.runtime"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/agent/graph_turn.py"
+        "cascade.sourceSymbol" "run_planning_role_turn"
+    }
+}
+
+code_feature_provider = element "feature: build_codex_argv" "Provider adapter" "Planning uses provider-default permissions unless yolo bypasses sandboxing; other providers differ." {
+    properties {
+        "cascade.semanticId" "element.code.feature.provider"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/agent/codex_cli.py"
+        "cascade.sourceSymbol" "build_codex_argv"
+    }
+}
+
+code_feature_rel_36 = code_feature_graph -> code_feature_state "Uses typed state" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-graph-to-code-feature-state"
+    }
+}
+
+code_feature_rel_37 = code_feature_graph -> code_feature_checkpoint "Compiles with persistent checkpointer" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-graph-to-code-feature-checkpoint"
+    }
+}
+
+code_feature_rel_38 = code_feature_graph -> code_feature_runtime "Executes role turns sequentially" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-graph-to-code-feature-runtime"
+    }
+}
+
+code_feature_rel_39 = code_feature_wiring -> code_feature_registry "Registers tools" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-wiring-to-code-feature-registry"
+    }
+}
+
+code_feature_rel_40 = code_feature_runtime -> code_feature_registry "Exposes scoped tool calls" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-runtime-to-code-feature-registry"
+    }
+}
+
+code_feature_rel_41 = code_feature_registry -> code_feature_guard "Tool implementations enforce scope" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-registry-to-code-feature-guard"
+    }
+}
+
+code_feature_rel_42 = code_feature_runtime -> code_feature_provider "Dispatches through selected adapter" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-runtime-to-code-feature-provider"
+    }
+}
+
+code_task_graph = element "task: ensure_task_graph" "Function" "Compiles sequential role nodes with LangGraph StateGraph." {
+    properties {
+        "cascade.semanticId" "element.code.task.graph"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/graph.py"
+        "cascade.sourceSymbol" "ensure_task_graph"
+    }
+}
+
+code_task_state = element "task: TaskGraphState" "TypedDict" "Messages, queue cursor and role configuration survive turns." {
+    properties {
+        "cascade.semanticId" "element.code.task.state"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/state.py"
+        "cascade.sourceSymbol" "TaskGraphState"
+    }
+}
+
+code_task_checkpoint = element "task: get_checkpointer" "Function / SqliteSaver" "langgraph-checkpoint-sqlite stores one SQLite file per work ID." {
+    properties {
+        "cascade.semanticId" "element.code.task.checkpoint"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/checkpoint.py"
+        "cascade.sourceSymbol" "get_checkpointer"
+    }
+}
+
+code_task_wiring = element "task: load_task_tools" "Function" "Registers scoped tools and lifecycle hooks." {
+    properties {
+        "cascade.semanticId" "element.code.task.wiring"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/wiring.py"
+        "cascade.sourceSymbol" "load_task_tools"
+    }
+}
+
+code_task_registry = element "task: task_tools" "Function" "Maps approved tool names to work-scoped callables." {
+    properties {
+        "cascade.semanticId" "element.code.task.registry"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/registry.py"
+        "cascade.sourceSymbol" "task_tools"
+    }
+}
+
+code_task_guard = element "task: task_tool_guard" "Function" "Checks Cascade tool paths and work scope; not an OS sandbox." {
+    properties {
+        "cascade.semanticId" "element.code.task.guard"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/guard.py"
+        "cascade.sourceSymbol" "task_tool_guard"
+    }
+}
+
+code_task_runtime = element "task: run_swe_turn" "Function" "Builds bounded provider turns and MCP tools. Provider permissions govern native tools." {
+    properties {
+        "cascade.semanticId" "element.code.task.runtime"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/swe_turn.py"
+        "cascade.sourceSymbol" "run_swe_turn"
+    }
+}
+
+code_task_provider = element "task: build_codex_argv" "Provider adapter" "SWE uses workspace-write unless yolo bypasses sandboxing; other providers differ." {
+    properties {
+        "cascade.semanticId" "element.code.task.provider"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/agent/codex_cli.py"
+        "cascade.sourceSymbol" "build_codex_argv"
+    }
+}
+
+code_task_rel_43 = code_task_graph -> code_task_state "Uses typed state" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-graph-to-code-task-state"
+    }
+}
+
+code_task_rel_44 = code_task_graph -> code_task_checkpoint "Compiles with persistent checkpointer" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-graph-to-code-task-checkpoint"
+    }
+}
+
+code_task_rel_45 = code_task_graph -> code_task_runtime "Executes role turns sequentially" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-graph-to-code-task-runtime"
+    }
+}
+
+code_task_rel_46 = code_task_wiring -> code_task_registry "Registers tools" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-wiring-to-code-task-registry"
+    }
+}
+
+code_task_rel_47 = code_task_runtime -> code_task_registry "Exposes scoped tool calls" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-runtime-to-code-task-registry"
+    }
+}
+
+code_task_rel_48 = code_task_registry -> code_task_guard "Tool implementations enforce scope" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-registry-to-code-task-guard"
+    }
+}
+
+code_task_rel_49 = code_task_runtime -> code_task_provider "Dispatches through selected adapter" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-runtime-to-code-task-provider"
+    }
+}
+
+code_teams_epic = element "teams: ensure_epic_graph" "LangGraph factory" "Creates the epic team graph with scoped state and SQLite checkpoints." {
+    properties {
+        "cascade.semanticId" "element.code.teams.epic"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/epic/graph.py"
+        "cascade.sourceSymbol" "ensure_epic_graph"
+    }
+}
+
+code_teams_feature = element "teams: ensure_feature_graph" "LangGraph factory" "Creates the feature team graph with scoped state and SQLite checkpoints." {
+    properties {
+        "cascade.semanticId" "element.code.teams.feature"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/feature/graph.py"
+        "cascade.sourceSymbol" "ensure_feature_graph"
+    }
+}
+
+code_teams_task = element "teams: ensure_task_graph" "LangGraph factory" "Creates the task team graph with scoped state and SQLite checkpoints." {
+    properties {
+        "cascade.semanticId" "element.code.teams.task"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/task/graph.py"
+        "cascade.sourceSymbol" "ensure_task_graph"
+    }
+}
+
+code_teams_skills = element "teams: load_role_skills_context" "Function" "Resolves role defaults and injects skill text into role prompts." {
+    properties {
+        "cascade.semanticId" "element.code.teams.skills"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/watchdog/role_skills.py"
+        "cascade.sourceSymbol" "load_role_skills_context"
+    }
+}
+
+code_teams_runtime = element "teams: run_planning_role_turn" "Function" "Builds role turns and routes provider execution through scoped tools." {
+    properties {
+        "cascade.semanticId" "element.code.teams.runtime"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/agent/graph_turn.py"
+        "cascade.sourceSymbol" "run_planning_role_turn"
+    }
+}
+
+code_teams_rel_50 = code_teams_epic -> code_teams_runtime "Executes planning role turns" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-epic-to-code-teams-runtime"
+    }
+}
+
+code_teams_rel_51 = code_teams_feature -> code_teams_runtime "Executes planning role turns" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-feature-to-code-teams-runtime"
+    }
+}
+
+code_teams_rel_52 = code_teams_runtime -> code_teams_skills "Loads current role playbooks" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-runtime-to-code-teams-skills"
+    }
+}
+
+code_teams_swe = element "teams: run_swe_turn" "Function" "Runs bounded implementation turns with supervised validation and delivery." {
+    properties {
+        "cascade.semanticId" "element.code.teams.swe"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/task/swe_turn.py"
+        "cascade.sourceSymbol" "run_swe_turn"
+    }
+}
+
+code_teams_rel_53 = code_teams_task -> code_teams_swe "Executes SWE invocation" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-task-to-code-teams-swe"
+    }
+}

@@ -25,6 +25,7 @@ from cascade.workspace.c4_render import (
     _ARTIFACT_VERSION,
     _BINDING_ADAPTER,
     _snapshot_verified_closure,
+    _source_provenance,
 )
 from cascade.workspace.c4_source import C4SourceError, validate_c4_workspace
 from cascade.workspace.c4_diff import C4SemanticModelArtifact
@@ -185,6 +186,7 @@ class C4RenderScheduler:
             ledger["operations"][operation_id] = {
                 "operation_id": operation_id,
                 "render_identity": identity,
+                "identity_inputs": _render_identity_inputs(closure.digest, chosen),
                 "status": "pending",
                 "owner": owner,
                 "snapshot_id": snapshot_id,
@@ -234,10 +236,7 @@ class C4RenderScheduler:
                 f"render {operation_id} is {scheduled.status}",
             )
         closure = _closure_from_row(row, self._source_path(row))
-        if scheduled.render_identity != render_identity(
-            closure.digest, C4RenderSettings(**row["settings"])
-        ):
-            raise ValueError("durable render identity is invalid")
+        _validate_pinned_render_identity(row, closure, scheduled.artifact)
         return C4SemanticModelArtifact(artifact_ref, scheduled.artifact, closure.contract)
 
     def retry(self, operation_id: str) -> C4ScheduledRenderOperation:
@@ -318,6 +317,11 @@ class C4RenderScheduler:
             try:
                 closure = _closure_from_row(row, self._source_path(row))
                 settings = C4RenderSettings(**row["settings"])
+                if row["render_identity"] != render_identity(closure.digest, settings):
+                    raise ValueError(
+                        "renderer version changed before this pinned render completed; "
+                        "refresh the architecture snapshot to admit the current renderer"
+                    )
                 result = self.renderer.submit(closure, settings).wait(
                     timeout=settings.timeout_seconds + 5
                 )
@@ -437,10 +441,8 @@ class C4RenderScheduler:
                 os.unlink(name)
 
 
-def render_identity(closure_digest: str, settings: C4RenderSettings) -> str:
-    """Versioned identity for every byte-affecting renderer input."""
-
-    payload = {
+def _render_identity_inputs(closure_digest: str, settings: C4RenderSettings) -> dict[str, object]:
+    return {
         "closure_digest": closure_digest,
         "image_digest": STRUCTURIZR_IMAGE_DIGEST,
         "artifact_version": _ARTIFACT_VERSION,
@@ -448,8 +450,59 @@ def render_identity(closure_digest: str, settings: C4RenderSettings) -> str:
         "adapter_sha256": hashlib.sha256(_BINDING_ADAPTER.read_bytes()).hexdigest(),
         "settings": settings.cache_payload(),
     }
+
+
+def _identity_digest(payload: dict[str, object]) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def render_identity(closure_digest: str, settings: C4RenderSettings) -> str:
+    """New admissions use the current renderer; completed renders keep their inputs."""
+    return _identity_digest(_render_identity_inputs(closure_digest, settings))
+
+
+def _validate_pinned_render_identity(
+    row: dict[str, object], closure: C4SourceClosure, artifact: C4RenderArtifact,
+) -> None:
+    inputs = row.get("identity_inputs")
+    legacy = inputs is None
+    if legacy:
+        # The only pre-versioned adapter shipped with schema 3. Do not bless
+        # arbitrary old digests or reinterpret completed renders as current.
+        inputs = {
+            "closure_digest": closure.digest,
+            "image_digest": STRUCTURIZR_IMAGE_DIGEST,
+            "artifact_version": 3,
+            "adapter_format": 1,
+            "adapter_sha256": "04a32a0141a2578724d6826b74d2192ba9bb94f971b00600350d1225d5ac3a2b",
+            "settings": row["settings"],
+        }
+    if (not isinstance(inputs, dict)
+            or set(inputs) != {"closure_digest", "image_digest", "artifact_version",
+                               "adapter_format", "adapter_sha256", "settings"}
+            or inputs["closure_digest"] != closure.digest
+            or inputs["settings"] != C4RenderSettings(**row["settings"]).cache_payload()
+            or inputs["image_digest"] != artifact.image_digest
+            or artifact.closure_digest != closure.digest
+            or _identity_digest(inputs) != row["render_identity"]
+            or row["operation_id"] != "c4-render-" + row["render_identity"]):
+        raise ValueError("durable render identity is invalid")
+    # Ready output remains pinned across upgrades. When a published artifact
+    # exists, bind it back to the original source and renderer inputs; consumers
+    # additionally recheck semantic digests and sanitized hit-target bindings.
+    manifest_path = (artifact.artifact_directory / "manifest.json"
+                     if artifact.artifact_directory is not None else None)
+    if manifest_path is not None and manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text())
+        if (manifest.get("version") != inputs["artifact_version"]
+                or manifest.get("closure_digest") != closure.digest
+                or manifest.get("image_digest") != inputs["image_digest"]
+                or manifest.get("settings") != inputs["settings"]
+                or manifest.get("source_provenance") != _source_provenance(closure)):
+            raise ValueError("durable render artifact provenance is invalid")
+    elif legacy:
+        raise ValueError("legacy render has no published provenance manifest")
 
 
 def _closure_to_dict(closure: C4SourceClosure) -> dict[str, object]:

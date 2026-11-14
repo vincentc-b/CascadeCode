@@ -25,7 +25,7 @@ copies the verified bytes to a private snapshot. Every Structurizr stage mounts
 that snapshot read-only, so later changes to the materialized directory cannot
 change a render already in progress.
 
-The immutable cache key covers artifact schema version 3, closure digest, the
+The immutable cache key covers artifact schema version 4, closure digest, the
 pinned Structurizr image digest, and bounded render settings. `manifest.json`
 records those values plus the source entry point, full source-file provenance,
 view inventory, source-diff reference, binding and SVG paths, and an
@@ -94,3 +94,37 @@ link the code-level structure, lifecycle, persistence, and recovery diagrams.
 and [Task](../../cascade/task/DESIGN.md) contain source-linked implementation views.
 These Mermaid diagrams complement static C4; they are not dynamic Structurizr
 views or separately deployed services.
+
+
+## Integrated code level
+
+From the supervisor component diagram, Explore **Epic team**, **Feature team**,
+**Task team**, or **Tier teams** to open the corresponding `cascade-*-code` view.
+These are native Structurizr custom views and custom elements, rendered and
+bound by the same offline pipeline as the other levels. The UI names their
+level **Code**; they do not represent additional deployed containers.
+
+Each code view declares `cascade.codeComponent` with the owning component's
+semantic ID. Code elements declare `cascade.parent` with the same component ID,
+plus a confined repository-relative `cascade.sourcePath` and a concrete
+`cascade.sourceSymbol`. Select a code element to open the source from the
+snapshot's pinned code revision. Level up reverses the verified component link.
+Unscoped custom views are not automatically treated as code views.
+
+The source contract validates component scope and path confinement. The render
+proves semantic hit targets for custom elements exactly as for C4 elements.
+Source content is served through opaque snapshot-authorized resource IDs, never
+an arbitrary path parameter, and is displayed as plain text.
+
+Interactive rendering performs validation, JSON/static export, and a single
+trusted batch capture of all bound SVGs. One Docker/Java/browser session captures
+all views; the redundant stock SVG export is omitted. Artifact schema version 4
+invalidates earlier cache entries. Per-file hashes, semantic bindings, bounded
+execution, cancellation, and fail-closed publication remain in force.
+
+Completed scheduler operations retain their renderer identity inputs. Reads verify
+those pinned inputs and published source provenance rather than recomputing with
+today's adapter bytes. The known schema-3 adapter remains readable through an
+explicit legacy identity check; its provenance manifest is mandatory. A pending
+operation admitted for another renderer fails with a refresh instruction instead
+of publishing new adapter output under its old identity.
