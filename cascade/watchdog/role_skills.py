@@ -14,12 +14,13 @@ _PRODUCT = "skills/roles/product_manager/SKILL.md"
 _ENG_MGR = "skills/roles/engineering_manager/SKILL.md"
 _SW_DEV = "skills/roles/software_developer/SKILL.md"
 _CODE_REV = "skills/roles/code_reviewer/SKILL.md"
+_DESIGN = "skills/design/SKILL.md"
 
 RoleSkillDefaults: Final[dict[RoleId, list[str]]] = {
-    "epic_manager": [_FRUGAL, _PRODUCT],
-    "epic_architect": [_FRUGAL],
-    "feature_lead": [_FRUGAL, _PRODUCT],
-    "feature_architect": [_FRUGAL],
+    "epic_manager": [_FRUGAL, _PRODUCT, _DESIGN],
+    "epic_architect": [_FRUGAL, _DESIGN],
+    "feature_lead": [_FRUGAL, _PRODUCT, _DESIGN],
+    "feature_architect": [_FRUGAL, _DESIGN],
     "boss": [_FRUGAL, _ENG_MGR],
     "swe": [_FRUGAL, _SW_DEV, _CODE_REV],
 }

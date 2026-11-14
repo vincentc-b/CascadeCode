@@ -28,13 +28,15 @@ _LOCKED_DEFAULTS: dict[RoleId, list[str]] = {
     "epic_manager": [
         "skills/roles/frugal_engineering/SKILL.md",
         "skills/roles/product_manager/SKILL.md",
+        "skills/design/SKILL.md",
     ],
-    "epic_architect": ["skills/roles/frugal_engineering/SKILL.md"],
+    "epic_architect": ["skills/roles/frugal_engineering/SKILL.md", "skills/design/SKILL.md"],
     "feature_lead": [
         "skills/roles/frugal_engineering/SKILL.md",
         "skills/roles/product_manager/SKILL.md",
+        "skills/design/SKILL.md",
     ],
-    "feature_architect": ["skills/roles/frugal_engineering/SKILL.md"],
+    "feature_architect": ["skills/roles/frugal_engineering/SKILL.md", "skills/design/SKILL.md"],
     "boss": [
         "skills/roles/frugal_engineering/SKILL.md",
         "skills/roles/engineering_manager/SKILL.md",
@@ -165,7 +167,8 @@ def test_load_role_skills_context_returns_path_and_text(tmp_path: Path) -> None:
         {
             "path": "skills/roles/frugal_engineering/SKILL.md",
             "text": "# Frugal\nBe frugal.\n",
-        }
+        },
+        {"path": "skills/design/SKILL.md", "text": "# skills/design/SKILL.md\n"}
     ]
 
 
@@ -191,3 +194,14 @@ def test_load_role_skills_context_swe_includes_task_skills(tmp_path: Path) -> No
         "skills/custom/SKILL.md",
     ]
     assert playbooks[-1]["text"] == "custom playbook\n"
+
+
+@pytest.mark.parametrize("role", ["epic_manager", "epic_architect", "feature_lead", "feature_architect"])
+def test_planning_roles_receive_current_design_review_rule(role: RoleId) -> None:
+    from cascade.agent.graph_turn import _append_planning_tool_directive
+
+    prompt = _append_planning_tool_directive(role, "Plan this work.")
+    assert "Before signing off or publishing" in prompt
+    assert "no epic/feature/task IDs" in prompt
+    assert "Rewrite violations before sign-off or publication" in prompt
+    assert "skills/design/SKILL.md" in default_role_skill_paths(role)

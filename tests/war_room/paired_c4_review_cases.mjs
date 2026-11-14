@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const {
   createPairedNavigation,
+  parentViews,
   createSemanticThreadModel,
   initPairedC4Review,
   renderUnifiedDiff,
@@ -155,8 +156,8 @@ const choiceTarget = {
 };
 assert.deepEqual(
   sortedDrillChoices(choiceTarget).map((choice) => choice.view_key),
-  ["alpha", "zeta"],
-  "drill choices use deterministic level/key order"
+  ["zeta", "alpha"],
+  "drill choices list broader levels before deeper levels"
 );
 const choicePayload = {
   ...payload,
@@ -639,3 +640,19 @@ contextReview.stopRefresh();
 
 console.log("paired_c4_review cases ok");
 
+
+
+// Level up uses model links even when there is no navigation history.
+const hierarchy = [
+  { key: "context", level: "systemContextViews", current: { targets: [
+    target("element", "system", "components", "componentViews")
+  ] } },
+  { key: "containers", level: "containerViews", proposed: { targets: [
+    target("element", "container", "components", "componentViews")
+  ] } },
+  { key: "unrelated", level: "containerViews", proposed: { targets: [] } },
+  { key: "components", level: "componentViews" }
+];
+assert.deepEqual(parentViews(hierarchy, hierarchy[3]).map(v => v.key), ["containers"]);
+assert.deepEqual(parentViews(hierarchy, hierarchy[0]), []);
+assert.deepEqual(parentViews([hierarchy[0], hierarchy[3]], hierarchy[3]).map(v => v.key), ["context"]);

@@ -796,7 +796,7 @@
           row.key + " (" + row.level + ")");
         item.selected = state.view && row.key === state.view.key && row.level === state.view.level;
       });
-      el.back.disabled = !state.history.length;
+      el.back.disabled = !viewerApi.parentViews(state.payload.views, state.view, state.payload.targets).length;
     }
 
     function pushNavigation() {
@@ -887,6 +887,7 @@
         document: doc,
         container: el.viewer,
         sideName: "branch",
+        view: view,
         side: { svg: view.artifact_url, targets: targets },
         selection: state.selection && {
           kind: state.selection.kind,
@@ -910,7 +911,7 @@
           });
         },
         onDrill: function (detail) {
-          var choices = sortedChoices(detail.target).filter(function (choice) {
+          var choices = (detail.choices || sortedChoices(detail.target)).filter(function (choice) {
             return !!findView(choice.view_key, choice.level);
           });
           if (choices.length === 1) {
@@ -979,14 +980,11 @@
         showView(findView(parts[0], parts[1]), null, true);
       });
       el.back.addEventListener("click", function () {
-        var previous = state.history.pop();
-        if (!previous) return;
-        state.view = previous.view;
-        state.selection = previous.selection;
-        el.drillChoices.hidden = true;
-        renderViewOptions();
-        renderViewer();
-        writeLink("pushState");
+        var parents = viewerApi.parentViews(state.payload.views, state.view, state.payload.targets);
+        if (parents.length === 1) showView(parents[0], null, true);
+        else if (parents.length > 1) chooseDrill({ label: "parent view" }, parents.map(function (view) {
+          return { view_key: view.key, level: view.level, label: view.key };
+        }));
       });
       el.documentPreviewClose.addEventListener("click", function () {
         state.resourceRequest += 1;

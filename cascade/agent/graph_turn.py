@@ -483,6 +483,14 @@ def _append_planning_tool_directive(
     if scope_id:
         parts.append(_scope_line(role, scope_id))
     parts.append(_PLANNING_TOOL_DIRECTIVE)
+    parts.append(
+        "Before signing off or publishing a plan, review its DESIGN.md edits. "
+        "Describe current design as matter of fact: no epic/feature/task IDs, "
+        "delivery-history references, previous requirements, or implementation chronology. "
+        "Keep those in work records. Rewrite violations before sign-off or publication. "
+        "Domain concepts such as epics and features may appear when describing current "
+        "product behavior; they must not serve as historical attribution."
+    )
     if role in _EPIC_PLANNING_ROLES:
         parts.append(
             "For CommentPosted events, call read_comment with the comment_id to get the "

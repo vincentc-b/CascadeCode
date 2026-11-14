@@ -1144,6 +1144,7 @@ def resource_bytes(
                 old, new,
                 fromfile=str(descriptor.get("before_path") or "/dev/null"),
                 tofile=descriptor["path"],
+                n=max(len(old), len(new)),
             )).encode("utf-8")
         if descriptor.get("mode") == "section":
             body = _markdown_section(body, str(descriptor["section"]))
