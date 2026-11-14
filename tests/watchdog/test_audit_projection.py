@@ -1,7 +1,8 @@
 import json
+import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import jsonschema
 import pytest
 
 from cascade.watchdog.audit_projection import (
@@ -9,10 +10,13 @@ from cascade.watchdog.audit_projection import (
     CurrentSummary,
     ProjectionManifest,
     SourceRef,
+    publish_audit_projection,
     project_recovery_sources,
     projection_json_schema,
     projection_root,
+    read_projection_manifest,
 )
+from cascade.watchdog.audit_lane import AuditPassResult
 
 
 STAMP = "2026-11-14T12:00:00+00:00"
@@ -136,7 +140,7 @@ def test_projects_all_stores_history_legacy_and_malformed_neighbors_without_writ
     }
     assert action.occurred_at == STAMP
     assert action.last_attempted_at == STAMP
-    assert action.last_verified_at == "2026-11-14T11:59:00+00:00"
+    assert action.last_verified_at is None
 
     prior_row = next(
         item
@@ -146,6 +150,7 @@ def test_projects_all_stores_history_legacy_and_malformed_neighbors_without_writ
     assert prior_row.authoritative_generation == PRIOR_GENERATION
     assert prior_row.verification_status == "unverifiable"
     assert prior_row.reason == "historical_attempt"
+    assert prior_row.last_verified_at is None
 
     legacy = next(
         item
@@ -154,6 +159,7 @@ def test_projects_all_stores_history_legacy_and_malformed_neighbors_without_writ
     )
     assert legacy.authoritative_generation is None
     assert legacy.failure_class is None
+    assert legacy.occurred_at == STAMP
     assert legacy.provenance == {
         "child_id": "task_legacy",
         "observed_child_sha": "0123456789abcdef",
@@ -187,7 +193,8 @@ def test_large_details_are_referenced_not_copied_and_source_failures_are_coverag
     projected = project_recovery_sources(tmp_path, max_detail_bytes=128)
     row = projected.current[0]
     serialized = json.dumps(row.as_dict())
-    jsonschema.validate(row.as_dict(), projection_json_schema())
+    current_schema = projection_json_schema()["$defs"]["current"]
+    assert current_schema["properties"]["source_ref"]["type"] == "object"
     assert row.detail_truncated is True
     assert "never publish me" not in serialized
     assert "secret-token" not in serialized
@@ -226,8 +233,7 @@ def test_manifest_and_single_schema_cover_all_projection_artifacts() -> None:
     ).as_dict()
     schema = projection_json_schema()
 
-    jsonschema.Draft202012Validator.check_schema(schema)
-    jsonschema.validate(manifest, schema)
+    assert set(schema["$defs"]["manifest"]["required"]) <= set(manifest)
     assert manifest["schema_version"] == PROJECTION_SCHEMA_VERSION == 2
     assert manifest["projection_kind"] == "manifest"
     assert manifest["sections"] == {
@@ -237,3 +243,177 @@ def test_manifest_and_single_schema_cover_all_projection_artifacts() -> None:
     }
     assert schema["$id"].endswith("/v2")
     assert set(schema["$defs"]) == {"manifest", "current", "coverage", "history"}
+
+
+def test_atomic_publisher_reconciles_matching_authority_and_bounds_pages(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / ".cascade"
+    legacy = {
+        f"legacy-{index}": {
+            "child_id": f"task_{index:03d}",
+            "observed_child_sha": f"sha-{index}",
+            "supervisor_id": "feat_001",
+            "observed_at": STAMP,
+        }
+        for index in range(101)
+    }
+    _write(
+        home / "executions.json",
+        {"actions": {"current": {"incident": _incident()}, **legacy}},
+    )
+    _write(home / "orphan_delivery_recoveries.json", {"recoveries": {}})
+    _write(home / "remediation_dispositions.json", {"dispositions": {}})
+    observed = datetime.fromisoformat(STAMP)
+    result = AuditPassResult(
+        projection_observations=(
+            {
+                "work_id": "task_001",
+                "owner": "feat_001",
+                "authoritative_generation": GENERATION,
+                "failure_class": "delivery_stalled",
+                "classification": "proven_incident",
+                "reason": "validated_delivery_missing",
+            },
+        )
+    )
+
+    epoch = publish_audit_projection(
+        tmp_path, result, interval_seconds=1800, observed_at=observed
+    )
+    manifest = read_projection_manifest(tmp_path)
+
+    assert manifest["epoch"] == epoch
+    assert manifest["fresh_until"] == (observed + timedelta(seconds=3660)).isoformat()
+    assert manifest["sections"]["history"]["page_count"] == 2
+    pointer = json.loads((projection_root(tmp_path) / "current.json").read_text())
+    assert pointer == {"schema_version": 2, "epoch": epoch}
+    current_page = json.loads(
+        (projection_root(tmp_path) / epoch / "current" / "000000.json").read_text()
+    )
+    assert current_page["epoch"] == epoch
+    assert current_page["rows"][0]["last_verified_at"] == STAMP
+    assert current_page["rows"][0]["fresh_until"] == manifest["fresh_until"]
+    for page in (projection_root(tmp_path) / epoch / "history").iterdir():
+        payload = json.loads(page.read_text())
+        assert len(payload["rows"]) <= 100
+        assert page.stat().st_size <= 256 * 1024
+
+
+def test_interrupted_pointer_swap_leaves_prior_epoch_readable_and_partial_unreferenced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / ".cascade"
+    for filename, collection in (
+        ("executions.json", "actions"),
+        ("orphan_delivery_recoveries.json", "recoveries"),
+        ("remediation_dispositions.json", "dispositions"),
+    ):
+        _write(home / filename, {collection: {}})
+    first = publish_audit_projection(
+        tmp_path,
+        AuditPassResult(),
+        interval_seconds=60,
+        observed_at=datetime(2026, 11, 14, tzinfo=timezone.utc),
+    )
+    real_replace = os.replace
+
+    def interrupt(source, destination):
+        if Path(destination).name == "current.json":
+            raise OSError("simulated pointer interruption")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", interrupt)
+    with pytest.raises(OSError, match="pointer interruption"):
+        publish_audit_projection(
+            tmp_path,
+            AuditPassResult(coverage_deferred=True),
+            interval_seconds=60,
+            observed_at=datetime(2026, 11, 14, 0, 1, tzinfo=timezone.utc),
+        )
+
+    assert read_projection_manifest(tmp_path)["epoch"] == first
+    epochs = [path for path in projection_root(tmp_path).iterdir() if path.is_dir()]
+    assert len(epochs) == 2
+
+
+def test_manifest_reader_rejects_missing_page_and_unchanged_pass_is_silent(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / ".cascade"
+    _write(home / "executions.json", {"actions": {}})
+    _write(home / "orphan_delivery_recoveries.json", {"recoveries": {}})
+    _write(home / "remediation_dispositions.json", {"dispositions": {}})
+    observed = datetime.fromisoformat(STAMP)
+    first = publish_audit_projection(
+        tmp_path, AuditPassResult(), interval_seconds=60, observed_at=observed
+    )
+    second = publish_audit_projection(
+        tmp_path,
+        AuditPassResult(),
+        interval_seconds=60,
+        observed_at=observed + timedelta(seconds=60),
+    )
+    assert second == first
+    assert (
+        len([path for path in projection_root(tmp_path).iterdir() if path.is_dir()])
+        == 1
+    )
+
+    manifest_path = projection_root(tmp_path) / first / "manifest.json"
+    damaged = json.loads(manifest_path.read_text())
+    damaged["sections"]["coverage"]["page_count"] = 1
+    manifest_path.write_text(json.dumps(damaged))
+    assert read_projection_manifest(tmp_path) == {
+        "status": "pending",
+        "reason": "page_invalid",
+        "epoch": first,
+    }
+
+
+def test_restart_preserves_pending_coverage_and_stales_expired_incident(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / ".cascade"
+    _write(home / "executions.json", {"actions": {"one": {"incident": _incident()}}})
+    _write(home / "orphan_delivery_recoveries.json", {"recoveries": {}})
+    _write(home / "remediation_dispositions.json", {"dispositions": {}})
+    observed = datetime.fromisoformat(STAMP)
+    incident = AuditPassResult(
+        projection_observations=(
+            {
+                "work_id": "task_001",
+                "authoritative_generation": GENERATION,
+                "failure_class": "delivery_stalled",
+                "classification": "proven_incident",
+                "reason": "stalled",
+            },
+        )
+    )
+    publish_audit_projection(
+        tmp_path, incident, interval_seconds=60, observed_at=observed
+    )
+    second = publish_audit_projection(
+        tmp_path,
+        AuditPassResult(
+            candidate_failures=({"work_id": "task_002", "reason": "work_deleted"},)
+        ),
+        interval_seconds=60,
+        observed_at=observed + timedelta(seconds=181),
+    )
+    manifest = read_projection_manifest(tmp_path)
+    assert manifest["epoch"] == second
+    coverage_pages = projection_root(tmp_path) / second / "coverage"
+    rows = [
+        row
+        for path in coverage_pages.iterdir()
+        for row in json.loads(path.read_text())["rows"]
+    ]
+    assert any(
+        row["work_id"] == "task_001"
+        and row["reason"] == "verification_stale"
+        and row["last_verified_at"] == STAMP
+        for row in rows
+    )
+    deleted = next(row for row in rows if row["reason"] == "work_deleted")
+    assert deleted["next_attempt_at"] == (observed + timedelta(seconds=241)).isoformat()

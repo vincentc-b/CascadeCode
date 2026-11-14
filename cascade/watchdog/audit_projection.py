@@ -8,12 +8,16 @@ source-ledger decoder defined here.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import stat
+import threading
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -23,6 +27,10 @@ from cascade.watchdog.audit_lane import canonical_audit_root
 PROJECTION_SCHEMA_VERSION = 2
 MAX_SOURCE_BYTES = 1024 * 1024
 MAX_DETAIL_BYTES = 4096
+MAX_PAGE_ROWS = 100
+MAX_PAGE_BYTES = 256 * 1024
+MAX_MANIFEST_BYTES = 64 * 1024
+_EPOCH_RE = re.compile(r"^[a-zA-Z0-9._-]{1,128}$")
 
 StoreName = Literal["action_recovery", "orphan_delivery", "remediation_dispositions"]
 VerificationStatus = Literal[
@@ -277,6 +285,552 @@ def projection_root(root: Path) -> Path:
     return canonical_audit_root(root) / ".cascade" / "health_audit" / "projections"
 
 
+def read_projection_manifest(root: Path) -> dict[str, object]:
+    """Read and pin one complete schema-2 epoch, or return pending state."""
+
+    base = projection_root(root)
+    try:
+        pointer = _read_json_object(base / "current.json", MAX_MANIFEST_BYTES)
+    except FileNotFoundError:
+        return {"status": "pending", "reason": "pointer_missing"}
+    except _SourceError as exc:
+        return {"status": "pending", "reason": f"pointer_{exc.reason}"}
+    epoch = pointer.get("epoch")
+    if (
+        pointer.get("schema_version") != PROJECTION_SCHEMA_VERSION
+        or not isinstance(epoch, str)
+        or _EPOCH_RE.fullmatch(epoch) is None
+    ):
+        return {"status": "pending", "reason": "pointer_incompatible"}
+    try:
+        manifest = _read_json_object(base / epoch / "manifest.json", MAX_MANIFEST_BYTES)
+    except FileNotFoundError:
+        return {"status": "pending", "reason": "manifest_missing", "epoch": epoch}
+    except _SourceError as exc:
+        return {
+            "status": "pending",
+            "reason": f"manifest_{exc.reason}",
+            "epoch": epoch,
+        }
+    if (
+        manifest.get("schema_version") != PROJECTION_SCHEMA_VERSION
+        or manifest.get("projection_kind") != "manifest"
+        or manifest.get("epoch") != epoch
+    ):
+        return {
+            "status": "pending",
+            "reason": "manifest_incompatible",
+            "epoch": epoch,
+        }
+    if not _validate_epoch_pages(base, epoch, manifest):
+        return {"status": "pending", "reason": "page_invalid", "epoch": epoch}
+    return manifest
+
+
+def publish_audit_projection(
+    root: Path,
+    pass_result: object,
+    prior_epoch: str | None = None,
+    *,
+    interval_seconds: int,
+    observed_at: datetime | None = None,
+    max_page_rows: int = MAX_PAGE_ROWS,
+    max_page_bytes: int = MAX_PAGE_BYTES,
+) -> str:
+    """Publish complete immutable pages before atomically switching the pointer."""
+
+    if type(interval_seconds) is not int or interval_seconds <= 0:
+        raise ValueError("projection interval must be positive")
+    if not 1 <= max_page_rows <= MAX_PAGE_ROWS or max_page_bytes < 1024:
+        raise ValueError("invalid projection page bounds")
+    now = (observed_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    fresh_until = (now + timedelta(seconds=2 * interval_seconds + 60)).isoformat()
+    base = projection_root(root)
+    prior_manifest = read_projection_manifest(root)
+    if prior_epoch is not None and prior_manifest.get("epoch") != prior_epoch:
+        prior_manifest = {"status": "pending", "reason": "prior_epoch_mismatch"}
+    prior_rows = _read_prior_rows(base, prior_manifest)
+    source_revisions, source_failures = _source_markers(root)
+    sources = project_recovery_sources(root)
+    current, coverage, history = _reconcile_projection(
+        prior_rows,
+        sources,
+        tuple(getattr(pass_result, "projection_observations", ())),
+        tuple(getattr(pass_result, "candidate_failures", ())),
+        now,
+        fresh_until,
+        (now + timedelta(seconds=interval_seconds)).isoformat(),
+        coverage_deferred=bool(getattr(pass_result, "coverage_deferred", False)),
+    )
+    rows = {
+        "current": [item.as_dict() for item in current],
+        "coverage": [item.as_dict() for item in coverage],
+        "history": [item.as_dict() for item in history],
+    }
+    epoch = f"epoch-{now.strftime('%Y%m%dT%H%M%S%fZ')}-{uuid.uuid4().hex[:12]}"
+    pages = {
+        name: _bounded_pages(name, values, epoch, max_page_rows, max_page_bytes)
+        for name, values in rows.items()
+    }
+    if (source_revisions, source_failures) != _source_markers(root):
+        raise RuntimeError("projection recovery source changed during publication")
+    if (
+        isinstance(prior_manifest.get("epoch"), str)
+        and prior_rows == rows
+        and _manifest_source_markers(prior_manifest)
+        == (source_revisions, source_failures)
+    ):
+        # Preserve receipt-only silence when a completed healthy pass has no
+        # material current, coverage, history, or source-marker change.
+        return str(prior_manifest["epoch"])
+    product_identity, tracking_identity = _repository_identities(root)
+    manifest = ProjectionManifest(
+        epoch=epoch,
+        observed_at=now.isoformat(),
+        interval_seconds=interval_seconds,
+        fresh_until=fresh_until,
+        product_identity=product_identity,
+        tracking_identity=tracking_identity,
+        page_counts={name: len(value) for name, value in pages.items()},
+        source_revisions=source_revisions,
+        source_failures=source_failures,
+    ).as_dict()
+
+    base.mkdir(parents=True, exist_ok=True)
+    epoch_dir = base / epoch
+    epoch_dir.mkdir()
+    try:
+        for section, section_pages in pages.items():
+            section_dir = epoch_dir / section
+            section_dir.mkdir()
+            for index, page in enumerate(section_pages):
+                _write_json_durable(section_dir / f"{index:06d}.json", page)
+            _fsync_directory(section_dir)
+        _write_json_durable(epoch_dir / "manifest.json", manifest)
+        _fsync_directory(epoch_dir)
+        _write_json_atomically(
+            base / "current.json",
+            {"schema_version": PROJECTION_SCHEMA_VERSION, "epoch": epoch},
+        )
+        _fsync_directory(base)
+    except Exception:
+        # Retain an unreferenced partial directory as interruption evidence.
+        raise
+    return epoch
+
+
+def _repository_identities(root: Path) -> tuple[str, str]:
+    from cascade.board.context import get_project_context, resolve_tracking_root
+
+    product = canonical_audit_root(root)
+    project = get_project_context()
+    if project is not None and product == project.target.root:
+        return str(project.target.repository_key), str(project.tracking.repository_key)
+    tracking = resolve_tracking_root(product)
+    return (
+        "repository-" + hashlib.sha256(product.as_uri().encode()).hexdigest()[:24],
+        "repository-" + hashlib.sha256(tracking.as_uri().encode()).hexdigest()[:24],
+    )
+
+
+def _source_markers(root: Path) -> tuple[dict[str, str], dict[str, str]]:
+    home = canonical_audit_root(root) / ".cascade"
+    revisions: dict[str, str] = {}
+    failures: dict[str, str] = {}
+    for store, filename, _collection in _STORE_SPECS:
+        try:
+            descriptor = os.open(
+                home / filename,
+                os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0),
+            )
+        except FileNotFoundError:
+            failures[store] = "source_missing"
+            continue
+        except OSError:
+            failures[store] = "source_unreadable"
+            continue
+        try:
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode):
+                failures[store] = "source_not_regular"
+                continue
+            if info.st_size > MAX_SOURCE_BYTES:
+                failures[store] = "source_too_large"
+                continue
+            content = os.read(descriptor, MAX_SOURCE_BYTES + 1)
+            if len(content) > MAX_SOURCE_BYTES:
+                failures[store] = "source_too_large"
+                continue
+            revisions[store] = "sha256:" + hashlib.sha256(content).hexdigest()
+        finally:
+            os.close(descriptor)
+    return revisions, failures
+
+
+def _read_prior_rows(
+    base: Path, manifest: Mapping[str, object]
+) -> dict[str, list[dict[str, object]]]:
+    result: dict[str, list[dict[str, object]]] = {
+        "current": [],
+        "coverage": [],
+        "history": [],
+    }
+    epoch = manifest.get("epoch")
+    sections = manifest.get("sections")
+    if not isinstance(epoch, str) or not isinstance(sections, Mapping):
+        return result
+    for name in result:
+        section = sections.get(name)
+        count = section.get("page_count") if isinstance(section, Mapping) else None
+        if type(count) is not int or not 0 <= count <= 100000:
+            return {"current": [], "coverage": [], "history": []}
+        try:
+            for index in range(count):
+                page = _read_json_object(
+                    base / epoch / name / f"{index:06d}.json", MAX_PAGE_BYTES
+                )
+                if page.get("epoch") != epoch or page.get("projection_kind") != name:
+                    raise _SourceError("page_incompatible")
+                page_rows = page.get("rows")
+                if not isinstance(page_rows, list) or len(page_rows) > MAX_PAGE_ROWS:
+                    raise _SourceError("page_incompatible")
+                result[name].extend(row for row in page_rows if isinstance(row, dict))
+        except (FileNotFoundError, _SourceError):
+            return {"current": [], "coverage": [], "history": []}
+    return result
+
+
+def _validate_epoch_pages(
+    base: Path, epoch: str, manifest: Mapping[str, object]
+) -> bool:
+    sections = manifest.get("sections")
+    if not isinstance(sections, Mapping):
+        return False
+    for name in ("current", "coverage", "history"):
+        section = sections.get(name)
+        count = section.get("page_count") if isinstance(section, Mapping) else None
+        if type(count) is not int or not 0 <= count <= 100000:
+            return False
+        for index in range(count):
+            try:
+                page = _read_json_object(
+                    base / epoch / name / f"{index:06d}.json", MAX_PAGE_BYTES
+                )
+            except (FileNotFoundError, _SourceError):
+                return False
+            rows = page.get("rows")
+            if (
+                page.get("schema_version") != PROJECTION_SCHEMA_VERSION
+                or page.get("projection_kind") != name
+                or page.get("epoch") != epoch
+                or not isinstance(rows, list)
+                or not 1 <= len(rows) <= MAX_PAGE_ROWS
+                or any(not isinstance(row, dict) for row in rows)
+            ):
+                return False
+    return True
+
+
+def _manifest_source_markers(
+    manifest: Mapping[str, object],
+) -> tuple[dict[str, str], dict[str, str]]:
+    revisions: dict[str, str] = {}
+    failures: dict[str, str] = {}
+    sources = manifest.get("sources")
+    if not isinstance(sources, Mapping):
+        return revisions, failures
+    for store, value in sources.items():
+        if store not in _STORE_NAMES or not isinstance(value, Mapping):
+            continue
+        revision = value.get("revision")
+        failure = value.get("failure")
+        if isinstance(revision, str):
+            revisions[store] = revision
+        if isinstance(failure, str):
+            failures[store] = failure
+    return revisions, failures
+
+
+def _reconcile_projection(
+    prior: Mapping[str, list[dict[str, object]]],
+    sources: RecoveryProjection,
+    observations: Sequence[Mapping[str, object]],
+    failures: Sequence[Mapping[str, object]],
+    now: datetime,
+    fresh_until: str,
+    next_attempt_at: str,
+    *,
+    coverage_deferred: bool,
+) -> tuple[
+    tuple[CurrentSummary, ...],
+    tuple[CoverageSummary, ...],
+    tuple[HistorySummary, ...],
+]:
+    observed_by_work = {
+        str(item.get("work_id")): item
+        for item in observations
+        if isinstance(item.get("work_id"), str)
+    }
+    current: list[CurrentSummary] = []
+    coverage: list[CoverageSummary] = list(sources.coverage)
+    history: list[HistorySummary] = list(sources.history)
+
+    for raw in prior.get("current", []):
+        if raw.get("work_id") in observed_by_work:
+            continue
+        try:
+            expiry = datetime.fromisoformat(str(raw.get("fresh_until")))
+            item = _summary_from_dict(raw, CurrentSummary)
+        except (TypeError, ValueError):
+            continue
+        if expiry > now:
+            current.append(item)
+        else:
+            coverage.append(_stale_coverage(item))
+
+    source_current = {
+        (item.work_id, item.authoritative_generation, item.failure_class): item
+        for item in sources.current
+    }
+    stale_coverage_keys = {
+        _coverage_key(item)
+        for item in _safe_prior_summaries(prior.get("coverage", []), CoverageSummary)
+        if item.verification_status == "stale"
+    } | {
+        _coverage_key(item) for item in coverage if item.verification_status == "stale"
+    }
+    matched_source_keys: set[tuple[str | None, str | None, str | None]] = set()
+    for work_id, observation in observed_by_work.items():
+        classification = observation.get("classification")
+        generation = observation.get("authoritative_generation")
+        failure_class = observation.get("failure_class")
+        verified = now.isoformat()
+        match = source_current.get((work_id, generation, failure_class))
+        if classification == "proven_incident" and match is not None:
+            matched_source_keys.add((work_id, generation, failure_class))
+            values = {
+                name: getattr(match, name) for name in AuditSummary.__dataclass_fields__
+            }
+            values.update(last_verified_at=verified, fresh_until=fresh_until)
+            current.append(CurrentSummary(**values))
+        else:
+            coverage.append(
+                CoverageSummary(
+                    None,
+                    work_id,
+                    _text(observation.get("owner")),
+                    _generation(generation),
+                    _text(failure_class),
+                    None,
+                    verified,
+                    verified,
+                    "verified" if classification == "healthy" else "pending",
+                    str(observation.get("reason") or classification or "unknown"),
+                    fresh_until,
+                    next_attempt_at if classification != "healthy" else None,
+                )
+            )
+    for key, item in source_current.items():
+        if key in matched_source_keys:
+            continue
+        pending_key = _coverage_key(item)
+        if pending_key in stale_coverage_keys:
+            continue
+        values = {
+            name: getattr(item, name) for name in AuditSummary.__dataclass_fields__
+        }
+        values.update(
+            verification_status="pending",
+            reason="authoritative_reassessment_pending",
+            next_attempt_at=next_attempt_at,
+        )
+        coverage.append(CoverageSummary(**values))
+    for failure in failures:
+        coverage.append(
+            CoverageSummary(
+                None,
+                _text(failure.get("work_id")),
+                None,
+                None,
+                None,
+                None,
+                now.isoformat(),
+                None,
+                "pending",
+                str(failure.get("reason") or "audit_observation_error"),
+                next_attempt_at=next_attempt_at,
+            )
+        )
+    if coverage_deferred:
+        coverage.append(
+            CoverageSummary(
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                now.isoformat(),
+                None,
+                "pending",
+                "deferred_by_budget",
+            )
+        )
+
+    new_coverage_keys = {_coverage_key(item) for item in coverage}
+    coverage.extend(
+        item
+        for item in _safe_prior_summaries(prior.get("coverage", []), CoverageSummary)
+        if item.work_id not in observed_by_work
+        and _coverage_key(item) not in new_coverage_keys
+    )
+    history.extend(_safe_prior_summaries(prior.get("history", []), HistorySummary))
+    current = _dedupe_summaries(current)
+    coverage = _dedupe_summaries(coverage)
+    history = _dedupe_summaries(history)
+    current.sort(key=lambda item: (item.work_id or "", _ref_key(item.source_ref)))
+    coverage.sort(
+        key=lambda item: (item.work_id or "", _ref_key(item.source_ref), item.reason)
+    )
+    history.sort(key=lambda item: (_ref_key(item.source_ref), item.occurred_at or ""))
+    return tuple(current), tuple(coverage), tuple(history)
+
+
+def _summary_from_dict(
+    raw: Mapping[str, object], cls: type[AuditSummary]
+) -> AuditSummary:
+    ref_raw = raw.get("source_ref")
+    ref = None
+    if isinstance(ref_raw, Mapping):
+        ref = SourceRef(
+            ref_raw.get("store"),  # type: ignore[arg-type]
+            ref_raw.get("row_key"),  # type: ignore[arg-type]
+            ref_raw.get("incident_history_ordinal"),  # type: ignore[arg-type]
+        )
+    values = {name: raw.get(name) for name in AuditSummary.__dataclass_fields__}
+    values["source_ref"] = ref
+    values["provenance"] = raw.get("provenance") or {}
+    return cls(**values)
+
+
+def _safe_prior_summaries(
+    raw_rows: Sequence[Mapping[str, object]], cls: type[AuditSummary]
+) -> list[Any]:
+    result = []
+    for raw in raw_rows:
+        try:
+            result.append(_summary_from_dict(raw, cls))
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def _stale_coverage(item: CurrentSummary) -> CoverageSummary:
+    values = {name: getattr(item, name) for name in AuditSummary.__dataclass_fields__}
+    values.update(verification_status="stale", reason="verification_stale")
+    return CoverageSummary(**values)
+
+
+def _dedupe_summaries(items: Sequence[Any]) -> list[Any]:
+    unique = {}
+    for item in items:
+        key = json.dumps(item.as_dict(), sort_keys=True, separators=(",", ":"))
+        unique[key] = item
+    return list(unique.values())
+
+
+def _coverage_key(item: AuditSummary) -> tuple[object, ...]:
+    return (
+        _ref_key(item.source_ref),
+        item.work_id,
+        tuple(sorted(item.provenance.items())),
+    )
+
+
+def _bounded_pages(
+    kind: str,
+    rows: Sequence[dict[str, object]],
+    epoch: str,
+    row_limit: int,
+    byte_limit: int,
+) -> list[dict[str, object]]:
+    pages: list[dict[str, object]] = []
+    pending: list[dict[str, object]] = []
+    for row in rows:
+        candidate = pending + [row]
+        wrapper = {
+            "schema_version": PROJECTION_SCHEMA_VERSION,
+            "projection_kind": kind,
+            "epoch": epoch,
+            "rows": candidate,
+        }
+        if pending and (
+            len(candidate) > row_limit or len(_json_bytes(wrapper)) > byte_limit
+        ):
+            pages.append(
+                {
+                    "schema_version": PROJECTION_SCHEMA_VERSION,
+                    "projection_kind": kind,
+                    "epoch": epoch,
+                    "rows": pending,
+                }
+            )
+            pending = [row]
+        else:
+            pending = candidate
+        check = {
+            "schema_version": PROJECTION_SCHEMA_VERSION,
+            "projection_kind": kind,
+            "epoch": epoch,
+            "rows": pending,
+        }
+        if len(_json_bytes(check)) > byte_limit:
+            raise ValueError("bounded projection row exceeds page byte ceiling")
+    if pending:
+        pages.append(
+            {
+                "schema_version": PROJECTION_SCHEMA_VERSION,
+                "projection_kind": kind,
+                "epoch": epoch,
+                "rows": pending,
+            }
+        )
+    return pages
+
+
+def _json_bytes(value: object) -> bytes:
+    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _write_json_durable(path: Path, value: Mapping[str, object]) -> None:
+    with path.open("xb") as handle:
+        handle.write(_json_bytes(value))
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _write_json_atomically(path: Path, value: Mapping[str, object]) -> None:
+    temporary = path.with_name(
+        f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+    )
+    try:
+        with temporary.open("wb") as handle:
+            handle.write(_json_bytes(value))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def project_recovery_sources(
     root: Path,
     *,
@@ -480,7 +1034,6 @@ def _summary_times(
         None,
     )
     attempted: list[str] = []
-    successful: list[str] = []
     attempts = incident.get("attempts")
     if isinstance(attempts, Sequence) and not isinstance(
         attempts, (str, bytes, bytearray)
@@ -495,17 +1048,15 @@ def _summary_times(
             stamp = next((value for value in stamps if value), None)
             if stamp:
                 attempted.append(stamp)
-                if attempt.get("outcome") in {"success", "succeeded"}:
-                    successful.append(stamp)
     request = incident.get("request")
     if isinstance(request, Mapping) and (
         stamp := _timestamp(request.get("delivered_at"))
     ):
         attempted.append(stamp)
-    recorded = _timestamp(incident.get("recorded_at"))
-    if recorded and incident.get("outcome") == "success":
-        successful.append(recorded)
-    return occurred, max(attempted, default=None), max(successful, default=None)
+    # A successful recovery attempt is not a fresh verification of the work
+    # obligation.  Reconciliation supplies that timestamp after checking
+    # canonical state for the matching generation.
+    return occurred, max(attempted, default=None), None
 
 
 def _legacy_provenance(row: Mapping[str, Any]) -> dict[str, str]:
@@ -530,7 +1081,13 @@ def _legacy_summary(
     occurred = next(
         (
             _timestamp(row.get(name))
-            for name in ("occurred_at", "time", "created_at", "updated_at")
+            for name in (
+                "observed_at",
+                "occurred_at",
+                "time",
+                "created_at",
+                "updated_at",
+            )
             if _timestamp(row.get(name))
         ),
         None,
@@ -713,6 +1270,8 @@ __all__ = [
     "PROJECTION_SCHEMA_VERSION",
     "MAX_SOURCE_BYTES",
     "MAX_DETAIL_BYTES",
+    "MAX_PAGE_ROWS",
+    "MAX_PAGE_BYTES",
     "SourceRef",
     "AuditSummary",
     "CurrentSummary",
@@ -721,6 +1280,8 @@ __all__ = [
     "ProjectionManifest",
     "RecoveryProjection",
     "projection_root",
+    "read_projection_manifest",
+    "publish_audit_projection",
     "project_recovery_sources",
     "projection_json_schema",
 ]

@@ -19,6 +19,11 @@ publication validation contract.
 
 ## Health-audit projection contract
 
+`REQ-WATCHDOG-002`: Projection source decoding preserves durable references,
+identity and provenance while bounding reads and exposing failures as coverage.
+`DEC-WATCHDOG-002`: Use a versioned projection schema and typed source references
+so consumers can pin a consistent epoch without interpreting raw ledgers.
+
 `audit_projection.py` owns schema version `2`, the source decoder, and the typed
 producer models.  The canonical ignored publication root is
 `.cascade/health_audit/projections/` under the resolved product repository.  A
@@ -26,9 +31,10 @@ manifest records the immutable epoch, observation/freshness times, interval,
 product and tracking identities, page counts for `current`, `coverage`, and
 `history`, plus per-source revision/failure markers.  Every summary repeats the
 schema version and keeps occurrence, latest attempt, and latest successful
-verification as separate timestamps.  Feature 044 task 003 owns atomic epoch
-publication; the War Room may consume the files but does not own or import this
-source classification logic.
+verification as separate timestamps.  Recovery-ledger success is an attempt
+result and does not populate `last_verified_at`; canonical audit reconciliation
+supplies that timestamp.  The audit lane publishes complete epochs;
+the War Room consumes them without importing source classification logic.
 
 `source_ref` is an opaque tuple of a fixed store name, its durable row key, and
 an optional zero-based `incident_history` ordinal.  It never contains a path.
@@ -49,10 +55,10 @@ detail allowance; they retain a reference and selected identity/state fields,
 not evidence objects, provider prompts, credentials, arbitrary result payloads,
 or hidden reasoning.
 
-A modern active row enters `current` only when its `work_id` is typed and
+A modern source row qualifies as a current candidate only when its `work_id` is typed and
 unambiguous (including agreement with nested `work.work_id`), its generation is
 a complete SHA-256 incident identity, its failure class is nonempty, and its
-outcome is not successful.  Its current source attempt is also indexed in
+outcome is not successful.  Its source attempt is also indexed in
 history.  Prior `incident_history` entries remain historical and are addressed
 by ordinal.  Rows lacking one of those identity elements are historical and
 unverifiable, with explicit coverage.  The legacy remediation shape—incident
@@ -62,10 +68,10 @@ child SHA is provenance only and is never promoted to an authoritative
 generation.
 
 Producer state transitions are conservative: a valid unresolved modern source
-attempt may be `proven_incident`; an authoritative successful verification is
+attempt may be a `proven_incident` candidate; an authoritative successful verification is
 retained as history with its own success timestamp; unavailable, ambiguous, or
 legacy evidence is `pending`/`unverifiable`; and freshness expiry is represented
-as `stale` by the later reconciler.  Only a fresh authoritative observation may
+as `stale` during reconciliation.  Only a fresh authoritative observation may
 move a row into or keep it in `current`, and only authoritative satisfaction of
 the relevant obligation may resolve it.  Request delivery, acknowledgement,
 result text, or a reported fix is follow-up state, not verification.
@@ -75,5 +81,37 @@ The focused compatibility fixtures live in
 and prior generations, the legacy shape, malformed adjacent rows, bounded large
 evidence, stable references, and byte-for-byte source immutability.  Pages built
 from these models are intended for 50-row default/100-row maximum pagination
-and the 256 KiB response ceiling; page construction and publication are owned by
-the subsequent producer task.
+and the 256 KiB response ceiling.
+
+## Bounded candidate reassessment
+
+`REQ-WATCHDOG-003`: Each completed audit pass fairly revisits ongoing work and
+historical unresolved obligations, advances beyond unavailable candidates, and
+keeps selection and observation within the pass budget.
+`DEC-WATCHDOG-003`: Persist separate tier positions for the ongoing and
+historical pools, plus a counter that reserves at least every fourth admission
+for history while both pools contain candidates. This prevents a continuous
+stream of active work from starving retained obligations across restarts.
+
+Candidate inventory reads the canonical board from the tracking repository and
+registered worktrees, with product-side Git and worktree references. Nonterminal
+and recently completed work enters the ongoing pool. Older completed work enters
+the historical pool when an unresolved action, review, reconciliation, cleanup,
+or registered worktree names it. Multiple references to one typed work ID
+produce one candidate with all reasons and source references. A missing or
+malformed canonical document remains an unavailable candidate for later retry.
+
+The receipt's opaque cursor carries both pool positions, tier rotation, and the
+historical admission counter. Each selected candidate has its own continuation
+so a timeout, unavailable document, or completed prefix can advance without
+skipping the unobserved suffix. The audit worker shares a read-only board
+snapshot within one pass; every repair still rechecks canonical state. The
+worker admits at most 100 candidates and 60 seconds per pass, and gives each
+observation at most two seconds. A process boundary reaps the worker and its
+subprocesses when the whole pass cannot finish. Candidate failures retain a
+retry reason and do not turn missing evidence into a healthy result.
+
+`tests/watchdog/test_audit_candidates.py` verifies pool rotation, retained
+references, split-root identity, unavailable evidence, and cursor continuation.
+`tests/watchdog/test_audit_lane.py` verifies observation deadlines, timeout
+advancement, partial-page continuation, snapshot reuse, and worker cleanup.

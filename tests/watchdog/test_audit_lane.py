@@ -266,6 +266,31 @@ def test_failed_pass_records_retry_without_advancing_then_clears_on_success(
     assert read_audit_receipt(tmp_path)["next_cursor"] == "after-retry"
 
 
+def test_projection_publication_failure_keeps_pass_pending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = Clock()
+
+    def fail_publication(*_args, **_kwargs):
+        raise OSError("pointer swap interrupted")
+
+    monkeypatch.setattr(
+        "cascade.watchdog.audit_projection.publish_audit_projection",
+        fail_publication,
+    )
+    lane = _lane(tmp_path, clock, lambda *_args: AuditPassResult(next_cursor="later"))
+
+    with pytest.raises(OSError, match="pointer swap interrupted"):
+        lane.run_due_pass()
+
+    assert read_audit_receipt(tmp_path) is None
+    failure = read_audit_failure(tmp_path)
+    assert failure is not None
+    assert failure["code"] == "projection_publication_failed"
+    assert failure["cursor"] is None
+    assert "prior current epoch remains readable" in failure["next_action"]
+
+
 def test_bounded_pass_continues_from_opaque_cursor_without_exceeding_page_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -463,6 +488,48 @@ def test_candidate_timeout_advances_unavailable_candidate_without_stalling_prefi
     assert attempts == ["task_001", "task_002", "feat_001"]
 
 
+def test_elapsed_candidate_deadline_allows_later_observation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(audit_lane_module, "_CANDIDATE_MAX_SECONDS", 0.02)
+    monkeypatch.setattr(
+        audit_lane_module,
+        "select_audit_candidates",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            candidates=tuple(
+                SimpleNamespace(work_id=work_id, evidence_available=True)
+                for work_id in ("task_001", "feat_001")
+            ),
+            next_cursor="done",
+            unavailable_evidence=(),
+            continuation_cursors=("after-task", "done"),
+            deferred=False,
+        ),
+    )
+    attempted: list[str] = []
+
+    def observe(work_id, **_kwargs):
+        attempted.append(work_id)
+        if work_id == "task_001":
+            time.sleep(0.1)
+        return SimpleNamespace(classification="healthy")
+
+    monkeypatch.setattr(audit_lane_module, "project_audit_observation", observe)
+    result = _run_bounded_audit_pass_inline(
+        tmp_path,
+        None,
+        threading.Event(),
+        max_items=2,
+        max_seconds=1,
+        monotonic=time.monotonic,
+    )
+
+    assert attempted == ["task_001", "feat_001"]
+    assert result.timed_out_candidates == ("task_001",)
+    assert result.reassessed_candidates == ("feat_001",)
+    assert result.next_cursor == "done"
+
+
 def test_observations_share_snapshot_and_each_receive_two_second_cap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -541,11 +608,13 @@ def test_partial_page_records_deferred_coverage_and_distinct_retry_reason(
 
     assert result.coverage_deferred
     assert result.next_cursor == "after-missing"
-    assert result.candidate_failures == ({
-        "work_id": "task_999",
-        "reason": "canonical_document_unavailable",
-        "retryable": True,
-    },)
+    assert result.candidate_failures == (
+        {
+            "work_id": "task_999",
+            "reason": "canonical_document_unavailable",
+            "retryable": True,
+        },
+    )
 
 
 def test_repeated_first_candidate_timeout_still_reaches_later_tiers(
@@ -1162,7 +1231,9 @@ def test_lane_cleanup_does_not_set_caller_stop_but_observes_it(
     assert not fresh_stop.is_set()
 
 
-def test_omitted_health_audit_table_keeps_default_on_configuration(tmp_path: Path) -> None:
+def test_omitted_health_audit_table_keeps_default_on_configuration(
+    tmp_path: Path,
+) -> None:
     (tmp_path / "cascade.toml").write_text(
         "[automation]\nenabled = true\n", encoding="utf-8"
     )

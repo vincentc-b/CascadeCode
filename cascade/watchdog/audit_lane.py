@@ -89,6 +89,7 @@ class AuditPassResult:
     investigation_requests: tuple[dict[str, Any], ...] = ()
     candidate_failures: tuple[dict[str, Any], ...] = ()
     coverage_deferred: bool = False
+    projection_observations: tuple[dict[str, Any], ...] = ()
 
 
 AuditPass = Callable[[str | None, threading.Event], AuditPassResult]
@@ -311,9 +312,7 @@ def _audit_observer_process(
     max_items: int,
     deadline: float,
     context_payload: object,
-    parent_observation_episodes: tuple[
-        tuple[str, str, str, str, float, int], ...
-    ],
+    parent_observation_episodes: tuple[tuple[str, str, str, str, float, int], ...],
 ) -> None:
     """Run observer work in a process that the claim owner can always reap."""
 
@@ -451,6 +450,7 @@ def _run_bounded_audit_pass_inline(
     reassessed_candidates: list[str] = []
     investigation_requests: list[dict[str, Any]] = []
     candidate_failures: list[dict[str, Any]] = []
+    projection_observations: list[dict[str, Any]] = []
 
     def completed(
         next_cursor: str | None, *, coverage_deferred: bool = False
@@ -464,6 +464,7 @@ def _run_bounded_audit_pass_inline(
             investigation_requests=tuple(investigation_requests),
             candidate_failures=tuple(candidate_failures),
             coverage_deferred=coverage_deferred,
+            projection_observations=tuple(projection_observations),
         )
 
     for index, candidate in enumerate(page.candidates):
@@ -476,22 +477,25 @@ def _run_bounded_audit_pass_inline(
         if not candidate.evidence_available:
             evidence_errors = tuple(getattr(candidate, "evidence_errors", ()))
             retry_reason = (
-                evidence_errors[0]
-                if evidence_errors
-                else "audit_evidence_unavailable"
+                evidence_errors[0] if evidence_errors else "audit_evidence_unavailable"
             )
-            investigation_requests.append({
-                "work_id": work_id, "reason": "audit_evidence_unavailable",
-                "evidence": {
-                    "classification": "unavailable_evidence",
-                    "retry_reason": retry_reason,
-                },
-            })
-            candidate_failures.append({
-                "work_id": work_id,
-                "reason": retry_reason,
-                "retryable": True,
-            })
+            investigation_requests.append(
+                {
+                    "work_id": work_id,
+                    "reason": "audit_evidence_unavailable",
+                    "evidence": {
+                        "classification": "unavailable_evidence",
+                        "retry_reason": retry_reason,
+                    },
+                }
+            )
+            candidate_failures.append(
+                {
+                    "work_id": work_id,
+                    "reason": retry_reason,
+                    "retryable": True,
+                }
+            )
             # Selection already proved this identity cannot currently be
             # projected.  Count it as unavailable evidence and advance the
             # exact selector cursor so one malformed reference cannot pin the
@@ -530,15 +534,23 @@ def _run_bounded_audit_pass_inline(
             if tier in {"task", "feature", "epic"}:
                 counts[f"tier.{tier}.unavailable_evidence"] += 1
             timed_out_candidates.append(work_id)
-            candidate_failures.append({
-                "work_id": work_id,
-                "reason": "audit_observation_timeout",
-                "retryable": True,
-            })
-            investigation_requests.append({
-                "work_id": work_id, "reason": "audit_observation_timeout",
-                "evidence": {"classification": "unavailable_evidence", "observation_error": "TimeoutExpired"},
-            })
+            candidate_failures.append(
+                {
+                    "work_id": work_id,
+                    "reason": "audit_observation_timeout",
+                    "retryable": True,
+                }
+            )
+            investigation_requests.append(
+                {
+                    "work_id": work_id,
+                    "reason": "audit_observation_timeout",
+                    "evidence": {
+                        "classification": "unavailable_evidence",
+                        "observation_error": "TimeoutExpired",
+                    },
+                }
+            )
             completed_cursor = candidate_cursor
             _log.warning("health audit observation timed out for %s: %s", work_id, exc)
             if monotonic() - started >= max_seconds:
@@ -550,15 +562,20 @@ def _run_bounded_audit_pass_inline(
             counts["unavailable_evidence"] += 1
             if tier in {"task", "feature", "epic"}:
                 counts[f"tier.{tier}.unavailable_evidence"] += 1
-            investigation_requests.append({
-                "work_id": work_id, "reason": "audit_observation_error",
-                "evidence": {"observation_error": type(exc).__name__},
-            })
-            candidate_failures.append({
-                "work_id": work_id,
-                "reason": f"audit_observation_error:{type(exc).__name__}",
-                "retryable": True,
-            })
+            investigation_requests.append(
+                {
+                    "work_id": work_id,
+                    "reason": "audit_observation_error",
+                    "evidence": {"observation_error": type(exc).__name__},
+                }
+            )
+            candidate_failures.append(
+                {
+                    "work_id": work_id,
+                    "reason": f"audit_observation_error:{type(exc).__name__}",
+                    "retryable": True,
+                }
+            )
             completed_cursor = candidate_cursor
             if monotonic() - started >= max_seconds:
                 return completed(completed_cursor, coverage_deferred=True)
@@ -570,16 +587,39 @@ def _run_bounded_audit_pass_inline(
         if observation.classification == "proven_incident":
             incident_work_ids.append(work_id)
         if observation.classification in {"proven_incident", "unavailable_evidence"}:
-            investigation_requests.append({
-                "work_id": work_id, "reason": "audit_requires_investigation",
-                "evidence": {
-                    "classification": observation.classification,
-                    "reason": str(getattr(observation, "reason", "unknown"))[:240],
-                    "generation": str(getattr(observation, "generation", ""))[:160],
-                },
-            })
+            investigation_requests.append(
+                {
+                    "work_id": work_id,
+                    "reason": "audit_requires_investigation",
+                    "evidence": {
+                        "classification": observation.classification,
+                        "reason": str(getattr(observation, "reason", "unknown"))[:240],
+                        "generation": str(getattr(observation, "generation", ""))[:160],
+                    },
+                }
+            )
         if observation.classification != "unavailable_evidence":
             reassessed_candidates.append(work_id)
+        projection_observations.append(
+            {
+                "work_id": work_id,
+                "owner": str(
+                    getattr(getattr(observation, "identity", None), "parent_id")
+                )
+                if getattr(getattr(observation, "identity", None), "parent_id", None)
+                else None,
+                "authoritative_generation": str(getattr(observation, "generation", "")),
+                "failure_class": getattr(
+                    getattr(observation, "incident", None), "failure_class", None
+                )
+                if getattr(observation, "incident", None) is not None
+                else None,
+                "classification": observation.classification,
+                "reason": str(
+                    getattr(observation, "reason", observation.classification)
+                ),
+            }
+        )
         completed_cursor = candidate_cursor
 
         if cancel_event.is_set():
@@ -793,6 +833,30 @@ class HealthAuditLane:
                 return False
             finished_mono = self._monotonic()
             finished_utc = self._aware_utc_now()
+            from cascade.watchdog.audit_projection import publish_audit_projection
+
+            try:
+                publish_audit_projection(
+                    self.root,
+                    result,
+                    interval_seconds=self.config.interval_seconds,
+                    observed_at=finished_utc,
+                )
+            except Exception as exc:
+                _write_failure(
+                    self.root,
+                    {
+                        "failed_at": finished_utc.isoformat(),
+                        "code": "projection_publication_failed",
+                        "message": str(exc) or type(exc).__name__,
+                        "next_action": (
+                            "Inspect the unreferenced projection epoch; the prior "
+                            "current epoch remains readable and the pass will retry."
+                        ),
+                        "cursor": cursor,
+                    },
+                )
+                raise
             if manual:
                 self._deadline = periodic_deadline
                 next_scheduled = finished_utc + timedelta(
