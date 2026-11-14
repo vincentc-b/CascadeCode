@@ -27,7 +27,7 @@ Use this skill when creating, updating, or reviewing repository design documents
 1. Read the existing design, relevant parent and child designs, current code, and the scoped diff.
 2. Preserve accurate prose, diagrams, identifiers, and rationale. Make focused edits for missing or stale facts instead of rewriting the document to match the template mechanically.
 3. For a full-tree request, work from meaningful leaves to the root, then verify downward and across sibling interfaces. For a diff-scoped request, update changed directories, their design-owning ancestors, and affected interface consumers only.
-4. Keep work history, task plans, and implementation narration in work records. Designs describe durable current behavior.
+4. Keep work history, task plans, and implementation narration in work records. Designs describe durable current behavior as matter-of-fact statements. Do not mention epics, feature/task history, previous requirements, migrations from earlier designs, or implementation chronology. Explain current constraints and rationale without narrating how the design evolved.
 
 ## Content contract
 

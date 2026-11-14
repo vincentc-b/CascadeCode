@@ -24,6 +24,7 @@ from cascade.workspace.architecture_review import (
     ArchitectureProposalError,
     ArchitectureReviewStore,
     ArchitectureReviewUnit,
+    resolve_registered_owner_revision,
     stage_architecture_proposal,
 )
 from cascade.workspace.c4_closure import materialize_c4_source_closure
@@ -94,6 +95,7 @@ def publish_architecture_review(
                 "amendment_id": None,
                 "reason_code": None,
                 "message": "architecture publication is pending validation",
+                "failure_history": [],
                 "created_at": now,
                 "updated_at": now,
             }
@@ -101,6 +103,30 @@ def publish_architecture_review(
             pending = True
         else:
             pending = existing.get("status") == "pending"
+            if (
+                existing.get("status") == "superseded"
+                and existing.get("reason_code") == "artifact_changed"
+            ):
+                history = list(existing.get("failure_history", []))
+                history.append({
+                    "status": existing["status"],
+                    "reason_code": existing.get("reason_code"),
+                    "message": existing.get("message"),
+                    "updated_at": existing.get("updated_at"),
+                })
+                existing.update({
+                    "status": "pending",
+                    "render_operation_id": None,
+                    "baseline_render_operation_id": None,
+                    "review_unit_id": None,
+                    "amendment_id": None,
+                    "reason_code": None,
+                    "message": "architecture publication retry is pending validation",
+                    "failure_history": history,
+                    "updated_at": time.time(),
+                })
+                _write_ledger(project, ledger)
+                pending = True
     if pending:
         store.set_acceptance_hold(unit.affected_work_ids, operation_id)
 
@@ -131,14 +157,24 @@ def discover_architecture_publication(
             expected_revision=str(row["expected_plan_revision"]),
             root=Path(root),
         )
+        lineage_revision = resolve_registered_owner_revision(
+            project.target, unit.owner_work_id
+        )
         if store.pending_promotion(unit.integration_lineage) is not None:
             return _update(
                 project, row, "pending", reason_code="acceptance_pending",
                 message="waiting for partial architecture acceptance to finish",
             )
-        current = store.resolve_current(unit.integration_lineage)
+        current = store.resolve_current(
+            unit.integration_lineage, lineage_revision=lineage_revision
+        )
         generation = current.generation if current else None
-        if generation != row["expected_generation"] or store.baseline_status(unit).stale:
+        if (
+            generation != row["expected_generation"]
+            or store.baseline_status(
+                unit, lineage_revision=lineage_revision
+            ).stale
+        ):
             return _terminal(
                 project, store, row, "superseded", "stale_baseline",
                 "accepted architecture baseline changed before publication",
@@ -147,7 +183,7 @@ def discover_architecture_publication(
         if unit.architecture_impact == "no_diagram_change":
             return _publish_validated(
                 project, store, row, unit, no_diagram=True,
-                baseline_artifact=None,
+                baseline_artifact=None, lineage_revision=lineage_revision,
             )
 
         scheduler = _project_scheduler(project)
@@ -202,9 +238,19 @@ def discover_architecture_publication(
             project, unit, work_id=str(row["originating_work_id"]),
             expected_revision=str(row["expected_plan_revision"]), root=Path(root),
         )
-        current = store.resolve_current(unit.integration_lineage)
+        lineage_revision = resolve_registered_owner_revision(
+            project.target, unit.owner_work_id
+        )
+        current = store.resolve_current(
+            unit.integration_lineage, lineage_revision=lineage_revision
+        )
         generation = current.generation if current else None
-        if generation != row["expected_generation"] or store.baseline_status(unit).stale:
+        if (
+            generation != row["expected_generation"]
+            or store.baseline_status(
+                unit, lineage_revision=lineage_revision
+            ).stale
+        ):
             return _terminal(
                 project, store, row, "superseded", "stale_baseline",
                 "accepted architecture baseline changed during rendering",
@@ -220,6 +266,7 @@ def discover_architecture_publication(
         return _publish_validated(
             project, store, row, unit, no_diagram=False,
             baseline_artifact=baseline_artifact,
+            lineage_revision=lineage_revision,
         )
     except ArchitectureProposalError as exc:
         return _terminal(project, store, row, "superseded" if exc.code in {
@@ -362,7 +409,8 @@ def _semantic_artifact(project, binding, unit_id, artifact):
 
 
 def _publish_validated(
-    project, store, row, unit, *, no_diagram: bool, baseline_artifact
+    project, store, row, unit, *, no_diagram: bool, baseline_artifact,
+    lineage_revision: str,
 ):
     origin = str(row["originating_work_id"])
     actor = str(row["actor"])
@@ -381,6 +429,8 @@ def _publish_validated(
             ),
             render_settings=render_settings,
             baseline_artifact=baseline_artifact,
+            lineage_revision=lineage_revision,
+            plan_work_id=origin,
         )
         assert result.amendment is not None
         return _terminal(
@@ -400,6 +450,8 @@ def _publish_validated(
         ),
         render_settings=render_settings,
         baseline_artifact=baseline_artifact,
+        lineage_revision=lineage_revision,
+        plan_work_id=origin,
     )
     assert staged.unit is not None
     return _terminal(

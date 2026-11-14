@@ -9,8 +9,10 @@ const require = createRequire(import.meta.url);
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const {
   createPairedNavigation,
+  parentViews,
   createSemanticThreadModel,
   initPairedC4Review,
+  renderUnifiedDiff,
   sortedDrillChoices,
 } = require(
   join(repoRoot, "cascade/war_room/static/plan_viewer.js")
@@ -154,8 +156,8 @@ const choiceTarget = {
 };
 assert.deepEqual(
   sortedDrillChoices(choiceTarget).map((choice) => choice.view_key),
-  ["alpha", "zeta"],
-  "drill choices use deterministic level/key order"
+  ["zeta", "alpha"],
+  "drill choices list broader levels before deeper levels"
 );
 const choicePayload = {
   ...payload,
@@ -334,6 +336,45 @@ for (const [state, expected] of [
 }
 
 const readyHost = createElement("section");
+const staleHost = createElement("section");
+initPairedC4Review({
+  state: "stale_revision",
+  owner_work_id: "epic_045",
+  approval_context: null,
+  summary: "pinned review plan revision is not in the current lineage",
+  reason: "pinned review plan revision is not in the current lineage",
+  architecture_impact: "no_diagram_change",
+  impact_reason: "Existing component boundaries remain accurate.",
+  resources: [{
+    kind: "design", path: "cascade/war_room/DESIGN.md", revision: "old-revision",
+    historical: true, url: "/api/architecture/resources/published/design",
+  }],
+  views: [], diffs: {},
+}, {
+  document, host: staleHost,
+  loadThreads() { throw new Error("Cannot load threads without a work ID"); },
+  loadDocumentationMarkdown() { return "# Published activation design"; },
+});
+await settle();
+assert.ok(descendants(staleHost).some((node) =>
+  node.textContent === "No C4 diagram changes proposed."));
+assert.ok(!descendants(staleHost).some((node) =>
+  node.className === "paired-c4-thread-error"));
+assert.ok(!descendants(staleHost).some((node) =>
+  node.textContent === "Semantic review threads" || node.textContent === "Reviewed diffs"));
+assert.equal(descendants(staleHost).filter((node) =>
+  node.textContent === "pinned review plan revision is not in the current lineage").length, 0);
+assert.ok(descendants(staleHost).some((node) => /Existing component boundaries/.test(node.textContent)));
+descendants(staleHost).find((node) => node.textContent === "Read published design").click();
+await settle();
+assert.ok(descendants(staleHost).some((node) => /Published activation design/.test(node.textContent)));
+
+const documentDiff = renderUnifiedDiff(document,
+  "--- design.md\n+++ design.md\n@@ -1,2 +1,2 @@\n-Choose a red button.\n+Choose a green button.\n Unchanged context.\n");
+assert.equal(descendants(documentDiff).filter((node) => node.className === "review-diff-added").length, 1);
+assert.equal(descendants(documentDiff).filter((node) => node.className === "review-diff-removed").length, 1);
+assert.ok(descendants(documentDiff).some((node) => node.className === "review-diff-inline" && node.textContent === "green"));
+
 initPairedC4Review(payload, { document, host: readyHost });
 const readyText = descendants(readyHost).map((node) => node.textContent);
 assert.ok(readyText.includes("3 affected views"), "proposal summary stays adjacent to the pair");
@@ -599,3 +640,19 @@ contextReview.stopRefresh();
 
 console.log("paired_c4_review cases ok");
 
+
+
+// Level up uses model links even when there is no navigation history.
+const hierarchy = [
+  { key: "context", level: "systemContextViews", current: { targets: [
+    target("element", "system", "components", "componentViews")
+  ] } },
+  { key: "containers", level: "containerViews", proposed: { targets: [
+    target("element", "container", "components", "componentViews")
+  ] } },
+  { key: "unrelated", level: "containerViews", proposed: { targets: [] } },
+  { key: "components", level: "componentViews" }
+];
+assert.deepEqual(parentViews(hierarchy, hierarchy[3]).map(v => v.key), ["containers"]);
+assert.deepEqual(parentViews(hierarchy, hierarchy[0]), []);
+assert.deepEqual(parentViews([hierarchy[0], hierarchy[3]], hierarchy[3]).map(v => v.key), ["context"]);

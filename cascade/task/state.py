@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import operator
 from typing import Annotated, NotRequired, TypedDict
+
+from cascade.agent.message_history import append_recent_messages
 
 
 class TaskGraphState(TypedDict):
     task_id: str
     feature_id: str
-    messages: Annotated[list[dict], operator.add]
+    messages: Annotated[list[dict], append_recent_messages]
     last_queue_offset: int
     skill_playbooks: list[dict]
     model_id: NotRequired[str]

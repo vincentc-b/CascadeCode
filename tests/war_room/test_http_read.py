@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import re
 import socket
 import threading
 import time
@@ -108,8 +109,9 @@ def test_war_room_scripts_are_not_cached_after_restart(war_room_server):
     base, _root, _server = war_room_server
     status, html, _ = _get(base + "/")
     assert status == HTTPStatus.OK
-    assert "/static/war_room.js?v=20261025" in html
-    status, script, headers = _get(base + "/static/war_room.js?v=20261025")
+    script_src = re.search(r'src="(/static/war_room\.js\?v=[^"]+)"', html)
+    assert script_src is not None
+    status, script, headers = _get(base + script_src.group(1))
     assert status == HTTPStatus.OK
     assert headers["Cache-Control"] == "no-store"
     assert 'actionButton("Cancel"' in script
@@ -141,6 +143,8 @@ def test_get_board_shape(war_room_server):
         "tasks",
         "board",
         "backlog_feature_priorities",
+        "backlog_epic_priority",
+        "feature_attention",
     }
     assert payload["board"]["completed_epic_display_limit"] == 10
     for tier in ("epics", "features", "tasks"):
@@ -291,8 +295,7 @@ def test_get_api_health_served_while_draining(war_room_server):
 
 
 def test_get_brief_template(war_room_server, monkeypatch):
-    from cascade.agent.discovery.inventory import get_provider_inventory
-    from cascade.agent.discovery.types import DiscoveredModel, ProviderDiscoverySnapshot
+    from cascade.agent.discovery.inventory import refresh_provider_inventory
     from tests.agent.test_provider_inventory import _available, _fake_discover, _unavailable
 
     mapping = {
@@ -302,11 +305,10 @@ def test_get_brief_template(war_room_server, monkeypatch):
     }
 
     def _get_inventory(**kwargs: object) -> object:
-        return get_provider_inventory(
+        return refresh_provider_inventory(
             discover=_fake_discover(mapping),
             ttl_seconds=60.0,
             now=10.0,
-            force_refresh=bool(kwargs.get("force_refresh")),
         )
 
     monkeypatch.setattr("cascade.briefs.get_provider_inventory", _get_inventory)

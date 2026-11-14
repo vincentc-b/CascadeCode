@@ -21,6 +21,8 @@ Code is a liability; testing is a cost-benefit exercise. Optimize for **system r
 
 4. **Continuous succession.** Knowledge is not siloed. When a role or domain transitions, overlap with the successor long enough to transfer context before stepping off.
 
+5. **Conflict recovery checks.** After resolving a review merge conflict, run the focused tests for the affected code paths and the review publication safeguards. Add nearby tests when the conflict changes behavior outside the branch's changed test files. Keep validation bounded; a full repository suite is a separate check, not the default publication gate.
+
 ## When in doubt
 
 Favor the smallest change that keeps the system honest; cut ceremony and redundant work before cutting scope that serves the core user problem.

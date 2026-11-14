@@ -10,6 +10,7 @@ import pytest
 
 import cascade.review_health as review_health
 import cascade.review_rebase as review_rebase
+import cascade.tracking as tracking
 from cascade.review_health import reconcile_open_review_health
 from cascade.task.action_recovery import load_action
 from cascade.watchdog.events import read_events
@@ -25,6 +26,39 @@ def _git(root: Path, *args: str) -> str:
 
 def _conflicting_snapshot(*_args: object, **_kwargs: object) -> dict[str, object]:
     return {"state": "open", "mergeability": "conflicting", "comments": []}
+
+
+def test_open_mergeable_github_review_reaches_healthy_path_with_supported_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _turn = _execution_ready_turn(tmp_path)
+    monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
+
+    def snapshot(trunk: Path, review: tracking.MergeRequest) -> dict[str, object]:
+        def runner(
+            args: list[str], command_root: Path
+        ) -> subprocess.CompletedProcess[str]:
+            assert command_root == trunk
+            if args[:3] == ["gh", "pr", "view"]:
+                assert "headRefOid" not in args[-1].split(",")
+                assert "commits" in args[-1].split(",")
+                return subprocess.CompletedProcess(
+                    args,
+                    0,
+                    '{"state":"OPEN","mergeable":"MERGEABLE",'
+                    '"mergeStateStatus":"CLEAN","comments":[],"reviews":[],\n'
+                    '"commits":[{"oid":"abc123"}]}',
+                    "",
+                )
+            return subprocess.CompletedProcess(args, 0, "[]", "")
+
+        return tracking.merge_request_snapshot(trunk, review, runner=runner)
+
+    monkeypatch.setattr(review_health, "merge_request_snapshot", snapshot)
+
+    assert reconcile_open_review_health(root) == [
+        {"owner_id": "feat_035_001", "outcome": "healthy"}
+    ]
 
 
 def test_monitor_publishes_an_already_resolved_owned_review(

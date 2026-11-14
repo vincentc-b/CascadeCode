@@ -13,6 +13,10 @@ from cascade.board.types import WorkDoc, WorkMeta
 from cascade.epic.guard import EpicToolDenied, tool_guard
 from cascade.epic.registry import register_epic_tool
 from cascade.epic.scoped_docs import epic_read_doc, epic_write_doc
+from cascade.feature_attention import (
+    AttentionTransaction,
+    feature_attention_transaction,
+)
 from cascade.planning_action_dependencies import require_action_dependencies
 from cascade.watchdog import append_event
 from cascade.watchdog.types import Event
@@ -55,13 +59,15 @@ def mint_feature(
             raise EpicToolDenied(f"dependencies_not_ready ({details})")
         assert evidence.board is not None
         with merged_board_snapshot(repo, evidence.board):
-            return _mint_feature(
-                title,
-                depends_on=depends_on,
-                body_stub=body_stub,
-                epic_id=epic_id,
-                root=repo,
-            )
+            with feature_attention_transaction(repo) as attention:
+                return _mint_feature(
+                    title,
+                    depends_on=depends_on,
+                    body_stub=body_stub,
+                    epic_id=epic_id,
+                    root=repo,
+                    attention=attention,
+                )
 
 
 def _mint_feature(
@@ -71,6 +77,7 @@ def _mint_feature(
     *,
     epic_id: str,
     root: Path,
+    attention: AttentionTransaction | None = None,
 ) -> str:
     repo = Path(root).resolve()
     deps = list(depends_on or [])
@@ -162,6 +169,9 @@ def _mint_feature(
     epic.meta.updated = today
     epic.body = _append_feature_breakdown(epic.body, feature_id)
     epic_write_doc(epic, epic_id=epic_id, root=repo)
+
+    if attention is not None:
+        attention.record_feature_minted(feature_id, epic_id)
 
     append_event(
         epic_id,

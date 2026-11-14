@@ -391,3 +391,6 @@
     margin-bottom: 0.35rem;
   }
 }
+.architecture-viewer .semantic-c4-expandable { cursor: zoom-in; }
+.architecture-viewer .semantic-c4-expand-badge { font: bold 20px sans-serif; fill: #fff; stroke: #172b4d; stroke-width: 4px; paint-order: stroke; pointer-events: none; }
+.semantic-c4-navigation-hint { font-size: .85rem; align-self: center; }

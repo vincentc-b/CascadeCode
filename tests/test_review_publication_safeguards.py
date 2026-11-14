@@ -9,10 +9,52 @@ import pytest
 from cascade import review_rebase
 from cascade.review_owner import current_review_owner, review_owner_exited
 from cascade.review_validation import run_review_validation, review_validation_timeout
+from cascade.validation_command import review_validation_command
 from cascade.task import action_recovery as actions
 from cascade.watchdog.events import read_events
 from tests.test_review_rebase import _execution_ready_turn, _git
 from tests.support import make_repo, add_doc
+
+
+def test_review_validation_selects_changed_and_adjacent_tests(tmp_path):
+    for name in (
+        "tests/test_review_rebase.py",
+        "tests/test_review_publication_safeguards.py",
+        "tests/workspace/test_architecture_review.py",
+        "tests/war_room/test_http_read.py",
+    ):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+
+    command = review_validation_command(
+        tmp_path,
+        tmp_path,
+        (
+            "cascade/workspace/architecture_review.py",
+            "tests/war_room/test_http_read.py",
+            "docs/epics/3_completed/epic_045.md",
+            "tests/../outside.py",
+        ),
+    )
+
+    assert command == (
+        "python3", "-m", "pytest", "-q",
+        "tests/test_review_publication_safeguards.py",
+        "tests/test_review_rebase.py",
+        "tests/war_room/test_http_read.py",
+        "tests/workspace/test_architecture_review.py",
+    )
+
+
+def test_review_validation_respects_explicit_repository_command(tmp_path):
+    (tmp_path / "cascade.toml").write_text(
+        '[validation]\ncommand = ["python3", "-m", "pytest", "-q"]\n',
+        encoding="utf-8",
+    )
+    assert review_validation_command(
+        tmp_path, tmp_path, ("tests/war_room/test_http_read.py",)
+    ) == ("python3", "-m", "pytest", "-q")
 
 
 def test_duplicate_lifecycle_document_blocks_before_checks_and_push(tmp_path, monkeypatch):
@@ -144,20 +186,20 @@ def test_malformed_board_document_is_not_silently_omitted(tmp_path):
         validate_publication_board(tmp_path)
 
 
-def test_repeated_failed_owner_publication_can_be_resolved_again(tmp_path, monkeypatch):
+def test_unchanged_failed_publication_waits_until_policy_changes(tmp_path, monkeypatch):
     from cascade.feature.review_recovery import publish_review_resolution
     root, turn = _execution_ready_turn(tmp_path)
     (root / '.git/info/exclude').write_text('.cascade/\ndocs/_queue/\n')
     _git(root, 'merge', 'epic/epic_035', '--no-edit')
     monkeypatch.setattr(review_rebase, 'validation_command', lambda r: (sys.executable, '-c', 'raise SystemExit(1)'))
-    for attempt in (1, 2):
+    for _ in range(2):
         result = publish_review_resolution(turn.action_id, feature_id='feat_035_001', root=root)
         assert result['recovery_state'] == 'awaiting_owner_decision'
-        assert actions.load_action(turn.action_id, root=root)['attempt_count'] == attempt
+        assert actions.load_action(turn.action_id, root=root)['attempt_count'] == 1
     monkeypatch.setattr(review_rebase, 'validation_command', lambda r: (sys.executable, '-c', ''))
     result = publish_review_resolution(turn.action_id, feature_id='feat_035_001', root=root)
     assert result['recovery_state'] == 'completed'
-    assert actions.load_action(turn.action_id, root=root)['attempt_count'] == 3
+    assert actions.load_action(turn.action_id, root=root)['attempt_count'] == 2
 
 
 def test_dead_claim_check_precedes_failing_board_projection(tmp_path, monkeypatch):

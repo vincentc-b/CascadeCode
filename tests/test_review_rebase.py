@@ -476,3 +476,28 @@ def test_recovery_blocks_a_remote_target_race_without_publication(
     action = load_action(turn.action_id, root=root)
     assert action is not None
     assert action["last_reconciliation"] == recovered.reconciliation.as_dict()
+
+
+def test_publication_rechecks_effective_scoped_validation_policy(tmp_path: Path, monkeypatch) -> None:
+    """Affected-test selection must not look like a policy change after checks."""
+    from dataclasses import replace
+
+    root, turn = _execution_ready_turn(tmp_path)
+    rebased = execute_review_rebase(turn, authorized_paths=("source.txt",))
+    with (root / ".git/info/exclude").open("a") as excludes:
+        excludes.write("\n__pycache__/\n.pytest_cache/\n")
+    tests = root / "tests"
+    tests.mkdir()
+    (tests / "test_source.py").write_text("def test_source():\n    assert True\n")
+    _git(root, "add", "tests/test_source.py")
+    _git(root, "commit", "-m", "Add affected validation fixture")
+    rebased = replace(rebased, source_head=_git(root, "rev-parse", "HEAD"),
+                      modified_paths=("tests/test_source.py",))
+    monkeypatch.setattr(review_rebase, "validation_command",
+                        lambda root: ("python3", "-m", "pytest", "-q"))
+
+    publication = check_and_publish_review_rebase(turn, rebased)
+
+    assert publication.published is True, (publication.blocker, publication.checks)
+    assert publication.checks[0].command[-1] == "tests/test_source.py"
+    assert _git(root, "rev-parse", "origin/feat/feat_035_001") == rebased.source_head

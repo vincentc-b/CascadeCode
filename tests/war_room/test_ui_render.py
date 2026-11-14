@@ -180,6 +180,14 @@ def test_war_room_js_renders_toast_body():
     assert '"Epic close timed out after 60s"' in source
 
 
+def test_feature_readiness_ui_cases():
+    if shutil.which("node") is None:
+        pytest.skip("node is required for browser-side UI contract tests")
+    cases = Path(__file__).with_name("feature_readiness_ui_cases.mjs")
+    result = subprocess.run(["node", str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_war_room_js_renders_canonical_recovery_incident_once_per_transition():
     source = (
         Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
