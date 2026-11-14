@@ -2,7 +2,7 @@
 id: epic_044
 title: Make health audit actionable while retaining recovery history
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_044_001
@@ -15,7 +15,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-10'
-updated: '2026-11-10'
+updated: '2026-11-14'
 provider: codex
 flex_mode: false
 models:
