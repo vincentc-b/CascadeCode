@@ -9,10 +9,52 @@ import pytest
 from cascade import review_rebase
 from cascade.review_owner import current_review_owner, review_owner_exited
 from cascade.review_validation import run_review_validation, review_validation_timeout
+from cascade.validation_command import review_validation_command
 from cascade.task import action_recovery as actions
 from cascade.watchdog.events import read_events
 from tests.test_review_rebase import _execution_ready_turn, _git
 from tests.support import make_repo, add_doc
+
+
+def test_review_validation_selects_changed_and_adjacent_tests(tmp_path):
+    for name in (
+        "tests/test_review_rebase.py",
+        "tests/test_review_publication_safeguards.py",
+        "tests/workspace/test_architecture_review.py",
+        "tests/war_room/test_http_read.py",
+    ):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+
+    command = review_validation_command(
+        tmp_path,
+        tmp_path,
+        (
+            "cascade/workspace/architecture_review.py",
+            "tests/war_room/test_http_read.py",
+            "docs/epics/3_completed/epic_045.md",
+            "tests/../outside.py",
+        ),
+    )
+
+    assert command == (
+        "python3", "-m", "pytest", "-q",
+        "tests/test_review_publication_safeguards.py",
+        "tests/test_review_rebase.py",
+        "tests/war_room/test_http_read.py",
+        "tests/workspace/test_architecture_review.py",
+    )
+
+
+def test_review_validation_respects_explicit_repository_command(tmp_path):
+    (tmp_path / "cascade.toml").write_text(
+        '[validation]\ncommand = ["python3", "-m", "pytest", "-q"]\n',
+        encoding="utf-8",
+    )
+    assert review_validation_command(
+        tmp_path, tmp_path, ("tests/war_room/test_http_read.py",)
+    ) == ("python3", "-m", "pytest", "-q")
 
 
 def test_duplicate_lifecycle_document_blocks_before_checks_and_push(tmp_path, monkeypatch):

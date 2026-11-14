@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
+from cascade.review_validation import review_validation_timeout, run_review_validation, validate_publication_board
 from cascade.resolution_actions import resolution_action
 from cascade.task.action_recovery import (
     ActionFailure,
@@ -25,6 +26,7 @@ from cascade.task.action_recovery import (
     resume_action,
 )
 from cascade.workspace.integration_worktree import locate_trunk
+from cascade.validation_command import review_validation_command, validation_command
 
 
 _ALLOWED_OPERATIONS = (
@@ -33,10 +35,6 @@ _ALLOWED_OPERATIONS = (
     "run_repository_checks",
     "push_source_with_force_with_lease",
 )
-
-from cascade.validation_command import validation_command
-from cascade.review_validation import review_validation_timeout, run_review_validation, validate_publication_board
-
 
 @dataclass(frozen=True)
 class WorktreeSnapshot:
@@ -238,8 +236,14 @@ def check_and_publish_review_rebase(
             f"Resolved checkout has invalid lifecycle documents ({type(exc).__name__}); repair the board before publication.", worktree,
         )
     try:
-        command = validation_command(locate_trunk(worktree))
-        timeout = review_validation_timeout(locate_trunk(worktree))
+        trunk = locate_trunk(worktree)
+        command = review_validation_command(
+            trunk,
+            worktree,
+            execution.modified_paths,
+            configured_command=validation_command(trunk),
+        )
+        timeout = review_validation_timeout(trunk)
         check_result = run_review_validation(command, cwd=worktree, timeout=timeout)
     except subprocess.TimeoutExpired:
         return _publication_blocked(
