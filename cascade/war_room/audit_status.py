@@ -47,6 +47,17 @@ def health_audit_status(*, root: Path) -> dict[str, object]:
 
     projection = read_audit_projection(root, AuditPageRequest("current"))
     receipt, failure, unavailable = _runtime_metadata(root)
+    from cascade.watchdog.audit_investigation import read_follow_up_snapshot
+
+    follow_ups = read_follow_up_snapshot(root=root)
+    if follow_ups.get("state") != "available":
+        unavailable = [
+            *unavailable,
+            {
+                "source": "audit_investigation_follow_ups",
+                "reason": str(follow_ups.get("reason") or "snapshot_unavailable"),
+            },
+        ]
     result: dict[str, object] = {
         "schema_version": 2,
         "snapshot": _snapshot_state(projection),
@@ -61,7 +72,12 @@ def health_audit_status(*, root: Path) -> dict[str, object]:
         "counts": _project_counts(receipt.get("counts") if receipt else None),
         "incidents": [],
         "unavailable_evidence": unavailable,
-        "investigations": [],
+        "investigation_snapshot": {
+            name: follow_ups[name]
+            for name in ("state", "reason", "version", "published_at", "source", "truncated", "unavailable_count")
+            if name in follow_ups
+        },
+        "investigations": follow_ups.get("rows", []),
         "agent_schedule": {},
     }
     if projection.get("state") != "ready":

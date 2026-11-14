@@ -40,9 +40,13 @@ and the route contract by [War Room](war_room/DESIGN.md#health-audit-http-consum
 The repository-owned architecture source remains
 [`architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/`](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/README.md).
 
-Verification locations: `tests/watchdog/test_audit_projection.py` and
-`tests/war_room/test_health_audit_routes.py`. The bounded endpoint and source
-limits have a verification gap until these suites cover large retained history.
+Verification locations: [producer tests](../tests/watchdog/test_audit_projection.py)
+and [consumer tests](../tests/war_room/test_health_audit_routes.py) cover each side
+of the boundary. The [integrated fixture](../tests/war_room/test_audit_integrated_experience.py) verifies the shared interface
+from retained recovery sources through an immutable epoch and loopback HTTP reads.
+The representative large-ledger work and byte counts are recorded by
+the [producer benchmark](../tests/watchdog/benchmark_audit_producer.py) and
+[GET benchmark](../tests/war_room/benchmark_audit_get.py).
 
 ## Review publication safeguards
 

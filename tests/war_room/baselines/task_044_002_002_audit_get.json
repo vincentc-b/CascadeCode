@@ -16,13 +16,13 @@
     "Local warm-cache measurement; not a cross-platform latency guarantee.",
     "Recorded evidence only; no flaky latency threshold is asserted."
   ],
-  "measured_at": "2026-11-14T03:22:42.170803+00:00",
+  "measured_at": "2026-11-14T03:52:28.848740+00:00",
   "measurement": {
-    "max_ms": 24.161,
-    "median_ms": 22.411,
-    "min_ms": 18.118,
-    "p95_ms": 23.941,
-    "response_bytes": 76034,
+    "max_ms": 50.806,
+    "median_ms": 24.946,
+    "min_ms": 22.65,
+    "p95_ms": 38.543,
+    "response_bytes": 76178,
     "warm_samples": 30
   }
 }

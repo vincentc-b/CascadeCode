@@ -22,9 +22,9 @@
     "Local filesystem measurement; not a cross-platform latency guarantee.",
     "Ceilings are verified by focused tests; elapsed time is recorded, not asserted."
   ],
-  "measured_at": "2026-11-14T02:53:51Z",
+  "measured_at": "2026-11-14T03:52:36Z",
   "producer": {
-    "elapsed_seconds": 0.21611688199845958,
+    "elapsed_seconds": 0.3556139719985367,
     "pages": 3,
     "serialized_page_bytes": 127754
   }
