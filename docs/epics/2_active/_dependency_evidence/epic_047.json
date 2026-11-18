@@ -1253,6 +1253,24 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_9ccda37fa62215d5e2f89ff3c636deeb9e07c4c16bd94669b48e7bcafcd24e89",
+      "dependency_id": "dep_docker",
+      "manifest_revision": 3,
+      "entry_revision": "sha256:d4a025562bfaaabdcb0ff23b36091f707d29311bebf2ac10d89640b13dedf213",
+      "recipe_revision": "sha256:682b30d8cdd6264d7a8b83e7c343466f4fc9106ce2aa11a83bbae108a8766431",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/docker'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49'\"'\"'' && docker --version && docker info --format '{{.ServerVersion}}'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-18T05:13:37.867509+00:00",
+      "selected_version": "28.0.0",
+      "integrity_reference": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
