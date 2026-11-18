@@ -226,6 +226,11 @@ Product scope choices are resolved by the state/authority and feature contracts 
   Chose Preserve the original Task and accepted review; admit an in-scope repair generation with a distinct follow-up publication after acceptance..
   Rationale: The deadlock is a missing legal parent delivery route, not missing implementation. Reusing the same Task avoids duplicate work while separate review generations prevent an older merged PR from authorizing a later source head. Material scope changes retain existing amendment/approval gates.
   Honors: Success criteria 1–4, 7 and 10; exact revision evidence; no blind reopening or approval reuse..
+
+- `dec_003` · 2026-11-18 · Epic Manager · **Macro-architecture / ownership, persistence and routing**
+  Chose Require exact registered mutation ownership, descendant survival proof and one executable generation-bound recovery path shared by Feature, Epic and audit adapters..
+  Rationale: Generic board ranking is not mutation authority, parent-only persistence is insufficient for retirement, and repeated wakeups cannot change a deterministic completed-parent prerequisite. Reuse existing actions, locks, claims and projection boundaries; retain every attempt and refuse ambiguous evidence.
+  Honors: Success criteria 5–6, 8–9 and 12–15; current-generation authority, work preservation and bounded recovery..
 ## Amendment log
 
 _(none)_
