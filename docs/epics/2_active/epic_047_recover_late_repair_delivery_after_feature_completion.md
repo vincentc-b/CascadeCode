@@ -4,7 +4,8 @@ title: Recover late repair delivery after feature completion
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_047_001
 depends_on: []
 owners:
 - epic_manager
@@ -99,6 +100,7 @@ Record requirements interpretation, exact mutation authority, crash ordering, ow
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_047_001
 
 The Epic Team will create and sequence feature plans here.
 
