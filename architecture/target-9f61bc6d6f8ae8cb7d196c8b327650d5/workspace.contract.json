@@ -78,8 +78,8 @@
     {"dsl_identifier": "code_task_leases", "semantic_id": "element.code.task.leases", "fragment": "model.dsl"}
   ],
   "fragments": [
-    {"path": "model.dsl", "owner": "task_034_007_002"},
-    {"path": "views.dsl", "owner": "task_034_007_002"}
+    {"path": "model.dsl", "owner": "epic_047"},
+    {"path": "views.dsl", "owner": "epic_047"}
   ],
   "relationships": [
     {"dsl_identifier": "operator_uses_war_room", "semantic_id": "relationship.operator-uses-war-room", "source": "operator", "destination": "war_room", "fragment": "model.dsl"},
@@ -178,5 +178,5 @@
     {"key": "cascade-boss-code", "fragment": "views.dsl"},
     {"key": "cascade-watchdog-code", "fragment": "views.dsl"}
   ],
-  "workspace": {"source": "workspace.dsl", "owner": "task_034_007_002"}
+  "workspace": {"source": "workspace.dsl", "owner": "epic_047"}
 }
