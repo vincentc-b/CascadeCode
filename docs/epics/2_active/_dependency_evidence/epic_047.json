@@ -697,6 +697,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_0a3548d323c7ce7d6ecd5e5913c265c2284252d7c031016e1a83cb378843ba97",
+      "dependency_id": "dep_structurizr",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:afbe4ae0eabb46455a2487c69b891c40b7979c608b0fa94bec040726187aa24e",
+      "recipe_revision": "sha256:e8e46c35130f16ff433b0edc26572a316140ca7212116b49fc4de8593f5f4685",
+      "exact_operation": "docker image inspect structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c --format '{{json .RepoDigests}}'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-18T05:12:58.153352+00:00",
+      "completed_at": "2026-11-18T05:12:58.525395+00:00",
+      "result": "succeeded",
+      "redacted_output": "[\"structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c\"]\n",
+      "selected_version": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "lock_references": [
+        "cascade/workspace/c4_render.py::STRUCTURIZR_IMAGE_DIGEST"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
