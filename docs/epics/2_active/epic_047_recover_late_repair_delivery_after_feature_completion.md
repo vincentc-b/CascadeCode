@@ -217,6 +217,10 @@ Product scope choices are resolved by the state/authority and feature contracts 
 
 - 2026-11-10 · Human · Requested this incident-based brief; approval is pending PR review and merge.
 
+- `dec_001` · 2026-11-18 · Epic Manager · **Core dependencies**
+  Chose Use the declared existing local toolchain for verification; no installation or upgrade..
+  Rationale: Assessed pyproject.toml, README prerequisites, current runtime/CLI installations and pinned renderer/browser availability. Manifest revision 4 has 14 successful current checks. This identifies the local verification target only; original package provenance, forge permission and deployment are separate facts.
+  Honors: Dependency declaration before planning; exact target identity; separate current human installation authority..
 ## Amendment log
 
 _(none)_
