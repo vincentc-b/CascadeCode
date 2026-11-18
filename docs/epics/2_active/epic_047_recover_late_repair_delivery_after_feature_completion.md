@@ -267,6 +267,11 @@ The authority/event ordering, review-generation compatibility, owner/survival in
   Chose Use the existing lifecycle action store for a fenced Feature repair generation, dedicated FeatureRepairAuthorized event and generation-specific review obligation..
   Rationale: A durable prepared intent precedes the active-path effect; exact owner/path/blob and committed introduction binding make replay inspectable. Historical review acceptance cannot authorize a later source. Shared lock ordering, live-owner fencing and phase postchecks prevent closeout or watchdog races without inventing dispatch evidence.
   Honors: Success criteria 1–7, 10, 12–15; existing scoped authority, immutable attempts, approvals and source/target validation..
+
+- `dec_006` · 2026-11-18 · Epic Architect · **Macro-architecture / owner and retirement interfaces**
+  Chose Require typed exact-owner resolution and a generation/head/inventory-bound descendant survival proof before checkout removal..
+  Rationale: Read ranking is not mutation authority and another completed parent document does not prove its descendants survive. Canonical parent tracking persistence, committed reread and independent product Git evidence preserve split-root ownership and restart convergence.
+  Honors: Success criteria 8–9 and 15; no sibling writes, destructive cleanup, arbitrary destination selection or stale-success resurrection..
 ## Amendment log
 
 _(none)_
