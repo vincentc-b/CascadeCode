@@ -262,6 +262,11 @@ The authority/event ordering, review-generation compatibility, owner/survival in
   Chose Sequence four backlog features and withhold manager sign-off until the Architect completes the source-linked contracts and integrated Code coverage..
   Rationale: Ownership and persistence underpin safe lifecycle recovery; lifecycle capability underpins executable routing; final convergence and runtime-handoff evidence validates the whole path. Current team Code views omit material Workspace/Boss/Watchdog recovery structure. Source-contract validity and 13 passing baseline tests do not close those design gaps.
   Honors: Design skill implementation-depth and pre-sign-off review contract; no speculative implementation claims or accepted-snapshot rewrites..
+
+- `dec_005` · 2026-11-18 · Epic Architect · **Macro-architecture / final transaction contract**
+  Chose Use the existing lifecycle action store for a fenced Feature repair generation, dedicated FeatureRepairAuthorized event and generation-specific review obligation..
+  Rationale: A durable prepared intent precedes the active-path effect; exact owner/path/blob and committed introduction binding make replay inspectable. Historical review acceptance cannot authorize a later source. Shared lock ordering, live-owner fencing and phase postchecks prevent closeout or watchdog races without inventing dispatch evidence.
+  Honors: Success criteria 1–7, 10, 12–15; existing scoped authority, immutable attempts, approvals and source/target validation..
 ## Amendment log
 
 _(none)_
