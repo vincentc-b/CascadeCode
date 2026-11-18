@@ -2205,6 +2205,321 @@
           "ping_action": "ping the team after resolving this blocker"
         }
       ]
+    },
+    {
+      "revision": 10,
+      "recorded_at": "2026-11-18T05:12:44.002801+00:00",
+      "scope": {
+        "manifest_revision": 2,
+        "entries": [
+          {
+            "dependency_id": "dep_python",
+            "source": "file:///opt/conda/bin/python3.12",
+            "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/bin/python3.12'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'' && /opt/conda/bin/python3.12 -c 'import sys; assert sys.version_info[:3] == (3,12,8)'",
+            "paths": [
+              "/opt/conda/bin"
+            ],
+            "destination": "/opt/conda/bin",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_pyyaml",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/RECORD",
+            "integrity_reference": "sha256:a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'PyYAML'\"'\"') == '\"'\"'6.0.3'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_cursor_sdk",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/RECORD",
+            "integrity_reference": "sha256:53f3708c1b93b19aec199decdfae8e1cccc39490400aa37c7e41077199ee3e58",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:53f3708c1b93b19aec199decdfae8e1cccc39490400aa37c7e41077199ee3e58'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'cursor-sdk'\"'\"') == '\"'\"'1.0.37'\"'\"'; importlib.import_module('\"'\"'cursor'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_langgraph",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/RECORD",
+            "integrity_reference": "sha256:dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'langgraph'\"'\"') == '\"'\"'1.2.14'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_langgraph_checkpoint_sqlite",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/RECORD",
+            "integrity_reference": "sha256:acc17a0f0a1faf300d72bc3c294519760f814191b113187a23dfd19a4dc76968",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:acc17a0f0a1faf300d72bc3c294519760f814191b113187a23dfd19a4dc76968'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'langgraph-checkpoint-sqlite'\"'\"') == '\"'\"'3.1.1'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_pytest",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/RECORD",
+            "integrity_reference": "sha256:b27302b307f7be9f789280d5a12892e035278b364767ffc5616aa816d092f8c7",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:b27302b307f7be9f789280d5a12892e035278b364767ffc5616aa816d092f8c7'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'pytest'\"'\"') == '\"'\"'9.0.3'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_setuptools",
+            "source": "file:///opt/conda/lib/python3.12/site-packages/setuptools-80.9.0.dist-info/RECORD",
+            "integrity_reference": "sha256:4fcabc308b8a9a70065915c40b912dd79855831aec55b5a5320b97660b021bb8",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/setuptools-80.9.0.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:4fcabc308b8a9a70065915c40b912dd79855831aec55b5a5320b97660b021bb8'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'setuptools'\"'\"') == '\"'\"'80.9.0'\"'\"'; importlib.import_module('\"'\"'setuptools'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages/setuptools-80.9.0.dist-info"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages/setuptools-80.9.0.dist-info",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_playwright",
+            "source": "file:///home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info/RECORD",
+            "integrity_reference": "sha256:aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'playwright'\"'\"') == '\"'\"'1.64.0'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"')'",
+            "paths": [
+              "/home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info"
+            ],
+            "destination": "/home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_git",
+            "source": "file:///usr/bin/git",
+            "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/git'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'' && test \"$(git --version)\" = 'git version 2.34.1'",
+            "paths": [
+              "/usr/bin"
+            ],
+            "destination": "/usr/bin",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_gh",
+            "source": "file:///usr/bin/gh",
+            "integrity_reference": "sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/gh'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524'\"'\"'' && gh --version && gh pr view --help",
+            "paths": [
+              "/usr/bin"
+            ],
+            "destination": "/usr/bin",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_docker",
+            "source": "file:///usr/bin/docker",
+            "integrity_reference": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/docker'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49'\"'\"'' && docker --version && docker info --format '{{.ServerVersion}}'",
+            "paths": [
+              "/usr/bin"
+            ],
+            "destination": "/usr/bin",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_codex",
+            "source": "file:///home/ubuntu/.codex/packages/standalone/releases/0.169.0-x86_64-unknown-linux-musl/bin/codex",
+            "integrity_reference": "sha256:b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.codex/packages/standalone/releases/0.169.0-x86_64-unknown-linux-musl/bin/codex'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b'\"'\"'' && codex --version",
+            "paths": [
+              "/home/ubuntu/.codex/packages/standalone/releases/0.169.0-x86_64-unknown-linux-musl/bin"
+            ],
+            "destination": "/home/ubuntu/.codex/packages/standalone/releases/0.169.0-x86_64-unknown-linux-musl/bin",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_chromium",
+            "source": "file:///home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome",
+            "integrity_reference": "sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+            "setup_operation": "/bin/false",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025'\"'\"'' && /opt/conda/bin/python3.12 -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(headless=True); assert b.version == \"156.0.8078.4\"; b.close(); p.stop()'",
+            "paths": [
+              "/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64"
+            ],
+            "destination": "/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64",
+            "cleanup": "Retain pre-existing software; verification creates no persistent installation."
+          },
+          {
+            "dependency_id": "dep_structurizr",
+            "source": "docker.io/structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+            "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+            "setup_operation": "/bin/false",
+            "check_operation": "docker image inspect structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c --format '{{json .RepoDigests}}'",
+            "paths": [
+              "/var/lib/docker"
+            ],
+            "destination": "/var/lib/docker",
+            "cleanup": "Retain pre-existing pinned image; remove only per-check temporary rendering artifacts."
+          }
+        ],
+        "feasibility_artifacts": [],
+        "limits": {
+          "timeout_seconds": 180,
+          "max_attempts": 5,
+          "max_output_bytes": 32768,
+          "memory_bytes": null
+        }
+      },
+      "authorization": null,
+      "checking": false,
+      "feasibility_results": [],
+      "blockers": [
+        {
+          "dependency_id": "dep_python",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-18T05:12:30.348084+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/bin/python3.12'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'' && /opt/conda/bin/python3.12 -c 'import sys; assert sys.version_info[:3] == (3,12,8)'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "/bin/false",
+          "expected_verification": "Exit 0: installed file digest and exact version match; declared capability is available.",
+          "cleanup": "Retain pre-existing software; verification creates no persistent installation.",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_pyyaml",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-18T05:12:32.533270+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'PyYAML'\"'\"') == '\"'\"'6.0.3'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "/bin/false",
+          "expected_verification": "Exit 0: installed file digest and exact version match; declared capability is available.",
+          "cleanup": "Retain pre-existing software; verification creates no persistent installation.",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_cursor_sdk",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-18T05:12:33.815468+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:53f3708c1b93b19aec199decdfae8e1cccc39490400aa37c7e41077199ee3e58'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'cursor-sdk'\"'\"') == '\"'\"'1.0.37'\"'\"'; importlib.import_module('\"'\"'cursor'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/opt/conda/lib/python3.12/importlib/__init__.py\", line 90, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1324, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'cursor'\n",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "/bin/false",
+          "expected_verification": "Exit 0: installed file digest and exact version match; declared capability is available.",
+          "cleanup": "Retain pre-existing software; verification creates no persistent installation.",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_langgraph",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-18T05:12:35.573706+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'langgraph'\"'\"') == '\"'\"'1.2.14'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "/bin/false",
+          "expected_verification": "Exit 0: installed file digest and exact version match; declared capability is available.",
+          "cleanup": "Retain pre-existing software; verification creates no persistent installation.",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_langgraph_checkpoint_sqlite",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-18T05:12:37.228077+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:acc17a0f0a1faf300d72bc3c294519760f814191b113187a23dfd19a4dc76968'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'langgraph-checkpoint-sqlite'\"'\"') == '\"'\"'3.1.1'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "/bin/false",
+          "expected_verification": "Exit 0: installed file digest and exact version match; declared capability is available.",
+          "cleanup": "Retain pre-existing software; verification creates no persistent installation.",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_pytest",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-18T05:12:38.622311+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:b27302b307f7be9f789280d5a12892e035278b364767ffc5616aa816d092f8c7'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'pytest'\"'\"') == '\"'\"'9.0.3'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "/bin/false",
+          "expected_verification": "Exit 0: installed file digest and exact version match; declared capability is available.",
+          "cleanup": "Retain pre-existing software; verification creates no persistent installation.",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_setuptools",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-18T05:12:40.632233+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/setuptools-80.9.0.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:4fcabc308b8a9a70065915c40b912dd79855831aec55b5a5320b97660b021bb8'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'setuptools'\"'\"') == '\"'\"'80.9.0'\"'\"'; importlib.import_module('\"'\"'setuptools'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "/bin/false",
+          "expected_verification": "Exit 0: installed file digest and exact version match; declared capability is available.",
+          "cleanup": "Retain pre-existing software; verification creates no persistent installation.",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_playwright",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-18T05:12:41.999004+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'playwright'\"'\"') == '\"'\"'1.64.0'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "/bin/false",
+          "expected_verification": "Exit 0: installed file digest and exact version match; declared capability is available.",
+          "cleanup": "Retain pre-existing software; verification creates no persistent installation.",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_git",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-18T05:12:43.365337+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/git'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'' && test \"$(git --version)\" = 'git version 2.34.1'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "/bin/false",
+          "expected_verification": "Exit 0: installed file digest and exact version match; declared capability is available.",
+          "cleanup": "Retain pre-existing software; verification creates no persistent installation.",
+          "ping_action": "ping the team after resolving this blocker"
+        }
+      ]
     }
   ]
 }
