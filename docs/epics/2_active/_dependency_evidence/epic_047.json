@@ -959,6 +959,40 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_da0a51ac97760efd2cf74ae1fdae0a231b039904d8367a1641a3d488e4de31f1",
+      "dependency_id": "dep_langgraph_checkpoint_sqlite",
+      "manifest_revision": 3,
+      "entry_revision": "sha256:7e2eecdad59a7f4ea9b75f3afa8adc271e0f81300555ca1ace2e5a4731c60128",
+      "recipe_revision": "sha256:688b5d1acdd8ed6641ab55ff5927df271ccae8b4bac6c2ad59164f9350aa50cf",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:acc17a0f0a1faf300d72bc3c294519760f814191b113187a23dfd19a4dc76968'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'langgraph-checkpoint-sqlite'\"'\"') == '\"'\"'3.1.1'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-18T05:13:25.394826+00:00",
+      "completed_at": "2026-11-18T05:13:26.819032+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "3.1.1",
+      "integrity_reference": "sha256:acc17a0f0a1faf300d72bc3c294519760f814191b113187a23dfd19a4dc76968",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
