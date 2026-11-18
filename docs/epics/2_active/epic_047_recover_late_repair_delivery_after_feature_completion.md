@@ -6,6 +6,7 @@ status: active
 parent: null
 children:
 - feat_047_001
+- feat_047_002
 depends_on: []
 owners:
 - epic_manager
@@ -100,6 +101,7 @@ Record requirements interpretation, exact mutation authority, crash ordering, ow
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_047_002
 - feat_047_001
 
 The Epic Team will create and sequence feature plans here.
