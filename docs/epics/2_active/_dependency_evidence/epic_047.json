@@ -889,6 +889,24 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_423060660e1b18bdd4528edb7a9e56c1c60092ea963a0a3b51f4e4eebd921e7c",
+      "dependency_id": "dep_langgraph",
+      "manifest_revision": 3,
+      "entry_revision": "sha256:b86cc4047053308b22335f8749d44f9cc03ec70e75e81a3fe916951133979a9f",
+      "recipe_revision": "sha256:98c6f1358c38b818ade909f78006fdd14f1acfaa50895e58b1ca69a3615575e2",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/RECORD'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad'\"'\"'' && /opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m; assert m.version('\"'\"'langgraph'\"'\"') == '\"'\"'1.2.14'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-18T05:13:23.459896+00:00",
+      "selected_version": "1.2.14",
+      "integrity_reference": "sha256:dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
