@@ -2821,6 +2821,24 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_97f36e6976aaf738e3465af0000fc30ca5b45a75fd3ddc9234b7d4a37ca262e8",
+      "dependency_id": "dep_chromium",
+      "manifest_revision": 4,
+      "entry_revision": "sha256:d195c6e92e6daaac87d9e4a0a60eb7937c650bbfa5c4cef43cc4c274e8220e56",
+      "recipe_revision": "sha256:288824483bce57c5762a9c4b6492e50f94f96f65eef8ac29805ed1cf3dc5baaa",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025'\"'\"'' && /opt/conda/bin/python3.12 -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(headless=True); assert b.version == \"156.0.8078.4\"; b.close(); p.stop()'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-18T05:15:21.352261+00:00",
+      "selected_version": "156.0.8078.4",
+      "integrity_reference": "sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
