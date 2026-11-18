@@ -2,9 +2,7 @@
 
 Purpose: run the persistent strategic team that owns Epic planning, decisions, approvals, and Feature coordination. Interfaces are Epic graph/boot/wiring, guarded tools, approvals, briefing/checkpoint state, and amendment reads. Owns `REQ-EPIC-001` (strategic context persists) and `DEC-EPIC-001` (Epic tools are scope-guarded).
 
-Evidence: `cascade/epic/` and `tests/epic/` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: exact child Task revisions for the A-F handoff remain unavailable.
 
 ## Readiness projection versus authorization
 
@@ -72,3 +70,13 @@ The two roles run sequentially within each invocation. Their durable context sur
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).
 
 The integrated Structurizr code view is `cascade-epic-code`. From the supervisor components view, Explore **Epic team**; select a code node for its pinned source. This view is the navigable implementation structure; the diagrams above supplement it with lifecycle context.
+
+## Immediate-child recovery
+
+`cascade-epic-code` links the scoped registry to
+[recover_feature](recovery.py) and
+[supervise_child](../team_supervision.py). The adapter requires the immediate
+parent relationship and returns an already-running outcome for a live team.
+Otherwise Feature recovery inspects durable incidents and queues a generation-keyed
+message and wakeup. [The package contract](../DESIGN.md#delivery-and-review-boundaries)
+distinguishes that acknowledgement from executable lifecycle repair.

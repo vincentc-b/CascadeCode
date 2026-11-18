@@ -2,9 +2,7 @@
 
 Purpose: expose the Python package and CLI composition root for repository-local delivery. Interfaces are `cascade.cli` and the domain packages below. Owns `REQ-CASCADE-001` (one local composition root) and `DEC-CASCADE-001` (domain packages remain independently testable).
 
-Evidence: `cascade/cli.py`, `cascade/__init__.py`, and `tests/test_cli.py` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory SHA-256 `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: missing receipts and unavailable reviews in the pinned inventory prevent complete historical attribution.
 
 ## Parent interfaces
 
@@ -17,10 +15,8 @@ owned proposal staging, and closeout receipts. Agent/provider execution consumes
 those scoped contexts but cannot accept an architecture proposal or bypass its
 owner review.
 
-These claims were checked against the corresponding package and integration tests
-at the refreshed baseline recorded in the reconciliation report. Historical rows
-with unavailable or ambiguous evidence remain unresolved and do not override the
-current code/test contract.
+Verification references live with each owning design; unavailable evidence does
+not establish a successful lifecycle transition.
 
 ## Health-audit read boundary
 
@@ -266,3 +262,36 @@ semantic scope, validation, bounded rendering and historical snapshot identity.
 [Watchdog role skills](watchdog/DESIGN.md#architecture-authoring-skill-delivery)
 provide the authoring contract to planning, implementation and completion-review
 roles. These are linked requirements, not duplicate ownership declarations.
+
+## Delivery and review boundaries
+
+`REQ-CASCADE-RECOVERY-001`: Scoped parent supervision verifies the direct-child
+relationship before delegating recovery. Durable attempts, acknowledgements and
+verified lifecycle results are distinct evidence.
+`REQ-REVIEW-REPAIR-001`: Review acceptance is evidence about a forge review and
+its observed revisions; publication uses the guarded review workflow.
+`DEC-CASCADE-RECOVERY-001`: Preserve a single local lifecycle authority across
+team adapters, watchdog claims and Boss delivery, with repository-specific state
+resolved through Workspace.
+
+[team_supervision.py::supervise_child](team_supervision.py) delegates Task
+recovery to [Feature recovery](feature/recovery.py). Feature-child recovery
+currently inspects incidents and queues a deduplicated team wakeup.
+[epic/recovery.py::recover_feature](epic/recovery.py) exposes that immediate-parent
+adapter. A wakeup does not perform a completed-to-active transaction.
+[review.py::ensure_feature_review](review.py) and
+[reconcile_feature_review_completions](review.py) persist review state and consume
+forge acceptance; they do not encode a general late-repair generation history.
+
+Implementation ownership and integrated Code views are in
+[Workspace](workspace/DESIGN.md#work-ownership-and-retirement),
+[Boss](boss/DESIGN.md#delivery-and-closeout),
+[Watchdog](watchdog/DESIGN.md#recovery-admission-and-active-path-authority),
+[Feature](feature/DESIGN.md), [Epic](epic/DESIGN.md) and [Task](task/DESIGN.md).
+The authoritative [model](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+keeps these in the existing supervisor and repository containers; Python modules
+are not separately deployed services. Guarded tools constrain agent operations;
+repository locks serialize mutations, without claiming OS filesystem isolation.
+Verification: [supervision tests](../tests/test_planning_manifest_and_team_controls.py),
+[review health](../tests/test_review_health.py), and
+[tracking adapter](../tests/test_tracking_find.py).

@@ -683,3 +683,396 @@ code_teams_rel_53 = code_teams_task -> code_teams_swe "Executes SWE invocation" 
         "cascade.semanticId" "relationship.code-teams-task-to-code-teams-swe"
     }
 }
+
+code_workspace_resolve = element "resolve_doc_worktree" "Python" "Resolve registered document checkout." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.resolve"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/doc_root.py"
+        "cascade.sourceSymbol" "resolve_doc_worktree"
+    }
+}
+
+code_workspace_board = element "merged_board" "Python" "Project worktree documents and approvals." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.board"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "merged_board"
+    }
+}
+
+code_workspace_select = element "_meta_preference" "Python" "Rank document copies for the read projection." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.select"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "_meta_preference"
+    }
+}
+
+code_workspace_registry = element "get_integration_worktree" "Python" "Read registered work identity." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.registry"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "get_integration_worktree"
+    }
+}
+
+code_workspace_persist = element "terminal_doc_persisted_outside_worktree" "Python" "Check surviving terminal parent document." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.persist"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "terminal_doc_persisted_outside_worktree"
+    }
+}
+
+code_workspace_retire = element "retire_integration_worktree" "Python" "Remove clean canonical checkout after merge evidence." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.retire"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "retire_integration_worktree"
+    }
+}
+
+code_workspace_preflight = element "preflight_lifecycle_merge_target" "Python" "Enforce active target and branch synchronization." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.preflight"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/branch_synchronization.py"
+        "cascade.sourceSymbol" "preflight_lifecycle_merge_target"
+    }
+}
+
+code_workspace_resolve_to_registry = code_workspace_resolve -> code_workspace_registry "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-resolve-to-registry"
+    }
+}
+
+code_workspace_resolve_to_board = code_workspace_resolve -> code_workspace_board "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-resolve-to-board"
+    }
+}
+
+code_workspace_board_to_select = code_workspace_board -> code_workspace_select "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-board-to-select"
+    }
+}
+
+code_workspace_retire_to_registry = code_workspace_retire -> code_workspace_registry "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-retire-to-registry"
+    }
+}
+
+code_workspace_persist_to_registry = code_workspace_persist -> code_workspace_registry "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-persist-to-registry"
+    }
+}
+
+code_workspace_preflight_to_registry = code_workspace_preflight -> code_workspace_registry "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-preflight-to-registry"
+    }
+}
+
+code_boss_merge = element "merge_task_branch" "Python" "Serialize Task delivery and integration gates." {
+    properties {
+        "cascade.semanticId" "element.code.boss.merge"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/merge.py"
+        "cascade.sourceSymbol" "merge_task_branch"
+    }
+}
+
+code_boss_rollup = element "try_complete_feature" "Python" "Serialize child rollup and review closeout." {
+    properties {
+        "cascade.semanticId" "element.code.boss.rollup"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/rollup.py"
+        "cascade.sourceSymbol" "try_complete_feature"
+    }
+}
+
+code_boss_queue = element "retry_pending_task_merges" "Python" "Retry durable validated deliveries." {
+    properties {
+        "cascade.semanticId" "element.code.boss.queue"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "retry_pending_task_merges"
+    }
+}
+
+code_boss_evidence = element "delivery_evidence_is_current" "Python" "Compare the validated source and target pair." {
+    properties {
+        "cascade.semanticId" "element.code.boss.evidence"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "delivery_evidence_is_current"
+    }
+}
+
+code_boss_review = element "ensure_feature_review" "Python" "Publish through review safeguards." {
+    properties {
+        "cascade.semanticId" "element.code.boss.review"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "ensure_feature_review"
+    }
+}
+
+code_boss_reconcile = element "reconcile_feature_review_completions" "Python" "Reconcile forge acceptance and target closeout." {
+    properties {
+        "cascade.semanticId" "element.code.boss.reconcile"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "reconcile_feature_review_completions"
+    }
+}
+
+code_boss_lock = element "task_lifecycle_lock" "Python" "Tracking-root cross-process lifecycle lock." {
+    properties {
+        "cascade.semanticId" "element.code.boss.lock"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/task/lifecycle_lock.py"
+        "cascade.sourceSymbol" "task_lifecycle_lock"
+    }
+}
+
+code_boss_queue_to_merge = code_boss_queue -> code_boss_merge "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-queue-to-merge"
+    }
+}
+
+code_boss_merge_to_evidence = code_boss_merge -> code_boss_evidence "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-merge-to-evidence"
+    }
+}
+
+code_boss_merge_to_lock = code_boss_merge -> code_boss_lock "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-merge-to-lock"
+    }
+}
+
+code_boss_rollup_to_lock = code_boss_rollup -> code_boss_lock "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-rollup-to-lock"
+    }
+}
+
+code_boss_rollup_to_review = code_boss_rollup -> code_boss_review "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-rollup-to-review"
+    }
+}
+
+code_boss_reconcile_to_rollup = code_boss_reconcile -> code_boss_rollup "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-reconcile-to-rollup"
+    }
+}
+
+code_watchdog_tick = element "watchdog_tick" "Python" "Reconcile dead claims and scan lifecycle state." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.tick"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/loop.py"
+        "cascade.sourceSymbol" "watchdog_tick"
+    }
+}
+
+code_watchdog_authority = element "_authorized" "Python" "Bind dispatch event to active path introduction." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.authority"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/loop.py"
+        "cascade.sourceSymbol" "_authorized"
+    }
+}
+
+code_watchdog_recover = element "dispatch_audit_recovery" "Python" "Bound observation admission and execution." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.recover"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/audit_recovery.py"
+        "cascade.sourceSymbol" "dispatch_audit_recovery"
+    }
+}
+
+code_watchdog_capability = element "CapabilityRegistry" "Python" "Resolve supported operation and accountable owner." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.capability"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/capabilities.py"
+        "cascade.sourceSymbol" "CapabilityRegistry"
+    }
+}
+
+code_watchdog_reservation = element "reserve_after_recheck" "Python" "Reserve a freshly rechecked incident generation." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.reservation"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "reserve_after_recheck"
+    }
+}
+
+code_watchdog_claim = element "accept_claim" "Python" "Accept exact durable execution claim." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.claim"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "accept_claim"
+    }
+}
+
+code_watchdog_result = element "record_result" "Python" "Record attempt result without asserting health." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.result"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "record_result"
+    }
+}
+
+code_watchdog_tick_to_authority = code_watchdog_tick -> code_watchdog_authority "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-tick-to-authority"
+    }
+}
+
+code_watchdog_recover_to_capability = code_watchdog_recover -> code_watchdog_capability "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-recover-to-capability"
+    }
+}
+
+code_watchdog_recover_to_reservation = code_watchdog_recover -> code_watchdog_reservation "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-recover-to-reservation"
+    }
+}
+
+code_watchdog_recover_to_claim = code_watchdog_recover -> code_watchdog_claim "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-recover-to-claim"
+    }
+}
+
+code_watchdog_recover_to_result = code_watchdog_recover -> code_watchdog_result "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-recover-to-result"
+    }
+}
+
+code_feature_mint = element "mint_task" "Python" "Admit scoped child specification under lifecycle lock." {
+    properties {
+        "cascade.semanticId" "element.code.feature.mint"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/mint.py"
+        "cascade.sourceSymbol" "mint_task"
+    }
+}
+
+code_feature_recover = element "recover_task" "Python" "Recover the existing direct child delivery." {
+    properties {
+        "cascade.semanticId" "element.code.feature.recover"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/recovery.py"
+        "cascade.sourceSymbol" "recover_task"
+    }
+}
+
+code_feature_registry_to_mint = code_feature_registry -> code_feature_mint "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-registry-to-mint"
+    }
+}
+
+code_feature_registry_to_recover = code_feature_registry -> code_feature_recover "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-registry-to-recover"
+    }
+}
+
+code_epic_recover = element "recover_feature" "Python" "Expose immediate child supervision." {
+    properties {
+        "cascade.semanticId" "element.code.epic.recover"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/epic/recovery.py"
+        "cascade.sourceSymbol" "recover_feature"
+    }
+}
+
+code_epic_supervise = element "supervise_child" "Python" "Inspect incidents and wake accountable team." {
+    properties {
+        "cascade.semanticId" "element.code.epic.supervise"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/team_supervision.py"
+        "cascade.sourceSymbol" "supervise_child"
+    }
+}
+
+code_epic_registry_to_recover = code_epic_registry -> code_epic_recover "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-registry-to-recover"
+    }
+}
+
+code_epic_recover_to_supervise = code_epic_recover -> code_epic_supervise "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-recover-to-supervise"
+    }
+}
+
+code_task_actions = element "resume_action" "Python" "Claim and resume durable attempts." {
+    properties {
+        "cascade.semanticId" "element.code.task.actions"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "resume_action"
+    }
+}
+
+code_task_leases = element "execution_lease_is_live" "Python" "Reject reuse while execution owner is live." {
+    properties {
+        "cascade.semanticId" "element.code.task.leases"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/execution.py"
+        "cascade.sourceSymbol" "execution_lease_is_live"
+    }
+}
+
+code_task_registry_to_actions = code_task_registry -> code_task_actions "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-registry-to-actions"
+    }
+}
+
+code_task_actions_to_leases = code_task_actions -> code_task_leases "Uses" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-actions-to-leases"
+    }
+}
+
+boss_uses_workspace = boss_component -> workspace_component "Checks merge targets and retires worktrees" {
+    properties {
+        "cascade.semanticId" "relationship.boss-uses-workspace"
+    }
+}
+
+watchdog_uses_boss = watchdog_component -> boss_component "Retries delivery and reconciles closeout" {
+    properties {
+        "cascade.semanticId" "relationship.watchdog-uses-boss"
+    }
+}

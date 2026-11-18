@@ -397,6 +397,13 @@ The diagrams in [Product workflow](#21-product-workflow), [The 3-Tier Directory 
 
 ---
 
+The supervisor implementation views include `cascade-workspace-code`,
+`cascade-boss-code`, and `cascade-watchdog-code`. They explain document ownership,
+Task delivery, closeout and admitted recovery. Follow the
+[package boundary](cascade/DESIGN.md#delivery-and-review-boundaries) to their owning
+designs, normal flows and current recovery limits. The team Code views also link
+the scoped recovery adapters and durable Task action collaborators.
+
 ## 5. Agent Lifecycles
 
 Each tier is a LangGraph subgraph with its own checkpointer namespace. Subgraphs do not inherit transcripts.

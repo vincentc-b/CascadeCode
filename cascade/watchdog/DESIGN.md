@@ -2,9 +2,7 @@
 
 Purpose: observe canonical state, admit dependency-ready work, and coordinate bounded recovery. Interfaces are dispatch/activation, queues, poll loop, capability registry, incidents/reservations, health audit, and model resolution. Owns `REQ-WATCHDOG-001` (automation obeys lifecycle gates) and `DEC-WATCHDOG-001` (generation-bound reservations converge recovery).
 
-Evidence: `cascade/watchdog/`, `tests/watchdog/`, and lifecycle tests at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: missing receipts prevent complete work-to-commit attribution.
 
 ## Publication-owner liveness
 
@@ -204,3 +202,52 @@ audit evidence. [config.py](config.py) validates these independent settings;
 [worker.py](../workspace/worker.py) wires the lane and conditionally starts
 automatic investigations. This is a repository operational choice, not a
 requirement for responsive architecture rendering.
+
+## Recovery admission and active-path authority
+
+`REQ-WATCHDOG-REPAIR-001`: Audit repair requires a fresh canonical incident,
+a supported capability for its accountable owner, and a matching durable claim.
+An attempt result cannot replace authoritative health verification.
+`DEC-WATCHDOG-REPAIR-001`: Recheck local fingerprints under the lifecycle lock
+and run bounded external observation outside that critical section. Reuse
+reservations to reject stale generations and duplicate claims.
+
+The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+connect `cascade-context` → `cascade-containers` →
+`cascade-supervisor-components` → `cascade-watchdog-code`, owned by
+`element.component.watchdog`. The [package](../DESIGN.md#delivery-and-review-boundaries)
+connects the team adapters and [Boss](../boss/DESIGN.md#delivery-and-closeout)
+delivery consumer. War Room consumes the bounded projection described above.
+
+| Source entry | Contract |
+|---|---|
+| [watchdog_tick / _authorized](loop.py) | Reconcile dead publication claims, scan active documents, and match an authorizing queue event to the active path introduction. |
+| [dispatch_audit_recovery](audit_recovery.py) | Bounded observation/admission → exact capability resolution → claim acceptance → executor. |
+| [CapabilityRegistry](capabilities.py) | Owner/tier/failure-specific capability metadata and finite retry policy. |
+| [reserve_after_recheck / accept_claim / record_result](reservations.py) | Canonical fingerprint, generation and claim-token comparison; persist attempts in the selected durable store. |
+
+```mermaid
+flowchart TD
+    Observe[Bounded authoritative observation] --> Capability[Resolve capability and owner]
+    Capability --> Recheck[Lock and recheck local fingerprint]
+    Recheck -->|fresh| Reserve[Persist reservation and accept exact claim]
+    Recheck -->|changed / unavailable| Refuse[Typed refusal; retain evidence]
+    Reserve --> Execute[Execute supported scoped operation]
+    Execute --> Result[Persist attempt result]
+    Result --> Verify[Later authoritative postcheck]
+    Verify -->|obligation satisfied| Resolved[Resolved evidence]
+    Verify -->|still blocked| Pending[Retained incident / bounded handoff]
+```
+
+Reservations and action attempts survive restart. Interrupted claims are
+reconciled using their exact token and execution identity; a live process is not
+reclaimed just because time elapsed. Dispatch returns whether execution was
+admitted, not whether the obligation is healthy. The active-path scanner accepts
+`FeatureReadyToPlan` for Features, `TaskDispatched` for Tasks and `EpicActivated`
+for Epics, checking introduction timestamps. It has no operation-specific Feature
+repair receipt. An arbitrary active-path move therefore lacks recovery authority.
+
+Verification: [authorization](../../tests/watchdog/test_watchdog.py),
+[audit recovery](../../tests/watchdog/test_audit_recovery.py), and
+[reservations](../../tests/watchdog/test_reservations.py).

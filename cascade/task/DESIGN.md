@@ -2,9 +2,7 @@
 
 Purpose: run one bounded implementation team in an isolated worktree with supervised file, test, commit, and lifecycle tools. Interfaces are Task graph/boot/wiring, SWE MCP, path guards, action recovery, lifecycle locks, and execution views. Owns `REQ-TASK-001` (implementation stays in assigned scope) and `DEC-TASK-001` (green post-commit supervised validation gates delivery).
 
-Evidence: `cascade/task/`, `tests/task/`, and lifecycle tests at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: receipts are absent for many historical Tasks, including A-F handoff children.
 
 ## Interrupted review publication attempts
 
@@ -76,3 +74,14 @@ Task graphs use one SWE node. Delivery additionally passes supervised validation
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).
 
 The integrated Structurizr code view is `cascade-task-code`. From the supervisor components view, Explore **Task team**; select a code node for its pinned source. This view is the navigable implementation structure; the diagrams above supplement it with lifecycle context.
+
+## Durable delivery collaborators
+
+`cascade-task-code` exposes [resume_action](action_recovery.py) and
+[execution_lease_is_live](execution.py) alongside the graph and tool registry.
+The action ledger in tracking-root `.cascade/executions.json` preserves attempts,
+claims and final validation evidence across worker restart. Recovery retains the
+Task identity and checks live execution ownership. [Boss](../boss/DESIGN.md#delivery-and-closeout)
+consumes the validated source/target pair; [Workspace](../workspace/DESIGN.md#work-ownership-and-retirement)
+checks the receiving parent. Source or target movement requires the supervised
+validation workflow, not a manually edited queue record.

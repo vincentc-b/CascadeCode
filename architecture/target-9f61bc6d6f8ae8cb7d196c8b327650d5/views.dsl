@@ -31,6 +31,7 @@ custom "cascade-epic-code" {
         "cascade.codeComponent" "element.component.epic-team"
     }
     include code_epic_graph code_epic_state code_epic_checkpoint code_epic_wiring code_epic_registry code_epic_guard code_epic_runtime code_epic_provider
+    include code_epic_recover code_epic_supervise
     autoLayout lr
 }
 
@@ -40,6 +41,7 @@ custom "cascade-feature-code" {
         "cascade.codeComponent" "element.component.feature-team"
     }
     include code_feature_graph code_feature_state code_feature_checkpoint code_feature_wiring code_feature_registry code_feature_guard code_feature_runtime code_feature_provider
+    include code_feature_mint code_feature_recover
     autoLayout lr
 }
 
@@ -49,6 +51,7 @@ custom "cascade-task-code" {
         "cascade.codeComponent" "element.component.task-team"
     }
     include code_task_graph code_task_state code_task_checkpoint code_task_wiring code_task_registry code_task_guard code_task_runtime code_task_provider
+    include code_task_actions code_task_leases
     autoLayout lr
 }
 
@@ -58,5 +61,32 @@ custom "cascade-teams-code" {
         "cascade.codeComponent" "element.component.teams"
     }
     include code_teams_epic code_teams_feature code_teams_task code_teams_skills code_teams_runtime code_teams_swe
+    autoLayout lr
+}
+
+custom "cascade-workspace-code" {
+    title "Workspace — Code"
+    properties {
+        "cascade.codeComponent" "element.component.workspace"
+    }
+    include code_workspace_resolve code_workspace_board code_workspace_select code_workspace_registry code_workspace_persist code_workspace_retire code_workspace_preflight
+    autoLayout lr
+}
+
+custom "cascade-boss-code" {
+    title "Boss — Code"
+    properties {
+        "cascade.codeComponent" "element.component.boss"
+    }
+    include code_boss_merge code_boss_rollup code_boss_queue code_boss_evidence code_boss_review code_boss_reconcile code_boss_lock
+    autoLayout lr
+}
+
+custom "cascade-watchdog-code" {
+    title "Watchdog — Code"
+    properties {
+        "cascade.codeComponent" "element.component.watchdog"
+    }
+    include code_watchdog_tick code_watchdog_authority code_watchdog_recover code_watchdog_capability code_watchdog_reservation code_watchdog_claim code_watchdog_result
     autoLayout lr
 }

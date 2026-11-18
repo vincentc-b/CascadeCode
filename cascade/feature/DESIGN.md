@@ -2,9 +2,7 @@
 
 Purpose: run the persistent tactical team that decomposes Features, responds to review, and coordinates Task integration. Interfaces are Feature graph/boot/wiring, guarded Task creation, publication/review polling, comments, briefing, and branch recovery. Owns `REQ-FEATURE-001` (Feature context survives Task turnover) and `DEC-FEATURE-001` (Task writes and ancestor reads are guarded).
 
-Evidence: `cascade/feature/` and `tests/feature/` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: receipt and review evidence remains incomplete.
 
 
 ## Implementation and navigation
@@ -63,3 +61,19 @@ The two roles run sequentially within each invocation. Their durable context sur
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).
 
 The integrated Structurizr code view is `cascade-feature-code`. From the supervisor components view, Explore **Feature team**; select a code node for its pinned source. This view is the navigable implementation structure; the diagrams above supplement it with lifecycle context.
+
+## Child admission and recovery
+
+`REQ-FEATURE-REPAIR-001`: Task recovery preserves direct-child scope and checks
+current execution ownership before resuming delivery.
+`DEC-FEATURE-REPAIR-001`: Use the existing supervised Task recovery and final
+validation boundary; a Feature tool cannot declare its own merge successful.
+[mint_task](mint.py) serializes child creation with the lifecycle lock and refuses
+blocked parents. It does not itself reactivate a completed Feature.
+[recover_task](recovery.py) delegates to
+[supervisor_recover_task_delivery](../task/supervisor_recovery.py).
+Both entries appear in `cascade-feature-code`, linked from the scoped registry.
+The [Boss closeout](../boss/DESIGN.md#delivery-and-closeout) and
+[Workspace ownership](../workspace/DESIGN.md#work-ownership-and-retirement)
+contracts govern the receiving parent and checkout. Failed target preflight
+retains the Task; no graph checkpoint substitutes for delivery evidence.
