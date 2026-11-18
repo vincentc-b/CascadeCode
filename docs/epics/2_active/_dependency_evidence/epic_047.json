@@ -573,6 +573,24 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_38e4faa20e83d4c4a764def10f352d0c70b3ae47155b18e868a1553b1c4e1f1c",
+      "dependency_id": "dep_codex",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:be8be9a6eb1e20cd41343129c38cc388489e1be20e20dac86b152e9d668aeaa2",
+      "recipe_revision": "sha256:5173173669d692462de520baab46b884fbaf9de20ec42269e17bf91bcc8b3df5",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.codex/packages/standalone/releases/0.169.0-x86_64-unknown-linux-musl/bin/codex'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b'\"'\"'' && codex --version",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-18T05:12:49.781869+00:00",
+      "selected_version": "0.169.0",
+      "integrity_reference": "sha256:b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
