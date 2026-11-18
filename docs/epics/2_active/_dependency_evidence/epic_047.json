@@ -2055,6 +2055,40 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_b8fd864b89db1276c12e1aada5e40af0dc00b7d1f31206e763edf4b7ba54d1dc",
+      "dependency_id": "dep_codex",
+      "manifest_revision": 3,
+      "entry_revision": "sha256:8f47d7baa2a644e9c2a71255672a937cd52ff3b40693801d3528beb50cb7b185",
+      "recipe_revision": "sha256:5173173669d692462de520baab46b884fbaf9de20ec42269e17bf91bcc8b3df5",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.codex/packages/standalone/releases/0.169.0-x86_64-unknown-linux-musl/bin/codex'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b'\"'\"'' && codex --version",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-18T05:14:22.138399+00:00",
+      "completed_at": "2026-11-18T05:14:23.843959+00:00",
+      "result": "succeeded",
+      "redacted_output": "codex-cli 0.169.0\n",
+      "selected_version": "0.169.0",
+      "integrity_reference": "sha256:b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
