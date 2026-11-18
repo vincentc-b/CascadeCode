@@ -1951,6 +1951,40 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_df4151fd8e8d5a3b9c17205cf6d8607fde848b616264c5784bbad1fc17474fe1",
+      "dependency_id": "dep_gh",
+      "manifest_revision": 3,
+      "entry_revision": "sha256:ac4dc79f3f500b1162af53f1292c64fa70ce12849691de6c518194f13201e21d",
+      "recipe_revision": "sha256:df8d87379226ac33dd9f32ead513e7535bbd648f40666b8ccb255ccf9ebabe24",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/gh'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524'\"'\"'' && gh --version && gh pr view --help",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-18T05:14:18.712608+00:00",
+      "completed_at": "2026-11-18T05:14:19.310338+00:00",
+      "result": "succeeded",
+      "redacted_output": "gh version 2.4.0+dfsg1 (2022-03-23 Ubuntu 2.4.0+dfsg1-2)\nhttps://github.com/cli/cli/releases/latest\nDisplay the title, body, and other information about a pull request.\n\nWithout an argument, the pull request that belongs to the current branch\nis displayed.\n\nWith '--web', open the pull request in a web browser instead.\n\nFor more information about output formatting flags, see `gh help formatting`.\n\nUSAGE\n  gh pr view [<number> | <url> | <branch>] [flags]\n\nFLAGS\n  -c, --comments          View pull request comments\n  -q, --jq expression     Filter JSON output using a jq expression\n      --json fields       Output JSON with the specified fields\n  -t, --template string   Format JSON output using a Go template\n  -w, --web               Open a pull request in the browser\n\nINHERITED FLAGS\n      --help                     Show help for command\n  -R, --repo [HOST/]OWNER/REPO   Select another repository using the [HOST/]OWNER/REPO format\n\nLEARN MORE\n  Use 'gh <command> <subcommand> --help' for more information about a command.\n  Read the manual at https://cli.github.com/manual\n\n",
+      "selected_version": "2.4.0+dfsg1",
+      "integrity_reference": "sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
