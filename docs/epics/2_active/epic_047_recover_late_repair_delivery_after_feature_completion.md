@@ -287,6 +287,11 @@ The authority/event ordering, review-generation compatibility, owner/survival in
   Chose Require typed exact-owner resolution and a generation/head/inventory-bound descendant survival proof before checkout removal..
   Rationale: Read ranking is not mutation authority and another completed parent document does not prove its descendants survive. Canonical parent tracking persistence, committed reread and independent product Git evidence preserve split-root ownership and restart convergence.
   Honors: Success criteria 8–9 and 15; no sibling writes, destructive cleanup, arbitrary destination selection or stale-success resurrection..
+
+- `dec_007` · 2026-11-18 · Epic Architect · **Diagram-impact inventory / planning closeout**
+  Chose Publish integrated current-code coverage with the final recovery proposal; keep runtime deployment and new transaction acceptance in child execution..
+  Rationale: Three new native Code views and expanded team views now expose real ownership, closeout and recovery collaborators; real rendering/navigation/source checks pass. Context/container topology is unchanged. Four provider-preflight watchdog failures reproduce on baseline and remain an explicit verification prerequisite. Current designs no longer carry stale reconstruction delivery status.
+  Honors: Design skill structure, lifecycle, source-contract and semantic closeout requirements; exact-revision architecture publication; no speculative implementation or deployment claims..
 ## Amendment log
 
 _(none)_
