@@ -19,6 +19,40 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_cd9ae31e9d3a0b1718d2d5507ab95b98a0e54690c0ec071b82edbc9b22639512",
+      "dependency_id": "dep_python",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:e7853bbd958daf571f9682b17f8c0a58c2e2137790ab65878f6537a3a98b5c08",
+      "recipe_revision": "sha256:86e946463a8e346c083e2d1c6c1983f38bc485f84539c145b56325aaea889125",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/bin/python3.12'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'' && /opt/conda/bin/python3.12 -c 'import sys; assert sys.version_info[:3] == (3,12,8)'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-18T05:12:29.224441+00:00",
+      "completed_at": "2026-11-18T05:12:30.348084+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "3.12.8",
+      "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
