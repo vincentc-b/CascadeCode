@@ -231,6 +231,11 @@ Product scope choices are resolved by the state/authority and feature contracts 
   Chose Require exact registered mutation ownership, descendant survival proof and one executable generation-bound recovery path shared by Feature, Epic and audit adapters..
   Rationale: Generic board ranking is not mutation authority, parent-only persistence is insufficient for retirement, and repeated wakeups cannot change a deterministic completed-parent prerequisite. Reuse existing actions, locks, claims and projection boundaries; retain every attempt and refuse ambiguous evidence.
   Honors: Success criteria 5–6, 8–9 and 12–15; current-generation authority, work preservation and bounded recovery..
+
+- `dec_004` · 2026-11-18 · Epic Manager · **Feature breakdown / planning review**
+  Chose Sequence four backlog features and withhold manager sign-off until the Architect completes the source-linked contracts and integrated Code coverage..
+  Rationale: Ownership and persistence underpin safe lifecycle recovery; lifecycle capability underpins executable routing; final convergence and runtime-handoff evidence validates the whole path. Current team Code views omit material Workspace/Boss/Watchdog recovery structure. Source-contract validity and 13 passing baseline tests do not close those design gaps.
+  Honors: Design skill implementation-depth and pre-sign-off review contract; no speculative implementation claims or accepted-snapshot rewrites..
 ## Amendment log
 
 _(none)_
