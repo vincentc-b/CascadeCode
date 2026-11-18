@@ -221,6 +221,11 @@ Product scope choices are resolved by the state/authority and feature contracts 
   Chose Use the declared existing local toolchain for verification; no installation or upgrade..
   Rationale: Assessed pyproject.toml, README prerequisites, current runtime/CLI installations and pinned renderer/browser availability. Manifest revision 4 has 14 successful current checks. This identifies the local verification target only; original package provenance, forge permission and deployment are separate facts.
   Honors: Dependency declaration before planning; exact target identity; separate current human installation authority..
+
+- `dec_002` · 2026-11-18 · Epic Manager · **Macro-architecture / recovery and review state contract**
+  Chose Preserve the original Task and accepted review; admit an in-scope repair generation with a distinct follow-up publication after acceptance..
+  Rationale: The deadlock is a missing legal parent delivery route, not missing implementation. Reusing the same Task avoids duplicate work while separate review generations prevent an older merged PR from authorizing a later source head. Material scope changes retain existing amendment/approval gates.
+  Honors: Success criteria 1–4, 7 and 10; exact revision evidence; no blind reopening or approval reuse..
 ## Amendment log
 
 _(none)_
