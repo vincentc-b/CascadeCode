@@ -7,6 +7,34 @@ description: Author and review C4 architecture and implementation diagrams in hi
 
 Use this skill when creating, updating, or reviewing repository design documents. Start from [templates/DESIGN.md](templates/DESIGN.md) unless the repository already has a compatible format.
 
+## Document contract and first use
+
+| Document | Owns | Does not own |
+|---|---|---|
+| `README.md` | Installation, configuration, first use, routine operation, and links to deeper documentation. | Detailed architecture or delivery history. |
+| Root and child `DESIGN.md` | Current requirements, architecture, interfaces, durable choices and rationale, and inspectable verification references. | Delivery IDs, schedules, status reports, chronology, or a backlog. |
+| Epic / feature / task records | Scope, parent/child IDs, dependencies, acceptance criteria, proposed changes, revisions, decision history, execution evidence, and closeout. | A second authoritative copy of current architecture. |
+
+For a new repository, read its brief and existing documentation before creating
+the root design from the template. Document the system that exists; do not claim
+planned components or unrun checks are implemented or verified. Keep proposed
+behavior and sequencing in work records. A design proposal on a work branch must
+be reviewed as a proposal and reconciled with the code before completion.
+Create child designs as meaningful boundaries emerge, not for empty scaffolding.
+Respect configured target/tracking documentation destinations and existing
+formats; initialization installs the template, not a fictional project design.
+
+Link from work records to stable design requirement/decision IDs. Design IDs
+must describe their owning subsystem, not encode an epic, feature, task, or date.
+Keep historical attribution in the work record when promoting a durable decision
+into its owning design. Product-domain terms and illustrative IDs needed to
+explain a schema or API are allowed; they must not attribute architecture to a
+particular delivery.
+
+For example, replace "Epic 044 added lazy imports after the startup incident"
+with "Repository-context dependencies are imported lazily to avoid initialization
+cycles." Preserve the incident and its delivery evidence in the work record.
+
 ## Choose document boundaries
 
 - A meaningful code directory owns a `DESIGN.md` when it has distinct behavior, state, interfaces, or decisions that would make a parent summary misleading.
@@ -27,7 +55,7 @@ Use this skill when creating, updating, or reviewing repository design documents
 1. Read the existing design, relevant parent and child designs, current code, and the scoped diff.
 2. Preserve accurate prose, diagrams, identifiers, and rationale. Make focused edits for missing or stale facts instead of rewriting the document to match the template mechanically.
 3. For a full-tree request, work from meaningful leaves to the root, then verify downward and across sibling interfaces. For a diff-scoped request, update changed directories, their design-owning ancestors, and affected interface consumers only.
-4. Keep work history, task plans, and implementation narration in work records. Designs describe durable current behavior as matter-of-fact statements. Do not mention epics, feature/task history, previous requirements, migrations from earlier designs, or implementation chronology. Explain current constraints and rationale without narrating how the design evolved.
+4. Keep work history, task plans, and implementation narration in work records. Designs describe durable current behavior as matter-of-fact statements. Do not include epic/feature/task IDs as attribution, delivery history, previous requirements, migrations from earlier designs, or implementation chronology. Explain current constraints and rationale without narrating how the design evolved. Domain concepts and schema examples remain valid under the document contract above.
 
 ## Content contract
 
@@ -53,6 +81,28 @@ Before finishing, check that:
 - every meaningful directory owns a design and every skipped directory has a clear covering parent;
 - architecture links and verification evidence exist and describe current, inspectable artifacts;
 - the document contains no task plan, speculative implementation detail, or stale generated inventory.
+
+## Review and closeout
+
+Apply this check before plan sign-off/publication and again before task delivery
+or feature/epic completion, including documentation-only changes:
+
+1. Read the changed designs and affected parent/child interfaces against the
+   final diff. Reconcile requirements, decisions, diagrams and evidence; remove
+   superseded statements instead of appending a history of changes.
+2. Review prose, headings, tables and diagram labels for delivery IDs, dates used
+   as change history, "previously", "introduced in", and similar attribution.
+   Judge context: protocol dates, compatibility constraints, domain concepts and
+   schema examples can be current design facts. Rewrite historical narration
+   into the current rule and its rationale, keeping useful history in work records.
+3. Record the designs reviewed, updates made (or a concrete no-change reason),
+   verification performed and unresolved gaps in the work closeout. Do not put
+   this review log in `DESIGN.md`.
+4. Fix violations before sign-off or recommending completion. If ownership or
+   scope prevents the edit, route the specific gap to the owning team and report
+   it explicitly rather than claiming documentation is complete.
+
+These are semantic review requirements, not a blanket text ban on IDs or dates.
 
 ## Implementation depth and team responsibilities
 

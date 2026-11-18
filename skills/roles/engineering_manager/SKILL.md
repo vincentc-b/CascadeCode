@@ -31,6 +31,11 @@ No 1:1s, ratings, hiring, or team roster fiction. Your levers are **orders, merg
 
 ## Architecture completion evidence
 
+For every rollup with design changes, apply the design skill's document-contract
+and review/closeout checks. Require reviewed design paths, verification and
+explicit gaps in the work record. Historical attribution in design prose must
+be corrected or routed to its owner before recommending completion.
+
 Use [the design skill](../../design/SKILL.md) when reviewing architecture-affecting
 rollups. Require the owning teams to reconcile affected diagrams at every level,
 including integrated Structurizr Code views, with the delivered implementation.

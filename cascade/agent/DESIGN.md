@@ -12,8 +12,8 @@ Planning and task MCP entry points must initialize in a fresh Python process,
 without depending on the supervisor's import order. The repository-context
 bridge imports board/workspace dependencies inside its functions: eager package
 initialization can traverse workspace, watchdog, task tools, and return to the
-partially initialized bridge before its exports exist. This previously prevented
-Epic 044's Manager and Architect from starting any planning or audit turn.
+partially initialized bridge before its exports exist. Lazy imports keep planning
+and audit entry points independent of package initialization order.
 
 This import boundary does not change trusted configuration, split target/tracking
 repository authority, architecture destination, or tool permissions. Startup

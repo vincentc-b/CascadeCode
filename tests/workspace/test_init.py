@@ -81,6 +81,42 @@ def test_second_init_does_not_overwrite_cascade_toml(tmp_path: Path) -> None:
     assert (root / "cascade.toml").read_text(encoding="utf-8") == edited
 
 
+def test_init_installs_loadable_guidance_for_every_role(tmp_path: Path) -> None:
+    from cascade.watchdog.role_skills import RoleSkillDefaults, load_role_skills_context
+
+    root = make_git_repo(tmp_path)
+    init_workspace(root)
+    for role in RoleSkillDefaults:
+        context = load_role_skills_context(root, role)
+        assert context
+        design = next(item for item in context if item["path"] == "skills/design/SKILL.md")
+        assert "## Document contract and first use" in design["text"]
+        assert "## Review and closeout" in design["text"]
+    template = root / "skills/design/templates/DESIGN.md"
+    assert "## Decisions and Rationale" in template.read_text()
+    assert not (root / "DESIGN.md").exists()
+
+
+def test_init_preserves_custom_guidance_and_repairs_missing_files(tmp_path: Path) -> None:
+    root = make_git_repo(tmp_path)
+    custom = root / "skills/design/SKILL.md"
+    custom.parent.mkdir(parents=True)
+    custom.write_text("# Project-specific design policy\n")
+    (root / "DESIGN.md").write_text("# Existing architecture\n")
+    init_workspace(root)
+    template = root / "skills/design/templates/DESIGN.md"
+    template.write_text("# Custom template\n")
+    missing = root / "skills/roles/software_developer/SKILL.md"
+    missing.unlink()
+
+    init_workspace(root)
+
+    assert custom.read_text() == "# Project-specific design policy\n"
+    assert template.read_text() == "# Custom template\n"
+    assert (root / "DESIGN.md").read_text() == "# Existing architecture\n"
+    assert "# Software Developer" in missing.read_text()
+
+
 def test_init_requires_git_repo(tmp_path: Path) -> None:
     root = tmp_path / "not_git"
     root.mkdir()

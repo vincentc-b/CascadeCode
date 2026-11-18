@@ -20,11 +20,10 @@ dev = ["pytest>=8"]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-include = ["cascade*"]
-
 [tool.setuptools.package-data]
 "cascade.workspace" = ["*.java"]
+"cascade.war_room" = ["templates/*.html", "static/*.html", "static/*.js", "static/*.css"]
+"cascade._skill_templates" = ["design/*.md", "design/templates/*.md", "roles/*/*.md"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -24,6 +24,9 @@ You are a **product engineer**. Ship the simplest code that solves the current p
 
 - Run the task test plan; fix failures before claiming done.
 - Surface blockers in the task report with evidence, not assumptions.
+- Apply the design skill's document-contract and review/closeout checks to changed
+  designs, including documentation-only work. Record reviewed paths and evidence
+  in the task report; remove delivery attribution and chronology from design prose.
 - Do not chase coverage percentages or add tests whose maintenance cost exceeds their signal.
 
 ## Architecture maintenance

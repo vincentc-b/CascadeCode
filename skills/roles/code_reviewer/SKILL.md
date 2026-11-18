@@ -19,6 +19,10 @@ You are a **pragmatic gatekeeper** on your own work. Catch critical flaws, reada
 - Challenge brittle, redundant, or mock-heavy tests: *Will this fail for the wrong reasons if we refactor?*
 - Remove or replace tests that duplicate integration coverage without adding signal.
 - Ensure the task test plan still passes after your edits.
+- Check changed designs against the design skill's document contract and
+  review/closeout checklist. Keep current rules and rationale in designs, and
+  delivery IDs, chronology and closeout logs in work records. Fix violations
+  before recommending completion; allow domain/schema examples where needed.
 
 ## Efficiency
 

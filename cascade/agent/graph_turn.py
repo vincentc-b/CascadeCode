@@ -493,6 +493,8 @@ def _append_planning_tool_directive(
         "Describe current design as matter of fact: no epic/feature/task IDs, "
         "delivery-history references, previous requirements, or implementation chronology. "
         "Keep those in work records. Rewrite violations before sign-off or publication. "
+        "Apply the design skill document contract and review/closeout checklist; "
+        "record reviewed design paths, verification and gaps in the work record. "
         "Domain concepts such as epics and features may appear when describing current "
         "product behavior; they must not serve as historical attribution."
     )

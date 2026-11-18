@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from importlib.resources import files
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from cascade.board.context import resolve_root
@@ -60,6 +62,7 @@ def init_workspace(root: Path) -> WorkspaceRoot:
         config_path.write_text(_DEFAULT_CASCADE_TOML, encoding="utf-8")
 
     _ensure_runtime_gitignore(path / ".gitignore")
+    _install_guidance(path)
 
     return WorkspaceRoot(
         path=path,
@@ -68,6 +71,33 @@ def init_workspace(root: Path) -> WorkspaceRoot:
         config=config_path,
         runtime=path / ".cascade",
     )
+
+
+def _install_guidance(root: Path) -> None:
+    """Fill missing playbooks/templates without replacing repository policy."""
+
+    try:
+        source = files("cascade._skill_templates")
+    except ModuleNotFoundError:
+        # Direct source checkouts need no installation to run the CLI or tests.
+        source = Path(__file__).resolve().parents[2] / "skills"
+    if not source.joinpath("design", "SKILL.md").is_file():
+        raise WorkspaceError("bundled Cascade guidance is missing; reinstall Cascade")
+
+    def copy_markdown(directory: Traversable, destination: Path) -> None:
+        for entry in directory.iterdir():
+            target = destination / entry.name
+            if entry.is_dir() and not entry.name.startswith((".", "_")):
+                copy_markdown(entry, target)
+            elif entry.is_file() and entry.name.endswith(".md"):
+                target.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    with target.open("x", encoding="utf-8") as handle:
+                        handle.write(entry.read_text(encoding="utf-8"))
+                except FileExistsError:
+                    pass
+
+    copy_markdown(source, root / "skills")
 
 
 def _ensure_runtime_gitignore(gitignore: Path) -> None:

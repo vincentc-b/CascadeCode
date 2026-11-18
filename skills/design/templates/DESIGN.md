@@ -1,6 +1,10 @@
 # Design: <project or directory>
 
 <!-- Keep this table of contents aligned with the H2 headings below. -->
+<!-- Describe current design and rationale. Keep delivery IDs, chronology,
+     proposed work, and closeout logs in epic/feature/task records. Use semantic
+     REQ/DEC scopes, not delivery IDs. Replace placeholders with verified facts;
+     do not present planned behavior or unrun checks as implemented evidence. -->
 
 ## Table of Contents
 

@@ -6,6 +6,26 @@ Evidence: `cascade/workspace/`, `tests/workspace/`, and `tests/architecture/` at
 
 Known gaps: missing receipts, unavailable reviews/source revisions, and unread child records block clean historical closeout.
 
+## Repository initialization and guidance
+
+`REQ-WORKSPACE-INIT-001`: Initialization in a Git repository creates board columns,
+default configuration, runtime ignore entries, and missing role/design playbooks
+and the design template under `skills/`. Existing configuration and guidance
+remain unchanged, including repository customizations. Repeating initialization
+restores missing guidance files. No project design is invented from placeholders.
+
+`DEC-WORKSPACE-INIT-001`: The repository's `skills/` tree is packaged as
+`cascade._skill_templates`, giving installed distributions and source checkouts
+the same authoring guidance without a separately maintained copy. Exclusive file
+creation preserves existing files. Agents read the installed repository copies,
+so guidance changes follow normal repository review and version control.
+
+Implementation: [initialization](init.py) and [package mapping](../../setup.py).
+Verification: [initialization tests](../../tests/workspace/test_init.py) exercise
+fresh role-context loading, customization preservation and missing-file repair.
+Documentation ownership and semantic review requirements belong to the
+[design skill](../../skills/design/SKILL.md).
+
 ## C4 code model and rendering contract
 
 - `REQ-WORKSPACE-C4-001`: A code view is a native Structurizr custom view whose
