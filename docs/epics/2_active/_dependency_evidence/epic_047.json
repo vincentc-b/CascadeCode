@@ -1149,6 +1149,24 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_98c64c98ecd631757edef87918becfb2466b85eed96525c65b6f15d956c4153f",
+      "dependency_id": "dep_git",
+      "manifest_revision": 3,
+      "entry_revision": "sha256:bbcf1c8fb3628aa99b4581d342a12f881c90f50624fa198388086032a18eb691",
+      "recipe_revision": "sha256:9cfa4ef6cf5efcbdec92ea6794ab64bc28ea9198701e7407e228f15393891410",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/git'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'' && test \"$(git --version)\" = 'git version 2.34.1'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-18T05:13:34.940516+00:00",
+      "selected_version": "2.34.1",
+      "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+      "lock_references": [],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
