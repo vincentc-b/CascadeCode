@@ -672,6 +672,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             "/api/approve_epic_plan": lambda h, b: h._handle_approve_epic_plan(b),
             "/api/sign_off_epic_plan": lambda h, b: h._handle_sign_off_epic_plan(b),
             "/api/approve_feature": lambda h, b: h._handle_approve_feature(b),
+            "/api/architecture/plan-preview": lambda h, b: h._handle_plan_preview(b),
             "/api/reorder_backlog_features": lambda h, b: h._handle_reorder_backlog_features(b),
             "/api/reorder_backlog_epics": lambda h, b: h._handle_reorder_backlog_epics(b),
         }
@@ -1508,6 +1509,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             self._json_error(HTTPStatus.NOT_FOUND, f"not found: {work_id}")
             return
         payload = work_doc_to_dict(doc, root=self.server.root)
+        from cascade.war_room.plan_comparison import plan_comparison
+
+        payload["comparison"] = plan_comparison(self.server.root, work_id)
         meta = doc.meta
         if meta.tier in {"epic", "feature"}:
             from cascade.war_room.architecture_routes import review_envelope
@@ -1515,6 +1519,12 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             payload["paired_review"] = review_envelope(
                 self.server.root, work_id, meta.tier
             )
+        elif meta.tier == "task":
+            payload["paired_review"] = {
+                "state": "missing_review", "owner_work_id": work_id,
+                "approval_context": None, "views": [],
+                "summary": "Committed task branch preview; no separate architecture approval.",
+            }
         if (
             meta.tier == "epic"
             and meta.plan_approved_at is None
@@ -1727,6 +1737,28 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         except ArchitectureHTTPError as exc:
             self._json_error(HTTPStatus(exc.status), str(exc))
         except (OSError, ValueError, WorkspaceError) as exc:
+            self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
+
+    def _handle_plan_preview(self, body: dict[str, Any]) -> None:
+        from cascade.war_room.plan_comparison import draft_diagrams
+
+        if set(body) - {"work_id", "snapshot_ids"} or not isinstance(body.get("work_id"), str):
+            self._json_error(HTTPStatus.BAD_REQUEST, "A work_id is required")
+            return
+        snapshots = body.get("snapshot_ids")
+        if snapshots is not None and (
+            not isinstance(snapshots, dict) or set(snapshots) != {"current", "proposed"}
+            or any(not isinstance(v, str) for v in snapshots.values())
+        ):
+            self._json_error(HTTPStatus.BAD_REQUEST, "Invalid preview snapshot identities")
+            return
+        try:
+            payload = draft_diagrams(
+                self.server.root, body["work_id"], scheduler=self.server.architecture_scheduler(),
+                snapshot_ids=snapshots
+            )
+            self._json_response(HTTPStatus.OK, payload)
+        except (OSError, ValueError, WorkspaceError, NotFound, KeyError) as exc:
             self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
 
     def _handle_architecture_snapshot_post(self, body: dict[str, Any]) -> None:

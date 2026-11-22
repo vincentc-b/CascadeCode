@@ -519,6 +519,8 @@ assert.equal(grouped.state.threads[0].replies.length, 3);
 // preserve coverage labels, and enter the existing authoritative requirement
 // thread composer without inventing a decision anchor.
 const contextHost = createElement("section");
+const contextDiagram = createElement("section");
+contextHost.appendChild(contextDiagram);
 const contextCalls = [];
 const markdownCalls = [];
 const contextPayload = {
@@ -556,7 +558,7 @@ function contextDocument(id, kind, state = "available") {
 }
 const contextReview = initPairedC4Review(contextPayload, {
   document,
-  host: contextHost,
+  host: contextDiagram,
   loadDocumentationContext(selection, url) {
     contextCalls.push({ ...selection, url });
     const selectedTarget = selection.kind !== "view";
@@ -589,6 +591,9 @@ const contextReview = initPairedC4Review(contextPayload, {
   },
 });
 assert.equal(contextCalls.length, 0, "context metadata is not read during board render");
+contextHost.querySelector('[data-review-tab="c4"]').click();
+assert.equal(contextDiagram.querySelector(".paired-c4-context"), null, "diagrams have no documentation column");
+contextHost.querySelector('[data-review-tab="design"]').click();
 contextHost.querySelector(".paired-c4-context-toggle").click();
 await settle();
 await settle();
@@ -620,6 +625,7 @@ assert.equal(contextReview.draftState().anchor.source_path, "docs/feature.md");
 assert.equal(contextReview.draftState().anchor.source_section, "REQ-7");
 assert.equal(contextReview.draftState().anchor.reviewed_tuple_digest, "tuple-exact");
 
+contextHost.querySelector('[data-review-tab="design"]').click();
 contextReview.navigation.select("element", "system.shop", "proposed");
 contextReview.render();
 await settle();
@@ -667,3 +673,169 @@ const codeTargets = [{
   drill_choices: [{view_key: "team-code", level: "codeViews"}],
 }];
 assert.deepEqual(parentViews(codeHierarchy, codeHierarchy[1], codeTargets).map(v => v.key), ["components"]);
+
+// Full document comparison retains context and always orders current before proposed.
+const { renderDocumentComparison } = require(join(repoRoot, "cascade/war_room/static/plan_viewer.js"));
+const fullComparison = renderDocumentComparison(document, {
+  current: "# Heading\n\nOriginal\n\nUnchanged tail",
+  proposed: "# Heading\n\nReplacement\n\nUnchanged tail",
+  removed_lines: [3], added_lines: [3],
+});
+assert.equal(fullComparison.children[0].children[0].textContent, "Current");
+assert.equal(fullComparison.children[1].children[0].textContent, "Proposed");
+assert.match(fullComparison.children[0].children[1].textContent, /Unchanged tail/);
+assert.match(fullComparison.children[1].children[1].textContent, /Replacement/);
+
+// Changes below a module remain discoverable from a shared overview, even when
+// the new Code view has no current counterpart and arrives first in the payload.
+const hierarchyPair = (targets) => ({ current: side("repo", "old", targets), proposed: side("repo", "new", targets) });
+const changePath = {
+  changed_views: [["new-code", "codeViews"]],
+  views: [
+    { key: "new-code", level: "codeViews", state: "added", current: null,
+      proposed: side("repo", "new", [target("element", "method")]) },
+    { key: "modules", level: "componentViews", state: "unchanged", ...hierarchyPair([
+      { ...target("element", "module"), state: "unchanged", drill_choices: [
+        { view_key: "new-code", level: "codeViews", scope_id: "module" }
+      ] },
+      { ...target("element", "unrelated"), state: "unchanged", drill_choices: [
+        { view_key: "new-code", level: "codeViews", scope_id: "module" }
+      ] },
+    ]) },
+    { key: "containers", level: "containerViews", state: "unchanged", ...hierarchyPair([
+      target("element", "container", "modules", "componentViews")
+    ]) },
+    { key: "overview", level: "systemContextViews", state: "unchanged", ...hierarchyPair([
+      target("element", "system", "containers", "containerViews")
+    ]) },
+  ],
+};
+const pathNavigation = createPairedNavigation(changePath);
+assert.equal(pathNavigation.state.view_key, "overview");
+assert.equal(pathNavigation.currentView().proposed.targets[0].contains_changes, true);
+const moduleView = pathNavigation.views.find(v => v.key === "modules");
+assert.equal(moduleView.proposed.targets[0].contains_changes, true);
+assert.equal(moduleView.proposed.targets[0].state, "unchanged", "descendant cues do not invent a direct semantic edit");
+assert.equal(moduleView.proposed.targets[1].contains_changes, false, "scope links cannot color unrelated siblings");
+assert.equal(changePath.views[1].proposed.targets[0].contains_changes, undefined, "input evidence stays immutable");
+pathNavigation.showView("modules", "componentViews");
+pathNavigation.updatePayload(changePath);
+assert.equal(pathNavigation.state.view_key, "modules", "polling preserves deliberate drill navigation");
+const fromPending = createPairedNavigation({ views: [] });
+fromPending.updatePayload(changePath);
+assert.equal(fromPending.state.view_key, "overview", "pending preview opens at the overview once ready");
+const firstArchitecture = createPairedNavigation({
+  changed_views: [["code", "codeViews"], ["context", "systemContextViews"]],
+  views: [
+    { key: "code", level: "codeViews", state: "added", current: null, proposed: side("repo", "new", []) },
+    { key: "context", level: "systemContextViews", state: "added", current: null, proposed: side("repo", "new", []) },
+  ],
+});
+assert.equal(firstArchitecture.state.view_key, "context", "a genuinely new model starts at the highest available level");
+
+// One click uses the complete next-level overview when other choices are subsets.
+const { preferredDrillChoice } = require(join(repoRoot, "cascade/war_room/static/plan_viewer.js"));
+const serviceChoices = [
+  {view_key: 'focused', level: 'componentViews'},
+  {view_key: 'overview', level: 'componentViews'},
+];
+const serviceViews = [
+  {key: 'focused', level: 'componentViews', ...hierarchyPair([target('element', 'team')])},
+  {key: 'overview', level: 'componentViews', ...hierarchyPair([
+    target('element', 'team'), target('element', 'workspace'), target('relationship', 'uses-workspace'),
+  ])},
+];
+assert.equal(preferredDrillChoice(serviceChoices, serviceViews, 'proposed').view_key, 'overview');
+assert.equal(preferredDrillChoice(serviceChoices, serviceViews, 'current').view_key, 'overview');
+const disjointViews = [serviceViews[0], {...serviceViews[1], ...hierarchyPair([
+  target('element', 'workspace'), target('element', 'boss'), target('relationship', 'uses-workspace'),
+])}];
+assert.equal(preferredDrillChoice(serviceChoices, disjointViews, 'proposed'), null, 'larger disjoint view must not be chosen by count');
+assert.equal(preferredDrillChoice(serviceChoices, [serviceViews[0]], 'proposed'), null, 'missing inventory cannot prove an overview');
+assert.equal(preferredDrillChoice(serviceChoices, [serviceViews[0], {...serviceViews[0],key:'overview'}], 'proposed'), null, 'equal views are genuinely ambiguous');
+
+// Level up reverses ownership links, not mere appearances in a view.
+const { preferredParentView } = require(join(repoRoot, "cascade/war_room/static/plan_viewer.js"));
+const scopedCode = {key:'workspace-code',level:'codeViews'};
+const scopedLink = {view_key:'workspace-code',level:'codeViews',scope_id:'workspace'};
+const scopedParents = [
+  {key:'all-components',level:'componentViews',...hierarchyPair([
+    {...target('element','workspace'),drill_choices:[scopedLink]}, target('element','team'),
+  ])},
+  {key:'team-components',level:'componentViews',...hierarchyPair([
+    {...target('element','repository'),drill_choices:[scopedLink]},
+  ])},
+];
+assert.deepEqual(parentViews([...scopedParents,scopedCode],scopedCode).map(v=>v.key),['all-components']);
+assert.deepEqual(parentViews([
+  {key:'all-components',level:'componentViews',target_ids:['workspace']},
+  {key:'team-components',level:'componentViews',target_ids:['repository']}, scopedCode,
+],scopedCode,[
+  {...target('element','workspace'),drill_choices:[scopedLink]},
+  {...target('element','repository'),drill_choices:[scopedLink]},
+]).map(v=>v.key),['all-components'], 'branch browsing follows the same ownership rule');
+assert.equal(preferredParentView(serviceViews,[]).key,'overview','direct entry uses the full parent overview');
+assert.equal(preferredParentView(serviceViews,[{view_key:'focused',level:'componentViews'}]).key,'focused','up returns to the actual valid parent visited');
+assert.equal(preferredParentView(serviceViews,[{view_key:'elsewhere',level:'containerViews'}]).key,'overview','unrelated history is not a parent');
+assert.equal(preferredParentView(disjointViews,[]),null,'genuine ambiguous parents remain explicit choices');
+assert.equal(preferredParentView([],[]),null,'root has no parent');
+
+// Background review renders must retain each pinned diagram's viewport.
+class ViewportParser {
+  parseFromString() {
+    const svg = createElement("svg");
+    svg.localName = "svg";
+    svg.setAttribute("viewBox", "0 0 800 600");
+    svg.clientWidth = 800;
+    svg.clientHeight = 600;
+    svg.closest = () => null;
+    return { documentElement: svg, querySelector: () => null };
+  }
+}
+const viewportHost = createElement("section");
+let viewportPayload = {
+  state: "ready", owner_work_id: "epic_047", semantic_threads: [],
+  views: [{ key: "context", level: "systemContextViews", state: "changed",
+    current: side("project", "base", []), proposed: side("project", "proposal", []) }],
+};
+const viewportReview = initPairedC4Review(structuredClone(viewportPayload), {
+  document, host: viewportHost, DOMParser: ViewportParser,
+  refreshPayload: () => structuredClone(viewportPayload),
+});
+await settle();
+function diagramCard(name) {
+  return descendants(viewportHost).find(node => node.getAttribute("data-side") === name);
+}
+function diagramSvg(name) {
+  return descendants(diagramCard(name)).find(node => node.localName === "svg");
+}
+function viewportControl(name, label) {
+  descendants(diagramCard(name)).find(node => node.textContent === label).click();
+}
+const fittedBox = diagramSvg("current").getAttribute("viewBox");
+viewportControl("current", "Zoom in");
+let currentSvg = diagramSvg("current");
+currentSvg.dispatchEvent({ type: "pointerdown", button: 0, clientX: 10, clientY: 10 });
+currentSvg.dispatchEvent({ type: "pointermove", clientX: 90, clientY: 50 });
+currentSvg.dispatchEvent({ type: "pointerup" });
+const pannedBox = currentSvg.getAttribute("viewBox");
+viewportControl("proposed", "Zoom out");
+const proposedBox = diagramSvg("proposed").getAttribute("viewBox");
+assert.notEqual(pannedBox, fittedBox);
+await viewportReview.refresh();
+assert.equal(diagramSvg("current").getAttribute("viewBox"), pannedBox);
+assert.equal(diagramSvg("proposed").getAttribute("viewBox"), proposedBox);
+// Consecutive renders before SVG installation must not erase saved state.
+viewportReview.render();
+viewportReview.render();
+await settle();
+assert.equal(diagramSvg("current").getAttribute("viewBox"), pannedBox);
+viewportControl("current", "Fit");
+await viewportReview.refresh();
+assert.equal(diagramSvg("current").getAttribute("viewBox"), fittedBox);
+assert.equal(diagramSvg("proposed").getAttribute("viewBox"), proposedBox);
+viewportPayload.views[0].proposed.revision = "new-proposal";
+await viewportReview.refresh();
+assert.equal(diagramSvg("proposed").getAttribute("viewBox"), fittedBox,
+  "a different pinned diagram starts fitted instead of inheriting old coordinates");
+viewportReview.stopRefresh();

@@ -253,3 +253,27 @@ def test_oversized_pinned_source_is_rejected_before_render(tmp_path: Path) -> No
         assert renderer.calls == 0
     finally:
         scheduler.close()
+
+
+def test_server_selected_branch_base_remains_pinned_after_head_moves(tmp_path: Path) -> None:
+    from dataclasses import replace
+    from cascade.workspace.architecture_browsing import resolve_architecture_context
+
+    root, project, base = _project(tmp_path)
+    (root / 'later.txt').write_text('planning continues\n')
+    head = _commit(root, 'later proposal')
+    selection = resolve_architecture_context(project, root)
+    baseline = replace(
+        selection, context=replace(selection.context, revision=base),
+        mapping_revision=base, documentation_revision=base,
+    )
+    renderer = _Renderer(tmp_path / 'cache')
+    with C4RenderScheduler(root, renderer=renderer) as scheduler:
+        with ArchitectureSnapshotStore(project, root, scheduler=scheduler) as store:
+            current = store.create_selection(baseline)
+            proposed = store.create_selection(selection)
+            assert current.descriptor['revisions']['code'] == base
+            assert current.descriptor['revisions']['documentation'] == base
+            assert proposed.descriptor['revisions']['code'] == head
+            assert current.snapshot_id != proposed.snapshot_id
+            assert _git(root, 'rev-parse', 'HEAD') == head

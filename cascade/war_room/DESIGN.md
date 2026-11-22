@@ -160,8 +160,13 @@ verify owner-lineage and exact-revision enforcement.
 - `REQ-WARROOM-C4-001`: Operators can navigate system context → containers →
   components → authored Code views through verified semantic targets. Explore
   opens the broadest available next-level view directly; the view selector retains
-  focused alternatives. Referencing an element in another view does not imply
-  that the view expands it. Level up chooses the broadest nearest parent;
+  focused alternatives. In paired review, automatic drill-down requires a
+  unique same-level destination whose target set contains all alternatives
+  when there are multiple choices; otherwise
+  a named chooser is scrolled into view and focused, with Escape to dismiss.
+  Referencing an element in another view does not imply that the view expands
+  it. Paired Level up prefers the verified originating parent from navigation
+  history, then the broadest nearest parent when there is no origin;
   browser history and deep links restore snapshot, view, level and selection.
 - `REQ-WARROOM-C4-002`: Selecting a code element exposes its source path and
   symbol and an authorized source resource at the snapshot's code revision.
@@ -170,7 +175,11 @@ verify owner-lineage and exact-revision enforcement.
   IDs fail rather than accepting caller-supplied paths.
 - `REQ-WARROOM-C4-003`: Repeated navigation reuses immutable SVG responses and
   the bounded browser SVG cache. Selecting an element preserves the existing SVG
-  and zoom; destroyed viewers cannot install late responses. Implementation
+  and zoom in the branch browser. Paired review rebuilds preserve independent
+  zoom and pan for each unchanged pinned diagram across background refresh,
+  selection, discussion updates and consecutive renders before SVG loading
+  completes. Fit explicitly resets that diagram; a new diagram identity starts
+  fitted. Destroyed viewers cannot install late responses. Implementation
   designs are discoverable from the pinned ownership mapping, with Mermaid
   rendering for supplementary behavior diagrams.
 
@@ -193,3 +202,77 @@ Verification: [HTTP tests](../../tests/war_room/test_architecture_http.py),
 [paired-view navigation](../../tests/war_room/paired_c4_review_cases.mjs).
 The authored team views are in the repository
 [view inventory](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
+
+
+`DEC-WARROOM-C4-002`: Paired review saves each viewer's viewBox before replacing
+its DOM and destroys the discarded viewer. The restoration key includes side,
+view key/level, repository, revision and SVG reference. At most 32 saved entries
+are retained for the review instance; a pending viewer with no viewBox does not
+overwrite saved coordinates. This fixes the epic_047 finding: the default
+15-second background refresh rebuilt the viewers and implicitly returned them
+to Fit. Viewport state is local presentation state, not review evidence.
+
+## Committed planning comparisons and project previews
+
+- `REQ-WARROOM-COMPARE-001`: Plan and DESIGN.md comparisons cover the registered
+  planning branch base through its latest committed HEAD, including multiple
+  commits. Undispatched work uses its nearest registered planning ancestor.
+  Ownership cycles, checkout/branch mismatches, unavailable revisions and an
+  uncommitted proposed plan produce an unavailable result. The plan comparison
+  excludes frontmatter; design comparison includes every changed DESIGN.md,
+  including additions and removals, with full unchanged context on both sides.
+- `REQ-WARROOM-COMPARE-002`: The Work tab initially shows the plan alone. When an
+  original brief exists, the operator can reveal its comparison and revision
+  labels. The Design tab presents changed documents with rendered block
+  highlighting; narrow screens stack the two sides. C4 uses the full review
+  width, while contextual documentation belongs in the Design tab.
+- `REQ-WARROOM-COMPARE-003`: Opening C4 requests the current project integration
+  revision versus the expected project after applying the selected committed
+  proposal. Work already integrated into the project must remain in the preview.
+  Merge conflicts are visible failures. Preview generation does not move real
+  refs or alter the operator checkout/index, publish a review, grant approval,
+  or promote accepted lineage. Tasks can preview without separate architecture
+  approval. Split architecture repositories require a published review.
+- `REQ-WARROOM-COMPARE-004`: Polling retains the authorized snapshot pair and
+  reports when the project or proposal advances. Explicit comparison refresh
+  reloads the page to obtain new pins. Once project preview is requested, late
+  publication responses or failures cannot replace it with publication data or
+  an empty accepted baseline. Failed preview loads remain visible and retry via
+  the project loader. Uncommitted source changes are excluded.
+- `REQ-WARROOM-COMPARE-005`: Current-side removals are red, proposed additions
+  green, and semantic edits amber on both sides, including reviewed renames and
+  containment moves. Selection/focus remains visible without hiding the change
+  color. Relationships use native SVG strokes. Dashed amber signals changes in
+  deeper verified views without reclassifying an unchanged parent as edited.
+
+`DEC-WARROOM-COMPARE-001`: [plan_comparison.py](plan_comparison.py) resolves Git
+inputs on the server. Document comparisons use the registered branch base;
+project diagrams use the latest project target HEAD when the preview is created.
+These baselines answer different review questions. A private temporary index and
+worktree perform a three-way merge; a deterministic commit object pins divergent
+projections without moving a branch. Ancestor cases reuse the appropriate commit.
+Git document reads have a 10-second timeout and 2 MiB output cap; changed design
+text has a cumulative 2 MiB cap. Projection Git operations have 30-second timeouts.
+
+`DEC-WARROOM-COMPARE-002`: `POST /api/architecture/plan-preview` accepts a work ID
+and optionally the current/proposed opaque snapshot IDs. Server-resolved context,
+shared projection evidence and ancestor checks bind the pair to its project and
+proposal. It delegates rendering to the bounded snapshot scheduler. Draft payloads
+have no approval context or reviewed tuple. The staged epic_047 publication in
+[review-units.json](../../architecture/review-units.json) retains its original
+empty accepted baseline and pinned references; it is separate from the project
+comparison and does not establish acceptance of these working-tree edits.
+
+`DEC-WARROOM-COMPARE-003`: Semantic target classification is shared across both
+sides, with previous IDs inheriting reviewed rename state. Descendant-change
+markers are derived for navigation without mutating the review payload. Viewer
+installation removes exported inline pixel dimensions so the container controls
+SVG sizing while the viewBox controls zoom, pan and Fit.
+
+Verification: [comparison tests](../../tests/war_room/test_plan_comparison.py)
+cover ownership, multi-commit document context, project integration, conflicts and
+pinned polling; [paired review scenarios](../../tests/war_room/paired_c4_review_cases.mjs)
+cover navigation, descendant markers and zoom/pan restoration, including explicit
+Fit and revision changes. [Chromium scenarios](../../tests/war_room/test_project_c4_colors.py)
+cover semantic colors, responsive SVG sizing, drill/parent choices and publication
+versus project-preview races. These fixtures do not claim live epic_047 acceptance.
