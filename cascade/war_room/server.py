@@ -1741,6 +1741,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
     def _handle_plan_preview(self, body: dict[str, Any]) -> None:
         from cascade.war_room.plan_comparison import draft_diagrams
+        from cascade.workspace.c4_scheduler import C4RenderAdmissionError
 
         if set(body) - {"work_id", "snapshot_ids"} or not isinstance(body.get("work_id"), str):
             self._json_error(HTTPStatus.BAD_REQUEST, "A work_id is required")
@@ -1758,7 +1759,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 snapshot_ids=snapshots
             )
             self._json_response(HTTPStatus.OK, payload)
-        except (OSError, ValueError, WorkspaceError, NotFound, KeyError) as exc:
+        except (OSError, ValueError, WorkspaceError, NotFound, KeyError, C4RenderAdmissionError) as exc:
             self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
 
     def _handle_architecture_snapshot_post(self, body: dict[str, Any]) -> None:

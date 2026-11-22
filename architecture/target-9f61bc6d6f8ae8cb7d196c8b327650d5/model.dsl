@@ -13,6 +13,12 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
         properties {
             "cascade.semanticId" "element.container.war-room"
         }
+
+        diagram_review = component "Diagram comparison" "Coordinates one combined architecture diff, semantic inspection and pinned review refresh." "Python / JavaScript" {
+            properties {
+                "cascade.semanticId" "element.component.diagram-review"
+            }
+        }
     }
 
     supervisor = container "Service" "Runs lifecycle, teams, automation, and integration." "Python" {
@@ -681,5 +687,116 @@ code_teams_swe = element "teams: run_swe_turn" "Function" "Runs bounded implemen
 code_teams_rel_53 = code_teams_task -> code_teams_swe "Executes SWE invocation" {
     properties {
         "cascade.semanticId" "relationship.code-teams-task-to-code-teams-swe"
+    }
+}
+
+code_review_pair = element "Comparison coordinator" "Function" "Owns single-view navigation, selection details and saved viewports." {
+    properties {
+        "cascade.semanticId" "element.code.code-review-pair"
+        "cascade.parent" "element.component.diagram-review"
+        "cascade.sourcePath" "cascade/war_room/static/plan_viewer.js"
+        "cascade.sourceSymbol" "initPairedC4Review"
+    }
+}
+
+code_review_navigation = element "Semantic navigation" "Function" "Starts at context, resolves verified detail levels and selections, and keeps landscape optional." {
+    properties {
+        "cascade.semanticId" "element.code.code-review-navigation"
+        "cascade.parent" "element.component.diagram-review"
+        "cascade.sourcePath" "cascade/war_room/static/plan_viewer.js"
+        "cascade.sourceSymbol" "createPairedNavigation"
+    }
+}
+
+code_review_svg = element "Semantic SVG viewer" "Function" "Owns viewBox, zoom, pan, Fit and verified SVG target lifecycle." {
+    properties {
+        "cascade.semanticId" "element.code.code-review-svg"
+        "cascade.parent" "element.component.diagram-review"
+        "cascade.sourcePath" "cascade/war_room/static/plan_viewer.js"
+        "cascade.sourceSymbol" "createSemanticC4Viewer"
+    }
+}
+
+review_pair_navigation = code_review_pair -> code_review_navigation "Resolves selected semantic identities" {
+    properties {
+        "cascade.semanticId" "relationship.review-pair-navigation"
+    }
+}
+
+review_pair_svg = code_review_pair -> code_review_svg "Creates the verified comparison viewer and preserves its viewport" {
+    properties {
+        "cascade.semanticId" "relationship.review-pair-svg"
+    }
+}
+
+review_svg_pair = code_review_svg -> code_review_pair "Emits semantic selection and drill events" {
+    properties {
+        "cascade.semanticId" "relationship.review-svg-pair"
+    }
+}
+
+code_review_preview = element "Project comparison projection" "Function / type" "Pins source snapshots and requests a combined presentation artifact." {
+    properties {
+        "cascade.semanticId" "element.code.code-review-preview"
+        "cascade.parent" "element.component.diagram-review"
+        "cascade.sourcePath" "cascade/war_room/plan_comparison.py"
+        "cascade.sourceSymbol" "draft_diagrams"
+    }
+}
+
+code_review_union = element "Combined semantic graph" "Function / type" "Unions targets, retains removals and rewired edges, and serves verified comparison SVGs." {
+    properties {
+        "cascade.semanticId" "element.code.code-review-union"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/c4_comparison.py"
+        "cascade.sourceSymbol" "attach_comparison"
+    }
+}
+
+code_review_layout = element "Comparison source closure" "Function / type" "Builds a confined derived Structurizr custom-view source with per-view identity bindings." {
+    properties {
+        "cascade.semanticId" "element.code.code-review-layout"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/c4_comparison.py"
+        "cascade.sourceSymbol" "comparison_source"
+    }
+}
+
+code_review_scheduler = element "Bounded render scheduler" "Function / type" "Caches and schedules derived renders without changing review or acceptance authority." {
+    properties {
+        "cascade.semanticId" "element.code.code-review-scheduler"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/c4_scheduler.py"
+        "cascade.sourceSymbol" "C4RenderScheduler"
+    }
+}
+
+review_pair_preview = code_review_pair -> code_review_preview "Requests committed project comparison" {
+    properties {
+        "cascade.semanticId" "relationship.review-pair-preview"
+    }
+}
+
+review_preview_union = code_review_preview -> code_review_union "Supplies authorized pinned semantic projections" {
+    properties {
+        "cascade.semanticId" "relationship.review-preview-union"
+    }
+}
+
+review_union_layout = code_review_union -> code_review_layout "Materializes comparison source" {
+    properties {
+        "cascade.semanticId" "relationship.review-union-layout"
+    }
+}
+
+review_union_scheduler = code_review_union -> code_review_scheduler "Admits or reuses bounded render" {
+    properties {
+        "cascade.semanticId" "relationship.review-union-scheduler"
+    }
+}
+
+review_workspace = diagram_review -> workspace_component "Requests bounded comparison artifacts" {
+    properties {
+        "cascade.semanticId" "relationship.review-workspace"
     }
 }

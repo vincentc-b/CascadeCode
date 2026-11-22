@@ -1112,3 +1112,7 @@ body {
   stroke-width: 3px;
   vector-effect: non-scaling-stroke;
 }
+
+.paired-c4-diagrams.c4-single-diagram { grid-template-columns: minmax(0, 1fr); }
+.c4-change-details { margin: 1rem 0; }
+.c4-change-detail { min-width: 0; padding: .75rem; overflow-wrap: anywhere; }

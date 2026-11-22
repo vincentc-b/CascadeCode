@@ -52,13 +52,21 @@ source order, and exporter IDs are excluded from semantic comparison. Labels
 are excluded from identity matching; changed names and descriptions are
 compared as semantic properties.
 
-Feature C may persist these pinned render, binding, source-diff, and semantic
-diff references as review evidence, but must not reinterpret failed bindings
-as interactive. Feature D may display paired views and attach interaction only
-to verified manifest targets; it must preserve the source-diff fallback for
-missing, ambiguous, removed, or invalid targets. Neither consumer may mutate or
-silently repair these artifacts, match by labels or geometry, or treat an
-unverified cache directory as a model authority.
+Published reviews persist pinned render, binding, source-diff, and semantic-diff
+references as evidence. Failed bindings remain noninteractive. The plan page
+renders one derived comparison graph from the union of authorized current and
+proposed projections, keeping removed targets and old connections visible.
+Interaction attaches only to verified targets; pending/failed rendering is
+explicit. The branch Architecture tab continues to display a single pinned
+revision. Neither consumer mutates accepted artifacts, matches identity by labels
+or geometry, or treats an unverified cache directory as model authority.
+
+The comparison graph is a presentation artifact with its own bounded source
+closure, native render, cache identity and verified target mapping. It does not
+replace either revision's authored model. The rendering and identity contract is
+owned by [Workspace](../../cascade/workspace/DESIGN.md#derived-comparison-rendering);
+colors, inspection, navigation and viewport preservation are owned by
+[War Room](../../cascade/war_room/DESIGN.md#single-diagram-architecture-differences).
 
 ## Historical evidence
 
@@ -92,8 +100,24 @@ The supervisor overview is `cascade-supervisor-components`; choose
 link the code-level structure, lifecycle, persistence, and recovery diagrams.
 [Epic](../../cascade/epic/DESIGN.md), [Feature](../../cascade/feature/DESIGN.md),
 and [Task](../../cascade/task/DESIGN.md) contain source-linked implementation views.
-These Mermaid diagrams complement static C4; they are not dynamic Structurizr
-views or separately deployed services.
+The owning designs' Mermaid diagrams complement the integrated Code views;
+they are not dynamic Structurizr views or separately deployed services.
+
+The default entry is `cascade-context` (L1), followed by `cascade-containers`
+(L2), component views (L3) and authored Code views (L4). Level up stops at context.
+`cascade-landscape` is a supporting overview available in the view selector and
+through explicit links, not another zoom level. Its current scope matches the
+context because the model contains one system and its immediate surroundings;
+retain the authored scope for broader multi-system models.
+
+For diagram review implementation, open `cascade-war-room-components`, then
+**Diagram comparison** → `cascade-diagram-review-code`. It connects the browser
+coordinator, semantic navigation and SVG viewer to the project-preview endpoint.
+From the supervisor's **Workspace** component, choose
+`cascade-comparison-render-code` to inspect combined graph construction, source
+closure materialization and the durable render scheduler. Their owning designs
+are [War Room](../../cascade/war_room/DESIGN.md) and
+[Workspace](../../cascade/workspace/DESIGN.md).
 
 
 ## Integrated code level

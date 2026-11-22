@@ -60,3 +60,27 @@ custom "cascade-teams-code" {
     include code_teams_epic code_teams_feature code_teams_task code_teams_skills code_teams_runtime code_teams_swe
     autoLayout lr
 }
+
+component war_room "cascade-war-room-components" {
+    title "War Room — diagram review"
+    include *
+    autoLayout lr
+}
+
+custom "cascade-diagram-review-code" {
+    title "Diagram comparison — Code"
+    properties {
+        "cascade.codeComponent" "element.component.diagram-review"
+    }
+    include code_review_pair code_review_navigation code_review_svg code_review_preview code_review_union
+    autoLayout lr
+}
+
+custom "cascade-comparison-render-code" {
+    title "Combined comparison rendering — Code"
+    properties {
+        "cascade.codeComponent" "element.component.workspace"
+    }
+    include code_review_union code_review_layout code_review_scheduler
+    autoLayout lr
+}

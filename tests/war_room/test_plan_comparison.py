@@ -214,3 +214,27 @@ def test_project_target_colors_cover_both_sides_renames_and_moves():
     assert colors['old-id'] == colors['new-id'] == 'changed'
     assert colors['moved'] == 'changed'
     assert colors['stable'] == 'unchanged'
+
+
+def test_comparison_metadata_exposes_pinned_semantic_details(tmp_path):
+    import hashlib
+    import json
+    from types import SimpleNamespace
+    from cascade.war_room.plan_comparison import comparison_metadata
+    workspace = {'model': {'softwareSystems': [{
+        'id': '1', 'name': 'Project', 'properties': {'cascade.semanticId': 'element.project'},
+        'containers': [{'id': '2', 'name': 'Service', 'description': 'Runs jobs',
+                        'technology': 'Python', 'tags': 'Worker',
+                        'properties': {'cascade.semanticId': 'element.service', 'decision': 'local'}}],
+    }]}}
+    path = tmp_path / 'workspace.json'
+    raw = json.dumps(workspace).encode()
+    path.write_bytes(raw)
+    artifact = SimpleNamespace(render=SimpleNamespace(
+        semantic_workspace=path, semantic_workspace_sha256=hashlib.sha256(raw).hexdigest()))
+    metadata = comparison_metadata(artifact)['element.service']
+    assert metadata['type'] == 'Container'
+    assert metadata['parent'] == 'element.project'
+    assert metadata['description'] == 'Runs jobs'
+    assert metadata['technology'] == 'Python'
+    assert metadata['properties']['decision'] == 'local'

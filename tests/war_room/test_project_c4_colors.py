@@ -83,7 +83,8 @@ def test_service_drills_to_component_overview_and_exposes_distinct_choices():
                 svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100">' +
                   targets.map((t,i)=>'<g data-cascade-model-kind="element" data-cascade-semantic-id="'+t.semantic_id+'">'+
                     '<rect x="'+(10+i*120)+'" y="10" width="100" height="70" fill="white" stroke="black"/></g>').join('')+'</svg>'});
-              const view = (key,level,targets) => ({key,level,state:'unchanged',current:side(targets),proposed:side(targets)});
+              const view = (key,level,targets) => ({key,level,state:'unchanged',current:side(targets),proposed:side(targets),
+                combined:side(targets.map(t=>({...t,source_side:'proposed',selection_id:t.semantic_id,before:t,after:t})))});
               const team = {...target('team'),drill_choices:[{view_key:'team-code',level:'codeViews',scope_id:'team'}]};
               PlanViewer.initPairedC4Review({owner_work_id:'epic_001',approval_context:null,views:[
                 view('containers','containerViews',[{...target('service'),label:'Service',drill_choices:choices}]),
@@ -94,18 +95,18 @@ def test_service_drills_to_component_overview_and_exposes_distinct_choices():
             }'''
             page.evaluate(setup, False)
             page.locator('[data-review-tab="c4"]').click()
-            for side in ('current', 'proposed'):
+            for side in ('combined',):
                 page.locator('.paired-c4-view-select').select_option('containers\0containerViews')
                 page.locator(f'.paired-c4-side-{side} [aria-label="element service"]').click()
                 assert page.locator('.paired-c4-view-select').input_value() == 'overview\0componentViews'
                 assert page.locator('.paired-c4-drill-choices').count() == 0
-                page.locator('.paired-c4-side-current [aria-label="element workspace"]').wait_for()
-                page.locator('.paired-c4-side-proposed [aria-label="element workspace"]').wait_for()
+                page.locator('.paired-c4-side-combined [aria-label="element workspace"]').wait_for()
+                page.locator('.paired-c4-side-combined [aria-label="element workspace"]').wait_for()
                 page.locator('.paired-c4-up').click()
                 assert page.locator('.paired-c4-view-select').input_value() == 'containers\0containerViews'
             # Returning from L4 preserves the focused L3 view used to get there.
             page.locator('.paired-c4-view-select').select_option('focused\0componentViews')
-            page.locator('.paired-c4-side-proposed [aria-label="element team"]').click()
+            page.locator('.paired-c4-side-combined [aria-label="element team"]').click()
             assert page.locator('.paired-c4-view-select').input_value() == 'team-code\0codeViews'
             page.locator('.paired-c4-up').click()
             assert page.locator('.paired-c4-view-select').input_value() == 'focused\0componentViews'
@@ -121,7 +122,7 @@ def test_service_drills_to_component_overview_and_exposes_distinct_choices():
             assert page.locator('.paired-c4-up').is_enabled()
             page.evaluate(setup, True)
             page.locator('[data-review-tab="c4"]').click()
-            page.locator('.paired-c4-side-proposed [aria-label="element service"]').click()
+            page.locator('.paired-c4-side-combined [aria-label="element service"]').click()
             page.wait_for_function('document.activeElement.classList.contains("paired-c4-drill-choice")')
             chooser = page.locator('.paired-c4-drill-choices')
             assert 'Service' in chooser.inner_text()
@@ -129,7 +130,7 @@ def test_service_drills_to_component_overview_and_exposes_distinct_choices():
             assert 0 <= rect['y'] < 720
             page.keyboard.press('Escape')
             assert chooser.count() == 0
-            page.locator('.paired-c4-side-proposed [aria-label="element service"]').click()
+            page.locator('.paired-c4-side-combined [aria-label="element service"]').click()
             page.get_by_role('button', name='Team components', exact=True).click()
             assert page.locator('.paired-c4-view-select').input_value() == 'focused\0componentViews'
         finally:

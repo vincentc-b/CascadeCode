@@ -202,10 +202,40 @@ Cascade environment, pull the image selected by the installed version:
 python -c 'import subprocess; from cascade.workspace.c4_render import STRUCTURIZR_IMAGE; subprocess.run(["docker", "pull", STRUCTURIZR_IMAGE], check=True)'
 ```
 
-The War Room exposes paired plan/design/C4 review and branch architecture
-browsing. Review published artifacts at their pinned revisions; do not replace
-accepted snapshots to make a check pass. Model/source contracts and local
-rendering are described in the [workspace design](cascade/workspace/DESIGN.md).
+The plan page has **Epic / feature / task**, **DESIGN.md changes**, and
+**C4 diagrams** tabs. The plan tab initially shows the proposed plan, with an
+optional comparison to the original brief; the design tab shows changed design
+documents with their surrounding context.
+
+C4 diagrams shows one combined diagram: red removals, green additions, amber edits, and
+unchanged elements for context. Click a marked element to explore its deeper view.
+Click a leaf element or relationship to inspect before/after details; use
+**Semantic targets** to inspect expandable elements without navigating.
+**Explore selected element** also opens a verified deeper view;
+**Level up** returns to its parent. Zoom and pan survive background refreshes;
+**Fit** resets the current view. A rewired relationship shows both its old red
+connection and its new green connection.
+
+**L1: System context** is the starting view. Click Cascade to open **L2: Containers**;
+**Level up** stops at context. **Project landscape** remains an optional overview
+in the selector, outside the normal drill-down path. Explicit saved view links
+are preserved. Landscape and context can contain the same elements when
+the landscape consists of one system and its immediate surroundings. **L2:
+Containers** expands Cascade into War Room, Service and Repository artifacts.
+Identical displayed graphs retain the same layout between views.
+
+The comparison uses committed project/proposal revisions. **Refresh comparison**
+reloads the page to obtain new pins; uncommitted architecture edits do not appear
+until committed. A first comparison can show a rendering status while its
+combined layout is prepared. Merge conflicts are reported explicitly and must
+be reconciled before a fresh integration preview can be rendered.
+
+The Architecture tab separately browses a selected branch at a pinned revision.
+Published review and approval evidence remains separate from previews; do not
+replace accepted snapshots to make a check pass. Interaction is described in the
+[War Room design](cascade/war_room/DESIGN.md#single-diagram-architecture-differences);
+model/source contracts and local rendering belong to the
+[workspace design](cascade/workspace/DESIGN.md#derived-comparison-rendering).
 
 ## Separate tracking repositories
 

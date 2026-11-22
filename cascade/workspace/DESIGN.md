@@ -98,3 +98,43 @@ Verification: [snapshot tests](../../tests/workspace/test_architecture_snapshots
 cover a server-selected base remaining pinned after HEAD advances, distinct
 snapshot identities and an unchanged checkout HEAD. Existing snapshot and scheduler
 validation applies to these selections as well.
+
+
+## Derived comparison rendering
+
+`REQ-WORKSPACE-C4-006`: A comparison graph is derived only from the authorized,
+pinned current/proposed semantic projections. It retains removed elements and
+relationships, merges reviewed renames, and renders both old and new connections
+when relationship endpoints change. Distinct displayed graphs have independent
+derived identity mappings so changes in another scope cannot overwrite their
+labels or connections. Views with identical
+semantic identities, labels, types, descriptions and connection endpoints reuse
+one layout, preventing arbitrary dependency reordering between levels. Their
+navigation, diff states and before/after metadata remain specific to each view.
+Missing endpoint evidence and ambiguous derived identities fail explicitly.
+
+`DEC-WORKSPACE-C4-004`: [c4_comparison.py](c4_comparison.py) materializes a temporary
+Structurizr custom-view source closure and submits it to the existing durable
+[C4RenderScheduler](c4_scheduler.py). This projection flattens conflicting
+containment into labeled graph elements; original parent and source metadata stay
+in the comparison details. It does not modify authored C4 source, accepted
+snapshots, publications, or Git refs. The source digest includes both snapshot
+identities; scheduler persistence, cache validation, resource limits and native
+SVG binding checks remain in force. Derived bound IDs map back to the original
+per-view targets only after validated artifact loading. Internal label
+suffixes satisfy Structurizr's global name/relationship uniqueness constraints;
+only those generated suffixes are removed from the bound SVG before delivery,
+retaining the original rendered labels. Color and interaction are applied by the
+shared viewer.
+
+`REQ-WORKSPACE-C4-007`: Combined rendering is bounded to 100 views, 5,000 target
+occurrences and 2 MiB of generated source. A response permits at most 4 MiB per
+SVG and 16 MiB of combined SVG text. Exceeding a bound is an explicit error, never
+a truncated comparison. Pending or failed renders never become a ready graph.
+Polling reuses the same render identity and pinned inputs.
+
+Verification: [comparison tests](../../tests/workspace/test_c4_comparison.py)
+cover semantic union, reviewed renames, endpoint rewiring, native rendering,
+verified SVG delivery and scheduler/cache reuse. The authored
+`cascade-comparison-render-code` view links the graph builder, source closure and
+scheduler to their actual source functions.

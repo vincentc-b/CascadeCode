@@ -355,8 +355,11 @@ def _snapshot_projection(
             ),
         })
     initial = next(
-        (item for item in views if item["level"] in {"systemLandscapeViews", "systemContextViews"}),
-        views[0] if views else None,
+        (item for item in views if item["level"] == "systemContextViews"),
+        next(
+            (item for item in views if item["level"] != "systemLandscapeViews"),
+            views[0] if views else None,
+        ),
     )
     page = views[cursor:cursor + limit]
     payload.update({

@@ -48,7 +48,15 @@
     {"dsl_identifier": "code_teams_task", "semantic_id": "element.code.teams.task", "fragment": "model.dsl"},
     {"dsl_identifier": "code_teams_skills", "semantic_id": "element.code.teams.skills", "fragment": "model.dsl"},
     {"dsl_identifier": "code_teams_runtime", "semantic_id": "element.code.teams.runtime", "fragment": "model.dsl"},
-    {"dsl_identifier": "code_teams_swe", "semantic_id": "element.code.teams.swe", "fragment": "model.dsl"}
+    {"dsl_identifier": "code_teams_swe", "semantic_id": "element.code.teams.swe", "fragment": "model.dsl"},
+    {"dsl_identifier": "diagram_review", "semantic_id": "element.component.diagram-review", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_review_pair", "semantic_id": "element.code.code-review-pair", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_review_navigation", "semantic_id": "element.code.code-review-navigation", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_review_svg", "semantic_id": "element.code.code-review-svg", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_review_preview", "semantic_id": "element.code.code-review-preview", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_review_union", "semantic_id": "element.code.code-review-union", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_review_layout", "semantic_id": "element.code.code-review-layout", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_review_scheduler", "semantic_id": "element.code.code-review-scheduler", "fragment": "model.dsl"}
   ],
   "fragments": [
     {"path": "model.dsl", "owner": "task_034_007_002"},
@@ -108,7 +116,15 @@
     {"dsl_identifier": "code_teams_rel_50", "semantic_id": "relationship.code-teams-epic-to-code-teams-runtime", "source": "code_teams_epic", "destination": "code_teams_runtime", "fragment": "model.dsl"},
     {"dsl_identifier": "code_teams_rel_51", "semantic_id": "relationship.code-teams-feature-to-code-teams-runtime", "source": "code_teams_feature", "destination": "code_teams_runtime", "fragment": "model.dsl"},
     {"dsl_identifier": "code_teams_rel_52", "semantic_id": "relationship.code-teams-runtime-to-code-teams-skills", "source": "code_teams_runtime", "destination": "code_teams_skills", "fragment": "model.dsl"},
-    {"dsl_identifier": "code_teams_rel_53", "semantic_id": "relationship.code-teams-task-to-code-teams-swe", "source": "code_teams_task", "destination": "code_teams_swe", "fragment": "model.dsl"}
+    {"dsl_identifier": "code_teams_rel_53", "semantic_id": "relationship.code-teams-task-to-code-teams-swe", "source": "code_teams_task", "destination": "code_teams_swe", "fragment": "model.dsl"},
+    {"dsl_identifier": "review_pair_navigation", "semantic_id": "relationship.review-pair-navigation", "source": "code_review_pair", "destination": "code_review_navigation", "fragment": "model.dsl"},
+    {"dsl_identifier": "review_pair_svg", "semantic_id": "relationship.review-pair-svg", "source": "code_review_pair", "destination": "code_review_svg", "fragment": "model.dsl"},
+    {"dsl_identifier": "review_svg_pair", "semantic_id": "relationship.review-svg-pair", "source": "code_review_svg", "destination": "code_review_pair", "fragment": "model.dsl"},
+    {"dsl_identifier": "review_pair_preview", "semantic_id": "relationship.review-pair-preview", "source": "code_review_pair", "destination": "code_review_preview", "fragment": "model.dsl"},
+    {"dsl_identifier": "review_preview_union", "semantic_id": "relationship.review-preview-union", "source": "code_review_preview", "destination": "code_review_union", "fragment": "model.dsl"},
+    {"dsl_identifier": "review_union_layout", "semantic_id": "relationship.review-union-layout", "source": "code_review_union", "destination": "code_review_layout", "fragment": "model.dsl"},
+    {"dsl_identifier": "review_union_scheduler", "semantic_id": "relationship.review-union-scheduler", "source": "code_review_union", "destination": "code_review_scheduler", "fragment": "model.dsl"},
+    {"dsl_identifier": "review_workspace", "semantic_id": "relationship.review-workspace", "source": "diagram_review", "destination": "workspace_component", "fragment": "model.dsl"}
   ],
   "renames": [],
   "version": 1,
@@ -121,7 +137,10 @@
     {"key": "cascade-epic-code", "fragment": "views.dsl"},
     {"key": "cascade-feature-code", "fragment": "views.dsl"},
     {"key": "cascade-task-code", "fragment": "views.dsl"},
-    {"key": "cascade-teams-code", "fragment": "views.dsl"}
+    {"key": "cascade-teams-code", "fragment": "views.dsl"},
+    {"key": "cascade-war-room-components", "fragment": "views.dsl"},
+    {"key": "cascade-diagram-review-code", "fragment": "views.dsl"},
+    {"key": "cascade-comparison-render-code", "fragment": "views.dsl"}
   ],
   "workspace": {"source": "workspace.dsl", "owner": "task_034_007_002"}
 }
