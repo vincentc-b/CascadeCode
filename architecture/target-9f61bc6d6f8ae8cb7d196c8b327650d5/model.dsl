@@ -14,7 +14,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
             "cascade.semanticId" "element.container.war-room"
         }
 
-        diagram_review = component "Diagram comparison" "Coordinates one combined architecture diff, semantic inspection and pinned review refresh." "Python / JavaScript" {
+        diagram_review = component "Diagram comparison" "Coordinates module design comparisons, combined architecture diffs, semantic inspection and pinned review refresh." "Python / JavaScript" {
             properties {
                 "cascade.semanticId" "element.component.diagram-review"
             }
@@ -690,7 +690,7 @@ code_teams_rel_53 = code_teams_task -> code_teams_swe "Executes SWE invocation" 
     }
 }
 
-code_review_pair = element "Comparison coordinator" "Function" "Owns single-view navigation, selection details and saved viewports." {
+code_review_pair = element "Comparison coordinator" "Function" "Owns design directory selection, single-view C4 navigation, selection details and saved viewports." {
     properties {
         "cascade.semanticId" "element.code.code-review-pair"
         "cascade.parent" "element.component.diagram-review"
@@ -798,5 +798,50 @@ review_union_scheduler = code_review_union -> code_review_scheduler "Admits or r
 review_workspace = diagram_review -> workspace_component "Requests bounded comparison artifacts" {
     properties {
         "cascade.semanticId" "relationship.review-workspace"
+    }
+}
+
+code_review_documents = element "Committed document comparison" "Function" "Returns all design owners and changed documents from the registered branch base to committed HEAD." {
+    properties {
+        "cascade.semanticId" "element.code.code-review-documents"
+        "cascade.parent" "element.component.diagram-review"
+        "cascade.sourcePath" "cascade/war_room/plan_comparison.py"
+        "cascade.sourceSymbol" "plan_comparison"
+    }
+}
+
+code_review_document_body = element "Rendered document comparison" "Function" "Renders current and proposed Markdown with changed-block highlights." {
+    properties {
+        "cascade.semanticId" "element.code.code-review-document-body"
+        "cascade.parent" "element.component.diagram-review"
+        "cascade.sourcePath" "cascade/war_room/static/plan_viewer.js"
+        "cascade.sourceSymbol" "renderDocumentComparison"
+    }
+}
+
+code_review_document_changes = element "Document change navigation" "Function" "Moves focus between highlighted blocks with previous/next controls and position indicators." {
+    properties {
+        "cascade.semanticId" "element.code.code-review-document-changes"
+        "cascade.parent" "element.component.diagram-review"
+        "cascade.sourcePath" "cascade/war_room/static/plan_viewer.js"
+        "cascade.sourceSymbol" "appendChangeNavigation"
+    }
+}
+
+review_pair_documents = code_review_pair -> code_review_documents "Consumes revision-pinned document data through the document API" {
+    properties {
+        "cascade.semanticId" "relationship.review-pair-documents"
+    }
+}
+
+review_pair_document_body = code_review_pair -> code_review_document_body "Renders the selected changed design" {
+    properties {
+        "cascade.semanticId" "relationship.review-pair-document-body"
+    }
+}
+
+review_document_changes = code_review_document_body -> code_review_document_changes "Installs navigation after Markdown highlighting" {
+    properties {
+        "cascade.semanticId" "relationship.review-document-changes"
     }
 }

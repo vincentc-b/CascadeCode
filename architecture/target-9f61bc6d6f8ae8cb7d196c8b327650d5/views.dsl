@@ -72,7 +72,7 @@ custom "cascade-diagram-review-code" {
     properties {
         "cascade.codeComponent" "element.component.diagram-review"
     }
-    include code_review_pair code_review_navigation code_review_svg code_review_preview code_review_union
+    include code_review_pair code_review_navigation code_review_svg code_review_preview code_review_union code_review_documents code_review_document_body code_review_document_changes
     autoLayout lr
 }
 

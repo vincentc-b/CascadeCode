@@ -229,8 +229,13 @@ evidence.
   initially shows the plan alone. When an
   original brief exists, the operator can reveal its comparison and revision
   labels. The Design tab (labeled DESIGN.md changes) presents documents with rendered block
-  highlighting; narrow screens stack the two sides. C4 uses the full review
-  width, while contextual documentation belongs in the Design tab.
+  highlighting. A directory tree includes unchanged design owners as context;
+  only changed documents are selectable, with green additions, amber changes
+  and red removals. Each side offers previous/next changed-block navigation
+  with a position indicator; narrow screens stack the tree and two sides.
+  Comparisons include integrated task/feature commits regardless of author,
+  but exclude uncommitted edits and work not yet integrated into the owner branch.
+  C4 uses the full review width, while contextual documentation belongs in the Design tab.
 - `REQ-WARROOM-COMPARE-003`: Opening C4 requests the current project integration
   revision versus the expected project after applying the selected committed
   proposal. Work already integrated into the project must remain in the preview.
@@ -259,7 +264,32 @@ These baselines answer different review questions. A private temporary index and
 worktree perform a three-way merge; a deterministic commit object pins divergent
 projections without moving a branch. Ancestor cases reuse the appropriate commit.
 Git document reads have a 10-second timeout and 2 MiB output cap; changed design
-text has a cumulative 2 MiB cap. Projection Git operations have 30-second timeouts.
+text has a cumulative 2 MiB cap. The `design_tree` inventory covers the union of
+both revisions' design paths, including unchanged documents. File presence
+classifies additions and removals independently of empty content. The browser
+builds ancestor directories from those paths and renders only the selected
+changed document. `renderDocumentComparison` highlights rendered blocks;
+`appendChangeNavigation` installs per-side controls after Markdown rendering,
+wraps at each end and focuses the target without changing the pinned revisions.
+Selection survives review rerenders while its document remains changed.
+Projection Git operations have 30-second timeouts.
+
+```mermaid
+sequenceDiagram
+    participant UI as Design tab
+    participant API as Document API
+    participant Git as Registered owner branch
+    UI->>API: Load work document and comparison
+    API->>Git: Read base and committed HEAD
+    alt Revisions unavailable or read limit exceeded
+        API-->>UI: Explicit unavailable comparison
+    else Comparison available
+        API-->>UI: Design path inventory and changed document bodies
+        UI->>UI: Build directory tree; select changed module
+        UI->>UI: Render both sides and highlight changed blocks
+        UI->>UI: Previous/next focuses a highlighted block
+    end
+```
 
 `DEC-WARROOM-COMPARE-002`: `POST /api/architecture/plan-preview` accepts a work ID
 and optionally the current/proposed opaque snapshot IDs. Server-resolved context,
@@ -277,8 +307,10 @@ installation removes exported inline pixel dimensions so the container controls
 SVG sizing while the viewBox controls zoom, pan and Fit.
 
 Verification: [comparison tests](../../tests/war_room/test_plan_comparison.py)
-cover ownership, multi-commit document context, project integration, conflicts and
-pinned polling; [comparison review scenarios](../../tests/war_room/paired_c4_review_cases.mjs)
+cover ownership, multi-commit document context, design inventory, project integration,
+conflicts and pinned polling; [design browser scenarios](../../tests/war_room/test_design_tree_browser.py)
+cover module selection, unchanged context, additions/removals, change navigation
+and narrow screens; [comparison review scenarios](../../tests/war_room/paired_c4_review_cases.mjs)
 cover navigation, descendant markers and zoom/pan restoration, including explicit
 Fit and revision changes. [Chromium scenarios](../../tests/war_room/test_project_c4_colors.py)
 cover semantic colors, responsive SVG sizing, drill/parent choices and publication

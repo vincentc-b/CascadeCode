@@ -1,5 +1,8 @@
 {
   "elements": [
+    {"dsl_identifier": "code_review_document_changes", "semantic_id": "element.code.code-review-document-changes", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_review_document_body", "semantic_id": "element.code.code-review-document-body", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_review_documents", "semantic_id": "element.code.code-review-documents", "fragment": "model.dsl"},
     {"dsl_identifier": "operator", "semantic_id": "element.person.operator", "fragment": "model.dsl"},
     {"dsl_identifier": "cascade", "semantic_id": "element.system.cascade", "fragment": "model.dsl"},
     {"dsl_identifier": "war_room", "semantic_id": "element.container.war-room", "fragment": "model.dsl"},
@@ -63,6 +66,9 @@
     {"path": "views.dsl", "owner": "task_034_007_002"}
   ],
   "relationships": [
+    {"dsl_identifier": "review_document_changes", "semantic_id": "relationship.review-document-changes", "source": "code_review_document_body", "destination": "code_review_document_changes", "fragment": "model.dsl"},
+    {"dsl_identifier": "review_pair_document_body", "semantic_id": "relationship.review-pair-document-body", "source": "code_review_pair", "destination": "code_review_document_body", "fragment": "model.dsl"},
+    {"dsl_identifier": "review_pair_documents", "semantic_id": "relationship.review-pair-documents", "source": "code_review_pair", "destination": "code_review_documents", "fragment": "model.dsl"},
     {"dsl_identifier": "operator_uses_war_room", "semantic_id": "relationship.operator-uses-war-room", "source": "operator", "destination": "war_room", "fragment": "model.dsl"},
     {"dsl_identifier": "war_room_calls_supervisor", "semantic_id": "relationship.war-room-calls-supervisor", "source": "war_room", "destination": "supervisor", "fragment": "model.dsl"},
     {"dsl_identifier": "supervisor_reads_repository", "semantic_id": "relationship.supervisor-reads-repository", "source": "supervisor", "destination": "repository", "fragment": "model.dsl"},

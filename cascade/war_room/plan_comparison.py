@@ -91,20 +91,25 @@ def plan_comparison(root: Path, work_id: str) -> dict:
             paths[side] = {p for p in _git(owner.path, "ls-tree", "-r", "--name-only", rev).splitlines()
                            if p == "DESIGN.md" or p.endswith("/DESIGN.md")}
         designs = []
+        design_tree = []
         total = 0
         for path in sorted(paths["current"] | paths["proposed"]):
             before = _blob(owner.path, base, path) if path in paths["current"] else ""
             after = _blob(owner.path, revision, path) if path in paths["proposed"] else ""
-            if before == after:
+            state = ("added" if path not in paths["current"] else
+                     "removed" if path not in paths["proposed"] else
+                     "changed" if before != after else "unchanged")
+            design_tree.append({"path": path, "state": state})
+            if state == "unchanged":
                 continue
             total += len(before.encode()) + len(after.encode())
             if total > MAX_TEXT_BYTES:
                 raise ValueError("Design comparison exceeds 2 MiB")
-            designs.append(compare_document(path, before, after))
+            designs.append({**compare_document(path, before, after), "state": state})
         return {"state": "draft", "owner_work_id": owner.work_id,
                 "current_revision": base, "proposed_revision": revision,
                 "message": "Committed branch preview · current is the branch base; proposed is the latest commit. Publication and approval are separate.",
-                "plan": plans, "designs": designs}
+                "plan": plans, "designs": designs, "design_tree": design_tree}
     except (ValueError, OSError, BoardError) as exc:
         return {"state": "unavailable", "message": str(exc), "designs": []}
 

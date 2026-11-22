@@ -24,6 +24,8 @@ def test_draft_keeps_full_context_and_all_designs_across_multiple_commits(tmp_pa
     (root / 'DESIGN.md').write_text('# Existing design\n\nUnchanged context.\n')
     (root / 'old').mkdir()
     (root / 'old/DESIGN.md').write_text('Retired component\n')
+    (root / 'stable').mkdir()
+    (root / 'stable/DESIGN.md').write_text('Stable design\n')
     base = commit(root, 'baseline')
     # A registered owner is sufficient; no architecture publication is created.
     save_registry(root, [IntegrationWorktree('epic', 'epic_001', git(root, 'branch', '--show-current'), root, base)])
@@ -52,6 +54,10 @@ def test_draft_keeps_full_context_and_all_designs_across_multiple_commits(tmp_pa
     assert designs['new/DESIGN.md']['current'] == ''
     assert designs['old/DESIGN.md']['proposed'] == ''
     assert designs['DESIGN.md']['added_lines'] == [4, 5]
+    assert {row['path']: row['state'] for row in result['design_tree']} == {
+        'DESIGN.md': 'changed', 'new/DESIGN.md': 'added',
+        'old/DESIGN.md': 'removed', 'stable/DESIGN.md': 'unchanged',
+    }
 
 
 def test_undispatched_feature_uses_owning_epic_branch(tmp_path):

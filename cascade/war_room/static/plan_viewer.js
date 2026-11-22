@@ -2797,6 +2797,37 @@
     });
   }
 
+  function appendChangeNavigation(doc, panel, body, className) {
+    var changes = Array.prototype.slice.call(body.querySelectorAll("." + className));
+    if (!changes.length) return;
+    var controls = doc.createElement("nav");
+    controls.className = "review-change-navigation";
+    controls.setAttribute("aria-label", "Document changes");
+    var status = doc.createElement("span");
+    status.setAttribute("aria-live", "polite");
+    status.textContent = changes.length + " changed blocks";
+    var index = -1;
+    [-1, 1].forEach(function (direction) {
+      var button = doc.createElement("button");
+      button.type = "button";
+      button.textContent = direction < 0 ? "Previous change" : "Next change";
+      button.addEventListener("click", function () {
+        if (index >= 0) changes[index].classList.remove("review-change-active");
+        index = index < 0 ? (direction > 0 ? 0 : changes.length - 1) :
+          (index + direction + changes.length) % changes.length;
+        var target = changes[index];
+        target.classList.add("review-change-active");
+        target.setAttribute("tabindex", "-1");
+        target.focus({ preventScroll: true });
+        target.scrollIntoView({ block: "center", behavior: "auto" });
+        status.textContent = "Change " + (index + 1) + " of " + changes.length;
+      });
+      controls.appendChild(button);
+    });
+    controls.appendChild(status);
+    panel.insertBefore(controls, body);
+  }
+
   function renderDocumentComparison(doc, comparison, proposedBody) {
     var columns = doc.createElement("div");
     columns.className = "review-rendered-columns";
@@ -2815,8 +2846,12 @@
       var className = side === "current" ? "review-change-removed" : "review-change-added";
       if (side === "proposed" && proposedBody) {
         highlightComparison(body, text, changed, className);
+        appendChangeNavigation(doc, panel, body, className);
       } else if (doc.defaultView) {
-        renderPlanBody(body, text).then(function () { highlightComparison(body, text, changed, className); });
+        renderPlanBody(body, text).then(function () {
+          highlightComparison(body, text, changed, className);
+          appendChangeNavigation(doc, panel, body, className);
+        });
       } else {
         body.textContent = text;
       }
@@ -2832,6 +2867,7 @@
     if (!host || !payload) return null;
     var navigation = createPairedNavigation(payload);
     var threadModel = createSemanticThreadModel(payload, navigation, options);
+    var selectedDesignPath = null;
     var pendingAnchor = null;
     var pendingDrill = null;
     var pendingThreadDraft = "";
@@ -2958,12 +2994,61 @@
         parent.appendChild(node("p", "paired-c4-revision",
           comparison.current_revision + " → " + comparison.proposed_revision));
         if (!comparison.designs.length) parent.appendChild(node("p", "", "No committed DESIGN.md changes against the branch base."));
-        comparison.designs.forEach(function (item) {
-          var section = node("section", "review-design-changes");
-          section.appendChild(node("h3", "", item.path));
-          section.appendChild(renderDocumentComparison(doc, item));
-          parent.appendChild(section);
+        var layout = node("div", "review-design-browser");
+        var tree = node("nav", "review-design-tree");
+        tree.setAttribute("aria-label", "Design document directories");
+        tree.appendChild(node("h3", "", "Modules"));
+        tree.appendChild(node("p", "review-design-legend", "Green: new · Amber: changed · Red: removed · Gray: unchanged"));
+        var detail = node("section", "review-design-changes");
+        var items = comparison.design_tree || comparison.designs.map(function (item) {
+          return { path: item.path, state: item.state || (!item.current ? "added" : !item.proposed ? "removed" : "changed") };
         });
+        var root = { name: ".", children: new Map() };
+        items.forEach(function (item) {
+          var parts = item.path.split("/").slice(0, -1), branch = root;
+          parts.forEach(function (part) {
+            if (!branch.children.has(part)) branch.children.set(part, { name: part, children: new Map() });
+            branch = branch.children.get(part);
+          });
+          branch.design = item;
+        });
+        var buttons = [];
+        function select(path) {
+          selectedDesignPath = path;
+          buttons.forEach(function (button) { button.setAttribute("aria-pressed", String(button.getAttribute("data-design-path") === path)); });
+          detail.innerHTML = "";
+          var item = comparison.designs.find(function (entry) { return entry.path === path; });
+          if (!item) return;
+          detail.appendChild(node("h3", "", item.path));
+          detail.appendChild(renderDocumentComparison(doc, item));
+        }
+        function appendBranch(branch, parent) {
+          var li = node("li", "");
+          var item = branch.design;
+          var changed = item && item.state !== "unchanged";
+          var label = node(changed ? "button" : "span", "review-design-module", branch.name + (item ? " · " + item.state : ""));
+          label.setAttribute("data-design-state", item ? item.state : "unchanged");
+          if (item) label.title = item.path;
+          if (changed) {
+            label.type = "button";
+            label.setAttribute("data-design-path", item.path);
+            label.addEventListener("click", function () { select(item.path); });
+            buttons.push(label);
+          }
+          li.appendChild(label);
+          if (branch.children.size) {
+            var children = node("ul", "");
+            Array.from(branch.children.values()).sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (child) { appendBranch(child, children); });
+            li.appendChild(children);
+          }
+          parent.appendChild(li);
+        }
+        var list = node("ul", "");
+        appendBranch(root, list);
+        tree.appendChild(list);
+        layout.appendChild(tree); layout.appendChild(detail); parent.appendChild(layout);
+        var initial = comparison.designs.find(function (item) { return item.path === selectedDesignPath; }) || comparison.designs[0];
+        if (initial) select(initial.path);
         return;
       }
       var resource = (payload.resources || []).find(function (row) { return row.kind === "design_diff"; });

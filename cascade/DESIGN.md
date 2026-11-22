@@ -133,8 +133,9 @@ The authoritative [C4 source](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327
 defines landscape, context, containers, supervisor components, a focused
 `cascade-team-components` view, and `cascade-war-room-components` for diagram
 review. The `cascade-diagram-review-code` and `cascade-comparison-render-code`
-views connect review presentation to bounded comparison rendering. Static C4 describes boundaries; the owning
-designs below contain implementation and behavior. Interactive exploration starts
+views connect module design comparisons and review presentation to bounded C4
+rendering. Static C4 describes boundaries; the owning designs below contain
+implementation and behavior. Interactive exploration starts
 at context and follows containers → components → Code; landscape is an optional
 overview outside that level hierarchy. The navigation contract is owned by
 [War Room](war_room/DESIGN.md#integrated-c4-exploration-and-source-inspection).

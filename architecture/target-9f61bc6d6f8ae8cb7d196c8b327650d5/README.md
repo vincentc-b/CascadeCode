@@ -113,6 +113,8 @@ retain the authored scope for broader multi-system models.
 For diagram review implementation, open `cascade-war-room-components`, then
 **Diagram comparison** → `cascade-diagram-review-code`. It connects the browser
 coordinator, semantic navigation and SVG viewer to the project-preview endpoint.
+It also traces the document API comparison through selected-module Markdown
+rendering and previous/next changed-block navigation.
 From the supervisor's **Workspace** component, choose
 `cascade-comparison-render-code` to inspect combined graph construction, source
 closure materialization and the durable render scheduler. Their owning designs
