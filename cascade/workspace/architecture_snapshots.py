@@ -124,6 +124,24 @@ class ArchitectureSnapshotStore:
             context_id,
             documentation_ref_id=documentation_ref_id,
         )
+        return self.create_selection(
+            selection, documentation_ref_id=documentation_ref_id,
+            code_directory=code_directory, settings=settings,
+        )
+
+    def create_selection(
+        self,
+        selection: ArchitectureContextSelection,
+        *,
+        documentation_ref_id: str | None = None,
+        code_directory: str = ".",
+        settings: C4RenderSettings | None = None,
+    ) -> ArchitectureBrowsingSnapshot:
+        """Render a server-resolved selection, including a registered worktree base.
+
+        HTTP callers must resolve authority before calling this method; arbitrary
+        client revisions are never accepted as selections.
+        """
         base = self._selection_descriptor(selection, code_directory, documentation_ref_id)
         if selection.documentation_ref_required:
             return self._persist_failure(

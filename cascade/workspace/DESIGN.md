@@ -76,3 +76,25 @@ Verification: [source validation](../../tests/workspace/test_c4_source.py),
 [semantic code metadata](../../tests/workspace/test_c4_review.py),
 [upgrade/tamper handling](../../tests/workspace/test_c4_scheduler.py), and
 [selected-checkout isolation](../../tests/workspace/test_architecture_browsing.py).
+
+
+## Server-resolved preview snapshots
+
+`REQ-WORKSPACE-C4-005`: A trusted server-resolved architecture selection can pin
+code, mapping and documentation revisions independently of the checkout's later
+HEAD. Creating that snapshot preserves the same descriptor identity, source
+validation, rendering bounds and persisted failure behavior as normal context
+selection; it does not change the checkout or accepted review lineage.
+
+`DEC-WORKSPACE-C4-003`: `ArchitectureSnapshotStore.create` resolves a context and
+then delegates to `create_selection`. The latter is an internal authority boundary,
+not an API for arbitrary client revisions. HTTP callers must authorize selections
+before invoking it. The War Room uses this entry point for immutable project
+projection commits and binds preview pairs to server-generated association
+evidence; preview policy is owned by the
+[War Room comparison design](../war_room/DESIGN.md#committed-planning-comparisons-and-project-previews).
+
+Verification: [snapshot tests](../../tests/workspace/test_architecture_snapshots.py)
+cover a server-selected base remaining pinned after HEAD advances, distinct
+snapshot identities and an unchanged checkout HEAD. Existing snapshot and scheduler
+validation applies to these selections as well.

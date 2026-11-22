@@ -1055,3 +1055,60 @@ body {
 .semantic-c4-expandable { cursor: zoom-in; }
 .semantic-c4-expand-badge { font: bold 20px sans-serif; fill: #fff; stroke: #172b4d; stroke-width: 4px; paint-order: stroke; pointer-events: none; }
 .semantic-c4-navigation-hint { font-size: .85rem; align-self: center; }
+
+/* Full committed documents retain their context on both sides of a proposal. */
+.plan-comparison { width: 100%; min-width: 0; grid-column: 1 / -1; }
+.plan-comparison[hidden] { display: none; }
+.plan-comparison #plan-body { padding: 0; margin: 0; max-width: none; }
+.review-rendered-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.review-rendered-columns > .plan-body { width: auto; min-width: 0; resize: none; }
+.review-rendered-body { overflow-wrap: anywhere; }
+.review-change-removed { background: rgba(207, 34, 46, .12); border-left: 3px solid #cf222e; padding-left: .5rem; }
+.review-change-added { background: rgba(35, 134, 54, .12); border-left: 3px solid #238636; padding-left: .5rem; }
+.review-design-changes { margin-bottom: 1.5rem; }
+@media (max-width: 48rem) {
+  .review-rendered-columns { grid-template-columns: 1fr; }
+}
+.paired-c4-workspace.paired-c4-draft { grid-template-columns: 1fr; }
+
+.plan-comparison-single .review-rendered-columns { grid-template-columns: 1fr; }
+.plan-comparison-single .review-rendered-before { display: none; }
+.plan-comparison-single .review-change-added { background: none; border-left: 0; padding-left: 0; }
+.plan-comparison-single .review-rendered-after { border-top: 1px solid var(--plan-border) !important; }
+.paired-c4-workspace.paired-c4-full-width { grid-template-columns: 1fr; }
+.semantic-c4-contains-changes.semantic-c4-diff-unchanged {
+  outline: 3px dashed #bf8700;
+  outline-offset: 3px;
+  filter: drop-shadow(0 0 3px #bf8700);
+}
+
+/* Project changes keep their semantic color on both sides, including selection. */
+.semantic-c4-diff-added { --semantic-change-color: #238636; }
+.semantic-c4-diff-removed { --semantic-change-color: #cf222e; opacity: 1; }
+.semantic-c4-diff-changed,
+.semantic-c4-contains-changes { --semantic-change-color: #bf8700; }
+.semantic-c4-diff-added,
+.semantic-c4-diff-removed,
+.semantic-c4-diff-changed {
+  outline: 3px solid var(--semantic-change-color);
+  outline-offset: 2px;
+  filter: drop-shadow(0 0 4px var(--semantic-change-color));
+}
+.semantic-c4-target-selected,
+.semantic-c4-target:hover,
+.semantic-c4-target:focus-visible {
+  outline: 3px solid #1f6feb;
+  filter: drop-shadow(0 0 5px var(--semantic-change-color, transparent)) drop-shadow(0 0 2px #1f6feb);
+}
+.paired-c4-legend-added { border-left: 4px solid #238636; padding-left: .5rem; }
+.paired-c4-legend-removed { border-left: 4px solid #cf222e; padding-left: .5rem; }
+.paired-c4-legend-changed { border-left: 4px solid #bf8700; padding-left: .5rem; }
+.semantic-c4-target[data-cascade-model-kind="relationship"]:is(.semantic-c4-diff-added, .semantic-c4-diff-removed, .semantic-c4-diff-changed) {
+  outline: none;
+}
+.semantic-c4-target:is(.semantic-c4-diff-added, .semantic-c4-diff-removed, .semantic-c4-diff-changed) [joint-selector="line"],
+.semantic-c4-target:is(.semantic-c4-diff-added, .semantic-c4-diff-removed, .semantic-c4-diff-changed) [joint-selector="body"] {
+  stroke: var(--semantic-change-color);
+  stroke-width: 3px;
+  vector-effect: non-scaling-stroke;
+}

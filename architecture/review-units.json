@@ -1,5 +1,1633 @@
 {
   "diffs": {
+    "architecture-review-02bd14eca71a30af51a9c18daa36ebf204d753ce658b3859a9672ac45b9dfbea": {
+      "changed_view_keys": [
+        "cascade-boss-code",
+        "cascade-containers",
+        "cascade-context",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-landscape",
+        "cascade-supervisor-components",
+        "cascade-task-code",
+        "cascade-team-components",
+        "cascade-teams-code",
+        "cascade-watchdog-code",
+        "cascade-workspace-code"
+      ],
+      "containment": [],
+      "current_artifact_ref": "empty_baseline",
+      "error": null,
+      "identities": [
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.boss.evidence",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.boss.lock",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.boss.merge",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.boss.queue",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.boss.reconcile",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.boss.review",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.boss.rollup",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.epic.checkpoint",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.epic.graph",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.epic.guard",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.epic.provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.epic.recover",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.epic.registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.epic.runtime",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.epic.state",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.epic.supervise",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.epic.wiring",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.feature.checkpoint",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.feature.graph",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.feature.guard",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.feature.mint",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.feature.provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.feature.recover",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.feature.registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.feature.runtime",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.feature.state",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.feature.wiring",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.task.actions",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.task.checkpoint",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.task.graph",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.task.guard",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.task.leases",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.task.provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.task.registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.task.runtime",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.task.state",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.task.wiring",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.teams.epic",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.teams.feature",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.teams.runtime",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.teams.skills",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.teams.swe",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.teams.task",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.watchdog.authority",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.watchdog.capability",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.watchdog.claim",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.watchdog.recover",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.watchdog.reservation",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.watchdog.result",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.watchdog.tick",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.workspace.board",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.workspace.persist",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.workspace.preflight",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.workspace.registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.workspace.resolve",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.workspace.retire",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.code.workspace.select",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.agent",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.board",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.boss",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.collaboration",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.epic-team",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.feature-team",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.task-team",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.teams",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.watchdog",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.component.workspace",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.container.repository",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.container.structurizr-cli",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.container.supervisor",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.container.war-room",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.person.operator",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.system.cascade",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.system.forge",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.system.model-provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "element",
+          "previous_semantic_id": null,
+          "semantic_id": "element.system.structurizr",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.agent-calls-provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.boss-reads-board",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.boss-uses-forge",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.boss-uses-workspace",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.cascade-uses-forge",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.cascade-uses-provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.cascade-uses-renderer",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-boss-merge-to-evidence",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-boss-merge-to-lock",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-boss-queue-to-merge",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-boss-reconcile-to-rollup",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-boss-rollup-to-lock",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-boss-rollup-to-review",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-epic-graph-to-code-epic-checkpoint",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-epic-graph-to-code-epic-runtime",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-epic-graph-to-code-epic-state",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-epic-recover-to-supervise",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-epic-registry-to-code-epic-guard",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-epic-registry-to-recover",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-epic-runtime-to-code-epic-provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-epic-runtime-to-code-epic-registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-epic-wiring-to-code-epic-registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-feature-graph-to-code-feature-checkpoint",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-feature-graph-to-code-feature-runtime",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-feature-graph-to-code-feature-state",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-feature-registry-to-code-feature-guard",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-feature-registry-to-mint",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-feature-registry-to-recover",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-feature-runtime-to-code-feature-provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-feature-runtime-to-code-feature-registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-feature-wiring-to-code-feature-registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-task-actions-to-leases",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-task-graph-to-code-task-checkpoint",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-task-graph-to-code-task-runtime",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-task-graph-to-code-task-state",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-task-registry-to-actions",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-task-registry-to-code-task-guard",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-task-runtime-to-code-task-provider",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-task-runtime-to-code-task-registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-task-wiring-to-code-task-registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-teams-epic-to-code-teams-runtime",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-teams-feature-to-code-teams-runtime",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-teams-runtime-to-code-teams-skills",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-teams-task-to-code-teams-swe",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-watchdog-recover-to-capability",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-watchdog-recover-to-claim",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-watchdog-recover-to-reservation",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-watchdog-recover-to-result",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-watchdog-tick-to-authority",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-workspace-board-to-select",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-workspace-persist-to-registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-workspace-preflight-to-registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-workspace-resolve-to-board",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-workspace-resolve-to-registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.code-workspace-retire-to-registry",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.epic-coordinates-feature",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.epic-persists",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.epic-runs-agent",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.feature-coordinates-task",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.feature-persists",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.feature-runs-agent",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.operator-uses-cascade",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.operator-uses-war-room",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.supervisor-exports-with-cli",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.supervisor-reads-repository",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.supervisor-validates-with-cli",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.task-persists",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.task-runs-agent",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.teams-route-epic",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.teams-route-feature",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.teams-route-task",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.teams-use-agent",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.teams-use-collaboration",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.teams-use-workspace",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.war-room-calls-supervisor",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.watchdog-dispatches-teams",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.watchdog-reads-board",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.watchdog-uses-boss",
+          "state": "added"
+        },
+        {
+          "changed_fields": [],
+          "kind": "relationship",
+          "previous_semantic_id": null,
+          "semantic_id": "relationship.workspace-calls-structurizr",
+          "state": "added"
+        }
+      ],
+      "proposed_artifact_ref": "architecture-review-02bd14eca71a30af51a9c18daa36ebf204d753ce658b3859a9672ac45b9dfbea",
+      "source_diff_reference": "revision:0d418e74db657d1dd968210a89c7f372c2ec769d;paths:architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl,architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl,architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json,architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+      "state": "empty_baseline",
+      "summary": "empty baseline: 155 identity change(s), 0 containment change(s), 12 affected view(s)",
+      "views": [
+        {
+          "changed_identities": [
+            "element.code.boss.evidence",
+            "element.code.boss.lock",
+            "element.code.boss.merge",
+            "element.code.boss.queue",
+            "element.code.boss.reconcile",
+            "element.code.boss.review",
+            "element.code.boss.rollup",
+            "relationship.code-boss-merge-to-evidence",
+            "relationship.code-boss-merge-to-lock",
+            "relationship.code-boss-queue-to-merge",
+            "relationship.code-boss-reconcile-to-rollup",
+            "relationship.code-boss-rollup-to-lock",
+            "relationship.code-boss-rollup-to-review"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-boss-code",
+          "proposed_elements": [
+            "element.code.boss.evidence",
+            "element.code.boss.lock",
+            "element.code.boss.merge",
+            "element.code.boss.queue",
+            "element.code.boss.reconcile",
+            "element.code.boss.review",
+            "element.code.boss.rollup"
+          ],
+          "proposed_relationships": [
+            "relationship.code-boss-merge-to-evidence",
+            "relationship.code-boss-merge-to-lock",
+            "relationship.code-boss-queue-to-merge",
+            "relationship.code-boss-reconcile-to-rollup",
+            "relationship.code-boss-rollup-to-lock",
+            "relationship.code-boss-rollup-to-review"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.container.repository",
+            "element.container.supervisor",
+            "element.container.war-room",
+            "element.person.operator",
+            "relationship.operator-uses-war-room",
+            "relationship.supervisor-reads-repository",
+            "relationship.war-room-calls-supervisor"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-containers",
+          "proposed_elements": [
+            "element.container.repository",
+            "element.container.supervisor",
+            "element.container.war-room",
+            "element.person.operator"
+          ],
+          "proposed_relationships": [
+            "relationship.operator-uses-war-room",
+            "relationship.supervisor-reads-repository",
+            "relationship.war-room-calls-supervisor"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.person.operator",
+            "element.system.cascade",
+            "element.system.forge",
+            "element.system.model-provider",
+            "element.system.structurizr",
+            "relationship.cascade-uses-forge",
+            "relationship.cascade-uses-provider",
+            "relationship.cascade-uses-renderer",
+            "relationship.operator-uses-cascade"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-context",
+          "proposed_elements": [
+            "element.person.operator",
+            "element.system.cascade",
+            "element.system.forge",
+            "element.system.model-provider",
+            "element.system.structurizr"
+          ],
+          "proposed_relationships": [
+            "relationship.cascade-uses-forge",
+            "relationship.cascade-uses-provider",
+            "relationship.cascade-uses-renderer",
+            "relationship.operator-uses-cascade"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.code.epic.checkpoint",
+            "element.code.epic.graph",
+            "element.code.epic.guard",
+            "element.code.epic.provider",
+            "element.code.epic.recover",
+            "element.code.epic.registry",
+            "element.code.epic.runtime",
+            "element.code.epic.state",
+            "element.code.epic.supervise",
+            "element.code.epic.wiring",
+            "relationship.code-epic-graph-to-code-epic-checkpoint",
+            "relationship.code-epic-graph-to-code-epic-runtime",
+            "relationship.code-epic-graph-to-code-epic-state",
+            "relationship.code-epic-recover-to-supervise",
+            "relationship.code-epic-registry-to-code-epic-guard",
+            "relationship.code-epic-registry-to-recover",
+            "relationship.code-epic-runtime-to-code-epic-provider",
+            "relationship.code-epic-runtime-to-code-epic-registry",
+            "relationship.code-epic-wiring-to-code-epic-registry"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-epic-code",
+          "proposed_elements": [
+            "element.code.epic.checkpoint",
+            "element.code.epic.graph",
+            "element.code.epic.guard",
+            "element.code.epic.provider",
+            "element.code.epic.recover",
+            "element.code.epic.registry",
+            "element.code.epic.runtime",
+            "element.code.epic.state",
+            "element.code.epic.supervise",
+            "element.code.epic.wiring"
+          ],
+          "proposed_relationships": [
+            "relationship.code-epic-graph-to-code-epic-checkpoint",
+            "relationship.code-epic-graph-to-code-epic-runtime",
+            "relationship.code-epic-graph-to-code-epic-state",
+            "relationship.code-epic-recover-to-supervise",
+            "relationship.code-epic-registry-to-code-epic-guard",
+            "relationship.code-epic-registry-to-recover",
+            "relationship.code-epic-runtime-to-code-epic-provider",
+            "relationship.code-epic-runtime-to-code-epic-registry",
+            "relationship.code-epic-wiring-to-code-epic-registry"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.code.feature.checkpoint",
+            "element.code.feature.graph",
+            "element.code.feature.guard",
+            "element.code.feature.mint",
+            "element.code.feature.provider",
+            "element.code.feature.recover",
+            "element.code.feature.registry",
+            "element.code.feature.runtime",
+            "element.code.feature.state",
+            "element.code.feature.wiring",
+            "relationship.code-feature-graph-to-code-feature-checkpoint",
+            "relationship.code-feature-graph-to-code-feature-runtime",
+            "relationship.code-feature-graph-to-code-feature-state",
+            "relationship.code-feature-registry-to-code-feature-guard",
+            "relationship.code-feature-registry-to-mint",
+            "relationship.code-feature-registry-to-recover",
+            "relationship.code-feature-runtime-to-code-feature-provider",
+            "relationship.code-feature-runtime-to-code-feature-registry",
+            "relationship.code-feature-wiring-to-code-feature-registry"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-feature-code",
+          "proposed_elements": [
+            "element.code.feature.checkpoint",
+            "element.code.feature.graph",
+            "element.code.feature.guard",
+            "element.code.feature.mint",
+            "element.code.feature.provider",
+            "element.code.feature.recover",
+            "element.code.feature.registry",
+            "element.code.feature.runtime",
+            "element.code.feature.state",
+            "element.code.feature.wiring"
+          ],
+          "proposed_relationships": [
+            "relationship.code-feature-graph-to-code-feature-checkpoint",
+            "relationship.code-feature-graph-to-code-feature-runtime",
+            "relationship.code-feature-graph-to-code-feature-state",
+            "relationship.code-feature-registry-to-code-feature-guard",
+            "relationship.code-feature-registry-to-mint",
+            "relationship.code-feature-registry-to-recover",
+            "relationship.code-feature-runtime-to-code-feature-provider",
+            "relationship.code-feature-runtime-to-code-feature-registry",
+            "relationship.code-feature-wiring-to-code-feature-registry"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.person.operator",
+            "element.system.cascade",
+            "element.system.forge",
+            "element.system.model-provider",
+            "element.system.structurizr",
+            "relationship.cascade-uses-forge",
+            "relationship.cascade-uses-provider",
+            "relationship.cascade-uses-renderer",
+            "relationship.operator-uses-cascade"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-landscape",
+          "proposed_elements": [
+            "element.person.operator",
+            "element.system.cascade",
+            "element.system.forge",
+            "element.system.model-provider",
+            "element.system.structurizr"
+          ],
+          "proposed_relationships": [
+            "relationship.cascade-uses-forge",
+            "relationship.cascade-uses-provider",
+            "relationship.cascade-uses-renderer",
+            "relationship.operator-uses-cascade"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.component.agent",
+            "element.component.board",
+            "element.component.boss",
+            "element.component.collaboration",
+            "element.component.epic-team",
+            "element.component.feature-team",
+            "element.component.task-team",
+            "element.component.teams",
+            "element.component.watchdog",
+            "element.component.workspace",
+            "element.container.repository",
+            "element.system.forge",
+            "element.system.model-provider",
+            "element.system.structurizr",
+            "relationship.agent-calls-provider",
+            "relationship.boss-reads-board",
+            "relationship.boss-uses-forge",
+            "relationship.boss-uses-workspace",
+            "relationship.epic-coordinates-feature",
+            "relationship.epic-persists",
+            "relationship.epic-runs-agent",
+            "relationship.feature-coordinates-task",
+            "relationship.feature-persists",
+            "relationship.feature-runs-agent",
+            "relationship.task-persists",
+            "relationship.task-runs-agent",
+            "relationship.teams-route-epic",
+            "relationship.teams-route-feature",
+            "relationship.teams-route-task",
+            "relationship.teams-use-agent",
+            "relationship.teams-use-collaboration",
+            "relationship.teams-use-workspace",
+            "relationship.watchdog-dispatches-teams",
+            "relationship.watchdog-reads-board",
+            "relationship.watchdog-uses-boss",
+            "relationship.workspace-calls-structurizr"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-supervisor-components",
+          "proposed_elements": [
+            "element.component.agent",
+            "element.component.board",
+            "element.component.boss",
+            "element.component.collaboration",
+            "element.component.epic-team",
+            "element.component.feature-team",
+            "element.component.task-team",
+            "element.component.teams",
+            "element.component.watchdog",
+            "element.component.workspace",
+            "element.container.repository",
+            "element.system.forge",
+            "element.system.model-provider",
+            "element.system.structurizr"
+          ],
+          "proposed_relationships": [
+            "relationship.agent-calls-provider",
+            "relationship.boss-reads-board",
+            "relationship.boss-uses-forge",
+            "relationship.boss-uses-workspace",
+            "relationship.epic-coordinates-feature",
+            "relationship.epic-persists",
+            "relationship.epic-runs-agent",
+            "relationship.feature-coordinates-task",
+            "relationship.feature-persists",
+            "relationship.feature-runs-agent",
+            "relationship.task-persists",
+            "relationship.task-runs-agent",
+            "relationship.teams-route-epic",
+            "relationship.teams-route-feature",
+            "relationship.teams-route-task",
+            "relationship.teams-use-agent",
+            "relationship.teams-use-collaboration",
+            "relationship.teams-use-workspace",
+            "relationship.watchdog-dispatches-teams",
+            "relationship.watchdog-reads-board",
+            "relationship.watchdog-uses-boss",
+            "relationship.workspace-calls-structurizr"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.code.task.actions",
+            "element.code.task.checkpoint",
+            "element.code.task.graph",
+            "element.code.task.guard",
+            "element.code.task.leases",
+            "element.code.task.provider",
+            "element.code.task.registry",
+            "element.code.task.runtime",
+            "element.code.task.state",
+            "element.code.task.wiring",
+            "relationship.code-task-actions-to-leases",
+            "relationship.code-task-graph-to-code-task-checkpoint",
+            "relationship.code-task-graph-to-code-task-runtime",
+            "relationship.code-task-graph-to-code-task-state",
+            "relationship.code-task-registry-to-actions",
+            "relationship.code-task-registry-to-code-task-guard",
+            "relationship.code-task-runtime-to-code-task-provider",
+            "relationship.code-task-runtime-to-code-task-registry",
+            "relationship.code-task-wiring-to-code-task-registry"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-task-code",
+          "proposed_elements": [
+            "element.code.task.actions",
+            "element.code.task.checkpoint",
+            "element.code.task.graph",
+            "element.code.task.guard",
+            "element.code.task.leases",
+            "element.code.task.provider",
+            "element.code.task.registry",
+            "element.code.task.runtime",
+            "element.code.task.state",
+            "element.code.task.wiring"
+          ],
+          "proposed_relationships": [
+            "relationship.code-task-actions-to-leases",
+            "relationship.code-task-graph-to-code-task-checkpoint",
+            "relationship.code-task-graph-to-code-task-runtime",
+            "relationship.code-task-graph-to-code-task-state",
+            "relationship.code-task-registry-to-actions",
+            "relationship.code-task-registry-to-code-task-guard",
+            "relationship.code-task-runtime-to-code-task-provider",
+            "relationship.code-task-runtime-to-code-task-registry",
+            "relationship.code-task-wiring-to-code-task-registry"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.component.agent",
+            "element.component.epic-team",
+            "element.component.feature-team",
+            "element.component.task-team",
+            "element.component.teams",
+            "element.component.watchdog",
+            "element.container.repository",
+            "relationship.epic-coordinates-feature",
+            "relationship.epic-persists",
+            "relationship.epic-runs-agent",
+            "relationship.feature-coordinates-task",
+            "relationship.feature-persists",
+            "relationship.feature-runs-agent",
+            "relationship.task-persists",
+            "relationship.task-runs-agent",
+            "relationship.teams-route-epic",
+            "relationship.teams-route-feature",
+            "relationship.teams-route-task",
+            "relationship.teams-use-agent",
+            "relationship.watchdog-dispatches-teams"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-team-components",
+          "proposed_elements": [
+            "element.component.agent",
+            "element.component.epic-team",
+            "element.component.feature-team",
+            "element.component.task-team",
+            "element.component.teams",
+            "element.component.watchdog",
+            "element.container.repository"
+          ],
+          "proposed_relationships": [
+            "relationship.epic-coordinates-feature",
+            "relationship.epic-persists",
+            "relationship.epic-runs-agent",
+            "relationship.feature-coordinates-task",
+            "relationship.feature-persists",
+            "relationship.feature-runs-agent",
+            "relationship.task-persists",
+            "relationship.task-runs-agent",
+            "relationship.teams-route-epic",
+            "relationship.teams-route-feature",
+            "relationship.teams-route-task",
+            "relationship.teams-use-agent",
+            "relationship.watchdog-dispatches-teams"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.code.teams.epic",
+            "element.code.teams.feature",
+            "element.code.teams.runtime",
+            "element.code.teams.skills",
+            "element.code.teams.swe",
+            "element.code.teams.task",
+            "relationship.code-teams-epic-to-code-teams-runtime",
+            "relationship.code-teams-feature-to-code-teams-runtime",
+            "relationship.code-teams-runtime-to-code-teams-skills",
+            "relationship.code-teams-task-to-code-teams-swe"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-teams-code",
+          "proposed_elements": [
+            "element.code.teams.epic",
+            "element.code.teams.feature",
+            "element.code.teams.runtime",
+            "element.code.teams.skills",
+            "element.code.teams.swe",
+            "element.code.teams.task"
+          ],
+          "proposed_relationships": [
+            "relationship.code-teams-epic-to-code-teams-runtime",
+            "relationship.code-teams-feature-to-code-teams-runtime",
+            "relationship.code-teams-runtime-to-code-teams-skills",
+            "relationship.code-teams-task-to-code-teams-swe"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.code.watchdog.authority",
+            "element.code.watchdog.capability",
+            "element.code.watchdog.claim",
+            "element.code.watchdog.recover",
+            "element.code.watchdog.reservation",
+            "element.code.watchdog.result",
+            "element.code.watchdog.tick",
+            "relationship.code-watchdog-recover-to-capability",
+            "relationship.code-watchdog-recover-to-claim",
+            "relationship.code-watchdog-recover-to-reservation",
+            "relationship.code-watchdog-recover-to-result",
+            "relationship.code-watchdog-tick-to-authority"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-watchdog-code",
+          "proposed_elements": [
+            "element.code.watchdog.authority",
+            "element.code.watchdog.capability",
+            "element.code.watchdog.claim",
+            "element.code.watchdog.recover",
+            "element.code.watchdog.reservation",
+            "element.code.watchdog.result",
+            "element.code.watchdog.tick"
+          ],
+          "proposed_relationships": [
+            "relationship.code-watchdog-recover-to-capability",
+            "relationship.code-watchdog-recover-to-claim",
+            "relationship.code-watchdog-recover-to-reservation",
+            "relationship.code-watchdog-recover-to-result",
+            "relationship.code-watchdog-tick-to-authority"
+          ],
+          "state": "empty_baseline"
+        },
+        {
+          "changed_identities": [
+            "element.code.workspace.board",
+            "element.code.workspace.persist",
+            "element.code.workspace.preflight",
+            "element.code.workspace.registry",
+            "element.code.workspace.resolve",
+            "element.code.workspace.retire",
+            "element.code.workspace.select",
+            "relationship.code-workspace-board-to-select",
+            "relationship.code-workspace-persist-to-registry",
+            "relationship.code-workspace-preflight-to-registry",
+            "relationship.code-workspace-resolve-to-board",
+            "relationship.code-workspace-resolve-to-registry",
+            "relationship.code-workspace-retire-to-registry"
+          ],
+          "current_elements": [],
+          "current_relationships": [],
+          "key": "cascade-workspace-code",
+          "proposed_elements": [
+            "element.code.workspace.board",
+            "element.code.workspace.persist",
+            "element.code.workspace.preflight",
+            "element.code.workspace.registry",
+            "element.code.workspace.resolve",
+            "element.code.workspace.retire",
+            "element.code.workspace.select"
+          ],
+          "proposed_relationships": [
+            "relationship.code-workspace-board-to-select",
+            "relationship.code-workspace-persist-to-registry",
+            "relationship.code-workspace-preflight-to-registry",
+            "relationship.code-workspace-resolve-to-board",
+            "relationship.code-workspace-resolve-to-registry",
+            "relationship.code-workspace-retire-to-registry"
+          ],
+          "state": "empty_baseline"
+        }
+      ]
+    },
     "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0": {
       "changed_view_keys": [
         "cascade-containers",
@@ -374,7 +2002,143 @@
   "lineages": {},
   "promotion_reservations": {},
   "promotions": {},
+  "review_order": [
+    "architecture-review-02bd14eca71a30af51a9c18daa36ebf204d753ce658b3859a9672ac45b9dfbea"
+  ],
   "review_units": {
+    "architecture-review-02bd14eca71a30af51a9c18daa36ebf204d753ce658b3859a9672ac45b9dfbea": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "epic_047",
+        "feat_047_001",
+        "feat_047_002",
+        "feat_047_003",
+        "feat_047_004"
+      ],
+      "architecture_impact": "diagram_change",
+      "authorized_owner": "epic_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": ".",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-ROOT-006"
+      ],
+      "design": {
+        "content_digest": "dd31e4708279564a738cef662642beab5d6b5f7350ee53682b6b577477c8a562",
+        "reference": {
+          "code_directory": ".",
+          "design_owner_directory": ".",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "epic_047",
+          "repository_path": "DESIGN.md",
+          "revision": "d59478f9176e0ce35fca18713a6a2a2a116db088",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": ".",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "Expose current ownership, delivery, review and recovery collaborators in integrated Code views and source-linked designs; the pinned plan defines the proposed late-repair transaction and child verification obligations. Context and container topology is unchanged because recovery uses existing supervisor, repository and forge boundaries.",
+      "integration_lineage": "epic:epic_047",
+      "owner_work_id": "epic_047",
+      "plan": {
+        "content_digest": "2358463a1751270b6c1e1e091d70243f9a8f643e7be2000c9c83b25b66f4eed8",
+        "path": "docs/epics/2_active/epic_047_recover_late_repair_delivery_after_feature_completion.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "39558b2cb130000418f59b6a2683fc28c7038d56"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": {
+        "contract": {
+          "content_digest": "86934770e5feb31156a62705548b1c5298406afd74a1a71bd4692ec6e2e8f233",
+          "reference": {
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "owning_work": "epic_047",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+            "revision": "0d418e74db657d1dd968210a89c7f372c2ec769d",
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+          }
+        },
+        "render_identity": "6de94f52a97eef8e06dce0d391166cff6c90395ce5f3de2fc60d987a94118efb",
+        "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+        "renderer_settings": {
+          "cpus": "2",
+          "memory": "1536m",
+          "pids_limit": 256,
+          "timeout_seconds": 180,
+          "tmpfs_size": "512m"
+        },
+        "semantic_artifact_digest": "cbf95d4a3c907484cd776bc0772df84478c6a7ff0082e545e0d0b849b4877196",
+        "source_closure_digest": "918e26916bba979a50e283a06bc93f31de346d65968565de932da0a4ffe39f4f",
+        "sources": [
+          {
+            "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a",
+            "reference": {
+              "code_directory": ".",
+              "design_owner_directory": ".",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "epic_047",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+              "revision": "0d418e74db657d1dd968210a89c7f372c2ec769d",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          },
+          {
+            "content_digest": "09ae7574e6a07a4c7e922ca5a9f938dd3ca9f7337e58c5df2c8ea057800aa2a8",
+            "reference": {
+              "code_directory": ".",
+              "design_owner_directory": ".",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "epic_047",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+              "revision": "0d418e74db657d1dd968210a89c7f372c2ec769d",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          },
+          {
+            "content_digest": "c13716853ba3130e264d6eeb9292b84eeb81d12d86f717a1cbc0edaaa449a795",
+            "reference": {
+              "code_directory": ".",
+              "design_owner_directory": ".",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "epic_047",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+              "revision": "0d418e74db657d1dd968210a89c7f372c2ec769d",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          }
+        ]
+      },
+      "requirement_citations": [
+        "REQ-ROOT-010"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-supervisor-components",
+        "cascade-workspace-code",
+        "cascade-boss-code",
+        "cascade-watchdog-code",
+        "cascade-feature-code",
+        "cascade-epic-code",
+        "cascade-task-code"
+      ]
+    },
     "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0": {
       "accepted_baseline": {
         "accepted_review_unit_id": null,

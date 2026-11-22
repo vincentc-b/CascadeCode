@@ -1791,8 +1791,31 @@
     });
   }
 
-  // Reverse verified drill links, choosing the nearest available C4 level.
-  // Selection history is deliberately irrelevant to hierarchy navigation.
+  function preferredDrillChoice(choices, views, sideName) {
+    if (choices.length === 1) return choices[0];
+    if (!choices.length || choices.some(function (choice) { return choice.level !== choices[0].level; })) return null;
+    var destinations = choices.map(function (choice) {
+      var view = views.find(function (candidate) {
+        return candidate.key === choice.view_key && candidate.level === choice.level;
+      });
+      var side = view && view[sideName];
+      return { choice: choice, targets: side && new Set((side.targets || []).map(function (target) {
+        return target.kind + "\u0000" + target.semantic_id;
+      })) };
+    });
+    if (destinations.some(function (item) { return !item.targets || !item.targets.size; })) return null;
+    // A verified overview containing every focused alternative is unambiguous.
+    // Counts or labels alone cannot establish that one view covers another.
+    var overviews = destinations.filter(function (candidate) {
+      return destinations.every(function (other) {
+        return Array.from(other.targets).every(function (id) { return candidate.targets.has(id); });
+      });
+    });
+    return overviews.length === 1 ? overviews[0].choice : null;
+  }
+
+  // Reverse verified ownership links to the nearest available C4 level.
+  // History may choose among valid parents, but cannot invent a parent.
   function parentViews(views, current, targets) {
     var levels = ["systemLandscapeViews", "systemContextViews", "containerViews", "componentViews", "codeViews"];
     var rank = current ? levels.indexOf(current.level) : -1;
@@ -1804,7 +1827,8 @@
       }) : [].concat(view.current && view.current.targets || [], view.proposed && view.proposed.targets || []);
       return rows.some(function (target) {
         return target.kind === "element" && sortedDrillChoices(target).some(function (choice) {
-          return choice.view_key === current.key && choice.level === current.level;
+          return choice.view_key === current.key && choice.level === current.level &&
+            (!choice.scope_id || choice.scope_id === target.semantic_id);
         });
       });
     });
@@ -1813,9 +1837,94 @@
       .sort(function (a, b) { return a.key.localeCompare(b.key); });
   }
 
+  function preferredParentView(parents, history) {
+    if (parents.length === 1) return parents[0];
+    for (var index = (history || []).length - 1; index >= 0; index -= 1) {
+      var entry = history[index];
+      var origin = parents.find(function (view) {
+        return view.key === entry.view_key && view.level === entry.level;
+      });
+      if (origin) return origin;
+    }
+    var choices = parents.map(function (view) { return {view_key: view.key, level: view.level}; });
+    var overview = preferredDrillChoice(choices, parents, "proposed") ||
+      preferredDrillChoice(choices, parents, "current");
+    return overview ? parents.find(function (view) {
+      return view.key === overview.view_key && view.level === overview.level;
+    }) : null;
+  }
+
+  var c4Levels = ["systemLandscapeViews", "systemContextViews", "containerViews", "componentViews", "codeViews"];
+
+  function c4LevelLabel(level) {
+    return {
+      systemLandscapeViews: "Project landscape",
+      systemContextViews: "L1: System context",
+      containerViews: "L2: Containers",
+      componentViews: "L3: Components",
+      codeViews: "L4: Code",
+      dynamicViews: "Dynamic view",
+      deploymentViews: "Deployment view",
+    }[level] || level;
+  }
+
+  function comparisonViews(payload) {
+    var views = (payload && payload.views || []).map(function (view) {
+      var copy = Object.assign({}, view);
+      ["current", "proposed"].forEach(function (side) {
+        if (view[side]) copy[side] = Object.assign({}, view[side], {
+          targets: (view[side].targets || []).map(function (target) {
+            return Object.assign({}, target, { contains_changes: false });
+          }),
+        });
+      });
+      return copy;
+    });
+    var changed = new Set((payload && payload.changed_views || []).map(function (v) { return v[0] + "\u0000" + v[1]; }));
+    views.forEach(function (view) {
+      view.contains_changes = false;
+      if (view.state && view.state !== "unchanged") changed.add(view.key + "\u0000" + view.level);
+    });
+    // Follow verified model links upwards. Never infer containment from labels.
+    views.slice().sort(function (a, b) { return c4Levels.indexOf(b.level) - c4Levels.indexOf(a.level); }).forEach(function (view) {
+      var rank = c4Levels.indexOf(view.level);
+      if (rank < 0) return;
+      ["current", "proposed"].forEach(function (side) {
+        (view[side] && view[side].targets || []).forEach(function (target) {
+          if (target.kind !== "element") return;
+          target.contains_changes = sortedDrillChoices(target).some(function (choice) {
+            return c4Levels.indexOf(choice.level) > rank &&
+              (!choice.scope_id || choice.scope_id === target.semantic_id) &&
+              changed.has(choice.view_key + "\u0000" + choice.level);
+          });
+          if (target.contains_changes) {
+            view.contains_changes = true;
+            changed.add(view.key + "\u0000" + view.level);
+          }
+        });
+      });
+    });
+    return views;
+  }
+
+  function initialComparisonView(views, payload) {
+    var changed = new Set((payload && payload.changed_views || []).map(function (v) { return v[0] + "\u0000" + v[1]; }));
+    function affected(view) {
+      return view.contains_changes || changed.has(view.key + "\u0000" + view.level) ||
+        (view.state && view.state !== "unchanged");
+    }
+    var choices = views.filter(affected);
+    if (!choices.length) choices = views.slice();
+    return choices.sort(function (a, b) {
+      var both = Number(!a.current || !a.proposed) - Number(!b.current || !b.proposed);
+      var aLevel = c4Levels.indexOf(a.level), bLevel = c4Levels.indexOf(b.level);
+      return both || (aLevel < 0 ? 99 : aLevel) - (bLevel < 0 ? 99 : bLevel) ||
+        Number(!a.proposed) - Number(!b.proposed) || a.key.localeCompare(b.key);
+    })[0] || null;
+  }
+
   function createPairedNavigation(payload) {
-    var views = Array.isArray(payload && payload.views) ? payload.views.slice() : [];
-    var changed = Array.isArray(payload && payload.changed_views) ? payload.changed_views : [];
+    var views = comparisonViews(payload);
 
     function findView(viewKey, level) {
       return views.find(function (view) {
@@ -1823,9 +1932,7 @@
       }) || null;
     }
 
-    var initial = null;
-    if (changed.length) initial = findView(changed[0][0], changed[0][1]);
-    if (!initial && views.length) initial = views[0];
+    var initial = initialComparisonView(views, payload);
     var state = initial ? {
       view_key: initial.key,
       level: initial.level,
@@ -1954,14 +2061,11 @@
         return { ok: true, state: snapshot(), resolutions: this.resolutions() };
       },
       updatePayload: function (nextPayload) {
-        views = Array.isArray(nextPayload && nextPayload.views) ? nextPayload.views.slice() : [];
+        views = comparisonViews(nextPayload);
         this.views = views;
         var surviving = findView(state.view_key, state.level);
         if (!surviving) {
-          var nextChanged = Array.isArray(nextPayload && nextPayload.changed_views) ?
-            nextPayload.changed_views : [];
-          surviving = nextChanged.length ? findView(nextChanged[0][0], nextChanged[0][1]) : null;
-          if (!surviving) surviving = views[0] || null;
+          surviving = initialComparisonView(views, nextPayload);
           state.view_key = surviving ? surviving.key : null;
           state.level = surviving ? surviving.level : null;
           state.selection = null;
@@ -2349,6 +2453,8 @@
     function applyTargetState(hit, target) {
       hit.classList.add("semantic-c4-target", "paired-c4-target");
       hit.classList.add("semantic-c4-diff-" + (target.state || "unchanged"));
+      hit.classList.toggle("semantic-c4-contains-changes", !!target.contains_changes);
+      hit.setAttribute("data-contains-changes", String(!!target.contains_changes));
       hit.setAttribute("data-cascade-diff-state", target.state || "unchanged");
       hit.setAttribute("tabindex", "0");
       hit.setAttribute("role", "button");
@@ -2362,7 +2468,7 @@
       }
       hit.setAttribute("aria-label", target.kind + " " + target.semantic_id);
       hit.setAttribute("aria-description", targetLabel(target) + ", " +
-        (target.state || "unchanged") + (expandable ? ", open submodules" : ", no deeper diagram available"));
+        (target.state || "unchanged") + (target.contains_changes ? ", contains changes in deeper views" : "") + (expandable ? ", open submodules" : ", no deeper diagram available"));
       var selected = options.selection &&
         options.selection.kind === target.kind &&
         options.selection.semantic_id === target.semantic_id;
@@ -2430,6 +2536,12 @@
         throw new Error("Pinned diagram is not an SVG");
       }
       svg = doc.importNode ? doc.importNode(parsedSvg, true) : parsedSvg;
+      // Renderer exports carry pixel sizes for a standalone image. The viewer
+      // controls the viewport; retain the viewBox for fit, pan and zoom.
+      if (svg.style) {
+        svg.style.removeProperty("width");
+        svg.style.removeProperty("height");
+      }
       svg.classList.add("semantic-c4-svg", "paired-c4-svg");
       svg.setAttribute("role", "group");
       svg.setAttribute("aria-label", sideName + " semantic architecture diagram");
@@ -2452,7 +2564,7 @@
         var height = parseFloat(svg.getAttribute("height"));
         if (width > 0 && height > 0) originalViewBox = [0, 0, width, height];
       }
-      if (originalViewBox) setViewBox(originalViewBox);
+      if (originalViewBox) setViewBox(parseViewBox(options.viewBox) || originalViewBox);
       canvas.replaceChildren ? canvas.replaceChildren(svg) : (canvas.innerHTML = "", canvas.appendChild(svg));
 
       if (doc.createElementNS) {
@@ -2528,7 +2640,8 @@
       var item = element("li", "semantic-c4-target-row semantic-c4-diff-" +
         (target.state || "unchanged"));
       var select = element("button", "semantic-c4-target-button",
-        target.kind + ": " + targetLabel(target) + " · " + (target.state || "unchanged"));
+        target.kind + ": " + targetLabel(target) + " · " + (target.state || "unchanged") +
+        (target.contains_changes ? " · contains changes" : ""));
       select.type = "button";
       select.addEventListener("click", function () { emitSelection(target, "list"); });
       item.appendChild(select);
@@ -2647,6 +2760,45 @@
     return table;
   }
 
+  function highlightComparison(body, text, changedLines, className) {
+    var starts = blockLineNumbersForBody(text);
+    var children = Array.prototype.slice.call(body.children);
+    children.forEach(function (child, index) {
+      var start = starts[index], end = starts[index + 1] || String(text).split("\n").length + 1;
+      if (start && changedLines.some(function (line) { return line >= start && line < end; })) {
+        child.classList.add(className);
+      }
+    });
+  }
+
+  function renderDocumentComparison(doc, comparison, proposedBody) {
+    var columns = doc.createElement("div");
+    columns.className = "review-rendered-columns";
+    ["current", "proposed"].forEach(function (side) {
+      var panel = doc.createElement("article");
+      panel.className = "plan-body review-rendered-" + (side === "current" ? "before" : "after");
+      var heading = doc.createElement("h4");
+      heading.textContent = side === "current" ? "Current" : "Proposed";
+      panel.appendChild(heading);
+      var body = side === "proposed" && proposedBody ? proposedBody : doc.createElement("div");
+      body.classList.add("review-rendered-body");
+      panel.appendChild(body);
+      columns.appendChild(panel);
+      var text = comparison[side] || "";
+      var changed = comparison[side === "current" ? "removed_lines" : "added_lines"] || [];
+      var className = side === "current" ? "review-change-removed" : "review-change-added";
+      if (side === "proposed" && proposedBody) {
+        highlightComparison(body, text, changed, className);
+      } else if (doc.defaultView) {
+        renderPlanBody(body, text).then(function () { highlightComparison(body, text, changed, className); });
+      } else {
+        body.textContent = text;
+      }
+      if (!text) body.textContent = side === "current" ? "Not present in current revision." : "Removed in proposed revision.";
+    });
+    return columns;
+  }
+
   function initPairedC4Review(payload, options) {
     options = options || {};
     var doc = options.document || document;
@@ -2661,6 +2813,8 @@
     var pendingThreadNeedsReview = false;
     var pendingThreadReviewMessage = "";
     var replyDrafts = {};
+    var diagramViewers = [];
+    var diagramViewports = new Map();
     var documentation = {
       open: false,
       side: null,
@@ -2673,6 +2827,8 @@
     var refreshTimer = null;
     var refreshInFlight = false;
     var stopped = false;
+    var draftRequested = false;
+    var draftError = null;
     host.hidden = false;
 
     function node(tag, className, text) {
@@ -2770,6 +2926,20 @@
     }
 
     function appendDesignDiff(parent) {
+      var comparison = options.comparison;
+      if (comparison && comparison.state === "draft") {
+        parent.appendChild(node("p", "paired-c4-summary", comparison.message));
+        parent.appendChild(node("p", "paired-c4-revision",
+          comparison.current_revision + " → " + comparison.proposed_revision));
+        if (!comparison.designs.length) parent.appendChild(node("p", "", "No committed DESIGN.md changes against the branch base."));
+        comparison.designs.forEach(function (item) {
+          var section = node("section", "review-design-changes");
+          section.appendChild(node("h3", "", item.path));
+          section.appendChild(renderDocumentComparison(doc, item));
+          parent.appendChild(section);
+        });
+        return;
+      }
       var resource = (payload.resources || []).find(function (row) { return row.kind === "design_diff"; });
       if (!resource) { parent.appendChild(node("p", "", "No published DESIGN.md comparison is available for this review.")); return; }
       var url = safeUrl(resource.url);
@@ -3137,6 +3307,7 @@
     }
 
     function beginThread(anchor) {
+      reviewTab = "c4";
       pendingAnchor = anchor;
       pendingThreadNeedsReview = false;
       pendingThreadReviewMessage = "";
@@ -3454,7 +3625,12 @@
       var viewerHost = node("div", "semantic-c4-viewer");
       card.appendChild(viewerHost);
       parent.appendChild(card);
-      createSemanticC4Viewer({
+      // Viewports belong to one immutable diagram, independently on each side.
+      var viewportKey = JSON.stringify([
+        sideName, view.key, view.level, side.repository_key, side.revision, side.svg,
+      ]);
+      var viewer = createSemanticC4Viewer({
+        viewBox: diagramViewports.get(viewportKey),
         document: doc,
         container: viewerHost,
         side: side,
@@ -3478,8 +3654,8 @@
           render();
         },
         onDrill: function (detail) {
-          if (detail.choices.length === 1) {
-            var choice = detail.choices[0];
+          var choice = preferredDrillChoice(detail.choices, navigation.views, sideName);
+          if (choice) {
             var moved = navigation.drill(
               sideName, detail.kind, detail.semantic_id, choice.view_key, choice.level
             );
@@ -3491,25 +3667,66 @@
           }
           pendingDrill = detail;
           render();
+          var revealChoices = function () {
+            if (pendingDrill !== detail || reviewTab !== "c4") return;
+            var chooser = host.querySelector(".paired-c4-drill-choices");
+            if (!chooser) return;
+            if (chooser.scrollIntoView) chooser.scrollIntoView({ block: "center" });
+            var first = chooser.querySelector(".paired-c4-drill-choice");
+            if (first && first.focus) first.focus({ preventScroll: true });
+          };
+          if (doc.defaultView && doc.defaultView.requestAnimationFrame) doc.defaultView.requestAnimationFrame(revealChoices);
+          else revealChoices();
         },
       });
+      diagramViewers.push({ key: viewportKey, viewer: viewer });
+    }
+
+    function preserveDiagramViewports() {
+      diagramViewers.forEach(function (entry) {
+        var box = entry.viewer.getViewBox();
+        if (box) diagramViewports.set(entry.key, box);
+        entry.viewer.destroy();
+      });
+      diagramViewers = [];
+      // Bound history across navigation and revision changes.
+      while (diagramViewports.size > 32) {
+        diagramViewports.delete(diagramViewports.keys().next().value);
+      }
     }
 
     function renderContents() {
+      preserveDiagramViewports();
       clear(host);
       var heading = node("div", "paired-c4-heading");
       var title = node("div", "");
-      title.appendChild(node("h2", "", "Architecture change review"));
+      title.appendChild(node("h2", "", "Project architecture comparison"));
       var noDiagramChange = payload.architecture_impact === "no_diagram_change" ||
         payload.state === "no_diagram_change";
-      title.appendChild(node("p", "paired-c4-summary", noDiagramChange ?
+      var awaitingProject = typeof options.loadDraft === "function" && !payload.project_comparison;
+      title.appendChild(node("p", "paired-c4-summary", awaitingProject ?
+        "Comparing the current project with its proposed architecture." : noDiagramChange ?
         "No C4 diagram changes proposed." : payload.state === "stale_revision" ?
           "Architecture review needs republication." : payload.summary || "No semantic summary supplied."));
       heading.appendChild(title);
       host.appendChild(heading);
+      if (draftError) host.appendChild(node("p", "paired-c4-error", draftError));
       var status = node("p", "paired-c4-status");
       status.setAttribute("role", "status");
       host.appendChild(status);
+      if (awaitingProject) {
+        status.textContent = draftError ? "Project architecture comparison could not be loaded. Retrying shortly." :
+          "Loading the current project and its projected architecture…";
+        return;
+      }
+      if (payload.project_revisions) {
+        host.appendChild(node("p", "paired-c4-project-baseline",
+          "Current: " + (payload.project_revisions.current_branch || "project integration branch") +
+          ". Proposed: the current project with this work's committed architecture proposal applied."));
+      }
+      if (payload.newer_revision_available) {
+        host.appendChild(node("p", "paired-c4-status", "The project or proposal has advanced. Refresh to compare the latest revisions."));
+      }
 
       if (payload.state === "error") {
         host.appendChild(node("p", "paired-c4-error", payload.error || "Paired diagram review is unavailable."));
@@ -3558,29 +3775,52 @@
       up.type = "button";
       up.disabled = !parents.length;
       up.addEventListener("click", function () {
-        if (parents.length === 1) {
+        var parent = preferredParentView(parents, navigation.state.history);
+        if (parent) {
           pendingDrill = null;
-          navigation.showView(parents[0].key, parents[0].level);
+          navigation.showView(parent.key, parent.level);
           render();
-        } else {
-          up.disabled = true;
-          parents.forEach(function (parent) {
-            var choice = node("button", "paired-c4-parent-choice", parent.key);
-            choice.type = "button";
-            choice.addEventListener("click", function () {
-              pendingDrill = null;
-              navigation.showView(parent.key, parent.level);
-              render();
-            });
-            controls.appendChild(choice);
-          });
+          return;
         }
+        var existing = controls.querySelector(".paired-c4-parent-choices");
+        if (existing) {
+          existing.remove();
+          up.setAttribute("aria-expanded", "false");
+          return;
+        }
+        var group = node("div", "paired-c4-parent-choices");
+        group.setAttribute("role", "group");
+        group.setAttribute("aria-label", "Choose a parent diagram");
+        group.appendChild(node("span", "", "Choose a parent diagram:"));
+        parents.forEach(function (candidate) {
+          var choice = node("button", "paired-c4-parent-choice", candidate.key);
+          choice.type = "button";
+          choice.addEventListener("click", function () {
+            pendingDrill = null;
+            navigation.showView(candidate.key, candidate.level);
+            render();
+          });
+          group.appendChild(choice);
+        });
+        group.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            group.remove();
+            up.setAttribute("aria-expanded", "false");
+            if (up.focus) up.focus();
+          }
+        });
+        controls.appendChild(group);
+        up.setAttribute("aria-expanded", "true");
+        if (group.scrollIntoView) group.scrollIntoView({block: "nearest"});
+        var first = group.querySelector("button");
+        if (first && first.focus) first.focus({preventScroll: true});
       });
       controls.appendChild(up);
       var label = node("label", "paired-c4-view-label", "View ");
       var select = node("select", "paired-c4-view-select");
       navigation.views.forEach(function (view) {
-        var option = node("option", "", view.key + " · " + view.level + " · " + view.state);
+        var option = node("option", "", view.key + " · " + c4LevelLabel(view.level) + " · " + view.state + (view.contains_changes ? " · changes below" : ""));
         option.value = view.key + "\u0000" + view.level;
         option.setAttribute("data-view-state", view.state || "unchanged");
         option.setAttribute("data-changed", view.state !== "unchanged" ? "true" : "false");
@@ -3597,9 +3837,21 @@
 
       if (pendingDrill) {
         var chooser = node("div", "paired-c4-drill-choices");
+        var targetName = pendingDrill.target && pendingDrill.target.label || pendingDrill.semantic_id;
+        chooser.setAttribute("role", "region");
+        chooser.setAttribute("aria-label", "Choose a view for " + targetName);
+        chooser.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            pendingDrill = null;
+            render();
+            var viewSelect = host.querySelector(".paired-c4-view-select");
+            if (viewSelect && viewSelect.focus) viewSelect.focus();
+          }
+        });
         chooser.appendChild(node(
           "p", "paired-c4-drill-explanation",
-          "Choose a verified destination. This semantic target occurs in multiple views."
+          targetName + " has multiple detailed views. Choose one to continue."
         ));
         pendingDrill.choices.forEach(function (choice) {
           var choiceButton = node(
@@ -3635,7 +3887,7 @@
       renderSide(diagrams, view, "current", status);
       renderSide(diagrams, view, "proposed", status);
       workspace.appendChild(diagrams);
-      renderDocumentationPanel(workspace);
+      workspace.classList.add("paired-c4-full-width");
       host.appendChild(workspace);
 
       var resolutions = navigation.resolutions();
@@ -3656,6 +3908,7 @@
       (payload.legend || []).forEach(function (item) {
         legend.appendChild(node("li", "paired-c4-legend-" + item.state, item.state + ": " + item.meaning));
       });
+      legend.appendChild(node("li", "paired-c4-legend-descendant", "Current: red = removed, amber = changed. Proposed: amber = changed, green = added. Dashed amber = changes in a deeper view."));
       if (legend.children.length) meta.appendChild(legend);
       appendResources(meta);
       appendDiffs(meta);
@@ -3675,7 +3928,7 @@
     function updateTabs() {
       host.hidden = reviewTab !== "c4";
       designPanel.hidden = reviewTab !== "design";
-      var work = doc.getElementById && doc.getElementById("plan-body");
+      var work = doc.getElementById && (doc.getElementById("plan-comparison") || doc.getElementById("plan-body"));
       if (work) work.hidden = reviewTab !== "work";
       Array.prototype.forEach.call(tabBar.children, function (button) {
         button.setAttribute("aria-pressed", String(button.getAttribute("data-review-tab") === reviewTab));
@@ -3685,25 +3938,36 @@
       var button = node("button", "", entry[1]);
       button.type = "button";
       button.setAttribute("data-review-tab", entry[0]);
-      button.addEventListener("click", function () { reviewTab = entry[0]; render(); });
+      button.addEventListener("click", function () {
+        reviewTab = entry[0];
+        if (reviewTab === "c4" && !draftRequested && typeof options.loadDraft === "function") {
+          draftRequested = true;
+          refresh();
+        }
+        render();
+      });
       tabBar.appendChild(button);
     });
     function render() {
       if (reviewTab === "c4") renderContents();
       clear(designPanel);
-      if (reviewTab === "design") appendDesignDiff(designPanel);
+      if (reviewTab === "design") {
+        appendDesignDiff(designPanel);
+        if (!payload.draft) renderDocumentationPanel(designPanel);
+      }
       updateTabs();
     }
 
     render();
     threadModel.load().then(render);
     function scheduleRefresh() {
-      if (stopped || typeof options.refreshPayload !== "function") return;
+      if (stopped || (typeof options.refreshPayload !== "function" && typeof options.loadDraft !== "function")) return;
       if (refreshTimer !== null) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(refresh, Math.max(5000, options.refreshIntervalMs || 15000));
     }
     function refresh() {
-      if (stopped || refreshInFlight || typeof options.refreshPayload !== "function") {
+      var loader = draftRequested ? options.loadDraft : options.refreshPayload;
+      if (stopped || refreshInFlight || typeof loader !== "function") {
         scheduleRefresh();
         return Promise.resolve(null);
       }
@@ -3712,8 +3976,17 @@
         return Promise.resolve(null);
       }
       refreshInFlight = true;
-      return Promise.resolve(options.refreshPayload()).then(function (nextPayload) {
+      return Promise.resolve().then(function () { return loader(); }).then(function (nextPayload) {
+        // A publication request may have started before the user opened C4.
+        // Never let that response replace the project comparison.
+        if (draftRequested && loader !== options.loadDraft) return options.loadDraft();
+        return nextPayload;
+      }, function (error) {
+        if (draftRequested && loader !== options.loadDraft) return options.loadDraft();
+        throw error;
+      }).then(function (nextPayload) {
         if (!nextPayload || stopped) return null;
+        draftError = null;
         var tupleChanged = reviewTupleKey(payload) !== reviewTupleKey(nextPayload);
         // Preserve the object identity captured by the semantic-thread model.
         Object.keys(payload).forEach(function (key) { delete payload[key]; });
@@ -3732,6 +4005,7 @@
         // failure.  The next active-page interval retries.
         threadModel.state.error = error && error.message ? error.message :
           "Failed to refresh architecture review";
+        if (draftRequested) draftError = threadModel.state.error;
         render();
         return null;
       }).finally(function () {
@@ -3741,6 +4015,7 @@
     }
     function stopRefresh() {
       stopped = true;
+      preserveDiagramViewports();
       if (refreshTimer !== null) clearTimeout(refreshTimer);
       refreshTimer = null;
     }
@@ -3822,6 +4097,16 @@
       }
     }
 
+    var draftSnapshots = null;
+    function loadDraftForWork() {
+      var request = { work_id: workId };
+      if (draftSnapshots) request.snapshot_ids = draftSnapshots;
+      return postJson("/api/architecture/plan-preview", request).then(function (value) {
+        if (value.snapshot_ids) draftSnapshots = value.snapshot_ids;
+        return value;
+      });
+    }
+
     var loadWork = fetch("/api/doc/" + encodeURIComponent(workId), {
       signal: pageLoadSignal(),
     })
@@ -3842,12 +4127,51 @@
           if (bodyEl) {
             bodyEl.hidden = false;
           }
+          if (doc.comparison && doc.comparison.state === "draft") {
+            var wrapper = document.createElement("section");
+            wrapper.id = "plan-comparison";
+            wrapper.className = "plan-comparison plan-comparison-single";
+            bodyEl.parentNode.insertBefore(wrapper, bodyEl);
+            var note = document.createElement("p");
+            note.textContent = "Plan proposed for this work item. Compare with the original brief when reviewing revisions.";
+            wrapper.appendChild(note);
+            var reload = document.createElement("button");
+            reload.type = "button";
+            reload.textContent = "Refresh comparison";
+            reload.addEventListener("click", function () { window.location.reload(); });
+            wrapper.appendChild(reload);
+            var revisions = document.createElement("p");
+            revisions.className = "paired-c4-revision";
+            revisions.textContent = doc.comparison.current_revision + " → " + doc.comparison.proposed_revision;
+            wrapper.appendChild(revisions);
+            var planColumns = renderDocumentComparison(document, doc.comparison.plan, bodyEl);
+            var planHeading = planColumns.children[1].querySelector("h4");
+            planHeading.textContent = "Plan";
+            wrapper.appendChild(planColumns);
+            revisions.hidden = true;
+            if (doc.comparison.plan.current.trim()) {
+              var compare = document.createElement("button");
+              compare.type = "button";
+              compare.textContent = "Compare with original brief";
+              compare.setAttribute("aria-pressed", "false");
+              wrapper.insertBefore(compare, revisions);
+              compare.addEventListener("click", function () {
+                var single = wrapper.classList.toggle("plan-comparison-single");
+                compare.textContent = single ? "Compare with original brief" : "Show plan only";
+                compare.setAttribute("aria-pressed", String(!single));
+                revisions.hidden = single;
+                planHeading.textContent = single ? "Plan" : "Proposed";
+              });
+            }
+          }
           if (doc.paired_review) {
             var envelope = doc.paired_review;
             if (envelope.resource_url) {
               loadArchitectureReview(envelope.resource_url)
                 .then(function (review) {
                   initPairedC4Review(review, {
+                    comparison: doc.comparison,
+                    loadDraft: loadDraftForWork,
                     refreshPayload: function () {
                       return loadArchitectureReview(envelope.resource_url);
                     },
@@ -3864,10 +4188,18 @@
                     error: (envelope.message || error.message || "Architecture review is unavailable.") +
                       (envelope.retry && envelope.retry.retryable ? " Retry shortly." : ""),
                     views: [], changed_views: [], diffs: {},
+                  }, {
+                    comparison: doc.comparison,
+                    loadDraft: loadDraftForWork,
+                    refreshPayload: function () { return loadArchitectureReview(envelope.resource_url); },
                   });
                 });
             } else {
-              initPairedC4Review(envelope);
+              initPairedC4Review(envelope, {
+                comparison: doc.comparison,
+                loadDraft: loadDraftForWork,
+                refreshPayload: function () { return Promise.resolve(envelope); },
+              });
             }
           }
           var readinessMount = null;
@@ -3936,12 +4268,16 @@
     initEpicPlanReadinessChrome: initEpicPlanReadinessChrome,
     initDependencyReviewChrome: initDependencyReviewChrome,
     sortedDrillChoices: sortedDrillChoices,
+    preferredDrillChoice: preferredDrillChoice,
     createSemanticC4Viewer: createSemanticC4Viewer,
     loadArchitectureReview: loadArchitectureReview,
     createPairedNavigation: createPairedNavigation,
+    comparisonViews: comparisonViews,
     parentViews: parentViews,
+    preferredParentView: preferredParentView,
     createSemanticThreadModel: createSemanticThreadModel,
     initPairedC4Review: initPairedC4Review,
     renderUnifiedDiff: renderUnifiedDiff,
+    renderDocumentComparison: renderDocumentComparison,
   };
 });
