@@ -187,7 +187,7 @@ def test_open_historical_review_is_refreshed_for_repair_generation(
         lambda *_a, **_k: {
             "state": "open", "url": mr.url,
             "source_branch": "feat/feat_001", "target_branch": "epic/epic_001",
-            "source_revision": "old-source",
+            "source_revision": "source-head",
         },
     )
     monkeypatch.setattr(review, "find_merge_request", lambda *_a, **_k: None)
@@ -204,6 +204,33 @@ def test_open_historical_review_is_refreshed_for_repair_generation(
     assert current["route"] == "refresh"
     assert current["previous_review_url"] == mr.url
     assert review.feature_review_generation("feat_001", 0, root=root)["url"] == mr.url
+
+
+def test_changed_review_source_head_is_refused_before_repair_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = make_repo(tmp_path)
+    _repair_publication_board(root, monkeypatch)
+    current = _projection("https://example.test/pulls/2")
+    review._store_review_generation(
+        root,
+        "feat_001",
+        current,
+        generation=1,
+        action_id="feature_repair:feat_001:one",
+    )
+    monkeypatch.setattr(
+        review,
+        "merge_request_snapshot",
+        lambda *_a, **_k: {
+            "state": "open", "url": current["url"],
+            "source_branch": "feat/feat_001", "target_branch": "epic/epic_001",
+            "source_revision": "unexpected-moving-head",
+        },
+    )
+
+    with pytest.raises(review.GitError, match="authoritative forge facts"):
+        review.ensure_feature_review("feat_001", root=root)
 
 
 def test_merged_historical_review_creates_linked_follow_up_and_fences_old_callback(
