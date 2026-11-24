@@ -377,5 +377,27 @@
     },
     "publication": "The exact request in epic_048_publication_resume.json remains the last recorded terminal failure. No supported terminal publication/render retry tool or new recovery event is available. Preserve its pinned references and accepted lineage; this review cannot replace that request with newer snapshots or claim recovery from replay. Runtime owner recovery remains required, coordinated by Epic Architect.",
     "handoff": "Route this revision-specific review to F3, then finish the planning turn so child execution/integration can proceed. No parent spec change, new policy decision, dependency installation, live restart or child lifecycle mutation is needed."
+  },
+  "manager_task_record_gate_followup": {
+    "trigger": "TeamMessage feat_048_003:feat_048_003:task001-contract-gate-handoff",
+    "role": "epic_manager",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "a4a20bd3e791e251f3882a60b1314bcbd58cb5b6",
+    "review_base": "287548a3",
+    "assessment": "Canonical epic and F3 plans are unchanged; no parent amendment, spec edit, new policy decision or renewed sign-off is required. Retain the existing scope and delivery gates.",
+    "new_evidence": {
+      "feature_architecture_review": "Feature reports architecture-review-00ce36f2c37133ff58149a1b0266be660350a854d07cf97bf01109cd435a19be pinned to a4a20bd3. This updates the earlier pending-review status as reported evidence; the review body and Feature sign-off were not independently inspected or inferred.",
+      "task_record": "Feature reports Task 001 still active at 0eacd93a with Acceptance criteria and Test plan TBD. Its supported revise_task attempt was refused while active. The full Feature contract and queued acceptance-record handoff do not establish a corrected Task record.",
+      "owner_handoff": "feat_048_003:feat_048_003:task001-acceptance-record-a4a20bd3 is reported enqueued to the active owning Task team. Feature Lead and Task owner retain responsibility for returning a supported correction revision or exact refusal, accountable recovery owner and next supported action."
+    },
+    "disposition": "Keep Task 001 record reconciliation explicitly unresolved before delivery. Preserve full runtime and diagram acceptance during execution. Do not cancel a live lease or edit guarded records to evade the active guard. No duplicate correction request or parent takeover is needed while the existing owner handoff is pending.",
+    "verification": {
+      "canonical_reads": "read_doc(epic_048), read_doc(feat_048_003), read_architecture_amendments; revisions match the retained reviews and no amendments are open.",
+      "design_review": "Reviewed the retained Manager/Architect closeout and its design inventory. git diff from 287548a3 confirms no source, DESIGN.md or architecture changes. This update records handoff evidence only: no actor/context, runtime/container, component/interface, Code declaration/ownership or execution/recovery flow changed; the existing per-view inventory and Task ownership remain applicable.",
+      "checks": "JSON parsed; diff checked for whitespace errors and verified to contain only this artifact update.",
+      "tests": "No runtime tests, rendering or browser journeys rerun for this evidence-only change; no child implementation or deployment acceptance claimed."
+    },
+    "remaining_owners": "F3 owns supported Task-record reconciliation and implemented runtime/cross-stage/navigation proof. F2 retains closeout evidence reconciliation; F4 retains operational evidence. Terminal architecture publication still requires supported runtime-owner recovery coordinated by Epic Architect; no new recovery evidence supplied.",
+    "handoff": "Acknowledge the existing F3 owner request and finish this planning turn so child execution and integration can proceed. Return on correction/refusal or delivery evidence; no polling."
   }
 }
