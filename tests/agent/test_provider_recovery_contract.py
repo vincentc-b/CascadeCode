@@ -204,6 +204,143 @@ def test_fake_transport_settles_once_and_provider_switch_cannot_replay(
     assert len(budget["operations"]) == 1
 
 
+@pytest.mark.parametrize(
+    "launch_route",
+    [
+        "direct",
+        "manual",
+        "periodic",
+        "audit",
+        "briefing",
+        "provider_switch",
+        "parent",
+        "replacement_action",
+    ],
+)
+def test_every_recovery_launch_route_is_attributed_to_one_physical_invocation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    launch_route: str,
+) -> None:
+    """Every entry path reaches the same prelaunch reservation boundary."""
+
+    bounded = _incident_turn(tmp_path)
+    routed = IncidentProviderTurn(
+        bounded.incident_id,
+        bounded.claim_id,
+        bounded.operation_id,
+        bounded.root,
+        launch_route=launch_route,  # type: ignore[arg-type]
+    )
+    monkeypatch.setenv("CASCADE_ENABLE_FAKE_PROVIDER", "1")
+    physical_invocations: list[str] = []
+    from cascade.agent import adapter
+
+    real_dispatch = adapter._dispatch_role
+
+    async def dispatch(turn: RoleTurn, **kwargs: object) -> RoleResult:
+        physical_invocations.append(turn.model_id)
+        return await real_dispatch(turn, **kwargs)
+
+    monkeypatch.setattr("cascade.agent.adapter._dispatch_role", dispatch)
+    result = asyncio.run(
+        run_role(
+            RoleTurn(
+                role="feature_lead",
+                provider="fake",
+                model_id="fast",
+                prompt="recover",
+                cwd=Path.cwd(),
+                recovery=_launch(),
+                incident_turn=routed,
+            )
+        )
+    )
+
+    assert result.status == "finished"
+    assert physical_invocations == ["fast"]
+    budget = read_incident_budget(routed.incident_id, root=routed.root)
+    assert budget is not None
+    receipt = budget["operations"][routed.operation_id]
+    assert receipt["attributes"]["launch_route"] == launch_route
+    assert receipt["charged"]["paid_turns"] == 1
+    assert receipt["observation"]["provider_started"] is True
+
+
+def test_route_provider_and_model_changes_cannot_replay_an_operation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Cosmetic caller changes never turn a settled operation into allowance."""
+
+    bounded = _incident_turn(tmp_path)
+    monkeypatch.setattr(
+        "cascade.agent.adapter.probe_provider",
+        lambda provider: ProviderStatus(provider, True, True, "env"),
+    )
+    monkeypatch.setattr(
+        "cascade.agent.adapter.resolve_credential", lambda _provider: _Credential()
+    )
+    physical_invocations: list[tuple[str, str]] = []
+
+    async def dispatch(turn: RoleTurn, **kwargs: object) -> RoleResult:
+        physical_invocations.append((str(kwargs["provider"]), turn.model_id))
+        return RoleResult(text="done", status="finished")
+
+    monkeypatch.setattr("cascade.agent.adapter._dispatch_role", dispatch)
+    asyncio.run(
+        run_role(
+            RoleTurn(
+                role="feature_lead",
+                provider="codex",
+                model_id="original",
+                prompt="recover",
+                cwd=Path.cwd(),
+                recovery=_launch(),
+                incident_turn=bounded,
+            )
+        )
+    )
+    replay = IncidentProviderTurn(
+        bounded.incident_id,
+        bounded.claim_id,
+        bounded.operation_id,
+        bounded.root,
+        launch_route="replacement_action",
+    )
+    with pytest.raises(ProviderBudgetRefusedError, match="operation_identity_replayed"):
+        asyncio.run(
+            run_role(
+                RoleTurn(
+                    role="feature_lead",
+                    provider="claude",
+                    model_id="replacement",
+                    prompt="cosmetically revised recovery prompt",
+                    cwd=Path.cwd(),
+                    recovery=_launch(),
+                    incident_turn=replay,
+                )
+            )
+        )
+
+    assert physical_invocations == [("codex", "original")]
+    budget = read_incident_budget(bounded.incident_id, root=bounded.root)
+    assert budget is not None
+    assert budget["charged"]["paid_turns"] == 1
+    assert len(budget["operations"]) == 1
+
+
+def test_unknown_recovery_launch_route_fails_before_admission(tmp_path: Path) -> None:
+    bounded = _incident_turn(tmp_path)
+    with pytest.raises(ValueError, match="unsupported recovery launch route"):
+        IncidentProviderTurn(
+            bounded.incident_id,
+            bounded.claim_id,
+            bounded.operation_id,
+            bounded.root,
+            launch_route="dashboard_retry",  # type: ignore[arg-type]
+        )
+
+
 def test_model_runtime_bound_above_trusted_maximum_refuses_before_transport(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

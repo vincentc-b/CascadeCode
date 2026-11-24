@@ -16,7 +16,7 @@ contain real implementation declarations; the sequence below supplements them.
 | [run_planning_role_turn](graph_turn.py) | Resolve checkpointed role/provider/model selections, recheck capability and call the tier runner. Tier graphs own checkpoints. |
 | [_run_sandbox_turn](planning_turn.py) / [PlanningSandbox](planning_sandbox.py) | Use the assigned team checkout, construct scoped tools and collect tool effects; clean up per-turn scratch files. |
 | [dispatch_planning_tool](mcp_wrappers.py) | Dispatch through the role catalog and owning tier's guard. A tool result establishes only that operation's outcome. |
-| [RoleTurn / RoleResult](types.py) | Carry launch settings, canonical incident-turn identity, text/status, tool effects, recovery report and normalized physical invocation receipt. |
+| [RoleTurn / RoleResult](types.py) | Carry launch settings, canonical incident-turn identity and validated direct/manual/periodic/audit/briefing/provider-switch/parent/replacement-action route, text/status, tool effects, recovery report and normalized physical invocation receipt. |
 | [ProviderInvocationReceipt](types.py) | Preserve provider/model/invocation ID; independently qualified input, output and cached-input usage; cancellation/output bounds; and outcome. Cached input is evidence within input usage, never an added token total. |
 | [admit_provider_turn / settle_provider_turn](provider_metering.py) | Reserve a paid turn and worst-case model runtime immediately before dispatch, then durably settle provider evidence or conservative interrupted or unavailable use against the same operation. |
 | [run_role](adapter.py) | Suppress terminal reconciled launches, check installation/credentials, register a live turn, enforce incident admission and dispatch Cursor, Claude, Codex or the test provider. |
@@ -78,6 +78,9 @@ process-group cleanup is a separate
 An adapter/tool-host failure proven to precede provider start releases the paid
 turn and model-runtime reservation and records `provider_started=false`; an
 unclassified exception is treated as unknown in-flight work, not as a free turn.
+The canonical turn records its validated launch route on the durable operation
+receipt. Route changes remain attribution only: they do not alter the original
+incident, claim, operation identity, policy version, or remaining allowance.
 
 Cursor SDK token fields are recorded as known evidence. The current Claude and
 Codex text transports and the deterministic test transport do not expose token
