@@ -2,9 +2,7 @@
 
 Purpose: run the persistent strategic team that owns Epic planning, decisions, approvals, and Feature coordination. Interfaces are Epic graph/boot/wiring, guarded tools, approvals, briefing/checkpoint state, and amendment reads. Owns `REQ-EPIC-001` (strategic context persists) and `DEC-EPIC-001` (Epic tools are scope-guarded).
 
-Evidence: `cascade/epic/` and `tests/epic/` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: exact child Task revisions for the A-F handoff remain unavailable.
 
 ## Readiness projection versus authorization
 
@@ -72,3 +70,48 @@ The two roles run sequentially within each invocation. Their durable context sur
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).
 
 The integrated Structurizr code view is `cascade-epic-code`. From the supervisor components view, Explore **Epic team**; select a code node for its pinned source. This view is the navigable implementation structure; the diagrams above supplement it with lifecycle context.
+
+## Immediate-child recovery
+
+`cascade-epic-code` links the scoped registry to
+[recover_feature](recovery.py) and
+[supervise_child](../team_supervision.py). The adapter requires the immediate
+parent relationship and returns an already-running outcome for a live team.
+For a direct Feature owning a completed-parent Task mismatch,
+[_recover_feature_lifecycle_mismatch](../team_supervision.py) verifies the exact
+registered owner, direct Task relationship, and current durable generation,
+then calls Feature `recover_task`. That call selects the same `feature_repair`
+inspect/admit/resume operation used by Feature self-recovery. Its result keeps
+request, acknowledgement, execution, verification, refusal, and next
+prerequisite separate. A live Feature graph remains an expected wait and does
+not enqueue or claim repair.
+Epic supervision supplies no independent completion assertion: the shared
+Watchdog postcheck consumes the same exact Feature repair/review generation and
+immediate-parent integration evidence before the incident becomes verified.
+
+For other Feature incidents, supervision queues a generation-keyed message and
+wakeup. [The package contract](../DESIGN.md#delivery-and-review-boundaries)
+distinguishes that coordination acknowledgement from executable lifecycle
+repair. Durable Feature-repair actions and queued delivery attempts survive
+restart; replay rechecks the same owner and generation before mutation.
+
+```mermaid
+sequenceDiagram
+    participant Epic as recover_feature
+    participant Supervision as supervise_child
+    participant Feature as recover_task
+    participant Repair as feature_repair
+    Epic->>Supervision: direct Feature + recover
+    Supervision->>Supervision: verify owner, Task parent, generation
+    alt live Feature owner
+        Supervision-->>Epic: expected wait
+    else exact mismatch
+        Supervision->>Feature: expected mismatch generation
+        Feature->>Repair: inspect then admit/resume
+        Repair-->>Epic: executed/refused; verified remains separate
+    else other incident
+        Supervision-->>Epic: durable handoff acknowledgement
+    end
+```
+
+Verification: [immediate parent recovery](../../tests/epic/test_parent_lifecycle_recovery.py).

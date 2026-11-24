@@ -242,7 +242,9 @@ def test_changed_deliverable_or_feature_base_revalidates_with_new_evidence(
 
     _validate_green(root, task_id)
     refreshed = _queued_evidence(root, task_id)
-    assert refreshed["deliverable_sha"] == after_deliverable_change["deliverable_sha"]
+    # Revalidation synchronizes the moved Feature base into the existing Task
+    # branch, so both sides of the validated pair acquire new exact heads.
+    assert refreshed["deliverable_sha"] != after_deliverable_change["deliverable_sha"]
     assert refreshed["feature_base_sha"] != after_deliverable_change["feature_base_sha"]
     assert pending_task_merges(root) == {task_id}
     assert get_task_run(task_id).state == "awaiting_merge"

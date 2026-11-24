@@ -6,6 +6,7 @@ import json
 from hashlib import sha256
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Mapping, TypedDict
 
 from cascade.task.lifecycle_lock import lifecycle_root
 from cascade.board.context import resolve_root
@@ -37,6 +38,17 @@ _SEMANTIC_CONFLICT_OWNERS = {
     "cross_feature": "epic_team",
     "epic_contract": "epic_team",
 }
+
+
+class ParentLifecycleMismatch(TypedDict):
+    """Typed envelope joining one queued delivery to Feature repair evidence."""
+
+    schema_version: int
+    failure_class: str
+    authoritative_generation: str
+    accountable_owner: str
+    selected_operation: str
+    evidence: dict[str, Any]
 
 
 def _path(root: Path) -> Path:
@@ -82,6 +94,9 @@ def _queued_merge_action(
     metadata: dict[str, object] = {"task_id": task_id}
     if delivery_evidence is not None:
         metadata["final_validation"] = dict(delivery_evidence)
+        repair_link = _feature_repair_delivery_link(task_id, root)
+        if repair_link is not None:
+            metadata["feature_repair"] = repair_link
     action = create_or_load_action(
         _queued_merge_action_id(task_id),
         _QUEUED_MERGE_KIND,
@@ -113,6 +128,36 @@ def _queued_merge_action(
     return action
 
 
+def _feature_repair_delivery_link(
+    task_id: str, root: Path
+) -> dict[str, object] | None:
+    """Bind current queue evidence to the repair generation that owns the Task."""
+
+    try:
+        feature_id = read_doc(task_id, root=root).meta.parent
+    except NotFound:
+        return None
+    if not feature_id:
+        return None
+    from cascade.feature.repair import current_feature_repair_record
+
+    repair = current_feature_repair_record(feature_id, root=root)
+    if repair is None or (
+        repair.get("task_id") != task_id
+        and repair.get("request_id") != _queued_merge_action_id(task_id)
+    ):
+        return None
+    action_id = repair.get("action_id")
+    generation = repair.get("generation")
+    if not isinstance(action_id, str) or not isinstance(generation, int):
+        return None
+    return {
+        "action_id": action_id,
+        "generation": generation,
+        "feature_id": feature_id,
+    }
+
+
 def queue_task_merge(
     task_id: str,
     *,
@@ -126,6 +171,12 @@ def queue_task_merge(
     # but can never leave an advertised delivery without its queue record.
     # Existing queue files remain a plain list for compatibility.
     _queued_merge_action(task_id, repo, delivery_evidence=delivery_evidence)
+    if delivery_evidence is not None:
+        from cascade.feature.repair import mark_feature_repair_delivery_pending
+
+        mark_feature_repair_delivery_pending(
+            task_id, delivery_evidence, root=repo
+        )
     with process_lock:
         pending = _read(repo)
         if task_id not in pending:
@@ -262,10 +313,12 @@ def retry_pending_task_merges(root: Path, *, feature_id: str | None = None) -> l
             and _merge_head_pair(task_id, repo) is not None
             and not delivery_evidence_is_current(task_id, evidence, root=repo)
         ):
-            # A branch moved after validation.  Do not execute an old merge;
-            # the next final validation will publish a replacement handoff.
-            invalidate_task_merge(task_id, root=repo)
-            removable.append(task_id)
+            # A branch moved after validation. Synchronize through the normal
+            # guarded branch service, then return the original Task to the
+            # supervised final gate. The old action and validation stay in the
+            # ledger as history, but cannot authorize this new head pair.
+            if _request_delivery_revalidation(task_id, evidence, repo):
+                removable.append(task_id)
             continue
         if _already_completed_equivalent(task_id, repo):
             from cascade.task.action_recovery import reconcile_completed_task_delivery
@@ -286,6 +339,11 @@ def retry_pending_task_merges(root: Path, *, feature_id: str | None = None) -> l
                 removable.append(task_id)
             continue
 
+        if _unchanged_parent_lifecycle_mismatch(task_id, action, repo):
+            # The completed parent cannot become mergeable by replaying the
+            # child merge.  Its exact Feature repair generation owns progress.
+            continue
+
         action = resume_action(
             _queued_merge_action_id(task_id),
             root=repo,
@@ -302,6 +360,60 @@ def retry_pending_task_merges(root: Path, *, feature_id: str | None = None) -> l
             removed = set(removable)
             _write(repo, [task_id for task_id in latest if task_id not in removed])
     return completed
+
+
+def _request_delivery_revalidation(
+    task_id: str, evidence: dict[str, str], root: Path
+) -> bool:
+    """Synchronize a stale delivery and queue one exact-pair validation turn."""
+
+    from cascade.task.execution import mark_stall_recovery_queued
+    from cascade.task.wiring import invalidate_validated_delivery
+    from cascade.watchdog.events import read_events
+    from cascade.workspace.branch_synchronization import update_integration_branch
+
+    synchronization = update_integration_branch(task_id, root=root)
+    if not synchronization.ok:
+        return False
+    heads = _merge_head_pair(task_id, root)
+    if heads is None:
+        return False
+    replacement = {
+        "task_id": task_id,
+        "deliverable_sha": heads[0],
+        "feature_base_sha": heads[1],
+    }
+    invalidate_validated_delivery(task_id, root=root)
+    events, _ = read_events(task_id, 0, root=root)
+    if not any(
+        event.type == "TaskValidationRetryRequested"
+        and event.payload.get("reason") == "delivery_heads_moved"
+        and event.payload.get("replacement_pair") == replacement
+        for event in events
+    ):
+        append_event(
+            task_id,
+            Event(
+                type="TaskValidationRetryRequested",
+                ts=datetime.now(timezone.utc),
+                payload={
+                    "task_id": task_id,
+                    "reason": "delivery_heads_moved",
+                    "stale_validation": dict(evidence),
+                    "replacement_pair": replacement,
+                    "instruction": (
+                        "The Task source or Feature target moved after final validation. "
+                        "Use the existing checkout and implementation, run the scoped "
+                        "Cascade swe_run_tests command on the clean committed tree, and "
+                        "publish replacement evidence only after it is green."
+                    ),
+                },
+                dest=task_id,
+            ),
+            root=root,
+        )
+    mark_stall_recovery_queued(task_id, root=root)
+    return True
 
 
 def _owned_by_feature(task_id: str, feature_id: str, root: Path) -> bool:
@@ -365,11 +477,246 @@ def _resume_queued_merge(task_id: str, root: Path) -> ActionResult:
     }:
         if reason != "busy":
             _record_merge_refusal(task_id, result, root)
-        classification = "transient_retry" if reason in {"busy", "not_active"} else "deterministic_repair"
+        if reason == "not_active" and _parent_is_completed(task_id, root):
+            mismatch = _store_parent_lifecycle_mismatch(task_id, root)
+            metadata["parent_lifecycle_mismatch"] = mismatch
+            classification = "parent_lifecycle_mismatch"
+        else:
+            classification = (
+                "transient_retry"
+                if reason in {"busy", "not_active"}
+                else "deterministic_repair"
+            )
         return ActionResult("failed", classification, metadata)
     if reason not in {"task_not_found", "wrong_column", "not_mergeable"}:
         _record_merge_refusal(task_id, result, root)
     return ActionResult("failed", "terminal_blocker", metadata)
+
+
+def _parent_is_completed(task_id: str, root: Path) -> bool:
+    """Distinguish a lifecycle mismatch from an active-parent refusal."""
+
+    try:
+        task = read_doc(task_id, root=root)
+        return bool(
+            task.meta.parent
+            and read_doc(task.meta.parent, root=root).meta.status == "completed"
+        )
+    except NotFound:
+        return False
+
+
+def _unchanged_parent_lifecycle_mismatch(
+    task_id: str, action: Mapping[str, Any], root: Path
+) -> bool:
+    """Observe an unchanged mismatch without spending another merge attempt."""
+
+    if action.get("failure_classification") != "parent_lifecycle_mismatch":
+        return False
+    metadata = action.get("metadata")
+    recorded = (
+        metadata.get("parent_lifecycle_mismatch")
+        if isinstance(metadata, Mapping)
+        else None
+    )
+    if not isinstance(recorded, Mapping):
+        return False
+    current = _parent_lifecycle_mismatch(task_id, root)
+    if current is None:
+        return False
+    return recorded.get("authoritative_generation") == current.get(
+        "authoritative_generation"
+    )
+
+
+def _store_parent_lifecycle_mismatch(task_id: str, root: Path) -> dict[str, Any]:
+    """Attach the exact completed-parent generation to the original action."""
+
+    mismatch = _parent_lifecycle_mismatch(task_id, root)
+    if mismatch is None:
+        raise ActionRecoveryError("completed parent lifecycle evidence disappeared")
+    action_id = _queued_merge_action_id(task_id)
+    action = load_action(action_id, root=root)
+    if action is None:
+        raise ActionRecoveryError("queued delivery action disappeared")
+    metadata = dict(action.get("metadata") or {})
+    metadata["parent_lifecycle_mismatch"] = mismatch
+    replace_action_metadata(action_id, metadata, root=root)
+    return mismatch
+
+
+def _parent_lifecycle_mismatch(
+    task_id: str, root: Path
+) -> ParentLifecycleMismatch | None:
+    """Build the canonical evidence generation for a completed Feature parent.
+
+    Every value here belongs to an existing authority: board documents,
+    registered mutation ownership, queued/repair actions, review state,
+    comments, dependencies, validation heads, or the Task execution lease.
+    Unknown legacy values remain ``None`` and therefore fail closed without
+    manufacturing an approval or owner.
+    """
+
+    try:
+        task = read_doc(task_id, root=root)
+        feature_id = task.meta.parent
+        if not feature_id:
+            return None
+        feature = read_doc(feature_id, root=root)
+    except NotFound:
+        return None
+    if feature.meta.tier != "feature" or feature.meta.status != "completed":
+        return None
+
+    try:
+        from cascade.workspace.integration_worktree import resolve_mutation_owner
+
+        owner_root: str | None = resolve_mutation_owner(
+            feature_id, trunk=root
+        ).resolve().as_posix()
+    except Exception:
+        owner_root = None
+
+    from cascade.feature.repair import current_feature_repair_record
+    from cascade.review import review_record_for_feature
+    from cascade.task.execution import execution_view
+
+    repair = current_feature_repair_record(feature_id, root=root)
+    review = review_record_for_feature(feature_id, root=root)
+    execution = execution_view(task_id, root=root) or {}
+    validation = queued_delivery_evidence(task_id, root=root)
+    heads = _merge_head_pair(task_id, root)
+
+    try:
+        from cascade.comments.store import read_comments
+
+        comments = [
+            {
+                "id": row.id,
+                "state": row.state,
+                "blocking": row.blocking,
+                "parent": row.parent,
+            }
+            for row in read_comments(feature_id, root=root, readonly=True)
+            if row.parent is None
+        ]
+    except Exception:
+        comments = None
+
+    board_dependencies: list[dict[str, Any]] = []
+    for dependency in feature.meta.depends_on:
+        try:
+            dependency_status: str | None = read_doc(
+                dependency, root=root
+            ).meta.status
+        except NotFound:
+            dependency_status = None
+        board_dependencies.append(
+            {"work_id": dependency, "status": dependency_status}
+        )
+
+    evidence: dict[str, Any] = {
+        "owner": {
+            "tier": "feature",
+            "work_id": feature_id,
+            "mutation_root": owner_root,
+        },
+        "parent": {
+            "feature_id": feature_id,
+            "feature_status": feature.meta.status,
+            "epic_id": feature.meta.parent,
+        },
+        "delivery_action": {
+            "action_id": _queued_merge_action_id(task_id),
+            "action_kind": _QUEUED_MERGE_KIND,
+        },
+        "repair_action": (
+            {
+                key: repair.get(key)
+                for key in (
+                    "action_id",
+                    "generation",
+                    "request_id",
+                    "task_id",
+                    "phase",
+                    "blocker",
+                    "next_action",
+                )
+            }
+            if isinstance(repair, Mapping)
+            else None
+        ),
+        "tested_heads": {
+            "validation": validation,
+            "current_source": heads[0] if heads else None,
+            "current_target": heads[1] if heads else None,
+        },
+        "review_obligation": (
+            {
+                key: review.get(key)
+                for key in (
+                    "current_generation",
+                    "generation",
+                    "action_id",
+                    "publication_action_id",
+                    "url",
+                    "state",
+                    "closed",
+                    "source_branch",
+                    "target_branch",
+                    "source_head",
+                    "target_head",
+                    "accepted_source_head",
+                    "accepted_target_head",
+                    "accepted_merge_sha",
+                    "reconciliation_status",
+                )
+            }
+            if isinstance(review, Mapping)
+            else None
+        ),
+        "gates": {
+            "approved_at": (
+                feature.meta.approved_at.isoformat()
+                if feature.meta.approved_at
+                else None
+            ),
+            "plan_approved_at": (
+                feature.meta.plan_approved_at.isoformat()
+                if feature.meta.plan_approved_at
+                else None
+            ),
+            "comments": comments,
+            "dependencies": board_dependencies,
+        },
+        "execution_lease": {
+            key: execution.get(key)
+            for key in (
+                "phase",
+                "health",
+                "attempt",
+                "owner_pid",
+                "owner_start_token",
+                "heartbeat_at",
+            )
+        },
+    }
+    from cascade.watchdog.incidents import authoritative_generation
+
+    generation = authoritative_generation(
+        work_id=task_id,
+        tier="task",
+        evidence=evidence,
+        capability="feature_repair",
+    )
+    return {
+        "schema_version": 1,
+        "failure_class": "parent_lifecycle_mismatch",
+        "authoritative_generation": generation,
+        "accountable_owner": f"feature_team:{feature_id}",
+        "selected_operation": "feature_repair",
+        "evidence": evidence,
+    }
 
 
 

@@ -18,6 +18,7 @@ from cascade.feature.recovery import (
     revise_task,
     retry_task,
 )
+from cascade.task.action_recovery import create_or_load_action
 from cascade.task.supervisor_recovery import RecoveryResult
 from cascade.watchdog.blockage import propagate_direct_report_blockage
 from cascade.task.execution import mark_awaiting_merge, mark_merge_blocked, mark_terminal
@@ -264,6 +265,82 @@ def test_feature_recover_task_rejects_foreign_task_before_supervisor_call(
 
     with pytest.raises(ValueError, match="not a child"):
         recover_task("task_002", feature_id="feat_001", root=root)
+
+
+def test_feature_recover_task_routes_exact_mismatch_generation_to_feature_repair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root, id="feat_001", title="Feature", tier="feature",
+        status="completed", parent="epic_001",
+    )
+    add_doc(
+        root, id="task_001", title="Task", tier="task",
+        status="active", parent="feat_001",
+    )
+    create_or_load_action(
+        "task_001:queued_merge",
+        "queued_task_merge",
+        root=root,
+        attempt_bound=3,
+        metadata={
+            "task_id": "task_001",
+            "parent_lifecycle_mismatch": {
+                "authoritative_generation": "sha256:" + "a" * 64,
+            },
+        },
+    )
+    calls: list[dict[str, object]] = []
+
+    def repair(feature_id, request_id, **kwargs):
+        calls.append({"feature_id": feature_id, "request_id": request_id, **kwargs})
+        if kwargs["operation"] == "inspect":
+            return {"ok": False, "phase": "absent", "generation": None}
+        return {
+            "ok": True,
+            "action_id": "feature_repair:feat_001:one",
+            "generation": 1,
+            "phase": "parent_enabled",
+            "blocker": None,
+            "next_action": "resume_original_task_delivery",
+            "evidence": {"authority_event_id": "authority:one"},
+        }
+
+    monkeypatch.setattr("cascade.feature.repair.feature_repair", repair)
+    monkeypatch.setattr(
+        "cascade.task_rollup._parent_lifecycle_mismatch",
+        lambda *_args, **_kwargs: {
+            "authoritative_generation": "sha256:" + "a" * 64,
+        },
+    )
+
+    stale = recover_task(
+        "task_001",
+        feature_id="feat_001",
+        root=root,
+        expected_generation="sha256:" + "b" * 64,
+    )
+    assert stale["refusal"]["code"] == "stale_authoritative_generation"
+    assert calls == []
+
+    result = recover_task(
+        "task_001",
+        feature_id="feat_001",
+        root=root,
+        expected_generation="sha256:" + "a" * 64,
+    )
+
+    assert result["selected_operation"] == "feature_repair.admit"
+    assert result["accountable_owner"] == "feature_team:feat_001"
+    assert result["admitted_or_requested"] is True
+    assert result["acknowledged"] is True
+    assert result["executed"] is True
+    assert result["verified"] is False
+    assert result["refusal"] is None
+    assert [call["operation"] for call in calls] == ["inspect", "admit"]
+    assert calls[-1]["scope_reference"] == "sha256:" + "a" * 64
 
 
 def test_tool_and_health_sweep_share_one_scoped_recovery_incident(

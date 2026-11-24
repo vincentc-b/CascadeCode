@@ -2,9 +2,7 @@
 
 Purpose: resolve repository roles, manage integration worktrees, and enforce revision-pinned architecture/C4 review contracts. Interfaces are `ProjectContext`, ownership/artifact references, C4 closure/render/diff/review, integration worktrees, inventory, and receipts. Owns `REQ-WORKSPACE-001` (repository roles/destinations are explicit), `REQ-WORKSPACE-002` (reviewed artifacts are revision-bound), and `DEC-WORKSPACE-001` (unreviewed proposals never become accepted lineage).
 
-Evidence: `cascade/workspace/`, `tests/workspace/`, and `tests/architecture/` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: missing receipts, unavailable reviews/source revisions, and unread child records block clean historical closeout.
 
 ## Repository initialization and guidance
 
@@ -79,6 +77,81 @@ Verification: [source validation](../../tests/workspace/test_c4_source.py),
 [semantic code metadata](../../tests/workspace/test_c4_review.py),
 [upgrade/tamper handling](../../tests/workspace/test_c4_scheduler.py), and
 [selected-checkout isolation](../../tests/workspace/test_architecture_browsing.py).
+
+## Work ownership and retirement
+
+`REQ-WORKSPACE-OWNER-001`: Lifecycle writes resolve exactly one owner from the
+work ID, tier and parent lineage, canonical tracking-repository role, registered
+checkout identity and expected branch. Epic and Feature registrations own their
+documents; a Task document is owned by its registered parent Feature checkout.
+Returned graphs are an admitted reconstruction owner. Remote backlog snapshots
+are read-only. Missing, conflicting, detached or changed ownership raises an
+actionable `MutationOwnerError`; a sibling historical copy never authorizes a
+write. Document reads may still project registered checkouts, returned graphs,
+backlog snapshots and historical copies.
+`DEC-WORKSPACE-OWNER-001`: Keep `merged_board` and `_meta_preference` as read
+projections. Lifecycle mutation uses `resolve_mutation_owner`, not column rank or
+generic worktree-path bonuses.
+
+`REQ-WORKSPACE-RETIRE-001`: Retirement preserves a branch and refuses a
+noncanonical, dirty, locked or currently occupied checkout. Merge ancestry or an
+explicit forge merge confirmation gates removal. Before removal, Workspace walks
+the registered parent's declared and reverse-linked descendant closure. Every
+required descendant must be canonically terminal and have Task merge or Feature
+completion/review provenance. The exact parent owner is the only persistence
+destination: absent terminal descendants are committed there and re-read before
+removal, while nonterminal, conflicting, ambiguous, unmerged, or unresolved-review
+state returns a reason and owner action without changing the branch, checkout, or
+registry. Repeated proof after an interrupted commit reuses the terminal rows
+already present and never creates a second registry or ledger.
+
+The integrated `cascade-workspace-code` view belongs to
+`element.component.workspace` in the [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl).
+Navigate from `cascade-context` through `cascade-containers` and
+`cascade-supervisor-components` to Workspace → Code in the
+[views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
+The model and [source contract](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json)
+are authoritative; renders are revision-bound derived artifacts.
+
+| Entry point | Inputs, output and state |
+|---|---|
+| [resolve_doc_worktree](doc_root.py) | Work ID and board → registered checkout; Tasks follow their Feature parent. Missing work raises `NotFound`. |
+| [resolve_mutation_owner / doc_filesystem_root](integration_worktree.py) | Work identity, parent lineage, repository role, registry path and branch → one writable owner or actionable `MutationOwnerError`. |
+| [merged_board / _meta_preference](integration_worktree.py) | Tracking board, registry and snapshot provenance → preferred documents with retained approval metadata. Ranking includes column and generic worktree-path bonuses; it does not prove exact mutation ownership. |
+| [preflight_lifecycle_merge_target](branch_synchronization.py) | Source/target work IDs and branches → synchronization check or typed refusal, including `not_active`. |
+| [prove_terminal_retirement / TerminalRetirementProof](integration_worktree.py) | Registered parent, exact destination, descendant closure, Git/event/review evidence → canonical terminal readback or an actionable refusal. |
+| [terminal_doc_persisted_outside_worktree](integration_worktree.py) | Compatibility Boolean backed by the same descendant-aware proof. |
+| [retire_integration_worktree](integration_worktree.py) | Registered identity and merge evidence → removal Boolean; refusal preserves registry and checkout. |
+
+```mermaid
+flowchart TD
+    ID[Work ID + tier + parent] --> Owner[Exact mutation-owner resolver]
+    Owner --> Registry[Canonical tracking role + registered path and branch]
+    ID --> Projection[Merged board read projection]
+    Registry --> Terminal[Enumerate terminal descendant closure]
+    Terminal --> Evidence{Delivery, completion and review evidence current?}
+    Evidence -->|no| Retain
+    Evidence -->|yes| Persist[Commit absent records to exact parent owner]
+    Persist --> Readback{Canonical readback complete?}
+    Readback -->|no or interrupted| Retain
+    Readback -->|yes| Gates[Canonical path, merge evidence, clean, unlocked, unoccupied]
+    Gates -->|pass| Remove[Remove checkout then registry entry; retain branch]
+    Gates -->|refusal| Retain[Retain checkout for recovery]
+```
+
+Registry JSON persists under `.cascade/`; Git retains branch identity and Markdown
+holds lifecycle state. Delivery actions and reviews remain the existing provenance
+stores; the retirement proof derives from them and does not persist another state
+machine. Restart reconstructs the board from surviving roots and repeats canonical
+readback, so a commit made before interruption is reused.
+Registry cleanup follows successful worktree removal; missing-path cleanup checks
+Git's worktree registration. This is repository ownership enforcement, not an OS
+sandbox.
+
+Verification: [worktree tests](../../tests/workspace/test_integration_worktrees.py),
+[document resolution](../../tests/war_room/test_resolve_worktree.py), and
+[branch synchronization](../../tests/workspace/test_branch_synchronization.py).
+The caller's closeout boundary is owned by [Boss](../boss/DESIGN.md#delivery-and-closeout).
 
 
 ## Server-resolved preview snapshots

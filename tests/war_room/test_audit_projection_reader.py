@@ -13,6 +13,7 @@ from cascade.war_room.audit_projection_reader import (
     read_audit_snapshot_header,
 )
 from cascade.watchdog.audit_projection import (
+    PROJECTION_SCHEMA_VERSION,
     HistorySummary,
     ProjectionManifest,
     SourceRef,
@@ -85,14 +86,17 @@ def _publish(
             _write(
                 base / epoch / name / f"{index:06d}.json",
                 {
-                    "schema_version": 2,
+                    "schema_version": PROJECTION_SCHEMA_VERSION,
                     "projection_kind": name,
                     "epoch": epoch,
                     "rows": rows,
                 },
             )
     _write(base / epoch / "manifest.json", manifest)
-    _write(base / "current.json", {"schema_version": 2, "epoch": epoch})
+    _write(
+        base / "current.json",
+        {"schema_version": PROJECTION_SCHEMA_VERSION, "epoch": epoch},
+    )
 
 
 def test_reader_filters_across_pages_and_preserves_bounded_provenance(tmp_path: Path) -> None:

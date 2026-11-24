@@ -18,6 +18,7 @@ from cascade.watchdog.audit_lane import (
 )
 from cascade.watchdog.audit_investigation import follow_up_snapshot_path
 from cascade.watchdog.audit_projection import (
+    PROJECTION_SCHEMA_VERSION,
     CoverageSummary,
     CurrentSummary,
     HistorySummary,
@@ -165,14 +166,17 @@ def _publish(
         _write(
             base / epoch / name / "000000.json",
             {
-                "schema_version": 2,
+                "schema_version": PROJECTION_SCHEMA_VERSION,
                 "projection_kind": name,
                 "epoch": epoch,
                 "rows": rows,
             },
         )
     _write(base / epoch / "manifest.json", manifest)
-    _write(base / "current.json", {"schema_version": 2, "epoch": epoch})
+    _write(
+        base / "current.json",
+        {"schema_version": PROJECTION_SCHEMA_VERSION, "epoch": epoch},
+    )
 
 
 def _publish_follow_ups(root: Path) -> None:

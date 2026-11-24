@@ -2,6 +2,81 @@
 
 Purpose: coordinate cross-tier rollups, Task merges, completion gates, and operator status. Interfaces are the boss graph, `merge_task_branch`, completion/rollup handlers, orphan detection, and `BossView`. Owns `REQ-BOSS-001` (integration respects tier gates) and `DEC-BOSS-001` (merge authority stays outside ephemeral Task agents).
 
-Evidence: `cascade/boss/` and `tests/boss/` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: review-to-commit links remain ambiguous where forge descriptions were unavailable.
+
+## Delivery and closeout
+
+`REQ-BOSS-CLOSEOUT-001`: Normal Feature closeout checks child completion,
+comments and review gates under the canonical lifecycle lock. A completed-path
+Feature can still have an open review; document position alone is not forge
+acceptance. [current_feature_obligation](rollup.py) also requires the current
+repair generation's reserved or original child to be terminal without a live lease, the
+current approval and dependencies, and either exact accepted review evidence or
+explicit local integration evidence. This predicate runs before the completed
+fast path and its result gates checkout retirement.
+`DEC-BOSS-CLOSEOUT-001`: Keep supervised Git integration and rollup outside the
+Task agent, preserving validation evidence and returning refusals to its durable
+queue instead of discarding the source checkout.
+Under `REQ-BOSS-001`, Boss invokes Workspace's descendant-aware retirement proof under
+the existing lifecycle authority after accepted Feature/Epic closeout. Boss logs
+the proof's missing evidence and owner action and leaves the branch, checkout and
+registry intact on refusal; it does not rank board copies or maintain a second
+retirement ledger.
+
+The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+connect `cascade-context` → `cascade-containers` →
+`cascade-supervisor-components` → `cascade-boss-code` for
+`element.component.boss`. [Workspace](../workspace/DESIGN.md#work-ownership-and-retirement)
+owns branch preflight and retirement; [Task](../task/DESIGN.md) owns validation
+and durable attempts; [package review contracts](../DESIGN.md#delivery-and-review-boundaries)
+own forge state. These functions collaborate within the local supervisor.
+
+| Entry point | Responsibility |
+|---|---|
+| [merge_task_branch](merge.py) | Lifecycle lock; validate current delivery, target, comments and architecture; merge and persist completion. |
+| [retry_pending_task_merges](../task_rollup.py) | Resume durable queued actions; retain source/target validation metadata and attempt history. |
+| [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
+| [current_feature_obligation](rollup.py) | Fence completed closeout and retirement to the current repair and review generation. |
+| [feature_review_generation](../review.py) | Read immutable per-generation review facts; top-level fields remain the current compatibility projection. |
+| [_require_repair_review_route](../review.py) | Compare a repair review's URL and source/target route with fresh forge facts before reuse or acceptance. |
+| [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
+| [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
+| [prove_terminal_retirement](../workspace/integration_worktree.py) | Verify and, when needed, canonically persist every terminal descendant before best-effort checkout retirement. |
+
+```mermaid
+flowchart TD
+    Queue[Durable validated Task action] --> Pair[Check current source and target]
+    Pair -->|current and gates pass| Merge[Merge Task and persist terminal record]
+    Pair -->|stale or refused| Preserve[Preserve work and recovery evidence]
+    Merge --> Rollup[Current repair, child, comment and approval gates]
+    Rollup --> Review[Publish Feature review; stage completed document]
+    Review --> Accept[Observe forge acceptance]
+    Accept --> Proof[Workspace descendant persistence + canonical readback]
+    Proof -->|complete| Close[Attempt retirement]
+    Proof -->|refused| Preserve
+```
+
+An open historical review is reused for a repair generation only when a fresh
+forge snapshot confirms the same URL and intended target. Its current generation
+then records the newly published source and target heads. A merged historical
+generation retains its accepted URL and heads; publication creates or recovers a
+distinct follow-up review from the retained Feature branch to the owning Epic
+branch and links it to the prior generation. Closed, missing, unknown, or
+conflicting forge facts stop publication. Registry writes are atomic, so a
+restart after remote creation discovers the same open review instead of creating
+a duplicate.
+
+Actions in `executions.json` retain authoritative delivery and repair evidence;
+the pending merge list is a scheduling index. Feature records in `reviews.json`
+have a schema version, immutable `generations`, and `current_generation`; their
+top-level fields project the current generation for compatibility. A generation
+binds its repair action, route, observed heads, accepted merge, publication
+action and reconciliation status. Restart retries queued actions and polls the
+same current row. A stale callback fails its generation/URL/ref fence and cannot
+close or retire a newer obligation. `not_active` remains a transient merge wait.
+
+Verification: [merge tests](../../tests/boss/test_merge.py),
+[rollup tests](../../tests/boss/test_rollup.py),
+[queue tests](../../tests/task/test_rollup_queue.py), and
+[completion integration](../../tests/test_completion_rollup_integration.py).

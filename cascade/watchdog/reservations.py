@@ -400,6 +400,74 @@ def record_result(
     )
 
 
+def verify_incident_postcheck(
+    work_id: str,
+    failure_class: str,
+    generation: str,
+    postcheck: Mapping[str, Any],
+    *,
+    root: Path,
+    now: datetime | None = None,
+) -> bool:
+    """Close one exact incident only after its authoritative postcheck passes.
+
+    This is deliberately separate from adapter result recording.  A request,
+    acknowledgement, or successful owner operation remains deferred until a
+    later canonical read proves the obligation represented by that generation.
+    """
+
+    if postcheck.get("verified") is not True:
+        return False
+    repo = resolve_root(root)
+    stamped = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    with task_lifecycle_lock(root=repo):
+        ledger = _read_store("action_recovery", repo)
+        matches: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
+        for row_key, raw_row in ledger.rows.items():
+            current = _row_incident(raw_row)
+            if (
+                current is not None
+                and current.get("work_id") == work_id
+                and current.get("failure_class") == failure_class
+                and current.get("authoritative_generation") == generation
+                and current.get("outcome") != "success"
+            ):
+                matches.append((row_key, raw_row, current))
+        if len(matches) != 1:
+            return False
+        row_key, row, current = matches[0]
+        result = dict(current.get("result") or {})
+        result["postcheck"] = json.loads(json.dumps(dict(postcheck)))
+        policy = dict(current.get("retry_policy") or {})
+        final = incident_record(
+            work_id=work_id,
+            tier=str(current["tier"]),  # type: ignore[arg-type]
+            accountable_owner=str(current["accountable_owner"]),
+            failure_class=failure_class,
+            generation=generation,
+            evidence=dict(current.get("evidence") or {}),
+            selected_capability=str(current["selected_capability"]),
+            request=dict(current.get("request") or {}),
+            acknowledgement=dict(current.get("acknowledgement") or {}),
+            result=result,
+            attempts=list(current.get("attempts") or []),
+            outcome="success",
+            now=stamped,
+            reassessment_seconds=int(policy.get("reassessment_seconds") or 60),
+            claim_seconds=int(policy.get("claim_seconds") or 300),
+            attempt_bound=int(policy.get("attempt_bound") or 3),
+        )
+        history = list(row.get("incident_history") or [])
+        history.append(json.loads(json.dumps(current)))
+        row["incident_history"] = history
+        row["incident"] = final
+        row["recovery_state"] = "completed"
+        row["updated_at"] = stamped.isoformat()
+        ledger.rows[row_key] = row
+        _write_store(ledger)
+        return True
+
+
 def _record_result(
     reservation: IncidentReservation,
     acknowledgement: Mapping[str, Any] | None,

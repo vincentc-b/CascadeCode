@@ -1707,6 +1707,14 @@ def incident_failure_class(tier: WorkTier, reason: str, evidence: AuditEvidence)
     if reason == "unresolved_recovery_reference":
         try:
             referenced = set(evidence.unresolved_references)
+            if tier == "task" and any(
+                row.get("action_kind") == "queued_task_merge"
+                and row.get("action_id") in referenced
+                and row.get("failure_classification")
+                == "parent_lifecycle_mismatch"
+                for row in recovery_actions(root=evidence.product_repository)
+            ):
+                return "parent_lifecycle_mismatch"
             if any(
                 row.get("action_kind") == "integration_branch_update"
                 and row.get("action_id") in referenced
@@ -2229,6 +2237,18 @@ def _classification(
     ):
         # Retaining the source worktree until its review lands is intentional.
         return "expected_wait", "review_pending"
+    if doc.meta.tier == "task":
+        try:
+            from cascade.task_rollup import _parent_lifecycle_mismatch
+
+            if _parent_lifecycle_mismatch(
+                doc.meta.id, evidence.product_repository
+            ) is not None:
+                return "proven_incident", "parent_lifecycle_mismatch"
+        except Exception:
+            # The surrounding evidence projection reports unreadable stores or
+            # Git facts separately. Do not invent repair authority here.
+            pass
     if doc.meta.tier == "task" and evidence.execution is not None:
         phase = evidence.execution.get("phase")
         if phase == "awaiting_merge":

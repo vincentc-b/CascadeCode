@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "sign_offs": [
+    {
+      "role": "epic_manager",
+      "plan_revision": "39558b2cb130000418f59b6a2683fc28c7038d56",
+      "signed_at": "2026-11-18T05:36:33.083339+00:00",
+      "evidence_snapshot_id": "evidence_11c74c32fa1b43df9b1c24b81032ab0a"
+    },
+    {
+      "role": "epic_architect",
+      "plan_revision": "39558b2cb130000418f59b6a2683fc28c7038d56",
+      "signed_at": "2026-11-18T05:39:26.398869+00:00",
+      "evidence_snapshot_id": "evidence_497eada67b374dad91bdae97ceb9eb1f"
+    }
+  ]
+}

@@ -162,6 +162,57 @@ into manual lifecycle controls; it does not configure providers or disable
 independently configured health audits. Some delivery paths support local
 operation without a forge; the brief-to-review walkthrough above requires one.
 
+### Hand off a reviewed orchestration repair to the runtime
+
+A Task commit, merged review, and running supervisor are separate facts. Use this
+procedure when the supervisor itself needs a reviewed Cascade repair. It does not
+authorize installation, change a product checkout, or deploy from a Task branch.
+
+1. Record the accepted review URL and its exact source commit. In a separately
+   prepared checkout of that reviewed commit, verify both the commit and a clean
+   tree before changing the installed runtime:
+
+   ```bash
+   git -C /absolute/path/to/reviewed/CascadeCode rev-parse HEAD^{commit}
+   git -C /absolute/path/to/reviewed/CascadeCode status --short
+   ```
+
+   Record that commit as the expected running revision. Leave the validated
+   delivery and its recovery action queued until the post-restart check succeeds.
+2. In the terminal that owns `cascade up`, press Ctrl-C once. This invokes the
+   supervisor's bounded drain: new mutations are refused, live turns get their
+   configured grace period, and remaining turns are cancelled with durable state
+   preserved. Wait for the command to exit. A second interrupt escalates to a
+   forced stop and should be used only when graceful drain cannot finish.
+3. Only with separate installation authority, update the dedicated Cascade
+   environment from the reviewed checkout using the installation procedure in
+   [Install Cascade](#install-cascade). Do not edit site-packages, import private
+   repair functions, hotpatch the old process, or change lifecycle/event files.
+4. With the same environment active, record the source actually selected by the
+   `cascade` command and confirm its Git revision equals the expected revision:
+
+   ```bash
+   python -c 'import pathlib,cascade; print(pathlib.Path(cascade.__file__).resolve().parents[1])'
+   git -C /absolute/path/printed/above rev-parse HEAD^{commit}
+   ```
+
+   A non-editable installation may not live inside a Git checkout. In that case,
+   use the environment's reviewed installation receipt or artifact digest to bind
+   the installed files to the expected commit; if no such binding exists, stop
+   and reinstall from the reviewed checkout rather than guessing a revision.
+5. Start `cascade up --root /absolute/path/to/product` from the product trunk.
+   Verify `curl -fsS http://127.0.0.1:8765/api/health` reports `serving` and record
+   the observed executing revision or artifact digest, worker PID, and timestamp.
+   With automation enabled, wait for the normal review poll and record the War
+   Room review-health outcome for the queued repair. If automation is disabled or
+   the forge is unavailable, keep the delivery queued and record the postcheck as
+   unperformed; do not manufacture success with an internal Python call.
+
+If the old running code cannot admit the repair, the exact prerequisite is:
+gracefully stop that old supervisor, obtain separate authority to install the
+reviewed revision, and restart it before retrying the canonical queued operation.
+A local Task merge alone does not satisfy that prerequisite.
+
 ## Keep documentation useful
 
 | Document | Purpose |

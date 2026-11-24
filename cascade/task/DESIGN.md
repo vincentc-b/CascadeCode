@@ -2,9 +2,7 @@
 
 Purpose: run one bounded implementation team in an isolated worktree with supervised file, test, commit, and lifecycle tools. Interfaces are Task graph/boot/wiring, SWE MCP, path guards, action recovery, lifecycle locks, and execution views. Owns `REQ-TASK-001` (implementation stays in assigned scope) and `DEC-TASK-001` (green post-commit supervised validation gates delivery).
 
-Evidence: `cascade/task/`, `tests/task/`, and lifecycle tests at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: receipts are absent for many historical Tasks, including A-F handoff children.
 
 ## Interrupted review publication attempts
 
@@ -76,3 +74,53 @@ Task graphs use one SWE node. Delivery additionally passes supervised validation
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).
 
 The integrated Structurizr code view is `cascade-task-code`. From the supervisor components view, Explore **Task team**; select a code node for its pinned source. This view is the navigable implementation structure; the diagrams above supplement it with lifecycle context.
+
+## Durable delivery collaborators
+
+`cascade-task-code` exposes [resume_action](action_recovery.py),
+[execution_lease_is_live](execution.py), and [swe_run_tests](git_tools.py)
+alongside the graph and tool registry.
+The action ledger in tracking-root `.cascade/executions.json` preserves attempts,
+claims and final validation evidence across worker restart. Recovery retains the
+Task identity and checks live execution ownership. [Boss](../boss/DESIGN.md#delivery-and-closeout)
+consumes the validated source/target pair; [Workspace](../workspace/DESIGN.md#work-ownership-and-retirement)
+checks the receiving parent. Source or target movement requires the supervised
+validation workflow, not a manually edited queue record.
+When a current repair action owns the Task, the queued delivery metadata also
+stores that action ID, generation, and Feature ID. This joins the exact green
+pair to its repair obligation without changing the stable queued-action ID.
+The same queue operation advances the matching repair receipt to
+`delivery_pending`; replay retains the original Task and repair identities.
+
+`ParentLifecycleMismatch` is stored additively on that same queued action when
+the Boss merge gate returns `not_active` for a completed Feature. Its
+`authoritative_generation` fingerprints the registered owner and parent status,
+delivery/repair identities, tested source/target pair, current review record,
+approval/comment/dependency gates and execution lease. The first refusal remains
+an immutable attempt. Before any later merge claim,
+[retry_pending_task_merges](../task_rollup.py) recomputes the generation; an
+unchanged observation performs no merge, turn, message or publication. A live
+Task/Feature turn and `busy` remain scheduling waits and spend no attempt.
+The Task boundary supplies the preserved validation pair and completed delivery
+action to the Watchdog postcheck. It does not treat a request, worker completion,
+or local status move as verification; original action and incident history remain
+inspectable after authoritative resolution.
+
+`REQ-TASK-DELIVERY-002`: A queued delivery is valid only for its exact Task
+source and Feature target heads. [retry_pending_task_merges](../task_rollup.py)
+uses branch synchronization before
+[_request_delivery_revalidation](../task_rollup.py) withdraws stale scheduling,
+records the replacement pair, and queues the original Task for supervised final
+validation. The old validation and every action attempt remain in the ledger;
+only a later green result may replace the current queue evidence.
+
+```mermaid
+flowchart LR
+    Queue[Queued Task action + green pair] --> Compare[Read source and target heads]
+    Compare -->|exact| Merge[Boss merge gate]
+    Compare -->|moved| Sync[Guarded branch synchronization]
+    Sync -->|refused| Retain[Retain checkout, action and old evidence]
+    Sync -->|clean| Retry[Queue exact replacement pair for supervised tests]
+    Retry -->|green| Queue
+    Retry -->|red or interrupted| Retain
+```

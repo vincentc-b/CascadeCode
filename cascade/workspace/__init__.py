@@ -2,7 +2,7 @@
 
 from importlib import import_module
 
-from cascade.workspace.errors import WorkspaceError
+from cascade.workspace.errors import MutationOwnerError, WorkspaceError
 from cascade.workspace.init import init_workspace
 from cascade.workspace.project_config import (
     ProjectConfiguration,
@@ -206,6 +206,7 @@ def __getattr__(name: str):
 
 __all__ = [
     "WorkspaceError",
+    "MutationOwnerError",
     "ArchitectureBrowsingError",
     "ArchitectureCodeContext",
     "ArchitectureContextCatalog",

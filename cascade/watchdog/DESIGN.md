@@ -2,9 +2,26 @@
 
 Purpose: observe canonical state, admit dependency-ready work, and coordinate bounded recovery. Interfaces are dispatch/activation, queues, poll loop, capability registry, incidents/reservations, health audit, and model resolution. Owns `REQ-WATCHDOG-001` (automation obeys lifecycle gates) and `DEC-WATCHDOG-001` (generation-bound reservations converge recovery).
 
-Evidence: `cascade/watchdog/`, `tests/watchdog/`, and lifecycle tests at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
+## Dispatch ownership transition
 
-Known gaps: missing receipts prevent complete work-to-commit attribution.
+Feature dispatch binds the dependency-checked board selection to its source
+checkout before registering the destination Feature worktree. Registration
+transfers mutation ownership, so the selected document is then relocated into
+that exact checkout and activated before the dispatch event is emitted. This
+ordering admits backlog documents retained outside the Epic checkout without
+allowing a sibling copy to win by board rank, and it prevents the empty newly
+registered checkout from being mistaken for the relocation source. Tasks
+minted after this transition are owned by the Feature checkout and follow the
+ordinary Task dispatch and supervised validation path.
+
+The temporary-repository acceptance matrix in
+[`tests/test_late_repair_convergence.py`](../../tests/test_late_repair_convergence.py)
+crosses this transition before exercising late repair, review generation and
+parent integration. The existing supervisor component and Watchdog code views
+remain accurate: the change does not add a runtime boundary, persistent store,
+public interface or new implementation symbol.
+
+
 
 ## Publication-owner liveness
 
@@ -24,7 +41,7 @@ identity and provenance while bounding reads and exposing failures as coverage.
 `DEC-WATCHDOG-002`: Use a versioned projection schema and typed source references
 so consumers can pin a consistent epoch without interpreting raw ledgers.
 
-`audit_projection.py` owns schema version `2`, the source decoder, and the typed
+`audit_projection.py` owns schema version `3`, the source decoder, and the typed
 producer models.  The canonical ignored publication root is
 `.cascade/health_audit/projections/` under the resolved product repository.  A
 manifest records the immutable epoch, observation/freshness times, interval,
@@ -204,3 +221,88 @@ audit evidence. [config.py](config.py) validates these independent settings;
 [worker.py](../workspace/worker.py) wires the lane and conditionally starts
 automatic investigations. This is a repository operational choice, not a
 requirement for responsive architecture rendering.
+
+## Recovery admission and active-path authority
+
+`REQ-WATCHDOG-REPAIR-001`: Audit repair requires a fresh canonical incident,
+a supported capability for its accountable owner, and a matching durable claim.
+An attempt result cannot replace authoritative health verification.
+`DEC-WATCHDOG-REPAIR-001`: Recheck local fingerprints under the lifecycle lock
+and run bounded external observation outside that critical section. Reuse
+reservations to reject stale generations and duplicate claims.
+
+The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+connect `cascade-context` → `cascade-containers` →
+`cascade-supervisor-components` → `cascade-watchdog-code`, owned by
+`element.component.watchdog`. The [package](../DESIGN.md#delivery-and-review-boundaries)
+connects the team adapters and [Boss](../boss/DESIGN.md#delivery-and-closeout)
+delivery consumer. War Room consumes the bounded projection described above.
+
+| Source entry | Contract |
+|---|---|
+| [watchdog_tick / _authorized](loop.py) | Reconcile dead publication claims, scan active documents, and match an authorizing queue event to the active path introduction. |
+| [dispatch_audit_recovery](audit_recovery.py) | Bounded observation/admission → exact capability resolution → claim acceptance → executor. |
+| [CapabilityRegistry](capabilities.py) | Owner/tier/failure-specific capability metadata and finite retry policy. |
+| [reserve_after_recheck / accept_claim / record_result](reservations.py) | Canonical fingerprint, generation and claim-token comparison; persist attempts in the selected durable store. |
+| [_incident_contract](audit_recovery.py) | Bind a completed-parent Task mismatch to its exact Feature owner and mismatch generation before reservation. |
+| [_execute_reservation](audit_recovery.py) | Invoke the selected owning-team adapter after exact claim acceptance and record its structured result. |
+| [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation, accepted heads, lease, descendant and retirement facts. |
+| [verify_incident_postcheck](reservations.py) | Atomically close only the matching generation and retain its deferred attempt in history. |
+| [_incident_projection](audit_projection.py) | Serialize bounded typed lifecycle evidence into immutable pages. |
+
+```mermaid
+flowchart TD
+    Observe[Bounded authoritative observation] --> Capability[Resolve capability and owner]
+    Capability --> Recheck[Lock and recheck local fingerprint]
+    Recheck -->|fresh| Reserve[Persist reservation and accept exact claim]
+    Recheck -->|changed / unavailable| Refuse[Typed refusal; retain evidence]
+    Reserve --> Execute[Execute supported scoped operation]
+    Execute --> Result[Persist attempt result]
+    Result --> Verify[Later authoritative postcheck]
+    Verify -->|obligation satisfied| Resolved[Resolved evidence]
+    Verify -->|still blocked| Pending[Retained incident / bounded handoff]
+```
+
+Reservations and action attempts survive restart. Interrupted claims are
+reconciled using their exact token and execution identity; a live process is not
+reclaimed just because time elapsed. Dispatch returns whether execution was
+admitted, not whether the obligation is healthy. The active-path scanner accepts
+`FeatureReadyToPlan` for Features, `TaskDispatched` for Tasks and `EpicActivated`
+for Epics, checking introduction timestamps. For a generation-bound repair,
+[repair_event_authorizes](../feature/repair.py) joins `FeatureRepairAuthorized`
+to the live action, exact owner/path/ref bindings, and the committed introduction
+blob. An arbitrary active-path move therefore lacks recovery authority.
+
+The `feature.feature_repair` capability is limited to Task-tier
+`parent_lifecycle_mismatch` incidents owned by the exact direct Feature. Its
+required evidence includes the document revision, Feature identity, and durable
+mismatch generation; its action-recovery store permits three finite attempts.
+Admission freshly observes the Task, reserves the audit generation, accepts the
+exact claim token, and then calls Feature `recover_task` with the separately
+fenced mismatch generation. Feature repair repeats owner, status, approval,
+comment, dependency, checkout, head, and live-lease checks under the lifecycle
+lock. Changed evidence refuses the stale request. The result retains selected
+operation/owner, request, acknowledgement, execution, refusal, next prerequisite,
+and verification independently. Parent reactivation is execution evidence but
+remains deferred until a later authoritative postcheck verifies the original
+validation pair, completed Task delivery, current immutable repair and review
+generations at accepted heads, parent integration, descendant survival, retired
+leases and registered worktrees. Deferred mismatch generations remain postcheck
+candidates after the board becomes healthy, so restart and repeated sweeps use
+the same check without replaying merge, worker, message, repair or publication.
+Unknown legacy acceptance and changed facts remain pending.
+
+If the capability is missing or broken, its probe records the exact resume
+prerequisite and the existing investigation outbox creates one generation-keyed
+handoff to an eligible planning owner. Repeated unchanged reassessment is
+coalesced by the investigation fingerprint and reservation cooldown. The outbox
+message and any graph wakeup are coordination evidence only; neither is recorded
+as an executed repair. If no legal owner can receive the handoff, the durable
+probe prerequisite remains the operator action.
+
+Verification: [authorization](../../tests/watchdog/test_watchdog.py),
+[audit recovery](../../tests/watchdog/test_audit_recovery.py),
+[parent lifecycle recovery](../../tests/watchdog/test_parent_lifecycle_recovery.py), and
+[parent lifecycle postcheck](../../tests/watchdog/test_parent_lifecycle_postcheck.py), and
+[reservations](../../tests/watchdog/test_reservations.py).

@@ -2,9 +2,7 @@
 
 Purpose: expose the Python package and CLI composition root for repository-local delivery. Interfaces are `cascade.cli` and the domain packages below. Owns `REQ-CASCADE-001` (one local composition root) and `DEC-CASCADE-001` (domain packages remain independently testable).
 
-Evidence: `cascade/cli.py`, `cascade/__init__.py`, and `tests/test_cli.py` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory SHA-256 `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
-Known gaps: missing receipts and unavailable reviews in the pinned inventory prevent complete historical attribution.
 
 ## Parent interfaces
 
@@ -17,10 +15,8 @@ owned proposal staging, and closeout receipts. Agent/provider execution consumes
 those scoped contexts but cannot accept an architecture proposal or bypass its
 owner review.
 
-These claims were checked against the corresponding package and integration tests
-at the refreshed baseline recorded in the reconciliation report. Historical rows
-with unavailable or ambiguous evidence remain unresolved and do not override the
-current code/test contract.
+Verification references live with each owning design; unavailable evidence does
+not establish a successful lifecycle transition.
 
 ## Health-audit read boundary
 
@@ -278,3 +274,89 @@ revision's authored model or its acceptance evidence.
 [Watchdog role skills](watchdog/DESIGN.md#architecture-authoring-skill-delivery)
 provide the authoring contract to planning, implementation and completion-review
 roles. These are linked requirements, not duplicate ownership declarations.
+
+## Delivery and review boundaries
+
+`REQ-CASCADE-RECOVERY-001`: Scoped parent supervision verifies the direct-child
+relationship before delegating recovery. Durable attempts, acknowledgements and
+verified lifecycle results are distinct evidence.
+`REQ-REVIEW-REPAIR-001`: Review acceptance is evidence about a forge review and
+its observed revisions; publication uses the guarded review workflow. Each
+Feature registry entry retains immutable generation rows and one current
+compatibility projection. Only a callback matching the current generation,
+URL and source/target route can satisfy closeout; historical acceptance remains
+inspectable but cannot approve later repair code.
+`REQ-REVIEW-REPAIR-002`: Repair publication observes the recorded review at the
+forge before selecting a route. A confirmed open review can be refreshed at the
+same URL; a confirmed merged review requires a linked follow-up from the retained
+Feature branch to its owning Epic branch. Unknown or conflicting state fails
+closed. Reconciliation binds callbacks to their immutable generation and exact
+accepted source/target heads, while independent target integration remains a
+separate closeout obligation.
+`DEC-CASCADE-RECOVERY-001`: Preserve a single local lifecycle authority across
+team adapters, watchdog claims and Boss delivery, with repository-specific state
+resolved through Workspace.
+
+Lifecycle callers use Workspace's exact mutation-owner contract before changing
+planning documents. The merged board remains suitable for status projection and
+selection display, but its preferred row cannot authorize a write; ambiguity or
+changed registry/branch identity fails closed with a recovery action.
+
+Parent-checkout retirement uses that same owner contract to enumerate terminal
+descendants, verify their existing Task delivery or Feature completion/review
+evidence, persist absent Markdown records to the authorized parent destination,
+and re-read them before removal. Boss remains the lifecycle caller; Workspace
+owns the proof and existing board, execution, review, Git and registry artifacts
+remain the only durable state. Refusal preserves the source branch and checkout.
+
+[team_supervision.py::supervise_child](team_supervision.py) delegates Task
+recovery to [Feature recovery](feature/recovery.py). A queued Task merge refused
+with `not_active` while its Feature is completed is a
+`parent_lifecycle_mismatch`, not a transient merge. The original action retains
+its validation pair, refusal and attempts; its canonical generation binds exact
+owner/status, delivery and repair identities, tested heads, review obligation,
+approval/comment/dependency gates, and execution lease. An unchanged supervisor
+sweep observes that generation without claiming another merge attempt. Feature
+recovery passes the exact generation through the existing `feature_repair`
+inspect/admit/resume operation and reports request, acknowledgement, execution,
+refusal and authoritative verification as separate fields.
+Feature-child recovery otherwise inspects incidents and queues a deduplicated
+team wakeup.
+[epic/recovery.py::recover_feature](epic/recovery.py) exposes that immediate-parent
+adapter. Epic supervision verifies the registered Feature owner and direct Task
+relationship, then invokes the same generation-bound Feature repair adapter;
+other incidents retain the deduplicated handoff path. Audit recovery resolves a
+`feature.feature_repair` capability for the exact Task/Feature pair, reserves and
+accepts one claim, and only then invokes that adapter. Missing capability creates
+one bounded investigation handoff when an eligible planning owner exists, or
+retains the probe's exact operator prerequisite. A wakeup, message, or accepted
+claim does not by itself perform or verify a completed-to-active transaction.
+The Watchdog-owned postcheck rereads canonical owner, board, action, execution,
+review and worktree registries and changes only the exact deferred incident to
+verified history after every owed generation fact is proven. Projection
+publication and War Room GET consume that result; neither performs the postcheck
+or schedules recovery.
+[review.py::ensure_feature_review](review.py) and
+[reconcile_feature_review_completions](review.py) persist review state and consume
+forge acceptance. Generation rows bind the repair action, forge identity,
+source/target refs and observed heads, accepted merge SHA, publication action and
+reconciliation status. Legacy rows are represented as generation zero; absent
+accepted heads remain unknown rather than being inferred from completed board
+position or a historical URL. GitHub observations request the CLI-supported
+`commits` field and pin the source revision to the final commit OID; an empty or
+malformed commit list is unavailable evidence. Repair publication also requires
+that observed OID to equal the generation's recorded source head, so a moving
+source branch is refused before publication.
+
+Implementation ownership and integrated Code views are in
+[Workspace](workspace/DESIGN.md#work-ownership-and-retirement),
+[Boss](boss/DESIGN.md#delivery-and-closeout),
+[Watchdog](watchdog/DESIGN.md#recovery-admission-and-active-path-authority),
+[Feature](feature/DESIGN.md), [Epic](epic/DESIGN.md) and [Task](task/DESIGN.md).
+The authoritative [model](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+keeps these in the existing supervisor and repository containers; Python modules
+are not separately deployed services. Guarded tools constrain agent operations;
+repository locks serialize mutations, without claiming OS filesystem isolation.
+Verification: [supervision tests](../tests/test_planning_manifest_and_team_controls.py),
+[review health](../tests/test_review_health.py), and
+[tracking adapter](../tests/test_tracking_find.py).

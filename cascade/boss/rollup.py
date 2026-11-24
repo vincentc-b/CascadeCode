@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
+import subprocess
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,7 +23,16 @@ _NEXT_SECTION = re.compile(r"^## ", re.MULTILINE)
 _LOG = logging.getLogger(__name__)
 
 
-def write_closeout(feature_id: WorkId, paragraph: str, *, root: Path | None = None) -> str | None:
+@dataclass(frozen=True)
+class CurrentFeatureObligation:
+    satisfied: bool
+    generation: int = 0
+    reason: str | None = None
+
+
+def write_closeout(
+    feature_id: WorkId, paragraph: str, *, root: Path | None = None
+) -> str | None:
     """Ensure the feature doc has a ## Closeout section with ``paragraph``. Does not move columns."""
 
     repo = resolve_root(root)
@@ -49,6 +60,7 @@ def try_complete_feature(
     *,
     root: Path | None = None,
     review_merged: bool = False,
+    review_generation: int | None = None,
 ) -> bool:
     """Complete the feature when all rollup gates pass; otherwise return False with no side effects."""
 
@@ -56,7 +68,12 @@ def try_complete_feature(
     from cascade.task.lifecycle_lock import task_lifecycle_lock
 
     with task_lifecycle_lock(root=repo):
-        return _try_complete_feature(feature_id, root=repo, review_merged=review_merged)
+        return _try_complete_feature(
+            feature_id,
+            root=repo,
+            review_merged=review_merged,
+            review_generation=review_generation,
+        )
 
 
 def _try_complete_feature(
@@ -64,6 +81,7 @@ def _try_complete_feature(
     *,
     root: Path,
     review_merged: bool = False,
+    review_generation: int | None = None,
 ) -> bool:
     """Locked Feature closeout implementation."""
 
@@ -83,14 +101,27 @@ def _try_complete_feature(
         require_lifecycle_review_gate(feature_id, "closeout", root=repo)
     except ArchitectureProposalError:
         return False
+    obligation = current_feature_obligation(
+        feature_id,
+        root=repo,
+        board=board,
+        review_generation=review_generation if review_merged else None,
+    )
     if (
         feature_meta.status == "completed"
         and feature_meta.path.parent.name == "3_completed"
     ):
+        if obligation.generation and not obligation.satisfied:
+            return False
         if review_merged and feature_meta.parent:
+            _record_satisfied_repair(feature_id, obligation, repo)
             _emit_feature_completed(feature_id, feature_meta.parent, repo)
             _retire_feature_worktree(
-                feature_id, feature_meta.parent, repo, merge_confirmed=True
+                feature_id,
+                feature_meta.parent,
+                repo,
+                merge_confirmed=True,
+                current_obligation=obligation,
             )
         elif not review_merged:
             from cascade.review import (
@@ -109,6 +140,7 @@ def _try_complete_feature(
                 merge_confirmed=feature_completed_recorded(
                     feature_id, feature_meta.parent, root=repo
                 ),
+                current_obligation=obligation,
             )
         return True
 
@@ -158,9 +190,14 @@ def _try_complete_feature(
         # feature plan, on the epic branch. Polling records the terminal event but
         # must not create another source commit after review.
         if doc.meta.parent:
+            _record_satisfied_repair(feature_id, obligation, repo)
             _emit_feature_completed(feature_id, doc.meta.parent, repo)
             _retire_feature_worktree(
-                feature_id, doc.meta.parent, repo, merge_confirmed=True
+                feature_id,
+                doc.meta.parent,
+                repo,
+                merge_confirmed=True,
+                current_obligation=obligation,
             )
             return True
         return False
@@ -205,16 +242,26 @@ def _try_complete_feature(
             move_doc(feature_id, "completed", root=trunk)
 
     _emit_feature_completed(feature_id, epic_id, repo)
-    _retire_feature_worktree(feature_id, epic_id, repo, merge_confirmed=True)
+    _record_satisfied_repair(feature_id, obligation, repo)
+    _retire_feature_worktree(
+        feature_id,
+        epic_id,
+        repo,
+        merge_confirmed=True,
+        current_obligation=obligation,
+    )
     return True
 
 
-def feature_completed_recorded(feature_id: WorkId, epic_id: WorkId, *, root: Path) -> bool:
+def feature_completed_recorded(
+    feature_id: WorkId, epic_id: WorkId, *, root: Path
+) -> bool:
     """True when ``FeatureCompleted`` for ``feature_id`` is already on the epic feed."""
 
     events, _ = read_events(epic_id, 0, root=root)
     return any(
-        event.type == "FeatureCompleted" and event.payload.get("feature_id") == feature_id
+        event.type == "FeatureCompleted"
+        and event.payload.get("feature_id") == feature_id
         for event in events
     )
 
@@ -240,6 +287,7 @@ def _retire_feature_worktree(
     repo: Path,
     *,
     merge_confirmed: bool = False,
+    current_obligation: CurrentFeatureObligation | None = None,
 ) -> None:
     """Best-effort cleanup after the feature is durably terminal.
 
@@ -250,16 +298,28 @@ def _retire_feature_worktree(
 
     from cascade.workspace.integration_worktree import (
         locate_trunk,
+        prove_terminal_retirement,
         retire_integration_worktree,
-        terminal_doc_persisted_outside_worktree,
     )
 
     if epic_id is None:
         return
+    if current_obligation is not None and not current_obligation.satisfied:
+        _LOG.warning(
+            "could not retire completed feature worktree %s: current obligation %s",
+            feature_id,
+            current_obligation.reason or "is incomplete",
+        )
+        return
     trunk = locate_trunk(repo)
-    if not terminal_doc_persisted_outside_worktree(
-        "feature", feature_id, trunk=trunk
-    ):
+    proof = prove_terminal_retirement("feature", feature_id, trunk=trunk)
+    if not proof.ok:
+        _LOG.warning(
+            "could not retire completed feature worktree %s: %s; %s",
+            feature_id,
+            proof.reason,
+            proof.next_action,
+        )
         return
     try:
         retire_integration_worktree(
@@ -271,6 +331,133 @@ def _retire_feature_worktree(
         )
     except Exception:
         _LOG.exception("could not retire completed feature worktree %s", feature_id)
+
+
+def current_feature_obligation(
+    feature_id: str,
+    *,
+    root: Path,
+    board=None,
+    review_generation: int | None = None,
+) -> CurrentFeatureObligation:
+    """Evaluate the one repair generation that may authorize closeout.
+
+    This projection is called only while ``task_lifecycle_lock`` is held.  It
+    does not poll the forge or acquire the review registry write lock.
+    """
+
+    from cascade.feature.repair import feature_repair_actions
+    from cascade.workspace.integration_worktree import merged_board
+
+    actions = feature_repair_actions(feature_id, root=root)
+    live = [
+        action
+        for action in actions
+        if action.get("phase") not in {"verified", "blocked", "superseded"}
+        and not str(action.get("phase") or "").startswith(("blocked", "superseded"))
+    ]
+    if not live:
+        return CurrentFeatureObligation(True)
+    current = max(live, key=lambda row: int(row.get("generation") or 0))
+    generation = int(current.get("generation") or 0)
+    if any(
+        action.get("phase") in {"prepared", "authority_recorded", "parent_enabled"}
+        for action in live
+    ):
+        return CurrentFeatureObligation(False, generation, "admission is not persisted")
+    repo = resolve_root(root)
+    board = board or merged_board(repo)
+    child_ids = _child_task_ids(feature_id, board)
+    if not child_ids or any(
+        task_id not in board.by_id
+        or board.by_id[task_id].status != "completed"
+        or board.by_id[task_id].path.parent.name != "3_completed"
+        for task_id in child_ids
+    ):
+        return CurrentFeatureObligation(
+            False, generation, "child delivery is nonterminal"
+        )
+    from cascade.task.execution import execution_lease_is_live
+
+    if any(execution_lease_is_live(task_id, root=root) for task_id in child_ids):
+        return CurrentFeatureObligation(
+            False, generation, "child delivery lease is live"
+        )
+    obligation_task_id = current.get("reserved_task_id") or current.get("task_id")
+    if obligation_task_id not in child_ids:
+        return CurrentFeatureObligation(
+            False, generation, "repair child is not canonical"
+        )
+    events, _ = read_events(feature_id, 0, root=repo)
+    repair_task_id = str(obligation_task_id)
+    if not any(
+        event.type == "TaskMerged" and event.payload.get("task_id") == repair_task_id
+        for event in events
+    ):
+        return CurrentFeatureObligation(
+            False, generation, "repair child lacks exact delivery evidence"
+        )
+    if _has_open_human_comments(feature_id, resolve_root(root)):
+        return CurrentFeatureObligation(
+            False, generation, "human comments are unresolved"
+        )
+    feature = board.by_id.get(feature_id)
+    if feature is None or feature.approved_at is None:
+        return CurrentFeatureObligation(False, generation, "approval is not current")
+    for dependency_id in feature.depends_on:
+        dependency = board.by_id.get(dependency_id)
+        if dependency is None or dependency.status != "completed":
+            return CurrentFeatureObligation(
+                False, generation, "dependency is not current"
+            )
+    from cascade.review import review_enabled, review_record_for_feature
+
+    record = review_record_for_feature(feature_id, root=root)
+    if review_enabled(resolve_root(root)):
+        if record is None or int(record.get("current_generation") or 0) != generation:
+            return CurrentFeatureObligation(
+                False, generation, "current review is not published"
+            )
+        if review_generation == generation:
+            return CurrentFeatureObligation(True, generation)
+        if not (
+            record.get("closed") is True
+            and record.get("reconciliation_status") == "accepted"
+            and record.get("accepted_source_head") == record.get("source_head")
+            and record.get("accepted_target_head") == record.get("target_head")
+            and record.get("accepted_merge_sha")
+        ):
+            return CurrentFeatureObligation(
+                False, generation, "current review is not accepted"
+            )
+        return CurrentFeatureObligation(True, generation)
+    if feature.parent:
+        parent_id = feature.parent
+        source = f"feat/{feature_id}"
+        target = f"epic/{parent_id}"
+        check = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", source, target],
+            cwd=resolve_root(root),
+            capture_output=True,
+            check=False,
+        )
+        if check.returncode == 0 and feature_completed_recorded(
+            feature_id, parent_id, root=resolve_root(root)
+        ):
+            return CurrentFeatureObligation(True, generation)
+    return CurrentFeatureObligation(
+        False, generation, "local integration evidence is missing"
+    )
+
+
+def _record_satisfied_repair(
+    feature_id: str, obligation: CurrentFeatureObligation, root: Path
+) -> None:
+    if not obligation.satisfied or not obligation.generation:
+        return
+    from cascade.feature.repair import mark_feature_repair_verified
+
+    mark_feature_repair_verified(feature_id, obligation.generation, root=root)
 
 
 def _feature_owner_root(feature_id: str, doc, repo: Path) -> Path:
@@ -336,7 +523,9 @@ def _delivery_recovery_planning_pending(feature_id: str, root: Path) -> bool:
     from cascade.feature.graph import ensure_feature_graph
     from cascade.workspace.kickoff import graph_turn_owner_is_live
 
-    snapshot = ensure_feature_graph(feature_id, root=root).get_state(thread_config(feature_id))
+    snapshot = ensure_feature_graph(feature_id, root=root).get_state(
+        thread_config(feature_id)
+    )
     offset = int((snapshot.values or {}).get("last_queue_offset") or 0)
     unread, _ = read_events(feature_id, offset, root=root)
     return (
@@ -419,7 +608,9 @@ def _upsert_closeout_section(body: str, paragraph: str) -> str:
         next_match = _NEXT_SECTION.search(rest)
         if next_match is not None:
             tail_start = match.end() + next_match.start()
-            return body[: match.start()] + new_section.rstrip() + "\n" + body[tail_start:]
+            return (
+                body[: match.start()] + new_section.rstrip() + "\n" + body[tail_start:]
+            )
         return body[: match.start()] + new_section
     trimmed = body.rstrip()
     if trimmed:
