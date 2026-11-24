@@ -13,6 +13,11 @@ acceptance.
 `DEC-BOSS-CLOSEOUT-001`: Keep supervised Git integration and rollup outside the
 Task agent, preserving validation evidence and returning refusals to its durable
 queue instead of discarding the source checkout.
+Under `REQ-BOSS-001`, Boss invokes Workspace's descendant-aware retirement proof under
+the existing lifecycle authority after accepted Feature/Epic closeout. Boss logs
+the proof's missing evidence and owner action and leaves the branch, checkout and
+registry intact on refusal; it does not rank board copies or maintain a second
+retirement ledger.
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
@@ -30,6 +35,7 @@ own forge state. These functions collaborate within the local supervisor.
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
+| [prove_terminal_retirement](../workspace/integration_worktree.py) | Verify and, when needed, canonically persist every terminal descendant before best-effort checkout retirement. |
 
 ```mermaid
 flowchart TD
@@ -39,7 +45,9 @@ flowchart TD
     Merge --> Rollup[Normal child and comment gates]
     Rollup --> Review[Publish Feature review; stage completed document]
     Review --> Accept[Observe forge acceptance]
-    Accept --> Close[Reconcile target and attempt retirement]
+    Accept --> Proof[Workspace descendant persistence + canonical readback]
+    Proof -->|complete| Close[Attempt retirement]
+    Proof -->|refused| Preserve
 ```
 
 Actions in `executions.json` retain authoritative delivery evidence; the pending

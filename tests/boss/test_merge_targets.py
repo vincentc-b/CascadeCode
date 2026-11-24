@@ -63,6 +63,42 @@ def test_terminal_worktree_cleanup_is_best_effort(
     assert "could not retire completed epic worktree epic_001" in caplog.text
 
 
+def test_feature_retirement_reports_workspace_proof_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from cascade.workspace.integration_worktree import TerminalRetirementProof
+
+    root = make_repo(tmp_path)
+    called = False
+
+    monkeypatch.setattr(
+        "cascade.workspace.integration_worktree.prove_terminal_retirement",
+        lambda *_args, **_kwargs: TerminalRetirementProof(
+            False,
+            "terminal descendant task_001 lacks delivery/completion provenance",
+            "restore merge evidence for task_001 before retirement",
+        ),
+    )
+
+    def unexpected_retirement(*args, **kwargs) -> bool:
+        nonlocal called
+        called = True
+        return True
+
+    monkeypatch.setattr(
+        "cascade.workspace.integration_worktree.retire_integration_worktree",
+        unexpected_retirement,
+    )
+
+    rollup_module._retire_feature_worktree("feat_001", "epic_001", root)
+
+    assert not called
+    assert "task_001 lacks delivery/completion provenance" in caplog.text
+    assert "restore merge evidence for task_001" in caplog.text
+
+
 def _initial_commit(root: Path) -> None:
     (root / "README.md").write_text("board\n", encoding="utf-8")
     subprocess.run(["git", "add", "README.md"], cwd=root, check=True, capture_output=True)

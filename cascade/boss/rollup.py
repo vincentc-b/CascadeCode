@@ -250,16 +250,21 @@ def _retire_feature_worktree(
 
     from cascade.workspace.integration_worktree import (
         locate_trunk,
+        prove_terminal_retirement,
         retire_integration_worktree,
-        terminal_doc_persisted_outside_worktree,
     )
 
     if epic_id is None:
         return
     trunk = locate_trunk(repo)
-    if not terminal_doc_persisted_outside_worktree(
-        "feature", feature_id, trunk=trunk
-    ):
+    proof = prove_terminal_retirement("feature", feature_id, trunk=trunk)
+    if not proof.ok:
+        _LOG.warning(
+            "could not retire completed feature worktree %s: %s; %s",
+            feature_id,
+            proof.reason,
+            proof.next_action,
+        )
         return
     try:
         retire_integration_worktree(

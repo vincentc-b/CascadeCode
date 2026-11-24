@@ -127,7 +127,7 @@ custom "cascade-boss-code" {
         "cascade.codeComponent" "element.component.boss"
     }
     include code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_feature code_boss_epic
-    include code_boss_evidence code_boss_review code_boss_reconcile code_boss_lock
+    include code_boss_evidence code_boss_retire code_boss_review code_boss_reconcile code_boss_lock
     autoLayout lr
 }
 
@@ -191,6 +191,6 @@ custom "cascade-workspace-code" {
         "cascade.codeComponent" "element.component.workspace"
     }
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
-    include code_workspace_resolve code_workspace_board code_workspace_select code_workspace_registry code_workspace_persist code_workspace_retire code_workspace_preflight
+    include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
     autoLayout lr
 }

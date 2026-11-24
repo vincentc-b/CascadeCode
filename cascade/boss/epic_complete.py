@@ -520,13 +520,22 @@ def _retire_epic_worktree(epic_id: WorkId, repo: Path) -> None:
 
     from cascade.workspace.integration_worktree import (
         locate_trunk,
+        prove_terminal_retirement,
         retire_integration_worktree,
     )
 
-    try:
-        retire_integration_worktree(
-            "epic", epic_id, merged_into="HEAD", trunk=locate_trunk(repo)
+    trunk = locate_trunk(repo)
+    proof = prove_terminal_retirement("epic", epic_id, trunk=trunk)
+    if not proof.ok:
+        _LOG.warning(
+            "could not retire completed epic worktree %s: %s; %s",
+            epic_id,
+            proof.reason,
+            proof.next_action,
         )
+        return
+    try:
+        retire_integration_worktree("epic", epic_id, merged_into="HEAD", trunk=trunk)
     except Exception:
         _LOG.exception("could not retire completed epic worktree %s", epic_id)
 
