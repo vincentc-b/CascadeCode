@@ -1457,6 +1457,26 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_c8ce29cdbfbd5b9e1530a5520f22b50a2163f65d6a6660a0d4eeb8cf26f5e011",
+      "dependency_id": "dep_codex",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:d410a4d8a381b6fb95c84380b72bfa274cf418b60e1fb969514cc6c689eaeaa1",
+      "recipe_revision": "sha256:447659572004354adb1f8ff0fb2a05e4960b2beb2914f97aa11d5ef3e9c44151",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/home/ubuntu/.codex/packages/standalone/releases/0.172.0-x86_64-unknown-linux-musl/bin/codex'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'0.172.0'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:36.077631+00:00",
+      "selected_version": "0.172.0",
+      "integrity_reference": "sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
