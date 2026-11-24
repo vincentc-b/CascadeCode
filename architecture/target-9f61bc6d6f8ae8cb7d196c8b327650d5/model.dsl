@@ -2016,12 +2016,30 @@ code_watchdog_contract = element "_incident_contract" "Function" "Bind an observ
     }
 }
 
+code_watchdog_budget_bind = element "_bind_original_incident" "Function" "Anchor parent-lifecycle owner work to the queued action's original Task-owned incident allowance." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.budget-bind"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/audit_recovery.py"
+        "cascade.sourceSymbol" "_bind_original_incident"
+    }
+}
+
 code_watchdog_incident_record = element "incident_record" "Function" "Keep original incident identity separate from changing material generation evidence." {
     properties {
         "cascade.semanticId" "element.code.watchdog.incident-record"
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/watchdog/incidents.py"
         "cascade.sourceSymbol" "incident_record"
+    }
+}
+
+code_watchdog_stage_receipt = element "recovery_stage_receipt" "Function" "Create immutable actor, capability, permitted-input, authority and result evidence for one recovery stage." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.stage-receipt"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incidents.py"
+        "cascade.sourceSymbol" "recovery_stage_receipt"
     }
 }
 
@@ -2706,6 +2724,15 @@ code_teams_validation_operation = element "ReviewValidationOperation" "Dataclass
     }
 }
 
+code_teams_validation_profile = element "ReviewValidationProfile" "Dataclass" "Bind an exact command and coverage class to its policy owner, approval revision and finite timeout/attempt budget." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validation-profile"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ReviewValidationProfile"
+    }
+}
+
 code_teams_validate_publish = element "check_and_publish_review_rebase" "Function" "Validate immutable source then recheck policy, remote heads and authority before leased push." {
     properties {
         "cascade.semanticId" "element.code.teams.validate_publish"
@@ -2862,6 +2889,12 @@ code_teams_budget_reserve_to_code_teams_validation_operation = code_teams_budget
     }
 }
 
+code_teams_validation_operation_to_code_teams_validation_profile = code_teams_validation_operation -> code_teams_validation_profile "Carries the approved finite profile" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-validation-operation-to-code-teams-validation-profile"
+    }
+}
+
 code_teams_validate_publish_to_code_teams_validator = code_teams_validate_publish -> code_teams_validator "Runs repository checks" {
     properties {
         "cascade.semanticId" "relationship.code-teams-validate-publish-to-code-teams-validator"
@@ -2871,6 +2904,24 @@ code_teams_validate_publish_to_code_teams_validator = code_teams_validate_publis
 code_teams_validator_to_code_teams_validation_operation = code_teams_validator -> code_teams_validation_operation "Verifies the live receipt before spawn" {
     properties {
         "cascade.semanticId" "relationship.code-teams-validator-to-code-teams-validation-operation"
+    }
+}
+
+code_watchdog_incident_record_to_code_watchdog_stage_receipt = code_watchdog_incident_record -> code_watchdog_stage_receipt "Embeds immutable stage evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-incident-record-to-stage-receipt"
+    }
+}
+
+code_watchdog_contract_to_code_watchdog_budget_bind = code_watchdog_contract -> code_watchdog_budget_bind "Anchors the original obligation before owner admission" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-incident-contract-to-budget-bind"
+    }
+}
+
+code_watchdog_budget_bind_to_code_task_budget_bind = code_watchdog_budget_bind -> code_task_budget_bind "Uses the sole Task-owned F1 ledger" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-budget-bind-to-task-budget-bind"
     }
 }
 

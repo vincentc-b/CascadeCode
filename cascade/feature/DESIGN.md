@@ -57,6 +57,10 @@ preserved worktree before resuming the owning team. See
 An incident-related lead or architect turn carries the original incident, claim
 and unique provider-operation identity through the shared Agent runner; missing
 or refused Task-owned budget admission launches no provider.
+Watchdog assignment names the exact Feature owner, registered capability,
+permitted evidence keys and capability-authority revision. Feature repair and
+publication write owner evidence but cannot mark the originating incident
+resolved; the independent Watchdog postcheck owns that terminal receipt.
 
 Verification: [graph and lifecycle tests](../../tests/feature/).
 

@@ -91,6 +91,11 @@ def test_exact_postcheck_is_the_only_path_to_verified_history(tmp_path: Path) ->
     row = payload["actions"]["reservation"]
     assert row["incident"]["outcome"] == "success"
     assert row["incident"]["result"]["postcheck"]["verified"] is True
+    assert [receipt["stage"] for receipt in row["incident"]["stage_receipts"]] == [
+        "verifying",
+        "resolved",
+    ]
+    assert row["incident"]["stage_receipts"][-1]["verification_reference"] == GENERATION
     assert row["incident_history"][-1]["outcome"] == "deferred"
     assert row["recovery_state"] == "completed"
     assert not verify_incident_postcheck(
@@ -152,7 +157,9 @@ def test_postcheck_fails_closed_when_a_relevant_fact_changes(
 
     incident = _contract()
     monkeypatch.setattr(subject, "_incident", lambda *_args: incident)
-    monkeypatch.setattr(subject, "verify_incident_postcheck", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        subject, "verify_incident_postcheck", lambda *_args, **_kwargs: True
+    )
     monkeypatch.setattr(subject, "task_lifecycle_lock", lambda **_kwargs: nullcontext())
     monkeypatch.setattr(
         subject,
@@ -160,17 +167,20 @@ def test_postcheck_fails_closed_when_a_relevant_fact_changes(
         lambda *_args, **_kwargs: {
             "recovery_state": "completed",
             "metadata": {
-                "final_validation": incident["evidence"]
-                ["parent_lifecycle_evidence"]["tested_heads"]["validation"]
+                "final_validation": incident["evidence"]["parent_lifecycle_evidence"][
+                    "tested_heads"
+                ]["validation"]
             },
         },
     )
+
     def completed(work_id: str) -> SimpleNamespace:
         return SimpleNamespace(
             id=work_id,
             status="completed",
             path=tmp_path / "docs" / "tasks" / "3_completed" / f"{work_id}.md",
         )
+
     board = SimpleNamespace(
         by_id={"task_001": completed("task_001"), "feat_001": completed("feat_001")}
     )
@@ -183,9 +193,9 @@ def test_postcheck_fails_closed_when_a_relevant_fact_changes(
     )
     monkeypatch.setattr(
         "cascade.workspace.integration_worktree.get_integration_worktree",
-        lambda _root, kind, _work_id: object()
-        if changed == "feature_worktree" and kind == "feature"
-        else None,
+        lambda _root, kind, _work_id: (
+            object() if changed == "feature_worktree" and kind == "feature" else None
+        ),
     )
     monkeypatch.setattr(
         "cascade.feature.repair.feature_repair_actions",
@@ -222,4 +232,3 @@ def test_postcheck_fails_closed_when_a_relevant_fact_changes(
 
     assert result["verified"] is (changed == "none")
     assert result["reason"] == reason
-

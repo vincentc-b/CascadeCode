@@ -371,9 +371,7 @@ def _admission_process(
     claim_token: str,
     expected_generation: str | None,
     expected_failure_class: str | None,
-    parent_observation_episodes: tuple[
-        tuple[str, str, str, str, float, int], ...
-    ],
+    parent_observation_episodes: tuple[tuple[str, str, str, str, float, int], ...],
 ) -> None:
     try:
         os.setsid()
@@ -525,12 +523,9 @@ def _admit_inline(
         and str(observation.generation) != expected_generation
     ):
         return None
-    if (
-        expected_failure_class is not None
-        and (
-            observation.incident is None
-            or observation.incident.failure_class != expected_failure_class
-        )
+    if expected_failure_class is not None and (
+        observation.incident is None
+        or observation.incident.failure_class != expected_failure_class
     ):
         return None
     target = _repair_target(
@@ -570,7 +565,9 @@ def _admit_inline(
                         "failure_class": contract["failure_class"],
                         "generation": contract["authoritative_generation"],
                         "selected_capability": contract["selected_capability"],
-                        "owner_id": str(contract["accountable_owner"]).partition(":")[2],
+                        "owner_id": str(contract["accountable_owner"]).partition(":")[
+                            2
+                        ],
                         "evidence": contract["evidence"],
                     },
                     root=root,
@@ -661,10 +658,7 @@ def _incident_contract(
             from cascade.task_rollup import _parent_lifecycle_mismatch
 
             mismatch = _parent_lifecycle_mismatch(str(observation.work_id), root)
-            if (
-                mismatch is not None
-                and mismatch.get("accountable_owner") == owner
-            ):
+            if mismatch is not None and mismatch.get("accountable_owner") == owner:
                 operation = "feature_repair"
                 evidence.update(
                     {
@@ -724,6 +718,13 @@ def _incident_contract(
 
     if operation is None or owner is None:
         return None
+    original_incident_id = None
+    if failure == "parent_lifecycle_mismatch":
+        original_incident_id = _bind_original_incident(
+            str(observation.work_id), root=root
+        )
+        if original_incident_id is None:
+            return None
     return incident_record(
         work_id=str(observation.work_id),
         tier=observation.tier,
@@ -733,7 +734,37 @@ def _incident_contract(
         evidence=evidence,
         selected_capability=operation,
         outcome="deferred",
+        original_incident_id=original_incident_id,
     )
+
+
+def _bind_original_incident(task_id: str, *, root: Path) -> str | None:
+    """Anchor Watchdog work to the existing queued action's F1 allowance."""
+
+    from cascade.task.action_recovery import load_action
+    from cascade.task.incident_budget import POLICY_VERSION, bind_incident_budget
+
+    action_id = f"{task_id}:queued_merge"
+    action = load_action(action_id, root=root)
+    incident = action.get("incident") if isinstance(action, Mapping) else None
+    generation = (
+        incident.get("authoritative_generation")
+        if isinstance(incident, Mapping)
+        else None
+    )
+    if not isinstance(generation, str):
+        return None
+    try:
+        bind_incident_budget(
+            action_id,
+            action_id,
+            generation,
+            {"policy_version": POLICY_VERSION},
+            root=root,
+        )
+    except Exception:
+        return None
+    return action_id
 
 
 def _evidence(observation: AuditObservation) -> dict[str, Any]:
@@ -919,9 +950,7 @@ def _result_outcome(value: object, *, reservation: IncidentReservation) -> str:
     return "success"
 
 
-def _reconcile_exact_blocker(
-    reservation: IncidentReservation, *, root: Path
-) -> None:
+def _reconcile_exact_blocker(reservation: IncidentReservation, *, root: Path) -> None:
     """Clear only a derived parent blocker carrying this result identity."""
 
     try:

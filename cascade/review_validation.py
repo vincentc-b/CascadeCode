@@ -1,16 +1,18 @@
 """Bounded repository checks for review publication, without shell evaluation."""
+
 from __future__ import annotations
 
 import os
 from pathlib import Path
 import platform
+import shutil
 import signal
 import subprocess
 import sys
 import tempfile
 import tomllib
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from cascade.task.incident_budget import (
     IncidentOperationDecision,
@@ -27,6 +29,44 @@ class ReviewValidationAdmissionError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class ReviewValidationProfile:
+    """Repository-owner-approved, finite validator policy."""
+
+    profile_id: str
+    command: tuple[str, ...]
+    coverage_class: str
+    policy_owner: str
+    approval_version: str
+    timeout_seconds: float
+    attempt_budget: int = 1
+
+    def __post_init__(self) -> None:
+        if not all(
+            isinstance(value, str) and value.strip()
+            for value in (
+                self.profile_id,
+                self.coverage_class,
+                self.policy_owner,
+                self.approval_version,
+            )
+        ):
+            raise ValueError("validation profile identity and approval are required")
+        if self.command and (
+            not isinstance(self.command[0], str)
+            or not self.command[0].strip()
+            or not all(isinstance(value, str) for value in self.command)
+        ):
+            raise ValueError("validation profile command must be an argv tuple")
+        if (
+            isinstance(self.timeout_seconds, bool)
+            or not 1 <= self.timeout_seconds <= 3600
+            or isinstance(self.attempt_budget, bool)
+            or self.attempt_budget != 1
+        ):
+            raise ValueError("validation profile requires one finite bounded attempt")
+
+
+@dataclass(frozen=True, slots=True)
 class ReviewValidationOperation:
     """Canonical identities and the durable permit for one validator process."""
 
@@ -36,6 +76,7 @@ class ReviewValidationOperation:
     root: Path
     permit: IncidentOperationPermit
     environment_revision: dict[str, str]
+    profile: ReviewValidationProfile
 
 
 def review_validation_environment() -> dict[str, str]:
@@ -57,22 +98,40 @@ def reserve_review_validation(
     timeout: float,
     environment_revision: dict[str, str],
     parent_operation_id: str | None = None,
+    profile: ReviewValidationProfile | None = None,
 ) -> tuple[IncidentOperationDecision, ReviewValidationOperation | None]:
     """Reserve the validator's worst-case runtime before any process spawn."""
 
+    selected = profile or replace(
+        approved_review_validation_profile(root), command=(), timeout_seconds=timeout
+    )
+    if timeout != selected.timeout_seconds:
+        raise ReviewValidationAdmissionError(
+            "validator timeout does not match its approved profile"
+        )
     decision = reserve_incident_operation(
         incident_id,
         operation_id,
         "review_validator",
-        {"tool_attempts": 1, "process_seconds": max(1, int(timeout + 0.999999))},
+        {
+            "tool_attempts": selected.attempt_budget,
+            "process_seconds": max(1, int(timeout + 0.999999)),
+        },
         claim_id,
         POLICY_VERSION,
         root=root,
-        attributes=(
-            {"parent_operation_id": parent_operation_id}
-            if parent_operation_id is not None
-            else None
-        ),
+        attributes={
+            "parent_operation_id": parent_operation_id,
+            "validation_profile": {
+                "id": selected.profile_id,
+                "coverage_class": selected.coverage_class,
+                "policy_owner": selected.policy_owner,
+                "approval_version": selected.approval_version,
+                "command": list(selected.command),
+                "timeout_seconds": selected.timeout_seconds,
+                "attempt_budget": selected.attempt_budget,
+            },
+        },
     )
     operation = (
         ReviewValidationOperation(
@@ -82,6 +141,7 @@ def reserve_review_validation(
             root,
             decision.permit,
             dict(environment_revision),
+            selected,
         )
         if decision.admitted and decision.permit is not None
         else None
@@ -104,25 +164,85 @@ def review_validation_command(root: Path) -> tuple[str, ...]:
     """Use the repository's review gate, preserving the task/full-suite default."""
     from cascade.validation_command import validation_command
 
-    path = root / 'cascade.toml'
+    path = root / "cascade.toml"
     config = tomllib.loads(path.read_text()) if path.exists() else {}
-    command = config.get('validation', {}).get('review_command')
+    command = config.get("validation", {}).get("review_command")
     if command is None:
         return validation_command(root)
-    if not isinstance(command, list) or not command or not all(
-        isinstance(arg, str) and arg.strip() for arg in command
+    if (
+        not isinstance(command, list)
+        or not command
+        or not all(isinstance(arg, str) and arg.strip() for arg in command)
     ):
-        raise ValueError('validation.review_command must be a nonempty argv array')
+        raise ValueError("validation.review_command must be a nonempty argv array")
     return tuple(command)
 
 
 def review_validation_timeout(root: Path) -> float:
-    path = root / 'cascade.toml'
+    path = root / "cascade.toml"
     config = tomllib.loads(path.read_text()) if path.exists() else {}
-    value = config.get('validation', {}).get('review_timeout_seconds', 300)
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 1 <= value <= 3600:
-        raise ValueError('validation.review_timeout_seconds must be between 1 and 3600')
+    value = config.get("validation", {}).get("review_timeout_seconds", 300)
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not 1 <= value <= 3600
+    ):
+        raise ValueError("validation.review_timeout_seconds must be between 1 and 3600")
     return float(value)
+
+
+def approved_review_validation_profile(
+    root: Path, *, command: tuple[str, ...] | None = None
+) -> ReviewValidationProfile:
+    """Resolve the one repository-approved review profile without executing it."""
+
+    path = root / "cascade.toml"
+    config = tomllib.loads(path.read_text()) if path.exists() else {}
+    validation = config.get("validation", {})
+    identity = validation.get("review_profile_id", "cascade.review-publication")
+    owner = validation.get("review_policy_owner", "repository_operator")
+    approval = validation.get("review_approval_version", "1")
+    coverage = validation.get("review_coverage_class", "review_publication")
+    if not all(
+        isinstance(value, str) and value.strip()
+        for value in (identity, owner, approval, coverage)
+    ):
+        raise ValueError("review validation profile identity and approval are required")
+    return ReviewValidationProfile(
+        identity,
+        command if command is not None else review_validation_command(root),
+        coverage,
+        owner,
+        approval,
+        review_validation_timeout(root),
+    )
+
+
+def preflight_review_validation(
+    profile: ReviewValidationProfile,
+    *,
+    cwd: Path,
+    command: tuple[str, ...] | None = None,
+) -> None:
+    """Refuse an infeasible profile before consuming a validator process."""
+
+    if not cwd.is_dir():
+        raise ReviewValidationAdmissionError(
+            "validator working directory is unavailable"
+        )
+    selected_command = profile.command or command
+    if not selected_command:
+        raise ReviewValidationAdmissionError("validator command is unavailable")
+    executable = selected_command[0]
+    resolved = (
+        Path(executable).is_file()
+        if os.sep in executable
+        else shutil.which(executable) is not None
+    )
+    if not resolved:
+        raise ReviewValidationAdmissionError(
+            "approved validator executable is unavailable"
+        )
 
 
 def run_review_validation(
@@ -135,9 +255,16 @@ def run_review_validation(
     # Files avoid unbounded in-memory capture; report only bounded diagnostic tails.
     def tail(handle):
         handle.seek(max(0, handle.tell() - 65536))
-        return handle.read(65536).decode('utf-8', errors='replace')
+        return handle.read(65536).decode("utf-8", errors="replace")
 
     if operation is not None:
+        if (
+            operation.profile.command and command != operation.profile.command
+        ) or timeout != operation.profile.timeout_seconds:
+            raise ReviewValidationAdmissionError(
+                "validator command or timeout differs from its approved profile"
+            )
+        preflight_review_validation(operation.profile, cwd=cwd, command=command)
         budget = read_incident_budget(operation.incident_id, root=operation.root)
         receipt = (budget or {}).get("operations", {}).get(operation.operation_id)
         if (
@@ -256,13 +383,16 @@ def validate_publication_board(worktree: Path) -> None:
     """
     from cascade.board.parse import parse_doc
     from cascade.board.errors import SchemaError
+
     seen = {}
-    for tier in ('epics', 'features', 'tasks'):
-        for column in ('1_backlog', '2_active', '3_completed', '4_cancelled'):
-            for path in sorted((worktree / 'docs' / tier / column).glob('*.md')):
+    for tier in ("epics", "features", "tasks"):
+        for column in ("1_backlog", "2_active", "3_completed", "4_cancelled"):
+            for path in sorted((worktree / "docs" / tier / column).glob("*.md")):
                 if path.is_symlink():
-                    raise SchemaError(f'publication board symlink: {path}')
+                    raise SchemaError(f"publication board symlink: {path}")
                 doc = parse_doc(path)
                 if doc.meta.id in seen:
-                    raise SchemaError(f'duplicate id {doc.meta.id} at {path} and {seen[doc.meta.id]}')
+                    raise SchemaError(
+                        f"duplicate id {doc.meta.id} at {path} and {seen[doc.meta.id]}"
+                    )
                 seen[doc.meta.id] = path

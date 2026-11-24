@@ -37,8 +37,16 @@ from cascade.watchdog.audit import (
     local_audit_fingerprint,
     project_audit_observation,
 )
-from cascade.watchdog.capabilities import CapabilityDescriptor
-from cascade.watchdog.incidents import incident_budget_identity, incident_record
+from cascade.watchdog.capabilities import (
+    CapabilityDescriptor,
+    capability_authority_revision,
+)
+from cascade.watchdog.incidents import (
+    append_stage_receipts,
+    incident_budget_identity,
+    incident_record,
+    recovery_stage_receipt,
+)
 
 ReservationState = Literal["reserved", "stale", "gated", "unavailable"]
 ResultOutcome = Literal["success", "error", "refused", "deferred", "unsafe", "no_op"]
@@ -107,10 +115,10 @@ def reserve_budgeted_operation(
         return IncidentOperationDecision(
             "owner_decision", "original_incident_identity_missing", 1
         )
-    if (
-        reservation.generation != incident.get("authoritative_generation")
-        or reservation.claim_token
-        != dict(incident.get("request") or {}).get("claim_token")
+    if reservation.generation != incident.get(
+        "authoritative_generation"
+    ) or reservation.claim_token != dict(incident.get("request") or {}).get(
+        "claim_token"
     ):
         return IncidentOperationDecision(
             "owner_decision", "watchdog_claim_identity_mismatch", 1
@@ -300,6 +308,39 @@ def reserve_after_recheck(
             claim_seconds=seconds,
             attempt_bound=capability.attempt_bound,
             original_incident_id=budget_incident_id,
+            stage_receipts=append_stage_receipts(
+                list(incident.get("stage_receipts") or []),
+                recovery_stage_receipt(
+                    "detected",
+                    actor="watchdog",
+                    capability=capability.name,
+                    permitted_inputs=capability.required_evidence,
+                    authority_revision=capability_authority_revision(capability),
+                    obligation=f"{work_id}:{failure}:{generation}",
+                    result="authoritative_incident_observed",
+                    now=stamped,
+                ),
+                recovery_stage_receipt(
+                    "admitted",
+                    actor="watchdog",
+                    capability=capability.name,
+                    permitted_inputs=capability.required_evidence,
+                    authority_revision=capability_authority_revision(capability),
+                    obligation=f"{work_id}:{failure}:{generation}",
+                    result="fresh_generation_claimed",
+                    now=stamped,
+                ),
+                recovery_stage_receipt(
+                    "assigned",
+                    actor=owner,
+                    capability=capability.name,
+                    permitted_inputs=capability.required_evidence,
+                    authority_revision=capability_authority_revision(capability),
+                    obligation=f"{work_id}:{failure}:{generation}",
+                    result="accountable_owner_bound",
+                    now=stamped,
+                ),
+            ),
         )
         row = _claim_row(
             previous_row,
@@ -372,6 +413,21 @@ def accept_claim(
             "accepted_at": stamped.isoformat(),
         }
         current["attempts"] = attempts
+        current["stage_receipts"] = append_stage_receipts(
+            list(current.get("stage_receipts") or []),
+            recovery_stage_receipt(
+                "executing",
+                actor=str(current["accountable_owner"]),
+                capability=str(current["selected_capability"]),
+                permitted_inputs=tuple(
+                    sorted(str(key) for key in dict(current.get("evidence") or {}))
+                ),
+                authority_revision=_stage_authority(current),
+                obligation=f"{reservation.work_id}:{reservation.failure_class}:{reservation.generation}",
+                result="claim_handoff_accepted",
+                now=stamped,
+            ),
+        )
         assert row is not None
         row["incident"] = current
         row["updated_at"] = stamped.isoformat()
@@ -423,7 +479,9 @@ def _record_unstarted_claim(
             for row in ledger.rows.values():
                 current = _row_incident(row)
                 request = current.get("request") if current is not None else None
-                token = request.get("claim_token") if isinstance(request, Mapping) else None
+                token = (
+                    request.get("claim_token") if isinstance(request, Mapping) else None
+                )
                 if (
                     token != claim_token
                     or current is None
@@ -526,6 +584,7 @@ def verify_incident_postcheck(
         result = dict(current.get("result") or {})
         result["postcheck"] = json.loads(json.dumps(dict(postcheck)))
         policy = dict(current.get("retry_policy") or {})
+        authority_revision = _stage_authority(current)
         final = incident_record(
             work_id=work_id,
             tier=str(current["tier"]),  # type: ignore[arg-type]
@@ -544,6 +603,31 @@ def verify_incident_postcheck(
             claim_seconds=int(policy.get("claim_seconds") or 300),
             attempt_bound=int(policy.get("attempt_bound") or 3),
             original_incident_id=incident_budget_identity(current),
+            stage_receipts=append_stage_receipts(
+                list(current.get("stage_receipts") or []),
+                recovery_stage_receipt(
+                    "verifying",
+                    actor="watchdog",
+                    capability="independent_postcheck",
+                    permitted_inputs=("authoritative_generation", "postcheck"),
+                    authority_revision=authority_revision,
+                    obligation=f"{work_id}:{failure_class}:{generation}",
+                    result="fresh_authoritative_facts_read",
+                    now=stamped,
+                    verification_reference=generation,
+                ),
+                recovery_stage_receipt(
+                    "resolved",
+                    actor="watchdog",
+                    capability="independent_postcheck",
+                    permitted_inputs=("authoritative_generation", "postcheck"),
+                    authority_revision=authority_revision,
+                    obligation=f"{work_id}:{failure_class}:{generation}",
+                    result="original_obligation_satisfied",
+                    now=stamped,
+                    verification_reference=generation,
+                ),
+            ),
         )
         history = list(row.get("incident_history") or [])
         history.append(json.loads(json.dumps(current)))
@@ -608,6 +692,31 @@ def _record_result(
             "adapter_executed": adapter_executed,
         }
         policy = dict(current.get("retry_policy") or {})
+        stage_receipts = list(current.get("stage_receipts") or [])
+        if reservation.failure_class == "parent_lifecycle_mismatch":
+            stage_receipts = append_stage_receipts(
+                stage_receipts,
+                recovery_stage_receipt(
+                    "validating",
+                    actor=str(current["accountable_owner"]),
+                    capability=str(current["selected_capability"]),
+                    permitted_inputs=("adapter_result", "authoritative_generation"),
+                    authority_revision=_stage_authority(current),
+                    obligation=f"{reservation.work_id}:{reservation.failure_class}:{reservation.generation}",
+                    result="owner_validation_status_recorded",
+                    now=stamped,
+                ),
+                recovery_stage_receipt(
+                    "publishing",
+                    actor=str(current["accountable_owner"]),
+                    capability=str(current["selected_capability"]),
+                    permitted_inputs=("adapter_result", "authoritative_generation"),
+                    authority_revision=_stage_authority(current),
+                    obligation=f"{reservation.work_id}:{reservation.failure_class}:{reservation.generation}",
+                    result="owner_publication_status_recorded",
+                    now=stamped,
+                ),
+            )
         final = incident_record(
             work_id=reservation.work_id,
             tier=reservation.tier,  # type: ignore[arg-type]
@@ -626,6 +735,25 @@ def _record_result(
             claim_seconds=int(policy.get("claim_seconds") or 300),
             attempt_bound=int(policy.get("attempt_bound") or 3),
             original_incident_id=incident_budget_identity(current),
+            stage_receipts=append_stage_receipts(
+                stage_receipts,
+                recovery_stage_receipt(
+                    "waiting",
+                    actor=str(current["accountable_owner"]),
+                    capability=str(current["selected_capability"]),
+                    permitted_inputs=tuple(
+                        sorted(str(key) for key in dict(current.get("evidence") or {}))
+                    ),
+                    authority_revision=_stage_authority(current),
+                    obligation=f"{reservation.work_id}:{reservation.failure_class}:{reservation.generation}",
+                    result=(
+                        "independent_postcheck_required"
+                        if outcome == "success"
+                        else f"owner_result_{outcome}"
+                    ),
+                    now=stamped,
+                ),
+            ),
         )
         assert row is not None
         history = list(row.get("incident_history") or [])
@@ -638,9 +766,7 @@ def _record_result(
         ledger.rows[reservation.reservation_id] = row
         _write_store(ledger)
         budget_operation_id = (
-            request.get("budget_operation_id")
-            if isinstance(request, Mapping)
-            else None
+            request.get("budget_operation_id") if isinstance(request, Mapping) else None
         )
         budget_incident_id = incident_budget_identity(current)
         if isinstance(budget_operation_id, str) and budget_incident_id is not None:
@@ -648,7 +774,9 @@ def _record_result(
                 budget_incident_id,
                 budget_operation_id,
                 {
-                    "outcome": "success" if outcome == "success" or not adapter_executed else "error",
+                    "outcome": "success"
+                    if outcome == "success" or not adapter_executed
+                    else "error",
                     "failure_class": result.get("failure_class"),
                     "quality": "known",
                     "usage": {"tool_attempts": 1 if adapter_executed else 0},
@@ -658,6 +786,15 @@ def _record_result(
                 now=stamped,
             )
         return json.loads(json.dumps(final))
+
+
+def _stage_authority(incident: Mapping[str, Any]) -> str:
+    for receipt in reversed(list(incident.get("stage_receipts") or [])):
+        if isinstance(receipt, Mapping) and isinstance(
+            receipt.get("authority_revision"), str
+        ):
+            return str(receipt["authority_revision"])
+    return "legacy-unversioned-authority"
 
 
 def _incident_fields(

@@ -97,13 +97,32 @@ provider work. Landscape/context and container boundaries are unchanged because
 the budget adds no person, external system, runtime process, database or network
 path; the supervisor component view shows Watchdog consuming Task's gate.
 
+`REQ-CASCADE-RECOVERY-002`: a bounded recovery journey exposes durable stage
+receipts for detected, admitted, assigned, executing, validating, publishing,
+verifying, resolved, and waiting states. Every receipt identifies its actor,
+scoped capability, permitted input names, authority revision and durable result.
+Owner execution, provider completion, queue acknowledgement, or push is never
+resolution. Only Watchdog may append `resolved`, after a fresh postcheck of the
+original obligation and exact authoritative generation.
+
+The stage envelope is additive to the existing tracking-root action and incident
+records. Task remains the sole incident-budget authority; tier teams remain the
+repair and publication owners; Watchdog owns independent verification. Restart
+reuses the claim, generation, operation and immutable receipt identities. Native
+shell, child processes and remote provider work are not isolated by this local
+ledger or by C4 component boundaries.
+
 Every production validator is admitted separately from its material publication
 generation. `publish_team_review_resolution` binds the canonical incident and
-policy-bearing generation, then reserves the approved worst-case validator runtime
+policy-bearing generation, then resolves a named validation profile and reserves
+the approved worst-case validator runtime
 under one top-level claim and one unique operation receipt. A changed source,
 target, validation profile, policy version, or interpreter environment can make a
 generation materially eligible, but only remaining incident-wide allowance grants
-a permit. Clocks and diagnostic reports are absent from the generation. Unknown
+a permit. The profile binds exact argv, coverage class, policy owner, approval
+revision and finite timeout/attempt budget; executable and working-directory
+feasibility is checked before spawn. Clocks and diagnostic reports are absent
+from the generation. Unknown
 classification fails closed; a deterministic review failure fences the settled
 receipt’s validation material (source tree, command, timeout, policy and runtime
 identity), not the remaining incident allowance. Previously failed material stays
