@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "sign_offs": [
+    {
+      "role": "epic_architect",
+      "plan_revision": "b7e1788b244cf7df848a9270d23bd61abf43e9ee",
+      "signed_at": "2026-11-24T16:53:39.521678+00:00",
+      "evidence_snapshot_id": "evidence_0d67e83709eb4684bc35be2410012295"
+    }
+  ]
+}
