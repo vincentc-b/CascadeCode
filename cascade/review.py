@@ -1088,13 +1088,17 @@ def _require_repair_review_route(
     target = intended_target or str(record.get("target_branch") or "")
     observed_target = str(snapshot.get("target_branch") or "")
     observed_source = str(snapshot.get("source_branch") or "")
+    expected_source_head = str(record.get("source_head") or "")
+    observed_source_head = str(snapshot.get("source_revision") or "")
     if (
         not target
+        or not expected_source_head
         or mr.target_branch != target
         or record.get("source_branch") != mr.source_branch
         or record.get("target_branch") != mr.target_branch
         or observed_source != mr.source_branch
         or observed_target != target
+        or observed_source_head != expected_source_head
         or snapshot.get("url") != mr.url
     ):
         raise GitError("review route conflicts with authoritative forge facts")

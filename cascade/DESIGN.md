@@ -342,7 +342,11 @@ forge acceptance. Generation rows bind the repair action, forge identity,
 source/target refs and observed heads, accepted merge SHA, publication action and
 reconciliation status. Legacy rows are represented as generation zero; absent
 accepted heads remain unknown rather than being inferred from completed board
-position or a historical URL.
+position or a historical URL. GitHub observations request the CLI-supported
+`commits` field and pin the source revision to the final commit OID; an empty or
+malformed commit list is unavailable evidence. Repair publication also requires
+that observed OID to equal the generation's recorded source head, so a moving
+source branch is refused before publication.
 
 Implementation ownership and integrated Code views are in
 [Workspace](workspace/DESIGN.md#work-ownership-and-retirement),

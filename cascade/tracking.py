@@ -402,11 +402,15 @@ def merge_request_snapshot(
         out["description"] = description
     if mr.forge == "github":
         commits = raw.get("commits")
-        source_revision = (
-            commits[-1].get("oid")
-            if isinstance(commits, list) and commits and isinstance(commits[-1], dict)
-            else None
-        )
+        if (
+            not isinstance(commits, list)
+            or not commits
+            or not isinstance(commits[-1], dict)
+            or not isinstance(commits[-1].get("oid"), str)
+            or not commits[-1]["oid"].strip()
+        ):
+            raise GitError("forge returned invalid GitHub commits JSON")
+        source_revision = commits[-1]["oid"].strip()
     else:
         source_revision = raw.get("sha")
     diff_refs = raw.get("diff_refs")

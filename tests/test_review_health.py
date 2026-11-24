@@ -45,9 +45,17 @@ def test_open_mergeable_github_review_reaches_healthy_path_with_supported_fields
                 return subprocess.CompletedProcess(
                     args,
                     0,
-                    '{"state":"OPEN","mergeable":"MERGEABLE",'
-                    '"mergeStateStatus":"CLEAN","comments":[],"reviews":[],\n'
-                    '"commits":[{"oid":"abc123"}]}',
+                    '{"state":"OPEN","isDraft":false,'
+                    '"url":"https://github.com/example/project/pull/1",'
+                    '"headRefName":"feat/feat_035_001",'
+                    '"baseRefName":"epic/epic_035",'
+                    '"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN",'
+                    '"body":"Reviewed repair","mergeCommit":null,'
+                    '"comments":[],"reviews":[],\n'
+                    '"commits":[{"authoredDate":"2026-11-24T10:00:00Z",'
+                    '"authors":[],"committedDate":"2026-11-24T10:00:00Z",'
+                    '"messageBody":"","messageHeadline":"Reviewed repair",'
+                    '"oid":"abc123"}]}',
                     "",
                 )
             return subprocess.CompletedProcess(args, 0, "[]", "")
