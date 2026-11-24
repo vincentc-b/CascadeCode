@@ -2,7 +2,7 @@
 id: feat_047_002
 title: Admit late repair generations without losing accepted review history
 tier: feature
-status: active
+status: completed
 parent: epic_047
 children:
 - task_047_002_001
