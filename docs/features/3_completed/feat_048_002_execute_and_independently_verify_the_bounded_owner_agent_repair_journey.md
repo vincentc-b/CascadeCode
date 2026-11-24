@@ -2,7 +2,7 @@
 id: feat_048_002
 title: Execute and independently verify the bounded owner-agent repair journey
 tier: feature
-status: active
+status: completed
 parent: epic_048
 children:
 - task_048_002_001
