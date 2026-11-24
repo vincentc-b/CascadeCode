@@ -49,7 +49,11 @@
     "old_request_replayed": true,
     "old_expected_plan_revision": "b7e1788b244cf7df848a9270d23bd61abf43e9ee",
     "old_result": "stale_revision: plan revision changed before architecture publication",
-    "next_action": "Publish reviewed ffcb9a10 plan with unchanged exact committed design/model references and null accepted-lineage generation."
+    "next_action": "Next architect turn repeats the identical ffcb9a10 request from the durable operation. Do not replace committed references or poll inside this planning turn.",
+    "status": "pending",
+    "operation_id": "architecture-publication-f17d12c797b510fe6679b23bbf54b3c2d6b6abc55443e11ff1c8cac84192b78e",
+    "reviewed_tuple_digest": "422218405db4254c756fe6beecab5409e8e767168c1ae3b951da2dd3c49c1797",
+    "render_operation_id": "c4-render-8374ce056d2b9a8249cc233ced3436f7164b81a9cd7befec6df6376d20b70028"
   },
   "remaining_gaps": [
     "F1 cumulative incident accounting",
@@ -57,5 +61,11 @@
     "F3 process-start loaded identity and authorized operational target/bootstrap",
     "F4 adversarial CI, budget feasibility and controlled supervisor recovery evidence"
   ],
-  "limitations": "Planning sign-off only; no implementation acceptance, dependency installation, live runtime restart or human plan approval."
+  "limitations": "Planning sign-off only; no implementation acceptance, dependency installation, live runtime restart or human plan approval.",
+  "sign_off": {
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "role": "epic_architect",
+    "evidence_snapshot_id": "evidence_c3e38c8852cd49f59cc5053cf50b6741",
+    "both_roles_current": true
+  }
 }
