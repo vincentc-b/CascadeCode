@@ -201,5 +201,55 @@
       "owner": "feat_048_002 Feature Lead and Feature Architect",
       "action": "Reconcile the canonical feature plan and four Task acceptance contracts against these existing parent obligations; verify the integrated F1 APIs and capability matrix before provider Task dispatch. Return concrete missing delivery or parent-contract changes through supported supervision/amendment rather than assuming approval proves implementation."
     }
+  },
+  "manager_contract_followup": {
+    "trigger_request_id": "feat_048_002:feat_048_002:f2-plan-f1-contract-ea2ed319",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "ea2ed3191bb928d80d759f8e0e5fab6fb56f591e",
+    "assessment": "The canonical F2 plan now pins F1 contracts, defines data/API/flow and records provider capability limits. This supersedes the earlier placeholder and dependency-visibility findings for the Feature plan. It does not establish implementation acceptance. The existing approved parent requirements cover the reported integration gaps; no epic scope, budget, authority or sequencing amendment is needed.",
+    "evidence": {
+      "canonical_reads": "read_doc(epic_048), read_doc(feat_048_002), list_children and read_architecture_amendments. F1 completed, F2 active with four Tasks, F3/F4 backlog; no amendments returned.",
+      "dependency_revision": "F2 canonical spec reports integrated F1 ff3cd399d1523ba6c4e123825c811f8c0b700e7c and implementation 270a72a2. The epic checkout remains at eb342c33 without that implementation, so this turn does not independently validate F1 source or its defects.",
+      "task_records": "Feature spec and incoming handoff report Task 001 active with live lease and acceptance TBD; Task 002-004 revised at fa2f171a, 30fe657f, e5b3bea1. No child Task content was read or edited by the Epic Manager."
+    },
+    "delivery_gates": [
+      {
+        "owner": "feat_048_002 / task_048_002_001",
+        "required": "Enable provider-to-production-MCP-to-real-validator reservations under one original incident and claim while the provider receipt remains active; serialize nested tools, keep an independent competing caller pending, charge parent model wait and nested process time separately, and settle each physical operation exactly once across restart. Preserve Task as the only budget authority and all existing consumption."
+      },
+      {
+        "owner": "feat_048_002 / task_048_002_001",
+        "required": "Successful unavailable usage must not produce free paid work. Preserve paid-turn charging and conservative time accounting when time evidence is absent; retain unavailable token quality. Use trustworthy measured dimensions when available without inventing token totals. Cover a successful empty/unavailable observation and replay/restart settlement."
+      },
+      {
+        "owner": "feat_048_002 Feature Lead and Feature Architect",
+        "required": "Reconcile Task 001 canonical acceptance through a supported recovery boundary before delivery. A message or Feature-level contract is not an updated Task record. Do not bypass the active lease, alter lifecycle files or reopen completed F1 merely to edit acceptance. If the supported path cannot reconcile it, report the exact refusal, owner and required action before recommending delivery."
+      },
+      {
+        "owner": "feat_048_002",
+        "required": "Retain the provider capability matrix and non-launch refusals for unsupported incident routes. Demonstrate one positive bounded owner journey through production adapters; universal refusal or scripted transport alone does not prove paid-provider controls. Keep F3 loaded-runtime and F4 operational/CI proof ownership unchanged."
+      },
+      {
+        "owner": "feat_048_002 Feature Architect and Task implementers",
+        "required": "Carry the canonical diagram-impact rows into each Task acceptance/closeout; reconcile real source, kinds, model, contract and normal/failure/restart behavior. Remove the reported forward-looking F2 wording in the integrated Task design as implementation becomes current. Report source-contract, render, navigation, pinned-source and warm-reuse evidence without claiming absent checks."
+      }
+    ],
+    "diagram_review": {
+      "inventory": "Existing diagram_impact_inventory and F2 canonical per-Task rows remain applicable; this followup changes no implementation.",
+      "context": "cascade-landscape / cascade-context: no new actor, external system or authority boundary in this handoff.",
+      "containers": "cascade-containers: no runtime, persistence or process boundary changes in this handoff; existing tracking-root authority retained.",
+      "components": "cascade-supervisor-components / cascade-team-components: Task budget, Agent invocation and Watchdog postcheck owners remain unchanged; F2 owns implemented collaborator changes.",
+      "code": "Agent, Task, Watchdog, Teams and affected tier Code views: no symbols change here; F2 must reconcile actual nested admission and settlement entry points at delivery.",
+      "projections": "Dashboard and War Room: no producer/consumer schema changes here; update only for changed implemented interfaces.",
+      "behavior": "No runtime transition changes here; F2 owns the provider/nested-tool and unavailable-usage settlement/restart flow updates."
+    },
+    "verification": {
+      "reviewed": "Approved parent nested-operation, unknown-usage and provider-route contracts; canonical F2 schema/API/flow, inventory and planning review; current epic-checkout Agent and Task designs and Watchdog recovery-admission section.",
+      "diff": "git diff --name-only eb342c33 HEAD -- DESIGN.md cascade architecture is empty before this artifact edit. No design/model edit is warranted for this handoff-only diff. The Feature-integrated design gap is explicitly routed above, not claimed repaired here.",
+      "checks": "JSON parse, inventory path/view-key checks and git diff --check passed.",
+      "tests": "No runtime tests, local render or browser checks rerun; this is a handoff artifact change, not implementation acceptance."
+    },
+    "publication": "Recorded architecture terminal failure remains separately owned by architecture runtime recovery, coordinated by Epic Architect. No fresh success evidence or supported recovery was established in this turn.",
+    "handoff": "F2 owns delivery-gate reconciliation and should return exact blocking refusals or parent-contract changes through supported supervision/amendment. No new epic sign-off, spec revision or child acceptance is asserted. End this planning turn to allow child execution/delivery."
   }
 }
