@@ -729,6 +729,26 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_4ef08fef9cc8f2f9e72b6403f46558c0a043d76785a8f037b50285ced744d69e",
+      "dependency_id": "dep_structurizr",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:c93200453f2c2dbcf6097aefbf84eb9684ea9a6ba7e097aa20396c044be79918",
+      "recipe_revision": "sha256:3fea0655363c3805fa7a3892ff74f69d2aef47716fdc47aba623dd6c622f81b2",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import subprocess,json; d=json.loads(subprocess.run([\"/usr/bin/docker\",\"image\",\"inspect\",'\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"'],capture_output=True,text=True,check=True,timeout=15).stdout)[0]; assert '\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"' in d[\"RepoDigests\"]; assert d[\"Architecture\"]==\"amd64\"; assert d[\"Os\"]==\"linux\"'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:02.703567+00:00",
+      "selected_version": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "lock_references": [
+        "cascade/workspace/c4_render.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
