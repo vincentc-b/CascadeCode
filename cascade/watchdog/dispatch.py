@@ -578,6 +578,7 @@ def _dispatch_task(
             "feature_id": feat_id,
             "by": by,
             "skills": skill_paths,
+            "parent_rev": meta.parent_rev,
             "instruction": (
                 "Read the Task and pinned Feature plans, implement the scoped change, "
                 "run the relevant tests, and leave a deliverable commit on the Task branch. "

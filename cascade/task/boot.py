@@ -7,7 +7,7 @@ from pathlib import Path
 
 from cascade.board.store import read_doc
 from cascade.task.graph import seed_task_role_models
-from cascade.watchdog.events import append_event
+from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.hooks import register_boot_hook
 from cascade.watchdog.config import ConfigError
 from cascade.agent.errors import ProviderConfigError
@@ -33,6 +33,11 @@ def last_fail_closed_boot() -> tuple[str, str] | None:
     """Return the most recent fail_closed_boot call, if any."""
 
     return _last_fail_closed
+
+
+def _dispatch_event(task_id: str, root: Path) -> Event | None:
+    events, _ = read_events(task_id, 0, root=root)
+    return next((event for event in reversed(events) if event.type == "TaskDispatched"), None)
 
 
 def boot_task(work_id: str) -> None:
@@ -66,7 +71,19 @@ def boot_task(work_id: str) -> None:
         fail_closed_boot(work_id, reason="parent_feature_unavailable")
         return
 
-    if pinned is not None:
+    dispatch = _dispatch_event(work_id, _boot_root)
+    if dispatch is not None and "parent_rev" in dispatch.payload:
+        # Dispatch pins the Feature before publishing the Task. A sibling mint
+        # can advance the Feature before this hook runs. Use the exact revision
+        # admitted by this dispatch and keep it fixed for the Task turn.
+        if (
+            dispatch.payload.get("task_id") != work_id
+            or dispatch.payload.get("feature_id") != feature_id
+            or dispatch.payload["parent_rev"] != pinned
+        ):
+            fail_closed_boot(work_id, reason="stale_parent_rev")
+            return
+    elif pinned is not None:
         try:
             current_parent = read_doc(feature_id, root=feature_root)
         except Exception:

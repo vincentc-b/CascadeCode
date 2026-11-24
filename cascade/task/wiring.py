@@ -69,10 +69,6 @@ def boot_task_wired(task_id: str) -> None:
         raise RuntimeError("install_task_wiring(root) must run before boot_task_wired")
     root = _wiring_root
 
-    stale = last_fail_closed_boot()
-    if stale is not None and stale[0] == task_id:
-        return
-
     if not checkpoint_path(task_id, root=root).exists():
         return
 
@@ -81,6 +77,10 @@ def boot_task_wired(task_id: str) -> None:
     except Exception:
         return
     if task.meta.tier != "task":
+        return
+
+    stale = last_fail_closed_boot()
+    if stale is not None and stale[0] == task_id and task.meta.status != "active":
         return
 
     if head_sha(root) is None:

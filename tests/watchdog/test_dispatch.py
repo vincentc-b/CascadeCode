@@ -301,6 +301,72 @@ def test_dispatch_task_refreshes_parent_pin_after_feature_plan_changes(tmp_path:
     assert read_doc("task_001", root=feature_root).meta.parent_rev == current_feature_sha
 
 
+@pytest.mark.parametrize("change_task_pin", [False, True])
+def test_task_boot_uses_the_feature_revision_admitted_at_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change_task_pin: bool
+) -> None:
+    from cascade.feature.mint import mint_task
+    from cascade.task.execution import execution_view
+    from cascade.task.wiring import install_task_wiring
+    from cascade.workspace.kickoff import kickoff_turn
+    from cascade.workspace.types import KickoffReason
+
+    root = make_repo(tmp_path, role_skills=True)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _open_feature(root)
+    feature = read_doc("feat_001", root=root)
+    feature_root = feature.meta.path.parents[3]
+    task_id = mint_task("First task", feature_id="feat_001", root=root)
+    starts: list[str] = []
+    sibling_minted = False
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff._invoke_role_turn",
+        lambda work_id, _tier, **_kwargs: starts.append(work_id),
+    )
+
+    def mint_sibling_before_boot(work_id: str) -> None:
+        nonlocal sibling_minted
+        assert work_id == task_id
+        if sibling_minted:
+            return
+        mint_task("Second task", feature_id="feat_001", root=root)
+        sibling_minted = True
+        task = read_doc(task_id, root=feature_root)
+        current_feature = read_doc("feat_001", root=feature_root)
+        assert task.meta.parent_rev != current_feature.sha
+        if change_task_pin:
+            task.meta.parent_rev = current_feature.sha
+            write_doc(task, root=feature_root)
+        # A queue delivery racing the boot hook cannot start the model early.
+        kickoff_turn(KickoffReason(kind="queue_event", work_id=task_id, by="watchdog", root=root))
+        assert starts == []
+
+    register_boot_hook("task", mint_sibling_before_boot)
+    install_task_wiring(root)
+    result = dispatch_task(task_id, "boss", root=root)
+
+    assert result.ok and result.event is not None
+    task = read_doc(task_id, root=feature_root)
+    events, _ = read_events("feat_001", 0, root=root)
+    lifecycle_events = [
+        event.type for event in events if event.payload.get("task_id") == task_id
+    ]
+    if change_task_pin:
+        assert task.meta.status == "blocked"
+        assert lifecycle_events == ["TaskFailed"]
+        assert execution_view(task_id, root=root)["last_error"] == "stale_parent_rev"
+        assert starts == []
+        assert dispatch_task(task_id, "boss", root=root).ok
+        assert read_doc(task_id, root=feature_root).meta.status == "active"
+        assert starts == [task_id]
+    else:
+        assert task.meta.status == "active"
+        assert task.meta.parent_rev == result.event.payload["parent_rev"]
+        assert lifecycle_events == ["TaskActivated"]
+        assert starts == [task_id]
+
+
 def test_parallelism_cap_ignores_blocked_and_does_not_emit(tmp_path: Path) -> None:
     root = make_repo(tmp_path, parallelism=2)
     add_doc(root, id="epic_001", title="Epic", tier="epic")

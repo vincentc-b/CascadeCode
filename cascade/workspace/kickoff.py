@@ -15,6 +15,7 @@ from cascade.agent.errors import TurnCancelledForDrain
 from cascade.board.context import resolve_root
 from cascade.board.errors import NotFound
 from cascade.board.store import read_doc
+from cascade.board.types import WorkMeta
 from cascade.watchdog.queue_cursor import queue_byte_size, resolve_last_queue_offset
 from cascade.workspace.drain import is_draining
 from cascade.workspace.types import KickoffReason
@@ -585,7 +586,16 @@ def _run_queue_delivery_locked(
 ) -> None:
     from cascade.watchdog.events import read_events
 
-    if tier in ("epic", "feature"):
+    if tier == "task":
+        from cascade.workspace.doc_root import read_doc_resolved
+
+        try:
+            task = read_doc_resolved(work_id, root=repo)
+        except NotFound:
+            return
+        if not _task_can_start_turn(task.meta):
+            return
+    elif tier in ("epic", "feature"):
         from cascade.task.action_recovery import pending_recovery_team_ids
         from cascade.workspace.integration_worktree import merged_board
 
@@ -835,6 +845,8 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> bool:
         tier = _tier_from_work_id(reason.work_id)
     if tier not in ("epic", "feature", "task"):
         return False
+    if tier == "task" and (doc is None or not _task_can_start_turn(doc.meta)):
+        return False
 
     feature_id = reason.feature_id or (doc.meta.parent if doc is not None else None)
     if reason.kind != "resume_inflight" and not _graph_has_inflight_turn(
@@ -957,6 +969,17 @@ def _kickoff_turn(reason: KickoffReason, repo: Path) -> bool:
         )
         return True
     return False
+
+
+def _task_can_start_turn(meta: WorkMeta) -> bool:
+    from cascade.task.worktree import get_task_run
+
+    run = get_task_run(meta.id)
+    return (
+        meta.status == "active"
+        and meta.path.parent.name == "2_active"
+        and (run is None or run.state != "booting")
+    )
 
 
 def _tier_from_work_id(work_id: str) -> str | None:
