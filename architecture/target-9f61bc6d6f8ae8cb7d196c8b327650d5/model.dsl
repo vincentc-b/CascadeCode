@@ -204,6 +204,12 @@ watchdog_uses_task_budget = watchdog_component -> task_team "Consumes the Task-o
         "cascade.semanticId" "relationship.watchdog-uses-task-budget"
     }
 }
+
+teams_use_task_budget = team_component -> task_team "Reserves and settles cumulative allowance for each review validator operation" {
+    properties {
+        "cascade.semanticId" "relationship.teams-use-task-budget"
+    }
+}
 teams_use_agent = team_component -> agent_component "Run role turns through" {
     properties {
         "cascade.semanticId" "relationship.teams-use-agent"
@@ -2640,12 +2646,30 @@ code_agent_cancel = element "cancel_live_turns" "Function" "Cancel registered lo
     }
 }
 
-code_teams_publication = element "publish_team_review_resolution" "Function" "Admit exact publication generation and resume owner-scoped validation/publication." {
+code_teams_publication = element "publish_team_review_resolution" "Function" "Carry canonical incident, claim and operation identities through cumulative admission and exact-SHA publication." {
     properties {
         "cascade.semanticId" "element.code.teams.publication"
         "cascade.parent" "element.component.teams"
         "cascade.sourcePath" "cascade/team_review_recovery.py"
         "cascade.sourceSymbol" "publish_team_review_resolution"
+    }
+}
+
+code_teams_budget_reserve = element "reserve_review_validation" "Function" "Atomically reserve the validator's approved worst-case runtime before any process spawn." {
+    properties {
+        "cascade.semanticId" "element.code.teams.budget-reserve"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "reserve_review_validation"
+    }
+}
+
+code_teams_validation_operation = element "ReviewValidationOperation" "Dataclass" "Carry the canonical incident, top-level claim, operation identity and durable permit to the validator." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validation-operation"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ReviewValidationOperation"
     }
 }
 
@@ -2658,7 +2682,7 @@ code_teams_validate_publish = element "check_and_publish_review_rebase" "Functio
     }
 }
 
-code_teams_validator = element "run_review_validation" "Function" "Run bounded repository checks with process-group cleanup and diagnostic tails." {
+code_teams_validator = element "run_review_validation" "Function" "Verify a live permit, run one bounded process group, and settle success, failure, timeout or interruption." {
     properties {
         "cascade.semanticId" "element.code.teams.validator"
         "cascade.parent" "element.component.teams"
@@ -2667,7 +2691,7 @@ code_teams_validator = element "run_review_validation" "Function" "Run bounded r
     }
 }
 
-code_task_generation = element "admit_review_publication_generation" "Function" "Fence unchanged publication generations while preserving action decisions and attempts." {
+code_task_generation = element "admit_review_publication_generation" "Function" "Record material publication evidence without granting allowance or growing the attempt bound." {
     properties {
         "cascade.semanticId" "element.code.task.generation"
         "cascade.parent" "element.component.task-team"
@@ -2757,9 +2781,39 @@ code_teams_publication_to_code_teams_validate_publish = code_teams_publication -
     }
 }
 
+code_teams_publication_to_code_teams_budget_reserve = code_teams_publication -> code_teams_budget_reserve "Reserves before action execution or validator spawn" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-code-teams-budget-reserve"
+    }
+}
+
+code_teams_budget_reserve_to_code_task_budget_reserve = code_teams_budget_reserve -> code_task_budget_reserve "Consumes the Task-owned cumulative gate" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-budget-reserve-to-code-task-budget-reserve"
+    }
+}
+
+code_teams_budget_reserve_to_code_teams_validation_operation = code_teams_budget_reserve -> code_teams_validation_operation "Issues canonical validator permit" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-budget-reserve-to-code-teams-validation-operation"
+    }
+}
+
 code_teams_validate_publish_to_code_teams_validator = code_teams_validate_publish -> code_teams_validator "Runs repository checks" {
     properties {
         "cascade.semanticId" "relationship.code-teams-validate-publish-to-code-teams-validator"
+    }
+}
+
+code_teams_validator_to_code_teams_validation_operation = code_teams_validator -> code_teams_validation_operation "Verifies the live receipt before spawn" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-validator-to-code-teams-validation-operation"
+    }
+}
+
+code_teams_validator_to_code_task_budget_settle = code_teams_validator -> code_task_budget_settle "Settles observed or conservative process usage" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-validator-to-code-task-budget-settle"
     }
 }
 

@@ -97,6 +97,26 @@ provider work. Landscape/context and container boundaries are unchanged because
 the budget adds no person, external system, runtime process, database or network
 path; the supervisor component view shows Watchdog consuming Task's gate.
 
+Every production validator is admitted separately from its material publication
+generation. `publish_team_review_resolution` binds the canonical incident and
+policy-bearing generation, then reserves the approved worst-case validator runtime
+under one top-level claim and one unique operation receipt. A changed source,
+target, validation profile, policy version, or interpreter environment can make a
+generation materially eligible, but only remaining incident-wide allowance grants
+a permit. Clocks and diagnostic reports are absent from the generation. Unknown
+classification fails closed; deterministic failure exhausts that evidence, while
+transient failure retains persisted bounded backoff and at most three operations.
+The legacy action attempt bound is never enlarged by generation admission.
+
+`run_review_validation` verifies the live receipt before `Popen`, starts a local
+process group, and settles known runtime on green, red, launch failure and timeout.
+Timeout or interruption stops the complete local group; interruption retains the
+worst-case reservation conservatively. This local gate does not meter provider
+paid turns: the provider boundary consumes the Task API separately. A green check
+is still insufficient to publish after source, target, validation policy,
+authorization, credentials or remote lease drift. Remote ancestry reconciliation
+is the authoritative completion check after an interrupted push.
+
 ### Publication implementation and recovery
 
 The [model](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
@@ -107,14 +127,14 @@ publication pipeline. `element.component.teams` owns that pipeline;
 
 | Source entry | Responsibility |
 |---|---|
-| [publish_team_review_resolution](team_review_recovery.py) | Recheck owner/admission and local resolution; bind generation to source, admitted heads and validation policy. |
-| [admit_review_publication_generation / resume_action](task/action_recovery.py) | Preserve decisions and attempts in the durable ledger; gate unchanged generations and claim execution. Generation admission is not a cumulative incident budget. |
+| [publish_team_review_resolution](team_review_recovery.py) | Carry canonical incident, claim and validator-operation identities from material admission through publication. |
+| [admit_review_publication_generation / resume_action](task/action_recovery.py) | Preserve decisions and attempts; record material evidence without granting allowance or growing the attempt bound. |
 | [bind_incident_budget / read_incident_budget](task/incident_budget.py) | Anchor every linked action and material generation to one original incident policy and expose its bounded restart-safe projection. |
 | [reserve_incident_operation / settle_incident_operation](task/incident_budget.py) | Atomically issue one bounded receipt under the live claim and charge actual or conservatively retained use exactly once. |
 | [extend_incident_budget / record_incident_budget_exhaustion](task/incident_budget.py) | Retain one exhaustion escalation and accept only independently authenticated finite additions within trusted maxima. |
 | [reserve_budgeted_operation / settle_budgeted_operation](watchdog/reservations.py) | Consume the Task gate after a distinct Watchdog capability claim without owning another allowance. |
 | [check_and_publish_review_rebase](review_rebase.py) | Check the immutable local source, validate, recheck policy/remote authority and push that SHA under the source lease. |
-| [run_review_validation](review_validation.py) | Execute the repository-selected checks through bounded process-group validation. |
+| [reserve_review_validation / run_review_validation](review_validation.py) | Reserve worst-case runtime before spawn, verify the receipt, stop the process group, bound diagnostics and settle every exit. |
 
 ```mermaid
 flowchart TD
@@ -122,7 +142,7 @@ flowchart TD
     Generation -->|eligible| Budget[Reserve cumulative allowance under live claim]
     Budget -->|permit| Checks[Validate immutable source and board]
     Budget -->|pending / exhausted / owner decision| Pending[Retain pending or refusal]
-    Generation -->|unchanged / live / gated| Pending[Retain pending or refusal]
+    Generation -->|not material / live / gated| Pending[Retain pending or refusal]
     Checks --> Settle[Settle exact receipt]
     Settle -->|red / timeout / interrupted| Preserve[Preserve checkout and conservative charge]
     Settle -->|green| Recheck[Recheck source, policy, remote heads and authority]
@@ -132,9 +152,11 @@ flowchart TD
     Receipt --> Verify[Independent obligation-specific postcheck]
 ```
 
-The action ledger and review registry survive restart. Interruption after a
-remote effect requires observation of that effect before another execution;
-publication evidence alone does not close the original delivery obligation.
+The action ledger and review registry survive restart. A reserved operation whose
+owner disappears remains charged and cannot be replayed as a fresh permit. An
+interruption after a remote effect requires independent remote-SHA observation
+before another execution; publication evidence alone does not close the original
+delivery obligation.
 The [Watchdog postcheck](watchdog/DESIGN.md#recovery-admission-and-active-path-authority)
 owns that distinction. [The real publication journey](../tests/test_review_recovery_journey.py)
 exercises timeout, restart, exhausted decisions and immutable publication.

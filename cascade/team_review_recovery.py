@@ -25,6 +25,17 @@ from cascade.task.action_recovery import (
     admit_review_publication_generation,
 )
 from cascade.team_branch_recovery import retry_team_integration_branch_update
+from cascade.task.incident_budget import (
+    POLICY_ID,
+    POLICY_VERSION,
+    bind_incident_budget,
+    read_incident_budget,
+)
+from cascade.review_validation import (
+    review_validation_environment,
+    reserve_review_validation,
+    settle_unused_review_validation,
+)
 from cascade.workspace.integration_worktree import locate_trunk
 
 TeamKind = Literal["epic_team", "feature_team"]
@@ -166,6 +177,8 @@ def publish_team_review_resolution(
         "observed_heads": list(heads),
         "validation_command": list(validation_command(trunk)),
         "validation_timeout_seconds": review_validation_timeout(trunk),
+        "budget_policy": {"id": POLICY_ID, "version": POLICY_VERSION},
+        "environment_revision": review_validation_environment(),
     }
     config_path = trunk / "cascade.toml"
     config = tomllib.loads(config_path.read_text()) if config_path.exists() else {}
@@ -183,6 +196,62 @@ def publish_team_review_resolution(
             "attempt_count": action.get("attempt_count"),
             "reason": None if action.get("recovery_state") == "completed"
             else "publication_generation_unchanged_or_blocked",
+        }
+
+    # Bind material evidence before claiming an action attempt.  This makes a
+    # first validator distinguishable from unknown legacy consumption and lets
+    # the cumulative gate refuse a repeated request without spawning anything.
+    action = load_action(action_id, root=trunk) or action
+    incident = action.get("incident") if isinstance(action, Mapping) else None
+    incident_generation = (
+        incident.get("authoritative_generation")
+        if isinstance(incident, Mapping)
+        else None
+    )
+    if not isinstance(incident_generation, str):
+        return {
+            "action_id": action_id,
+            "recovery_state": "awaiting_owner_decision",
+            "reason": "canonical_incident_generation_missing",
+        }
+    budget = bind_incident_budget(
+        action_id,
+        action_id,
+        incident_generation,
+        {"policy_version": POLICY_VERSION},
+        root=trunk,
+    )
+
+    generation_fingerprint = hashlib.sha256(
+        json.dumps(generation, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    validator_operations = [
+        operation_id
+        for operation_id in (budget.get("operations") or {})
+        if str(operation_id).startswith(f"review-validator:{action_id}:")
+    ]
+    operation_id = (
+        f"review-validator:{action_id}:{generation_fingerprint}:"
+        f"{len(validator_operations) + 1}"
+    )
+    claim_id = f"review-publication:{action_id}"
+    budget_decision, validation_operation = reserve_review_validation(
+        action_id,
+        claim_id,
+        operation_id,
+        root=trunk,
+        timeout=float(generation["validation_timeout_seconds"]),
+        environment_revision=dict(generation["environment_revision"]),
+    )
+    if validation_operation is None:
+        return {
+            "action_id": action_id,
+            "recovery_state": action.get("recovery_state"),
+            "attempt_count": action.get("attempt_count"),
+            "reason": f"validation_budget_{budget_decision.reason}",
+            "incident_id": action_id,
+            "claim_id": claim_id,
+            "operation_id": operation_id,
         }
 
     if action.get("recovery_state") == "awaiting_owner_decision":
@@ -211,6 +280,7 @@ def publish_team_review_resolution(
         for decision in decisions:
             decision_id = decision.get("decision_id")
             if decision.get("owner") != team_kind or not isinstance(decision_id, str):
+                settle_unused_review_validation(validation_operation)
                 raise PermissionError(
                     "review recovery has an unresolved decision for another team"
                 )
@@ -222,7 +292,10 @@ def publish_team_review_resolution(
                 metadata={"team_id": team_id, "publication_generation": generation},
             )
 
+    validation_consumed = False
+
     def execute(_context: object) -> dict[str, object]:
+        nonlocal validation_consumed
         preflight = prepare_review_rebase_turn(action_id, root=trunk)
         if preflight.turn is None:
             blocker = preflight.blocker
@@ -254,8 +327,13 @@ def publish_team_review_resolution(
             if path
         )
         publication = check_and_publish_review_rebase(
-            turn, ReviewRebaseExecution(True, local_head, modified)
+            turn,
+            ReviewRebaseExecution(True, local_head, modified),
+            validation_operation=validation_operation,
         )
+        current_budget = read_incident_budget(action_id, root=trunk) or {}
+        receipt = (current_budget.get("operations") or {}).get(operation_id) or {}
+        validation_consumed = receipt.get("state") == "settled"
         if not publication.published:
             blocker = publication.blocker
             raise ActionFailure(
@@ -287,12 +365,22 @@ def publish_team_review_resolution(
             }
         }
 
-    completed = resume_action(action_id, root=trunk, execute=execute)
+    try:
+        completed = resume_action(action_id, root=trunk, execute=execute)
+    finally:
+        if not validation_consumed:
+            current_budget = read_incident_budget(action_id, root=trunk) or {}
+            receipt = (current_budget.get("operations") or {}).get(operation_id) or {}
+            if receipt.get("state") == "reserved":
+                settle_unused_review_validation(validation_operation)
     result = {
         "action_id": action_id,
         "recovery_state": completed.get("recovery_state"),
         "attempt_count": completed.get("attempt_count"),
         "failure_classification": completed.get("failure_classification"),
+        "incident_id": action_id,
+        "claim_id": claim_id,
+        "operation_id": operation_id,
     }
     if completed.get("recovery_state") not in {"completed", "running"}:
         from cascade.task.action_recovery import capture_and_route_action_failure

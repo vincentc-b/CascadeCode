@@ -5,17 +5,20 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 import pytest
 
-from cascade.board import store as _board_store  # Initialize the normal package wiring.
+from cascade.board import store as _board_store  # noqa: F401 - initialize wiring
 from cascade.review_health import reconcile_open_review_health
+from cascade.feature import invoke_tool as invoke_feature_tool, load_feature_tools
 from cascade.task.action_recovery import (
     ActionFailure, create_or_load_action, load_action, record_owner_decision,
     record_owner_resolution, resume_action,
 )
 from cascade.validation_command import validation_command
 from cascade.review_validation import review_validation_command
+from cascade.task.incident_budget import read_incident_budget
 from tests.test_review_rebase import _execution_ready_turn
 from tests.test_review_health import _git, _conflicting_snapshot
 
@@ -61,6 +64,15 @@ def _resolved_review(tmp_path, monkeypatch):
 def test_timed_out_recovery_waits_across_restart_then_publishes_after_policy_fix(tmp_path, monkeypatch):
     root, turn = _resolved_review(tmp_path, monkeypatch)
     head = _git(root, 'rev-parse', 'HEAD')
+    pushes = tmp_path / 'publication-pushes.jsonl'
+    remote = Path(_git(root, 'remote', 'get-url', 'origin'))
+    hook = remote / 'hooks' / 'post-receive'
+    hook.write_text(
+        '#!/bin/sh\nwhile read old new ref; do '
+        f'printf "%s %s %s\\n" "$old" "$new" "$ref" >> "{pushes}"; '
+        'done\n'
+    )
+    hook.chmod(0o755)
     calls = tmp_path / 'validator-calls.jsonl'
     validator = tmp_path / 'validate_resolution.py'
     validator.write_text('''
@@ -89,33 +101,59 @@ time.sleep(2)
     assert failed['completion_metadata']['checks'][0]['returncode'] == 124
     assert 'merged source and target verified' in failed['completion_metadata']['checks'][0]['stdout']
     assert _git(root, 'ls-remote', 'origin', 'refs/heads/feat/feat_035_001').split()[0] == turn.observed_source_sha
+    assert not pushes.exists()
 
-    for _ in range(3):
+    load_feature_tools()
+    refused = invoke_feature_tool(
+        'feat_035_001', 'publish_review_resolution',
+        {'action_id': turn.action_id}, root=root,
+    )
+    assert refused['reason'] == 'validation_budget_transient_backoff'
+    for _ in range(2):
         reconcile_open_review_health(root)
     _monitor_in_new_process(root)
     assert load_action(turn.action_id, root=root)['attempt_count'] == 1
     assert len(calls.read_text().splitlines()) == 1
+    budget = read_incident_budget(turn.action_id, root=root)
+    assert budget is not None
+    assert budget['charged']['tool_attempts'] == 1
+    assert len(budget['operations']) == 1
     assert _git(root, 'rev-parse', 'HEAD') == head
+    assert not pushes.exists()
 
     # A changed operator-owned policy is new evidence; no Task/source edit or
-    # resetting failed attempts is required to make recovery executable again.
+    # resetting failed attempts is required. The incident-wide transient
+    # backoff remains authoritative across that policy correction.
     _policy(root, command, 10)
-    result = reconcile_open_review_health(root)
-    assert result[0]['outcome'] == 'published'
+    time.sleep(6)
+    result = invoke_feature_tool(
+        'feat_035_001', 'publish_review_resolution',
+        {'action_id': turn.action_id}, root=root,
+    )
+    assert result['recovery_state'] == 'completed'
     action = load_action(turn.action_id, root=root)
     assert action['recovery_state'] == 'completed'
     assert action['attempt_count'] == 2
     assert action['attempts'][0] == failed
     assert action['attempts'][1]['outcome'] == 'succeeded'
     assert len(action['review_publication_generations']) == 2
+    assert result['incident_id'] == turn.action_id
+    assert result['claim_id'] == f'review-publication:{turn.action_id}'
+    assert result['operation_id']
     assert _git(root, 'ls-remote', 'origin', 'refs/heads/feat/feat_035_001').split()[0] == head
+    assert len(pushes.read_text().splitlines()) == 1
     _monitor_in_new_process(root)
     assert len(calls.read_text().splitlines()) == 2
+    budget = read_incident_budget(turn.action_id, root=root)
+    assert budget is not None
+    assert budget['charged']['tool_attempts'] == 2
+    assert len(budget['operations']) == 2
     assert not calls.with_suffix('.orphan').exists(), 'timed-out validator children must be stopped'
     assert load_action(turn.action_id, root=root)['recovery_state'] == 'completed'
+    assert len(pushes.read_text().splitlines()) == 1
 
 
-def test_exhausted_legacy_review_is_rearmed_without_erasing_attempts(tmp_path, monkeypatch):
+def test_exhausted_legacy_review_is_not_rearmed_by_policy_change(tmp_path, monkeypatch):
     root, turn = _resolved_review(tmp_path, monkeypatch)
     create_or_load_action(turn.action_id, 'review_rebase', root=root, attempt_bound=1,
                          owning_team={'kind': 'feature_team', 'work_id': 'feat_035_001'})
@@ -140,12 +178,13 @@ def test_exhausted_legacy_review_is_rearmed_without_erasing_attempts(tmp_path, m
     validator.write_text("from pathlib import Path\nassert Path('source.txt').read_text().strip() == 'source'\nassert Path('target.txt').read_text().strip() == 'target'\n")
     _policy(root, [sys.executable, str(validator)], 10)
     result = reconcile_open_review_health(root)
-    assert result[0]['outcome'] == 'published'
+    assert result[0]['outcome'] == 'blocked'
     recovered = load_action(turn.action_id, root=root)
-    assert recovered['recovery_state'] == 'completed'
-    assert recovered['attempt_count'] == 2
+    assert recovered['recovery_state'] == 'awaiting_owner_decision'
+    assert recovered['attempt_count'] == 1
     assert recovered['attempts'][0] == prior_attempt
-    assert recovered['attempt_bound'] == 2
+    assert recovered['attempt_bound'] == 1
+    assert _git(root, 'ls-remote', 'origin', 'refs/heads/feat/feat_035_001').split()[0] == turn.observed_source_sha
 
 
 def test_changed_review_policy_cannot_clear_a_human_gate(tmp_path, monkeypatch):

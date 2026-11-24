@@ -91,6 +91,24 @@ supplied legacy totals alone cannot establish trusted historical accounting.
 Focused temporary-repository verification is in
 [`tests/task/test_incident_budget.py`](../../tests/task/test_incident_budget.py).
 
+Review publication is a concrete consumer of this API. Its material generation
+contains exact source and target heads, the approved validation command and
+timeout, budget policy ID/version, and interpreter environment revision. Material
+admission cannot increase `attempt_bound`. Before a real validator process starts,
+the Teams component reserves one tool attempt and the configured worst-case
+process runtime under the original incident and stable top-level publication
+claim. The validator carries a distinct operation receipt and settles on success,
+red result, launch error, timeout, or interruption. Deterministic failure permits
+no unchanged expensive check; transient failure uses the ledger's persisted
+5-second then 10-second jittered backoff and three-operation ceiling. Unknown
+classification waits for owner reconciliation. Independent finite extension keeps
+all prior attempts, decisions, charges and the first escalation.
+
+The Task gate exposes paid-turn and model/token dimensions for the provider-owned
+consumer, but does not claim that provider spending is enforced by review
+publication. The full Task validation gate remains separate from repository review
+validation, and Epic product acceptance remains a later lifecycle obligation.
+
 
 
 ## Interrupted review publication attempts

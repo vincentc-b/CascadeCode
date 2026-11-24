@@ -34,6 +34,13 @@ dead claims indefinitely running. Unknown process identity is not proof of death
 See `cascade/task/DESIGN.md` and `cascade/DESIGN.md` for the durable transition and
 publication validation contract.
 
+Review-validator admission does not add a second Watchdog budget or capability.
+The Teams publication path consumes the same Task-owned cumulative gate directly;
+Watchdog continues to own observation, proven-dead owner reconciliation and the
+independent postcheck. Landscape, context, container and `cascade-watchdog-code`
+remain unchanged because no Watchdog source symbol, persistent store or runtime
+boundary changes at this interface.
+
 ## Original recovery incident identity
 
 Watchdog incident envelopes preserve `original_incident_id` independently from
