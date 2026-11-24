@@ -39,29 +39,60 @@
   "diagram_impact_inventory": [
     {
       "level": "context",
-      "views": ["cascade-landscape", "cascade-context"],
-      "designs": ["DESIGN.md"],
+      "views": [
+        "cascade-landscape",
+        "cascade-context"
+      ],
+      "designs": [
+        "DESIGN.md"
+      ],
       "owner": "Epic Architect; F2 checks changed authority interfaces; F4 navigation proof",
       "required": "Retain provider, operator and forge boundaries. F2 adds no external system. Reconcile only if actual implementation changes a relationship or independent extension authority."
     },
     {
       "level": "containers",
-      "views": ["cascade-containers"],
-      "designs": ["DESIGN.md", "cascade/DESIGN.md"],
+      "views": [
+        "cascade-containers"
+      ],
+      "designs": [
+        "DESIGN.md",
+        "cascade/DESIGN.md"
+      ],
       "owner": "F2 consumer integration; F3 loaded runtime",
       "required": "Use existing worker/tool processes and F1 tracking-trunk persistence. Explain process and remote cancellation boundaries without claiming component or working-directory isolation. No second store or service."
     },
     {
       "level": "components",
-      "views": ["cascade-supervisor-components", "cascade-team-components"],
-      "designs": ["cascade/DESIGN.md", "cascade/agent/DESIGN.md", "cascade/watchdog/DESIGN.md"],
+      "views": [
+        "cascade-supervisor-components",
+        "cascade-team-components"
+      ],
+      "designs": [
+        "cascade/DESIGN.md",
+        "cascade/agent/DESIGN.md",
+        "cascade/watchdog/DESIGN.md"
+      ],
       "owner": "F2",
       "required": "Reconcile Task budget authority, Agent invocation receipts, tier-scoped dispatch, queued investigations, publication and Watchdog postcheck collaborators. Update CLI/War Room component interfaces only if changed."
     },
     {
       "level": "code",
-      "views": ["cascade-agent-code", "cascade-watchdog-code", "cascade-teams-code", "cascade-epic-code", "cascade-feature-code", "cascade-task-code"],
-      "designs": ["cascade/agent/DESIGN.md", "cascade/watchdog/DESIGN.md", "cascade/DESIGN.md", "cascade/epic/DESIGN.md", "cascade/feature/DESIGN.md", "cascade/task/DESIGN.md"],
+      "views": [
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-task-code"
+      ],
+      "designs": [
+        "cascade/agent/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "cascade/task/DESIGN.md"
+      ],
       "owner": "F2; preserve F1 budget ownership",
       "source_entries": [
         "cascade/agent/adapter.py:run_role",
@@ -82,15 +113,27 @@
     },
     {
       "level": "projection",
-      "views": ["cascade-dashboard-code", "cascade-war-room-http-code"],
-      "designs": ["cascade/war_room/DESIGN.md"],
+      "views": [
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ],
+      "designs": [
+        "cascade/war_room/DESIGN.md"
+      ],
       "owner": "F2 for changed producer/consumer interfaces; F4 truthfulness proof",
       "required": "Project bounded stage, wait and known/unknown consumption evidence. Reads do not dispatch work or extend budgets. No view edit is needed if the actual interface remains unchanged; record that diff-based reason."
     },
     {
       "level": "behavior",
-      "views": ["Owning-design Mermaid flows"],
-      "designs": ["cascade/agent/DESIGN.md", "cascade/watchdog/DESIGN.md", "cascade/task/DESIGN.md", "cascade/DESIGN.md"],
+      "views": [
+        "Owning-design Mermaid flows"
+      ],
+      "designs": [
+        "cascade/agent/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "cascade/DESIGN.md"
+      ],
       "owner": "F2",
       "required": "Trace observe/admit/reserve/provider/nested-tool/settle/publish/postcheck and unavailable-owner wait, cancellation, crash reconciliation and exhaustion. Identify durable state and restart authority. Keep proposed guarantees in work records until reconciled with source."
     }
@@ -108,5 +151,55 @@
     "checks": "JSON parsed successfully; all listed design paths and 15 source declarations resolved against Python ASTs; git diff --check passed.",
     "tests": "No runtime tests, render or browser checks rerun for this handoff-only change. Retained evidence is not represented as fresh F1 or F2 acceptance.",
     "limitations": "No spec edit, new sign-off, child implementation acceptance, lifecycle recovery, live deployment or dependency installation. F1 implementation visibility and failed architecture publication remain explicit follow-up checks."
+  },
+  "architect_review": {
+    "role": "epic_architect",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "e63a83fd810526e9ecb56b5df23c5c9d2759d809",
+    "decision": "The Manager constraints agree with the approved parent architecture. F2 now lists four Tasks but its canonical Data structures and API contracts remain TBD and its Logic flow remains Start to End. This is an unresolved feature planning gap, not architectural acceptance. Feature owners must reconcile the canonical plan and applicable Task acceptance before provider Task dispatch/sign-off. No parent contract change or renewed epic sign-off is required for this handoff.",
+    "current_observations": {
+      "feature": "read_doc reports F2 active with task_048_002_001 through task_048_002_004; supervise_child inspect reports active with no incidents.",
+      "dependency": "F1 supervise_child inspect reports completed with no incidents. The owned epic checkout still has no incident_budget module and its Agent boundary has no durable usage receipt. This does not establish the delivered F1 API or prove that F1 failed; F2 must inspect its integrated dependency revision.",
+      "task_visibility": "read_doc(task_048_002_001) returned content_access_denied. Task contents were not inspected through filesystem or alternate access. Feature Lead and Architect own verification and correction of all four Task contracts.",
+      "amendments": "read_architecture_amendments returned []. Both retained epic sign-offs match ffcb9a10."
+    },
+    "required_feature_acceptance": [
+      "Replace canonical schema/API/flow placeholders through read_doc/write_doc and record decisions through record_decision. Pin the delivered F1 source revision and concrete reservation, settlement, lineage binding, read/reconcile and independently authorized extension contracts, including typed pending/refusal/unknown outcomes. If these are unavailable, route the exact delivery prerequisite through supported parent supervision; do not fabricate a parallel ledger.",
+      "Record a source-backed capability matrix before provider Task dispatch: supported provider/mode, usage fields and overlap, enforced launch deadline, shell/child-process coverage, cancellation/reaping and remote overrun limits, and explicit refused modes. Preserve assigned Codex/model/reasoning. In this checkout run_codex_role passes no per-incident timeout; run_subprocess_turn defaults to 3600 seconds and kills only the direct process; RoleResult has no usage receipt. Existing MCP scope checks alone do not establish the approved turn/process bounds.",
+      "Specify input/output schemas for incident identity, material generation, top-level claim, nested operation, physical invocation and settlement receipt. Show reserve-before-launch and exactly-once settlement through exceptions, cancellation, lost response and restart. Retain uncertain consumption; a lease clock or provider switch must not free a live claim or renew allowance. Parent model wait time and nested validator process time remain separate charged dimensions.",
+      "Assign one Task or an explicit ordered Task seam to the real provider-to-MCP-to-validator journey sharing the F1 claim, plus a competing pending caller. Trace production owner repair/check/commit/delivery and immutable leased publication to an independent Watchdog check of the original obligation. Count real effects; provider completion, acknowledgement or a push is not resolution. Include no-owner/capability refusal and exhausted-incident audit suppression while unrelated work remains eligible.",
+      "Copy the applicable diagram_impact_inventory rows in this artifact into Task acceptance with named source symbols, owning design, view key and evidence. Reconcile all actual changed declarations/kinds/relationships and one normal plus one failure/restart path at delivery. Preserve the F3 loaded-runtime and F4 operational-proof boundaries; propose an epic amendment for parent policy, authority or sequencing changes."
+    ],
+    "diagram_impact_review": {
+      "inventory": "The six Manager inventory rows above remain the applicable F2 inventory; acceptance requires row-by-row final-diff reconciliation, including context, containers, components, Code, projections and supplementary behavior.",
+      "context": "No actor, external system or extension-authority boundary changes in this handoff; cascade-landscape and cascade-context remain applicable.",
+      "containers": "No runtime process, store or deployment boundary changes; cascade-containers continues to describe the existing runtime. F2 consumes the tracking-trunk ledger; C4 containers and PlanningSandbox do not establish OS isolation.",
+      "components": "No collaborator changes are implemented here. Agent launch/receipt, Task accounting and Watchdog independent postcheck remain separate owners in supervisor/team component views; F2 must reconcile changed dispatch consumers.",
+      "code": "No declaration is added or renamed here. Existing Agent, Watchdog, Teams and tier Code views remain current-source baseline, not proof of future admission guarantees. Task owners must add real implemented entry points and matching source-contract rows, then verify navigation, pinned source, stale links and component ownership.",
+      "behavior": "The existing Agent flow describes guarded provider dispatch and Watchdog flow describes later authoritative verification. This artifact adds acceptance constraints only. Implemented reservation/settlement/cancellation/restart flows must be reconciled in owning designs by F2.",
+      "projection": "No producer/consumer schema changes here. Dashboard and War Room Code views require updates only for actual changed interfaces; read-only projections cannot spend or extend allowance."
+    },
+    "verification": {
+      "reviewed_designs": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/agent/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "cascade/workspace/DESIGN.md",
+        "cascade/war_room/DESIGN.md"
+      ],
+      "scope": "Read current Agent implementation/normal flow/failure/isolation and Task/Watchdog persistence/postcheck sections against adapter.run_role, RoleTurn/RoleResult, run_codex_role and run_subprocess_turn. Checked the remaining affected parent/child designs and architecture directory for changes against retained reviewed revision c717bb36; diff is empty. No current architecture fact changes, so no design/model edit is warranted.",
+      "checks": "JSON parse, listed design paths and source declarations, inventory view-key existence, and git diff --check passed.",
+      "tests": "No runtime, render or browser checks rerun for this artifact-only change. Prior evidence remains in epic_048_architecture_review.json and epic_048_architect_rereview.json; no fresh implementation or navigation acceptance is claimed.",
+      "publication": "Terminal failure remains recorded in epic_048_publication_resume.json. No new recovery event or supported publication retry tool is supplied. Preserve the exact request and runtime-owner handoff; unchanged replay cannot recover the terminal operation.",
+      "limitations": "Feature plan completeness, F1 delivered API visibility and Task coverage remain unverified. No feature sign-off, board/spec edit, runtime recovery, dependency installation, accepted-snapshot change or product acceptance is claimed."
+    },
+    "handoff": {
+      "owner": "feat_048_002 Feature Lead and Feature Architect",
+      "action": "Reconcile the canonical feature plan and four Task acceptance contracts against these existing parent obligations; verify the integrated F1 APIs and capability matrix before provider Task dispatch. Return concrete missing delivery or parent-contract changes through supported supervision/amendment rather than assuming approval proves implementation."
+    }
   }
 }
