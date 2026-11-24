@@ -254,5 +254,67 @@
     },
     "publication": "The exact request in epic_048_publication_resume.json remains terminal failed after interrupted rendering and automatic recovery. No new recovery event or terminal retry API is supplied. Preserve the pinned request and accepted lineage; do not substitute newer references or repeat terminal replay as recovery. Architecture runtime owner still owes supported recovery, coordinated by Epic Architect. This is separate from approved epic scope and F3 implementation.",
     "handoff": "F3 Feature Lead and Architect own canonical contract/Task reconciliation and implemented proof. Return plan/Task revisions and any supported-path refusal or proposed parent-contract change through Cascade. End this planning turn after routing the artifact so child execution/delivery can proceed."
+  },
+  "manager_contract_review": {
+    "trigger": "TeamMessage feat_048_003:feat_048_003:f3-contract-reconciled-a4a20bd3",
+    "role": "epic_manager",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "a4a20bd3e791e251f3882a60b1314bcbd58cb5b6",
+    "review_base": "86eede65",
+    "assessment": "The canonical F3 correction addresses the earlier schema/API/flow placeholders and fits the approved parent scope. Its reviewed/integrated/installed/loaded evidence, independent host check, launcher-selected import root, lazy/mixed-source refusals and original-budget continuity are explicit. This is parent scope review, not Feature plan sign-off, Task acceptance or runtime/deployment proof. No parent amendment or new policy decision is needed.",
+    "evidence_boundary": {
+      "canonical_reads": "read_doc(epic_048) and read_doc(feat_048_003); list_children reports F1/F2 completed, F3 active with three Tasks and F4 backlog. read_architecture_amendments returned []. Both existing epic role sign-offs remain pinned to ffcb9a10.",
+      "integrated_dependency": "F3 canonical plan pins completed F2 revision 65f542713de31c9d13bf90fe022851e152f849af and names the F1/F2 APIs. This is a Feature-owned source claim; the epic checkout retains the earlier c717bb36 implementation baseline. No child-source acceptance is inferred from lifecycle completion.",
+      "task_records": "The Feature reports Task 003 acceptance b3fda6c27cd7375a103d69a1516d404f4bb5f10e and revised Task 002 acceptance. Prior Task reads were content_access_denied; no alternate access was used. Task 001 remains active with its own acceptance TBD and revise_task refused cannot be revised while active. The canonical Feature contract and queued child handoff supply implementation guidance but do not establish that its Task record was reconciled.",
+      "review_currency": "The retained architect_review in this artifact targets a8b0a45d. F3 Feature Architect must reconcile its review against a4a20bd3 and any later implementation-driven revision before sign-off. Epic Architect should reconcile the parent architecture handoff on this revision; prior review must not be relabeled current."
+    },
+    "delivery_gates": [
+      {
+        "owner": "F3 Feature Lead and Task 001 owning team",
+        "required": "Retain the full canonical runtime acceptance during execution. Before delivery, reconcile the Task acceptance through a supported owning-team/lifecycle route and return the resulting revision; if the active guard still prevents it, retain the exact refusal, responsible recovery owner and next supported action as an explicit unresolved gate. Do not edit guarded Task markdown directly, cancel a live lease to evade the guard or equate a queued message with a revised record."
+      },
+      {
+        "owner": "F3 Feature Architect and runtime implementer",
+        "required": "Review the current plan and concretize the serialized receipt, immutable per-start capture, bounded health response and typed verifier outcomes against actual implementation. Prove both a reviewed real worker and refusal of stale, wrong-root, dirty, mixed/lazy or startup-mutated code. Trusted reviewed/integrated/installed evidence must be independent of the worker report; recapture process-local evidence on restart and recheck identity before durable resolution."
+      },
+      {
+        "owner": "F3 cross-stage implementer",
+        "required": "Reach production repair, validation, delivery, review and independent postcheck through supported entry points with real repositories, processes and stores. Preserve the original incident allowance, claims and history through split roots, retirement and restart. Count remote effects independently after push-before-receipt interruption. Live owners, unfinished acceptance, unintegrated follow-up heads and unavailable evidence stay pending."
+      },
+      {
+        "owner": "F3 Task 003 and Feature reviewers",
+        "required": "Reconcile all diagram-impact rows against the delivered diff, including affected health producers/consumers and review Code view. Return exact view keys, source symbols, owning designs, validation/render/navigation evidence, stale-link checks and measured warm artifact reuse. No current design fact may be promoted solely from this plan."
+      },
+      {
+        "owner": "F3 preflight owner; F4 operational exercise owner",
+        "required": "Retain exact environment/product/tracking/runtime roots, artifact/receipt, supported entry points, actor/credentials, permitted injection, finite command budget and rollback/cleanup. Name unavailable evidence or authority as a prerequisite. Local verified dependencies and an isolated harness do not authorize installation or prove the controlled live exercise."
+      }
+    ],
+    "scope_and_sequencing": "F3 owns runtime/bootstrap and cross-stage delivery proof. F2 retains its closeout-evidence reconciliation; F4 retains adversarial CI, measured budget feasibility and authorized operational evidence. Do not reopen completed children or absorb those scopes here. Architecture publication recovery remains separately owned by the runtime owner, coordinated by Epic Architect.",
+    "diagram_impact_reconciliation": {
+      "inventory": "Retain diagram_impact_inventory above. F3 assigns runtime/launcher/health to Task 001, cross-stage owner/publication to Task 002, and final reconciliation/navigation to Task 003.",
+      "context": "cascade-landscape / cascade-context: this review artifact changes no actor, external dependency or authority. Implementers must reconcile actual bootstrap responsibility.",
+      "containers": "cascade-containers: this review changes no runtime, persistence store or isolation boundary. F3 must verify installed versus loaded origin and split-root state against code.",
+      "components": "cascade-cli-components / cascade-supervisor-components / cascade-team-components / cascade-war-room-components: this review changes no interfaces. F3 owns receipt producer, independent comparison and affected health-consumer reconciliation.",
+      "code": "cascade-workspace-commands-code / cascade-workspace-code / cascade-watchdog-code / cascade-feature-code / cascade-task-code / cascade-teams-code and affected cascade-dashboard-code / cascade-war-room-http-code: no declaration changes in this artifact. F3 must synchronize actual symbols, kinds, ownership and source contracts, then prove navigation and pinned source.",
+      "behavior": "No execution transition changes here. F3 must trace actual startup/load/verify, refusal/restart and post-push reconciliation in owning designs at delivery."
+    },
+    "verification": {
+      "reviewed_designs": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/workspace/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "cascade/war_room/DESIGN.md"
+      ],
+      "scope": "Reviewed linked parent boundaries and runtime, repair, delivery and independent-postcheck sections against canonical F3 plan. Checked launcher import-root selection, worker source-fingerprint timing and postcheck refusal/authoritative fact joins in owned source. Existing Workspace design explicitly distinguishes liveness from loaded-source proof; pending new behavior remains in work records.",
+      "design_changes": "None. Source, owning designs and architecture remain unchanged from retained c717bb36. This artifact updates review evidence only, adding no architecture fact or delivery attribution to designs. Child implementation and full-tree design completeness are not asserted.",
+      "checks": "JSON parse; retained inventory design paths, source declarations and view-key resolution; unchanged source/design/model diff; git diff --check.",
+      "tests": "No runtime tests, render or browser journeys rerun for this artifact-only change. F3 source-contract validation is a child report, not independently rerun acceptance here.",
+      "gaps": "Task 001 record reconciliation, current Feature architecture review and implemented runtime/cross-stage/navigation evidence remain open. F4 operational evidence and terminal architecture-publication recovery remain separately owned."
+    },
+    "handoff": "Send this review to F3 with its exact canonical revision. Epic Architect can reconcile the shared artifact on its next turn. Finish the planning turn so child execution and integration can progress; no polling, lifecycle mutation, spec edit or renewed parent sign-off is needed."
   }
 }
