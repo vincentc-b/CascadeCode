@@ -581,6 +581,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_675047ede0bb3df7ae0404edebb50a8c3248ac6f01009b877f62da60cb961c5b",
+      "dependency_id": "dep_docker",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:d453b04e16565b2747ca4a2ec0e8d748b64eea34e29296a50156d52fc580ee5f",
+      "recipe_revision": "sha256:aa6a1a69501193732b8a5940bb7e0d290fa15ea5b7235557efa12bac8cc1d2fa",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/docker'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'28.0.0'\"'\"' in r.stdout; subprocess.run([p,\"info\",\"--format\",\"{{.ServerVersion}}\"],check=True,timeout=15)'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:43.884098+00:00",
+      "completed_at": "2026-11-24T16:30:47.078253+00:00",
+      "result": "succeeded",
+      "redacted_output": "28.0.0\n",
+      "selected_version": "28.0.0",
+      "integrity_reference": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
