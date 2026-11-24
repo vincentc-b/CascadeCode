@@ -170,7 +170,27 @@ def queue_task_merge(
     # function returns, so an interruption can leave an unadvertised action
     # but can never leave an advertised delivery without its queue record.
     # Existing queue files remain a plain list for compatibility.
-    _queued_merge_action(task_id, repo, delivery_evidence=delivery_evidence)
+    action = _queued_merge_action(task_id, repo, delivery_evidence=delivery_evidence)
+    # Bind the original incident allowance before publishing the scheduling
+    # index.  Otherwise the first merge refusal becomes an unaccounted legacy
+    # attempt and the later Watchdog owner handoff must fail closed even though
+    # Cascade created and observed the attempt itself.
+    incident = action.get("incident") if isinstance(action, Mapping) else None
+    generation = (
+        incident.get("authoritative_generation")
+        if isinstance(incident, Mapping)
+        else None
+    )
+    if isinstance(generation, str):
+        from cascade.task.incident_budget import POLICY_VERSION, bind_incident_budget
+
+        bind_incident_budget(
+            _queued_merge_action_id(task_id),
+            _queued_merge_action_id(task_id),
+            generation,
+            {"policy_version": POLICY_VERSION},
+            root=repo,
+        )
     if delivery_evidence is not None:
         from cascade.feature.repair import mark_feature_repair_delivery_pending
 
@@ -444,6 +464,14 @@ def _resume_queued_merge(task_id: str, root: Path) -> ActionResult:
     result = merge_task_branch(task_id, root=root)
     metadata = _merge_outcome_metadata(task_id, result, root)
     if result.ok or _already_completed_equivalent(task_id, root):
+        evidence = queued_delivery_evidence(task_id, root=root)
+        if evidence is not None:
+            # A Feature repair may be admitted after this delivery was first
+            # queued.  Persist the exact tested pair again at successful merge
+            # so the repair can advance from parent admission to publication.
+            from cascade.feature.repair import mark_feature_repair_delivery_pending
+
+            mark_feature_repair_delivery_pending(task_id, evidence, root=root)
         _clear_delivery_blockers(task_id, root)
         if result.ok:
             from cascade.boss.rollup import on_task_merged

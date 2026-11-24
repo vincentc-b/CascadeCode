@@ -63,8 +63,16 @@ def reconcile_parent_lifecycle_incident(
         return _pending("repair_execution_unproven")
 
     feature_id = evidence.get("feature_id")
+    acknowledgement = adapter.get("acknowledgement")
+    acknowledgement = (
+        acknowledgement if isinstance(acknowledgement, Mapping) else {}
+    )
     repair_generation = adapter.get("generation")
+    if repair_generation is None:
+        repair_generation = acknowledgement.get("repair_generation")
     repair_action_id = adapter.get("action_id")
+    if repair_action_id is None:
+        repair_action_id = acknowledgement.get("repair_action_id")
     if (
         not isinstance(feature_id, str)
         or type(repair_generation) is not int
