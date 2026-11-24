@@ -113,6 +113,26 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_c688b3829301f656c11479b00f703812a8f56c565011c31d64744f8d6f1705a0",
+      "dependency_id": "dep_cursor_sdk",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:e82339d910f56bd839f853262120b3dbf5d4622d249d6d86ccd4a1b7d0e16f01",
+      "recipe_revision": "sha256:65ad6a8a5ef0c739a3e11aab7e232efbc65a29d4f767eebb0d193ba3a8b1ee65",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'cursor-sdk'\"'\"'); assert d.version=='\"'\"'1.0.37'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638'\"'\"'; importlib.import_module('\"'\"'cursor_sdk'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:09.982753+00:00",
+      "selected_version": "1.0.37",
+      "integrity_reference": "sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
