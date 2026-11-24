@@ -24,6 +24,29 @@ ProviderPermissionMode = Literal["default", "yolo"]
 UsageQuality = Literal["known", "estimated", "unavailable"]
 InvocationOutcome = Literal["success", "error", "interrupted", "unknown"]
 CancellationBound = Literal["provider", "local_transport", "unavailable"]
+RecoveryLaunchRoute = Literal[
+    "direct",
+    "manual",
+    "periodic",
+    "audit",
+    "briefing",
+    "provider_switch",
+    "parent",
+    "replacement_action",
+]
+
+_RECOVERY_LAUNCH_ROUTES = frozenset(
+    {
+        "direct",
+        "manual",
+        "periodic",
+        "audit",
+        "briefing",
+        "provider_switch",
+        "parent",
+        "replacement_action",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +162,7 @@ class IncidentProviderTurn:
     worst_case_known_tokens: int = 0
     output_token_limit: int | None = None
     cancellation_bound: CancellationBound = "local_transport"
+    launch_route: RecoveryLaunchRoute = "direct"
 
     def __post_init__(self) -> None:
         for name in ("incident_id", "claim_id", "operation_id"):
@@ -170,6 +194,10 @@ class IncidentProviderTurn:
         }:
             raise ValueError(
                 f"unsupported provider cancellation bound: {self.cancellation_bound}"
+            )
+        if self.launch_route not in _RECOVERY_LAUNCH_ROUTES:
+            raise ValueError(
+                f"unsupported recovery launch route: {self.launch_route}"
             )
 
 

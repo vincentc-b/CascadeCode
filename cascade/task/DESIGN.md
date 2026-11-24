@@ -118,6 +118,8 @@ remain distinct coverage classes.
 
 The Task gate exposes paid-turn and model/token dimensions to the Agent-owned
 consumer. Provider receipts retain provider/model/invocation identity and explicit
+validated launch-route attribution for direct, manual, periodic, audit, briefing,
+provider-switch, parent and replacement-action entry points, plus explicit
 known, estimated or unavailable token evidence in each operation observation;
 cached input is not added to known input plus output. Interrupted provider work
 retains its complete reservation. Review publication does not itself meter those

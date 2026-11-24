@@ -69,6 +69,7 @@ def admit_provider_turn(
             "provider": provider,
             "model_id": turn.model_id,
             "invocation_id": invocation_id,
+            "launch_route": budget.launch_route,
             "cancellation_bound": budget.cancellation_bound,
             "output_token_limit": budget.output_token_limit,
         },
