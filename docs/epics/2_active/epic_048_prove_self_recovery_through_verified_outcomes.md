@@ -8,6 +8,7 @@ children:
 - feat_048_001
 - feat_048_002
 - feat_048_003
+- feat_048_004
 depends_on: []
 owners:
 - epic_manager
@@ -120,6 +121,7 @@ Budget policy and extensions must be owned by the approved repository/operator a
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_048_004
 - feat_048_003
 - feat_048_002
 - feat_048_001
