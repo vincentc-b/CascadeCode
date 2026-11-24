@@ -38,6 +38,7 @@ from cascade.workspace.integration_worktree import (
     create_integration_worktree,
     doc_filesystem_root,
     get_integration_worktree,
+    git_root_for_path,
     integration_branch,
     merged_board,
     refresh_merged_board,
@@ -344,6 +345,11 @@ def _dispatch_feature(
     if head_sha(root) is None:
         return _fail("bad_state")
 
+    # The dependency evaluation selected the exact dispatchable copy. Resolve
+    # its checkout before registering the destination: activation can retain a
+    # backlog copy outside the Epic checkout, and once the Feature worktree is
+    # registered it becomes authoritative before relocation has populated it.
+    source_root = git_root_for_path(meta.path)
     feat_branch = integration_branch("feature", work_id)
     feat_wt = create_integration_worktree(
         "feature",
@@ -353,7 +359,12 @@ def _dispatch_feature(
         trunk=root,
     )
 
-    _relocate_active(work_id, dest_root=feat_wt.path, trunk=root)
+    _relocate_active(
+        work_id,
+        source_root=source_root,
+        dest_root=feat_wt.path,
+        trunk=root,
+    )
 
     event = _emit(
         root,
@@ -530,11 +541,12 @@ def _dispatch_task(
     # a draft pin.  Refresh it immediately before cutting the execution branch
     # so a not-yet-started Task cannot fail merely because a sibling was added
     # or the parent plan was clarified.
+    task_source_root = git_root_for_path(meta.path)
     meta = _refresh_task_parent_pin(
         work_id,
         feat_id,
+        source_root=task_source_root,
         feature_root=feat_wt.path,
-        trunk=root,
     )
 
     feat_branch = integration_branch("feature", feat_id)
@@ -553,6 +565,7 @@ def _dispatch_task(
         feature_root,
         work_id,
         None if skills is None else skill_paths,
+        source_root=task_source_root,
         trunk=root,
     )
     event = _emit(
@@ -579,12 +592,11 @@ def _refresh_task_parent_pin(
     task_id: str,
     feature_id: str,
     *,
+    source_root: Path,
     feature_root: Path,
-    trunk: Path,
 ) -> WorkMeta:
     """Commit the live Feature revision onto a Task before its branch is cut."""
 
-    source_root = doc_filesystem_root(task_id, trunk=trunk)
     task = read_doc(task_id, root=source_root)
     feature = read_doc(feature_id, root=feature_root)
     task.meta.parent_rev = feature.sha
@@ -607,11 +619,12 @@ def _place_task_active(
     work_id: str,
     skill_paths: list[str] | None,
     *,
+    source_root: Path | None = None,
     trunk: Path,
 ) -> None:
     """One write: status active in 2_active, with a skill override applied only here."""
 
-    source_root = doc_filesystem_root(work_id, trunk=trunk)
+    source_root = source_root or doc_filesystem_root(work_id, trunk=trunk)
     doc = read_doc(work_id, root=source_root)
     previous = doc.meta.path.resolve()
     if skill_paths is not None:
@@ -830,10 +843,11 @@ def _fail(
     )
 
 
-def _relocate_active(work_id: str, *, dest_root: Path, trunk: Path) -> None:
+def _relocate_active(
+    work_id: str, *, source_root: Path, dest_root: Path, trunk: Path
+) -> None:
     """Move a work doc into ``dest_root`` ``2_active`` and drop the prior copy."""
 
-    source_root = doc_filesystem_root(work_id, trunk=trunk)
     doc = read_doc(work_id, root=source_root)
     old_path = doc.meta.path.resolve()
     tier = doc.meta.tier

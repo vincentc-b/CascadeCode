@@ -1,0 +1,445 @@
+"""Cross-boundary acceptance for late Feature repair convergence.
+
+These scenarios intentionally use real Git worktrees, Task delivery, Feature
+repair receipts, review generations, and parent integration.  Only the forge
+transport is deterministic; no lifecycle or review result is manufactured.
+"""
+
+from __future__ import annotations
+
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Callable
+
+import pytest
+
+import cascade.review as review
+from cascade.board.errors import GitError
+from cascade.board.store import move_doc, read_doc, write_doc
+from cascade.boss.merge import merge_task_branch
+from cascade.boss.rollup import write_closeout
+from cascade.comments.store import comment
+from cascade.feature.mint import mint_task
+from cascade.feature.repair import (
+    FeatureRepairError,
+    admit_feature_repair,
+    inspect_feature_repair,
+)
+from cascade.task.action_recovery import recovery_actions
+from cascade.task.execution import mark_running
+from cascade.task.git_tools import swe_commit, swe_run_tests
+from cascade.task.worktree import clear_task_runs, get_task_run
+from cascade.tracking import MergeRequest
+from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
+from cascade.watchdog.events import read_events
+from cascade.workspace.integration_worktree import get_integration_worktree
+from tests.feature.test_recovery import _select_roles
+from tests.support import add_doc, approve_board_feature, make_repo
+from tests.test_approval_selection_gate import _inventory
+
+
+@pytest.fixture(autouse=True)
+def _provider_and_task_isolation(monkeypatch: pytest.MonkeyPatch):
+    inventory = _inventory("offered")
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory
+    )
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    clear_task_runs()
+    yield
+    clear_task_runs()
+
+
+def _git(root: Path, *args: str, check: bool = True) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if check and result.returncode:
+        raise AssertionError(result.stderr or result.stdout)
+    return result.stdout.strip()
+
+
+def _completed_feature(tmp_path: Path) -> tuple[Path, object, str]:
+    """Run the normal mint, dispatch, validation, and queued-delivery path."""
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_roles(
+        root,
+        "epic_001",
+        "epic_manager",
+        "epic_architect",
+        "feature_lead",
+        "feature_architect",
+        "swe",
+    )
+    _select_roles(root, "feat_001", "feature_lead", "feature_architect", "swe")
+    assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
+    assert dispatch_feature("feat_001", "human", root=root).ok
+    feature_entry = get_integration_worktree(root, "feature", "feat_001")
+    assert feature_entry is not None
+
+    task_id = mint_task(
+        "Deliver value",
+        body_stub="Implement and validate product.py.",
+        feature_id="feat_001",
+        root=root,
+    )
+    assert dispatch_task(task_id, "human", root=root).ok
+    run = get_task_run(task_id)
+    assert run is not None
+    (run.worktree / "product.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (run.worktree / "test_product.py").write_text(
+        "from product import VALUE\n\ndef test_value():\n    assert VALUE == 1\n",
+        encoding="utf-8",
+    )
+    (run.worktree / ".gitignore").write_text(
+        "__pycache__/\n.pytest_cache/\n", encoding="utf-8"
+    )
+    swe_commit("implement value", task_id=task_id, task_run=run, root=root)
+    validation = swe_run_tests(
+        cmd=["pytest", "test_product.py", "-q"],
+        task_id=task_id,
+        task_run=run,
+        root=root,
+    )
+    assert validation["exit_code"] == 0
+    assert validation["final_validation"]["task_id"] == task_id
+    assert merge_task_branch(task_id, root=root).ok
+    write_closeout(
+        "feat_001",
+        "Implemented product.py through the supervised Task delivery path.",
+        root=feature_entry.path,
+    )
+    return root, feature_entry, task_id
+
+
+class DeterministicForge:
+    """Contract-shaped forge boundary with observable publication count."""
+
+    def __init__(self, historical: MergeRequest, state: str) -> None:
+        self.historical = historical
+        self.state = state
+        self.created: list[MergeRequest] = []
+        self.current_source_head: str | None = None
+
+    def snapshot(self, _root: Path, mr: MergeRequest) -> dict[str, object]:
+        current = bool(self.created and mr == self.created[0])
+        assert current or mr == self.historical
+        return {
+            "state": "open" if current else self.state,
+            "url": mr.url,
+            "source_branch": mr.source_branch,
+            "target_branch": mr.target_branch,
+            "source_revision": self.current_source_head or "historical-source",
+            "target_revision": "historical-target",
+            "merge_sha": (
+                "historical-merge"
+                if not current and self.state == "merged"
+                else None
+            ),
+            "comments": [],
+        }
+
+    def find(self, *_args, **_kwargs) -> MergeRequest | None:
+        return self.created[0] if self.created else None
+
+    def create(self, _root: Path, **kwargs: object) -> MergeRequest:
+        created = MergeRequest(
+            url="https://forge.example/pulls/repair",
+            number="2",
+            forge="github",
+            source_branch=str(kwargs["source_branch"]),
+            target_branch=str(kwargs["target_branch"]),
+            draft=False,
+        )
+        self.created.append(created)
+        return created
+
+
+@pytest.mark.parametrize(
+    ("historical_state", "expected_route", "expected_url", "created"),
+    [
+        ("open", "refresh", "https://forge.example/pulls/original", 0),
+        ("merged", "follow_up", "https://forge.example/pulls/repair", 1),
+    ],
+)
+def test_completed_feature_repair_publishes_current_heads_and_integrates_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    historical_state: str,
+    expected_route: str,
+    expected_url: str,
+    created: int,
+) -> None:
+    """A late repair keeps old acceptance separate from current delivery."""
+
+    root, feature_entry, task_id = _completed_feature(tmp_path)
+    epic_entry = get_integration_worktree(root, "epic", "epic_001")
+    assert epic_entry is not None
+    move_doc("feat_001", "completed", root=feature_entry.path)
+
+    historical = MergeRequest(
+        url="https://forge.example/pulls/original",
+        number="1",
+        forge="github",
+        source_branch="feat/feat_001",
+        target_branch="epic/epic_001",
+        draft=False,
+    )
+    historical_projection = {
+        "url": historical.url,
+        "number": historical.number,
+        "forge": historical.forge,
+        "source_branch": historical.source_branch,
+        "target_branch": historical.target_branch,
+        "source_head": "historical-source",
+        "target_head": "historical-target",
+        "draft": False,
+        "closed": historical_state == "merged",
+        "accepted_merge_sha": (
+            "historical-merge" if historical_state == "merged" else None
+        ),
+        "accepted_source_head": (
+            "historical-source" if historical_state == "merged" else None
+        ),
+        "accepted_target_head": (
+            "historical-target" if historical_state == "merged" else None
+        ),
+        "reconciliation_status": (
+            "accepted" if historical_state == "merged" else "pending"
+        ),
+        "seen_comments": [],
+        "toast_notified": True,
+    }
+    review._store_review_generation(
+        root,
+        "feat_001",
+        historical_projection,
+        generation=0,
+        action_id=None,
+    )
+
+    admitted = admit_feature_repair(
+        "feat_001",
+        f"late-delivery:{task_id}",
+        task_id=task_id,
+        approval_reference="approved-feature-plan",
+        scope_reference="late-review-reconciliation",
+        root=root,
+    )
+    assert admitted["phase"] == "parent_enabled"
+    assert admitted["generation"] == 1
+    historical_row = review.feature_review_generation("feat_001", 0, root=root)
+    assert historical_row is not None
+
+    forge = DeterministicForge(historical, historical_state)
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+    monkeypatch.setattr(review, "merge_request_snapshot", forge.snapshot)
+    monkeypatch.setattr(review, "find_merge_request", forge.find)
+    monkeypatch.setattr(review, "create_merge_request", forge.create)
+    monkeypatch.setattr(review, "push_branch", lambda *_args, **_kwargs: None)
+
+    published = review.ensure_feature_review("feat_001", root=root)
+    published_record = review.review_record_for_feature("feat_001", root=root)
+    assert published_record is not None
+    forge.current_source_head = str(published_record["source_head"])
+    replay = review.ensure_feature_review("feat_001", root=root)
+    assert published is not None and replay is not None
+    assert published.url == replay.url == expected_url
+    assert len(forge.created) == created
+
+    current = review.review_record_for_feature("feat_001", root=root)
+    assert current is not None
+    assert current["current_generation"] == 1
+    assert current["action_id"] == admitted["action_id"]
+    assert current["route"] == expected_route
+    assert current["source_head"] == _git(feature_entry.path, "rev-parse", "HEAD")
+    assert current["target_head"] == _git(epic_entry.path, "rev-parse", "HEAD")
+    assert current["source_head"] != historical_row["source_head"]
+    assert review.feature_review_generation("feat_001", 0, root=root) == historical_row
+    if historical_state == "merged":
+        assert historical_row["accepted_merge_sha"] == "historical-merge"
+        assert current["previous_review_url"] == historical.url
+
+    # Forge acceptance and Git integration are deliberately separate facts.
+    # Land the exact current source on the real Epic line, then prove replay
+    # cannot create another publication or authority event.
+    _git(epic_entry.path, "merge", "--no-ff", "feat/feat_001", "-m", "integrate repair")
+    assert (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", current["source_head"], "HEAD"],
+            cwd=epic_entry.path,
+            check=False,
+        ).returncode
+        == 0
+    )
+    assert review.ensure_feature_review("feat_001", root=root).url == expected_url
+    authority = [
+        event
+        for event in read_events("feat_001", 0, root=root)[0]
+        if event.type == "FeatureRepairAuthorized"
+    ]
+    opened = [
+        event
+        for event in read_events("war_room", 0, root=root)[0]
+        if event.type == "Toast"
+        and event.payload.get("kind") == "feature_review_opened"
+    ]
+    assert len(authority) == 1
+    assert len(opened) == 1
+
+
+def _interrupt_after_prepare(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[Path, dict[str, object]], None]:
+    import cascade.feature.repair as repair
+
+    real_write = repair._write_payload
+    calls = 0
+
+    def interrupt(repo: Path, payload: dict[str, object]) -> None:
+        nonlocal calls
+        calls += 1
+        real_write(repo, payload)
+        if calls == 1:
+            raise OSError("prepared repair interruption")
+
+    monkeypatch.setattr(repair, "_write_payload", interrupt)
+    return real_write
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        "source_moved",
+        "target_moved",
+        "dirty_checkout",
+        "approval_changed",
+        "blocking_comment",
+        "dependency_refusal",
+        "live_owner",
+    ],
+)
+def test_prepared_repair_refusals_are_typed_and_preserve_durable_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    refusal: str,
+) -> None:
+    """Mutable gates are reread; a refusal cannot rewrite the repair receipt."""
+
+    root, feature_entry, task_id = _completed_feature(tmp_path)
+    epic_entry = get_integration_worktree(root, "epic", "epic_001")
+    assert epic_entry is not None
+    move_doc("feat_001", "completed", root=feature_entry.path)
+    ledger_write = _interrupt_after_prepare(monkeypatch)
+    with pytest.raises(OSError, match="prepared repair interruption"):
+        admit_feature_repair(
+            "feat_001",
+            f"late-delivery:{task_id}",
+            task_id=task_id,
+            approval_reference="approved-feature-plan",
+            root=root,
+        )
+
+    import cascade.feature.repair as repair
+
+    # Restore the ledger writer after the deliberately interrupted checkpoint.
+    monkeypatch.setattr(repair, "_write_payload", ledger_write)
+
+    if refusal == "source_moved":
+        feature = read_doc("feat_001", root=feature_entry.path)
+        feature.body += "\nLate unreviewed source edit.\n"
+        write_doc(feature, root=feature_entry.path)
+    elif refusal == "target_moved":
+        (epic_entry.path / "target-moved.txt").write_text("moved\n", encoding="utf-8")
+        _git(epic_entry.path, "add", "target-moved.txt")
+        _git(epic_entry.path, "commit", "-m", "move target")
+    elif refusal == "dirty_checkout":
+        feature = read_doc("feat_001", root=feature_entry.path)
+        feature.meta.path.write_text(
+            feature.meta.path.read_text(encoding="utf-8") + "\ndirty\n",
+            encoding="utf-8",
+        )
+    elif refusal == "approval_changed":
+        feature = read_doc("feat_001", root=feature_entry.path)
+        feature.meta.approved_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
+        write_doc(feature, root=feature_entry.path)
+    elif refusal == "blocking_comment":
+        comment(
+            "feat_001",
+            "Scope",
+            "Do not admit this repair yet.",
+            author="human",
+            blocking=True,
+            root=root,
+        )
+    elif refusal == "dependency_refusal":
+        add_doc(
+            root,
+            id="feat_999",
+            title="Unfinished dependency",
+            tier="feature",
+            parent="epic_001",
+        )
+        feature = read_doc("feat_001", root=feature_entry.path)
+        feature.meta.depends_on = ["feat_999"]
+        write_doc(feature, root=feature_entry.path)
+    elif refusal == "live_owner":
+        mark_running(task_id, root=root)
+    else:  # pragma: no cover - exhaustive parameter guard
+        raise AssertionError(refusal)
+
+    before_action = next(
+        row
+        for row in recovery_actions(root=root)
+        if row.get("kind") == "feature_repair"
+    )
+    with pytest.raises((FeatureRepairError, GitError)):
+        admit_feature_repair(
+            "feat_001",
+            f"late-delivery:{task_id}",
+            task_id=task_id,
+            approval_reference="approved-feature-plan",
+            root=root,
+        )
+    after_action = next(
+        row
+        for row in recovery_actions(root=root)
+        if row.get("kind") == "feature_repair"
+    )
+    for key in (
+        "action_id",
+        "generation",
+        "prior_document_digest",
+        "intended_document_digest",
+        "source_head",
+        "target_head",
+    ):
+        assert after_action[key] == before_action[key]
+    assert after_action["phase"] == "prepared"
+    assert after_action.get("authority_event_id") is None
+    assert after_action.get("introduction_commit") is None
+    inspected = inspect_feature_repair(
+        "feat_001", f"late-delivery:{task_id}", root=root
+    )
+    assert inspected["phase"] == "prepared"
+    assert not [
+        row
+        for row in recovery_actions(root=root)
+        if row.get("kind") == "feature_repair"
+        and row.get("phase") != "prepared"
+    ]
+    assert not [
+        event
+        for event in read_events("feat_001", 0, root=root)[0]
+        if event.type == "FeatureRepairAuthorized"
+    ]

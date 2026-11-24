@@ -2,6 +2,25 @@
 
 Purpose: observe canonical state, admit dependency-ready work, and coordinate bounded recovery. Interfaces are dispatch/activation, queues, poll loop, capability registry, incidents/reservations, health audit, and model resolution. Owns `REQ-WATCHDOG-001` (automation obeys lifecycle gates) and `DEC-WATCHDOG-001` (generation-bound reservations converge recovery).
 
+## Dispatch ownership transition
+
+Feature dispatch binds the dependency-checked board selection to its source
+checkout before registering the destination Feature worktree. Registration
+transfers mutation ownership, so the selected document is then relocated into
+that exact checkout and activated before the dispatch event is emitted. This
+ordering admits backlog documents retained outside the Epic checkout without
+allowing a sibling copy to win by board rank, and it prevents the empty newly
+registered checkout from being mistaken for the relocation source. Tasks
+minted after this transition are owned by the Feature checkout and follow the
+ordinary Task dispatch and supervised validation path.
+
+The temporary-repository acceptance matrix in
+[`tests/test_late_repair_convergence.py`](../../tests/test_late_repair_convergence.py)
+crosses this transition before exercising late repair, review generation and
+parent integration. The existing supervisor component and Watchdog code views
+remain accurate: the change does not add a runtime boundary, persistent store,
+public interface or new implementation symbol.
+
 
 
 ## Publication-owner liveness
