@@ -842,7 +842,8 @@
       el.targetDetail.hidden = !target;
       if (!target) return;
       var heading = doc.createElement("h3");
-      heading.textContent = target.kind === "relationship" ? "Relationship" : "Element";
+      heading.textContent = target.kind === "relationship" ? "Relationship" :
+        target.source_kind || (target.source_path ? "Code element" : "Element");
       var label = doc.createElement("p");
       label.textContent = target.label || target.semantic_id;
       var identity = doc.createElement("p");

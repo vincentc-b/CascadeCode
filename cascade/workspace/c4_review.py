@@ -118,6 +118,7 @@ class _SemanticTarget:
 
     source_path: str | None = None
     source_symbol: str | None = None
+    source_kind: str | None = None
 
 _LEGEND = (
     {"state": "added", "meaning": "present only in proposed"},
@@ -596,6 +597,7 @@ def _semantic_targets(workspace: dict[str, object]) -> dict[str, _SemanticTarget
         code_parent = properties.get("cascade.parent")
         source_path = properties.get("cascade.sourcePath")
         source_symbol = properties.get("cascade.sourceSymbol")
+        source_kind = None
         if code_parent is not None:
             if code_parent not in _component_semantics(workspace):
                 raise C4BindingError("code element names an unknown component parent")
@@ -607,6 +609,9 @@ def _semantic_targets(workspace: dict[str, object]) -> dict[str, _SemanticTarget
                 raise C4BindingError("code source path must be confined and repository-relative")
             if not isinstance(source_symbol, str) or not source_symbol.strip():
                 raise C4BindingError("code source path requires a symbol")
+            metadata = row.get("metadata")
+            if code_parent is not None and isinstance(metadata, str):
+                source_kind = metadata.strip() or None
         result[semantic_id] = _SemanticTarget(
             "relationship" if relationship else "element",
             semantic_id,
@@ -616,6 +621,7 @@ def _semantic_targets(workspace: dict[str, object]) -> dict[str, _SemanticTarget
             destination,
             source_path,
             source_symbol,
+            source_kind,
         )
     return result
 

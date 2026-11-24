@@ -55,7 +55,10 @@ Documentation ownership and semantic review requirements belong to the
 
 `DEC-WORKSPACE-C4-001`: Code diagrams use Structurizr custom elements/views rather
 than inventing deployable containers for functions and types. The HTTP projection
-maps validated code views to the fourth-level navigation contract. Supplementary
+maps validated code views to the fourth-level navigation contract. Each code
+element uses the native metadata field for its source declaration kind. The
+[C4 guide](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/README.md#integrated-code-level)
+defines the labels and their corresponding declarations. Supplementary
 sequence diagrams in owning designs explain behavior without replacing the code
 view.
 

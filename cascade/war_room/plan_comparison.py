@@ -198,9 +198,11 @@ def comparison_metadata(artifact) -> dict[str, dict]:
             semantic_id = value.get('properties', {}).get('cascade.semanticId')
             if semantic_id in identities:
                 result[semantic_id] = {
-                    'type': {'people': 'Person', 'softwareSystems': 'Software system',
-                             'containers': 'Container', 'components': 'Component',
-                             'customElements': 'Code element', 'relationships': 'Relationship'}.get(kind, kind),
+                    'type': identities[semantic_id].source_kind or {
+                        'people': 'Person', 'softwareSystems': 'Software system',
+                        'containers': 'Container', 'components': 'Component',
+                        'customElements': 'Code element', 'relationships': 'Relationship',
+                    }.get(kind, kind),
                     'description': value.get('description', ''),
                     'technology': value.get('technology', ''),
                     'tags': value.get('tags', ''), 'url': value.get('url', ''),

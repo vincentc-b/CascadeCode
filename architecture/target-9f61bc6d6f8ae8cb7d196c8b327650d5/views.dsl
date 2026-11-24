@@ -62,7 +62,7 @@ custom "cascade-teams-code" {
 }
 
 component war_room "cascade-war-room-components" {
-    title "War Room — diagram review"
+    title "War Room — components"
     include *
     autoLayout lr
 }
@@ -72,7 +72,7 @@ custom "cascade-diagram-review-code" {
     properties {
         "cascade.codeComponent" "element.component.diagram-review"
     }
-    include code_review_pair code_review_navigation code_review_svg code_review_preview code_review_union code_review_documents code_review_document_body code_review_document_changes
+    include code_review_pair code_review_navigation code_review_svg code_review_preview code_review_documents code_review_document_body code_review_document_changes
     autoLayout lr
 }
 
@@ -82,5 +82,109 @@ custom "cascade-comparison-render-code" {
         "cascade.codeComponent" "element.component.workspace"
     }
     include code_review_union code_review_layout code_review_scheduler
+    autoLayout lr
+}
+
+component cli "cascade-cli-components" {
+    include *
+    autoLayout lr
+}
+
+custom "cascade-board-code" {
+    title "Board — Code"
+    properties {
+        "cascade.codeComponent" "element.component.board"
+    }
+    include code_board_list code_board_index code_board_parse code_board_move code_board_validate
+    autoLayout lr
+}
+
+custom "cascade-agent-code" {
+    title "Agent runtime — Code"
+    properties {
+        "cascade.codeComponent" "element.component.agent"
+    }
+    include code_agent_planning code_agent_preflight code_agent_runner code_agent_turn code_agent_recovery code_agent_recovery_store
+    autoLayout lr
+}
+
+custom "cascade-watchdog-code" {
+    title "Watchdog — Code"
+    properties {
+        "cascade.codeComponent" "element.component.watchdog"
+    }
+    include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish
+    autoLayout lr
+}
+
+custom "cascade-boss-code" {
+    title "Boss — Code"
+    properties {
+        "cascade.codeComponent" "element.component.boss"
+    }
+    include code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_feature code_boss_epic
+    autoLayout lr
+}
+
+custom "cascade-collaboration-code" {
+    title "Comments and amendments — Code"
+    properties {
+        "cascade.codeComponent" "element.component.collaboration"
+    }
+    include code_collaboration_comment code_collaboration_route code_collaboration_gate code_collaboration_propose code_collaboration_sidecar code_collaboration_resolve
+    autoLayout lr
+}
+
+custom "cascade-war-room-http-code" {
+    title "HTTP and operator identity — Code"
+    properties {
+        "cascade.codeComponent" "element.component.war-room-http"
+    }
+    include code_http_serve code_http_handler code_http_identity code_http_local
+    autoLayout lr
+}
+
+custom "cascade-architecture-browser-code" {
+    title "Architecture browser — Code"
+    properties {
+        "cascade.codeComponent" "element.component.architecture-browser"
+    }
+    include code_browse_controller code_browse_snapshot code_browse_projection code_browse_resource
+    autoLayout lr
+}
+
+custom "cascade-dashboard-code" {
+    title "Dashboard and audit reads — Code"
+    properties {
+        "cascade.codeComponent" "element.component.dashboard"
+    }
+    include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader
+    autoLayout lr
+}
+
+custom "cascade-workspace-commands-code" {
+    title "Workspace commands — Code"
+    properties {
+        "cascade.codeComponent" "element.component.workspace-commands"
+    }
+    include code_cli_main code_cli_up code_cli_worker
+    autoLayout lr
+}
+
+custom "cascade-diagnostics-code" {
+    title "Repository diagnostics — Code"
+    properties {
+        "cascade.codeComponent" "element.component.diagnostics"
+    }
+    include code_probe_command code_probe_workspace code_probe_lifecycle
+    autoLayout lr
+}
+
+custom "cascade-workspace-code" {
+    title "Workspace — Code"
+    properties {
+        "cascade.codeComponent" "element.component.workspace"
+    }
+    include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
     autoLayout lr
 }

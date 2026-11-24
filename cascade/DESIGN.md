@@ -129,27 +129,29 @@ first. The source board is acquired lazily once per reconciliation call.
 
 ## Architecture navigation
 
-The authoritative [C4 source](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl)
-defines landscape, context, containers, supervisor components, a focused
-`cascade-team-components` view, and `cascade-war-room-components` for diagram
-review. The `cascade-diagram-review-code` and `cascade-comparison-render-code`
-views connect module design comparisons and review presentation to bounded C4
-rendering. Static C4 describes boundaries; the owning designs below contain
-implementation and behavior. Interactive exploration starts
-at context and follows containers → components → Code; landscape is an optional
-overview outside that level hierarchy. The navigation contract is owned by
-[War Room](war_room/DESIGN.md#integrated-c4-exploration-and-source-inspection).
+Start in `cascade-context` and follow containers → components → Code. The
+[C4 guide](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/README.md#reading-the-implementation)
+describes the levels and declaration labels. The designs below document the
+behavior and verification behind each Code view.
 
-| Component | Implementation design |
-|---|---|
-| Tier teams | [Epic](epic/DESIGN.md#implementation-and-navigation), [Feature](feature/DESIGN.md#implementation-and-navigation), [Task](task/DESIGN.md#implementation-and-navigation) |
-| Agent runtime | [Agent design](agent/DESIGN.md) |
-| Lifecycle observation | [Watchdog design](watchdog/DESIGN.md) |
-| Completion and merge gates | [Boss design](boss/DESIGN.md) |
-| Canonical work state | [Board design](board/DESIGN.md) |
-| Repository and architecture services | [Workspace design](workspace/DESIGN.md) |
-| Operator HTTP and diagrams | [War Room design](war_room/DESIGN.md) |
-| Collaboration | [Comments](comments/DESIGN.md), [Amendments](amendments/DESIGN.md) |
+| Container | Component | Code view | Design |
+|---|---|---|---|
+| Operator CLI | Workspace commands | `cascade-workspace-commands-code` | [Cascade package](DESIGN.md), [Workspace](workspace/DESIGN.md) |
+| Operator CLI | Repository diagnostics | `cascade-diagnostics-code` | [Probe](probe/DESIGN.md) |
+| War Room | HTTP and operator identity | `cascade-war-room-http-code` | [War Room](war_room/DESIGN.md) |
+| War Room | Architecture browser | `cascade-architecture-browser-code` | [Source inspection](war_room/DESIGN.md#integrated-c4-exploration-and-source-inspection) |
+| War Room | Diagram comparison | `cascade-diagram-review-code` | [Plan preview](war_room/DESIGN.md#committed-planning-comparisons-and-project-previews) |
+| War Room | Dashboard and audit reads | `cascade-dashboard-code` | [Audit HTTP](war_room/DESIGN.md#health-audit-http-consumer) |
+| Service | Board | `cascade-board-code` | [Board](board/DESIGN.md) |
+| Service | Agent runtime | `cascade-agent-code` | [Agent](agent/DESIGN.md) |
+| Service | Tier teams | `cascade-teams-code` | [Team execution](#team-execution) |
+| Service | Epic team | `cascade-epic-code` | [Epic](epic/DESIGN.md#implementation-and-navigation) |
+| Service | Feature team | `cascade-feature-code` | [Feature](feature/DESIGN.md#implementation-and-navigation) |
+| Service | Task team | `cascade-task-code` | [Task](task/DESIGN.md#implementation-and-navigation) |
+| Service | Watchdog | `cascade-watchdog-code` | [Watchdog](watchdog/DESIGN.md) |
+| Service | Boss | `cascade-boss-code` | [Boss](boss/DESIGN.md) |
+| Service | Workspace | `cascade-workspace-code`, `cascade-comparison-render-code` | [Workspace](workspace/DESIGN.md#c4-code-model-and-rendering-contract) |
+| Service | Comments and amendments | `cascade-collaboration-code` | [Comments](comments/DESIGN.md), [Amendments](amendments/DESIGN.md) |
 
 ## Team execution
 

@@ -172,8 +172,10 @@ verify owner-lineage and exact-revision enforcement.
   it. Comparison Level up prefers the verified originating parent from navigation
   history, then the broadest nearest parent when there is no origin;
   browser history and deep links restore snapshot, view, level and selection.
-- `REQ-WARROOM-C4-002`: Selecting a code element exposes its source path and
-  symbol and an authorized source resource at the snapshot's code revision.
+- `REQ-WARROOM-C4-002`: Selecting a code element exposes its declaration kind,
+  source path and symbol, and an authorized source resource at the snapshot's
+  code revision. Comparison details use the declaration kind from each side's
+  semantic model.
   Source previews render plain text, never Markdown or executable HTML. Advancing
   HEAD cannot change the bytes of an existing source URL. Invalid opaque resource
   IDs fail rather than accepting caller-supplied paths.

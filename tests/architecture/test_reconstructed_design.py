@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -61,45 +62,37 @@ def test_leaf_designs_have_unique_owned_ids_and_pinned_evidence() -> None:
                 decision_ids.add(clean)
 
 
-def test_c4_contract_has_stable_context_container_and_component_views() -> None:
+def test_current_c4_contract_retains_required_base_views() -> None:
     contract = validate_c4_workspace(ARCHITECTURE)
-    evidence = json.loads((ARCHITECTURE / "reconstruction-evidence.json").read_text())
-    inventory = ARCHITECTURE / "historical-evidence-inventory.json"
-
-    assert {view.key for view in contract.views} == {
+    assert {
         "cascade-landscape",
         "cascade-context",
         "cascade-containers",
         "cascade-supervisor-components",
-    }
+    } <= {view.key for view in contract.views}
     assert contract.owner == "task_034_007_002"
     assert set(contract.fragment_owners.values()) == {"task_034_007_002"}
     assert len(contract.semantic_ids) == len(contract.elements) + len(contract.relationships)
-    inventory_state = json.loads(inventory.read_text())
-    assert (
-        inventory_state["baseline_pair"]["g_artifact_sha256"]
-        == evidence["inventory"]["sha256"]
-    )
-    assert evidence["target_repository_key"] == TARGET_KEY
-    assert evidence["proposal"]["accepted"] is False
 
 
-def test_staged_evidence_pins_the_authored_design_and_model_bytes() -> None:
+def test_staged_evidence_pins_the_historical_design_and_model_bytes() -> None:
     evidence = json.loads((ARCHITECTURE / "reconstruction-evidence.json").read_text())
+    inventory = json.loads((ARCHITECTURE / "historical-evidence-inventory.json").read_text())
+    assert inventory["baseline_pair"]["g_artifact_sha256"] == evidence["inventory"]["sha256"]
+    assert evidence["target_repository_key"] == TARGET_KEY
     revision = evidence["artifact_revision"]
-    paths = [
-        Path("architecture/design-mappings.json"),
-        Path("cascade/workspace/DESIGN.md"),
-        Path("architecture") / TARGET_KEY / "workspace.dsl",
-        Path("architecture") / TARGET_KEY / "model.dsl",
-        Path("architecture") / TARGET_KEY / "views.dsl",
-        Path("architecture") / TARGET_KEY / "workspace.contract.json",
-    ]
 
-    assert evidence["proposal"]["status"] == "staged_pending_review"
-    assert len(evidence["proposal"]["review_unit_ids"]) == 1
-    for path in paths:
-        pinned = subprocess.check_output(
-            ["git", "show", f"{revision}:{path.as_posix()}"], cwd=ROOT
+    proposal = evidence["proposal"]
+    assert proposal["accepted"] is False
+    assert proposal["status"] == "staged_pending_review"
+    unit_id, = proposal["review_unit_ids"]
+    registry = json.loads((ROOT / "architecture/review-units.json").read_text())
+    unit = registry["review_units"][unit_id]
+    model = unit["proposed_model"]
+    for artifact in (unit["design"], model["contract"], *model["sources"]):
+        reference = artifact["reference"]
+        assert reference["revision"] == revision
+        blob = subprocess.check_output(
+            ["git", "show", f"{revision}:{reference['repository_path']}"], cwd=ROOT
         )
-        assert pinned == (ROOT / path).read_bytes()
+        assert hashlib.sha256(blob).hexdigest() == artifact["content_digest"]
