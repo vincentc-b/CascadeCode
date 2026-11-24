@@ -291,6 +291,11 @@ No canonical comment threads or architecture amendments were open at review. Rem
   Chose Extend four existing Code views with current source declarations; assign Task/Teams/Agent/Workspace ownership explicitly. Require a process-start loaded-artifact receipt and independent postcheck in F3 before F4 operational proof..
   Rationale: The current model omits publication collaborators and worker restart detail, and worker status has no loaded-revision binding. Source HEAD, a passing render or a provider completion result cannot prove deployed recovery. Reconcile current designs now and keep new guarantees in work records until implemented.
   Honors: Criteria 1, 6–15; design implementation-depth contract; exact pinned publication; no new deployment boundary or accepted-snapshot rewrite; explicit operational target and authorization gate..
+
+- `dec_006` · 2026-11-24 · Epic Manager · **Manager review and canonical budget persistence**
+  Chose Retain the architect's budget, nested-operation, provider-coverage and loaded-runtime contracts; clarify that F1's single incident budget uses the existing tracking-trunk executions sidecar and lifecycle lock, including split product/tracking roots..
+  Rationale: Source inspection of action_recovery._path and lifecycle_lock.lifecycle_root confirms tracking-trunk ownership, matching cascade/task/DESIGN.md. The product-root wording could create a second spendable ledger. Focused source/provider/navigation/publication checks passed 28 tests; architecture closure hashes and 14 declaration kinds match retained evidence. No design/model change is needed for this plan clarification.
+  Honors: Success criteria 13 and 16–19; one authoritative incident allowance; existing persistence ownership; all F1–F4 acceptance and diagram obligations; renewed Architect sign-off and revision-pinned publication before normal human approval..
 ## Amendment log
 
 _(none)_
