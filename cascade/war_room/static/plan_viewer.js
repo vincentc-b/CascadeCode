@@ -2891,6 +2891,7 @@
     var stopped = false;
     var draftRequested = false;
     var draftError = null;
+    var draftConflict = false;
     host.hidden = false;
 
     function node(tag, className, text) {
@@ -3834,8 +3835,19 @@
       status.setAttribute("role", "status");
       host.appendChild(status);
       if (awaitingProject) {
-        status.textContent = draftError ? "Project architecture comparison could not be loaded. Retrying shortly." :
-          "Loading the current project and its projected architecture…";
+        if (draftConflict) {
+          status.textContent = "Reconcile the proposal with the current project, then retry the comparison.";
+          var retry = node("button", "paired-c4-retry", "Retry comparison");
+          retry.type = "button";
+          retry.addEventListener("click", function () {
+            retry.disabled = true;
+            refresh();
+          });
+          host.appendChild(retry);
+        } else {
+          status.textContent = draftError ? "Project architecture comparison could not be loaded. Retrying shortly." :
+            "Loading the current project and its projected architecture…";
+        }
         return;
       }
       if (payload.project_revisions) {
@@ -4128,8 +4140,10 @@
     render();
     threadModel.load().then(render);
     function scheduleRefresh() {
-      if (stopped || (typeof options.refreshPayload !== "function" && typeof options.loadDraft !== "function")) return;
       if (refreshTimer !== null) clearTimeout(refreshTimer);
+      refreshTimer = null;
+      if (draftConflict) return;
+      if (stopped || (typeof options.refreshPayload !== "function" && typeof options.loadDraft !== "function")) return;
       refreshTimer = setTimeout(refresh, Math.max(5000, options.refreshIntervalMs || 15000));
     }
     function refresh() {
@@ -4154,6 +4168,7 @@
       }).then(function (nextPayload) {
         if (!nextPayload || stopped) return null;
         draftError = null;
+        draftConflict = false;
         var tupleChanged = reviewTupleKey(payload) !== reviewTupleKey(nextPayload);
         // Preserve the object identity captured by the semantic-thread model.
         Object.keys(payload).forEach(function (key) { delete payload[key]; });
@@ -4168,11 +4183,13 @@
           return nextPayload;
         });
       }).catch(function (error) {
-        // Keep the last verified page usable while exposing a bounded refresh
-        // failure.  The next active-page interval retries.
+        // Keep the last verified page usable while exposing the refresh failure.
         threadModel.state.error = error && error.message ? error.message :
           "Failed to refresh architecture review";
-        if (draftRequested) draftError = threadModel.state.error;
+        if (draftRequested) {
+          draftError = threadModel.state.error;
+          draftConflict = Boolean(error && error.status === 409);
+        }
         render();
         return null;
       }).finally(function () {

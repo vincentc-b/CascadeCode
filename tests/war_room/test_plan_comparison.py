@@ -144,7 +144,7 @@ def test_project_projection_preserves_current_main_and_applies_proposal_without_
 
 def test_project_projection_reports_conflicts_instead_of_removing_current_work(tmp_path):
     import pytest
-    from cascade.war_room.plan_comparison import project_projection_revision
+    from cascade.war_room.plan_comparison import ProjectProjectionConflict, project_projection_revision
 
     root = make_repo(tmp_path)
     (root / 'architecture.txt').write_text('original\n')
@@ -156,7 +156,7 @@ def test_project_projection_reports_conflicts_instead_of_removing_current_work(t
     git(root, 'worktree', 'add', str(branch), 'proposal')
     (branch / 'architecture.txt').write_text('conflicting proposal\n')
     proposal = commit(branch, 'proposal change')
-    with pytest.raises(ValueError, match='conflicts with the current project.*architecture.txt'):
+    with pytest.raises(ProjectProjectionConflict, match='conflicts with the current project.*architecture.txt'):
         project_projection_revision(root, current, proposal)
     assert (root / 'architecture.txt').read_text() == 'already delivered change\n'
     assert git(root, 'rev-parse', 'HEAD') == current

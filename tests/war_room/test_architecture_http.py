@@ -79,6 +79,29 @@ def _stop(server, thread) -> None:
     thread.join(timeout=5)
 
 
+@pytest.mark.parametrize("conflict, expected_status", [(True, 409), (False, 503)])
+def test_plan_preview_distinguishes_conflicts_from_service_failures(
+    tmp_path: Path, monkeypatch, conflict: bool, expected_status: int,
+) -> None:
+    from cascade.war_room import plan_comparison
+
+    def fail_preview(*args, **kwargs):
+        if conflict:
+            raise plan_comparison.ProjectProjectionConflict("Proposal conflicts in model.dsl")
+        raise ValueError("Preview is unavailable")
+
+    monkeypatch.setattr(plan_comparison, "draft_diagrams", fail_preview)
+    server, thread, base = _start(make_repo(tmp_path))
+    try:
+        status, raw, _headers = _post(base + "/api/architecture/plan-preview", {"work_id": "epic_001"})
+        assert status == expected_status
+        assert json.loads(raw)["error"] == (
+            "Proposal conflicts in model.dsl" if conflict else "Preview is unavailable"
+        )
+    finally:
+        _stop(server, thread)
+
+
 def test_context_catalog_exposes_session_target_without_accepting_queries(
     tmp_path: Path,
 ) -> None:

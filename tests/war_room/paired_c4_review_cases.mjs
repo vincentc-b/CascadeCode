@@ -330,6 +330,50 @@ function settle() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+{
+  const timers = new Map();
+  const { setTimeout, clearTimeout } = globalThis;
+  let nextTimer = 0;
+  globalThis.setTimeout = (callback) => {
+    timers.set(++nextTimer, callback);
+    return nextTimer;
+  };
+  globalThis.clearTimeout = (id) => timers.delete(id);
+  try {
+    const page = createElement("main");
+    const host = page.appendChild(createElement("section"));
+    const conflict = Object.assign(new Error("Proposal conflicts in model.dsl"), { status: 409 });
+    let calls = 0;
+    const review = initPairedC4Review({ state: "first", views: [] }, {
+      document, host,
+      loadDraft() {
+        calls++;
+        if (calls === 1) throw conflict;
+        if (calls === 2) throw Object.assign(new Error("Preview is unavailable"), { status: 503 });
+        return { state: "ready", project_comparison: true, views: [], summary: "Preview loaded" };
+      },
+    });
+    page.querySelector('[data-review-tab="c4"]').click();
+    await settle();
+    assert.equal(host.querySelector(".paired-c4-error").textContent, conflict.message);
+    assert.match(host.querySelector(".paired-c4-status").textContent, /Reconcile the proposal/);
+    assert.equal(timers.size, 0, "a conflict cancels the scheduled refresh");
+    host.querySelector(".paired-c4-retry").click();
+    await settle();
+    assert.equal(calls, 2);
+    assert.match(host.querySelector(".paired-c4-status").textContent, /Retrying shortly/);
+    assert.equal(timers.size, 1, "a transient failure schedules the next retry");
+    await [...timers.values()][0]();
+    assert.equal(calls, 3);
+    assert.equal(host.querySelector(".paired-c4-error"), null);
+    assert.equal(host.querySelector(".paired-c4-summary").textContent, "Preview loaded");
+    review.stopRefresh();
+  } finally {
+    globalThis.setTimeout = setTimeout;
+    globalThis.clearTimeout = clearTimeout;
+  }
+}
+
 const errorHost = createElement("section");
 initPairedC4Review({
   state: "error",

@@ -247,8 +247,9 @@ evidence.
   reports when the project or proposal advances. Explicit comparison refresh
   reloads the page to obtain new pins. Once project preview is requested, late
   publication responses or failures cannot replace it with publication data or
-  an empty accepted baseline. Failed preview loads remain visible and retry via
-  the project loader. Uncommitted source changes are excluded.
+  an empty accepted baseline. Transient preview failures retry via the project
+  loader. A merge conflict lists the affected paths and pauses polling until
+  the operator retries. Uncommitted source changes are excluded.
 - `REQ-WARROOM-COMPARE-005`: One diagram contains the union of both revisions:
   removals are red, additions green, semantic edits amber, and unchanged targets
   remain as context. Reviewed renames remain one changed target. A rewired
