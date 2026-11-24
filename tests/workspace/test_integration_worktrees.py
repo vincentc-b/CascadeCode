@@ -11,6 +11,7 @@ import pytest
 
 from cascade.board.context import set_project_context
 from cascade.board.store import (
+    list_board,
     move_doc,
     read_doc,
     read_doc_in_worktree,
@@ -162,6 +163,80 @@ def test_mutation_owner_uses_tracking_root_in_split_project(tmp_path: Path) -> N
     move_doc("epic_001", "active", root=target)
     assert read_doc("epic_001", root=target).meta.status == "active"
     assert not list((entry.path / "docs").rglob("*.md"))
+
+
+def test_mutation_owner_split_root_rejects_changed_owner_despite_completed_sibling(
+    tmp_path: Path,
+) -> None:
+    target = make_repo(tmp_path / "target")
+    tracking = make_repo(tmp_path / "tracking")
+    _initial_commit(target)
+    add_doc(tracking, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        tracking,
+        id="feat_001",
+        title="Owner backlog",
+        tier="feature",
+        parent="epic_001",
+    )
+    set_project_context(ProjectContext.split(target, tracking))
+    owner = ensure_integration_worktree(
+        "feature",
+        "feat_001",
+        branch=integration_branch("feature", "feat_001"),
+        base_ref="HEAD",
+        trunk=target,
+    )
+    sibling = ensure_integration_worktree(
+        "feature",
+        "feat_002",
+        branch=integration_branch("feature", "feat_002"),
+        base_ref="HEAD",
+        trunk=target,
+    )
+    set_project_context(ProjectContext.colocated(sibling.path))
+    add_doc(
+        sibling.path,
+        id="epic_001",
+        title="Historical epic",
+        tier="epic",
+        status="active",
+    )
+    add_doc(
+        sibling.path,
+        id="feat_001",
+        title="Historical sibling",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    set_project_context(ProjectContext.split(target, tracking))
+
+    save_registry(
+        target,
+        [
+            IntegrationWorktree(
+                owner.kind,
+                owner.work_id,
+                "feat/changed",
+                owner.path,
+                owner.base_sha,
+            ),
+            sibling,
+        ],
+    )
+    invalidate_merged_board(target)
+    historical = next(
+        (sibling.path / "docs/features/3_completed").glob("feat_001_*.md")
+    )
+    assert historical.is_file()
+    with pytest.raises(MutationOwnerError, match="registered branch or checkout path"):
+        resolve_mutation_owner("feat_001", trunk=target)
+
+    save_registry(target, [owner, sibling])
+    move_doc("feat_001", "active", root=target)
+    assert read_doc_in_worktree("feat_001", tracking).meta.status == "active"
+    assert historical.is_file()
 
 
 def test_mutation_owner_refuses_snapshot_and_missing_registered_owner(tmp_path: Path) -> None:
@@ -824,6 +899,193 @@ def test_retirement_persists_and_rereads_missing_terminal_task(
     assert copied.meta.status == "completed"
     assert copied.meta.path.parent.name == "3_completed"
     assert prove_terminal_retirement("feature", "feat_001", trunk=root).ok
+
+
+def test_delivery_rollup_retirement_and_restart_converge_on_terminal_task(
+    tmp_path: Path,
+) -> None:
+    from cascade.boss.rollup import try_complete_feature
+    from cascade.comments.store import comment, resolve_comment
+    from cascade.task.action_recovery import recovery_actions
+    from cascade.task.execution import (
+        execution_view,
+        mark_awaiting_merge,
+        mark_queued,
+        mark_running,
+    )
+    from cascade.task.failure import defer_task_teardown, flush_deferred_task_teardown
+    from cascade.task.worktree import create_task_worktree
+    from cascade.task_rollup import queue_task_merge, retry_pending_task_merges
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    commit_board(root)
+    epic = ensure_integration_worktree(
+        "epic",
+        "epic_001",
+        branch=integration_branch("epic", "epic_001"),
+        base_ref="HEAD",
+        trunk=root,
+    )
+    feature = ensure_integration_worktree(
+        "feature",
+        "feat_001",
+        branch=integration_branch("feature", "feat_001"),
+        base_ref=epic.branch,
+        trunk=root,
+    )
+    move_doc("feat_001", "active", root=root)
+
+    # The child is minted after the parent checkout was cut.  This is the
+    # production shape that left a terminal parent copy without its last Task.
+    add_doc(
+        feature.path,
+        id="task_001",
+        title="Last task",
+        tier="task",
+        status="active",
+        parent="feat_001",
+    )
+    feature_doc = read_doc_in_worktree("feat_001", feature.path)
+    feature_doc.meta.children = ["task_001"]
+    save_doc(feature_doc, previous_path=feature_doc.meta.path, root=feature.path)
+    task_run = create_task_worktree(
+        "task_001",
+        root=root,
+        parent_rev=None,
+        skills=[],
+        base_ref=feature.branch,
+    )
+    (task_run.worktree / "delivered.txt").write_text(
+        "delivered\n", encoding="utf-8"
+    )
+    subprocess.run(
+        ["git", "add", "delivered.txt"],
+        cwd=task_run.worktree,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "deliver task"],
+        cwd=task_run.worktree,
+        check=True,
+        capture_output=True,
+    )
+    deliverable_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=task_run.worktree,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    feature_base_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=feature.path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    mark_queued("task_001", root=root)
+    mark_running("task_001", root=root)
+    mark_awaiting_merge("task_001", root=root)
+    queue_task_merge(
+        "task_001",
+        root=root,
+        delivery_evidence={
+            "task_id": "task_001",
+            "deliverable_sha": deliverable_sha,
+            "feature_base_sha": feature_base_sha,
+        },
+    )
+    comment_id = comment(
+        "feat_001",
+        "Scope",
+        "Hold parent rollup until Task delivery evidence is inspected.",
+        author="human",
+        root=root,
+    )
+    teardown = defer_task_teardown()
+    assert retry_pending_task_merges(root) == ["task_001"]
+
+    execution = execution_view("task_001", root=root)
+    assert execution is not None
+    assert (execution["phase"], execution["outcome"]) == ("terminal", "succeeded")
+    action = next(
+        row
+        for row in recovery_actions(root=root)
+        if row["action_id"] == "task_001:queued_merge"
+    )
+    assert action["recovery_state"] == "completed"
+    task_events, _ = read_events("feat_001", 0, root=root)
+    merged = [event for event in task_events if event.type == "TaskMerged"]
+    assert len(merged) == 1
+    assert merged[0].payload["task_id"] == "task_001"
+    assert merged[0].payload["branch"] == "task/task_001"
+    assert merged[0].payload["merge_sha"]
+
+    resolve_comment("feat_001", comment_id, author="human", root=root)
+    subprocess.run(
+        ["git", "add", "docs/_comments/feat_001.jsonl"],
+        cwd=feature.path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "resolve closeout hold"],
+        cwd=feature.path,
+        check=True,
+        capture_output=True,
+    )
+    move_doc("feat_001", "completed", root=feature.path)
+    assert "task_001" not in list_board(epic.path).by_id
+    invalidate_merged_board(root)
+
+    assert try_complete_feature("feat_001", root=root, review_merged=True)
+    assert not feature.path.exists()
+    persisted = read_doc_in_worktree("task_001", epic.path)
+    assert persisted.meta.status == "completed"
+    assert persisted.meta.path.parent.name == "3_completed"
+    feature_events, _ = read_events("epic_001", 0, root=root)
+    assert any(
+        event.type == "FeatureCompleted"
+        and event.payload.get("feature_id") == "feat_001"
+        for event in feature_events
+    )
+
+    # The Task checkout still contains its pre-merge active copy until graph
+    # teardown.  The merged board must keep the canonical persisted terminal row.
+    assert task_run.worktree.is_dir()
+    assert list_board(task_run.worktree).by_id["task_001"].status == "active"
+    invalidate_merged_board(root)
+    projected = merged_board(root).by_id["task_001"]
+    assert projected.status == "completed"
+    assert projected.path.is_relative_to(epic.path)
+
+    flush_deferred_task_teardown(teardown)
+    retire_terminal_registered_worktrees(root)
+    retire_terminal_registered_worktrees(root)
+    resume_legally_active_graphs(root)
+    invalidate_merged_board(root)
+
+    restarted = merged_board(root).by_id["task_001"]
+    assert restarted.status == "completed"
+    assert restarted.path.is_relative_to(epic.path)
+    assert read_doc_in_worktree("task_001", epic.path).meta.status == "completed"
+    assert execution_view("task_001", root=root)["outcome"] == "succeeded"
+    assert next(
+        row
+        for row in recovery_actions(root=root)
+        if row["action_id"] == "task_001:queued_merge"
+    )["recovery_state"] == "completed"
 
 
 def test_retirement_refuses_missing_descendant_provenance(tmp_path: Path) -> None:
