@@ -51,7 +51,7 @@ custom "cascade-task-code" {
         "cascade.codeComponent" "element.component.task-team"
     }
     include code_task_graph code_task_state code_task_checkpoint code_task_wiring code_task_registry code_task_guard code_task_runtime code_task_provider
-    include code_task_actions code_task_mismatch code_task_leases code_task_validation code_task_revalidation
+    include code_task_actions code_task_delivery_queue code_task_mismatch code_task_leases code_task_validation code_task_revalidation
     include code_task_generation
     include code_task_budget_bind code_task_budget_read code_task_budget_extend code_task_budget_exhaust code_task_budget_reserve code_task_budget_settle
     autoLayout lr

@@ -2160,6 +2160,15 @@ code_task_actions = element "resume_action" "Function" "Claim and resume durable
     }
 }
 
+code_task_delivery_queue = element "queue_task_merge" "Function" "Persist the validated delivery action, bind its original incident budget, then advertise scheduling." {
+    properties {
+        "cascade.semanticId" "element.code.task.delivery-queue"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "queue_task_merge"
+    }
+}
+
 code_task_budget_bind = element "bind_incident_budget" "Function" "Anchor canonical actions and material generations to one original incident policy." {
     properties {
         "cascade.semanticId" "element.code.task.incident-budget-bind"
@@ -2529,6 +2538,18 @@ code_task_validation_to_actions = code_task_validation -> code_task_actions "Pub
 code_task_budget_bind_to_actions = code_task_budget_bind -> code_task_actions "Verifies and annotates the canonical durable action" {
     properties {
         "cascade.semanticId" "relationship.code-task-incident-budget-bind-to-actions"
+    }
+}
+
+code_task_delivery_queue_to_actions = code_task_delivery_queue -> code_task_actions "Persists the canonical queued delivery before scheduling" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-delivery-queue-to-actions"
+    }
+}
+
+code_task_delivery_queue_to_budget_bind = code_task_delivery_queue -> code_task_budget_bind "Binds original allowance before the first merge attempt" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-delivery-queue-to-budget-bind"
     }
 }
 

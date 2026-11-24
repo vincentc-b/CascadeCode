@@ -205,6 +205,7 @@ The integrated Structurizr code view is `cascade-task-code`. From the supervisor
 `cascade-task-code` exposes [resume_action](action_recovery.py), the incident
 budget lineage/reserve/settle/read/extension/escalation entry points in
 [incident_budget.py](incident_budget.py),
+[queue_task_merge](../task_rollup.py),
 [execution_lease_is_live](execution.py), and [swe_run_tests](git_tools.py)
 alongside the graph and tool registry.
 The action ledger in tracking-root `.cascade/executions.json` preserves attempts,
@@ -216,8 +217,12 @@ validation workflow, not a manually edited queue record.
 When a current repair action owns the Task, the queued delivery metadata also
 stores that action ID, generation, and Feature ID. This joins the exact green
 pair to its repair obligation without changing the stable queued-action ID.
-The same queue operation advances the matching repair receipt to
-`delivery_pending`; replay retains the original Task and repair identities.
+The queue persists and binds the original incident budget before advertising the
+scheduling index, so a first merge refusal cannot become ambiguous legacy use.
+It advances a matching repair receipt to `delivery_pending`; when repair is
+admitted after the queue entry already exists, successful merge reapplies the
+same immutable validation pair to advance that receipt. Replay retains the
+original Task and repair identities.
 
 `ParentLifecycleMismatch` is stored additively on that same queued action when
 the Boss merge gate returns `not_active` for a completed Feature. Its

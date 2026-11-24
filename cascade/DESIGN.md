@@ -436,6 +436,11 @@ position or a historical URL. GitHub observations request the CLI-supported
 malformed commit list is unavailable evidence. Repair publication also requires
 that observed OID to equal the generation's recorded source head, so a moving
 source branch is refused before publication.
+Late delivery can carry a superseded completed Feature path back onto the source
+branch. Review preparation restores only the exact active path named by the
+durable repair receipt before pinning the tested publication SHA. After forge
+acceptance, target closeout mutates the Epic checkout directly; an accepted
+stacked-review projection cannot bypass that target postcondition.
 
 Implementation ownership and integrated Code views are in
 [Workspace](workspace/DESIGN.md#work-ownership-and-retirement),
