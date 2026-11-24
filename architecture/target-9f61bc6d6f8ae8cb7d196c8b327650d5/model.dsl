@@ -50,14 +50,14 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
             }
         }
         agent_component = component "Agent runtime" "Normalizes provider turns and capability checks." "cascade.agent" {
-            url "../../cascade/agent/DESIGN.md"
             properties {
+                "cascade.designPath" "cascade/agent/DESIGN.md"
                 "cascade.semanticId" "element.component.agent"
             }
         }
         team_component = component "Tier teams" "Runs persistent Epic/Feature and bounded Task graphs." "cascade.epic/feature/task" {
-            url "../../cascade/DESIGN.md"
             properties {
+                "cascade.designPath" "cascade/DESIGN.md"
                 "cascade.semanticId" "element.component.teams"
             }
         }
@@ -104,8 +104,8 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
         }
 
             workspace_commands = component "Workspace commands" "Dispatches operator commands for initialization, supervised startup and cancellation." "cascade.cli / cascade.workspace" {
-                url "../../cascade/workspace/DESIGN.md"
                 properties {
+                    "cascade.designPath" "cascade/workspace/DESIGN.md"
                     "cascade.semanticId" "element.component.workspace-commands"
                 }
             }
