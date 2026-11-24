@@ -239,6 +239,11 @@ No DESIGN.md or C4 source edits are included in this manager turn. The current A
   Chose Separate material-generation retry admission from one persistent incident-wide allowance. Propose bounded defaults/maxima in the epic table for independent architect and human plan review; no automatic renewal or self-approved extension..
   Rationale: admit_review_publication_generation currently grows attempt_bound for a new generation. A separate lineage reservation gate is required before tool/provider spending. Unknown provider usage remains unknown with conservative turn/time limits; independent authenticated authority owns explicit extensions.
   Honors: Success criteria 3–4 and 16–19; preserved attempt/decision history; no self-granted spending, weaker validation or invented token/billing evidence..
+
+- `dec_003` · 2026-11-24 · Epic Manager · **Verification and review gates**
+  Chose Require both deterministic production-adapter CI and supported real-supervisor evidence. Retain architect review of integrated Code coverage and loaded-runtime identity as a pre-sign-off gate..
+  Rationale: The 20 passing baseline tests and 15 verified local software entries establish usable starting tooling, not complete owner-agent recovery or deployment. Local installed identity cannot prove a repaired worker loaded reviewed code; controlled operational execution needs a separately identified environment and current authority.
+  Honors: Success criteria 8–15; design implementation-depth contract; no accepted-snapshot rewrite, installation authority by declaration, or completion from helper tests alone..
 ## Amendment log
 
 _(none)_
