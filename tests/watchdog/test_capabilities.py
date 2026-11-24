@@ -3,7 +3,11 @@
 from dataclasses import replace
 from pathlib import Path
 
-from cascade.task.action_recovery import create_or_load_action, load_action, recovery_actions
+from cascade.task.action_recovery import (
+    create_or_load_action,
+    load_action,
+    recovery_actions,
+)
 from cascade.task.supervisor_recovery import supervisor_recover_task_delivery
 from cascade.watchdog.capabilities import (
     HEALTH_AUDITOR_ROLE,
@@ -100,7 +104,10 @@ def test_startup_registry_contains_only_callable_bounded_recovery_seams() -> Non
         "publish_integration_review",
         "reconcile_completion_rollup",
     }
-    assert all(row.attempt_bound > 0 and callable(row.executor) for row in registry.descriptors())
+    assert all(
+        row.attempt_bound > 0 and callable(row.executor)
+        for row in registry.descriptors()
+    )
 
 
 def test_registry_fingerprint_tracks_authority_and_reachability_requirements() -> None:
@@ -385,6 +392,11 @@ def test_missing_capability_is_durable_and_arrival_is_reprobed(tmp_path: Path) -
     assert missing_receipt is not None
     assert missing_receipt["recovery_state"] == "retryable"
     assert missing_receipt["metadata"]["resume_action"] == missing.resume_action
+    waiting = missing_receipt["metadata"]["stage_receipt"]
+    assert waiting["stage"] == "waiting"
+    assert waiting["actor"] == "feature_team:feat_001"
+    assert waiting["result"] == "capability_missing:operation_not_registered"
+    assert waiting["obligation"].endswith(str(incident["authoritative_generation"]))
     assert missing_receipt["incident"]["request"]
     assert missing_receipt["incident"]["result"]
 
@@ -481,15 +493,34 @@ def test_missing_operation_is_not_persisted_for_unauthorized_owner(
     assert recovery_actions(root=root) == []
 
 
-def test_real_observations_do_not_hash_probe_receipts_and_arrival_retires_old_generation(tmp_path, monkeypatch):
+def test_real_observations_do_not_hash_probe_receipts_and_arrival_retires_old_generation(
+    tmp_path, monkeypatch
+):
     from cascade.watchdog.audit import project_audit_observation
 
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
-    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001", status="active")
-    add_doc(root, id="task_001", title="Blocked", tier="task", parent="feat_001", status="blocked")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        parent="epic_001",
+        status="active",
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Blocked",
+        tier="task",
+        parent="feat_001",
+        status="blocked",
+    )
     missing_registry = CapabilityRegistry()
-    monkeypatch.setattr("cascade.watchdog.capabilities.default_capability_registry", lambda: missing_registry)
+    monkeypatch.setattr(
+        "cascade.watchdog.capabilities.default_capability_registry",
+        lambda: missing_registry,
+    )
     initial = project_audit_observation("task_001", root=root)
     receipt_ids = set()
     for _ in range(3):
@@ -503,12 +534,20 @@ def test_real_observations_do_not_hash_probe_receipts_and_arrival_retires_old_ge
         receipt_ids.add(missing.receipt_action_id)
     assert len(receipt_ids) == 1
 
-    monkeypatch.setattr("cascade.watchdog.capabilities.default_capability_registry", _registry)
+    monkeypatch.setattr(
+        "cascade.watchdog.capabilities.default_capability_registry", _registry
+    )
     arrived_observation = project_audit_observation("task_001", root=root)
     assert arrived_observation.generation != initial.generation
     incident = _incident()
     incident["authoritative_generation"] = arrived_observation.generation.value
     available = probe_capability(incident, "feature_team:feat_001", root=root)
     assert available.available
-    assert load_action(str(next(iter(receipt_ids))), root=root)["recovery_state"] == "completed"
-    assert project_audit_observation("task_001", root=root).generation == arrived_observation.generation
+    assert (
+        load_action(str(next(iter(receipt_ids))), root=root)["recovery_state"]
+        == "completed"
+    )
+    assert (
+        project_audit_observation("task_001", root=root).generation
+        == arrived_observation.generation
+    )

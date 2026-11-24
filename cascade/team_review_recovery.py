@@ -170,13 +170,43 @@ def publish_team_review_resolution(
     # A clean local merge is not a new owner decision on every health poll.
     # Bind retries to the actual resolution and the operator-owned check policy.
     from cascade.review_rebase import validation_command
-    from cascade.review_validation import review_validation_timeout
+    from cascade.review_validation import (
+        ReviewValidationAdmissionError,
+        approved_review_validation_profile,
+        preflight_review_validation,
+    )
+
+    validation_profile = None
+    try:
+        validation_profile = approved_review_validation_profile(
+            trunk, command=validation_command(trunk)
+        )
+        preflight_review_validation(validation_profile, cwd=worktree)
+    except (ReviewValidationAdmissionError, ValueError) as exc:
+        return {
+            "action_id": action_id,
+            "recovery_state": "awaiting_owner_decision",
+            "reason": "validation_profile_infeasible",
+            "detail": str(exc),
+            "validation_profile": (
+                validation_profile.profile_id
+                if validation_profile is not None
+                else None
+            ),
+        }
 
     generation = {
         "source_head": _git(worktree, "rev-parse", "HEAD"),
         "observed_heads": list(heads),
-        "validation_command": list(validation_command(trunk)),
-        "validation_timeout_seconds": review_validation_timeout(trunk),
+        "validation_command": list(validation_profile.command),
+        "validation_timeout_seconds": validation_profile.timeout_seconds,
+        "validation_profile": {
+            "id": validation_profile.profile_id,
+            "coverage_class": validation_profile.coverage_class,
+            "policy_owner": validation_profile.policy_owner,
+            "approval_version": validation_profile.approval_version,
+            "attempt_budget": validation_profile.attempt_budget,
+        },
         "budget_policy": {"id": POLICY_ID, "version": POLICY_VERSION},
         "environment_revision": review_validation_environment(),
     }
@@ -184,7 +214,9 @@ def publish_team_review_resolution(
     config = tomllib.loads(config_path.read_text()) if config_path.exists() else {}
     policy = config.get("validation", {})
     action, admitted_generation = admit_review_publication_generation(
-        action_id, generation, root=trunk,
+        action_id,
+        generation,
+        root=trunk,
         allow_legacy_policy_upgrade=(
             "review_command" in policy or "review_timeout_seconds" in policy
         ),
@@ -194,7 +226,8 @@ def publish_team_review_resolution(
             "action_id": action_id,
             "recovery_state": action.get("recovery_state"),
             "attempt_count": action.get("attempt_count"),
-            "reason": None if action.get("recovery_state") == "completed"
+            "reason": None
+            if action.get("recovery_state") == "completed"
             else "publication_generation_unchanged_or_blocked",
         }
 
@@ -242,6 +275,7 @@ def publish_team_review_resolution(
         root=trunk,
         timeout=float(generation["validation_timeout_seconds"]),
         environment_revision=dict(generation["environment_revision"]),
+        profile=validation_profile,
     )
     if validation_operation is None:
         return {
@@ -311,13 +345,18 @@ def publish_team_review_resolution(
             )
         turn = preflight.turn
         local_head = _git(worktree, "rev-parse", "--verify", "HEAD^{commit}")
-        if not local_head or local_head != generation["source_head"] or not all(
-            _is_ancestor(worktree, head, local_head) for head in heads
+        if (
+            not local_head
+            or local_head != generation["source_head"]
+            or not all(_is_ancestor(worktree, head, local_head) for head in heads)
         ):
             raise ActionFailure(
                 "owner_decision",
                 "The owned branch no longer contains both admitted review heads.",
-                metadata={"reason": "local_resolution_not_ready", "publication_generation": generation},
+                metadata={
+                    "reason": "local_resolution_not_ready",
+                    "publication_generation": generation,
+                },
             )
         modified = tuple(
             path
@@ -345,8 +384,12 @@ def publish_team_review_resolution(
                     else "publication_failed",
                     "publication_generation": generation,
                     "checks": [
-                        {"command": list(check.command), "returncode": check.returncode,
-                         "stdout": check.stdout[-8192:], "stderr": check.stderr[-8192:]}
+                        {
+                            "command": list(check.command),
+                            "returncode": check.returncode,
+                            "stdout": check.stdout[-8192:],
+                            "stderr": check.stderr[-8192:],
+                        }
                         for check in publication.checks
                     ],
                 },
@@ -358,8 +401,12 @@ def publish_team_review_resolution(
                 "source_ref": source_ref,
                 "publication_generation": generation,
                 "checks": [
-                    {"command": list(check.command), "returncode": check.returncode,
-                     "stdout": check.stdout[-8192:], "stderr": check.stderr[-8192:]}
+                    {
+                        "command": list(check.command),
+                        "returncode": check.returncode,
+                        "stdout": check.stdout[-8192:],
+                        "stderr": check.stderr[-8192:],
+                    }
                     for check in publication.checks
                 ],
             }
