@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-10'
-updated: '2026-11-10'
+updated: '2026-11-24'
 provider: codex
 flex_mode: false
 models:
@@ -27,6 +27,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+plan_approved_at: '2026-11-24T05:38:27.107170+00:00'
 ---
 # Recover late repair delivery after feature completion
 
