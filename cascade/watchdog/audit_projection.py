@@ -24,7 +24,7 @@ from typing import Any, Literal
 from cascade.board.work_ids import parse_work_id_parts
 from cascade.watchdog.audit_lane import canonical_audit_root
 
-PROJECTION_SCHEMA_VERSION = 2
+PROJECTION_SCHEMA_VERSION = 3
 MAX_SOURCE_BYTES = 1024 * 1024
 MAX_DETAIL_BYTES = 4096
 MAX_PAGE_ROWS = 100
@@ -136,6 +136,7 @@ class AuditSummary:
     next_attempt_at: str | None = None
     detail_truncated: bool = False
     provenance: Mapping[str, str] = field(default_factory=dict)
+    incident: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.verification_status not in _STATUSES:
@@ -157,6 +158,8 @@ class AuditSummary:
             for key, value in self.provenance.items()
         ):
             raise ValueError("projection provenance must contain string pairs")
+        if not isinstance(self.incident, Mapping):
+            raise ValueError("projection incident detail must be a mapping")
 
     def as_dict(self) -> dict[str, object]:
         kind = (
@@ -183,6 +186,7 @@ class AuditSummary:
             "next_attempt_at": self.next_attempt_at,
             "detail_truncated": self.detail_truncated,
             "provenance": dict(self.provenance),
+            "incident": dict(self.incident),
         }
 
 
@@ -1067,6 +1071,7 @@ def _modern_summary(
     times = _summary_times(incident)
     truncated = _detail_truncated(incident, detail_limit)
     outcome = incident.get("outcome")
+    incident_detail = _incident_projection(incident)
     if (
         work_id
         and generation
@@ -1085,6 +1090,24 @@ def _modern_summary(
             None,
             _timestamp(incident.get("next_reassessment_at")),
             truncated,
+            {},
+            incident_detail,
+        )
+    if work_id and generation and failure and outcome == "success" and times[2]:
+        return HistorySummary(
+            ref,
+            work_id,
+            owner,
+            generation,
+            failure,
+            *times,
+            "verified",
+            "authoritative_postcheck_verified",
+            None,
+            None,
+            truncated,
+            {},
+            incident_detail,
         )
     return HistorySummary(
         ref,
@@ -1100,7 +1123,86 @@ def _modern_summary(
         None,
         _timestamp(incident.get("next_reassessment_at")),
         truncated,
+        {},
+        incident_detail,
     )
+
+
+def _incident_projection(incident: Mapping[str, Any]) -> dict[str, Any]:
+    """Publish the bounded lifecycle fields needed to explain this incident."""
+
+    if incident.get("failure_class") != "parent_lifecycle_mismatch":
+        return {}
+    evidence = incident.get("evidence")
+    evidence = evidence if isinstance(evidence, Mapping) else {}
+    parent = evidence.get("parent_lifecycle_evidence")
+    parent = parent if isinstance(parent, Mapping) else {}
+    result = incident.get("result")
+    result = result if isinstance(result, Mapping) else {}
+    adapter = result.get("adapter_result")
+    adapter = adapter if isinstance(adapter, Mapping) else {}
+    postcheck = result.get("postcheck")
+    postcheck = postcheck if isinstance(postcheck, Mapping) else {}
+    request = incident.get("request")
+    acknowledgement = incident.get("acknowledgement")
+    detail = {
+        "task_id": incident.get("work_id"),
+        "feature_id": evidence.get("feature_id"),
+        "epic_id": (
+            parent.get("parent", {}).get("epic_id")
+            if isinstance(parent.get("parent"), Mapping)
+            else None
+        ),
+        "recovery_action_id": adapter.get("action_id"),
+        "recovery_generation": adapter.get("generation"),
+        "failure_reason": evidence.get("reason"),
+        "blocked_operation": incident.get("selected_capability"),
+        "blocked_owner": incident.get("accountable_owner"),
+        "original_validation": (
+            parent.get("tested_heads", {}).get("validation")
+            if isinstance(parent.get("tested_heads"), Mapping)
+            else None
+        ),
+        "prior_review": parent.get("review_obligation"),
+        "required_review": postcheck.get("review")
+        if isinstance(postcheck.get("review"), Mapping)
+        else {
+            key: adapter.get(key)
+            for key in ("generation", "action_id", "phase")
+        },
+        "selected_capability": incident.get("selected_capability"),
+        "request": dict(request) if isinstance(request, Mapping) else {},
+        "acknowledgement": (
+            dict(acknowledgement) if isinstance(acknowledgement, Mapping) else {}
+        ),
+        "execution": {
+            "outcome": incident.get("outcome"),
+            "executed": adapter.get("executed"),
+            "refusal": adapter.get("refusal"),
+        },
+        "freshness": {
+            "recorded_at": incident.get("recorded_at"),
+            "next_reassessment_at": incident.get("next_reassessment_at"),
+        },
+        "verification": {
+            "verified": postcheck.get("verified") is True,
+            "verified_at": postcheck.get("verified_at"),
+            "reason": postcheck.get("reason"),
+        },
+    }
+    try:
+        if len(json.dumps(detail, sort_keys=True, separators=(",", ":")).encode()) <= MAX_DETAIL_BYTES:
+            return detail
+    except (TypeError, ValueError):
+        pass
+    return {
+        "task_id": incident.get("work_id"),
+        "feature_id": evidence.get("feature_id"),
+        "blocked_operation": incident.get("selected_capability"),
+        "blocked_owner": incident.get("accountable_owner"),
+        "selected_capability": incident.get("selected_capability"),
+        "detail_truncated": True,
+    }
 
 
 def _unambiguous_work_id(incident: Mapping[str, Any]) -> str | None:
@@ -1153,7 +1255,14 @@ def _summary_times(
     # A successful recovery attempt is not a fresh verification of the work
     # obligation.  Reconciliation supplies that timestamp after checking
     # canonical state for the matching generation.
-    return occurred, max(attempted, default=None), None
+    result = incident.get("result")
+    postcheck = result.get("postcheck") if isinstance(result, Mapping) else None
+    verified = (
+        _timestamp(postcheck.get("verified_at"))
+        if isinstance(postcheck, Mapping) and postcheck.get("verified") is True
+        else None
+    )
+    return occurred, max(attempted, default=None), verified
 
 
 def _legacy_provenance(row: Mapping[str, Any]) -> dict[str, str]:
@@ -1295,6 +1404,7 @@ def projection_json_schema() -> dict[str, object]:
         "next_attempt_at": nullable_string,
         "detail_truncated": {"type": "boolean"},
         "provenance": {"type": "object", "additionalProperties": {"type": "string"}},
+        "incident": {"type": "object"},
     }
     required = list(summary_properties)
 
@@ -1321,7 +1431,7 @@ def projection_json_schema() -> dict[str, object]:
 
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "cascade://health-audit/projection/v2",
+        "$id": "cascade://health-audit/projection/v3",
         "title": "Cascade health audit projection",
         "oneOf": [
             {"$ref": "#/$defs/manifest"},

@@ -31,7 +31,7 @@ custom "cascade-epic-code" {
         "cascade.codeComponent" "element.component.epic-team"
     }
     include code_epic_graph code_epic_state code_epic_checkpoint code_epic_wiring code_epic_registry code_epic_guard code_epic_runtime code_epic_provider
-    include code_epic_recover code_epic_supervise
+    include code_epic_recover code_epic_supervise code_epic_mismatch_route
     autoLayout lr
 }
 
@@ -41,7 +41,7 @@ custom "cascade-feature-code" {
         "cascade.codeComponent" "element.component.feature-team"
     }
     include code_feature_graph code_feature_state code_feature_checkpoint code_feature_wiring code_feature_registry code_feature_guard code_feature_runtime code_feature_provider
-    include code_feature_mint code_feature_recover code_feature_repair code_feature_reserve
+    include code_feature_mint code_feature_recover code_feature_mismatch_result code_feature_repair code_feature_reserve
     autoLayout lr
 }
 
@@ -51,7 +51,7 @@ custom "cascade-task-code" {
         "cascade.codeComponent" "element.component.task-team"
     }
     include code_task_graph code_task_state code_task_checkpoint code_task_wiring code_task_registry code_task_guard code_task_runtime code_task_provider
-    include code_task_actions code_task_leases code_task_validation code_task_revalidation
+    include code_task_actions code_task_mismatch code_task_leases code_task_validation code_task_revalidation
     autoLayout lr
 }
 
@@ -117,7 +117,7 @@ custom "cascade-watchdog-code" {
         "cascade.codeComponent" "element.component.watchdog"
     }
     include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish
-    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_capability code_watchdog_reservation code_watchdog_claim code_watchdog_result
+    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
     autoLayout lr
 }
 

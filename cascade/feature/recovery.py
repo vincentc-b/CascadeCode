@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypedDict
 
 from cascade.board.errors import GitError, NotFound
 from cascade.task.lifecycle_lock import task_lifecycle_lock
@@ -20,6 +21,27 @@ from cascade.watchdog.blockage import (
 from cascade.watchdog.dispatch import dispatch_task
 from cascade.war_room.serialize import dispatch_result_to_dict
 from cascade.workspace.integration_worktree import doc_filesystem_root, locate_trunk
+
+
+class ParentLifecycleMismatchRecovery(TypedDict):
+    """Read-only projection of one exact Feature repair request and result."""
+
+    ok: bool
+    task_id: str
+    feature_id: str
+    failure_class: str
+    authoritative_generation: str | None
+    selected_operation: str
+    accountable_owner: str
+    admitted_or_requested: bool
+    acknowledged: bool
+    executed: bool
+    verified: bool
+    request: dict[str, object]
+    acknowledgement: dict[str, object]
+    execution: dict[str, object]
+    refusal: dict[str, object] | None
+    next_prerequisite: object
 
 
 def _owned_task(task_id: str, *, feature_id: str, root: Path):
@@ -230,7 +252,7 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
         action = "none"
 
     incident = recovery_incident(task_id, root=trunk)
-    return {
+    response: dict[str, object] = {
         "phase": phase,
         "reason": typed_reason,
         "attempt_count": attempt_count,
@@ -244,6 +266,15 @@ def recovery_status(task_id: str, *, feature_id: str, root: Path) -> dict[str, o
         "action": action,
         "incident": incident.as_dict() if incident is not None else None,
     }
+    mismatch = _parent_lifecycle_mismatch_recovery(
+        task_id,
+        feature_id=feature_id,
+        root=trunk,
+        operation="inspect",
+    )
+    if mismatch is not None:
+        response["parent_lifecycle_mismatch"] = mismatch
+    return response
 
 
 def retry_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object]:
@@ -273,7 +304,13 @@ def retry_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object
     return response
 
 
-def recover_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, object]:
+def recover_task(
+    task_id: str,
+    *,
+    feature_id: str,
+    root: Path,
+    expected_generation: str | None = None,
+) -> dict[str, object]:
     """Request supervised recovery for one direct child Task.
 
     Feature Teams can request recovery but cannot manipulate a Task worktree,
@@ -284,6 +321,15 @@ def recover_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, obje
 
     trunk = locate_trunk(Path(root).resolve())
     task = _owned_task(task_id, feature_id=feature_id, root=trunk)
+    mismatch = _parent_lifecycle_mismatch_recovery(
+        task_id,
+        feature_id=feature_id,
+        root=trunk,
+        operation="recover",
+        expected_generation=expected_generation,
+    )
+    if mismatch is not None:
+        return mismatch
     result = supervisor_recover_task_delivery(
         task_id, root=trunk, feature_id=feature_id
     )
@@ -306,6 +352,190 @@ def recover_task(task_id: str, *, feature_id: str, root: Path) -> dict[str, obje
     if outcome == "blocker":
         response["blocker"] = result.reason
     return response
+
+
+def _parent_lifecycle_mismatch_recovery(
+    task_id: str,
+    *,
+    feature_id: str,
+    root: Path,
+    operation: str,
+    expected_generation: str | None = None,
+) -> dict[str, object] | None:
+    """Route an exact completed-parent incident through ``feature_repair``.
+
+    This adapter creates no second lifecycle transition and starts no team
+    turn.  It checks the direct child above, binds the caller to the durable
+    queued-action generation, then lets Feature repair recheck owner, approval,
+    comments, dependencies, checkout cleanliness, heads, and execution lease
+    under the lifecycle lock.
+    """
+
+    from cascade.feature.repair import FeatureRepairError, feature_repair
+    from cascade.task.action_recovery import load_action
+
+    action_id = f"{task_id}:queued_merge"
+    action = load_action(action_id, root=root)
+    metadata = action.get("metadata") if isinstance(action, dict) else None
+    mismatch = (
+        metadata.get("parent_lifecycle_mismatch")
+        if isinstance(metadata, dict)
+        else None
+    )
+    if not isinstance(mismatch, dict):
+        return None
+    generation = mismatch.get("authoritative_generation")
+    if not isinstance(generation, str):
+        return _mismatch_result(
+            task_id,
+            feature_id=feature_id,
+            generation=None,
+            operation="feature_repair.inspect",
+            refusal="authoritative_generation_missing",
+        )
+    if expected_generation is not None and expected_generation != generation:
+        return _mismatch_result(
+            task_id,
+            feature_id=feature_id,
+            generation=generation,
+            operation="feature_repair.inspect",
+            refusal="stale_authoritative_generation",
+        )
+
+    from cascade.task_rollup import _parent_lifecycle_mismatch
+
+    current = _parent_lifecycle_mismatch(task_id, root)
+    if current is None:
+        return _mismatch_result(
+            task_id,
+            feature_id=feature_id,
+            generation=generation,
+            operation="feature_repair.inspect",
+            refusal="incident_no_longer_matches",
+        )
+    if current["authoritative_generation"] != generation:
+        return _mismatch_result(
+            task_id,
+            feature_id=feature_id,
+            generation=current["authoritative_generation"],
+            operation="feature_repair.inspect",
+            refusal="authoritative_generation_changed",
+        )
+
+    from cascade.workspace.errors import MutationOwnerError
+
+    try:
+        inspected = feature_repair(
+            feature_id, action_id, root=root, operation="inspect"
+        )
+    except (FeatureRepairError, MutationOwnerError, GitError, OSError) as exc:
+        return _mismatch_result(
+            task_id,
+            feature_id=feature_id,
+            generation=generation,
+            operation="feature_repair.inspect",
+            refusal=str(exc),
+        )
+    if operation == "inspect":
+        return _mismatch_result(
+            task_id,
+            feature_id=feature_id,
+            generation=generation,
+            operation="feature_repair.inspect",
+            repair=inspected,
+        )
+
+    selected = "resume" if inspected.get("phase") != "absent" else "admit"
+    try:
+        repaired = feature_repair(
+            feature_id,
+            action_id,
+            root=root,
+            operation=selected,
+            task_id=task_id,
+            scope_reference=generation,
+            claim_owner=f"feature_team:{feature_id}",
+            **(
+                {"expected_generation": inspected.get("generation")}
+                if selected == "resume"
+                else {}
+            ),
+        )
+    except (FeatureRepairError, MutationOwnerError, GitError, OSError) as exc:
+        return _mismatch_result(
+            task_id,
+            feature_id=feature_id,
+            generation=generation,
+            operation=f"feature_repair.{selected}",
+            repair=inspected,
+            refusal=str(exc),
+        )
+    return _mismatch_result(
+        task_id,
+        feature_id=feature_id,
+        generation=generation,
+        operation=f"feature_repair.{selected}",
+        repair=repaired,
+    )
+
+
+def _mismatch_result(
+    task_id: str,
+    *,
+    feature_id: str,
+    generation: str | None,
+    operation: str,
+    repair: dict[str, object] | None = None,
+    refusal: str | None = None,
+) -> ParentLifecycleMismatchRecovery:
+    """Return the typed request/acknowledgement/execution projection."""
+
+    repair = repair or {}
+    phase = repair.get("phase")
+    acknowledged = phase not in {None, "absent"}
+    requested = operation != "feature_repair.inspect"
+    executed = phase in {
+        "parent_enabled",
+        "delivery_pending",
+        "review_pending",
+        "integration_pending",
+        "retirement_pending",
+        "verified",
+    }
+    next_prerequisite = refusal or repair.get("blocker") or repair.get("next_action")
+    return {
+        "ok": refusal is None and bool(repair.get("ok")),
+        "task_id": task_id,
+        "feature_id": feature_id,
+        "failure_class": "parent_lifecycle_mismatch",
+        "authoritative_generation": generation,
+        "selected_operation": operation,
+        "accountable_owner": f"feature_team:{feature_id}",
+        "admitted_or_requested": requested or acknowledged,
+        "acknowledged": acknowledged,
+        "executed": executed,
+        # Only the later authoritative delivery/integration postcheck may set
+        # this flag; reactivating the Feature is intentionally insufficient.
+        "verified": phase == "verified",
+        "request": {
+            "action_id": f"{task_id}:queued_merge",
+            "authoritative_generation": generation,
+        },
+        "acknowledgement": {
+            "repair_action_id": repair.get("action_id"),
+            "repair_generation": repair.get("generation"),
+            "phase": phase,
+        },
+        "execution": {
+            "executed": executed,
+            "phase": phase,
+            "evidence": repair.get("evidence"),
+        },
+        "refusal": (
+            {"code": refusal, "message": refusal} if refusal is not None else None
+        ),
+        "next_prerequisite": next_prerequisite,
+    }
 
 
 def _project_recovery_incident(

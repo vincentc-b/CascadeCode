@@ -91,6 +91,7 @@ def test_startup_registry_contains_only_callable_bounded_recovery_seams() -> Non
     assert all(row.available and row.role == HEALTH_AUDITOR_ROLE for row in probes)
     assert {row.operation for row in registry.descriptors()} == {
         "supervisor_recover_task_delivery",
+        "feature_repair",
         "recover_task",
         "retry_task",
         "retry_integration_branch_update",

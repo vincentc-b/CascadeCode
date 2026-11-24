@@ -103,8 +103,20 @@ document is written. Restart reuses that reservation, verifies an existing Task
 against the digest, and idempotently repairs the parent child list and
 `TasksMinted` event. A completed Feature cannot mint without first passing the
 generation-bound repair admission and becoming the exact authorized active copy.
-[recover_task](recovery.py) delegates to
-[supervisor_recover_task_delivery](../task/supervisor_recovery.py).
+[recover_task](recovery.py) delegates ordinary Task failures to
+[supervisor_recover_task_delivery](../task/supervisor_recovery.py). For a
+completed-parent delivery mismatch it instead verifies the queued action's exact
+authoritative generation and invokes [feature_repair](repair.py) with the stable
+queued-action request ID. The repair operation rechecks direct parentage,
+mutation ownership, approval, comments, dependencies, checkout state, heads and
+the execution lease under the lifecycle lock. Its typed projection keeps
+selection, request/admission, acknowledgement, execution, refusal and verified
+postcheck evidence distinct; parent reactivation alone is never verified
+delivery.
+After closeout marks the exact repair generation verified, Watchdog separately
+checks the canonical completed Feature, current accepted review heads, surviving
+completed Task and retired owner checkouts. Feature recovery cannot clear the
+shared incident or substitute an older accepted review generation.
 Both entries appear in `cascade-feature-code`, linked from the scoped registry.
 The [Boss closeout](../boss/DESIGN.md#delivery-and-closeout) and
 [Workspace ownership](../workspace/DESIGN.md#work-ownership-and-retirement)

@@ -22,7 +22,7 @@ identity and provenance while bounding reads and exposing failures as coverage.
 `DEC-WATCHDOG-002`: Use a versioned projection schema and typed source references
 so consumers can pin a consistent epoch without interpreting raw ledgers.
 
-`audit_projection.py` owns schema version `2`, the source decoder, and the typed
+`audit_projection.py` owns schema version `3`, the source decoder, and the typed
 producer models.  The canonical ignored publication root is
 `.cascade/health_audit/projections/` under the resolved product repository.  A
 manifest records the immutable epoch, observation/freshness times, interval,
@@ -226,6 +226,11 @@ delivery consumer. War Room consumes the bounded projection described above.
 | [dispatch_audit_recovery](audit_recovery.py) | Bounded observation/admission → exact capability resolution → claim acceptance → executor. |
 | [CapabilityRegistry](capabilities.py) | Owner/tier/failure-specific capability metadata and finite retry policy. |
 | [reserve_after_recheck / accept_claim / record_result](reservations.py) | Canonical fingerprint, generation and claim-token comparison; persist attempts in the selected durable store. |
+| [_incident_contract](audit_recovery.py) | Bind a completed-parent Task mismatch to its exact Feature owner and mismatch generation before reservation. |
+| [_execute_reservation](audit_recovery.py) | Invoke the selected owning-team adapter after exact claim acceptance and record its structured result. |
+| [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation, accepted heads, lease, descendant and retirement facts. |
+| [verify_incident_postcheck](reservations.py) | Atomically close only the matching generation and retain its deferred attempt in history. |
+| [_incident_projection](audit_projection.py) | Serialize bounded typed lifecycle evidence into immutable pages. |
 
 ```mermaid
 flowchart TD
@@ -250,6 +255,35 @@ for Epics, checking introduction timestamps. For a generation-bound repair,
 to the live action, exact owner/path/ref bindings, and the committed introduction
 blob. An arbitrary active-path move therefore lacks recovery authority.
 
+The `feature.feature_repair` capability is limited to Task-tier
+`parent_lifecycle_mismatch` incidents owned by the exact direct Feature. Its
+required evidence includes the document revision, Feature identity, and durable
+mismatch generation; its action-recovery store permits three finite attempts.
+Admission freshly observes the Task, reserves the audit generation, accepts the
+exact claim token, and then calls Feature `recover_task` with the separately
+fenced mismatch generation. Feature repair repeats owner, status, approval,
+comment, dependency, checkout, head, and live-lease checks under the lifecycle
+lock. Changed evidence refuses the stale request. The result retains selected
+operation/owner, request, acknowledgement, execution, refusal, next prerequisite,
+and verification independently. Parent reactivation is execution evidence but
+remains deferred until a later authoritative postcheck verifies the original
+validation pair, completed Task delivery, current immutable repair and review
+generations at accepted heads, parent integration, descendant survival, retired
+leases and registered worktrees. Deferred mismatch generations remain postcheck
+candidates after the board becomes healthy, so restart and repeated sweeps use
+the same check without replaying merge, worker, message, repair or publication.
+Unknown legacy acceptance and changed facts remain pending.
+
+If the capability is missing or broken, its probe records the exact resume
+prerequisite and the existing investigation outbox creates one generation-keyed
+handoff to an eligible planning owner. Repeated unchanged reassessment is
+coalesced by the investigation fingerprint and reservation cooldown. The outbox
+message and any graph wakeup are coordination evidence only; neither is recorded
+as an executed repair. If no legal owner can receive the handoff, the durable
+probe prerequisite remains the operator action.
+
 Verification: [authorization](../../tests/watchdog/test_watchdog.py),
-[audit recovery](../../tests/watchdog/test_audit_recovery.py), and
+[audit recovery](../../tests/watchdog/test_audit_recovery.py),
+[parent lifecycle recovery](../../tests/watchdog/test_parent_lifecycle_recovery.py), and
+[parent lifecycle postcheck](../../tests/watchdog/test_parent_lifecycle_postcheck.py), and
 [reservations](../../tests/watchdog/test_reservations.py).

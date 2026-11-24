@@ -100,6 +100,26 @@ class AuditRecoveryWorker:
                 for recovery_request in request:
                     work_id = recovery_request["work_id"]
                     try:
+                        postcheck_generation = recovery_request.get(
+                            "postcheck_generation"
+                        )
+                        if postcheck_generation is not None:
+                            from cascade.watchdog.incident_postcheck import (
+                                reconcile_parent_lifecycle_incident,
+                            )
+
+                            postcheck = reconcile_parent_lifecycle_incident(
+                                work_id,
+                                postcheck_generation,
+                                root=self.root,
+                            )
+                            if (
+                                postcheck.get("verified") is True
+                                or recovery_request.get("postcheck_only") == "true"
+                                or recovery_request.get("authoritative_generation")
+                                == postcheck_generation
+                            ):
+                                continue
                         dispatch_audit_recovery(
                             self.root,
                             work_id,
@@ -539,6 +559,27 @@ def _admit_inline(
         contract, owner, root=root, registry=selected, persist=True
     )
     if not probe.available:
+        if str(contract.get("failure_class")) == "parent_lifecycle_mismatch":
+            try:
+                from cascade.watchdog.audit_investigation import request_investigation
+
+                request_investigation(
+                    str(contract["work_id"]),
+                    f"capability_unavailable:{probe.reason}",
+                    {
+                        "failure_class": contract["failure_class"],
+                        "generation": contract["authoritative_generation"],
+                        "selected_capability": contract["selected_capability"],
+                        "owner_id": str(contract["accountable_owner"]).partition(":")[2],
+                        "evidence": contract["evidence"],
+                    },
+                    root=root,
+                )
+            except Exception:
+                # The durable capability probe retains the exact operator
+                # prerequisite when no eligible planning owner can receive a
+                # scoped handoff.
+                pass
         return None
     owner_kind = owner.partition(":")[0]
     descriptor = selected.resolve(
@@ -616,7 +657,26 @@ def _incident_contract(
 
     if observation.tier == "task" and parent_id:
         owner = f"feature_team:{parent_id}"
-        if failure == "blocked_task_failed":
+        if failure == "parent_lifecycle_mismatch":
+            from cascade.task_rollup import _parent_lifecycle_mismatch
+
+            mismatch = _parent_lifecycle_mismatch(str(observation.work_id), root)
+            if (
+                mismatch is not None
+                and mismatch.get("accountable_owner") == owner
+            ):
+                operation = "feature_repair"
+                evidence.update(
+                    {
+                        "task_id": str(observation.work_id),
+                        "feature_id": parent_id,
+                        "parent_lifecycle_generation": mismatch.get(
+                            "authoritative_generation"
+                        ),
+                        "parent_lifecycle_evidence": mismatch.get("evidence"),
+                    }
+                )
+        elif failure == "blocked_task_failed":
             operation = "retry_task"
         elif failure in {
             "stalled_execution",
@@ -748,6 +808,13 @@ def _execute_reservation(
                 )
             elif descriptor.operation in {"retry_task", "recover_task"}:
                 value = executor(reservation.work_id, feature_id=owner_id, root=root)
+            elif descriptor.operation == "feature_repair":
+                value = executor(
+                    reservation.work_id,
+                    feature_id=owner_id,
+                    root=root,
+                    expected_generation=str(evidence["parent_lifecycle_generation"]),
+                )
             elif descriptor.operation == "retry_integration_branch_update":
                 owner_arg = "feature_id" if owner_kind == "feature_team" else "epic_id"
                 value = executor(
@@ -819,6 +886,10 @@ def _result_payload(value: object) -> dict[str, Any]:
 
 def _result_outcome(value: object, *, reservation: IncidentReservation) -> str:
     if isinstance(value, Mapping):
+        if reservation.failure_class == "parent_lifecycle_mismatch":
+            if value.get("refusal") is not None or value.get("ok") is False:
+                return "refused"
+            return "success" if value.get("verified") is True else "deferred"
         if value.get("durable_result") is True:
             return "success"
         state = value.get("state")

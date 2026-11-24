@@ -310,10 +310,32 @@ owns the proof and existing board, execution, review, Git and registry artifacts
 remain the only durable state. Refusal preserves the source branch and checkout.
 
 [team_supervision.py::supervise_child](team_supervision.py) delegates Task
-recovery to [Feature recovery](feature/recovery.py). Feature-child recovery
-currently inspects incidents and queues a deduplicated team wakeup.
+recovery to [Feature recovery](feature/recovery.py). A queued Task merge refused
+with `not_active` while its Feature is completed is a
+`parent_lifecycle_mismatch`, not a transient merge. The original action retains
+its validation pair, refusal and attempts; its canonical generation binds exact
+owner/status, delivery and repair identities, tested heads, review obligation,
+approval/comment/dependency gates, and execution lease. An unchanged supervisor
+sweep observes that generation without claiming another merge attempt. Feature
+recovery passes the exact generation through the existing `feature_repair`
+inspect/admit/resume operation and reports request, acknowledgement, execution,
+refusal and authoritative verification as separate fields.
+Feature-child recovery otherwise inspects incidents and queues a deduplicated
+team wakeup.
 [epic/recovery.py::recover_feature](epic/recovery.py) exposes that immediate-parent
-adapter. A wakeup does not perform a completed-to-active transaction.
+adapter. Epic supervision verifies the registered Feature owner and direct Task
+relationship, then invokes the same generation-bound Feature repair adapter;
+other incidents retain the deduplicated handoff path. Audit recovery resolves a
+`feature.feature_repair` capability for the exact Task/Feature pair, reserves and
+accepts one claim, and only then invokes that adapter. Missing capability creates
+one bounded investigation handoff when an eligible planning owner exists, or
+retains the probe's exact operator prerequisite. A wakeup, message, or accepted
+claim does not by itself perform or verify a completed-to-active transaction.
+The Watchdog-owned postcheck rereads canonical owner, board, action, execution,
+review and worktree registries and changes only the exact deferred incident to
+verified history after every owed generation fact is proven. Projection
+publication and War Room GET consume that result; neither performs the postcheck
+or schedules recovery.
 [review.py::ensure_feature_review](review.py) and
 [reconcile_feature_review_completions](review.py) persist review state and consume
 forge acceptance. Generation rows bind the repair action, forge identity,

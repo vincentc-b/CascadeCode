@@ -19,6 +19,7 @@ from typing import Literal, Mapping
 from cascade.board.work_ids import parse_work_id_parts
 from cascade.watchdog.audit_projection import (
     MAX_AGGREGATE_REASONS,
+    MAX_DETAIL_BYTES,
     MAX_MANIFEST_BYTES,
     MAX_PAGE_BYTES,
     MAX_PAGE_ROWS,
@@ -526,9 +527,15 @@ def _validate_row(row: Mapping[str, object], section: str) -> bool:
         ):
             return False
         provenance = row.get("provenance")
+        incident = row.get("incident")
         if (
             type(row.get("detail_truncated")) is not bool
             or not isinstance(provenance, dict)
+            or not isinstance(incident, dict)
+            or len(
+                json.dumps(incident, sort_keys=True, separators=(",", ":")).encode()
+            )
+            > MAX_DETAIL_BYTES
             or any(
                 not isinstance(key, str)
                 or not isinstance(value, str)

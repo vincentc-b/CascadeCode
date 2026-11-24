@@ -92,6 +92,20 @@ pair to its repair obligation without changing the stable queued-action ID.
 The same queue operation advances the matching repair receipt to
 `delivery_pending`; replay retains the original Task and repair identities.
 
+`ParentLifecycleMismatch` is stored additively on that same queued action when
+the Boss merge gate returns `not_active` for a completed Feature. Its
+`authoritative_generation` fingerprints the registered owner and parent status,
+delivery/repair identities, tested source/target pair, current review record,
+approval/comment/dependency gates and execution lease. The first refusal remains
+an immutable attempt. Before any later merge claim,
+[retry_pending_task_merges](../task_rollup.py) recomputes the generation; an
+unchanged observation performs no merge, turn, message or publication. A live
+Task/Feature turn and `busy` remain scheduling waits and spend no attempt.
+The Task boundary supplies the preserved validation pair and completed delivery
+action to the Watchdog postcheck. It does not treat a request, worker completion,
+or local status move as verification; original action and incident history remain
+inspectable after authoritative resolution.
+
 `REQ-TASK-DELIVERY-002`: A queued delivery is valid only for its exact Task
 source and Feature target heads. [retry_pending_task_merges](../task_rollup.py)
 uses branch synchronization before

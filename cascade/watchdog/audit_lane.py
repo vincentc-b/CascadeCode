@@ -453,6 +453,14 @@ def _run_bounded_audit_pass_inline(
     investigation_requests: list[dict[str, Any]] = []
     candidate_failures: list[dict[str, Any]] = []
     projection_observations: list[dict[str, Any]] = []
+    # Deferred parent-lifecycle incidents remain postcheck candidates even
+    # after the board itself becomes healthy.  This read is ledger-only; the
+    # recovery worker performs the later authoritative reconciliation.
+    from cascade.watchdog.incident_postcheck import (
+        pending_parent_lifecycle_postchecks,
+    )
+
+    pending_postchecks = pending_parent_lifecycle_postchecks(root)
 
     def completed(
         next_cursor: str | None, *, coverage_deferred: bool = False
@@ -596,6 +604,18 @@ def _run_bounded_audit_pass_inline(
                     "failure_class": str(observation.incident.failure_class),
                 }
             )
+        postcheck_generation = pending_postchecks.get(work_id)
+        if postcheck_generation is not None:
+            request = {
+                "work_id": work_id,
+                "postcheck_generation": postcheck_generation,
+                "failure_class": "parent_lifecycle_mismatch",
+            }
+            if observation.classification == "proven_incident":
+                request["authoritative_generation"] = str(observation.generation)
+            else:
+                request["postcheck_only"] = "true"
+            recovery_requests.append(request)
         if observation.classification in {"proven_incident", "unavailable_evidence"}:
             investigation_requests.append(
                 {

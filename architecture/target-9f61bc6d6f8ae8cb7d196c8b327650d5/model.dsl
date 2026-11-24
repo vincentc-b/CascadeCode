@@ -1968,6 +1968,51 @@ code_watchdog_result = element "record_result" "Function" "Record attempt result
     }
 }
 
+code_watchdog_contract = element "_incident_contract" "Function" "Bind an observed mismatch to the exact Feature owner, capability, and durable mismatch generation." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.incident-contract"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/audit_recovery.py"
+        "cascade.sourceSymbol" "_incident_contract"
+    }
+}
+
+code_watchdog_executor = element "_execute_reservation" "Function" "Invoke the owner adapter only after exact claim acceptance and persist its structured result." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.reservation-executor"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/audit_recovery.py"
+        "cascade.sourceSymbol" "_execute_reservation"
+    }
+}
+
+code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Function" "Re-read canonical Task, Feature, repair, review, owner, delivery, lease and retirement facts for one exact generation." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.postcheck"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incident_postcheck.py"
+        "cascade.sourceSymbol" "reconcile_parent_lifecycle_incident"
+    }
+}
+
+code_watchdog_verify = element "verify_incident_postcheck" "Function" "Atomically convert one exact deferred incident to verified history while preserving prior attempts." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.verify"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "verify_incident_postcheck"
+    }
+}
+
+code_watchdog_incident_projection = element "_incident_projection" "Function" "Serialize bounded typed parent-lifecycle evidence into immutable audit pages." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.incident-projection"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/audit_projection.py"
+        "cascade.sourceSymbol" "_incident_projection"
+    }
+}
+
 code_feature_mint = element "mint_task" "Function" "Admit scoped child specification under lifecycle lock." {
     properties {
         "cascade.semanticId" "element.code.feature.mint"
@@ -1983,6 +2028,15 @@ code_feature_recover = element "recover_task" "Function" "Recover the existing d
         "cascade.parent" "element.component.feature-team"
         "cascade.sourcePath" "cascade/feature/recovery.py"
         "cascade.sourceSymbol" "recover_task"
+    }
+}
+
+code_feature_mismatch_result = element "ParentLifecycleMismatchRecovery" "TypedDict" "Separates selected owner and operation, request, acknowledgement, execution, refusal, and verified postcheck evidence." {
+    properties {
+        "cascade.semanticId" "element.code.feature.parent-lifecycle-mismatch-recovery"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/recovery.py"
+        "cascade.sourceSymbol" "ParentLifecycleMismatchRecovery"
     }
 }
 
@@ -2022,12 +2076,30 @@ code_epic_supervise = element "supervise_child" "Function" "Inspect incidents an
     }
 }
 
+code_epic_mismatch_route = element "_recover_feature_lifecycle_mismatch" "Function" "Verify direct Task ownership and route the exact mismatch generation to Feature recovery." {
+    properties {
+        "cascade.semanticId" "element.code.epic.parent-lifecycle-mismatch-route"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/team_supervision.py"
+        "cascade.sourceSymbol" "_recover_feature_lifecycle_mismatch"
+    }
+}
+
 code_task_actions = element "resume_action" "Function" "Claim and resume durable attempts." {
     properties {
         "cascade.semanticId" "element.code.task.actions"
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task/action_recovery.py"
         "cascade.sourceSymbol" "resume_action"
+    }
+}
+
+code_task_mismatch = element "ParentLifecycleMismatch" "TypedDict" "Binds one completed-parent refusal to its canonical Feature repair generation." {
+    properties {
+        "cascade.semanticId" "element.code.task.parent-lifecycle-mismatch"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "ParentLifecycleMismatch"
     }
 }
 
@@ -2208,6 +2280,48 @@ code_watchdog_recover_to_result = code_watchdog_recover -> code_watchdog_result 
     }
 }
 
+code_watchdog_recover_to_contract = code_watchdog_recover -> code_watchdog_contract "Builds exact admission contract" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-recover-to-incident-contract"
+    }
+}
+
+code_watchdog_contract_to_capability = code_watchdog_contract -> code_watchdog_capability "Selects owner-scoped capability" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-incident-contract-to-capability"
+    }
+}
+
+code_watchdog_recover_to_executor = code_watchdog_recover -> code_watchdog_executor "Executes accepted reservation" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-recover-to-reservation-executor"
+    }
+}
+
+code_watchdog_executor_to_feature_recover = code_watchdog_executor -> code_feature_recover "Invokes canonical Feature repair adapter after claim acceptance" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-reservation-executor-to-feature-recover"
+    }
+}
+
+code_watchdog_audit_lane_to_postcheck = code_watchdog_audit_lane -> code_watchdog_postcheck "Reassesses deferred mismatch generations after restart and later sweeps" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-audit-lane-to-postcheck"
+    }
+}
+
+code_watchdog_postcheck_to_verify = code_watchdog_postcheck -> code_watchdog_verify "Closes only the exact proven generation" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-postcheck-to-verify"
+    }
+}
+
+code_watchdog_publish_to_incident_projection = code_watchdog_publish -> code_watchdog_incident_projection "Projects bounded typed evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-publish-to-incident-projection"
+    }
+}
+
 code_feature_registry_to_mint = code_feature_registry -> code_feature_mint "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-feature-registry-to-mint"
@@ -2223,6 +2337,18 @@ code_feature_mint_to_reserve = code_feature_mint -> code_feature_reserve "Reserv
 code_feature_registry_to_recover = code_feature_registry -> code_feature_recover "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-feature-registry-to-recover"
+    }
+}
+
+code_feature_recover_to_repair = code_feature_recover -> code_feature_repair "Routes completed-parent mismatch through exact repair generation" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-recover-to-repair"
+    }
+}
+
+code_feature_recover_to_mismatch_result = code_feature_recover -> code_feature_mismatch_result "Returns typed recovery evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-recover-to-parent-lifecycle-mismatch-recovery"
     }
 }
 
@@ -2244,9 +2370,27 @@ code_epic_recover_to_supervise = code_epic_recover -> code_epic_supervise "Uses"
     }
 }
 
+code_epic_supervise_to_mismatch_route = code_epic_supervise -> code_epic_mismatch_route "Routes exact completed-parent mismatch" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-supervise-to-parent-lifecycle-mismatch-route"
+    }
+}
+
+code_epic_mismatch_route_to_feature_recover = code_epic_mismatch_route -> code_feature_recover "Calls canonical Feature repair adapter" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-parent-lifecycle-mismatch-route-to-feature-recover"
+    }
+}
+
 code_task_registry_to_actions = code_task_registry -> code_task_actions "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-task-registry-to-actions"
+    }
+}
+
+code_task_mismatch_to_actions = code_task_mismatch -> code_task_actions "Suppresses unchanged delivery retries on the original action" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-parent-lifecycle-mismatch-to-actions"
     }
 }
 

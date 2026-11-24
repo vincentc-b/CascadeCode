@@ -72,6 +72,12 @@ filter mismatch gives a bounded restart response. Each response names the epoch,
 continuation, and completeness, stays within 256 KiB serialized bytes, and
 preserves stable source references instead of reading large raw details. An empty
 verified-current page with incomplete coverage does not claim health.
+Parent lifecycle rows also carry the bounded typed Task, Feature/Epic, recovery
+generation, blocked owner/operation, original validation, prior/required review,
+request/acknowledgement/execution, freshness and verified outcome published by
+Watchdog. A resolved generation leaves current only after a fresh authoritative
+postcheck and remains in history across restart. Missing or malformed detail is
+pending or truncated, never inferred as health.
 
 `DEC-WARROOM-AUDIT-002`: GET routes use the
 [bounded projection reader](#bounded-health-audit-projection-reads)
