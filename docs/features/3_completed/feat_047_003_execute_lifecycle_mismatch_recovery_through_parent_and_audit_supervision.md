@@ -2,7 +2,7 @@
 id: feat_047_003
 title: Execute lifecycle mismatch recovery through parent and audit supervision
 tier: feature
-status: active
+status: completed
 parent: epic_047
 children:
 - task_047_003_001
