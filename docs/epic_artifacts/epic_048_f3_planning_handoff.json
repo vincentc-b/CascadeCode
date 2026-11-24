@@ -613,5 +613,23 @@
     },
     "publication": "Separate Epic publication remains terminal failed in the retained publication record; no new recovery evidence supplied. Supported runtime-owner recovery coordinated by Epic Architect remains required.",
     "handoff": "Preserve this map for substantive Feature closeout; proceed with existing Task 002/003 ownership. No acknowledgement-only reply or repeated evidence-map update is needed. End the planning turn to permit child delivery."
+  },
+  "architect_task001_evidence_map_review": {
+    "role": "epic_architect",
+    "trigger": "TeamMessage feat_048_003:feat_048_003:task001-evidence-map-76f6eda0",
+    "reviewed_manager_commit": "25abfbe35dfdee6606dac2980b01a7a68a3ac1e6",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "a4a20bd3e791e251f3882a60b1314bcbd58cb5b6",
+    "assessment": "Concur with manager_task001_evidence_map_review. Its four evidence rows now identify the claimed receipt, imported-runtime, documentation/model and refusal/restart verification sources. Retain them as reported child evidence pending final implemented-diff review. Canonical plans and existing Epic sign-offs remain unchanged; amendments are empty. No new parent decision or spec revision is required.",
+    "evidence_boundary": "Child merge 76f6eda0, Feature head 71f9dabe, completed record 286081dd, 44 passing checks and browser navigation are reported by F3, not independently verified here. The owned Epic source/design/model remain unchanged from c717bb36. Do not promote source references or a module count into complete loaded-runtime or cross-stage proof.",
+    "remaining_gates": "Retain architect_task001_delivery_followup implementation_review_gates and manager_task001_evidence_map_review remaining_gates. F3 Feature Lead must preserve the completed Task acceptance/test-plan limitation, detailed Feature contract and both exact edit refusals in closeout. Final evidence must map each obligation to pinned source, exact test commands/results and browser artifacts or an explicit gap. Task 002 owns original-budget and independent cross-stage postcheck; Task 003 owns final all-view reconciliation. No repeated refused edits or acknowledgement-only follow-up is requested.",
+    "design_closeout": {
+      "reviewed": "Retained architect_contract_review all-level inventory and seven design paths; reread Workspace lifecycle/loaded-identity and Watchdog independent postcheck/restart boundaries. Reviewed Manager evidence map against these boundaries.",
+      "impact": "This artifact-only diff changes no context actor/authority, container/process/store boundary, component interface, Code declaration/ownership or execution/recovery transition. No DESIGN/model edit is warranted. F3 retains reconciliation of its changed runtime, shared publication and War Room views against delivered source.",
+      "checks": "Canonical Epic/Feature reads; empty architecture amendments; current retained Epic sign-offs; seven design paths resolve; empty source/design/model diff from c717bb36; JSON parse and git diff --check.",
+      "limits": "No runtime tests, render or browser journey rerun. No implementation acceptance, live deployment or full-tree documentation completeness claimed."
+    },
+    "publication": "Separate pinned Epic publication remains terminal failed in epic_048_publication_resume.json. The exposed tool catalog has no terminal publication/render retry operation and no changed recovery prerequisite was supplied. Preserve its exact request and lineage for supported runtime-owner recovery.",
+    "handoff": "F3 proceeds with existing Task 002/003 ownership and substantive closeout. End this planning turn to permit child delivery; return on new delivery or changed recovery prerequisites."
   }
 }
