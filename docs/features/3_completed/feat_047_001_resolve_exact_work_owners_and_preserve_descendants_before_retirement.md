@@ -2,7 +2,7 @@
 id: feat_047_001
 title: Resolve exact work owners and preserve descendants before retirement
 tier: feature
-status: active
+status: completed
 parent: epic_047
 children:
 - task_047_001_001
