@@ -301,6 +301,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_f53db459158d9740b714a7af94dfe6f1f4e9a0df823454eccfb1113940f52963",
+      "dependency_id": "dep_pytest",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:998d136d376b47a29e31d9ec13be9099c1d6465415d0355584d4971ffc984610",
+      "recipe_revision": "sha256:4b10cd51881dd4ff2639073f5a58c5ae3a5f68ccd19a12ce6615ebc4a3a1fb81",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:23.982282+00:00",
+      "completed_at": "2026-11-24T16:30:25.221088+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "9.0.3",
+      "integrity_reference": "sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
