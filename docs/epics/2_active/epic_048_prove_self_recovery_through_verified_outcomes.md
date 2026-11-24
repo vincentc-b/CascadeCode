@@ -96,11 +96,90 @@ This brief complements [Epic 047](epic_047_recover_late_repair_delivery_after_fe
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+### Baseline and smallest delivery slice
+
+This is a proposed implementation plan, not evidence that the complete contract already exists. The owned checkout contains the publication fixes described in the brief, late-child Feature repair, generation-bound parent postchecks, descendant-safe retirement, and bounded audit projections. Retain those implementations. The initial verification command `python -m pytest -q tests/test_review_recovery_journey.py tests/workspace/test_c4_source.py` passed 20 tests in 20.58 seconds during planning.
+
+Concrete gaps found in source:
+- `task/action_recovery.py:admit_review_publication_generation` can grow `attempt_bound` to `attempt_count + 1` for a new generation. It has no incident-wide consumption ceiling. Preserve generation-specific decision IDs while making the cumulative allowance a separate mandatory gate.
+- `agent/types.py:RoleResult` carries outcome and recovery report but no normalized usage receipt. `agent/recovery_contract.py:report_provider_recovery` describes provider-turn completion, which must never become incident resolution.
+- `watchdog/audit_investigation.py:request_investigation` and replay retain generation/cooldown evidence, but need shared incident-budget admission before another paid owning-team turn.
+- `workspace/worker.py:_worker_supervisor_status` reports process/status facts without a binding to the loaded reviewed source/artifact. The README operator handoff is a useful starting route, not deployed-capability proof.
+- `tests/test_review_recovery_journey.py` exercises real validation and publication, but the end-to-end worker/owning-agent/tool/deployment journey remains to be established.
+
+First deliver a bounded real publication recovery against the existing machinery, then extend that same harness to the actual owning-agent journey, then deployment/cross-stage recovery, then the full negative matrix and operational proof. Do not postpone all integration until the final feature.
+
+### Responsibilities and durable contracts
+
+| Boundary / source entry points | Proposed change and evidence owner |
+|---|---|
+| `watchdog/incidents.py`, `reservations.py`; `task/action_recovery.py:start_attempt, resume_action, admit_review_publication_generation` | F1 adds stable original-incident lineage and atomic reservation/settlement using existing durable stores and lifecycle locks. Action/generation identity remains distinct from budget identity. |
+| `team_review_recovery.py:publish_team_review_resolution`; `review_rebase.py:check_and_publish_review_rebase`; `review_validation.py:run_review_validation` | F1 gates expensive checks and retains exact tested source, target, policy and remote lease; F2 supplies executable owned validation profiles and scoped handoff. |
+| `watchdog/audit_recovery.py:dispatch_audit_recovery`, `audit_investigation.py:request_investigation, replay_pending_investigations`; `workspace/kickoff.py:deliver_queue_kickoffs` | F2 joins observation, capability, actor, queued work and result; unchanged or exhausted incidents cannot repeatedly commission model work. |
+| `agent/graph_turn.py:run_planning_role_turn`, `agent/adapter.py:run_role`, `agent/types.py:RoleTurn, RoleResult`; `task/swe_turn.py:run_swe_turn_sync` | F2 reserves before every incident-related provider invocation and persists attributable provider/model/usage/time receipts across restart. Role catalogs and path/approval guards retain authority. |
+| `workspace/launcher.py:run_launcher_loop`, `workspace/worker.py:run_worker, drain_and_shutdown`; capability registry and health evidence | F3 binds reviewed/integrated/installed/loaded revisions and capability generation; supported restart and bootstrap retain independent installation authority. |
+| `watchdog/incident_postcheck.py:reconcile_parent_lifecycle_incident`, `reservations.py:verify_incident_postcheck`; review registry, pending delivery and worktree registry | F2/F3 independently verify original obligations from authoritative state. Publication alone never clears product acceptance or an unfinished descendant delivery. |
+| Existing audit projection and War Room consumers | F2 projects typed stage, wait, budget and prerequisite evidence through the current bounded read interface. Reads neither initiate work nor grant extensions. F4 verifies truthful presentation. |
+
+Proposed logical receipt fields: stable incident/lineage ID; action and generation IDs; stage; owner/capability and authority revision; exact work/repository identities; source/target/policy/environment revisions; invocation/reservation/claim/decision IDs; observed result and retained evidence references; independently verified obligation; wait reason, next action and accountable external owner. These extend existing envelopes, not a parallel lifecycle state machine/database. The owning feature specifies schema/version compatibility before Task dispatch.
+
+Stages are detected → admitted → assigned → executing → validating → publishing → verifying → resolved. Any stage can enter waiting with a named prerequisite. A failed attempt is retained beneath the unresolved incident. Fresh material evidence returns through admission; it does not rewind consumption or erase history. A live claim is pending. An interrupted process is reconciled from process identity, durable receipts and remote effects before replay. Unknown evidence remains waiting/unverifiable.
+
+### Incident budget policy proposed for plan approval
+
+These are initial product defaults and configuration ceilings, not installation/spending authority for this planning turn. Approval must preserve full Task and Epic acceptance coverage. A workload that cannot fit must wait for its policy owner; it must not substitute weaker validation.
+
+| Resource | Default allowance | Maximum configurable allowance without a separately reviewed policy change |
+|---|---:|---:|
+| Unchanged deterministic failure | 1 failed expensive attempt per material generation | 1 |
+| Transient retries for one operation | 3 total attempts | 3; any larger operation-specific limit requires explicit reviewed justification |
+| Expensive tool/process attempts across incident lineage | 6 | 20 |
+| Paid repair/investigation role turns across incident lineage | 6 | 12 |
+| One validator/process operation | Existing approved timeout, normally 300 s, further bounded by reservation | 3,600 s; never increase an approved profile automatically |
+| Total validator/repair subprocess runtime | 1,800 s | 7,200 s |
+| One model turn / cumulative model runtime | 300 s / 1,800 s | 900 s / 7,200 s |
+| Elapsed incident time from original admission, including waits | 3,600 s | 86,400 s |
+| Known provider input plus output tokens | 200,000 | 1,000,000; hard enforcement only where the provider can bound admitted input/output |
+| Concurrent expensive operations per incident | 1 | 1 for the initial implementation |
+
+Transient delays use 5 s then 10 s exponential bases with bounded ±20% jitter; persist the next eligible time. Test with an injected clock/random source while invoking real operations. Clock-only changes do not change material identity. No retry after exhausted cumulative allowance even when a transient delay has elapsed.
+
+Reserve one attempt/turn and its bounded worst-case runtime before launch under the existing cross-process lock. Check the remaining elapsed deadline and reduce the permitted runtime accordingly. Settle the unique operation once from actual observations; retain consumed reservation conservatively when process/usage evidence is unknown. A proven dead claim may be reconciled; a nominal lease timeout alone cannot free a live claim. Cancellation must reap local child processes, retain partial usage and describe provider-side overrun limitations.
+
+Token ceilings are admission/stop thresholds unless both usage and enforceable bounds are supported; do not promise a hard cap for Codex or another provider without evidence. Unknown usage is unknown, with conservative turn/time ceilings still mandatory. Cached input is a subset of input, and total usage is not the sum of overlapping provider counters. Prefer one recovery incident per provider turn. Shared turns require a predeclared allocation across participating incident lineages, reservations on all of them, one physical invocation receipt and exactly-once accounting; ambiguous attribution waits rather than obtaining free work.
+
+Use one deduplicated exhaustion escalation containing original failure, known cumulative consumption, unknown usage, last material evidence, preserved work and next action. An extension requires authenticated independent operator/repository authority, actor, reason, relevant evidence, added finite allowance and retained prior totals. The recovering team cannot authorize its extension. New IDs, provider changes, policy cycles and parent handoffs cannot renew limits. Unrelated incidents remain eligible.
+
+### Validation, deployment and completion boundaries
+
+A validation profile owns its exact command, coverage class, source/target applicability, policy owner/approval revision, per-run budget and diagnostics. Distinguish Task validation, review-conflict regression and Epic acceptance. Known infeasible profiles or a repeated deterministic timeout wait for the policy owner. Source/policy/target movement invalidates prior green evidence and requires fresh admission. Keep whole-process-group cleanup and bounded diagnostic tails.
+
+The harness uses real temporary product/tracking repositories, a bare remote, real validator processes, normal worker/watchdog queues, graph/checkpoint storage and production scoped tool adapters. Only paid provider and external forge transports may be scripted. Fixture setup may create initial failure/legacy evidence; after admission, no private success setter, lifecycle-file rewrite or direct push may complete the journey. Independently count provider invocations, process spawns and downstream effects.
+
+For runtime repair, separately identify accepted review, integrated commit, installed artifact/source and actually loaded worker process/capability generation. Use the supported drain/restart route, retaining installation approval. If the broken adapter prevents normal admission, the supported independent bootstrap route must expose the exact approved external step; it cannot depend solely on calling that adapter again. F3 must identify the operational target and required authority before F4 runs a live exercise. The local prerequisite manifest proves tooling only.
+
+### Diagram-impact inventory and ownership
+
+Authoritative source directory: `architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/` (`workspace.dsl`, `model.dsl`, `views.dsl`, `workspace.contract.json`). Existing integrated views are the starting point, not proof that the new contracts are covered. All rows require final-diff reconciliation. F1–F3 feature planners must copy applicable rows into Task acceptance criteria; F4 verifies the integrated result.
+
+| Level / view keys | Owning design and real source boundaries | Required update / verification and delivery owner |
+|---|---|---|
+| Landscape/context: `cascade-landscape`, `cascade-context` | `DESIGN.md`; existing operator, local Cascade, forge, provider and renderer boundaries | No new system is proposed: budgets/harness stay inside existing boundaries. Epic Architect checks operator extension/bootstrap responsibility and changes relationships only if needed; F4 verifies context navigation. |
+| Containers: `cascade-containers` | `DESIGN.md`, `cascade/DESIGN.md`; CLI launcher, worker, repository artifacts | No extra deployed service or recovery database. F3 documents installed/loaded revision and persistence boundary; change view descriptions/relationships if actual responsibility changes. Verify no claim that C4 containers provide OS isolation. |
+| Components: `cascade-supervisor-components`, `cascade-team-components`, affected `cascade-cli-components` / `cascade-war-room-components` | `cascade/DESIGN.md` plus Agent, Watchdog, Task and Workspace designs; source entries in the responsibilities table | F1/F2 expose admission → provider/tool execution → authoritative postcheck; F3 exposes runtime handoff. Preserve one owner per concern; model relationships agree with source and child designs. |
+| Code: `cascade-task-code`, `cascade-watchdog-code`, existing publication owner coverage | `cascade/task/DESIGN.md`, `cascade/watchdog/DESIGN.md`, `cascade/DESIGN.md`; action generation, reservations, review validation/publication, postchecks | F1 adds real budget/claim/settlement/extension implementation entries and publication collaborators to the correct owning component. If a new focused custom view is needed, declare and connect its exact key in the feature plan; do not leave publication as a documentation-only box. |
+| Code: `cascade-agent-code`, `cascade-teams-code`, affected `cascade-epic-code` / `cascade-feature-code` / `cascade-task-code` | `cascade/agent/DESIGN.md` and tier designs; run_role, run_planning_role_turn, run_swe_turn_sync, recovery contracts and scoped dispatch | F2 shows pre-launch reservation, normalized usage, cancellation, provider/tool wiring and receipt consumers. Real paths/symbols/kinds, correct cascade.parent and cascade.codeComponent required. |
+| Code: `cascade-workspace-code`, affected `cascade-workspace-commands-code` | `cascade/workspace/DESIGN.md`; run_launcher_loop, run_worker, drain_and_shutdown, owner/retirement interfaces | F3 covers loaded-revision identity and normal/bootstrap restart; link exact state/checkpoint owners. Preserve current descendant ownership and retirement implementation. |
+| Code/UI: `cascade-dashboard-code`, affected `cascade-war-room-http-code` | `cascade/war_room/DESIGN.md`; existing recovery/audit projection readers and health routes | F2/F3 update only changed producer/consumer interfaces. F4 verifies budget/stage/wait truthfulness. No audit dashboard redesign. |
+| Supplementary behavior | Task/Agent/Watchdog/Workspace owning designs, parent links in `cascade/DESIGN.md` | F1: reserve/run/settle/exhaust/extend; F2: observed incident through owner tools to verification and unavailable-owner wait; F3: review/install/load/postcheck and crash-after-push resume. Mermaid supplements native integrated views. F4 traces one normal and one failure/restart case per changed boundary. |
+
+Proposed ownership of new stable IDs: `REQ-RECOVERY-BUDGET-001` and `DEC-RECOVERY-BUDGET-001` in `cascade/task/DESIGN.md`; `REQ-AGENT-RECOVERY-001` and `DEC-AGENT-RECOVERY-001` in `cascade/agent/DESIGN.md`; `REQ-CASCADE-RECOVERY-002` in `cascade/DESIGN.md`; `REQ-WORKSPACE-RUNTIME-001` and `DEC-WORKSPACE-RUNTIME-001` in `cascade/workspace/DESIGN.md`. These are reserved proposed owners, not implemented requirements. Link existing `REQ-ROOT-AUDIT-003`, `REQ-REVIEW-PUBLISH-001`, `REQ-WATCHDOG-REPAIR-001`, `REQ-TASK-DELIVERY-002`, `REQ-WORKSPACE-OWNER-001` and `REQ-WORKSPACE-RETIRE-001`; do not duplicate them.
+
+Architect review before plan sign-off must establish source-linked proposed structure and resolve required integrated publication/budget coverage. Reconcile current designs without claiming planned behavior exists. Final acceptance includes source-contract validation, real pinned-image rendering, context → container → component → Code, Level up, saved deep links and pinned source opening; verify renamed/deleted symbols and ownership changes, warm artifact reuse and measured performance without per-view process startup or weakened bounds. Accepted snapshots remain immutable.
 
 ## Cross-module constraints
 
-Use Codex as the brief's provider and preserve its explicit per-role model/reasoning settings for descendants. Keep this brief in backlog for normal review and activation; filing it does not authorize implementation or activation of a new team.
+Use Codex as the provider and preserve the explicit per-role model/reasoning settings for descendants. Human activation authorizes planning; feature execution remains behind normal plan approval. New prerequisite installation and live runtime changes retain their separate exact authority boundaries.
 
 Reuse and connect the existing action ledger, generation/claim machinery, review and resolution admissions, owner-scoped tools, supervisor update/deployment, audit investigations and receipt projection. Avoid a parallel scheduler, recovery database or unrestricted agent capability. Prioritize a narrow executable vertical journey and its regression before extending the matrix.
 
@@ -118,7 +197,13 @@ Budget policy and extensions must be owned by the approved repository/operator a
 
 ## Core dependencies
 
-To be identified during epic planning.
+Canonical software manifest revision 2 is ready: all 15 entries have current successful read-only verification. The target is explicitly the local Linux x86_64 verification host `ip-172-31-37-14`, runner/repository/worktree `/home/ubuntu/dev/CascadeCode`, host sandbox, runtime `/opt/conda/bin/python3.12`, container digest `not_applicable`. Source editing is confined to the owned integration worktree `.cascade/worktrees/epic_epic_048`; the dependency executor's repository identity is not a deployed-runtime claim.
+
+Verified versions: CPython 3.12.8; PyYAML 6.0.3; cursor-sdk 1.0.37; langgraph 1.2.14; langgraph-checkpoint-sqlite 3.1.1; pytest 9.0.3; setuptools 80.9.0; Playwright 1.64.0; Git 2.34.1; Node 20.20.2; Docker 28.0.0; Codex CLI 0.172.0; gh 2.4.0+dfsg1; Chromium 156.0.8078.4; Structurizr image pinned by `cascade/workspace/c4_render.py` to `sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c`. Exact installed artifact/RECORD hashes and check recipes live in the canonical manifest; installed hashes do not claim upstream package provenance.
+
+No installation was performed or authorized. Credentials, live forge access and exact deployment target remain separately checked operational prerequisites. CI must declare its own resolved runner/tool identity and reproducible setup in F4; this local verification is not proof of a future hosted runner. F3 must update declarations before any different environment or newly required software is used.
+
+Existing late-parent recovery, ownership, postcheck and audit-projection code is an integration dependency, not duplicate feature scope. Preserve its current contracts and route unrelated acceptance defects to their existing owner. Inspect later integrated changes before descendant implementation; do not assume a historical PR or completed status alone proves conformance.
 
 ## Feature breakdown
 - feat_048_004
@@ -130,12 +215,16 @@ The Epic Team will create and sequence feature plans here.
 
 ## Open questions
 
-- Which existing capabilities complete the first executable owner-agent recovery journey, and where are the actual missing authority or deployment transitions?
-- Which validation profiles and budget adaptations can be pre-authorized safely, and which changes genuinely require a policy owner or human review?
-- How will the harness prove the running worker loaded the reviewed repair instead of exercising only an isolated branch or a mocked postcheck?
-- Which legacy exhausted/partially published states can be reconciled from unambiguous evidence without resetting history?
-- What reviewed default and maximum model-turn/token/runtime allowances fit each repair class, and which authority can grant a bounded extension?
-- How will shared agent turns and providers with unavailable usage be attributed honestly without creating an accounting or retry loophole?
+- **Epic Architect, before plan sign-off:** validate proposed budget defaults/ceilings and reservation/lineage ownership; establish the source-linked design proposal and exact integrated publication/budget Code-view coverage. Inspect affected parent/child interfaces and remove any delivery-history wording in touched designs. Manager must review any resulting plan revision before signing it.
+- **F2, before provider Task dispatch:** record each supported provider's actual usage and enforceable limit/cancellation capabilities. The approved fallback is turn/time admission with honest unknown usage; no hard token-cap or monetary claim without evidence.
+- **F3 → F4, before controlled operational execution:** identify the exact target environment, reviewed runtime/artifact, supported bootstrap steps and independent operator/install/credential authority. Absence is a visible completion blocker, not permission to deploy or call private repair functions.
+- **Legacy migration:** known preserved attempts remain charged; ambiguous lineage/usage waits for a bounded independent decision. Neither migration nor an accepted historical PR grants a fresh allowance.
+
+### Planning design review and evidence
+
+Reviewed root `DESIGN.md`, `cascade/DESIGN.md`, and affected sections of `cascade/{task,watchdog,workspace,agent}/DESIGN.md`, the architecture README/views, and concrete source entry points listed above. Current baseline source validation and publication journey: 20 passing tests in 20.58 s. Installed renderer image and real Chromium launch were verified as prerequisites; no new model render, browser navigation proof, operational self-recovery demonstration or final product acceptance is claimed.
+
+No DESIGN.md or C4 source edits are included in this manager turn. The current Agent design is materially too shallow for the proposed usage/reservation/cancellation boundary and contains baseline-inventory attribution; the Architect must reconcile that affected design and integrated views before plan sign-off. Publication/budget Code coverage and the deployed-revision contract also require an explicit proposal review. These are routed architectural review gaps, not waived deliverables. The inventory above assigns implementation and final verification to the feature teams. Designs must describe current reconciled behavior without delivery chronology; this work record owns proposals, review state and evidence.
 
 ## Decision log
 
