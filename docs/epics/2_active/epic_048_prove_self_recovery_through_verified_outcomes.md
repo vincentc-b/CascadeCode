@@ -4,7 +4,8 @@ title: Prove self recovery through verified outcomes
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_048_001
 depends_on: []
 owners:
 - epic_manager
@@ -117,6 +118,7 @@ Budget policy and extensions must be owned by the approved repository/operator a
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_048_001
 
 The Epic Team will create and sequence feature plans here.
 
