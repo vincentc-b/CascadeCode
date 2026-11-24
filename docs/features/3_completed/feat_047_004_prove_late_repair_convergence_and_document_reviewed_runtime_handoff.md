@@ -2,7 +2,7 @@
 id: feat_047_004
 title: Prove late repair convergence and document reviewed runtime handoff
 tier: feature
-status: active
+status: completed
 parent: epic_047
 children:
 - task_047_004_001
