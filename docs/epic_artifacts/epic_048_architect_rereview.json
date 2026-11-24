@@ -1,0 +1,61 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_architect",
+  "reviewed_plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+  "design_model_revision": "c717bb36c27c9de56d797205f95f52037e1fb935",
+  "reviewed_designs": [
+    "DESIGN.md",
+    "cascade/DESIGN.md",
+    "cascade/task/DESIGN.md",
+    "cascade/watchdog/DESIGN.md",
+    "cascade/agent/DESIGN.md",
+    "cascade/workspace/DESIGN.md"
+  ],
+  "decision": "Accept dec_006: lifecycle_root locates the tracking trunk for both action ledger and lifecycle lock. Retain one authoritative incident allowance across product/tracking roots. No further plan or design edit required.",
+  "diagram_impact": {
+    "context_and_containers": "Unchanged: persistence clarification adds no system, service, runtime boundary or store.",
+    "components": "Unchanged: Task retains action-ledger ownership; Watchdog and provider callers consume it.",
+    "code": "Four reviewed integrated views and their 14 added source declarations are unchanged at c717bb36. All four closure hashes match retained render/browser evidence; no symbol rename/deletion or component move.",
+    "behavior": "Current publication refusal/retry, provider launch/cancellation and worker drain/restart flows remain accurate. New budget reservation and loaded-identity flows remain F1-F3 implementation obligations.",
+    "task_acceptance": "Existing diagram-impact inventory assigns each level to F1-F3 and integrated verification to F4; all four feature scopes retain required Task acceptance propagation."
+  },
+  "verification": [
+    {
+      "command": "python -m pytest -q tests/task/test_lifecycle_lock.py",
+      "result": "5 passed in 20.08s; concurrent writers, common trunk lock and split-root ledger/queue persistence"
+    },
+    {
+      "check": "Source review",
+      "result": "action_recovery._path delegates to lifecycle_root; lifecycle_root = locate_trunk(resolve_tracking_root(root)); Task design agrees."
+    },
+    {
+      "check": "Final-diff design review",
+      "result": "Reviewed original design additions and b7e1788b..ffcb9a10 clarification. Six design paths and four architecture closure hashes unchanged. No new requirement owner, historical attribution, speculative current guarantee or stale source reference added."
+    },
+    {
+      "check": "Normal/failure evidence",
+      "result": "Retained exact-SHA publication and timeout/restart journey evidence reviewed; Manager reports 28 focused checks on unchanged code. No broader rerun warranted for this plan-only clarification."
+    },
+    {
+      "check": "Native rendering and browser navigation",
+      "result": "Retained epic_048_architecture_review.json evidence matches current closure; four Code journeys, source opening, deep-link restoration, Level up and warm artifact reuse. Not rerun this turn."
+    },
+    {
+      "check": "Review threads",
+      "result": "No epic comment sidecar in owned checkout or tracking trunk; read_architecture_amendments returned []."
+    }
+  ],
+  "publication": {
+    "old_request_replayed": true,
+    "old_expected_plan_revision": "b7e1788b244cf7df848a9270d23bd61abf43e9ee",
+    "old_result": "stale_revision: plan revision changed before architecture publication",
+    "next_action": "Publish reviewed ffcb9a10 plan with unchanged exact committed design/model references and null accepted-lineage generation."
+  },
+  "remaining_gaps": [
+    "F1 cumulative incident accounting",
+    "F2 all expensive launch paths and provider capability evidence",
+    "F3 process-start loaded identity and authorized operational target/bootstrap",
+    "F4 adversarial CI, budget feasibility and controlled supervisor recovery evidence"
+  ],
+  "limitations": "Planning sign-off only; no implementation acceptance, dependency installation, live runtime restart or human plan approval."
+}
