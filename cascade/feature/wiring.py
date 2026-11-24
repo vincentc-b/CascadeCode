@@ -23,6 +23,7 @@ def load_feature_tools() -> None:
     import cascade.feature.docs_tool as docs_tool_mod
     import cascade.feature.mint as mint_mod
     import cascade.feature.recovery as recovery_mod
+    import cascade.feature.repair as repair_mod
     import cascade.feature.review_recovery as review_recovery_mod
     import cascade.planning_dependency_tools as dependency_tools_mod
     from cascade.planning_architecture_tools import publish_feature_architecture_review
@@ -51,6 +52,7 @@ def load_feature_tools() -> None:
         "reply_comment", "escalate_comment_to_epic", "propose_epic_amendment", "ack_amendment",
         "reply_merge_request_comment", "revise_task", "retry_task", "recovery_status",
         "recover_task",
+        "feature_repair",
         "refresh_dependency_status",
         "retry_integration_branch_update",
         "publish_review_resolution",
@@ -81,6 +83,7 @@ def load_feature_tools() -> None:
     register_feature_tool("retry_task", recovery_mod.retry_task)
     register_feature_tool("recovery_status", recovery_mod.recovery_status)
     register_feature_tool("recover_task", recovery_mod.recover_task)
+    register_feature_tool("feature_repair", repair_mod.feature_repair)
     register_feature_tool(
         "refresh_dependency_status", dependency_tools_mod.refresh_feature_dependencies
     )

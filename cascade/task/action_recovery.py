@@ -836,6 +836,22 @@ def pending_recovery_team_ids(*, root: Path) -> set[str]:
         actions = _actions(_read_payload(repo))
     pending: set[str] = set()
     for action in actions.values():
+        if (
+            action.get("kind") == "feature_repair"
+            and action.get("phase")
+            in {
+                "prepared",
+                "authority_recorded",
+                "parent_enabled",
+                "delivery_pending",
+                "review_pending",
+                "integration_pending",
+                "retirement_pending",
+            }
+            and isinstance(action.get("feature_id"), str)
+        ):
+            pending.add(str(action["feature_id"]))
+            continue
         if action.get("recovery_state") != "awaiting_owner_decision":
             continue
         recovery = action.get("recovery")

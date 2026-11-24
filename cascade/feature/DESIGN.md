@@ -56,6 +56,30 @@ preserved worktree before resuming the owning team. See
 
 Verification: [graph and lifecycle tests](../../tests/feature/).
 
+## Generation-bound late repair
+
+`REQ-FEATURE-REPAIR-002`: [feature_repair](repair.py) records each request in the
+existing action ledger before it emits `FeatureRepairAuthorized`. The event and
+receipt bind one generation to the exact owner, active path, source/target refs,
+and document digest. [Watchdog authorization](../watchdog/loop.py) admits the
+active introduction only while all of those bindings and, after checkpointing,
+the introducing commit and blob still agree.
+
+```mermaid
+sequenceDiagram
+    participant Feature as feature_repair
+    participant Ledger as executions.json
+    participant Queue as Feature queue
+    participant Board as Feature document
+    participant Watchdog
+    Feature->>Ledger: persist prepared generation
+    Feature->>Queue: FeatureRepairAuthorized (exact bindings)
+    Feature->>Board: commit exact active document
+    Feature->>Ledger: checkpoint commit and blob
+    Watchdog->>Ledger: rejoin live generation
+    Watchdog->>Board: verify path, digest, commit and blob
+```
+
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.
 
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).

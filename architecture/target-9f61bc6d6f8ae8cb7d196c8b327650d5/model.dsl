@@ -1959,6 +1959,15 @@ code_feature_recover = element "recover_task" "Function" "Recover the existing d
     }
 }
 
+code_feature_repair = element "feature_repair" "Function" "Persist and authorize one exact late-repair generation." {
+    properties {
+        "cascade.semanticId" "element.code.feature.repair"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "feature_repair"
+    }
+}
+
 code_epic_recover = element "recover_feature" "Function" "Expose immediate child supervision." {
     properties {
         "cascade.semanticId" "element.code.epic.recover"
@@ -2130,6 +2139,12 @@ code_feature_registry_to_mint = code_feature_registry -> code_feature_mint "Uses
 code_feature_registry_to_recover = code_feature_registry -> code_feature_recover "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-feature-registry-to-recover"
+    }
+}
+
+code_feature_registry_to_repair = code_feature_registry -> code_feature_repair "Admits exact repair generations" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-registry-to-repair"
     }
 }
 
