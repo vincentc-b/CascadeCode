@@ -209,6 +209,7 @@ def default_capability_registry() -> CapabilityRegistry:
     from cascade.epic.wiring import load_epic_tools
     from cascade.feature.registry import feature_tools
     from cascade.feature.wiring import load_feature_tools
+    from cascade.feature.recovery import recover_task
     from cascade.task.supervisor_recovery import supervisor_recover_task_delivery
 
     try:
@@ -254,6 +255,26 @@ def default_capability_registry() -> CapabilityRegistry:
                 resume_action=(
                     "Restore the Task lifecycle checkout/queue evidence, then rerun "
                     "probe_capability for this incident."
+                ),
+                **common,
+            ),
+            CapabilityDescriptor(
+                name="feature.feature_repair",
+                operation="feature_repair",
+                executor=recover_task,
+                tiers=frozenset({"task"}),
+                failure_classes=frozenset({"parent_lifecycle_mismatch"}),
+                owner_kinds=frozenset({"feature_team"}),
+                required_evidence=(
+                    "document_revision",
+                    "feature_id",
+                    "parent_lifecycle_generation",
+                ),
+                durable_store="action_recovery",
+                attempt_bound=3,
+                resume_action=(
+                    "Restore the exact Feature repair capability and owner, then "
+                    "reassess this parent lifecycle mismatch generation."
                 ),
                 **common,
             ),

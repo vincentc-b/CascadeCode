@@ -31,7 +31,7 @@ custom "cascade-epic-code" {
         "cascade.codeComponent" "element.component.epic-team"
     }
     include code_epic_graph code_epic_state code_epic_checkpoint code_epic_wiring code_epic_registry code_epic_guard code_epic_runtime code_epic_provider
-    include code_epic_recover code_epic_supervise
+    include code_epic_recover code_epic_supervise code_epic_mismatch_route
     autoLayout lr
 }
 
@@ -117,7 +117,7 @@ custom "cascade-watchdog-code" {
         "cascade.codeComponent" "element.component.watchdog"
     }
     include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish
-    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_capability code_watchdog_reservation code_watchdog_claim code_watchdog_result
+    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_claim code_watchdog_result
     autoLayout lr
 }
 

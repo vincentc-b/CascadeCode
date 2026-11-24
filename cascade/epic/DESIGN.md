@@ -77,6 +77,38 @@ The integrated Structurizr code view is `cascade-epic-code`. From the supervisor
 [recover_feature](recovery.py) and
 [supervise_child](../team_supervision.py). The adapter requires the immediate
 parent relationship and returns an already-running outcome for a live team.
-Otherwise Feature recovery inspects durable incidents and queues a generation-keyed
-message and wakeup. [The package contract](../DESIGN.md#delivery-and-review-boundaries)
-distinguishes that acknowledgement from executable lifecycle repair.
+For a direct Feature owning a completed-parent Task mismatch,
+[_recover_feature_lifecycle_mismatch](../team_supervision.py) verifies the exact
+registered owner, direct Task relationship, and current durable generation,
+then calls Feature `recover_task`. That call selects the same `feature_repair`
+inspect/admit/resume operation used by Feature self-recovery. Its result keeps
+request, acknowledgement, execution, verification, refusal, and next
+prerequisite separate. A live Feature graph remains an expected wait and does
+not enqueue or claim repair.
+
+For other Feature incidents, supervision queues a generation-keyed message and
+wakeup. [The package contract](../DESIGN.md#delivery-and-review-boundaries)
+distinguishes that coordination acknowledgement from executable lifecycle
+repair. Durable Feature-repair actions and queued delivery attempts survive
+restart; replay rechecks the same owner and generation before mutation.
+
+```mermaid
+sequenceDiagram
+    participant Epic as recover_feature
+    participant Supervision as supervise_child
+    participant Feature as recover_task
+    participant Repair as feature_repair
+    Epic->>Supervision: direct Feature + recover
+    Supervision->>Supervision: verify owner, Task parent, generation
+    alt live Feature owner
+        Supervision-->>Epic: expected wait
+    else exact mismatch
+        Supervision->>Feature: expected mismatch generation
+        Feature->>Repair: inspect then admit/resume
+        Repair-->>Epic: executed/refused; verified remains separate
+    else other incident
+        Supervision-->>Epic: durable handoff acknowledgement
+    end
+```
+
+Verification: [immediate parent recovery](../../tests/epic/test_parent_lifecycle_recovery.py).

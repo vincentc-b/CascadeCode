@@ -323,7 +323,14 @@ refusal and authoritative verification as separate fields.
 Feature-child recovery otherwise inspects incidents and queues a deduplicated
 team wakeup.
 [epic/recovery.py::recover_feature](epic/recovery.py) exposes that immediate-parent
-adapter. A wakeup does not perform a completed-to-active transaction.
+adapter. Epic supervision verifies the registered Feature owner and direct Task
+relationship, then invokes the same generation-bound Feature repair adapter;
+other incidents retain the deduplicated handoff path. Audit recovery resolves a
+`feature.feature_repair` capability for the exact Task/Feature pair, reserves and
+accepts one claim, and only then invokes that adapter. Missing capability creates
+one bounded investigation handoff when an eligible planning owner exists, or
+retains the probe's exact operator prerequisite. A wakeup, message, or accepted
+claim does not by itself perform or verify a completed-to-active transaction.
 [review.py::ensure_feature_review](review.py) and
 [reconcile_feature_review_completions](review.py) persist review state and consume
 forge acceptance. Generation rows bind the repair action, forge identity,

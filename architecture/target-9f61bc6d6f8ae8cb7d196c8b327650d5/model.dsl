@@ -1968,6 +1968,24 @@ code_watchdog_result = element "record_result" "Function" "Record attempt result
     }
 }
 
+code_watchdog_contract = element "_incident_contract" "Function" "Bind an observed mismatch to the exact Feature owner, capability, and durable mismatch generation." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.incident-contract"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/audit_recovery.py"
+        "cascade.sourceSymbol" "_incident_contract"
+    }
+}
+
+code_watchdog_executor = element "_execute_reservation" "Function" "Invoke the owner adapter only after exact claim acceptance and persist its structured result." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.reservation-executor"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/audit_recovery.py"
+        "cascade.sourceSymbol" "_execute_reservation"
+    }
+}
+
 code_feature_mint = element "mint_task" "Function" "Admit scoped child specification under lifecycle lock." {
     properties {
         "cascade.semanticId" "element.code.feature.mint"
@@ -2028,6 +2046,15 @@ code_epic_supervise = element "supervise_child" "Function" "Inspect incidents an
         "cascade.parent" "element.component.epic-team"
         "cascade.sourcePath" "cascade/team_supervision.py"
         "cascade.sourceSymbol" "supervise_child"
+    }
+}
+
+code_epic_mismatch_route = element "_recover_feature_lifecycle_mismatch" "Function" "Verify direct Task ownership and route the exact mismatch generation to Feature recovery." {
+    properties {
+        "cascade.semanticId" "element.code.epic.parent-lifecycle-mismatch-route"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/team_supervision.py"
+        "cascade.sourceSymbol" "_recover_feature_lifecycle_mismatch"
     }
 }
 
@@ -2226,6 +2253,30 @@ code_watchdog_recover_to_result = code_watchdog_recover -> code_watchdog_result 
     }
 }
 
+code_watchdog_recover_to_contract = code_watchdog_recover -> code_watchdog_contract "Builds exact admission contract" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-recover-to-incident-contract"
+    }
+}
+
+code_watchdog_contract_to_capability = code_watchdog_contract -> code_watchdog_capability "Selects owner-scoped capability" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-incident-contract-to-capability"
+    }
+}
+
+code_watchdog_recover_to_executor = code_watchdog_recover -> code_watchdog_executor "Executes accepted reservation" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-recover-to-reservation-executor"
+    }
+}
+
+code_watchdog_executor_to_feature_recover = code_watchdog_executor -> code_feature_recover "Invokes canonical Feature repair adapter after claim acceptance" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-reservation-executor-to-feature-recover"
+    }
+}
+
 code_feature_registry_to_mint = code_feature_registry -> code_feature_mint "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-feature-registry-to-mint"
@@ -2271,6 +2322,18 @@ code_epic_registry_to_recover = code_epic_registry -> code_epic_recover "Uses" {
 code_epic_recover_to_supervise = code_epic_recover -> code_epic_supervise "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-epic-recover-to-supervise"
+    }
+}
+
+code_epic_supervise_to_mismatch_route = code_epic_supervise -> code_epic_mismatch_route "Routes exact completed-parent mismatch" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-supervise-to-parent-lifecycle-mismatch-route"
+    }
+}
+
+code_epic_mismatch_route_to_feature_recover = code_epic_mismatch_route -> code_feature_recover "Calls canonical Feature repair adapter" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-parent-lifecycle-mismatch-route-to-feature-recover"
     }
 }
 
