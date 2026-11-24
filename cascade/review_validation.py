@@ -56,6 +56,7 @@ def reserve_review_validation(
     root: Path,
     timeout: float,
     environment_revision: dict[str, str],
+    parent_operation_id: str | None = None,
 ) -> tuple[IncidentOperationDecision, ReviewValidationOperation | None]:
     """Reserve the validator's worst-case runtime before any process spawn."""
 
@@ -67,6 +68,11 @@ def reserve_review_validation(
         claim_id,
         POLICY_VERSION,
         root=root,
+        attributes=(
+            {"parent_operation_id": parent_operation_id}
+            if parent_operation_id is not None
+            else None
+        ),
     )
     operation = (
         ReviewValidationOperation(

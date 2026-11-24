@@ -279,6 +279,12 @@ task_runs_agent = task_team -> agent_component "Executes role turns through" {
     }
 }
 
+agent_uses_task_budget = agent_component -> task_team "Reserves and settles incident-related provider operations through" {
+    properties {
+        "cascade.semanticId" "relationship.agent-uses-task-budget"
+    }
+}
+
 task_persists = task_team -> repository "Persists checkpoints and work evidence in" {
     properties {
         "cascade.semanticId" "relationship.task-persists"
@@ -375,7 +381,7 @@ code_epic_guard = element "epic: tool_guard" "Function" "Checks Cascade tool pat
     }
 }
 
-code_epic_runtime = element "epic: run_planning_role_turn" "Function" "Builds bounded provider turns and MCP tools. Provider permissions govern native tools." {
+code_epic_runtime = element "epic: run_planning_role_turn" "Function" "Builds scoped provider turns; incident recovery requires Task-budget admission before launch." {
     properties {
         "cascade.semanticId" "element.code.epic.runtime"
         "cascade.parent" "element.component.epic-team"
@@ -489,7 +495,7 @@ code_feature_guard = element "feature: tool_guard" "Function" "Checks Cascade to
     }
 }
 
-code_feature_runtime = element "feature: run_planning_role_turn" "Function" "Builds bounded provider turns and MCP tools. Provider permissions govern native tools." {
+code_feature_runtime = element "feature: run_planning_role_turn" "Function" "Builds scoped provider turns; incident recovery requires Task-budget admission before launch." {
     properties {
         "cascade.semanticId" "element.code.feature.runtime"
         "cascade.parent" "element.component.feature-team"
@@ -603,7 +609,7 @@ code_task_guard = element "task: task_tool_guard" "Function" "Checks Cascade too
     }
 }
 
-code_task_runtime = element "task: run_swe_turn" "Function" "Builds bounded provider turns and MCP tools. Provider permissions govern native tools." {
+code_task_runtime = element "task: run_swe_turn" "Function" "Builds scoped provider turns; incident recovery requires Task-budget admission before launch." {
     properties {
         "cascade.semanticId" "element.code.task.runtime"
         "cascade.parent" "element.component.task-team"
@@ -2583,12 +2589,39 @@ watchdog_uses_boss = watchdog_component -> boss_component "Retries delivery and 
     }
 }
 
-code_agent_result = element "RoleResult" "Dataclass" "Text, status, tool effects and optional recovery report; no normalized usage receipt." {
+code_agent_result = element "RoleResult" "Dataclass" "Text, status, tool effects, recovery report and optional normalized invocation receipt." {
     properties {
         "cascade.semanticId" "element.code.agent.result"
         "cascade.parent" "element.component.agent"
         "cascade.sourcePath" "cascade/agent/types.py"
         "cascade.sourceSymbol" "RoleResult"
+    }
+}
+
+code_agent_receipt = element "ProviderInvocationReceipt" "Dataclass" "Records provider, model, invocation identity, non-invented token evidence, outcome and enforceable bounds." {
+    properties {
+        "cascade.semanticId" "element.code.agent.invocation-receipt"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/types.py"
+        "cascade.sourceSymbol" "ProviderInvocationReceipt"
+    }
+}
+
+code_agent_provider_admit = element "admit_provider_turn" "Function" "Atomically reserves one paid turn and finite worst-case model runtime before provider dispatch." {
+    properties {
+        "cascade.semanticId" "element.code.agent.provider-admit"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/provider_metering.py"
+        "cascade.sourceSymbol" "admit_provider_turn"
+    }
+}
+
+code_agent_provider_settle = element "settle_provider_turn" "Function" "Normalizes physical invocation evidence and settles known or conservative use exactly once." {
+    properties {
+        "cascade.semanticId" "element.code.agent.provider-settle"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/provider_metering.py"
+        "cascade.sourceSymbol" "settle_provider_turn"
     }
 }
 
@@ -2655,7 +2688,7 @@ code_teams_publication = element "publish_team_review_resolution" "Function" "Ca
     }
 }
 
-code_teams_budget_reserve = element "reserve_review_validation" "Function" "Atomically reserve the validator's approved worst-case runtime before any process spawn." {
+code_teams_budget_reserve = element "reserve_review_validation" "Function" "Atomically reserve the validator's approved worst-case runtime before any process spawn, linked to a live provider parent when invoked from that turn." {
     properties {
         "cascade.semanticId" "element.code.teams.budget-reserve"
         "cascade.parent" "element.component.teams"
@@ -2760,6 +2793,36 @@ code_agent_runner_to_code_agent_report = code_agent_runner -> code_agent_report 
 code_agent_runner_to_code_agent_result = code_agent_runner -> code_agent_result "Returns" {
     properties {
         "cascade.semanticId" "relationship.code-agent-runner-to-code-agent-result"
+    }
+}
+
+code_agent_runner_to_code_agent_provider_admit = code_agent_runner -> code_agent_provider_admit "Requires admission immediately before dispatch" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-runner-to-provider-admit"
+    }
+}
+
+code_agent_runner_to_code_agent_provider_settle = code_agent_runner -> code_agent_provider_settle "Settles success, error, timeout and interruption" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-runner-to-provider-settle"
+    }
+}
+
+code_agent_provider_admit_to_code_task_budget_reserve = code_agent_provider_admit -> code_task_budget_reserve "Consumes the Task-owned incident allowance" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-provider-admit-to-task-budget-reserve"
+    }
+}
+
+code_agent_provider_settle_to_code_task_budget_settle = code_agent_provider_settle -> code_task_budget_settle "Settles the canonical operation receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-provider-settle-to-task-budget-settle"
+    }
+}
+
+code_agent_result_to_code_agent_receipt = code_agent_result -> code_agent_receipt "Carries normalized invocation evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-result-to-invocation-receipt"
     }
 }
 

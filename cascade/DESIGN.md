@@ -115,8 +115,9 @@ The legacy action attempt bound is never enlarged by generation admission.
 `run_review_validation` verifies the live receipt before `Popen`, starts a local
 process group, and settles known runtime on green, red, launch failure and timeout.
 Timeout or interruption stops the complete local group; interruption retains the
-worst-case reservation conservatively. This local gate does not meter provider
-paid turns: the provider boundary consumes the Task API separately. A green check
+worst-case reservation conservatively. Provider work is metered separately at
+the shared Agent adapter boundary, which reserves a paid turn and worst-case model
+runtime before dispatch and settles one normalized invocation receipt. A green check
 is still insufficient to publish after source, target, validation policy,
 authorization, credentials or remote lease drift. Remote ancestry reconciliation
 is the authoritative completion check after an interrupted push.
@@ -135,10 +136,11 @@ publication pipeline. `element.component.teams` owns that pipeline;
 | [admit_review_publication_generation / resume_action](task/action_recovery.py) | Preserve decisions and attempts; record material evidence without granting allowance or growing the attempt bound. |
 | [bind_incident_budget / read_incident_budget](task/incident_budget.py) | Anchor every linked action and material generation to one original incident policy and expose its bounded restart-safe projection. |
 | [reserve_incident_operation / settle_incident_operation](task/incident_budget.py) | Atomically issue one bounded receipt under the live claim and charge actual or conservatively retained use exactly once. |
+| [admit_provider_turn / settle_provider_turn](agent/provider_metering.py) | Consume the Task-owned allowance immediately around an incident-related provider dispatch and retain normalized invocation evidence. |
 | [extend_incident_budget / record_incident_budget_exhaustion](task/incident_budget.py) | Retain one exhaustion escalation and accept only independently authenticated finite additions within trusted maxima. |
 | [reserve_budgeted_operation / settle_budgeted_operation](watchdog/reservations.py) | Consume the Task gate after a distinct Watchdog capability claim without owning another allowance. |
 | [check_and_publish_review_rebase](review_rebase.py) | Check the immutable local source, validate, recheck policy/remote authority and push that SHA under the source lease. |
-| [reserve_review_validation / run_review_validation](review_validation.py) | Reserve worst-case runtime before spawn, verify the receipt, stop the process group, bound diagnostics and settle every exit. |
+| [reserve_review_validation / run_review_validation](review_validation.py) | Reserve worst-case runtime before spawn, optionally bind the receipt to its live provider parent, verify the receipt, stop the process group, bound diagnostics and settle every exit. |
 
 ```mermaid
 flowchart TD

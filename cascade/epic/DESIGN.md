@@ -62,6 +62,9 @@ authorize advancing lifecycle state. Recovery inspects durable state and the
 preserved worktree before resuming the owning team. See
 [shared supervision](../team_supervision.py) and
 [branch recovery](../team_branch_recovery.py).
+An incident-related manager or architect turn carries the original incident,
+claim and unique provider-operation identity through the shared Agent runner;
+missing or refused Task-owned budget admission launches no provider.
 
 Verification: [graph and lifecycle tests](../../tests/epic/).
 

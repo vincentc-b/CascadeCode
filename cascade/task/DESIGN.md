@@ -40,7 +40,7 @@ state is not extension authority. [record_incident_budget_exhaustion](incident_b
 derives one stable escalation identity and retains its first reason across
 replay and later extension.
 
-[reserve_incident_operation](incident_budget.py) is the versioned F2 consumer
+[reserve_incident_operation](incident_budget.py) is the versioned operation-consumer
 boundary. Under `task_lifecycle_lock` it verifies the bound current generation,
 trusted policy version, accounting integrity, persisted transient backoff,
 original elapsed deadline, a single live claim, operation serialization, and
@@ -56,7 +56,9 @@ process/model seconds, and known tokens exactly once. Interrupted or unknown
 work charges its full reservation and retains the claim for reconciliation.
 Elapsed time is measured from the original incident start rather than summed as
 runtime. Nested provider, MCP, tool, and validator work reuse the top-level claim
-but receive separate serialized receipts. `claim_complete` releases that claim
+but receive separate serialized receipts. A provider child must cite the live
+parent operation identity; sharing the claim string alone grants no nesting
+authority, and unrelated competitors wait. `claim_complete` releases that claim
 only after its owner has settled the final operation.
 
 ```mermaid
@@ -80,10 +82,13 @@ flowchart TD
     E -->|no| X
 ```
 
-The record meters process work now and provides the F2 boundary for later paid
-provider enforcement; this component does not itself launch a provider turn.
-Known tokens are charged only from provider evidence, while unavailable token
-usage remains honest and falls back to paid-turn/runtime bounds. The lifecycle
+The record meters both process work and paid provider work; this component does
+not itself launch a provider turn. The Agent boundary's
+[admit_provider_turn / settle_provider_turn](../agent/provider_metering.py)
+uses the same operation API immediately around physical provider dispatch.
+Known tokens are charged only from provider evidence, while unavailable usage
+remains honest and retains the reserved paid-turn/runtime/token bounds without
+publishing those bounds as observed token totals. The lifecycle
 flock serializes ledger mutation across local processes; permits bound allowance
 but do not claim operating-system, network, or remote-provider isolation.
 Unknown legacy use is marked unavailable rather than inferred, and caller-
@@ -104,9 +109,12 @@ no unchanged expensive check; transient failure uses the ledger's persisted
 classification waits for owner reconciliation. Independent finite extension keeps
 all prior attempts, decisions, charges and the first escalation.
 
-The Task gate exposes paid-turn and model/token dimensions for the provider-owned
-consumer, but does not claim that provider spending is enforced by review
-publication. The full Task validation gate remains separate from repository review
+The Task gate exposes paid-turn and model/token dimensions to the Agent-owned
+consumer. Provider receipts retain provider/model/invocation identity and explicit
+known, estimated or unavailable token evidence in each operation observation;
+cached input is not added to known input plus output. Interrupted provider work
+retains its complete reservation. Review publication does not itself meter those
+turns. The full Task validation gate remains separate from repository review
 validation, and Epic product acceptance remains a later lifecycle obligation.
 
 
@@ -173,6 +181,9 @@ authorize advancing lifecycle state. Recovery inspects durable state and the
 preserved worktree before resuming the owning team. See
 [shared supervision](../team_supervision.py) and
 [branch recovery](../team_branch_recovery.py).
+An incident-related SWE turn carries the original incident, claim and unique
+provider-operation identity through the shared Agent runner; missing or refused
+budget admission launches no provider.
 
 Verification: [graph and lifecycle tests](../../tests/task/).
 

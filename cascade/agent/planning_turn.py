@@ -22,7 +22,13 @@ from cascade.agent.planning_sandbox import (
 )
 from cascade.agent.providers import ProviderId
 from cascade.agent.recovery_contract import ProviderRecoveryLaunch
-from cascade.agent.types import ProviderPermissionMode, RoleId, RoleResult, RoleTurn
+from cascade.agent.types import (
+    IncidentProviderTurn,
+    ProviderPermissionMode,
+    RoleId,
+    RoleResult,
+    RoleTurn,
+)
 from cascade.board.parse import parse_doc
 from cascade.planning_dependency_tools import refresh_planning_dependencies
 
@@ -62,6 +68,7 @@ async def run_epic_planning_turn(
     reasoning_level: str | None = None,
     flex_mode: bool | None = None,
     recovery: ProviderRecoveryLaunch | None = None,
+    incident_turn: IncidentProviderTurn | None = None,
 ) -> RoleResult:
     if role not in _EPIC_ROLES:
         raise ValueError(f"not an epic planning role: {role}")
@@ -96,6 +103,7 @@ async def run_epic_planning_turn(
         reasoning_level=reasoning_level,
         flex_mode=flex_mode,
         recovery=recovery,
+        incident_turn=incident_turn,
         sandbox=PlanningSandbox(
             scratch_dir=scratch,
             repo_root=repo,
@@ -118,6 +126,7 @@ async def run_epic_planning_turn(
             status="error",
             tool_effects=result.tool_effects,
             recovery=result.recovery,
+            invocation=result.invocation,
         )
     return result
 
@@ -133,6 +142,7 @@ async def run_feature_planning_turn(
     reasoning_level: str | None = None,
     flex_mode: bool | None = None,
     recovery: ProviderRecoveryLaunch | None = None,
+    incident_turn: IncidentProviderTurn | None = None,
 ) -> RoleResult:
     if role not in _FEATURE_ROLES:
         raise ValueError(f"not a feature planning role: {role}")
@@ -154,6 +164,7 @@ async def run_feature_planning_turn(
         reasoning_level=reasoning_level,
         flex_mode=flex_mode,
         recovery=recovery,
+        incident_turn=incident_turn,
         sandbox=PlanningSandbox(
             scratch_dir=scratch,
             repo_root=repo,
@@ -201,6 +212,7 @@ async def _run_sandbox_turn(
     reasoning_level: str | None = None,
     flex_mode: bool | None = None,
     recovery: ProviderRecoveryLaunch | None = None,
+    incident_turn: IncidentProviderTurn | None = None,
     permission_mode: ProviderPermissionMode = "default",
 ) -> RoleResult:
     scratch = sandbox.scratch_dir
@@ -219,6 +231,7 @@ async def _run_sandbox_turn(
             reasoning_level=reasoning_level,
             flex_mode=flex_mode,
             recovery=recovery,
+            incident_turn=incident_turn,
             permission_mode=permission_mode,
         )
     else:
@@ -232,6 +245,7 @@ async def _run_sandbox_turn(
             reasoning_level=reasoning_level,
             flex_mode=flex_mode,
             recovery=recovery,
+            incident_turn=incident_turn,
             permission_mode=permission_mode,
         )
     try:
@@ -245,6 +259,7 @@ async def _run_sandbox_turn(
             status=result.status,
             tool_effects=tool_effects,
             recovery=result.recovery,
+            invocation=result.invocation,
         )
     finally:
         teardown_scratch(scratch)

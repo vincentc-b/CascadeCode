@@ -10,6 +10,7 @@ import pytest
 from cursor_sdk import CloudAgentOptions, CursorAgentError as SdkCursorAgentError
 from cursor_sdk import RunResult
 from cursor_sdk import AsyncAgent, AsyncClient
+from cursor_sdk.types import TokenUsage
 
 from cascade.agent import (
     CursorAgentError,
@@ -21,6 +22,7 @@ from cascade.agent import (
     run_role,
     validate_model_id,
 )
+from cascade.agent.types import IncidentProviderTurn
 from cascade.agent.adapter import _cursor_bridge_command
 
 
@@ -147,6 +149,34 @@ def test_agent_disposed_before_return(
     assert exited == [True]
 
 
+def test_cursor_usage_is_normalized_without_adding_cached_tokens(
+    api_key_env: None,
+    mock_async_client: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def ok_prompt(*args: object, **kwargs: object) -> RunResult:
+        return RunResult(
+            id="run-usage",
+            agent_id="agent-usage",
+            status="finished",
+            result="ok",
+            usage=TokenUsage(
+                input_tokens=100,
+                output_tokens=20,
+                cache_read_tokens=40,
+                cache_write_tokens=0,
+                total_tokens=120,
+            ),
+        )
+
+    monkeypatch.setattr(AsyncAgent, "prompt", ok_prompt)
+    result = asyncio.run(run_role(_turn()))
+    assert result.invocation is not None
+    assert result.invocation.invocation_id == "run-usage"
+    assert result.invocation.usage.cached_input.value == 40
+    assert result.invocation.usage.known_total == 120
+
+
 def test_model_id_forwarded_verbatim(
     api_key_env: None,
     mock_async_client: AsyncMock,
@@ -186,6 +216,17 @@ def test_build_agent_options_uses_env_key(api_key_env: None) -> None:
     assert opts.local is not None
     assert opts.local.setting_sources == []
     assert opts.tools == []
+
+    bounded = build_agent_options(
+        _turn(
+            incident_turn=IncidentProviderTurn(
+                "incident:1", "claim:1", "provider:1", Path("/tmp/tracking")
+            )
+        ),
+        api_key="cursor_test_key",
+    )
+    assert bounded.idempotency_key is not None
+    assert bounded.idempotency_key.startswith("sha256:")
 
 
 def test_build_agent_options_disables_builtin_tools(api_key_env: None) -> None:
