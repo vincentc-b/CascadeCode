@@ -257,17 +257,10 @@ def move_doc(work_id: WorkId, dest_column: Column, *, root: Path | None = None) 
 
 
 def _move_doc(work_id: WorkId, dest_column: Column, root: Path | None) -> str | None:
-    from cascade.workspace.integration_worktree import doc_filesystem_root, is_trunk_pointer
+    from cascade.workspace.integration_worktree import resolve_mutation_owner
 
     repo = resolve_tracking_root(root)
-    trunk_board = list_board(repo)
-    if work_id in trunk_board.by_id and is_trunk_pointer(trunk_board.by_id[work_id]):
-        repo = doc_filesystem_root(work_id, trunk=repo)
-    elif work_id not in trunk_board.by_id:
-        try:
-            repo = doc_filesystem_root(work_id, trunk=repo)
-        except NotFound:
-            pass
+    repo = resolve_mutation_owner(work_id, trunk=repo)
     from cascade.workspace.integration_worktree import (
         invalidate_merged_board,
         locate_trunk,
@@ -404,16 +397,19 @@ def read_doc(work_id: WorkId, rev: str | None = None, *, root: Path | None = Non
         doc = parse_text(text, repo / rel)
         doc.sha = rev
         return doc
-    from cascade.workspace.integration_worktree import doc_filesystem_root, is_trunk_pointer
+    from cascade.workspace.integration_worktree import (
+        is_trunk_pointer,
+        projected_doc_filesystem_root,
+    )
 
     board = list_board(repo)
     if work_id in board.by_id and is_trunk_pointer(board.by_id[work_id]):
-        doc_root = doc_filesystem_root(work_id, trunk=repo)
+        doc_root = projected_doc_filesystem_root(work_id, trunk=repo)
     elif work_id in board.by_id:
         doc_root = repo
     else:
         try:
-            doc_root = doc_filesystem_root(work_id, trunk=repo)
+            doc_root = projected_doc_filesystem_root(work_id, trunk=repo)
         except NotFound:
             raise NotFound(work_id) from None
     board = list_board(doc_root)

@@ -80,11 +80,18 @@ Verification: [source validation](../../tests/workspace/test_c4_source.py),
 
 ## Work ownership and retirement
 
-`REQ-WORKSPACE-OWNER-001`: Document reads resolve registered Epic/Feature
-checkouts and Task parent checkouts, including returned and backlog snapshots.
-Read provenance is distinct from permission to mutate a checkout.
-`DEC-WORKSPACE-OWNER-001`: Keep the merged board as a read projection; use
-registered work identity and repository roles when interpreting its paths.
+`REQ-WORKSPACE-OWNER-001`: Lifecycle writes resolve exactly one owner from the
+work ID, tier and parent lineage, canonical tracking-repository role, registered
+checkout identity and expected branch. Epic and Feature registrations own their
+documents; a Task document is owned by its registered parent Feature checkout.
+Returned graphs are an admitted reconstruction owner. Remote backlog snapshots
+are read-only. Missing, conflicting, detached or changed ownership raises an
+actionable `MutationOwnerError`; a sibling historical copy never authorizes a
+write. Document reads may still project registered checkouts, returned graphs,
+backlog snapshots and historical copies.
+`DEC-WORKSPACE-OWNER-001`: Keep `merged_board` and `_meta_preference` as read
+projections. Lifecycle mutation uses `resolve_mutation_owner`, not column rank or
+generic worktree-path bonuses.
 
 `REQ-WORKSPACE-RETIRE-001`: Retirement preserves a branch and refuses a
 noncanonical, dirty, locked or currently occupied checkout. Merge ancestry or an
@@ -102,6 +109,7 @@ are authoritative; renders are revision-bound derived artifacts.
 | Entry point | Inputs, output and state |
 |---|---|
 | [resolve_doc_worktree](doc_root.py) | Work ID and board → registered checkout; Tasks follow their Feature parent. Missing work raises `NotFound`. |
+| [resolve_mutation_owner / doc_filesystem_root](integration_worktree.py) | Work identity, parent lineage, repository role, registry path and branch → one writable owner or actionable `MutationOwnerError`. |
 | [merged_board / _meta_preference](integration_worktree.py) | Tracking board, registry and snapshot provenance → preferred documents with retained approval metadata. Ranking includes column and generic worktree-path bonuses; it does not prove exact mutation ownership. |
 | [preflight_lifecycle_merge_target](branch_synchronization.py) | Source/target work IDs and branches → synchronization check or typed refusal, including `not_active`. |
 | [terminal_doc_persisted_outside_worktree](integration_worktree.py) | Work ID → existence of another completed parent document. This check does not inventory terminal descendants. |
@@ -109,9 +117,10 @@ are authoritative; renders are revision-bound derived artifacts.
 
 ```mermaid
 flowchart TD
-    ID[Work ID] --> Registry[Registered checkout / parent]
-    Registry --> Projection[Merged board and document provenance]
-    Projection --> Terminal[Terminal sweep: external parent document]
+    ID[Work ID + tier + parent] --> Owner[Exact mutation-owner resolver]
+    Owner --> Registry[Canonical tracking role + registered path and branch]
+    ID --> Projection[Merged board read projection]
+    Registry --> Terminal[Terminal sweep: external parent document]
     Terminal --> Gates[Canonical path, merge evidence, clean, unlocked, unoccupied]
     Gates -->|pass| Remove[Remove checkout then registry entry; retain branch]
     Gates -->|refusal| Retain[Retain checkout for recovery]
@@ -121,8 +130,8 @@ Registry JSON persists under `.cascade/`; Git retains branch identity and Markdo
 holds lifecycle state. Restart reconstructs the board from surviving roots.
 Registry cleanup follows successful worktree removal; missing-path cleanup checks
 Git's worktree registration. This is repository ownership enforcement, not an OS
-sandbox. Exact-owner ambiguity and descendant durability require inspection beyond
-the current parent-document predicate.
+sandbox. Descendant durability requires inspection beyond the current
+parent-document predicate.
 
 Verification: [worktree tests](../../tests/workspace/test_integration_worktrees.py),
 [document resolution](../../tests/war_room/test_resolve_worktree.py), and

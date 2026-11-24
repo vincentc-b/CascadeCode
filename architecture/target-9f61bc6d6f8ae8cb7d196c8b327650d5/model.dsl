@@ -84,7 +84,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.boss"
             }
         }
-        workspace_component = component "Workspace" "Resolves repositories and revision-pinned architecture." "cascade.workspace" {
+        workspace_component = component "Workspace" "Resolves exact lifecycle owners, repository roles, and revision-pinned architecture." "cascade.workspace" {
             properties {
                 "cascade.semanticId" "element.component.workspace"
             }
@@ -1761,6 +1761,24 @@ code_workspace_resolve = element "resolve_doc_worktree" "Function" "Resolve regi
     }
 }
 
+code_workspace_mutation_owner = element "resolve_mutation_owner" "Function" "Prove lifecycle write ownership from repository role, lineage, registry identity, and branch." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.mutation-owner"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "resolve_mutation_owner"
+    }
+}
+
+code_workspace_doc_owner = element "doc_filesystem_root" "Function" "Route mutation callers through exact owner resolution." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.doc-owner"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "doc_filesystem_root"
+    }
+}
+
 code_workspace_board = element "merged_board" "Function" "Project worktree documents and approvals." {
     properties {
         "cascade.semanticId" "element.code.workspace.board"
@@ -1968,6 +1986,18 @@ code_workspace_resolve_to_registry = code_workspace_resolve -> code_workspace_re
 code_workspace_resolve_to_board = code_workspace_resolve -> code_workspace_board "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-workspace-resolve-to-board"
+    }
+}
+
+code_workspace_mutation_owner_to_registry = code_workspace_mutation_owner -> code_workspace_registry "Validates exact identity and branch" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-mutation-owner-to-registry"
+    }
+}
+
+code_workspace_doc_owner_to_mutation_owner = code_workspace_doc_owner -> code_workspace_mutation_owner "Delegates mutation authority" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-doc-owner-to-mutation-owner"
     }
 }
 

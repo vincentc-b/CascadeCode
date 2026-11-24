@@ -191,6 +191,6 @@ custom "cascade-workspace-code" {
         "cascade.codeComponent" "element.component.workspace"
     }
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
-    include code_workspace_resolve code_workspace_board code_workspace_select code_workspace_registry code_workspace_persist code_workspace_retire code_workspace_preflight
+    include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_persist code_workspace_retire code_workspace_preflight
     autoLayout lr
 }

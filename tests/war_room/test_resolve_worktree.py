@@ -14,12 +14,18 @@ from pathlib import Path
 
 import pytest
 
-from cascade.board.store import write_doc
+from cascade.board.store import read_doc_in_worktree, save_doc, write_doc
 from cascade.workspace.doc_root import read_doc_resolved
 from cascade.war_room.server import serve
 from cascade.watchdog import activate_epic, dispatch_feature
 from cascade.workspace.doc_root import resolve_doc_worktree
-from cascade.workspace.integration_worktree import integration_worktree_path
+from cascade.workspace.integration_worktree import (
+    ensure_integration_worktree,
+    integration_branch,
+    integration_worktree_path,
+    invalidate_merged_board,
+    merged_board,
+)
 from tests.support import add_doc, make_repo, approve_board_feature
 
 
@@ -103,6 +109,39 @@ def _seed_active_epic(root: Path) -> None:
         status="backlog",
         parent="feat_001",
     )
+
+
+def test_view_plan_resolution_stays_read_only_when_sibling_copy_ranks_higher(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
+    owner = ensure_integration_worktree(
+        "feature",
+        "feat_001",
+        branch=integration_branch("feature", "feat_001"),
+        base_ref="HEAD",
+        trunk=root,
+    )
+    sibling = ensure_integration_worktree(
+        "feature",
+        "feat_002",
+        branch=integration_branch("feature", "feat_002"),
+        base_ref="HEAD",
+        trunk=root,
+    )
+    historical = read_doc_in_worktree("feat_001", sibling.path)
+    previous = historical.meta.path
+    historical.meta.status = "completed"
+    historical.meta.path = sibling.path / "docs/features/3_completed/feat_001_feature.md"
+    save_doc(historical, previous_path=previous, root=sibling.path)
+    invalidate_merged_board(root)
+
+    assert merged_board(root).by_id["feat_001"].path.is_relative_to(sibling.path)
+    assert resolve_doc_worktree("feat_001", root=root) == owner.path
 
 
 def _mark_body(root: Path, work_id: str, marker: str) -> None:

@@ -84,10 +84,10 @@ def read_doc_resolved(work_id: WorkId, *, root: Path):
     """Read ``work_id`` preferring the integration worktree from ``resolve_doc_worktree``.
 
     Child specs may still live on trunk (or another checkout) until dispatch relocates
-    them; fall back to ``doc_filesystem_root`` when the preferred tree has no copy.
+    them; fall back to the merged-board projection when the preferred tree has no copy.
     """
 
-    from cascade.workspace.integration_worktree import doc_filesystem_root
+    from cascade.workspace.integration_worktree import projected_doc_filesystem_root
 
     trunk = Path(root).resolve()
     preferred = resolve_doc_worktree(work_id, root=trunk)
@@ -97,7 +97,7 @@ def read_doc_resolved(work_id: WorkId, *, root: Path):
         return read_doc_in_worktree(work_id, preferred)
     except NotFound:
         pass
-    fs_root = doc_filesystem_root(work_id, trunk=trunk)
+    fs_root = projected_doc_filesystem_root(work_id, trunk=trunk)
     if fs_root.resolve() == preferred.resolve():
         raise NotFound(work_id)
     if fs_root.resolve() == trunk.resolve():

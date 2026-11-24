@@ -18,6 +18,7 @@ from typing import Callable, Iterator, Literal
 import fcntl
 
 from cascade.board.errors import GitError, NotFound
+from cascade.workspace.errors import MutationOwnerError
 from cascade.board.gitutil import head_sha, path_for_work_id
 from cascade.board.store import list_board
 from cascade.board.types import BoardIndex, WorkMeta
@@ -808,8 +809,213 @@ def _merged_board_uncached(trunk: Path, *, readonly: bool = False) -> BoardIndex
     return BoardIndex(by_id=by_id)
 
 
+def resolve_mutation_owner(
+    work_id: str,
+    *,
+    trunk: Path,
+    tier: str | None = None,
+    parent: str | None = None,
+) -> Path:
+    """Prove the one checkout authorized to mutate ``work_id``.
+
+    The merged board is intentionally not authority here.  Ownership follows
+    the canonical tracking repository, exact registry identity, expected
+    branch, and parent lineage.  Historical copies in sibling worktrees remain
+    useful to read but cannot win a lifecycle write by column rank.
+    """
+
+    from cascade.board.context import get_project_context, resolve_tracking_root
+    from cascade.workspace.backlog_snapshot import snapshot_board
+
+    requested = Path(trunk).resolve()
+    tracking = locate_trunk(resolve_tracking_root(requested)).resolve()
+    project = get_project_context()
+    product = tracking
+    if project is not None:
+        product = locate_trunk(project.target.root).resolve()
+        tracking = locate_trunk(project.tracking.root).resolve()
+        allowed = (
+            requested in {product, tracking}
+            or requested.is_relative_to(product / ".cascade" / "worktrees")
+            or requested.is_relative_to(tracking / ".cascade")
+        )
+        if not allowed:
+            raise MutationOwnerError(
+                work_id,
+                "the requested repository has no canonical product/tracking role",
+                f"retry with product root {product} or tracking root {tracking}",
+            )
+
+    registry = load_registry(product)
+    boards: dict[Path, BoardIndex] = {tracking: list_board(tracking)}
+    for entry in registry:
+        if entry.path.is_dir():
+            boards.setdefault(entry.path.resolve(), list_board(entry.path))
+
+    # Returned work is an admitted reconstruction path.  Discover it directly;
+    # the merged-board winner is a read projection and is never consulted for
+    # mutation authority.
+    returned_roots: list[Path] = []
+    returns_home = tracking / ".cascade" / "epic-returns"
+    if returns_home.is_dir():
+        for manifest in sorted(returns_home.glob("*/manifest.json")):
+            try:
+                return_state = json.loads(
+                    manifest.read_text(encoding="utf-8")
+                ).get("state")
+            except (OSError, json.JSONDecodeError, AttributeError) as exc:
+                raise MutationOwnerError(
+                    work_id,
+                    f"return manifest is unreadable: {manifest}",
+                    "repair or remove the corrupt return manifest through lifecycle recovery",
+                ) from exc
+            if return_state not in {"returning", "returned"}:
+                continue
+            candidate = manifest.parent.resolve()
+            if work_id in list_board(candidate).by_id:
+                returned_roots.append(candidate)
+    if len(returned_roots) > 1:
+        raise MutationOwnerError(
+            work_id,
+            "multiple returned lifecycle snapshots claim mutation ownership",
+            "reconcile the return manifests before retrying",
+        )
+    returned_root = returned_roots[0] if returned_roots else None
+    snapshot_copy = snapshot_board(product).by_id.get(work_id)
+
+    copies = [board.by_id[work_id] for board in boards.values() if work_id in board.by_id]
+    if returned_root is not None:
+        returned_board = list_board(returned_root)
+        if work_id in returned_board.by_id:
+            copies.append(returned_board.by_id[work_id])
+    if not copies:
+        if snapshot_copy is not None:
+            raise MutationOwnerError(
+                work_id,
+                "the only canonical provenance is a read-only backlog snapshot",
+                "activate or import the backlog item before mutating it",
+            )
+        raise MutationOwnerError(
+            work_id,
+            "no document copy has canonical product/tracking provenance",
+            "restore the work document in its registered owner or reconstruct it through the lifecycle recovery path",
+        )
+    if (
+        snapshot_copy is not None
+        and returned_root is None
+        and not any(row.work_id == work_id for row in registry)
+        and all(copy.status == "backlog" for copy in copies)
+    ):
+        raise MutationOwnerError(
+            work_id,
+            "canonical provenance is a read-only backlog snapshot",
+            "activate or import the backlog item before mutating it",
+        )
+
+    tiers = {copy.tier for copy in copies}
+    parents = {copy.parent for copy in copies}
+    if tier is not None:
+        tiers.add(tier)
+    if parent is not None:
+        parents.add(parent)
+    if len(tiers) != 1 or len(parents) != 1:
+        raise MutationOwnerError(
+            work_id,
+            "document copies disagree on tier or parent lineage",
+            "reconcile the conflicting copies and registry before retrying",
+        )
+    resolved_tier = next(iter(tiers))
+    resolved_parent = next(iter(parents))
+
+    if returned_root is not None:
+        owner = returned_root.resolve()
+    elif resolved_tier == "epic":
+        entry = _exact_owner_entry(registry, "epic", work_id, product)
+        owner = entry.path.resolve() if entry is not None and product == tracking else tracking
+    elif resolved_tier == "feature":
+        entry = _exact_owner_entry(registry, "feature", work_id, product)
+        if entry is not None:
+            owner = tracking if product != tracking else entry.path.resolve()
+        else:
+            if not resolved_parent:
+                raise MutationOwnerError(
+                    work_id, "feature has no parent owner", "restore its parent epic metadata"
+                )
+            owner = resolve_mutation_owner(resolved_parent, trunk=product, tier="epic")
+    elif resolved_tier == "task":
+        if not resolved_parent:
+            raise MutationOwnerError(
+                work_id, "task has no parent owner", "restore its parent feature metadata"
+            )
+        # A Task checkout owns execution rather than its Markdown file, but a
+        # present registration is still part of the lifecycle identity and
+        # must not silently drift to another path or branch.
+        _exact_owner_entry(registry, "task", work_id, product)
+        owner = resolve_mutation_owner(resolved_parent, trunk=product, tier="feature")
+    else:
+        raise MutationOwnerError(
+            work_id, f"unsupported tier {resolved_tier!r}", "repair the work document tier"
+        )
+
+    owner_board = list_board(owner)
+    owned = owner_board.by_id.get(work_id)
+    if owned is None or owned.tier != resolved_tier or owned.parent != resolved_parent:
+        raise MutationOwnerError(
+            work_id,
+            f"registered owner {owner} does not contain the expected document",
+            "restore the document in that checkout or repair the exact registry identity",
+        )
+    return owner
+
+
+def _exact_owner_entry(
+    registry: list[IntegrationWorktree],
+    kind: IntegrationKind,
+    work_id: str,
+    trunk: Path,
+) -> IntegrationWorktree | None:
+    matches = [row for row in registry if row.kind == kind and row.work_id == work_id]
+    if len(matches) > 1:
+        raise MutationOwnerError(
+            work_id,
+            "multiple registry entries claim the same owner identity",
+            "remove the duplicate registry entry after verifying the live checkout",
+        )
+    if not matches:
+        return None
+    entry = matches[0]
+    expected_branch = integration_branch(kind, work_id)
+    expected_path = integration_worktree_path(kind, work_id, trunk=trunk)
+    if entry.branch != expected_branch or entry.path.resolve() != expected_path:
+        raise MutationOwnerError(
+            work_id,
+            "registered branch or checkout path conflicts with canonical ownership",
+            f"repair the registry to {expected_branch} at {expected_path}",
+        )
+    if not entry.path.is_dir():
+        raise MutationOwnerError(
+            work_id,
+            "the registered owner checkout is missing",
+            "repair the registered worktree before retrying the mutation",
+        )
+    branch = _git(entry.path, "symbolic-ref", "--quiet", "--short", "HEAD", check=False)
+    if branch.returncode != 0 or branch.stdout.strip() != expected_branch:
+        raise MutationOwnerError(
+            work_id,
+            "the registered checkout is on a different or detached branch",
+            f"restore checkout {entry.path} to {expected_branch}",
+        )
+    return entry
+
+
 def doc_filesystem_root(work_id: str, *, trunk: Path) -> Path:
-    """Return the checkout root that owns ``work_id``'s markdown file."""
+    """Return the exact checkout authorized to mutate ``work_id``."""
+
+    return resolve_mutation_owner(work_id, trunk=trunk)
+
+
+def projected_doc_filesystem_root(work_id: str, *, trunk: Path) -> Path:
+    """Return the checkout containing the merged-board read projection."""
 
     meta = _best_meta_for_id(work_id, trunk=trunk)
     path = meta.path.resolve()
@@ -821,11 +1027,9 @@ def doc_filesystem_root(work_id: str, *, trunk: Path) -> Path:
     from cascade.workspace.backlog_snapshot import snapshot_root
 
     snap = snapshot_root(trunk).resolve()
-    try:
-        path.relative_to(snap)
-    except ValueError:
-        return git_root_for_path(meta.path)
-    return snap
+    if path.is_relative_to(snap):
+        return snap
+    return git_root_for_path(meta.path)
 
 
 def _best_meta_for_id(work_id: str, *, trunk: Path) -> WorkMeta:

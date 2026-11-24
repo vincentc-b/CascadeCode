@@ -9,7 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from cascade.board.store import read_doc, write_doc
+from cascade.board.context import set_project_context
+from cascade.board.store import (
+    move_doc,
+    read_doc,
+    read_doc_in_worktree,
+    save_doc,
+    write_doc,
+)
 from cascade.watchdog import (
     activate_epic,
     dispatch_feature,
@@ -26,6 +33,7 @@ from cascade.workspace.integration_worktree import (
     load_registry,
     merged_board,
     repair_missing_worktree,
+    resolve_mutation_owner,
     retire_integration_worktree,
     retire_terminal_registered_worktrees,
     scan_active_markdown_roots,
@@ -33,6 +41,8 @@ from cascade.workspace.integration_worktree import (
     unregister_missing_integration_worktree,
 )
 from cascade.workspace.integration_worktree import IntegrationWorktree
+from cascade.workspace.types import ProjectContext
+from cascade.workspace.errors import MutationOwnerError
 from cascade.workspace.up import resume_legally_active_graphs
 from tests.support import add_doc, make_repo, approve_board_feature, commit_board
 
@@ -53,6 +63,149 @@ def _initial_commit(root: Path) -> None:
     subprocess.run(
         ["git", "commit", "-m", "init"], cwd=root, check=True, capture_output=True
     )
+
+
+def test_mutation_owner_ignores_completed_copy_in_sibling_worktree(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Owner", tier="feature", parent="epic_001")
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
+    owner = ensure_integration_worktree(
+        "feature",
+        "feat_001",
+        branch=integration_branch("feature", "feat_001"),
+        base_ref="HEAD",
+        trunk=root,
+    )
+    sibling = ensure_integration_worktree(
+        "feature",
+        "feat_002",
+        branch=integration_branch("feature", "feat_002"),
+        base_ref="HEAD",
+        trunk=root,
+    )
+    stale = read_doc_in_worktree("task_001", sibling.path)
+    previous = stale.meta.path
+    stale.meta.status = "completed"
+    stale.meta.path = sibling.path / "docs/tasks/3_completed/task_001_task.md"
+    save_doc(stale, previous_path=previous, root=sibling.path)
+    invalidate_merged_board(root)
+
+    assert merged_board(root).by_id["task_001"].path.is_relative_to(sibling.path)
+    assert resolve_mutation_owner("task_001", trunk=root) == owner.path
+    move_doc("task_001", "active", root=root)
+    assert read_doc_in_worktree("task_001", owner.path).meta.status == "active"
+    assert read_doc_in_worktree("task_001", sibling.path).meta.status == "completed"
+
+
+def test_mutation_owner_rejects_changed_registry_identity(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
+    entry = ensure_integration_worktree(
+        "epic",
+        "epic_001",
+        branch=integration_branch("epic", "epic_001"),
+        base_ref="HEAD",
+        trunk=root,
+    )
+    save_registry(
+        root,
+        [
+            IntegrationWorktree(
+                entry.kind,
+                entry.work_id,
+                "epic/changed",
+                entry.path,
+                entry.base_sha,
+            )
+        ],
+    )
+
+    with pytest.raises(
+        MutationOwnerError, match="registered branch or checkout path"
+    ) as exc:
+        resolve_mutation_owner("epic_001", trunk=root)
+    assert exc.value.reason.startswith("registered branch")
+
+    save_registry(root, [entry])
+    subprocess.run(
+        ["git", "checkout", "-b", "epic/wrong-checkout"],
+        cwd=entry.path,
+        check=True,
+        capture_output=True,
+    )
+    with pytest.raises(MutationOwnerError, match="different or detached branch"):
+        resolve_mutation_owner("epic_001", trunk=root)
+
+
+def test_mutation_owner_uses_tracking_root_in_split_project(tmp_path: Path) -> None:
+    target = make_repo(tmp_path / "target")
+    tracking = make_repo(tmp_path / "tracking")
+    _initial_commit(target)
+    add_doc(tracking, id="epic_001", title="Epic", tier="epic")
+    set_project_context(ProjectContext.split(target, tracking))
+
+    assert resolve_mutation_owner("epic_001", trunk=target) == tracking
+    entry = ensure_integration_worktree(
+        "epic",
+        "epic_001",
+        branch=integration_branch("epic", "epic_001"),
+        base_ref="HEAD",
+        trunk=target,
+    )
+    assert resolve_mutation_owner("epic_001", trunk=target) == tracking
+    move_doc("epic_001", "active", root=target)
+    assert read_doc("epic_001", root=target).meta.status == "active"
+    assert not list((entry.path / "docs").rglob("*.md"))
+
+
+def test_mutation_owner_refuses_snapshot_and_missing_registered_owner(tmp_path: Path) -> None:
+    from cascade.workspace.backlog_snapshot import snapshot_root
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(snapshot_root(root), id="epic_001", title="Remote", tier="epic")
+    with pytest.raises(MutationOwnerError, match="read-only backlog snapshot"):
+        resolve_mutation_owner("epic_001", trunk=root)
+
+    active_owner = ensure_integration_worktree(
+        "epic",
+        "epic_001",
+        branch=integration_branch("epic", "epic_001"),
+        base_ref="HEAD",
+        trunk=root,
+    )
+    assert resolve_mutation_owner("epic_001", trunk=root) == active_owner.path
+
+    shutil.rmtree(snapshot_root(root))
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    missing = IntegrationWorktree(
+        "feature",
+        "feat_001",
+        integration_branch("feature", "feat_001"),
+        integration_worktree_path("feature", "feat_001", trunk=root),
+        "0" * 40,
+    )
+    save_registry(root, [missing])
+    with pytest.raises(MutationOwnerError, match="registered owner checkout is missing"):
+        resolve_mutation_owner("feat_001", trunk=root)
+
+
+def test_mutation_owner_accepts_returned_lifecycle_root(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    returned = root / ".cascade/epic-returns/epic_001"
+    add_doc(returned, id="epic_001", title="Returned", tier="epic")
+    (returned / "manifest.json").write_text(
+        '{"state":"returned","members":[{"id":"epic_001"}]}\n',
+        encoding="utf-8",
+    )
+
+    assert resolve_mutation_owner("epic_001", trunk=root) == returned.resolve()
 
 
 def _chain(root: Path) -> None:

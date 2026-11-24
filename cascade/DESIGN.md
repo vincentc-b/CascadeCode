@@ -286,6 +286,11 @@ its observed revisions; publication uses the guarded review workflow.
 team adapters, watchdog claims and Boss delivery, with repository-specific state
 resolved through Workspace.
 
+Lifecycle callers use Workspace's exact mutation-owner contract before changing
+planning documents. The merged board remains suitable for status projection and
+selection display, but its preferred row cannot authorize a write; ambiguity or
+changed registry/branch identity fails closed with a recovery action.
+
 [team_supervision.py::supervise_child](team_supervision.py) delegates Task
 recovery to [Feature recovery](feature/recovery.py). Feature-child recovery
 currently inspects incidents and queues a deduplicated team wakeup.

@@ -6,6 +6,17 @@ Evidence: `cascade/board/{types,parse,validate,store,work_ids}.py` and `tests/bo
 
 Known gaps: missing receipts prevent attributing every invariant to accepted work.
 
+## Lifecycle mutation owner interface
+
+Board columns and frontmatter remain the lifecycle truth under `REQ-BOARD-001`,
+but a merged board row is a read projection across several checkouts. Board-store
+Lifecycle moves obtain their filesystem root through Workspace's
+[`resolve_mutation_owner`](../workspace/integration_worktree.py); column rank and
+historical completed copies cannot grant write authority. Missing or conflicting
+registered ownership fails before a document move or write. The exact ownership
+contract and typed refusal belong to
+[`REQ-WORKSPACE-OWNER-001`](../workspace/DESIGN.md#work-ownership-and-retirement).
+
 ## Safe frontmatter scan performance
 
 Worktree board scans may read thousands of records during a cold War Room request.
