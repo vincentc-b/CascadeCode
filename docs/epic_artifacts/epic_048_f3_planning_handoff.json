@@ -554,5 +554,64 @@
     },
     "publication": "The separate pinned Epic operation remains terminal failed in epic_048_publication_resume.json. No supported terminal retry tool or new recovery evidence is available in this turn. Runtime-owner recovery remains required; preserve the exact request and accepted lineage.",
     "handoff": "Send this disposition to F3 and end the planning turn to permit child delivery. Return on substantive delivery, closeout reconciliation or changed recovery prerequisites; no acknowledgement-only response or polling required."
+  },
+  "manager_task001_evidence_map_review": {
+    "role": "epic_manager",
+    "trigger": "TeamMessage feat_048_003:feat_048_003:task001-evidence-map-76f6eda0",
+    "review_base": "f84bda4a",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "a4a20bd3e791e251f3882a60b1314bcbd58cb5b6",
+    "assessment": "The reported source/test map supplies concrete references for Task 001 closeout reconciliation within the approved contract. It does not correct the completed Task record or establish final cross-stage acceptance. Canonical plans are unchanged and no architecture amendments are open; no spec write, new decision or renewed sign-off is needed.",
+    "reported_revisions": {
+      "task_merge": "76f6eda0",
+      "feature_head": "71f9dabe",
+      "completed_task_record": "286081dd"
+    },
+    "reported_evidence_map": [
+      {
+        "obligation": "Trusted reviewed/integrated/installed binding",
+        "source": "cascade/workspace/runtime_identity.py:create_runtime_authority, validate_runtime_authority",
+        "claim": "Externally signed deployment receipt, clean accepted-review and integrated ancestry, installed bytes."
+      },
+      {
+        "obligation": "Actual loaded worker and independent verification",
+        "source": "cascade/workspace/runtime_identity.py:loaded_runtime_identity, verify_loaded_runtime_identity; cascade/workspace/launcher.py; cascade/workspace/worker.py",
+        "claim": "Imported callables, host PID/boot/start, launcher-selected import root, package/module bytes and capability generation."
+      },
+      {
+        "obligation": "Operator procedure and navigable implementation",
+        "source": "README.md; cascade/workspace/DESIGN.md; model.dsl, views.dsl and workspace.contract.json",
+        "claim": "Bootstrap and process/restart flow plus native Workspace Commands Code declarations."
+      },
+      {
+        "obligation": "Refusal and restart verification",
+        "source": "tests/workspace/test_runtime_identity.py",
+        "claim": "Signed/dirty/stale/wrong-root/unknown evidence, a real worker and restart, stale/mixed/capability refusal. Task owner reports 44 passing checks and representative C4 navigation; Feature Lead has not rerun them."
+      }
+    ],
+    "evidence_boundary": "All child implementation, Task-record and test/browser claims above are reported by F3. This turn read the canonical Feature contract but did not inspect child source or guarded Task content. Owned Epic source/design/model remain unchanged from c717bb36. Exact test commands, output artifacts and browser evidence must remain inspectable at final Feature review; no test count is promoted to independent Epic verification.",
+    "record_limitation": {
+      "status": "Completed Task acceptance and test plan remain TBD as reported at 286081dd.",
+      "refusals": [
+        "task_048_003_001 cannot be revised while active",
+        "task_048_003_001 cannot be revised while completed"
+      ],
+      "owner": "F3 Feature Lead owns closeout reconciliation; board lifecycle owner owns any supported completed-record correction route.",
+      "disposition": "Retain the detailed canonical Feature contract, this evidence map and both exact refusals in Feature closeout, with each obligation mapped to inspectable evidence or an explicit gap. Do not repeat refused edits without changed prerequisites, edit guarded Task files directly or roll back lifecycle. The record limitation remains visible for final review and is not waived."
+    },
+    "remaining_gates": [
+      "Task 002: production cross-stage owner-tool journey, fresh independent runtime/postcheck, original incident budget, split-root delivery, retirement/restart and crash-after-push remote-effect reconciliation. Partial Workspace proof cannot close these gates.",
+      "Task 003: final all-level diagram/source reconciliation, including shared publication and War Room health consumers, source/kind/ownership validation, bounded rendering, context-to-Code/Level up/deep-link/pinned-source navigation, stale-link rejection and measured warm artifact reuse.",
+      "Final runtime source review must check registered callable and lazy-import closure, startup mutation/mixed-origin refusals and current evidence at admission and final postcheck; a six-module count alone is insufficient.",
+      "F3 supplies exact target/artifact/actor/injection/rollback preflight. F4 retains adversarial CI, measured budget feasibility and separately authorized operational proof."
+    ],
+    "design_closeout": {
+      "reviewed": "Retained per-view inventory and prior Manager/Architect reviews; current Workspace lifecycle/runtime and Watchdog postcheck interface descriptions. All seven owning design paths resolve.",
+      "impact": "This diff only records evidence references. It changes no context actor/authority, container/runtime/store boundary, component interface, Code declaration/ownership or execution/recovery transition. No DESIGN/model edit is warranted; retain the existing inventory and F3 final-diff ownership.",
+      "checks": "Canonical Epic/Feature reads; list_children confirms F1/F2 completed, F3 active, F4 backlog; empty architecture amendments; design-path resolution; empty diff from c717bb36 over cascade, DESIGN.md and docs/architecture; JSON parse and git diff --check.",
+      "limits": "No runtime tests, render or browser checks rerun. No child implementation acceptance, live deployment or full-tree documentation completeness claimed."
+    },
+    "publication": "Separate Epic publication remains terminal failed in the retained publication record; no new recovery evidence supplied. Supported runtime-owner recovery coordinated by Epic Architect remains required.",
+    "handoff": "Preserve this map for substantive Feature closeout; proceed with existing Task 002/003 ownership. No acknowledgement-only reply or repeated evidence-map update is needed. End the planning turn to permit child delivery."
   }
 }
