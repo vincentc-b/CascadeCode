@@ -91,6 +91,11 @@ owner exit, PID reuse, live/unknown owners and durable exactly-once handoff.
 
 These safeguards remain inside the existing supervisor, lifecycle-recovery and
 review-publication components; they add no C4 container or external service.
+The Task lifecycle lock and tracking-root ledger are local serialization and
+persistence boundaries, not operating-system isolation for validators or remote
+provider work. Landscape/context and container boundaries are unchanged because
+the budget adds no person, external system, runtime process, database or network
+path; the supervisor component view shows Watchdog consuming Task's gate.
 
 ### Publication implementation and recovery
 
@@ -105,17 +110,22 @@ publication pipeline. `element.component.teams` owns that pipeline;
 | [publish_team_review_resolution](team_review_recovery.py) | Recheck owner/admission and local resolution; bind generation to source, admitted heads and validation policy. |
 | [admit_review_publication_generation / resume_action](task/action_recovery.py) | Preserve decisions and attempts in the durable ledger; gate unchanged generations and claim execution. Generation admission is not a cumulative incident budget. |
 | [bind_incident_budget / read_incident_budget](task/incident_budget.py) | Anchor every linked action and material generation to one original incident policy and expose its bounded restart-safe projection. |
+| [reserve_incident_operation / settle_incident_operation](task/incident_budget.py) | Atomically issue one bounded receipt under the live claim and charge actual or conservatively retained use exactly once. |
 | [extend_incident_budget / record_incident_budget_exhaustion](task/incident_budget.py) | Retain one exhaustion escalation and accept only independently authenticated finite additions within trusted maxima. |
+| [reserve_budgeted_operation / settle_budgeted_operation](watchdog/reservations.py) | Consume the Task gate after a distinct Watchdog capability claim without owning another allowance. |
 | [check_and_publish_review_rebase](review_rebase.py) | Check the immutable local source, validate, recheck policy/remote authority and push that SHA under the source lease. |
 | [run_review_validation](review_validation.py) | Execute the repository-selected checks through bounded process-group validation. |
 
 ```mermaid
 flowchart TD
     Owner[Owner publication request] --> Generation[Recheck exact generation and durable claim]
-    Generation -->|eligible| Checks[Validate immutable source and board]
+    Generation -->|eligible| Budget[Reserve cumulative allowance under live claim]
+    Budget -->|permit| Checks[Validate immutable source and board]
+    Budget -->|pending / exhausted / owner decision| Pending[Retain pending or refusal]
     Generation -->|unchanged / live / gated| Pending[Retain pending or refusal]
-    Checks -->|red / timeout| Preserve[Preserve checkout and failure]
-    Checks -->|green| Recheck[Recheck source, policy, remote heads and authority]
+    Checks --> Settle[Settle exact receipt]
+    Settle -->|red / timeout / interrupted| Preserve[Preserve checkout and conservative charge]
+    Settle -->|green| Recheck[Recheck source, policy, remote heads and authority]
     Recheck -->|match| Push[Lease-publish tested SHA]
     Recheck -->|drift| Preserve
     Push --> Receipt[Record publication evidence]

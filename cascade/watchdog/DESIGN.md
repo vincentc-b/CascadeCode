@@ -46,8 +46,19 @@ Watchdog remains an observation and capability consumer and does not maintain a
 second budget store. Existing envelopes without an original identity remain
 readable; expensive admission must not infer fresh allowance from that absence.
 
+[`incident_budget_identity`](incidents.py) reads the original identity without
+substituting the work ID or material generation. After the ordinary capability
+reservation is accepted, [`reserve_budgeted_operation`](reservations.py) passes
+that identity, the exact Watchdog claim token, operation identity and worst-case
+charge to Task's cumulative gate. Its returned permit is distinct from the audit
+observation and capability claim. [`settle_budgeted_operation`](reservations.py)
+settles the corresponding Task receipt on success, refusal, timeout or
+interruption. The wrappers do not keep allowance, reclaim a claim by lease age,
+or launch work when Task returns pending, exhausted or owner-decision.
+
 The `cascade-watchdog-code` view includes
-[`incident_record`](incidents.py) as the envelope boundary. Focused lineage and
+[`incident_record`](incidents.py) as the envelope boundary and the reserve/settle
+consumer functions above. Focused lineage and
 restart coverage is in
 [`tests/task/test_incident_budget.py`](../../tests/task/test_incident_budget.py),
 while [`tests/watchdog/test_incidents.py`](../../tests/watchdog/test_incidents.py)

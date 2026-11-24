@@ -26,6 +26,11 @@ from cascade.board.context import resolve_root
 from cascade.board.store import read_doc
 from cascade.board.work_ids import parse_work_id_parts
 from cascade.task.execution import execution_views
+from cascade.task.incident_budget import (
+    IncidentOperationDecision,
+    reserve_incident_operation,
+    settle_incident_operation,
+)
 from cascade.task.lifecycle_lock import lifecycle_root, task_lifecycle_lock
 from cascade.watchdog.audit import (
     AuditObservation,
@@ -33,7 +38,7 @@ from cascade.watchdog.audit import (
     project_audit_observation,
 )
 from cascade.watchdog.capabilities import CapabilityDescriptor
-from cascade.watchdog.incidents import incident_record
+from cascade.watchdog.incidents import incident_budget_identity, incident_record
 
 ReservationState = Literal["reserved", "stale", "gated", "unavailable"]
 ResultOutcome = Literal["success", "error", "refused", "deferred", "unsafe", "no_op"]
@@ -83,6 +88,63 @@ class ReservationDecision:
 
 class ReservationConflict(RuntimeError):
     """A result does not belong to the store's current reservation token."""
+
+
+def reserve_budgeted_operation(
+    incident: Mapping[str, Any],
+    reservation: IncidentReservation,
+    operation_id: str,
+    kind: str,
+    worst_case: Mapping[str, Any],
+    *,
+    root: Path,
+    now: datetime | None = None,
+) -> IncidentOperationDecision:
+    """Consume Task's gate without turning the Watchdog claim into a budget."""
+
+    incident_id = incident_budget_identity(incident)
+    if incident_id is None:
+        return IncidentOperationDecision(
+            "owner_decision", "original_incident_identity_missing", 1
+        )
+    if (
+        reservation.generation != incident.get("authoritative_generation")
+        or reservation.claim_token
+        != dict(incident.get("request") or {}).get("claim_token")
+    ):
+        return IncidentOperationDecision(
+            "owner_decision", "watchdog_claim_identity_mismatch", 1
+        )
+    return reserve_incident_operation(
+        incident_id,
+        operation_id,
+        kind,
+        worst_case,
+        reservation.claim_token,
+        1,
+        root=root,
+        now=now,
+    )
+
+
+def settle_budgeted_operation(
+    incident: Mapping[str, Any],
+    operation_id: str,
+    observation: Mapping[str, Any],
+    *,
+    root: Path,
+    now: datetime | None = None,
+) -> IncidentOperationDecision:
+    """Settle the Task-owned receipt; Watchdog retains only claim observation."""
+
+    incident_id = incident_budget_identity(incident)
+    if incident_id is None:
+        return IncidentOperationDecision(
+            "owner_decision", "original_incident_identity_missing", 1
+        )
+    return settle_incident_operation(
+        incident_id, operation_id, observation, root=root, now=now
+    )
 
 
 def reserve_after_recheck(
@@ -187,6 +249,30 @@ def reserve_after_recheck(
             "claim_token": claim_token,
             "operation": capability.operation,
         }
+        budget_incident_id = incident_budget_identity(incident)
+        if budget_incident_id is not None:
+            budget_operation_id = f"watchdog:{reservation_id}:{claim_token}"
+            budget_decision = reserve_incident_operation(
+                budget_incident_id,
+                budget_operation_id,
+                f"watchdog_owner:{capability.operation}",
+                {"tool_attempts": 1},
+                claim_token,
+                1,
+                root=repo,
+                now=stamped,
+            )
+            if not budget_decision.admitted:
+                return ReservationDecision(
+                    "unavailable",
+                    f"incident_budget_{budget_decision.state}:{budget_decision.reason}",
+                )
+            request["budget_operation_id"] = budget_operation_id
+            # The Task gate may share executions.json with this capability.
+            # Refresh the additive envelope so the following atomic replacement
+            # cannot discard its just-written operation receipt.
+            ledger = _read_store(capability.durable_store, repo)
+            previous_row = ledger.rows.get(reservation_id)
         attempt = {
             "attempt": len(prior_attempts) + 1,
             "reservation_id": reservation_id,
@@ -213,6 +299,7 @@ def reserve_after_recheck(
             now=stamped,
             claim_seconds=seconds,
             attempt_bound=capability.attempt_bound,
+            original_incident_id=budget_incident_id,
         )
         row = _claim_row(
             previous_row,
@@ -456,6 +543,7 @@ def verify_incident_postcheck(
             reassessment_seconds=int(policy.get("reassessment_seconds") or 60),
             claim_seconds=int(policy.get("claim_seconds") or 300),
             attempt_bound=int(policy.get("attempt_bound") or 3),
+            original_incident_id=incident_budget_identity(current),
         )
         history = list(row.get("incident_history") or [])
         history.append(json.loads(json.dumps(current)))
@@ -537,6 +625,7 @@ def _record_result(
             reassessment_seconds=int(policy.get("reassessment_seconds") or 60),
             claim_seconds=int(policy.get("claim_seconds") or 300),
             attempt_bound=int(policy.get("attempt_bound") or 3),
+            original_incident_id=incident_budget_identity(current),
         )
         assert row is not None
         history = list(row.get("incident_history") or [])
@@ -548,6 +637,26 @@ def _record_result(
             row["updated_at"] = stamped.isoformat()
         ledger.rows[reservation.reservation_id] = row
         _write_store(ledger)
+        budget_operation_id = (
+            request.get("budget_operation_id")
+            if isinstance(request, Mapping)
+            else None
+        )
+        budget_incident_id = incident_budget_identity(current)
+        if isinstance(budget_operation_id, str) and budget_incident_id is not None:
+            settle_incident_operation(
+                budget_incident_id,
+                budget_operation_id,
+                {
+                    "outcome": "success" if outcome == "success" or not adapter_executed else "error",
+                    "failure_class": result.get("failure_class"),
+                    "quality": "known",
+                    "usage": {"tool_attempts": 1 if adapter_executed else 0},
+                    "claim_complete": True,
+                },
+                root=repo,
+                now=stamped,
+            )
         return json.loads(json.dumps(final))
 
 
@@ -847,5 +956,7 @@ __all__ = [
     "accept_claim",
     "record_interrupted_claim",
     "record_result",
+    "reserve_budgeted_operation",
     "reserve_after_recheck",
+    "settle_budgeted_operation",
 ]

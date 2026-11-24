@@ -198,6 +198,12 @@ watchdog_dispatches_teams = watchdog_component -> team_component "Dispatches eli
         "cascade.semanticId" "relationship.watchdog-dispatches-teams"
     }
 }
+
+watchdog_uses_task_budget = watchdog_component -> task_team "Consumes the Task-owned incident operation gate after a distinct observation claim" {
+    properties {
+        "cascade.semanticId" "relationship.watchdog-uses-task-budget"
+    }
+}
 teams_use_agent = team_component -> agent_component "Run role turns through" {
     properties {
         "cascade.semanticId" "relationship.teams-use-agent"
@@ -1953,6 +1959,24 @@ code_watchdog_reservation = element "reserve_after_recheck" "Function" "Reserve 
     }
 }
 
+code_watchdog_budget_reserve = element "reserve_budgeted_operation" "Function" "Use the accepted Watchdog claim to request a distinct Task-owned bounded operation permit." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.budget-reserve"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "reserve_budgeted_operation"
+    }
+}
+
+code_watchdog_budget_settle = element "settle_budgeted_operation" "Function" "Settle the distinct Task-owned operation receipt without creating a Watchdog budget." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.budget-settle"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "settle_budgeted_operation"
+    }
+}
+
 code_watchdog_claim = element "accept_claim" "Function" "Accept exact durable execution claim." {
     properties {
         "cascade.semanticId" "element.code.watchdog.claim"
@@ -2139,6 +2163,24 @@ code_task_budget_exhaust = element "record_incident_budget_exhaustion" "Function
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task/incident_budget.py"
         "cascade.sourceSymbol" "record_incident_budget_exhaustion"
+    }
+}
+
+code_task_budget_reserve = element "reserve_incident_operation" "Function" "Atomically verify lineage, policy, material generation, backoff, elapsed deadline, live claim and cumulative remaining allowance." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-reserve"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "reserve_incident_operation"
+    }
+}
+
+code_task_budget_settle = element "settle_incident_operation" "Function" "Idempotently charge observed use or retain an uncertain reservation conservatively." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-settle"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "settle_incident_operation"
     }
 }
 
@@ -2481,6 +2523,30 @@ code_task_budget_exhaust_to_bind = code_task_budget_exhaust -> code_task_budget_
 code_task_budget_bind_to_watchdog_incident = code_task_budget_bind -> code_watchdog_incident_record "Verifies material generation and persists original identity" {
     properties {
         "cascade.semanticId" "relationship.code-task-incident-budget-bind-to-watchdog-incident-record"
+    }
+}
+
+code_watchdog_budget_reserve_to_task_budget_reserve = code_watchdog_budget_reserve -> code_task_budget_reserve "Consumes the Task-owned cumulative gate after a distinct capability claim" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-budget-reserve-to-task-budget-reserve"
+    }
+}
+
+code_watchdog_budget_settle_to_task_budget_settle = code_watchdog_budget_settle -> code_task_budget_settle "Settles the exact charged receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-budget-settle-to-task-budget-settle"
+    }
+}
+
+code_task_budget_reserve_to_bind = code_task_budget_reserve -> code_task_budget_bind "Verifies the canonical bound material generation and policy" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-reserve-to-bind"
+    }
+}
+
+code_task_budget_settle_to_reserve = code_task_budget_settle -> code_task_budget_reserve "Settles the unique durable reservation identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-settle-to-reserve"
     }
 }
 

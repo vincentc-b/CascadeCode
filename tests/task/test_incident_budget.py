@@ -1,4 +1,5 @@
 import json
+import multiprocessing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,8 +18,32 @@ from cascade.task.incident_budget import (
     extend_incident_budget,
     read_incident_budget,
     record_incident_budget_exhaustion,
+    reserve_incident_operation,
+    settle_incident_operation,
 )
 from tests.support import make_repo
+
+
+def _reserve_in_process(
+    root: str,
+    operation_id: str,
+    claim_id: str,
+    start: object,
+    release: object,
+    results: object,
+) -> None:
+    start.wait()  # type: ignore[attr-defined]
+    decision = reserve_incident_operation(
+        "task_001:concurrent",
+        operation_id,
+        "validator",
+        {"tool_attempts": 1, "process_seconds": 300},
+        claim_id,
+        1,
+        root=Path(root),
+    )
+    results.put((decision.state, decision.reason))  # type: ignore[attr-defined]
+    release.wait()  # type: ignore[attr-defined]
 
 
 def _action(
@@ -197,18 +222,9 @@ def test_legacy_missing_lineage_waits_and_known_exhaustion_needs_extension(
         {"legacy_usage": {"tool_attempts": 6}},
         root=root,
     )
-    assert exhausted["status"] == "exhausted"
-    assert exhausted["escalation_id"]
-    extended = extend_incident_budget(
-        "task_001:known-exhausted",
-        AuthenticatedHuman("human:operator"),
-        "bounded retry approved",
-        {"escalation_id": exhausted["escalation_id"]},
-        {"tool_attempts": 1},
-        root=root,
-    )
-    assert extended["status"] == "active"
-    assert extended["charged"]["tool_attempts"] == 6
+    assert exhausted["status"] == "awaiting_owner_decision"
+    assert exhausted["wait_reason"] == "legacy_usage_unverified"
+    assert exhausted["charged"]["tool_attempts"] == 0
 
 
 def test_only_independent_authenticated_bounded_extension_is_retained(
@@ -334,3 +350,272 @@ def test_exhaustion_creates_one_escalation_and_extension_preserves_it(
     assert extended["status"] == "active"
     assert extended["escalation_id"] == first["escalation_id"]
     assert extended["original_admitted_at"] == first["original_admitted_at"]
+
+
+def test_original_elapsed_origin_survives_late_bind_and_restart(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    origin = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    action = create_or_load_action(
+        "task_001:elapsed",
+        "review_publication",
+        root=root,
+        attempt_bound=3,
+        owning_team={"kind": "feature_team", "work_id": "feat_001"},
+        evidence={"affected_work_id": "task_001"},
+        now=origin,
+    )
+    bound = bind_incident_budget(
+        "task_001:elapsed",
+        "task_001:elapsed",
+        action["incident"]["authoritative_generation"],
+        {},
+        root=root,
+        now=datetime(2026, 1, 1, 0, 30, tzinfo=timezone.utc),
+    )
+    assert bound["original_admitted_at"] == origin.isoformat()
+    assert bound["original_admission_quality"] == "known"
+
+    after_restart = reserve_incident_operation(
+        "task_001:elapsed",
+        "validator:late",
+        "validator",
+        {"tool_attempts": 1, "process_seconds": 10},
+        "claim:late",
+        1,
+        root=root,
+        now=datetime(2026, 1, 1, 1, 0, tzinfo=timezone.utc),
+    )
+    assert after_restart.state == "exhausted"
+    assert after_restart.reason == "elapsed_deadline_exhausted"
+
+
+def test_reserve_settle_nested_charge_and_replay_are_exactly_once(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    action = _action(root, "task_001:operations")
+    bind_incident_budget(
+        "task_001:operations",
+        "task_001:operations",
+        action["incident"]["authoritative_generation"],
+        {},
+        root=root,
+    )
+    first = reserve_incident_operation(
+        "task_001:operations",
+        "provider:1",
+        "provider_turn",
+        {"paid_turns": 1, "model_seconds": 300, "known_tokens": 10_000},
+        "claim:owner",
+        1,
+        root=root,
+    )
+    assert first.state == "admitted"
+    assert first.permit is not None
+    competing_operation = reserve_incident_operation(
+        "task_001:operations",
+        "validator:too-early",
+        "validator",
+        {"tool_attempts": 1, "process_seconds": 300},
+        "claim:owner",
+        1,
+        root=root,
+    )
+    assert competing_operation.reason == "serialized_operation_in_flight"
+
+    settled = settle_incident_operation(
+        "task_001:operations",
+        "provider:1",
+        {
+            "outcome": "success",
+            "quality": "known",
+            "usage": {"paid_turns": 1, "model_seconds": 12, "known_tokens": 800},
+        },
+        root=root,
+    )
+    replay = settle_incident_operation(
+        "task_001:operations",
+        "provider:1",
+        {"outcome": "unknown", "usage": {}},
+        root=root,
+    )
+    assert settled.state == replay.state == "admitted"
+    nested = reserve_incident_operation(
+        "task_001:operations",
+        "validator:1",
+        "validator",
+        {"tool_attempts": 1, "process_seconds": 300},
+        "claim:owner",
+        1,
+        root=root,
+    )
+    assert nested.state == "admitted"
+    nested_settled = settle_incident_operation(
+        "task_001:operations",
+        "validator:1",
+        {
+            "outcome": "success",
+            "quality": "estimated",
+            "usage": {"tool_attempts": 1, "process_seconds": 4},
+            "claim_complete": True,
+        },
+        root=root,
+    )
+    assert nested_settled.state == "admitted"
+    budget = read_incident_budget("task_001:operations", root=root)
+    assert budget is not None
+    assert budget["charged"]["paid_turns"] == 1
+    assert budget["charged"]["known_tokens"] == 800
+    assert budget["charged"]["tool_attempts"] == 1
+    assert budget["charged"]["process_seconds"] == 4
+    assert budget["reserved"]["process_seconds"] == 0
+    assert budget["consumption_quality"] == "estimated"
+    assert budget["live_claim"] is None
+
+
+def test_two_processes_cannot_overspend_or_reclaim_live_owner(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    action = _action(root, "task_001:concurrent")
+    bind_incident_budget(
+        "task_001:concurrent",
+        "task_001:concurrent",
+        action["incident"]["authoritative_generation"],
+        {},
+        root=root,
+    )
+    context = multiprocessing.get_context("fork")
+    start = context.Event()
+    release = context.Event()
+    results = context.Queue()
+    processes = [
+        context.Process(
+            target=_reserve_in_process,
+            args=(str(root), f"validator:{index}", f"claim:{index}", start, release, results),
+        )
+        for index in range(2)
+    ]
+    for process in processes:
+        process.start()
+    start.set()
+    outcomes = [results.get(timeout=10) for _ in processes]
+    release.set()
+    for process in processes:
+        process.join(timeout=10)
+        assert process.exitcode == 0
+    assert sorted(state for state, _ in outcomes) == ["admitted", "pending"]
+    assert any(reason == "live_incident_claim" for _, reason in outcomes)
+    budget = read_incident_budget("task_001:concurrent", root=root)
+    assert budget is not None
+    assert budget["reserved"]["tool_attempts"] == 1
+    assert budget["reserved"]["process_seconds"] == 300
+
+
+def test_interrupted_operation_retains_conservative_charge_and_claim(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    action = _action(root, "task_001:crash")
+    bind_incident_budget(
+        "task_001:crash",
+        "task_001:crash",
+        action["incident"]["authoritative_generation"],
+        {},
+        root=root,
+    )
+    reserve_incident_operation(
+        "task_001:crash",
+        "validator:crash",
+        "validator",
+        {"tool_attempts": 1, "process_seconds": 300},
+        "claim:crash",
+        1,
+        root=root,
+    )
+    result = settle_incident_operation(
+        "task_001:crash",
+        "validator:crash",
+        {"outcome": "interrupted", "quality": "unavailable", "usage": {}},
+        root=root,
+    )
+    assert result.state == "owner_decision"
+    budget = read_incident_budget("task_001:crash", root=root)
+    assert budget is not None
+    assert budget["charged"]["tool_attempts"] == 1
+    assert budget["charged"]["process_seconds"] == 300
+    assert budget["consumption_quality"] == "unavailable"
+    assert budget["live_claim"]["claim_id"] == "claim:crash"
+    assert budget["wait_reason"] == "in_flight_usage_reconciliation_required"
+
+
+def test_transient_backoff_is_persisted_and_exhaustion_coalesces(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    origin = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    action = create_or_load_action(
+        "task_001:transient",
+        "review_publication",
+        root=root,
+        attempt_bound=3,
+        owning_team={"kind": "feature_team", "work_id": "feat_001"},
+        evidence={"affected_work_id": "task_001"},
+        now=origin,
+    )
+    bind_incident_budget(
+        "task_001:transient",
+        "task_001:transient",
+        action["incident"]["authoritative_generation"],
+        {},
+        root=root,
+    )
+
+    for attempt, offset in enumerate((0, 8, 22), start=1):
+        operation_id = f"validator:{attempt}"
+        admitted = reserve_incident_operation(
+            "task_001:transient",
+            operation_id,
+            "validator",
+            {"tool_attempts": 1, "process_seconds": 10},
+            "claim:transient",
+            1,
+            root=root,
+            now=origin.replace(second=offset),
+        )
+        assert admitted.state == "admitted"
+        settled = settle_incident_operation(
+            "task_001:transient",
+            operation_id,
+            {
+                "outcome": "error",
+                "failure_class": "transient",
+                "usage": {"tool_attempts": 1, "process_seconds": 1},
+            },
+            root=root,
+            now=origin.replace(second=offset + 1),
+        )
+        if attempt < 3:
+            assert settled.state == "admitted"
+            too_soon = reserve_incident_operation(
+                "task_001:transient",
+                f"validator:{attempt}:early",
+                "validator",
+                {"tool_attempts": 1, "process_seconds": 10},
+                "claim:transient",
+                1,
+                root=root,
+                now=origin.replace(second=offset + 2),
+            )
+            assert too_soon.reason == "transient_backoff"
+        else:
+            assert settled.state == "exhausted"
+
+    budget = read_incident_budget("task_001:transient", root=root)
+    assert budget is not None
+    assert budget["charged"]["tool_attempts"] == 3
+    assert budget["charged"]["process_seconds"] == 3
+    assert budget["escalation_id"]
+    first_escalation = budget["escalation_id"]
+    replay = record_incident_budget_exhaustion(
+        "task_001:transient", "replayed exhaustion", root=root
+    )
+    assert replay["escalation_id"] == first_escalation

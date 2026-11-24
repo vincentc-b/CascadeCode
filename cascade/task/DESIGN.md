@@ -16,8 +16,12 @@ the record active again.
 in tracking-root `.cascade/executions.json`, using the existing lifecycle lock
 and atomic replacement. The record keeps original admission time, action and
 generation bindings, policy ID/version/defaults/maxima, consumption quality,
-append-only extension receipts, and the first exhaustion escalation. This
-avoids a generation-local counter and introduces no scheduler or database.
+charged and in-flight totals, unique operation receipts, the live top-level
+claim, append-only extension receipts, and the first exhaustion escalation.
+The original admission time is the earliest valid durable action/attempt time;
+missing or malformed legacy time requires an owner decision instead of renewing
+the elapsed allowance. This avoids a generation-local counter and introduces no
+scheduler or database.
 
 [bind_incident_budget](incident_budget.py) verifies the current action incident
 contract before anchoring an original identity. A new original identity must
@@ -36,24 +40,54 @@ state is not extension authority. [record_incident_budget_exhaustion](incident_b
 derives one stable escalation identity and retains its first reason across
 replay and later extension.
 
+[reserve_incident_operation](incident_budget.py) is the versioned F2 consumer
+boundary. Under `task_lifecycle_lock` it verifies the bound current generation,
+trusted policy version, accounting integrity, persisted transient backoff,
+original elapsed deadline, a single live claim, operation serialization, and
+charged plus reserved allowance in every dimension. Its admitted result carries
+a bounded permit and durable receipt. Pending, exhausted, and owner-decision
+results carry the policy version and any existing receipt; replay never returns
+a new permit. Claim age is not proof of abandonment. A different live caller
+waits, while proven-dead or uncertain work requires authoritative reconciliation.
+
+[settle_incident_operation](incident_budget.py) removes the exact in-flight
+reservation and adds actual known or estimated process attempts, paid turns,
+process/model seconds, and known tokens exactly once. Interrupted or unknown
+work charges its full reservation and retains the claim for reconciliation.
+Elapsed time is measured from the original incident start rather than summed as
+runtime. Nested provider, MCP, tool, and validator work reuse the top-level claim
+but receive separate serialized receipts. `claim_complete` releases that claim
+only after its owner has settled the final operation.
+
 ```mermaid
 flowchart TD
     A[Canonical action incident generation] --> B{Original or linked action?}
     B -->|original action identity| C[Create versioned incident budget]
     B -->|bound parent and original identity| D[Append action/generation binding]
     B -->|ambiguous lineage| W[Wait for owner decision]
-    C --> L{Legacy usage known?}
+    C --> L{Origin and legacy usage known?}
     L -->|yes or no attempts| Active[Active finite policy]
     L -->|missing or malformed| W
-    Active --> X[One durable exhaustion escalation]
+    Active --> R{Atomic operation reservation}
+    R -->|bounded permit| S[Serialized launch and exact settlement]
+    R -->|live owner or backoff| P[Pending with existing receipt]
+    R -->|ambiguous or corrupt| W
+    S -->|interrupted or unknown| W
+    S -->|allowance remains| Active
+    S -->|deadline or cumulative limit| X[One durable exhaustion escalation]
     X --> E{Authenticated independent extension within maxima?}
     E -->|yes| Active
     E -->|no| X
 ```
 
-The persistent record does not claim provider-token enforcement or process
-reservation. Unknown legacy use is marked unavailable rather than inferred,
-and the later operation admission boundary must honor the resulting wait.
+The record meters process work now and provides the F2 boundary for later paid
+provider enforcement; this component does not itself launch a provider turn.
+Known tokens are charged only from provider evidence, while unavailable token
+usage remains honest and falls back to paid-turn/runtime bounds. The lifecycle
+flock serializes ledger mutation across local processes; permits bound allowance
+but do not claim operating-system, network, or remote-provider isolation.
+Unknown legacy use is marked unavailable rather than inferred, and caller-
+supplied legacy totals alone cannot establish trusted historical accounting.
 Focused temporary-repository verification is in
 [`tests/task/test_incident_budget.py`](../../tests/task/test_incident_budget.py).
 
@@ -133,7 +167,7 @@ The integrated Structurizr code view is `cascade-task-code`. From the supervisor
 ## Durable delivery collaborators
 
 `cascade-task-code` exposes [resume_action](action_recovery.py), the incident
-budget lineage/read/extension/escalation entry points in
+budget lineage/reserve/settle/read/extension/escalation entry points in
 [incident_budget.py](incident_budget.py),
 [execution_lease_is_live](execution.py), and [swe_run_tests](git_tools.py)
 alongside the graph and tool registry.

@@ -151,6 +151,19 @@ def incident_record(
     }
 
 
+def incident_budget_identity(incident: Mapping[str, Any]) -> str | None:
+    """Return the separately bound original identity without inventing one."""
+
+    value = incident.get("original_incident_id")
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value or value.strip() != value:
+        raise ValueError("original incident identity is malformed")
+    if value == incident.get("authoritative_generation"):
+        raise ValueError("incident identity cannot be its material generation")
+    return value
+
+
 def project_incident(
     observation: object,
     ledger: Mapping[str, Any] | Sequence[Mapping[str, Any]],
@@ -270,5 +283,6 @@ __all__ = [
     "authoritative_generation",
     "capability_authority_fingerprint",
     "incident_record",
+    "incident_budget_identity",
     "project_incident",
 ]
