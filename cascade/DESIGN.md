@@ -92,6 +92,41 @@ owner exit, PID reuse, live/unknown owners and durable exactly-once handoff.
 These safeguards remain inside the existing supervisor, lifecycle-recovery and
 review-publication components; they add no C4 container or external service.
 
+### Publication implementation and recovery
+
+The [model](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+connect `cascade-supervisor-components` → `cascade-teams-code` to the shared
+publication pipeline. `element.component.teams` owns that pipeline;
+`element.component.task-team` owns the action ledger in `cascade-task-code`.
+
+| Source entry | Responsibility |
+|---|---|
+| [publish_team_review_resolution](team_review_recovery.py) | Recheck owner/admission and local resolution; bind generation to source, admitted heads and validation policy. |
+| [admit_review_publication_generation / resume_action](task/action_recovery.py) | Preserve decisions and attempts in the durable ledger; gate unchanged generations and claim execution. Generation admission is not a cumulative incident budget. |
+| [check_and_publish_review_rebase](review_rebase.py) | Check the immutable local source, validate, recheck policy/remote authority and push that SHA under the source lease. |
+| [run_review_validation](review_validation.py) | Execute the repository-selected checks through bounded process-group validation. |
+
+```mermaid
+flowchart TD
+    Owner[Owner publication request] --> Generation[Recheck exact generation and durable claim]
+    Generation -->|eligible| Checks[Validate immutable source and board]
+    Generation -->|unchanged / live / gated| Pending[Retain pending or refusal]
+    Checks -->|red / timeout| Preserve[Preserve checkout and failure]
+    Checks -->|green| Recheck[Recheck source, policy, remote heads and authority]
+    Recheck -->|match| Push[Lease-publish tested SHA]
+    Recheck -->|drift| Preserve
+    Push --> Receipt[Record publication evidence]
+    Receipt --> Verify[Independent obligation-specific postcheck]
+```
+
+The action ledger and review registry survive restart. Interruption after a
+remote effect requires observation of that effect before another execution;
+publication evidence alone does not close the original delivery obligation.
+The [Watchdog postcheck](watchdog/DESIGN.md#recovery-admission-and-active-path-authority)
+owns that distinction. [The real publication journey](../tests/test_review_recovery_journey.py)
+exercises timeout, restart, exhausted decisions and immutable publication.
+
 ### Historical review reconciliation and queue retention
 
 Requirement: pruning a terminal Epic's queue must not trigger replay of all its

@@ -50,11 +50,13 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
             }
         }
         agent_component = component "Agent runtime" "Normalizes provider turns and capability checks." "cascade.agent" {
+            url "../../cascade/agent/DESIGN.md"
             properties {
                 "cascade.semanticId" "element.component.agent"
             }
         }
         team_component = component "Tier teams" "Runs persistent Epic/Feature and bounded Task graphs." "cascade.epic/feature/task" {
+            url "../../cascade/DESIGN.md"
             properties {
                 "cascade.semanticId" "element.component.teams"
             }
@@ -102,6 +104,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
         }
 
             workspace_commands = component "Workspace commands" "Dispatches operator commands for initialization, supervised startup and cancellation." "cascade.cli / cascade.workspace" {
+                url "../../cascade/workspace/DESIGN.md"
                 properties {
                     "cascade.semanticId" "element.component.workspace-commands"
                 }
@@ -2430,5 +2433,233 @@ boss_uses_workspace = boss_component -> workspace_component "Checks merge target
 watchdog_uses_boss = watchdog_component -> boss_component "Retries delivery and reconciles closeout" {
     properties {
         "cascade.semanticId" "relationship.watchdog-uses-boss"
+    }
+}
+
+code_agent_result = element "RoleResult" "Dataclass" "Text, status, tool effects and optional recovery report; no normalized usage receipt." {
+    properties {
+        "cascade.semanticId" "element.code.agent.result"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/types.py"
+        "cascade.sourceSymbol" "RoleResult"
+    }
+}
+
+code_agent_scoped = element "_run_sandbox_turn" "Function" "Build scoped tools, collect effects and clean up temporary runtime files." {
+    properties {
+        "cascade.semanticId" "element.code.agent.scoped"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/planning_turn.py"
+        "cascade.sourceSymbol" "_run_sandbox_turn"
+    }
+}
+
+code_agent_dispatch = element "dispatch_planning_tool" "Function" "Apply role catalog and owning tool guards before dispatch." {
+    properties {
+        "cascade.semanticId" "element.code.agent.dispatch"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/mcp_wrappers.py"
+        "cascade.sourceSymbol" "dispatch_planning_tool"
+    }
+}
+
+code_agent_codex = element "run_codex_role" "Function" "Check Codex tool-host support and supply per-turn MCP configuration." {
+    properties {
+        "cascade.semanticId" "element.code.agent.codex"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/codex_cli.py"
+        "cascade.sourceSymbol" "run_codex_role"
+    }
+}
+
+code_agent_process = element "run_subprocess_turn" "Function" "Run the CLI with a timeout and direct-process cleanup." {
+    properties {
+        "cascade.semanticId" "element.code.agent.process"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/cli_common.py"
+        "cascade.sourceSymbol" "run_subprocess_turn"
+    }
+}
+
+code_agent_report = element "report_provider_recovery" "Function" "Report provider-turn outcome while preserving action and checkpoint identity." {
+    properties {
+        "cascade.semanticId" "element.code.agent.report"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/recovery_contract.py"
+        "cascade.sourceSymbol" "report_provider_recovery"
+    }
+}
+
+code_agent_cancel = element "cancel_live_turns" "Function" "Cancel registered local asyncio tasks and signal recorded provider PIDs." {
+    properties {
+        "cascade.semanticId" "element.code.agent.cancel"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/turn_registry.py"
+        "cascade.sourceSymbol" "cancel_live_turns"
+    }
+}
+
+code_teams_publication = element "publish_team_review_resolution" "Function" "Admit exact publication generation and resume owner-scoped validation/publication." {
+    properties {
+        "cascade.semanticId" "element.code.teams.publication"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/team_review_recovery.py"
+        "cascade.sourceSymbol" "publish_team_review_resolution"
+    }
+}
+
+code_teams_validate_publish = element "check_and_publish_review_rebase" "Function" "Validate immutable source then recheck policy, remote heads and authority before leased push." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validate_publish"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_rebase.py"
+        "cascade.sourceSymbol" "check_and_publish_review_rebase"
+    }
+}
+
+code_teams_validator = element "run_review_validation" "Function" "Run bounded repository checks with process-group cleanup and diagnostic tails." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validator"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "run_review_validation"
+    }
+}
+
+code_task_generation = element "admit_review_publication_generation" "Function" "Fence unchanged publication generations while preserving action decisions and attempts." {
+    properties {
+        "cascade.semanticId" "element.code.task.generation"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "admit_review_publication_generation"
+    }
+}
+
+code_cli_launcher = element "run_launcher_loop" "Function" "Supervise worker handshake, bounded startup retries and restart." {
+    properties {
+        "cascade.semanticId" "element.code.cli.launcher"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/launcher.py"
+        "cascade.sourceSymbol" "run_launcher_loop"
+    }
+}
+
+code_cli_drain = element "drain_and_shutdown" "Function" "Drain HTTP and agent turns before worker shutdown." {
+    properties {
+        "cascade.semanticId" "element.code.cli.drain"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/worker.py"
+        "cascade.sourceSymbol" "drain_and_shutdown"
+    }
+}
+
+code_cli_status = element "_worker_supervisor_status" "Function" "Build worker PID and lifecycle status without loaded-source attestation." {
+    properties {
+        "cascade.semanticId" "element.code.cli.status"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/worker.py"
+        "cascade.sourceSymbol" "_worker_supervisor_status"
+    }
+}
+
+code_agent_scoped_to_code_agent_runner = code_agent_scoped -> code_agent_runner "Invokes with scoped tools" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-scoped-to-code-agent-runner"
+    }
+}
+
+code_agent_scoped_to_code_agent_dispatch = code_agent_scoped -> code_agent_dispatch "Provides guarded tool transport" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-scoped-to-code-agent-dispatch"
+    }
+}
+
+code_agent_runner_to_code_agent_codex = code_agent_runner -> code_agent_codex "Dispatches Codex turns" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-runner-to-code-agent-codex"
+    }
+}
+
+code_agent_codex_to_code_agent_process = code_agent_codex -> code_agent_process "Launches CLI" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-codex-to-code-agent-process"
+    }
+}
+
+code_agent_runner_to_code_agent_report = code_agent_runner -> code_agent_report "Normalizes recovery outcome" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-runner-to-code-agent-report"
+    }
+}
+
+code_agent_runner_to_code_agent_result = code_agent_runner -> code_agent_result "Returns" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-runner-to-code-agent-result"
+    }
+}
+
+code_agent_report_to_code_agent_result = code_agent_report -> code_agent_result "Populates recovery report" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-report-to-code-agent-result"
+    }
+}
+
+code_agent_cancel_to_code_agent_process = code_agent_cancel -> code_agent_process "Signals the registered provider PID" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-cancel-to-code-agent-process"
+    }
+}
+
+code_teams_publication_to_code_teams_validate_publish = code_teams_publication -> code_teams_validate_publish "Executes admitted publication" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-code-teams-validate-publish"
+    }
+}
+
+code_teams_validate_publish_to_code_teams_validator = code_teams_validate_publish -> code_teams_validator "Runs repository checks" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-validate-publish-to-code-teams-validator"
+    }
+}
+
+code_teams_publication_to_code_task_generation = code_teams_publication -> code_task_generation "Checks material generation" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-code-task-generation"
+    }
+}
+
+code_task_generation_to_code_task_actions = code_task_generation -> code_task_actions "Admits eligible action resumption" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-generation-to-code-task-actions"
+    }
+}
+
+code_cli_up_to_code_cli_launcher = code_cli_up -> code_cli_launcher "Starts supervision" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-up-to-code-cli-launcher"
+    }
+}
+
+code_cli_launcher_to_code_cli_worker = code_cli_launcher -> code_cli_worker "Spawns and restarts worker" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-launcher-to-code-cli-worker"
+    }
+}
+
+code_cli_worker_to_code_cli_drain = code_cli_worker -> code_cli_drain "Drains on exit" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-worker-to-code-cli-drain"
+    }
+}
+
+code_cli_worker_to_code_cli_status = code_cli_worker -> code_cli_status "Publishes lifecycle status" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-worker-to-code-cli-status"
+    }
+}
+
+code_cli_drain_to_code_agent_cancel = code_cli_drain -> code_agent_cancel "Cancels live provider turns" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-drain-to-code-agent-cancel"
     }
 }

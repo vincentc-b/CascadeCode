@@ -4,6 +4,46 @@ Purpose: resolve repository roles, manage integration worktrees, and enforce rev
 
 
 
+## Worker lifecycle and runtime identity
+
+The [package index](../DESIGN.md#architecture-navigation) and authoritative
+[model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+connect `cascade-cli-components` → `cascade-workspace-commands-code`.
+`element.component.workspace-commands` owns launcher/worker lifecycle code;
+`cascade-workspace-code` owns repository identity and retained worktrees.
+These are collaborating implementation responsibilities, not extra deployments.
+
+| Source entry | Current behavior |
+|---|---|
+| [run_launcher_loop](launcher.py) | Own the listen socket, spawn workers with a readiness handshake, classify exits and bound startup retries/backoff. |
+| [run_worker](worker.py) | Start HTTP, watchdog and recovery lanes; exit for stop, update or crash. |
+| [drain_and_shutdown](worker.py) | Stop admitting work, join handlers and wait for/cancel live agent turns before shutdown. |
+| [_worker_supervisor_status](worker.py) | Publish PID, state, restart count, error and next action. These fields do not bind loaded code to an accepted revision. |
+
+```mermaid
+stateDiagram-v2
+    [*] --> Starting: launcher spawns worker
+    Starting --> Running: readiness handshake
+    Starting --> Backoff: startup failure
+    Backoff --> Starting: bounded retry
+    Backoff --> Degraded: startup allowance exhausted
+    Running --> Draining: update or stop
+    Running --> Draining: crash or launcher lost
+    Draining --> Starting: update / supervised restart
+    Draining --> [*]: stop
+```
+
+The launcher retains process supervision while a worker restarts. Durable queues,
+graph checkpoints, action claims and registered worktrees belong to their existing
+owners; restart does not reset delivery or grant authority. Drain cancellation
+uses the [Agent registry](../agent/DESIGN.md#state-failure-and-isolation).
+The worker status file establishes liveness/status, not an installed artifact
+hash or proof that the process imported a reviewed revision. A repository HEAD
+or capability name alone cannot supply that proof.
+
+Verification references: [startup recovery](../../tests/workspace/test_worker_startup_recovery.py)
+and [drain integration](../../tests/workspace/test_feat_018_002_drain_integration.py).
+
 ## Repository initialization and guidance
 
 `REQ-WORKSPACE-INIT-001`: Initialization in a Git repository creates board columns,

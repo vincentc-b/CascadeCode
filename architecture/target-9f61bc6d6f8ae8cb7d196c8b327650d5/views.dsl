@@ -52,6 +52,7 @@ custom "cascade-task-code" {
     }
     include code_task_graph code_task_state code_task_checkpoint code_task_wiring code_task_registry code_task_guard code_task_runtime code_task_provider
     include code_task_actions code_task_mismatch code_task_leases code_task_validation code_task_revalidation
+    include code_task_generation
     autoLayout lr
 }
 
@@ -61,6 +62,7 @@ custom "cascade-teams-code" {
         "cascade.codeComponent" "element.component.teams"
     }
     include code_teams_epic code_teams_feature code_teams_task code_teams_skills code_teams_runtime code_teams_swe
+    include code_teams_publication code_teams_validate_publish code_teams_validator
     autoLayout lr
 }
 
@@ -108,6 +110,7 @@ custom "cascade-agent-code" {
         "cascade.codeComponent" "element.component.agent"
     }
     include code_agent_planning code_agent_preflight code_agent_runner code_agent_turn code_agent_recovery code_agent_recovery_store
+    include code_agent_result code_agent_scoped code_agent_dispatch code_agent_codex code_agent_process code_agent_report code_agent_cancel
     autoLayout lr
 }
 
@@ -173,6 +176,7 @@ custom "cascade-workspace-commands-code" {
         "cascade.codeComponent" "element.component.workspace-commands"
     }
     include code_cli_main code_cli_up code_cli_worker
+    include code_cli_launcher code_cli_drain code_cli_status
     autoLayout lr
 }
 
