@@ -94,6 +94,7 @@ def incident_record(
     reassessment_seconds: int = DEFAULT_REASSESSMENT_SECONDS,
     claim_seconds: int = DEFAULT_CLAIM_SECONDS,
     attempt_bound: int = 3,
+    original_incident_id: str | None = None,
 ) -> dict[str, Any]:
     """Build the common JSON record embedded by each existing ledger."""
 
@@ -110,6 +111,12 @@ def incident_record(
         raise ValueError("incident generation must be a full sha256 identity")
     if reassessment_seconds < 1 or claim_seconds < 1 or attempt_bound < 1:
         raise ValueError("incident retry policy values must be positive")
+    if original_incident_id is not None and (
+        not isinstance(original_incident_id, str)
+        or not original_incident_id
+        or original_incident_id.strip() != original_incident_id
+    ):
+        raise ValueError("original incident identity must be a nonempty stable string")
     stamped = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     retry_at = None
     claim_expires_at = None
@@ -125,6 +132,7 @@ def incident_record(
         "accountable_owner": accountable_owner,
         "failure_class": failure_class,
         "authoritative_generation": generation,
+        "original_incident_id": original_incident_id,
         "evidence": _json_copy(evidence),
         "selected_capability": selected_capability,
         "request": _json_copy(request or {}),

@@ -104,6 +104,8 @@ publication pipeline. `element.component.teams` owns that pipeline;
 |---|---|
 | [publish_team_review_resolution](team_review_recovery.py) | Recheck owner/admission and local resolution; bind generation to source, admitted heads and validation policy. |
 | [admit_review_publication_generation / resume_action](task/action_recovery.py) | Preserve decisions and attempts in the durable ledger; gate unchanged generations and claim execution. Generation admission is not a cumulative incident budget. |
+| [bind_incident_budget / read_incident_budget](task/incident_budget.py) | Anchor every linked action and material generation to one original incident policy and expose its bounded restart-safe projection. |
+| [extend_incident_budget / record_incident_budget_exhaustion](task/incident_budget.py) | Retain one exhaustion escalation and accept only independently authenticated finite additions within trusted maxima. |
 | [check_and_publish_review_rebase](review_rebase.py) | Check the immutable local source, validate, recheck policy/remote authority and push that SHA under the source lease. |
 | [run_review_validation](review_validation.py) | Execute the repository-selected checks through bounded process-group validation. |
 

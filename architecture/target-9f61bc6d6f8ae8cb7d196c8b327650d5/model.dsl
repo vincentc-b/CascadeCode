@@ -1980,6 +1980,15 @@ code_watchdog_contract = element "_incident_contract" "Function" "Bind an observ
     }
 }
 
+code_watchdog_incident_record = element "incident_record" "Function" "Keep original incident identity separate from changing material generation evidence." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.incident-record"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incidents.py"
+        "cascade.sourceSymbol" "incident_record"
+    }
+}
+
 code_watchdog_executor = element "_execute_reservation" "Function" "Invoke the owner adapter only after exact claim acceptance and persist its structured result." {
     properties {
         "cascade.semanticId" "element.code.watchdog.reservation-executor"
@@ -2094,6 +2103,42 @@ code_task_actions = element "resume_action" "Function" "Claim and resume durable
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task/action_recovery.py"
         "cascade.sourceSymbol" "resume_action"
+    }
+}
+
+code_task_budget_bind = element "bind_incident_budget" "Function" "Anchor canonical actions and material generations to one original incident policy." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-bind"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "bind_incident_budget"
+    }
+}
+
+code_task_budget_read = element "read_incident_budget" "Function" "Project one restart-safe cumulative budget without spending allowance." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-read"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "read_incident_budget"
+    }
+}
+
+code_task_budget_extend = element "extend_incident_budget" "Function" "Append an independently authenticated finite extension within trusted maxima." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-extend"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "extend_incident_budget"
+    }
+}
+
+code_task_budget_exhaust = element "record_incident_budget_exhaustion" "Function" "Persist one stable escalation for exhausted cumulative allowance." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-exhaust"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "record_incident_budget_exhaustion"
     }
 }
 
@@ -2406,6 +2451,36 @@ code_task_actions_to_leases = code_task_actions -> code_task_leases "Uses" {
 code_task_validation_to_actions = code_task_validation -> code_task_actions "Publishes validated delivery to durable action" {
     properties {
         "cascade.semanticId" "relationship.code-task-validation-to-actions"
+    }
+}
+
+code_task_budget_bind_to_actions = code_task_budget_bind -> code_task_actions "Verifies and annotates the canonical durable action" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-bind-to-actions"
+    }
+}
+
+code_task_budget_read_to_bind = code_task_budget_read -> code_task_budget_bind "Projects the bound original incident record" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-read-to-bind"
+    }
+}
+
+code_task_budget_extend_to_bind = code_task_budget_extend -> code_task_budget_bind "Extends the bound trusted policy" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-extend-to-bind"
+    }
+}
+
+code_task_budget_exhaust_to_bind = code_task_budget_exhaust -> code_task_budget_bind "Retains one escalation on the bound policy" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-exhaust-to-bind"
+    }
+}
+
+code_task_budget_bind_to_watchdog_incident = code_task_budget_bind -> code_watchdog_incident_record "Verifies material generation and persists original identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-bind-to-watchdog-incident-record"
     }
 }
 

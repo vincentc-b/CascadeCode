@@ -2100,6 +2100,11 @@ def _refresh_incident(action: dict[str, Any], *, now: datetime | None = None) ->
         generation=generation,
         evidence=evidence,
         selected_capability=action_kind,
+        original_incident_id=(
+            str(action["incident_budget_id"])
+            if isinstance(action.get("incident_budget_id"), str)
+            else None
+        ),
         request={
             "original_action": recovery.get("original_action")
             or {"action_id": action.get("action_id"), "action_kind": action_kind}

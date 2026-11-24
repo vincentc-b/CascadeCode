@@ -34,6 +34,25 @@ dead claims indefinitely running. Unknown process identity is not proof of death
 See `cascade/task/DESIGN.md` and `cascade/DESIGN.md` for the durable transition and
 publication validation contract.
 
+## Original recovery incident identity
+
+Watchdog incident envelopes preserve `original_incident_id` independently from
+`authoritative_generation`. The generation continues to fingerprint current
+material evidence and capability authority; changing it does not create or own
+another cumulative allowance. Task owns the durable lineage, trusted policy,
+extensions, and escalation under
+[`REQ-RECOVERY-BUDGET-001`](../task/DESIGN.md#durable-incident-lineage-and-policy).
+Watchdog remains an observation and capability consumer and does not maintain a
+second budget store. Existing envelopes without an original identity remain
+readable; expensive admission must not infer fresh allowance from that absence.
+
+The `cascade-watchdog-code` view includes
+[`incident_record`](incidents.py) as the envelope boundary. Focused lineage and
+restart coverage is in
+[`tests/task/test_incident_budget.py`](../../tests/task/test_incident_budget.py),
+while [`tests/watchdog/test_incidents.py`](../../tests/watchdog/test_incidents.py)
+retains generation/history compatibility coverage.
+
 ## Health-audit projection contract
 
 `REQ-WATCHDOG-002`: Projection source decoding preserves durable references,

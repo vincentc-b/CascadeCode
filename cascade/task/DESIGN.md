@@ -2,6 +2,61 @@
 
 Purpose: run one bounded implementation team in an isolated worktree with supervised file, test, commit, and lifecycle tools. Interfaces are Task graph/boot/wiring, SWE MCP, path guards, action recovery, lifecycle locks, and execution views. Owns `REQ-TASK-001` (implementation stays in assigned scope) and `DEC-TASK-001` (green post-commit supervised validation gates delivery).
 
+## Durable incident lineage and policy
+
+`REQ-RECOVERY-BUDGET-001`: Every recovery action and material generation that
+belongs to one original incident shares one durable, finite policy record. A
+replacement or child action must cite an already-bound parent action; its own
+identity cannot create another allowance. Ambiguous legacy consumption waits
+for an owner decision. Exhaustion retains one escalation identity, and only an
+independently authenticated, finite extension within trusted maxima can make
+the record active again.
+
+`DEC-RECOVERY-BUDGET-001`: Store versioned `incident_budgets` beside `actions`
+in tracking-root `.cascade/executions.json`, using the existing lifecycle lock
+and atomic replacement. The record keeps original admission time, action and
+generation bindings, policy ID/version/defaults/maxima, consumption quality,
+append-only extension receipts, and the first exhaustion escalation. This
+avoids a generation-local counter and introduces no scheduler or database.
+
+[bind_incident_budget](incident_budget.py) verifies the current action incident
+contract before anchoring an original identity. A new original identity must
+equal its existing action identity; subsequent actions need both the original
+identity and a parent already present in the binding list. The action incident
+envelope carries `original_incident_id` separately from
+`authoritative_generation`, so material evidence can change without resetting
+the policy. [read_incident_budget](incident_budget.py) projects one record and
+remaining allowance without creating state.
+
+[extend_incident_budget](incident_budget.py) accepts the request-scoped
+`AuthenticatedHuman` produced by the human-facing boundary, rejects the
+recovering team's identity, hashes the complete extension facts into an
+idempotent receipt, and enforces the trusted maxima. Actor text or action-owner
+state is not extension authority. [record_incident_budget_exhaustion](incident_budget.py)
+derives one stable escalation identity and retains its first reason across
+replay and later extension.
+
+```mermaid
+flowchart TD
+    A[Canonical action incident generation] --> B{Original or linked action?}
+    B -->|original action identity| C[Create versioned incident budget]
+    B -->|bound parent and original identity| D[Append action/generation binding]
+    B -->|ambiguous lineage| W[Wait for owner decision]
+    C --> L{Legacy usage known?}
+    L -->|yes or no attempts| Active[Active finite policy]
+    L -->|missing or malformed| W
+    Active --> X[One durable exhaustion escalation]
+    X --> E{Authenticated independent extension within maxima?}
+    E -->|yes| Active
+    E -->|no| X
+```
+
+The persistent record does not claim provider-token enforcement or process
+reservation. Unknown legacy use is marked unavailable rather than inferred,
+and the later operation admission boundary must honor the resulting wait.
+Focused temporary-repository verification is in
+[`tests/task/test_incident_budget.py`](../../tests/task/test_incident_budget.py).
+
 
 
 ## Interrupted review publication attempts
@@ -77,7 +132,9 @@ The integrated Structurizr code view is `cascade-task-code`. From the supervisor
 
 ## Durable delivery collaborators
 
-`cascade-task-code` exposes [resume_action](action_recovery.py),
+`cascade-task-code` exposes [resume_action](action_recovery.py), the incident
+budget lineage/read/extension/escalation entry points in
+[incident_budget.py](incident_budget.py),
 [execution_lease_is_live](execution.py), and [swe_run_tests](git_tools.py)
 alongside the graph and tool registry.
 The action ledger in tracking-root `.cascade/executions.json` preserves attempts,
