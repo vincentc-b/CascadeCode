@@ -1,0 +1,70 @@
+{
+  "fixture": "/tmp/epic048-browser-f9l7khqs/repo",
+  "fixture_revision": "acdc08c5a496f7fdc690f35438e81b1b4206bf37",
+  "source_revision": "c717bb36c27c9de56d797205f95f52037e1fb935",
+  "checks": [
+    {
+      "view": "cascade-agent-code",
+      "pinned_symbol": "run_codex_role",
+      "deep_link": "http://127.0.0.1:58929/?tab=architecture&context=context-86c02008bc5cfb2d34b80a10bbd0094b&snapshot=architecture-snapshot-ced74e3bb3a59f21444e2f096e37fa78e98d1c1d450a03330dd0eaa674bd0740&view=cascade-agent-code&level=codeViews&target=element.code.agent.codex",
+      "level_up": true
+    },
+    {
+      "view": "cascade-teams-code",
+      "pinned_symbol": "check_and_publish_review_rebase",
+      "deep_link": "http://127.0.0.1:58929/?tab=architecture&context=context-86c02008bc5cfb2d34b80a10bbd0094b&snapshot=architecture-snapshot-ced74e3bb3a59f21444e2f096e37fa78e98d1c1d450a03330dd0eaa674bd0740&view=cascade-teams-code&level=codeViews&target=element.code.teams.validate_publish",
+      "level_up": true
+    },
+    {
+      "view": "cascade-task-code",
+      "pinned_symbol": "admit_review_publication_generation",
+      "deep_link": "http://127.0.0.1:58929/?tab=architecture&context=context-86c02008bc5cfb2d34b80a10bbd0094b&snapshot=architecture-snapshot-ced74e3bb3a59f21444e2f096e37fa78e98d1c1d450a03330dd0eaa674bd0740&view=cascade-task-code&level=codeViews&target=element.code.task.generation",
+      "level_up": true
+    },
+    {
+      "view": "cascade-workspace-commands-code",
+      "pinned_symbol": "_worker_supervisor_status",
+      "deep_link": "http://127.0.0.1:58929/?tab=architecture&context=context-86c02008bc5cfb2d34b80a10bbd0094b&snapshot=architecture-snapshot-ced74e3bb3a59f21444e2f096e37fa78e98d1c1d450a03330dd0eaa674bd0740&view=cascade-workspace-commands-code&level=codeViews&target=element.code.cli.status",
+      "level_up": true
+    }
+  ],
+  "warm_artifact_reused": true,
+  "warm_four_journeys_seconds": 16.687,
+  "status": "passed",
+  "cached_snapshot_load_seconds": 1.651,
+  "fixture_reused": true,
+  "limitations": [
+    "Isolated browser fixture, not a deployed recovery demonstration.",
+    "No symbols renamed/deleted or component ownership changed in this proposal; all authored source declarations resolved. Final feature diffs must repeat stale-link checks.",
+    "Provider spending enforcement and loaded-runtime attestation remain proposed implementation obligations.",
+    "Temporary fixture URLs record tested navigation and are not hosted artifact links."
+  ],
+  "source_hashes": {
+    "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a",
+    "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl": "4b207a45cd22c9d30a7c497c0c34834b22975423a474bde1964795bd2e3d360b",
+    "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl": "be9a911705ab2ebcca5439255b34d37e729993b98a1f34e500567054066e2cca",
+    "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json": "56791c597a1b81ffc4b0f086f3704eec4f53e5df3b64d680fbdba0401e633a30"
+  },
+  "verification": [
+    {
+      "command": "python -m pytest -q tests/workspace/test_c4_source.py tests/agent/test_provider_recovery_contract.py tests/workspace/test_c4_render.py::test_real_pinned_renderer_publishes_one_validated_handoff_and_cache",
+      "result": "21 passed in 57.02 s; before design metadata correction"
+    },
+    {
+      "command": "python -m pytest -q tests/war_room/test_architecture_tab_ui.py tests/test_review_recovery_journey.py",
+      "result": "8 passed in 25.14 s"
+    },
+    {
+      "command": "python -m pytest -q tests/workspace/test_c4_source.py tests/war_room/test_architecture_tab_ui.py",
+      "result": "16 passed in 3.85 s after metadata correction"
+    },
+    {
+      "command": "Committed-closure C4ArtifactRenderer with default settings and pinned installed image",
+      "result": "ready for c717bb36c27c9de56d797205f95f52037e1fb935, 24 views, full bounds retained"
+    },
+    {
+      "command": "python docs/epic_artifacts/epic_048_architecture_browser.py [existing-isolated-fixture]",
+      "result": "Four full UI journeys, source opening, restored selection and level up; render operation ledger unchanged"
+    }
+  ]
+}
