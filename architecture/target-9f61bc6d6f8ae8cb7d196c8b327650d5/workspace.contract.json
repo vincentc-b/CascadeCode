@@ -175,8 +175,8 @@
     {"dsl_identifier": "code_task_validation", "semantic_id": "element.code.task.validation", "fragment": "model.dsl"}
   ],
   "fragments": [
-    {"path": "model.dsl", "owner": "epic_047"},
-    {"path": "views.dsl", "owner": "epic_047"}
+    {"path": "model.dsl", "owner": "epic_048"},
+    {"path": "views.dsl", "owner": "epic_048"}
   ],
   "relationships": [
     {"dsl_identifier": "code_agent_scoped_to_code_agent_runner", "semantic_id": "relationship.code-agent-scoped-to-code-agent-runner", "fragment": "model.dsl", "source": "code_agent_scoped", "destination": "code_agent_runner"},
@@ -403,5 +403,5 @@
     {"key": "cascade-diagnostics-code", "fragment": "views.dsl"},
     {"key": "cascade-workspace-code", "fragment": "views.dsl"}
   ],
-  "workspace": {"source": "workspace.dsl", "owner": "epic_047"}
+  "workspace": {"source": "workspace.dsl", "owner": "epic_048"}
 }
