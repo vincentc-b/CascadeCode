@@ -23,6 +23,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-24T19:16:21.893965+00:00'
 ---
 # Enforce durable incident budgets at recovery admission
 
