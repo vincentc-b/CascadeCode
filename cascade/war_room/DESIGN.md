@@ -172,8 +172,10 @@ verify owner-lineage and exact-revision enforcement.
   it. Comparison Level up prefers the verified originating parent from navigation
   history, then the broadest nearest parent when there is no origin;
   browser history and deep links restore snapshot, view, level and selection.
-- `REQ-WARROOM-C4-002`: Selecting a code element exposes its source path and
-  symbol and an authorized source resource at the snapshot's code revision.
+- `REQ-WARROOM-C4-002`: Selecting a code element exposes its declaration kind,
+  source path and symbol, and an authorized source resource at the snapshot's
+  code revision. Comparison details use the declaration kind from each side's
+  semantic model.
   Source previews render plain text, never Markdown or executable HTML. Advancing
   HEAD cannot change the bytes of an existing source URL. Invalid opaque resource
   IDs fail rather than accepting caller-supplied paths.
@@ -247,8 +249,9 @@ evidence.
   reports when the project or proposal advances. Explicit comparison refresh
   reloads the page to obtain new pins. Once project preview is requested, late
   publication responses or failures cannot replace it with publication data or
-  an empty accepted baseline. Failed preview loads remain visible and retry via
-  the project loader. Uncommitted source changes are excluded.
+  an empty accepted baseline. Transient preview failures retry via the project
+  loader. A merge conflict lists the affected paths and pauses polling until
+  the operator retries. Uncommitted source changes are excluded.
 - `REQ-WARROOM-COMPARE-005`: One diagram contains the union of both revisions:
   removals are red, additions green, semantic edits amber, and unchanged targets
   remain as context. Reviewed renames remain one changed target. A rewired

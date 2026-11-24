@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import threading
@@ -61,6 +63,7 @@ def test_real_pinned_renderer_publishes_one_validated_handoff_and_cache(
     assert result.artifact_directory and result.artifact_directory.joinpath(
         "manifest.json"
     ).is_file()
+    _assert_cascade_view_coverage(result.semantic_workspace)
 
     cached = renderer.submit(closure).wait(timeout=5)
     assert cached.status == "ready"
@@ -93,6 +96,83 @@ def test_real_pinned_renderer_publishes_one_validated_handoff_and_cache(
     assert stale.status == "render_error"
     assert stale.failure and stale.failure.code == "invalid_artifact"
     assert "provenance" in stale.failure.message
+
+
+def _assert_cascade_view_coverage(semantic_workspace: Path) -> None:
+    workspace = json.loads(semantic_workspace.read_text())
+    model, views = workspace["model"], workspace["views"]
+    systems = {
+        system["properties"]["cascade.semanticId"]: system
+        for system in model["softwareSystems"]
+    }
+    cascade = systems["element.system.cascade"]
+    containers = {container["id"]: container for container in cascade["containers"]}
+    component_views = views["componentViews"]
+    assert {view["containerId"] for view in component_views} == {
+        container_id for container_id, container in containers.items()
+        if container.get("components")
+    }
+    context_view, = views["systemContextViews"]
+    container_view, = views["containerViews"]
+    assert context_view["softwareSystemId"] == container_view["softwareSystemId"] == cascade["id"]
+    assert {item["id"] for item in container_view["elements"]} >= (
+        containers.keys() | {system["id"] for system in systems.values() if system != cascade}
+    )
+    components = {}
+    for container_id, container in containers.items():
+        visible = {
+            item["id"]
+            for view in component_views if view["containerId"] == container_id
+            for item in view["elements"]
+        }
+        for component in container.get("components", []):
+            assert component["id"] in visible, component["name"]
+            components[component["properties"]["cascade.semanticId"]] = component
+
+    code_nodes = {row["id"]: row for row in model["customElements"]}
+    code_views = views["customViews"]
+    assert {view["properties"]["cascade.codeComponent"] for view in code_views} == components.keys()
+    covered = set()
+    for view in code_views:
+        assert view["elements"], view["key"]
+        for item in view["elements"]:
+            properties = code_nodes[item["id"]]["properties"]
+            assert properties["cascade.parent"] == view["properties"]["cascade.codeComponent"]
+            covered.add(item["id"])
+    assert covered == code_nodes.keys()
+
+    for node in code_nodes.values():
+        path = _REPOSITORY_ROOT / node["properties"]["cascade.sourcePath"]
+        symbol = node["properties"]["cascade.sourceSymbol"]
+        assert _declaration_kind(path, symbol) == node["metadata"], (path, symbol)
+
+
+def _declaration_kind(path: Path, symbol: str) -> str:
+    source = path.read_text()
+    if path.suffix == ".js":
+        matches = re.findall(rf"^\s*(?:async\s+)?function\s+{re.escape(symbol)}\s*\(", source, re.M)
+        assert len(matches) == 1, (path, symbol)
+        return "Function"
+
+    assert path.suffix == ".py", path
+    declaration = ast.parse(source)
+    for name in symbol.split("."):
+        matches = [item for item in declaration.body if getattr(item, "name", None) == name]
+        assert len(matches) == 1, (path, symbol)
+        declaration = matches[0]
+    if isinstance(declaration, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return "Method" if "." in symbol else "Function"
+    assert isinstance(declaration, ast.ClassDef), (path, symbol)
+    bases = {ast.unparse(base).split(".")[-1] for base in declaration.bases}
+    if "Protocol" in bases:
+        return "Interface"
+    if "TypedDict" in bases:
+        return "TypedDict"
+    for decorator in declaration.decorator_list:
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        if ast.unparse(target).split(".")[-1] == "dataclass":
+            return "Dataclass"
+    return "Class"
 
 
 @pytest.mark.parametrize("mutation", ["changed", "missing", "extra"])

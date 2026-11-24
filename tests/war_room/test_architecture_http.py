@@ -79,6 +79,29 @@ def _stop(server, thread) -> None:
     thread.join(timeout=5)
 
 
+@pytest.mark.parametrize("conflict, expected_status", [(True, 409), (False, 503)])
+def test_plan_preview_distinguishes_conflicts_from_service_failures(
+    tmp_path: Path, monkeypatch, conflict: bool, expected_status: int,
+) -> None:
+    from cascade.war_room import plan_comparison
+
+    def fail_preview(*args, **kwargs):
+        if conflict:
+            raise plan_comparison.ProjectProjectionConflict("Proposal conflicts in model.dsl")
+        raise ValueError("Preview is unavailable")
+
+    monkeypatch.setattr(plan_comparison, "draft_diagrams", fail_preview)
+    server, thread, base = _start(make_repo(tmp_path))
+    try:
+        status, raw, _headers = _post(base + "/api/architecture/plan-preview", {"work_id": "epic_001"})
+        assert status == expected_status
+        assert json.loads(raw)["error"] == (
+            "Proposal conflicts in model.dsl" if conflict else "Preview is unavailable"
+        )
+    finally:
+        _stop(server, thread)
+
+
 def test_context_catalog_exposes_session_target_without_accepting_queries(
     tmp_path: Path,
 ) -> None:
@@ -220,17 +243,17 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
     def submit(_renderer, closure, settings=None):  # type: ignore[no-untyped-def]
         output = tmp_path / "rendered"
         output.mkdir(exist_ok=True)
-        element = closure.contract.elements[0]
-        view = closure.contract.views[0]
-        landscape = closure.contract.views[1]
+        element = next(row for row in closure.contract.elements if row.dsl_identifier == "cascade")
+        view_keys = {row.key for row in closure.contract.views}
+        assert {"cascade-context", "cascade-landscape"} <= view_keys
         workspace = {
             "model": {"softwareSystems": [{
                 "id": "1", "name": "System",
                 "properties": {"cascade.semanticId": element.semantic_id},
             }]},
             "views": {
-                "systemLandscapeViews": [{"key": landscape.key}],
-                "systemContextViews": [{"key": view.key, "softwareSystemId": "1"}],
+                "systemLandscapeViews": [{"key": "cascade-landscape"}],
+                "systemContextViews": [{"key": "cascade-context", "softwareSystemId": "1"}],
             },
         }
         workspace["model"]["softwareSystems"][0]["containers"] = [{
@@ -238,7 +261,7 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
             "components": [{"id": "3", "properties": {"cascade.semanticId": "element.component.epic-team"}}],
         }]
         workspace["model"]["customElements"] = [{
-            "id": "4", "name": "example", "properties": {
+            "id": "4", "name": "example", "metadata": "Function", "properties": {
                 "cascade.semanticId": "element.code.epic.graph",
                 "cascade.parent": "element.component.epic-team",
                 "cascade.sourcePath": "example.py", "cascade.sourceSymbol": "example",
@@ -267,7 +290,7 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
                     "export_id": "1",
                     "semantic_id": element.semantic_id,
                 }],
-            } for rendered_key in (landscape.key, view.key)],
+            } for rendered_key in ("cascade-landscape", "cascade-context")],
         }), encoding="utf-8")
         return Result(C4RenderArtifact(
             status="ready",
@@ -278,7 +301,7 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
             svg_files=(svg,),
             binding_manifest=manifest,
             interactive=True,
-            view_keys=(landscape.key, view.key),
+            view_keys=("cascade-landscape", "cascade-context"),
             revision=closure.revision,
         ))
 
@@ -302,7 +325,7 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
         context_view = payload["views"][1]
         assert context_view["level"] == "systemContextViews"
         assert payload["initial_view"]["level"] == "systemContextViews"
-        target = next(row for row in payload["targets"] if row["semantic_id"] == "element.person.operator")
+        target = next(row for row in payload["targets"] if row["semantic_id"] == "element.system.cascade")
         assert target["semantic_id"]
         assert target["drill_choices"][1]["view_key"] == context_view["key"]
         assert target["drill_choices"][1]["scope_id"] == target["semantic_id"]
@@ -336,6 +359,7 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
 
         code = next(row for row in payload["targets"] if row["source_path"] == "example.py")
         assert code["source_symbol"] == "example"
+        assert code["source_kind"] == "Function"
         status, raw, headers = _get(base + code["source_url"])
         assert status == 200
         assert raw == pinned_source

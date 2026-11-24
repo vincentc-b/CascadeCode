@@ -348,6 +348,7 @@ def _snapshot_projection(
             "drill_choices": memberships.get(target_id, []),
             "source_path": target.source_path,
             "source_symbol": target.source_symbol,
+            "source_kind": target.source_kind,
             "source_url": (
                 f"/api/architecture/resources/{snapshot.snapshot_id}/"
                 f"{_opaque_id(_code_resource_descriptor(snapshot, target.source_path))}"

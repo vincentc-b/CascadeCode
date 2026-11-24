@@ -93,54 +93,49 @@ owner review, missing receipts, or material provenance gaps.
 
 ## Reading the implementation
 
-Start with `cascade-landscape`, `cascade-context`, and `cascade-containers`.
-The supervisor overview is `cascade-supervisor-components`; choose
-`cascade-team-components` in the Architecture view selector for the team breakdown.
-[Package navigation and team execution](../../cascade/DESIGN.md#architecture-navigation)
-link the code-level structure, lifecycle, persistence, and recovery diagrams.
-[Epic](../../cascade/epic/DESIGN.md), [Feature](../../cascade/feature/DESIGN.md),
-and [Task](../../cascade/task/DESIGN.md) contain source-linked implementation views.
-The owning designs' Mermaid diagrams complement the integrated Code views;
-they are not dynamic Structurizr views or separately deployed services.
+| Level | View and scope |
+|---|---|
+| L1 System context | `cascade-context` shows the operator, Cascade, Git forge, model provider and local Structurizr tooling. |
+| L2 Containers | `cascade-containers` shows the Operator CLI, War Room, Service, repository artifacts and direct external dependencies. The CLI supervises the worker. The HTTP server and watchdog share the worker process. Repository artifacts are the Git-backed data store. |
+| L3 Components | `cascade-cli-components`, `cascade-war-room-components` and `cascade-supervisor-components` expand the application boundaries. `cascade-team-components` focuses on the tier graphs and their collaborators. |
+| L4 Code | Every modeled Cascade component has a scoped Code view. Use [the component index](../../cascade/DESIGN.md#architecture-navigation) to find each view and its owning design. |
 
-The default entry is `cascade-context` (L1), followed by `cascade-containers`
-(L2), component views (L3) and authored Code views (L4). Level up stops at context.
-`cascade-landscape` is a supporting overview available in the view selector and
-through explicit links, not another zoom level. Its current scope matches the
-context because the model contains one system and its immediate surroundings;
-retain the authored scope for broader multi-system models.
-
-For diagram review implementation, open `cascade-war-room-components`, then
-**Diagram comparison** → `cascade-diagram-review-code`. It connects the browser
-coordinator, semantic navigation and SVG viewer to the project-preview endpoint.
-It also traces the document API comparison through selected-module Markdown
-rendering and previous/next changed-block navigation.
-From the supervisor's **Workspace** component, choose
-`cascade-comparison-render-code` to inspect combined graph construction, source
-closure materialization and the durable render scheduler. Their owning designs
-are [War Room](../../cascade/war_room/DESIGN.md) and
-[Workspace](../../cascade/workspace/DESIGN.md).
-
+The War Room starts at system context. Select Cascade, then an application
+container, then a component to reach its code. **Level up** retraces that
+path and stops at context. `cascade-landscape` is available in the view selector.
+The owning designs' Mermaid diagrams supplement the structural views with
+execution, persistence and recovery flows.
 
 ## Integrated code level
 
-From the supervisor component diagram, Explore **Epic team**, **Feature team**,
-**Task team**, or **Tier teams** to open the corresponding `cascade-*-code` view.
-These are native Structurizr custom views and custom elements, rendered and
-bound by the same offline pipeline as the other levels. The UI names their
-level **Code**; they do not represent additional deployed containers.
+Read the kind label under a code box's name. It comes from the second quoted
+field of the Structurizr `element` declaration, exported as `metadata`. The
+War Room also shows that kind in the selected node's details and in the
+comparison's before/after **type** field. [Structurizr element syntax](https://docs.structurizr.com/dsl/language#element)
+
+| Label | How to recognize it in source | Example |
+|---|---|---|
+| Function | Python `def` or `async def`, or a JavaScript `function` declaration | [`ensure_epic_graph`](../../cascade/epic/graph.py) |
+| Method | Function declared on a class, written as `ClassName.method` in the source symbol | [`WarRoomRequestHandler.do_GET`](../../cascade/war_room/server.py) |
+| Class | Concrete class declaration | [`C4RenderScheduler`](../../cascade/workspace/c4_scheduler.py) |
+| Dataclass | Python class decorated with `@dataclass` | [`BoardIndex`](../../cascade/board/types.py) |
+| TypedDict | Python class declaring the keys and value types of a dictionary | [`EpicGraphState`](../../cascade/epic/state.py) |
+| Interface | A structural contract declared with Python's `Protocol` | [`HumanIdentityVerifier`](../../cascade/war_room/human_auth.py) |
 
 Each code view declares `cascade.codeComponent` with the owning component's
 semantic ID. Code elements declare `cascade.parent` with the same component ID,
 plus a confined repository-relative `cascade.sourcePath` and a concrete
-`cascade.sourceSymbol`. Select a code element to open the source from the
-snapshot's pinned code revision. Level up reverses the verified component link.
-Unscoped custom views are not automatically treated as code views.
+`cascade.sourceSymbol`. Use the description for the declaration's responsibility,
+framework or return value. Select a box and choose **Open pinned source** in
+the Architecture tab to read its file at the snapshot's code revision. Follow
+the displayed symbol to find the declaration.
 
-The source contract validates component scope and path confinement. The render
-proves semantic hit targets for custom elements exactly as for C4 elements.
-Source content is served through opaque snapshot-authorized resource IDs, never
-an arbitrary path parameter, and is displayed as plain text.
+The source contract checks component references and path confinement. The
+[renderer integration test](../../tests/workspace/test_c4_render.py)
+checks that each component has a Code view, that Code nodes belong to their
+view's component, and that every authored kind and symbol matches the source.
+The renderer verifies semantic hit targets and the HTTP API serves plain-text
+source through snapshot-authorized resource IDs.
 
 Interactive rendering performs validation, JSON/static export, and a single
 trusted batch capture of all bound SVGs. One Docker/Java/browser session captures

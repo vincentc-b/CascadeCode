@@ -16,6 +16,10 @@ from cascade.workspace.integration_worktree import load_registry_readonly, locat
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 
 
+class ProjectProjectionConflict(ValueError):
+    """Committed changes conflict with the current project revision."""
+
+
 def _git(root: Path, *args: str) -> str:
     try:
         result = subprocess.run(["git", *args], cwd=root, capture_output=True, timeout=10)
@@ -158,9 +162,12 @@ def project_projection_revision(root: Path, current: str, proposal: str) -> str:
         run("read-tree", "--reset", "-u", current)
         merged = run("merge-recursive", common, "--", current, proposal, check=False)
         if merged.returncode:
-            conflicts = run("diff", "--name-only", "--diff-filter=U").stdout.strip()
-            raise ValueError("Proposal conflicts with the current project; reconcile before previewing: " +
-                             (conflicts[:2000] or "integration could not be completed"))
+            conflicts = run("diff", "--name-only", "--diff-filter=U").stdout.splitlines()
+            if conflicts:
+                raise ProjectProjectionConflict(
+                    "Proposal conflicts with the current project in " + ", ".join(conflicts)[:2000]
+                )
+            raise ValueError("Unable to prepare the project architecture projection")
         tree = run("write-tree").stdout.strip()
         return run("commit-tree", tree, "-p", current, "-p", proposal,
                    input=f"Project architecture preview\n\nCurrent: {current}\nProposal: {proposal}\n").stdout.strip()
@@ -191,9 +198,11 @@ def comparison_metadata(artifact) -> dict[str, dict]:
             semantic_id = value.get('properties', {}).get('cascade.semanticId')
             if semantic_id in identities:
                 result[semantic_id] = {
-                    'type': {'people': 'Person', 'softwareSystems': 'Software system',
-                             'containers': 'Container', 'components': 'Component',
-                             'customElements': 'Code element', 'relationships': 'Relationship'}.get(kind, kind),
+                    'type': identities[semantic_id].source_kind or {
+                        'people': 'Person', 'softwareSystems': 'Software system',
+                        'containers': 'Container', 'components': 'Component',
+                        'customElements': 'Code element', 'relationships': 'Relationship',
+                    }.get(kind, kind),
                     'description': value.get('description', ''),
                     'technology': value.get('technology', ''),
                     'tags': value.get('tags', ''), 'url': value.get('url', ''),

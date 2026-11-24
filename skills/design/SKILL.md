@@ -123,7 +123,11 @@ For each affected significant subsystem:
   components in this Structurizr model, provide a native custom code view with
   `cascade.codeComponent` naming the component semantic ID. Its custom code
   elements use `cascade.parent`, `cascade.sourcePath`, and `cascade.sourceSymbol`
-  to identify real implementation and its owning component. Keep model and
+  to identify real implementation and its owning component. Use the native
+  `element` metadata field for the declaration kind, such as Function, Method,
+  Class, Dataclass, TypedDict or Interface. Put framework names and
+  responsibilities in the description. Verify the kind against the declaration
+  in source. Keep model and
   contract declarations synchronized. Verify Explore reaches Code and Level up
   returns to the component view; a document link alone does not satisfy this.
   Behavioral Mermaid diagrams in DESIGN.md can supplement the integrated view.

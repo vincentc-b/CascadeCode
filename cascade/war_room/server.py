@@ -1740,7 +1740,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
 
     def _handle_plan_preview(self, body: dict[str, Any]) -> None:
-        from cascade.war_room.plan_comparison import draft_diagrams
+        from cascade.war_room.plan_comparison import ProjectProjectionConflict, draft_diagrams
         from cascade.workspace.c4_scheduler import C4RenderAdmissionError
 
         if set(body) - {"work_id", "snapshot_ids"} or not isinstance(body.get("work_id"), str):
@@ -1759,6 +1759,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 snapshot_ids=snapshots
             )
             self._json_response(HTTPStatus.OK, payload)
+        except ProjectProjectionConflict as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
         except (OSError, ValueError, WorkspaceError, NotFound, KeyError, C4RenderAdmissionError) as exc:
             self._json_error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
 

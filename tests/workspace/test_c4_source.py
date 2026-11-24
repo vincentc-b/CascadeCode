@@ -81,8 +81,9 @@ def test_invalid_semantic_ids_and_view_keys_fail_before_rendering(
     elif mutation == "invalid_id":
         manifest["elements"][0]["semantic_id"] = "Element With Spaces"
     elif mutation == "duplicate_id":
-        duplicate = manifest["elements"][0]["semantic_id"]
-        manifest["elements"][1]["semantic_id"] = duplicate
+        elements = {row["dsl_identifier"]: row for row in manifest["elements"]}
+        duplicate = elements["operator"]["semantic_id"]
+        elements["cascade"]["semantic_id"] = duplicate
         model = workspace.joinpath("model.dsl").read_text(encoding="utf-8")
         model = model.replace(
             '"cascade.semanticId" "element.system.cascade"',

@@ -220,8 +220,8 @@ connection and its new green connection.
 **Level up** stops at context. **Project landscape** remains an optional overview
 in the selector, outside the normal drill-down path. Explicit saved view links
 are preserved. Landscape and context can contain the same elements when
-the landscape consists of one system and its immediate surroundings. **L2:
-Containers** expands Cascade into War Room, Service and Repository artifacts.
+the landscape consists of one system and its immediate surroundings. The container
+view expands Cascade into Operator CLI, War Room, Service and Repository artifacts.
 Identical displayed graphs retain the same layout between views.
 
 The comparison uses committed project/proposal revisions. **Refresh comparison**
@@ -230,7 +230,11 @@ until committed. A first comparison can show a rendering status while its
 combined layout is prepared. Merge conflicts are reported explicitly and must
 be reconciled before a fresh integration preview can be rendered.
 
-The Architecture tab separately browses a selected branch at a pinned revision.
+The Architecture tab browses a selected branch at a pinned revision. Drill
+through an application's components to see the Code view. Each code box shows
+its declaration kind. Select a box to see the symbol and open its pinned source.
+The [C4 guide](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/README.md#integrated-code-level)
+explains the labels and maps the views to their source.
 Published review and approval evidence remains separate from previews; do not
 replace accepted snapshots to make a check pass. Interaction is described in the
 [War Room design](cascade/war_room/DESIGN.md#single-diagram-architecture-differences);
