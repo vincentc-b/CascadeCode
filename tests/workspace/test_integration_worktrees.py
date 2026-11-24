@@ -33,6 +33,7 @@ from cascade.workspace.integration_worktree import (
     load_registry,
     merged_board,
     repair_missing_worktree,
+    prove_terminal_retirement,
     resolve_mutation_owner,
     retire_integration_worktree,
     retire_terminal_registered_worktrees,
@@ -628,7 +629,15 @@ def test_registry_save_does_not_deadlock_with_merged_board_reader(
     assert failures == []
 
 
-def test_retire_clean_merged_worktree_preserves_branch(tmp_path: Path) -> None:
+def test_retire_clean_merged_worktree_preserves_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.workspace.integration_worktree import TerminalRetirementProof
+
+    monkeypatch.setattr(
+        "cascade.workspace.integration_worktree.prove_terminal_retirement",
+        lambda *_args, **_kwargs: TerminalRetirementProof(True),
+    )
     root = make_repo(tmp_path)
     _initial_commit(root)
     branch = integration_branch("epic", "epic_001")
@@ -645,7 +654,15 @@ def test_retire_clean_merged_worktree_preserves_branch(tmp_path: Path) -> None:
     assert _branch_exists(root, branch)
 
 
-def test_retire_refuses_dirty_or_locked_worktree(tmp_path: Path) -> None:
+def test_retire_refuses_dirty_or_locked_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.workspace.integration_worktree import TerminalRetirementProof
+
+    monkeypatch.setattr(
+        "cascade.workspace.integration_worktree.prove_terminal_retirement",
+        lambda *_args, **_kwargs: TerminalRetirementProof(True),
+    )
     root = make_repo(tmp_path)
     _initial_commit(root)
     branch = integration_branch("epic", "epic_001")
@@ -675,7 +692,15 @@ def test_retire_refuses_dirty_or_locked_worktree(tmp_path: Path) -> None:
     assert get_integration_worktree(root, "epic", "epic_001") is not None
 
 
-def test_retire_accepts_authoritative_squash_merge_confirmation(tmp_path: Path) -> None:
+def test_retire_accepts_authoritative_squash_merge_confirmation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.workspace.integration_worktree import TerminalRetirementProof
+
+    monkeypatch.setattr(
+        "cascade.workspace.integration_worktree.prove_terminal_retirement",
+        lambda *_args, **_kwargs: TerminalRetirementProof(True),
+    )
     root = make_repo(tmp_path)
     _initial_commit(root)
     branch = integration_branch("feature", "feat_001")
@@ -706,6 +731,141 @@ def test_retire_accepts_authoritative_squash_merge_confirmation(tmp_path: Path) 
     )
     assert not entry.path.exists()
     assert _branch_exists(root, branch)
+
+
+def test_retirement_persists_and_rereads_missing_terminal_task(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    epic = ensure_integration_worktree(
+        "epic",
+        "epic_001",
+        branch=integration_branch("epic", "epic_001"),
+        base_ref="HEAD",
+        trunk=root,
+    )
+    feature = ensure_integration_worktree(
+        "feature",
+        "feat_001",
+        branch=integration_branch("feature", "feat_001"),
+        base_ref=epic.branch,
+        trunk=root,
+    )
+    move_doc("task_001", "completed", root=feature.path)
+    move_doc("feat_001", "completed", root=feature.path)
+    subprocess.run(
+        ["git", "branch", integration_branch("task", "task_001"), "HEAD"],
+        cwd=feature.path,
+        check=True,
+        capture_output=True,
+    )
+
+    target_feature = read_doc_in_worktree("feat_001", epic.path)
+    previous_feature = target_feature.meta.path
+    target_feature.meta.status = "completed"
+    target_feature.meta.path = (
+        epic.path / "docs/features/3_completed" / previous_feature.name
+    )
+    save_doc(target_feature, previous_path=previous_feature, root=epic.path)
+    target_task = read_doc_in_worktree("task_001", epic.path).meta.path
+    subprocess.run(
+        ["git", "rm", str(target_task.relative_to(epic.path))],
+        cwd=epic.path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "remove stale task copy"],
+        cwd=epic.path,
+        check=True,
+        capture_output=True,
+    )
+    reviews = root / ".cascade" / "reviews.json"
+    reviews.write_text(
+        '{"feat_001": {"closed": true, "target_branch": "epic/epic_001"}}\n',
+        encoding="utf-8",
+    )
+
+    import cascade.board.store as board_store
+
+    real_write = board_store.write_doc
+    interrupted = True
+
+    def interrupt_once(*args, **kwargs):
+        nonlocal interrupted
+        if interrupted:
+            interrupted = False
+            raise OSError("simulated persistence interruption")
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(board_store, "write_doc", interrupt_once)
+    first = prove_terminal_retirement("feature", "feat_001", trunk=root)
+    assert not first.ok
+    assert first.next_action is not None and "retry retirement" in first.next_action
+    assert feature.path.is_dir()
+    assert get_integration_worktree(root, "feature", "feat_001") is not None
+
+    proof = prove_terminal_retirement("feature", "feat_001", trunk=root)
+
+    assert proof.ok
+    assert proof.required_descendants == ("task_001",)
+    assert proof.persisted_descendants == ("task_001",)
+    copied = read_doc_in_worktree("task_001", epic.path)
+    assert copied.meta.status == "completed"
+    assert copied.meta.path.parent.name == "3_completed"
+    assert prove_terminal_retirement("feature", "feat_001", trunk=root).ok
+
+
+def test_retirement_refuses_missing_descendant_provenance(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(root, id="task_001", title="Task", tier="task", parent="feat_001")
+    epic = ensure_integration_worktree(
+        "epic", "epic_001", branch="epic/epic_001", base_ref="HEAD", trunk=root
+    )
+    feature = ensure_integration_worktree(
+        "feature", "feat_001", branch="feat/feat_001", base_ref=epic.branch, trunk=root
+    )
+    move_doc("task_001", "completed", root=feature.path)
+    move_doc("feat_001", "completed", root=feature.path)
+    target_feature = read_doc_in_worktree("feat_001", epic.path)
+    previous = target_feature.meta.path
+    target_feature.meta.status = "completed"
+    target_feature.meta.path = epic.path / "docs/features/3_completed" / previous.name
+    save_doc(target_feature, previous_path=previous, root=epic.path)
+    reviews = root / ".cascade" / "reviews.json"
+    reviews.write_text(
+        '{"feat_001": {"closed": true, "target_branch": "epic/epic_001"}}\n',
+        encoding="utf-8",
+    )
+
+    proof = prove_terminal_retirement("feature", "feat_001", trunk=root)
+
+    assert not proof.ok
+    assert (
+        proof.reason is not None
+        and "lacks delivery/completion provenance" in proof.reason
+    )
+    assert feature.path.is_dir()
+    assert get_integration_worktree(root, "feature", "feat_001") is not None
 
 
 def test_restart_retires_terminal_review_worktree(tmp_path: Path) -> None:

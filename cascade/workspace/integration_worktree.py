@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextvars
+import copy
 import json
 import os
 import shutil
@@ -20,6 +21,8 @@ import fcntl
 from cascade.board.errors import GitError, NotFound
 from cascade.workspace.errors import MutationOwnerError
 from cascade.board.gitutil import head_sha, path_for_work_id
+from cascade.board.parse import parse_doc
+from cascade.board.paths import column_dir
 from cascade.board.store import list_board
 from cascade.board.types import BoardIndex, WorkMeta
 
@@ -53,6 +56,17 @@ class CancellationTeardownResult:
     complete: bool
     step: str
     detail: str | None = None
+
+
+@dataclass(frozen=True)
+class TerminalRetirementProof:
+    """Inspectable, retry-safe proof required before a checkout is retired."""
+
+    ok: bool
+    reason: str | None = None
+    next_action: str | None = None
+    required_descendants: tuple[str, ...] = ()
+    persisted_descendants: tuple[str, ...] = ()
 
 
 def integration_branch(kind: IntegrationKind, work_id: str) -> str:
@@ -371,7 +385,9 @@ def retire_integration_worktree(
     if entry is None:
         return True
     expected = integration_worktree_path(kind, work_id, trunk=trunk)
-    if entry.path.resolve() != expected:
+    if entry.path.resolve() != expected or entry.branch != integration_branch(
+        kind, work_id
+    ):
         return False
     if not merge_confirmed and not _branch_merged_into(trunk, entry.branch, merged_into):
         return False
@@ -396,9 +412,13 @@ def retire_integration_worktree(
         )
         if status.returncode != 0 or status.stdout.strip():
             return False
-        removed = _git(
-            trunk, "worktree", "remove", str(entry.path), check=False
-        )
+
+    proof = prove_terminal_retirement(kind, work_id, trunk=trunk)
+    if not proof.ok:
+        return False
+
+    if entry.path.exists():
+        removed = _git(trunk, "worktree", "remove", str(entry.path), check=False)
         if removed.returncode != 0:
             return False
     elif present:
@@ -438,35 +458,357 @@ def unregister_missing_integration_worktree(
 def terminal_doc_persisted_outside_worktree(
     kind: IntegrationKind, work_id: str, *, trunk: Path
 ) -> bool:
-    """True when another checkout durably owns the terminal plan document.
+    """Compatibility predicate backed by the descendant-aware proof."""
 
-    A merge confirmation proves that source changes landed, but it does not by
-    itself prove that the completed plan is present in the destination checkout.
-    Keep the source worktree registered until that metadata is visible elsewhere;
-    otherwise removing it can make dependency resolution forget the completed
-    work item entirely.
+    return prove_terminal_retirement(kind, work_id, trunk=trunk).ok
+
+
+def prove_terminal_retirement(
+    kind: IntegrationKind, work_id: str, *, trunk: Path
+) -> TerminalRetirementProof:
+    """Persist and verify terminal descendants before retiring ``work_id``.
+
+    The registered checkout remains the source of the terminal closure.  Its
+    parent owner is the authorized destination.  Missing records are copied one
+    at a time through the ordinary Git-backed board store, making an interrupted
+    pass safe to repeat.  Existing nonterminal or conflicting destination rows
+    are never overwritten.
     """
 
-    trunk = locate_trunk(trunk).resolve()
-    source = get_integration_worktree(trunk, kind, work_id)
-    if source is None:
-        return True
-    source_path = source.path.resolve()
-    roots = [trunk]
-    roots.extend(entry.path for entry in load_registry(trunk))
-    for root in roots:
-        resolved = root.resolve()
-        if resolved == source_path or not resolved.is_dir():
+    from cascade.board.context import resolve_tracking_root
+    from cascade.board.store import write_doc
+
+    product = locate_trunk(trunk).resolve()
+    entry = get_integration_worktree(product, kind, work_id)
+    if entry is None:
+        return TerminalRetirementProof(True)
+    expected_path = integration_worktree_path(kind, work_id, trunk=product)
+    expected_branch = integration_branch(kind, work_id)
+    if entry.path.resolve() != expected_path or entry.branch != expected_branch:
+        return TerminalRetirementProof(
+            False,
+            f"registered identity for {work_id} is noncanonical",
+            f"repair the registry to {expected_branch} at {expected_path}",
+        )
+    present, locked = _listed_worktree_state(product, entry.path)
+    if locked:
+        return TerminalRetirementProof(
+            False,
+            f"registered checkout for {work_id} is locked",
+            f"unlock {entry.path} after confirming its owner has stopped",
+        )
+    try:
+        Path.cwd().resolve().relative_to(entry.path.resolve())
+    except ValueError:
+        pass
+    else:
+        return TerminalRetirementProof(
+            False,
+            f"registered checkout for {work_id} is currently occupied",
+            "leave the checkout before retrying retirement",
+        )
+    if not present or not entry.path.is_dir():
+        return TerminalRetirementProof(
+            False,
+            f"registered checkout for {work_id} is missing",
+            "repair the exact registered checkout before retirement",
+        )
+    status = _git(
+        entry.path, "status", "--porcelain", "--untracked-files=all", check=False
+    )
+    if status.returncode != 0 or status.stdout.strip():
+        return TerminalRetirementProof(
+            False,
+            f"registered checkout for {work_id} is dirty or unreadable",
+            f"finish or reconcile owner changes in {entry.path} before retirement",
+        )
+    try:
+        source_root = resolve_mutation_owner(work_id, trunk=product, tier=kind)
+    except MutationOwnerError as exc:
+        return TerminalRetirementProof(False, exc.reason, exc.action)
+    source_board = list_board(source_root)
+    parent = source_board.by_id.get(work_id)
+    if not _terminal_meta(parent, kind):
+        return TerminalRetirementProof(
+            False,
+            f"terminal source document for {work_id} is missing or noncanonical",
+            "restore the completed document in its exact registered owner",
+        )
+
+    try:
+        if parent.parent:
+            destination = resolve_mutation_owner(parent.parent, trunk=product)
+        else:
+            destination = locate_trunk(resolve_tracking_root(product)).resolve()
+    except MutationOwnerError as exc:
+        return TerminalRetirementProof(False, exc.reason, exc.action)
+    destination = destination.resolve()
+    if destination == entry.path.resolve():
+        return TerminalRetirementProof(
+            False,
+            f"{work_id} has no distinct authorized terminal destination",
+            "merge the parent checkout and persist its terminal document before retirement",
+        )
+
+    destination_parent = list_board(destination).by_id.get(work_id)
+    if not _terminal_meta(destination_parent, kind):
+        return TerminalRetirementProof(
+            False,
+            f"authorized destination lacks terminal document {work_id}",
+            f"persist completed {work_id} in {destination} before retirement",
+        )
+    parent_provenance = _registered_parent_proven(
+        kind,
+        work_id,
+        parent.parent,
+        product=product,
+        evidence_roots=(product, source_root, destination),
+    )
+    if parent_provenance is not None:
+        return TerminalRetirementProof(
+            False, parent_provenance[0], parent_provenance[1]
+        )
+
+    closure, refusal = _required_terminal_descendants(parent, source_board)
+    if refusal is not None:
+        return TerminalRetirementProof(False, refusal[0], refusal[1])
+    required = tuple(meta.id for meta in closure)
+    provenance_refusal = _terminal_provenance_refusal(
+        ([parent] if kind == "task" else []) + closure,
+        product=product,
+        evidence_roots=(product, source_root, destination),
+    )
+    if provenance_refusal is not None:
+        return TerminalRetirementProof(
+            False, provenance_refusal[0], provenance_refusal[1], required
+        )
+
+    persisted: list[str] = []
+    try:
+        for meta in closure:
+            destination_meta = list_board(destination).by_id.get(meta.id)
+            if destination_meta is not None:
+                if not _terminal_meta(destination_meta, meta.tier) or (
+                    destination_meta.parent != meta.parent
+                ):
+                    return TerminalRetirementProof(
+                        False,
+                        f"authorized destination has conflicting record {meta.id}",
+                        f"reconcile {meta.id} in {destination} without overwriting its provenance",
+                        required,
+                        tuple(persisted),
+                    )
+                continue
+            doc = copy.deepcopy(parse_doc(meta.path))
+            doc.sha = None
+            doc.meta.status = "completed"
+            doc.meta.path = (
+                destination / column_dir(doc.meta.tier, "completed") / meta.path.name
+            ).resolve()
+            write_doc(doc, root=destination)
+            persisted.append(meta.id)
+    except Exception as exc:
+        return TerminalRetirementProof(
+            False,
+            f"terminal descendant persistence was interrupted: {exc}",
+            "retry retirement; already committed descendant records will be reused",
+            required,
+            tuple(persisted),
+        )
+
+    reread = list_board(destination)
+    for meta in closure:
+        copied = reread.by_id.get(meta.id)
+        if not _terminal_meta(copied, meta.tier) or copied.parent != meta.parent:
+            return TerminalRetirementProof(
+                False,
+                f"canonical readback is missing terminal descendant {meta.id}",
+                f"restore completed {meta.id} in {destination} and retry",
+                required,
+                tuple(persisted),
+            )
+    return TerminalRetirementProof(
+        True,
+        required_descendants=required,
+        persisted_descendants=tuple(persisted),
+    )
+
+
+def _terminal_meta(meta: WorkMeta | None, tier: str) -> bool:
+    return bool(
+        meta is not None
+        and meta.tier == tier
+        and meta.status == "completed"
+        and meta.path.parent.name == "3_completed"
+    )
+
+
+def _required_terminal_descendants(
+    parent: WorkMeta, board: BoardIndex
+) -> tuple[list[WorkMeta], tuple[str, str] | None]:
+    """Return the declared/reverse-linked descendant closure, parents first."""
+
+    children_by_parent: dict[str, set[str]] = {}
+    for meta in board.by_id.values():
+        if meta.parent:
+            children_by_parent.setdefault(meta.parent, set()).add(meta.id)
+    pending = list(
+        dict.fromkeys(
+            [*parent.children, *sorted(children_by_parent.get(parent.id, set()))]
+        )
+    )
+    result: list[WorkMeta] = []
+    seen: set[str] = set()
+    while pending:
+        child_id = pending.pop(0)
+        if child_id in seen:
             continue
-        meta = list_board(resolved).by_id.get(work_id)
-        if (
-            meta is not None
-            and meta.tier == kind
-            and meta.status == "completed"
-            and meta.path.parent.name == "3_completed"
+        seen.add(child_id)
+        child = board.by_id.get(child_id)
+        if child is None:
+            return [], (
+                f"required descendant {child_id} is missing from {parent.id}'s registered owner",
+                f"restore {child_id} in the registered checkout before retirement",
+            )
+        if child.parent != parent.id and not any(
+            row.id == child.parent for row in result
         ):
-            return True
-    return False
+            return [], (
+                f"required descendant {child_id} has ambiguous parent lineage",
+                f"reconcile the parent of {child_id} before retirement",
+            )
+        if not _terminal_meta(child, child.tier):
+            return [], (
+                f"required descendant {child_id} is not canonically terminal",
+                f"complete {child_id} in its owning checkout before retirement",
+            )
+        result.append(child)
+        pending.extend(child.children)
+        pending.extend(sorted(children_by_parent.get(child.id, set())))
+    return result, None
+
+
+def _terminal_provenance_refusal(
+    descendants: list[WorkMeta], *, product: Path, evidence_roots: tuple[Path, ...]
+) -> tuple[str, str] | None:
+    reviews = _review_records(product)
+    for meta in descendants:
+        if not meta.parent:
+            return (
+                f"terminal descendant {meta.id} lacks parent provenance",
+                f"restore the parent of {meta.id} before retirement",
+            )
+        if meta.tier == "task":
+            target = f"feat/{meta.parent}"
+            proven = _branch_merged_into(
+                product, integration_branch("task", meta.id), target
+            )
+            event_type = "TaskMerged"
+            payload_key = "task_id"
+        elif meta.tier == "feature":
+            review = reviews.get(meta.id)
+            if isinstance(review, dict) and review.get("closed") is not True:
+                return (
+                    f"feature review obligation for {meta.id} is unresolved",
+                    f"complete or reconcile the review for {meta.id} before retirement",
+                )
+            target = f"epic/{meta.parent}"
+            proven = _branch_merged_into(
+                product, integration_branch("feature", meta.id), target
+            )
+            proven = proven or _closed_review_matches(review, target)
+            event_type = "FeatureCompleted"
+            payload_key = "feature_id"
+        else:
+            return (
+                f"unsupported terminal descendant tier {meta.tier!r} for {meta.id}",
+                "repair the descendant tier before retirement",
+            )
+        if not proven:
+            proven = any(
+                _completion_event_exists(
+                    root, meta.parent, event_type, payload_key, meta.id
+                )
+                for root in evidence_roots
+            )
+        if not proven:
+            return (
+                f"terminal descendant {meta.id} lacks delivery/completion provenance",
+                f"restore merge or completion evidence for {meta.id} before retirement",
+            )
+    return None
+
+
+def _registered_parent_proven(
+    kind: IntegrationKind,
+    work_id: str,
+    parent_id: str | None,
+    *,
+    product: Path,
+    evidence_roots: tuple[Path, ...],
+) -> tuple[str, str] | None:
+    branch = integration_branch(kind, work_id)
+    if kind == "epic":
+        proven = _branch_merged_into(product, branch, "HEAD")
+    elif parent_id is None:
+        proven = False
+    elif kind == "task":
+        proven = _branch_merged_into(product, branch, f"feat/{parent_id}")
+        proven = proven or any(
+            _completion_event_exists(root, parent_id, "TaskMerged", "task_id", work_id)
+            for root in evidence_roots
+        )
+    else:
+        review = _review_records(product).get(work_id)
+        if isinstance(review, dict) and review.get("closed") is not True:
+            return (
+                f"feature review obligation for {work_id} is unresolved",
+                f"complete or reconcile the review for {work_id} before retirement",
+            )
+        target = f"epic/{parent_id}"
+        proven = _branch_merged_into(product, branch, target)
+        proven = proven or _closed_review_matches(review, target)
+        proven = proven or any(
+            _completion_event_exists(
+                root, parent_id, "FeatureCompleted", "feature_id", work_id
+            )
+            for root in evidence_roots
+        )
+    if proven:
+        return None
+    return (
+        f"registered source {work_id} lacks merge/completion provenance",
+        f"merge or reconcile {branch} before retirement",
+    )
+
+
+def _review_records(product: Path) -> dict[str, object]:
+    path = product / ".cascade" / "reviews.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _closed_review_matches(review: object, target: str) -> bool:
+    return bool(
+        isinstance(review, dict)
+        and review.get("closed") is True
+        and review.get("target_branch") == target
+    )
+
+
+def _completion_event_exists(
+    root: Path, destination: str, event_type: str, payload_key: str, work_id: str
+) -> bool:
+    from cascade.watchdog.events import read_events
+
+    events, _ = read_events(destination, 0, root=root)
+    return any(
+        event.type == event_type and event.payload.get(payload_key) == work_id
+        for event in events
+    )
 
 
 def create_integration_worktree(

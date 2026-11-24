@@ -1815,6 +1815,15 @@ code_workspace_persist = element "terminal_doc_persisted_outside_worktree" "Func
     }
 }
 
+code_workspace_descendant_proof = element "prove_terminal_retirement" "Function" "Enumerates required terminal descendants, persists absent records to the exact parent owner, and requires canonical readback plus delivery provenance." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.descendant-proof"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "prove_terminal_retirement"
+    }
+}
+
 code_workspace_retire = element "retire_integration_worktree" "Function" "Remove clean canonical checkout after merge evidence." {
     properties {
         "cascade.semanticId" "element.code.workspace.retire"
@@ -1839,6 +1848,15 @@ code_boss_evidence = element "delivery_evidence_is_current" "Function" "Compare 
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/task_rollup.py"
         "cascade.sourceSymbol" "delivery_evidence_is_current"
+    }
+}
+
+code_boss_retire = element "_retire_feature_worktree" "Function" "Calls the Workspace descendant proof and preserves refused Feature checkouts for recovery." {
+    properties {
+        "cascade.semanticId" "element.code.boss.retire"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/rollup.py"
+        "cascade.sourceSymbol" "_retire_feature_worktree"
     }
 }
 
@@ -2013,6 +2031,18 @@ code_workspace_retire_to_registry = code_workspace_retire -> code_workspace_regi
     }
 }
 
+code_workspace_retire_to_descendant_proof = code_workspace_retire -> code_workspace_descendant_proof "Requires before removal" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-retire-to-descendant-proof"
+    }
+}
+
+code_workspace_persist_to_descendant_proof = code_workspace_persist -> code_workspace_descendant_proof "Delegates compatibility check" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-persist-to-descendant-proof"
+    }
+}
+
 code_workspace_persist_to_registry = code_workspace_persist -> code_workspace_registry "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-workspace-persist-to-registry"
@@ -2046,6 +2076,12 @@ code_boss_rollup_to_lock = code_boss_feature -> code_boss_lock "Uses" {
 code_boss_rollup_to_review = code_boss_feature -> code_boss_review "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-boss-rollup-to-review"
+    }
+}
+
+code_boss_rollup_to_retire = code_boss_feature -> code_boss_retire "Requests closeout cleanup" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-rollup-to-retire"
     }
 }
 

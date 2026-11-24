@@ -95,8 +95,15 @@ generic worktree-path bonuses.
 
 `REQ-WORKSPACE-RETIRE-001`: Retirement preserves a branch and refuses a
 noncanonical, dirty, locked or currently occupied checkout. Merge ancestry or an
-explicit forge merge confirmation gates removal. The terminal sweep also checks
-for a completed parent document in another checkout.
+explicit forge merge confirmation gates removal. Before removal, Workspace walks
+the registered parent's declared and reverse-linked descendant closure. Every
+required descendant must be canonically terminal and have Task merge or Feature
+completion/review provenance. The exact parent owner is the only persistence
+destination: absent terminal descendants are committed there and re-read before
+removal, while nonterminal, conflicting, ambiguous, unmerged, or unresolved-review
+state returns a reason and owner action without changing the branch, checkout, or
+registry. Repeated proof after an interrupted commit reuses the terminal rows
+already present and never creates a second registry or ledger.
 
 The integrated `cascade-workspace-code` view belongs to
 `element.component.workspace` in the [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl).
@@ -112,7 +119,8 @@ are authoritative; renders are revision-bound derived artifacts.
 | [resolve_mutation_owner / doc_filesystem_root](integration_worktree.py) | Work identity, parent lineage, repository role, registry path and branch → one writable owner or actionable `MutationOwnerError`. |
 | [merged_board / _meta_preference](integration_worktree.py) | Tracking board, registry and snapshot provenance → preferred documents with retained approval metadata. Ranking includes column and generic worktree-path bonuses; it does not prove exact mutation ownership. |
 | [preflight_lifecycle_merge_target](branch_synchronization.py) | Source/target work IDs and branches → synchronization check or typed refusal, including `not_active`. |
-| [terminal_doc_persisted_outside_worktree](integration_worktree.py) | Work ID → existence of another completed parent document. This check does not inventory terminal descendants. |
+| [prove_terminal_retirement / TerminalRetirementProof](integration_worktree.py) | Registered parent, exact destination, descendant closure, Git/event/review evidence → canonical terminal readback or an actionable refusal. |
+| [terminal_doc_persisted_outside_worktree](integration_worktree.py) | Compatibility Boolean backed by the same descendant-aware proof. |
 | [retire_integration_worktree](integration_worktree.py) | Registered identity and merge evidence → removal Boolean; refusal preserves registry and checkout. |
 
 ```mermaid
@@ -120,18 +128,25 @@ flowchart TD
     ID[Work ID + tier + parent] --> Owner[Exact mutation-owner resolver]
     Owner --> Registry[Canonical tracking role + registered path and branch]
     ID --> Projection[Merged board read projection]
-    Registry --> Terminal[Terminal sweep: external parent document]
-    Terminal --> Gates[Canonical path, merge evidence, clean, unlocked, unoccupied]
+    Registry --> Terminal[Enumerate terminal descendant closure]
+    Terminal --> Evidence{Delivery, completion and review evidence current?}
+    Evidence -->|no| Retain
+    Evidence -->|yes| Persist[Commit absent records to exact parent owner]
+    Persist --> Readback{Canonical readback complete?}
+    Readback -->|no or interrupted| Retain
+    Readback -->|yes| Gates[Canonical path, merge evidence, clean, unlocked, unoccupied]
     Gates -->|pass| Remove[Remove checkout then registry entry; retain branch]
     Gates -->|refusal| Retain[Retain checkout for recovery]
 ```
 
 Registry JSON persists under `.cascade/`; Git retains branch identity and Markdown
-holds lifecycle state. Restart reconstructs the board from surviving roots.
+holds lifecycle state. Delivery actions and reviews remain the existing provenance
+stores; the retirement proof derives from them and does not persist another state
+machine. Restart reconstructs the board from surviving roots and repeats canonical
+readback, so a commit made before interruption is reused.
 Registry cleanup follows successful worktree removal; missing-path cleanup checks
 Git's worktree registration. This is repository ownership enforcement, not an OS
-sandbox. Descendant durability requires inspection beyond the current
-parent-document predicate.
+sandbox.
 
 Verification: [worktree tests](../../tests/workspace/test_integration_worktrees.py),
 [document resolution](../../tests/war_room/test_resolve_worktree.py), and

@@ -291,6 +291,13 @@ planning documents. The merged board remains suitable for status projection and
 selection display, but its preferred row cannot authorize a write; ambiguity or
 changed registry/branch identity fails closed with a recovery action.
 
+Parent-checkout retirement uses that same owner contract to enumerate terminal
+descendants, verify their existing Task delivery or Feature completion/review
+evidence, persist absent Markdown records to the authorized parent destination,
+and re-read them before removal. Boss remains the lifecycle caller; Workspace
+owns the proof and existing board, execution, review, Git and registry artifacts
+remain the only durable state. Refusal preserves the source branch and checkout.
+
 [team_supervision.py::supervise_child](team_supervision.py) delegates Task
 recovery to [Feature recovery](feature/recovery.py). Feature-child recovery
 currently inspects incidents and queues a deduplicated team wakeup.
