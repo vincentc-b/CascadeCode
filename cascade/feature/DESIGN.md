@@ -30,6 +30,7 @@ flowchart LR
 | [state.py](state.py) | Defines checkpointed role, message, and queue state. |
 | [checkpoint.py](checkpoint.py) | SQLite state under `.cascade/checkpoints/<work-id>.sqlite`; thread ID is the work ID. |
 | [registry.py](registry.py) and [wiring.py](wiring.py) | Scoped tool registration and execution wiring. |
+| [repair.py](repair.py) | Persists generation-bound admission, idempotent authority, child identity, and delivery progress. |
 | [role skills](../watchdog/role_skills.py) | Resolves the default playbooks, including design authoring/review. |
 
 ## Turn lifecycle
@@ -73,11 +74,12 @@ sequenceDiagram
     participant Board as Feature document
     participant Watchdog
     Feature->>Ledger: persist prepared generation
-    Feature->>Queue: FeatureRepairAuthorized (exact bindings)
+    Feature->>Queue: append FeatureRepairAuthorized once (exact bindings)
     Feature->>Board: commit exact active document
     Feature->>Ledger: checkpoint commit and blob
     Watchdog->>Ledger: rejoin live generation
     Watchdog->>Board: verify path, digest, commit and blob
+    Note over Ledger,Queue: Restart joins the stable event ID before appending
 ```
 
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.

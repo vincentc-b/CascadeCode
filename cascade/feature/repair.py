@@ -32,7 +32,7 @@ from cascade.task.lifecycle_lock import (
     task_lifecycle_lock,
     task_lifecycle_read_lock,
 )
-from cascade.watchdog.events import append_event
+from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.types import Event
 from cascade.workspace.integration_worktree import (
     git_root_for_path,
@@ -349,6 +349,46 @@ def mark_feature_repair_verified(
         _write_payload(repo, payload)
 
 
+def mark_feature_repair_delivery_pending(
+    task_id: str, delivery_evidence: Mapping[str, str], *, root: Path
+) -> None:
+    """Bind a green Task pair to the live repair without changing its identity."""
+
+    repo = lifecycle_root(root)
+    with task_lifecycle_lock(root=repo):
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        candidates = [
+            (action_id, action)
+            for action_id, action in actions.items()
+            if action.get("kind") == "feature_repair"
+            and action.get("phase") in _ACTIVE_PHASES
+            and (
+                action.get("task_id") == task_id
+                or action.get("reserved_task_id") == task_id
+                or action.get("request_id") == f"{task_id}:queued_merge"
+            )
+        ]
+        if not candidates:
+            return
+        action_id, action = max(
+            candidates, key=lambda row: int(row[1].get("generation") or 0)
+        )
+        if action.get("phase") in {"prepared", "authority_recorded"}:
+            raise FeatureRepairError(
+                "Task validation cannot precede repair parent introduction"
+            )
+        action.update(
+            phase="delivery_pending",
+            final_validation=dict(delivery_evidence),
+            next_action="merge_original_task_delivery",
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        actions[action_id] = action
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+
+
 def _admit_or_resume(
     feature_id: str,
     request_id: str,
@@ -449,28 +489,35 @@ def _admit_or_resume(
             action.get("authority_event_id") or f"{action_id}:g{action['generation']}"
         )
         if action.get("phase") == "prepared":
-            append_event(
-                feature_id,
-                Event(
-                    type="FeatureRepairAuthorized",
-                    ts=datetime.now(timezone.utc),
-                    payload={
-                        "id": feature_id,
-                        "feature_id": feature_id,
-                        "epic_id": action["epic_id"],
-                        "action_id": action_id,
-                        "generation": action["generation"],
-                        "event_id": event_id,
-                        "owner_fingerprint": action["owner_fingerprint"],
-                        "source_ref": action["source_ref"],
-                        "target_ref": action["target_ref"],
-                        "intended_active_path": action["intended_active_path"],
-                        "document_digest": action["intended_document_digest"],
-                    },
-                    dest=feature_id,
-                ),
-                root=repo,
+            event = Event(
+                type="FeatureRepairAuthorized",
+                ts=datetime.now(timezone.utc),
+                payload={
+                    "id": feature_id,
+                    "feature_id": feature_id,
+                    "epic_id": action["epic_id"],
+                    "action_id": action_id,
+                    "generation": action["generation"],
+                    "event_id": event_id,
+                    "owner_fingerprint": action["owner_fingerprint"],
+                    "source_ref": action["source_ref"],
+                    "target_ref": action["target_ref"],
+                    "intended_active_path": action["intended_active_path"],
+                    "document_digest": action["intended_document_digest"],
+                },
+                dest=feature_id,
             )
+            queued, _ = read_events(feature_id, 0, root=repo)
+            if not any(
+                row.type == "FeatureRepairAuthorized"
+                and row.payload.get("event_id") == event_id
+                for row in queued
+            ):
+                append_event(
+                    feature_id,
+                    event,
+                    root=repo,
+                )
             action.update(
                 phase="authority_recorded",
                 authority_event_id=event_id,

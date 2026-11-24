@@ -135,6 +135,7 @@
     {"dsl_identifier": "code_boss_reconcile", "semantic_id": "element.code.boss.reconcile", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_lock", "semantic_id": "element.code.boss.lock", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_authority", "semantic_id": "element.code.watchdog.authority", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_watchdog_repair_authority", "semantic_id": "element.code.watchdog.repair-authority", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_recover", "semantic_id": "element.code.watchdog.recover", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_capability", "semantic_id": "element.code.watchdog.capability", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_reservation", "semantic_id": "element.code.watchdog.reservation", "fragment": "model.dsl"},
@@ -148,7 +149,8 @@
     {"dsl_identifier": "code_epic_supervise", "semantic_id": "element.code.epic.supervise", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_actions", "semantic_id": "element.code.task.actions", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_revalidation", "semantic_id": "element.code.task.delivery-revalidation", "fragment": "model.dsl"},
-    {"dsl_identifier": "code_task_leases", "semantic_id": "element.code.task.leases", "fragment": "model.dsl"}
+    {"dsl_identifier": "code_task_leases", "semantic_id": "element.code.task.leases", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_task_validation", "semantic_id": "element.code.task.validation", "fragment": "model.dsl"}
   ],
   "fragments": [
     {"path": "model.dsl", "owner": "epic_047"},
@@ -305,6 +307,7 @@
     {"dsl_identifier": "code_boss_obligation_to_review_generation", "semantic_id": "relationship.code-boss-obligation-to-review-generation", "source": "code_boss_obligation", "destination": "code_boss_review_generation", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_reconcile_to_rollup", "semantic_id": "relationship.code-boss-reconcile-to-rollup", "source": "code_boss_reconcile", "destination": "code_boss_feature", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_tick_to_authority", "semantic_id": "relationship.code-watchdog-tick-to-authority", "source": "code_watchdog_tick", "destination": "code_watchdog_authority", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_watchdog_authority_to_repair", "semantic_id": "relationship.code-watchdog-authority-to-repair-authority", "source": "code_watchdog_authority", "destination": "code_watchdog_repair_authority", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_recover_to_capability", "semantic_id": "relationship.code-watchdog-recover-to-capability", "source": "code_watchdog_recover", "destination": "code_watchdog_capability", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_recover_to_reservation", "semantic_id": "relationship.code-watchdog-recover-to-reservation", "source": "code_watchdog_recover", "destination": "code_watchdog_reservation", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_recover_to_claim", "semantic_id": "relationship.code-watchdog-recover-to-claim", "source": "code_watchdog_recover", "destination": "code_watchdog_claim", "fragment": "model.dsl"},
@@ -317,6 +320,7 @@
     {"dsl_identifier": "code_epic_recover_to_supervise", "semantic_id": "relationship.code-epic-recover-to-supervise", "source": "code_epic_recover", "destination": "code_epic_supervise", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_registry_to_actions", "semantic_id": "relationship.code-task-registry-to-actions", "source": "code_task_registry", "destination": "code_task_actions", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_actions_to_leases", "semantic_id": "relationship.code-task-actions-to-leases", "source": "code_task_actions", "destination": "code_task_leases", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_task_validation_to_actions", "semantic_id": "relationship.code-task-validation-to-actions", "source": "code_task_validation", "destination": "code_task_actions", "fragment": "model.dsl"},
     {"dsl_identifier": "boss_uses_workspace", "semantic_id": "relationship.boss-uses-workspace", "source": "boss_component", "destination": "workspace_component", "fragment": "model.dsl"},
     {"dsl_identifier": "watchdog_uses_boss", "semantic_id": "relationship.watchdog-uses-boss", "source": "watchdog_component", "destination": "boss_component", "fragment": "model.dsl"}
   ],

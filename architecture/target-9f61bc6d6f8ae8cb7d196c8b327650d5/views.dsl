@@ -51,7 +51,7 @@ custom "cascade-task-code" {
         "cascade.codeComponent" "element.component.task-team"
     }
     include code_task_graph code_task_state code_task_checkpoint code_task_wiring code_task_registry code_task_guard code_task_runtime code_task_provider
-    include code_task_actions code_task_leases code_task_revalidation
+    include code_task_actions code_task_leases code_task_validation code_task_revalidation
     autoLayout lr
 }
 
@@ -117,7 +117,7 @@ custom "cascade-watchdog-code" {
         "cascade.codeComponent" "element.component.watchdog"
     }
     include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish
-    include code_watchdog_authority code_watchdog_recover code_watchdog_capability code_watchdog_reservation code_watchdog_claim code_watchdog_result
+    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_capability code_watchdog_reservation code_watchdog_claim code_watchdog_result
     autoLayout lr
 }
 

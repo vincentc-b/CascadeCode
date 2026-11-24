@@ -10,7 +10,7 @@ Purpose: coordinate cross-tier rollups, Task merges, completion gates, and opera
 comments and review gates under the canonical lifecycle lock. A completed-path
 Feature can still have an open review; document position alone is not forge
 acceptance. [current_feature_obligation](rollup.py) also requires the current
-repair generation's reserved child to be terminal without a live lease, the
+repair generation's reserved or original child to be terminal without a live lease, the
 current approval and dependencies, and either exact accepted review evidence or
 explicit local integration evidence. This predicate runs before the completed
 fast path and its result gates checkout retirement.

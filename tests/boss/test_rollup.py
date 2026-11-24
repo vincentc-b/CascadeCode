@@ -15,7 +15,10 @@ from cascade.boss.rollup import (
 )
 from cascade.comments.store import comment, resolve_comment
 from cascade.feature.mint import mint_task
-from cascade.feature.repair import admit_feature_repair
+from cascade.feature.repair import (
+    admit_feature_repair,
+    mark_feature_repair_delivery_pending,
+)
 from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.types import Event
 from tests.support import add_doc, commit_board, make_repo
@@ -220,6 +223,58 @@ def test_current_repair_generation_fences_old_review_callback(
     assert current_feature_obligation(
         "feat_001", root=root, review_generation=1
     ).satisfied
+
+
+def test_original_repair_task_is_the_current_closeout_child(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    feature = read_doc("feat_001", root=root)
+    feature.meta.approved_at = datetime.now(timezone.utc)
+    write_doc(feature, root=root)
+    add_doc(
+        root,
+        id="task_001",
+        title="Original task",
+        tier="task",
+        status="completed",
+        parent="feat_001",
+    )
+    commit_board(root)
+    admit_feature_repair(
+        "feat_001", "task_001:queued_merge", task_id="task_001", root=root
+    )
+    mark_feature_repair_delivery_pending(
+        "task_001",
+        {
+            "task_id": "task_001",
+            "deliverable_sha": "source",
+            "feature_base_sha": "target",
+        },
+        root=root,
+    )
+    append_event(
+        "feat_001",
+        Event(
+            type="TaskMerged",
+            ts=datetime.now(timezone.utc),
+            payload={"task_id": "task_001", "merge_sha": "delivery"},
+            dest="feat_001",
+        ),
+        root=root,
+    )
+
+    obligation = current_feature_obligation("feat_001", root=root)
+    assert obligation.generation == 1
+    assert obligation.reason == "local integration evidence is missing"
 
 
 def test_on_task_merged_synthesizes_closeout_without_model_action(

@@ -159,6 +159,12 @@ def queue_task_merge(
     # but can never leave an advertised delivery without its queue record.
     # Existing queue files remain a plain list for compatibility.
     _queued_merge_action(task_id, repo, delivery_evidence=delivery_evidence)
+    if delivery_evidence is not None:
+        from cascade.feature.repair import mark_feature_repair_delivery_pending
+
+        mark_feature_repair_delivery_pending(
+            task_id, delivery_evidence, root=repo
+        )
     with process_lock:
         pending = _read(repo)
         if task_id not in pending:

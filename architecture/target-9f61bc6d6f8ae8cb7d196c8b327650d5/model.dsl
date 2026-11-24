@@ -2049,6 +2049,15 @@ code_task_leases = element "execution_lease_is_live" "Function" "Reject reuse wh
     }
 }
 
+code_task_validation = element "swe_run_tests" "Function" "Run scoped pytest and bind a clean committed Task head to its Feature base." {
+    properties {
+        "cascade.semanticId" "element.code.task.validation"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/git_tools.py"
+        "cascade.sourceSymbol" "swe_run_tests"
+    }
+}
+
 code_workspace_resolve_to_registry = code_workspace_resolve -> code_workspace_registry "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-workspace-resolve-to-registry"
@@ -2244,6 +2253,27 @@ code_task_registry_to_actions = code_task_registry -> code_task_actions "Uses" {
 code_task_actions_to_leases = code_task_actions -> code_task_leases "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-task-actions-to-leases"
+    }
+}
+
+code_task_validation_to_actions = code_task_validation -> code_task_actions "Publishes validated delivery to durable action" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-validation-to-actions"
+    }
+}
+
+code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event to the live action and committed active-document introduction." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.repair-authority"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "repair_event_authorizes"
+    }
+}
+
+code_watchdog_authority_to_repair = code_watchdog_authority -> code_watchdog_repair_authority "Checks generation-bound Feature repair" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-authority-to-repair-authority"
     }
 }
 

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+import cascade.feature.repair as repair
 from cascade.board.store import read_doc, write_doc
 from cascade.feature.repair import FeatureRepairError, admit_feature_repair
 from cascade.watchdog.events import append_event, read_events
@@ -81,6 +82,37 @@ def test_replay_is_idempotent_and_changed_approval_is_refused(tmp_path: Path) ->
         admit_feature_repair(
             "feat_001", "delivery:task_001", approval_reference="approval-2", root=root
         )
+
+
+def test_restart_after_authority_append_reuses_one_event_and_action(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _completed_feature(root)
+    real_write = repair._write_payload
+    calls = 0
+
+    def interrupt_after_event(repo: Path, payload: dict) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected authority checkpoint interruption")
+        real_write(repo, payload)
+
+    monkeypatch.setattr(repair, "_write_payload", interrupt_after_event)
+    with pytest.raises(OSError, match="checkpoint interruption"):
+        admit_feature_repair("feat_001", "delivery:task_001", root=root)
+
+    monkeypatch.setattr(repair, "_write_payload", real_write)
+    resumed = admit_feature_repair("feat_001", "delivery:task_001", root=root)
+    replay = admit_feature_repair("feat_001", "delivery:task_001", root=root)
+
+    assert replay["action_id"] == resumed["action_id"]
+    assert replay["generation"] == resumed["generation"] == 1
+    events, _ = read_events("feat_001", 0, root=root)
+    authority = [event for event in events if event.type == "FeatureRepairAuthorized"]
+    assert len(authority) == 1
+    assert authority[0].payload["action_id"] == resumed["action_id"]
 
 
 def test_watchdog_rejects_event_whose_generation_does_not_match_action(

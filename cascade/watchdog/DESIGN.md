@@ -245,8 +245,10 @@ reconciled using their exact token and execution identity; a live process is not
 reclaimed just because time elapsed. Dispatch returns whether execution was
 admitted, not whether the obligation is healthy. The active-path scanner accepts
 `FeatureReadyToPlan` for Features, `TaskDispatched` for Tasks and `EpicActivated`
-for Epics, checking introduction timestamps. It has no operation-specific Feature
-repair receipt. An arbitrary active-path move therefore lacks recovery authority.
+for Epics, checking introduction timestamps. For a generation-bound repair,
+[repair_event_authorizes](../feature/repair.py) joins `FeatureRepairAuthorized`
+to the live action, exact owner/path/ref bindings, and the committed introduction
+blob. An arbitrary active-path move therefore lacks recovery authority.
 
 Verification: [authorization](../../tests/watchdog/test_watchdog.py),
 [audit recovery](../../tests/watchdog/test_audit_recovery.py), and

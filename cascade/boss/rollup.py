@@ -383,18 +383,19 @@ def current_feature_obligation(
         return CurrentFeatureObligation(
             False, generation, "child delivery lease is live"
         )
-    if current.get("reserved_task_id") not in child_ids:
+    obligation_task_id = current.get("reserved_task_id") or current.get("task_id")
+    if obligation_task_id not in child_ids:
         return CurrentFeatureObligation(
-            False, generation, "reserved child is not canonical"
+            False, generation, "repair child is not canonical"
         )
     events, _ = read_events(feature_id, 0, root=repo)
-    reserved_task_id = str(current.get("reserved_task_id"))
+    repair_task_id = str(obligation_task_id)
     if not any(
-        event.type == "TaskMerged" and event.payload.get("task_id") == reserved_task_id
+        event.type == "TaskMerged" and event.payload.get("task_id") == repair_task_id
         for event in events
     ):
         return CurrentFeatureObligation(
-            False, generation, "reserved child lacks exact delivery evidence"
+            False, generation, "repair child lacks exact delivery evidence"
         )
     if _has_open_human_comments(feature_id, resolve_root(root)):
         return CurrentFeatureObligation(
