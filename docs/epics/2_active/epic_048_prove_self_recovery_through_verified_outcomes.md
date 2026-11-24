@@ -197,7 +197,7 @@ Budget policy and extensions must be owned by the approved repository/operator a
 
 ## Core dependencies
 
-Canonical software manifest revision 2 is ready: all 15 entries have current successful read-only verification. The target is explicitly the local Linux x86_64 verification host `ip-172-31-37-14`, runner/repository/worktree `/home/ubuntu/dev/CascadeCode`, host sandbox, runtime `/opt/conda/bin/python3.12`, container digest `not_applicable`. Source editing is confined to the owned integration worktree `.cascade/worktrees/epic_epic_048`; the dependency executor's repository identity is not a deployed-runtime claim.
+Canonical software manifest revision 2 is ready: all 15 entries have current successful read-only verification. The target is explicitly the local Linux x86_64 verification host `ip-172-31-37-14`, runner `ip-172-31-37-14`, repository/worktree `/home/ubuntu/dev/CascadeCode`, host sandbox, runtime `/opt/conda/bin/python3.12`, container digest `not_applicable`. Source editing is confined to the owned integration worktree `.cascade/worktrees/epic_epic_048`; the dependency executor's repository identity is not a deployed-runtime claim.
 
 Verified versions: CPython 3.12.8; PyYAML 6.0.3; cursor-sdk 1.0.37; langgraph 1.2.14; langgraph-checkpoint-sqlite 3.1.1; pytest 9.0.3; setuptools 80.9.0; Playwright 1.64.0; Git 2.34.1; Node 20.20.2; Docker 28.0.0; Codex CLI 0.172.0; gh 2.4.0+dfsg1; Chromium 156.0.8078.4; Structurizr image pinned by `cascade/workspace/c4_render.py` to `sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c`. Exact installed artifact/RECORD hashes and check recipes live in the canonical manifest; installed hashes do not claim upstream package provenance.
 
