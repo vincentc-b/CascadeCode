@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 from cascade.board.errors import NotFound, SchemaError
 from cascade.board.id_reservations import release_work_id
 from cascade.board.paths import slugify
+from cascade.board.parse import render_doc
 from cascade.board.store import allocate_id, list_board, read_doc, write_doc
 from cascade.board.types import WorkDoc, WorkId, WorkMeta
 from cascade.feature.checkout import feature_checkout_root
@@ -15,15 +18,17 @@ from cascade.feature.guard import FeatureToolDenied, tool_guard
 from cascade.feature.registry import register_feature_tool
 from cascade.feature.scoped_docs import feature_read_doc, feature_write_doc
 from cascade.planning_action_dependencies import require_action_dependencies
-from cascade.watchdog import append_event
+from cascade.watchdog import append_event, read_events
 from cascade.watchdog.types import Event
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
+
 
 def mint_task(
     title: str,
     depends_on: list[str] | None = None,
     skills: list[str] | None = None,
     body_stub: str = "",
+    repair_request_id: str | None = None,
     *,
     feature_id: str,
     root: Path,
@@ -43,6 +48,7 @@ def mint_task(
                 depends_on=depends_on,
                 skills=skills,
                 body_stub=body_stub,
+                repair_request_id=repair_request_id,
                 feature_id=feature_id,
                 root=trunk,
             )
@@ -53,6 +59,7 @@ def _mint_task(
     depends_on: list[str] | None = None,
     skills: list[str] | None = None,
     body_stub: str = "",
+    repair_request_id: str | None = None,
     *,
     feature_id: str,
     root: Path,
@@ -61,6 +68,9 @@ def _mint_task(
     checkout = feature_checkout_root(feature_id, trunk=trunk)
     feature = _require_feature(feature_id, trunk)
     _refuse_blocked_feature(feature)
+    repair_action = _mint_repair_action(
+        feature, repair_request_id=repair_request_id, root=trunk
+    )
     from cascade.comments.gate import refusal_if_blocked
 
     if blocked := refusal_if_blocked(feature_id, root=trunk):
@@ -103,13 +113,55 @@ def _mint_task(
         feature.meta,
         epic=epic_doc.meta if epic_doc is not None else None,
     )
-    task_id: WorkId | None = None
-    for _attempt in range(8):
-        candidate = allocate_id("task", merged_board(trunk), parent_id=feature_id)
-        path = checkout / "docs" / "tasks" / "1_backlog" / f"{candidate}_{slugify(title)}.md"
+    request_digest = hashlib.sha256(
+        json.dumps(
+            {
+                "title": title,
+                "depends_on": deps,
+                "skills": [path.as_posix() for path in skill_paths],
+                "body_stub": body_stub,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    reserved_id = (
+        str(repair_action.get("reserved_task_id") or "") if repair_action else ""
+    )
+    task_id: WorkId | None = reserved_id or None
+    doc: WorkDoc | None = None
+    attempts = 1 if reserved_id else 8
+    for _attempt in range(attempts):
+        candidate = task_id or allocate_id(
+            "task", merged_board(trunk), parent_id=feature_id
+        )
+        path = (
+            checkout
+            / "docs"
+            / "tasks"
+            / "1_backlog"
+            / f"{candidate}_{slugify(title)}.md"
+        )
         if not tool_guard(path, "write", feature_id=feature_id, root=trunk):
             release_work_id(candidate)
             raise FeatureToolDenied(f"write denied for {path}")
+
+        existing = list_board(checkout).by_id.get(candidate)
+        if existing is not None:
+            if existing.tier != "task" or existing.parent != feature_id:
+                raise FeatureToolDenied(
+                    f"reserved repair child {candidate} is conflicting"
+                )
+            doc = read_doc(candidate, root=checkout)
+            digest = hashlib.sha256(render_doc(doc).encode("utf-8")).hexdigest()
+            if (
+                repair_action is None
+                or digest != repair_action.get("reserved_task_spec_digest")
+                or request_digest != repair_action.get("reserved_mint_request_digest")
+            ):
+                raise FeatureToolDenied("reserved repair child specification changed")
+            task_id = candidate
+            break
 
         doc = WorkDoc(
             meta=WorkMeta(
@@ -132,7 +184,9 @@ def _mint_task(
                 flex_mode=(
                     feature.meta.flex_mode
                     if feature.meta.flex_mode is not None
-                    else epic_doc.meta.flex_mode if epic_doc is not None else None
+                    else epic_doc.meta.flex_mode
+                    if epic_doc is not None
+                    else None
                 ),
             ),
             body=_task_body(
@@ -144,16 +198,35 @@ def _mint_task(
             ),
             sha=None,
         )
+        spec_digest = hashlib.sha256(render_doc(doc).encode("utf-8")).hexdigest()
+        if repair_action is not None:
+            from cascade.feature.repair import FeatureRepairError, reserve_repair_child
+
+            try:
+                repair_action = reserve_repair_child(
+                    str(repair_action["action_id"]),
+                    task_id=candidate,
+                    spec_digest=spec_digest,
+                    request_digest=request_digest,
+                    root=trunk,
+                )
+            except FeatureRepairError as exc:
+                if not reserved_id:
+                    release_work_id(candidate)
+                raise FeatureToolDenied(str(exc)) from exc
         try:
             write_doc(doc, root=checkout)
             task_id = candidate
             break
         except SchemaError as exc:
+            if repair_action is not None:
+                raise
             release_work_id(candidate)
             if "id collision" not in str(exc):
                 raise
     if task_id is None:
         raise SchemaError("failed to allocate task id after persistence retries")
+    assert doc is not None
 
     from cascade.provider_recovery_waiver import stamp_minted_descendant_waivers
     from cascade.watchdog.model_resolve import resolve_effective_selections
@@ -172,16 +245,26 @@ def _mint_task(
     feature.body = _append_task_breakdown(feature.body, task_id)
     feature_write_doc(feature, feature_id=feature_id, root=trunk)
 
-    append_event(
-        feature_id,
-        Event(
-            type="TasksMinted",
-            ts=datetime.now(timezone.utc),
-            payload={"feature_id": feature_id, "task_ids": [task_id]},
-            dest=feature_id,
-        ),
-        root=trunk,
-    )
+    if repair_action is not None:
+        from cascade.feature.repair import mark_repair_child_persisted
+
+        mark_repair_child_persisted(str(repair_action["action_id"]), root=trunk)
+
+    events, _ = read_events(feature_id, 0, root=trunk)
+    if not any(
+        event.type == "TasksMinted" and task_id in event.payload.get("task_ids", [])
+        for event in events
+    ):
+        append_event(
+            feature_id,
+            Event(
+                type="TasksMinted",
+                ts=datetime.now(timezone.utc),
+                payload={"feature_id": feature_id, "task_ids": [task_id]},
+                dest=feature_id,
+            ),
+            root=trunk,
+        )
     return task_id
 
 
@@ -203,6 +286,30 @@ def _refuse_blocked_feature(feature: WorkDoc) -> None:
         raise FeatureToolDenied(
             f"mint_task refused: feature {feature.meta.id} is blocked awaiting amendment resolution"
         )
+
+
+def _mint_repair_action(
+    feature: WorkDoc, *, repair_request_id: str | None, root: Path
+) -> dict[str, object] | None:
+    """Require the admitted route when the active Feature is a repair generation."""
+
+    marker_present = "<!-- cascade-feature-repair:" in feature.body
+    if feature.meta.status != "active":
+        raise FeatureToolDenied(
+            f"mint_task refused: feature {feature.meta.id} is not active"
+        )
+    if not marker_present and repair_request_id is None:
+        return None
+    if repair_request_id is None:
+        raise FeatureToolDenied(
+            "mint_task refused: current repair generation requires repair_request_id"
+        )
+    from cascade.feature.repair import FeatureRepairError, repair_action_for_mint
+
+    try:
+        return repair_action_for_mint(feature.meta.id, repair_request_id, root=root)
+    except FeatureRepairError as exc:
+        raise FeatureToolDenied(str(exc)) from exc
 
 
 def _validate_skills(skills: list[str], root: Path) -> list[Path]:

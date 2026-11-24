@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
-from cascade.board.store import read_doc
-from cascade.boss.rollup import on_task_merged, try_complete_feature, write_closeout
+import cascade.review as review
+from cascade.board.store import move_doc, read_doc, write_doc
+from cascade.boss.rollup import (
+    current_feature_obligation,
+    on_task_merged,
+    try_complete_feature,
+    write_closeout,
+)
 from cascade.comments.store import comment, resolve_comment
-from cascade.watchdog.events import read_events
-from tests.support import add_doc, make_repo
+from cascade.feature.mint import mint_task
+from cascade.feature.repair import admit_feature_repair
+from cascade.watchdog.events import append_event, read_events
+from cascade.watchdog.types import Event
+from tests.support import add_doc, commit_board, make_repo
 
 
 def _rollup_board(tmp_path: Path) -> Path:
@@ -94,7 +104,9 @@ def test_resolved_human_comment_does_not_block(tmp_path: Path) -> None:
     assert try_complete_feature("feat_001", root=root) is True
 
 
-def test_missing_closeout_is_synthesized_after_all_children_complete(tmp_path: Path) -> None:
+def test_missing_closeout_is_synthesized_after_all_children_complete(
+    tmp_path: Path,
+) -> None:
     root = _rollup_board(tmp_path)
 
     assert try_complete_feature("feat_001", root=root) is True
@@ -142,7 +154,77 @@ def test_child_task_via_parent_only_not_in_children_list(tmp_path: Path) -> None
     assert try_complete_feature("feat_001", root=root) is True
 
 
-def test_on_task_merged_synthesizes_closeout_without_model_action(tmp_path: Path) -> None:
+def test_current_repair_generation_fences_old_review_callback(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    feature = read_doc("feat_001", root=root)
+    feature.meta.approved_at = datetime.now(timezone.utc)
+    write_doc(feature, root=root)
+    commit_board(root)
+    admit_feature_repair("feat_001", "mint:late", root=root)
+
+    assert not current_feature_obligation("feat_001", root=root).satisfied
+    task_id = mint_task(
+        "Late repair",
+        feature_id="feat_001",
+        repair_request_id="mint:late",
+        root=root,
+    )
+    move_doc(task_id, "completed", root=root)
+    append_event(
+        "feat_001",
+        Event(
+            type="TaskMerged",
+            ts=datetime.now(timezone.utc),
+            payload={
+                "task_id": task_id,
+                "feature_id": "feat_001",
+                "merge_sha": "delivery",
+            },
+            dest="feat_001",
+        ),
+        root=root,
+    )
+    review._store_review_generation(
+        root,
+        "feat_001",
+        {
+            "url": "https://example.test/pulls/2",
+            "number": "2",
+            "forge": "github",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_head": "source",
+            "target_head": "target",
+            "draft": False,
+            "closed": False,
+        },
+        generation=1,
+        action_id="feature_repair:feat_001:late",
+    )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    assert not current_feature_obligation(
+        "feat_001", root=root, review_generation=0
+    ).satisfied
+    assert current_feature_obligation(
+        "feat_001", root=root, review_generation=1
+    ).satisfied
+
+
+def test_on_task_merged_synthesizes_closeout_without_model_action(
+    tmp_path: Path,
+) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(

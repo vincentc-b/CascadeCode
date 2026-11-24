@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Mapping
@@ -165,6 +166,187 @@ def resume_feature_repair(
     return feature_repair(
         feature_id, request_id, root=root, operation="resume", **kwargs
     )
+
+
+def repair_action_for_mint(
+    feature_id: str, request_id: str, *, root: Path
+) -> dict[str, Any]:
+    """Return the admitted mint action bound to the current Feature generation.
+
+    Callers hold ``task_lifecycle_lock``.  This deliberately reads the action
+    ledger without acquiring a review-registry lock, preserving the lifecycle
+    lock ordering used by mint and closeout.
+    """
+
+    action_id = _stable_action_id(feature_id, request_id)
+    action = _actions(_read_payload(lifecycle_root(root))).get(action_id)
+    if (
+        action is None
+        or action.get("kind") != "feature_repair"
+        or action.get("feature_id") != feature_id
+        or action.get("task_id") is not None
+        or action.get("phase") not in _ACTIVE_PHASES
+    ):
+        raise FeatureRepairError("mint requires an admitted feature repair action")
+    marker = (
+        f"{_MARKER_PREFIX} action_id={action_id} "
+        f"generation={action.get('generation')} -->"
+    )
+    doc, _ = _current_feature(feature_id, lifecycle_root(root))
+    if doc.meta.status != "active" or marker not in doc.body:
+        raise FeatureRepairError("mint repair generation is not the current Feature")
+    return action
+
+
+def reserve_repair_child(
+    action_id: str,
+    *,
+    task_id: str,
+    spec_digest: str,
+    request_digest: str,
+    root: Path,
+) -> dict[str, Any]:
+    """Persist one child identity and exact spec before either parent write.
+
+    Replaying the same action returns the same reservation.  A changed title,
+    dependency set, backend selection, or other rendered-spec field changes the
+    digest and therefore fails closed instead of allocating another Task.
+    """
+
+    repo = lifecycle_root(root)
+    payload = _read_payload(repo)
+    actions = _actions(payload)
+    action = actions.get(action_id)
+    if action is None or action.get("kind") != "feature_repair":
+        raise FeatureRepairError(
+            "feature repair action disappeared before child reserve"
+        )
+    existing_id = action.get("reserved_task_id")
+    existing_digest = action.get("reserved_task_spec_digest")
+    if existing_id is not None or existing_digest is not None:
+        if (
+            existing_id != task_id
+            or existing_digest != spec_digest
+            or action.get("reserved_mint_request_digest") != request_digest
+        ):
+            raise FeatureRepairError("reserved repair child specification changed")
+        return action
+    action.update(
+        reserved_task_id=task_id,
+        reserved_task_spec_digest=spec_digest,
+        reserved_mint_request_digest=request_digest,
+        phase="delivery_pending",
+        next_action="persist_reserved_task",
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    actions[action_id] = action
+    payload["actions"] = actions
+    _write_payload(repo, payload)
+    return action
+
+
+def mark_repair_child_persisted(action_id: str, *, root: Path) -> None:
+    """Checkpoint both idempotent child writes after canonical readback."""
+
+    repo = lifecycle_root(root)
+    payload = _read_payload(repo)
+    actions = _actions(payload)
+    action = actions.get(action_id)
+    if action is None or action.get("kind") != "feature_repair":
+        raise FeatureRepairError("feature repair action disappeared after child write")
+    action.update(
+        child_persisted=True,
+        phase="delivery_pending",
+        next_action="deliver_reserved_task",
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    actions[action_id] = action
+    payload["actions"] = actions
+    _write_payload(repo, payload)
+
+
+def current_feature_repair_generation(feature_id: str, *, root: Path) -> int:
+    """Return the greatest live repair generation, or zero for ordinary work."""
+
+    try:
+        actions = _actions(_read_payload(lifecycle_root(root)))
+    except ActionRecoveryUnavailable:
+        return 0
+    return max(
+        (
+            int(action.get("generation") or 0)
+            for action in actions.values()
+            if action.get("kind") == "feature_repair"
+            and action.get("feature_id") == feature_id
+            and action.get("phase") in _ACTIVE_PHASES
+        ),
+        default=0,
+    )
+
+
+def current_feature_repair_record(
+    feature_id: str, *, root: Path
+) -> dict[str, Any] | None:
+    """Return a copy of the greatest live repair action for review binding."""
+
+    try:
+        actions = _actions(_read_payload(lifecycle_root(root)))
+    except ActionRecoveryUnavailable:
+        return None
+    candidates = [
+        action
+        for action in actions.values()
+        if action.get("kind") == "feature_repair"
+        and action.get("feature_id") == feature_id
+        and action.get("phase") in _ACTIVE_PHASES
+    ]
+    if not candidates:
+        return None
+    return _copy(max(candidates, key=lambda row: int(row.get("generation") or 0)))
+
+
+def feature_repair_actions(feature_id: str, *, root: Path) -> list[dict[str, Any]]:
+    """Project all generations for closeout while the lifecycle fence is held."""
+
+    try:
+        actions = _actions(_read_payload(lifecycle_root(root)))
+    except ActionRecoveryUnavailable:
+        return []
+    return [
+        _copy(action)
+        for action in actions.values()
+        if action.get("kind") == "feature_repair"
+        and action.get("feature_id") == feature_id
+    ]
+
+
+def mark_feature_repair_verified(
+    feature_id: str, generation: int, *, root: Path
+) -> None:
+    """Make a satisfied generation historical before checkout retirement."""
+
+    repo = lifecycle_root(root)
+    payload = _read_payload(repo)
+    actions = _actions(payload)
+    changed = False
+    for action_id, action in actions.items():
+        if (
+            action.get("kind") == "feature_repair"
+            and action.get("feature_id") == feature_id
+            and int(action.get("generation") or 0) == generation
+        ):
+            action.update(
+                phase="verified",
+                next_action=None,
+                verified_at=datetime.now(timezone.utc).isoformat(),
+                updated_at=datetime.now(timezone.utc).isoformat(),
+            )
+            actions[action_id] = action
+            changed = True
+            break
+    if changed:
+        payload["actions"] = actions
+        _write_payload(repo, payload)
 
 
 def _admit_or_resume(
@@ -458,6 +640,20 @@ def _admission_gates(doc, *, task_id: str | None, root: Path) -> None:
         raise FeatureRepairError("feature repair approval is missing")
     if blocked := refusal_if_blocked(doc.meta.id, root=root, board=board):
         raise FeatureRepairError(blocked)
+    try:
+        owner_root = git_root_for_path(doc.meta.path)
+    except GitError as exc:
+        raise FeatureRepairError("feature repair checkout is unavailable") from exc
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=owner_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if status.returncode != 0 or status.stdout.strip():
+        raise FeatureRepairError("feature repair checkout is dirty or unreadable")
     for dep in doc.meta.depends_on:
         candidate = board.by_id.get(dep)
         if candidate is None or candidate.status != "completed":

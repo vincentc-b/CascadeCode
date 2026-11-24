@@ -41,7 +41,7 @@ custom "cascade-feature-code" {
         "cascade.codeComponent" "element.component.feature-team"
     }
     include code_feature_graph code_feature_state code_feature_checkpoint code_feature_wiring code_feature_registry code_feature_guard code_feature_runtime code_feature_provider
-    include code_feature_mint code_feature_recover code_feature_repair
+    include code_feature_mint code_feature_recover code_feature_repair code_feature_reserve
     autoLayout lr
 }
 
@@ -127,7 +127,7 @@ custom "cascade-boss-code" {
         "cascade.codeComponent" "element.component.boss"
     }
     include code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_feature code_boss_epic
-    include code_boss_evidence code_boss_retire code_boss_review code_boss_reconcile code_boss_lock
+    include code_boss_evidence code_boss_retire code_boss_review code_boss_reconcile code_boss_lock code_boss_obligation code_boss_review_generation
     autoLayout lr
 }
 

@@ -281,7 +281,11 @@ roles. These are linked requirements, not duplicate ownership declarations.
 relationship before delegating recovery. Durable attempts, acknowledgements and
 verified lifecycle results are distinct evidence.
 `REQ-REVIEW-REPAIR-001`: Review acceptance is evidence about a forge review and
-its observed revisions; publication uses the guarded review workflow.
+its observed revisions; publication uses the guarded review workflow. Each
+Feature registry entry retains immutable generation rows and one current
+compatibility projection. Only a callback matching the current generation,
+URL and source/target route can satisfy closeout; historical acceptance remains
+inspectable but cannot approve later repair code.
 `DEC-CASCADE-RECOVERY-001`: Preserve a single local lifecycle authority across
 team adapters, watchdog claims and Boss delivery, with repository-specific state
 resolved through Workspace.
@@ -305,7 +309,11 @@ currently inspects incidents and queues a deduplicated team wakeup.
 adapter. A wakeup does not perform a completed-to-active transaction.
 [review.py::ensure_feature_review](review.py) and
 [reconcile_feature_review_completions](review.py) persist review state and consume
-forge acceptance; they do not encode a general late-repair generation history.
+forge acceptance. Generation rows bind the repair action, forge identity,
+source/target refs and observed heads, accepted merge SHA, publication action and
+reconciliation status. Legacy rows are represented as generation zero; absent
+accepted heads remain unknown rather than being inferred from completed board
+position or a historical URL.
 
 Implementation ownership and integrated Code views are in
 [Workspace](workspace/DESIGN.md#work-ownership-and-retirement),

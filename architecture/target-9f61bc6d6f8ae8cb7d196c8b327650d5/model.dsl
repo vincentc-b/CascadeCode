@@ -1887,6 +1887,24 @@ code_boss_lock = element "task_lifecycle_lock" "Function" "Tracking-root cross-p
     }
 }
 
+code_boss_obligation = element "current_feature_obligation" "Function" "Fence closeout and retirement on the current repair, child delivery, review, and integration evidence." {
+    properties {
+        "cascade.semanticId" "element.code.boss.current-obligation"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/rollup.py"
+        "cascade.sourceSymbol" "current_feature_obligation"
+    }
+}
+
+code_boss_review_generation = element "feature_review_generation" "Function" "Read one immutable Feature review generation while compatibility fields project the current one." {
+    properties {
+        "cascade.semanticId" "element.code.boss.review-generation"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_review_generation"
+    }
+}
+
 code_watchdog_authority = element "_authorized" "Function" "Bind dispatch event to active path introduction." {
     properties {
         "cascade.semanticId" "element.code.watchdog.authority"
@@ -1965,6 +1983,15 @@ code_feature_repair = element "feature_repair" "Function" "Persist and authorize
         "cascade.parent" "element.component.feature-team"
         "cascade.sourcePath" "cascade/feature/repair.py"
         "cascade.sourceSymbol" "feature_repair"
+    }
+}
+
+code_feature_reserve = element "reserve_repair_child" "Function" "Persist the idempotent Task identity and rendered-spec digest before child and parent writes." {
+    properties {
+        "cascade.semanticId" "element.code.feature.reserve-repair-child"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "reserve_repair_child"
     }
 }
 
@@ -2094,6 +2121,18 @@ code_boss_rollup_to_retire = code_boss_feature -> code_boss_retire "Requests clo
     }
 }
 
+code_boss_rollup_to_obligation = code_boss_feature -> code_boss_obligation "Checks current generation" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-rollup-to-current-obligation"
+    }
+}
+
+code_boss_obligation_to_review_generation = code_boss_obligation -> code_boss_review_generation "Reads immutable current evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-obligation-to-review-generation"
+    }
+}
+
 code_boss_reconcile_to_rollup = code_boss_reconcile -> code_boss_feature "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-boss-reconcile-to-rollup"
@@ -2133,6 +2172,12 @@ code_watchdog_recover_to_result = code_watchdog_recover -> code_watchdog_result 
 code_feature_registry_to_mint = code_feature_registry -> code_feature_mint "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-feature-registry-to-mint"
+    }
+}
+
+code_feature_mint_to_reserve = code_feature_mint -> code_feature_reserve "Reserves before persistence" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-mint-to-reserve-repair-child"
     }
 }
 
