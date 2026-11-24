@@ -111,7 +111,7 @@ custom "cascade-agent-code" {
         "cascade.codeComponent" "element.component.agent"
     }
     include code_agent_planning code_agent_preflight code_agent_runner code_agent_turn code_agent_recovery code_agent_recovery_store
-    include code_agent_result code_agent_scoped code_agent_dispatch code_agent_codex code_agent_process code_agent_report code_agent_cancel
+    include code_agent_result code_agent_receipt code_agent_provider_admit code_agent_provider_settle code_agent_scoped code_agent_dispatch code_agent_codex code_agent_process code_agent_report code_agent_cancel
     autoLayout lr
 }
 

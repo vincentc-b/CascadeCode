@@ -1,6 +1,9 @@
 {
   "elements": [
     {"dsl_identifier": "code_agent_result", "semantic_id": "element.code.agent.result", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_agent_receipt", "semantic_id": "element.code.agent.invocation-receipt", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_agent_provider_admit", "semantic_id": "element.code.agent.provider-admit", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_agent_provider_settle", "semantic_id": "element.code.agent.provider-settle", "fragment": "model.dsl"},
     {"dsl_identifier": "code_agent_scoped", "semantic_id": "element.code.agent.scoped", "fragment": "model.dsl"},
     {"dsl_identifier": "code_agent_dispatch", "semantic_id": "element.code.agent.dispatch", "fragment": "model.dsl"},
     {"dsl_identifier": "code_agent_codex", "semantic_id": "element.code.agent.codex", "fragment": "model.dsl"},
@@ -196,6 +199,12 @@
     {"dsl_identifier": "code_agent_codex_to_code_agent_process", "semantic_id": "relationship.code-agent-codex-to-code-agent-process", "fragment": "model.dsl", "source": "code_agent_codex", "destination": "code_agent_process"},
     {"dsl_identifier": "code_agent_runner_to_code_agent_report", "semantic_id": "relationship.code-agent-runner-to-code-agent-report", "fragment": "model.dsl", "source": "code_agent_runner", "destination": "code_agent_report"},
     {"dsl_identifier": "code_agent_runner_to_code_agent_result", "semantic_id": "relationship.code-agent-runner-to-code-agent-result", "fragment": "model.dsl", "source": "code_agent_runner", "destination": "code_agent_result"},
+    {"dsl_identifier": "code_agent_runner_to_code_agent_provider_admit", "semantic_id": "relationship.code-agent-runner-to-provider-admit", "fragment": "model.dsl", "source": "code_agent_runner", "destination": "code_agent_provider_admit"},
+    {"dsl_identifier": "code_agent_runner_to_code_agent_provider_settle", "semantic_id": "relationship.code-agent-runner-to-provider-settle", "fragment": "model.dsl", "source": "code_agent_runner", "destination": "code_agent_provider_settle"},
+    {"dsl_identifier": "code_agent_provider_admit_to_code_task_budget_reserve", "semantic_id": "relationship.code-agent-provider-admit-to-task-budget-reserve", "fragment": "model.dsl", "source": "code_agent_provider_admit", "destination": "code_task_budget_reserve"},
+    {"dsl_identifier": "code_agent_provider_settle_to_code_task_budget_settle", "semantic_id": "relationship.code-agent-provider-settle-to-task-budget-settle", "fragment": "model.dsl", "source": "code_agent_provider_settle", "destination": "code_task_budget_settle"},
+    {"dsl_identifier": "code_agent_result_to_code_agent_receipt", "semantic_id": "relationship.code-agent-result-to-invocation-receipt", "fragment": "model.dsl", "source": "code_agent_result", "destination": "code_agent_receipt"},
+    {"dsl_identifier": "agent_uses_task_budget", "semantic_id": "relationship.agent-uses-task-budget", "fragment": "model.dsl", "source": "agent_component", "destination": "task_team"},
     {"dsl_identifier": "code_agent_report_to_code_agent_result", "semantic_id": "relationship.code-agent-report-to-code-agent-result", "fragment": "model.dsl", "source": "code_agent_report", "destination": "code_agent_result"},
     {"dsl_identifier": "code_agent_cancel_to_code_agent_process", "semantic_id": "relationship.code-agent-cancel-to-code-agent-process", "fragment": "model.dsl", "source": "code_agent_cancel", "destination": "code_agent_process"},
     {"dsl_identifier": "code_teams_publication_to_code_teams_validate_publish", "semantic_id": "relationship.code-teams-publication-to-code-teams-validate-publish", "fragment": "model.dsl", "source": "code_teams_publication", "destination": "code_teams_validate_publish"},

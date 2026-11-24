@@ -34,6 +34,15 @@ class ProviderNotImplementedError(Exception):
     """Backend dispatch is not implemented yet."""
 
 
+class ProviderBudgetRefusedError(Exception):
+    """The canonical incident ledger refused a provider invocation."""
+
+    def __init__(self, state: str, reason: str) -> None:
+        self.state = state
+        self.reason = reason
+        super().__init__(f"provider turn budget refused ({state}: {reason})")
+
+
 class ProviderCliError(Exception):
     """CLI argv, probe, or subprocess setup failure before a turn executes."""
 
