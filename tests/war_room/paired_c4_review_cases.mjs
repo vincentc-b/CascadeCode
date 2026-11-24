@@ -11,12 +11,39 @@ const {
   createPairedNavigation,
   parentViews,
   createSemanticThreadModel,
-  initPairedC4Review,
+  initPairedC4Review: initReview,
   renderUnifiedDiff,
   sortedDrillChoices,
 } = require(
   join(repoRoot, "cascade/war_room/static/plan_viewer.js")
 );
+
+// Semantic projections and a derived comparison SVG are supplied by the server.
+function withCombined(payload) {
+  return {...payload, views: (payload.views || []).map(view => {
+    if (view.combined) return view;
+    const before = view.current?.targets || [], after = view.proposed?.targets || [];
+    const keys = new Set([...before, ...after].map(t => t.kind + "\0" + t.semantic_id));
+    const targets = [...keys].map(key => {
+      const old = before.find(t => t.kind + "\0" + t.semantic_id === key);
+      const next = after.find(t => t.kind + "\0" + t.semantic_id === key);
+      const chosen = next || old;
+      return {...chosen, selection_id: chosen.semantic_id, source_side: next ? "proposed" : "current",
+        before: old || null, after: next || null};
+    });
+    const source = view.proposed || view.current;
+    return {...view, combined: source && {...source, targets,
+      revision: [view.current?.revision, view.proposed?.revision].join(":"),
+    }};
+  })};
+}
+function initPairedC4Review(payload, options = {}) {
+  const wrapped = {...options};
+  for (const key of ["refreshPayload", "loadDraft"]) {
+    if (options[key]) wrapped[key] = () => Promise.resolve(options[key]()).then(withCombined);
+  }
+  return initReview(withCombined(payload), wrapped);
+}
 
 function target(kind, semanticId, drillViewKey, drillLevel) {
   return {
@@ -378,8 +405,8 @@ assert.ok(descendants(documentDiff).some((node) => node.className === "review-di
 initPairedC4Review(payload, { document, host: readyHost });
 const readyText = descendants(readyHost).map((node) => node.textContent);
 assert.ok(readyText.includes("3 affected views"), "proposal summary stays adjacent to the pair");
-assert.ok(readyText.includes("docs-a @ " + "a".repeat(40)));
-assert.ok(readyText.includes("docs-b @ " + "b".repeat(40)));
+assert.ok(readyText.includes("current: docs-a @ " + "a".repeat(40)));
+assert.ok(readyText.includes("proposed: docs-b @ " + "b".repeat(40)));
 assert.ok(readyText.includes("REQ-7"));
 assert.ok(readyText.includes("ADR-4"));
 assert.ok(readyText.includes("git:model-a..model-b"));
@@ -812,30 +839,44 @@ function diagramSvg(name) {
 function viewportControl(name, label) {
   descendants(diagramCard(name)).find(node => node.textContent === label).click();
 }
-const fittedBox = diagramSvg("current").getAttribute("viewBox");
-viewportControl("current", "Zoom in");
-let currentSvg = diagramSvg("current");
+const fittedBox = diagramSvg("combined").getAttribute("viewBox");
+viewportControl("combined", "Zoom in");
+let currentSvg = diagramSvg("combined");
 currentSvg.dispatchEvent({ type: "pointerdown", button: 0, clientX: 10, clientY: 10 });
 currentSvg.dispatchEvent({ type: "pointermove", clientX: 90, clientY: 50 });
 currentSvg.dispatchEvent({ type: "pointerup" });
 const pannedBox = currentSvg.getAttribute("viewBox");
-viewportControl("proposed", "Zoom out");
-const proposedBox = diagramSvg("proposed").getAttribute("viewBox");
 assert.notEqual(pannedBox, fittedBox);
 await viewportReview.refresh();
-assert.equal(diagramSvg("current").getAttribute("viewBox"), pannedBox);
-assert.equal(diagramSvg("proposed").getAttribute("viewBox"), proposedBox);
+assert.equal(diagramSvg("combined").getAttribute("viewBox"), pannedBox);
 // Consecutive renders before SVG installation must not erase saved state.
 viewportReview.render();
 viewportReview.render();
 await settle();
-assert.equal(diagramSvg("current").getAttribute("viewBox"), pannedBox);
-viewportControl("current", "Fit");
+assert.equal(diagramSvg("combined").getAttribute("viewBox"), pannedBox);
+viewportControl("combined", "Fit");
 await viewportReview.refresh();
-assert.equal(diagramSvg("current").getAttribute("viewBox"), fittedBox);
-assert.equal(diagramSvg("proposed").getAttribute("viewBox"), proposedBox);
+assert.equal(diagramSvg("combined").getAttribute("viewBox"), fittedBox);
 viewportPayload.views[0].proposed.revision = "new-proposal";
 await viewportReview.refresh();
-assert.equal(diagramSvg("proposed").getAttribute("viewBox"), fittedBox,
+assert.equal(diagramSvg("combined").getAttribute("viewBox"), fittedBox,
   "a different pinned diagram starts fitted instead of inheriting old coordinates");
 viewportReview.stopRefresh();
+
+
+// Landscape is optional, not a parent level or the default entry point.
+const optionalLandscape = {
+  key: "landscape", level: "systemLandscapeViews", state: "changed",
+  ...hierarchyPair([target("element", "system", "overview", "systemContextViews")]),
+};
+const withLandscape = {...changePath, views: [optionalLandscape, ...changePath.views]};
+const contextEntry = createPairedNavigation(withLandscape);
+assert.equal(contextEntry.currentView().key, "overview");
+assert.deepEqual(parentViews(contextEntry.views, contextEntry.currentView()), []);
+assert.equal(contextEntry.showView("landscape", "systemLandscapeViews").ok, true);
+contextEntry.updatePayload(withLandscape);
+assert.equal(contextEntry.currentView().key, "landscape", "refresh preserves an explicit overview selection");
+assert.equal(createPairedNavigation({views: [optionalLandscape]}).currentView().key, "landscape",
+  "a landscape-only model remains usable");
+assert.equal(createPairedNavigation({views: [optionalLandscape, changePath.views[2]]}).currentView().key,
+  "containers", "missing context falls back to an available detail view");

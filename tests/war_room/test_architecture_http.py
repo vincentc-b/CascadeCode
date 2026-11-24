@@ -222,12 +222,16 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
         output.mkdir(exist_ok=True)
         element = closure.contract.elements[0]
         view = closure.contract.views[0]
+        landscape = closure.contract.views[1]
         workspace = {
             "model": {"softwareSystems": [{
                 "id": "1", "name": "System",
                 "properties": {"cascade.semanticId": element.semantic_id},
             }]},
-            "views": {"systemContextViews": [{"key": view.key, "softwareSystemId": "1"}]},
+            "views": {
+                "systemLandscapeViews": [{"key": landscape.key}],
+                "systemContextViews": [{"key": view.key, "softwareSystemId": "1"}],
+            },
         }
         workspace["model"]["softwareSystems"][0]["containers"] = [{
             "id": "2", "properties": {"cascade.semanticId": "element.container.supervisor"},
@@ -254,16 +258,16 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
             "interactive": True,
             "source_diff_reference": "pinned:test",
             "views": [{
-                "view_key": view.key,
+                "view_key": rendered_key,
                 "svg": svg.name,
                 "targets": [{
-                    "view_key": view.key,
+                    "view_key": rendered_key,
                     "renderer_node_id": "node-1",
                     "kind": "element",
                     "export_id": "1",
                     "semantic_id": element.semantic_id,
                 }],
-            }],
+            } for rendered_key in (landscape.key, view.key)],
         }), encoding="utf-8")
         return Result(C4RenderArtifact(
             status="ready",
@@ -274,7 +278,7 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
             svg_files=(svg,),
             binding_manifest=manifest,
             interactive=True,
-            view_keys=(view.key,),
+            view_keys=(landscape.key, view.key),
             revision=closure.revision,
         ))
 
@@ -294,21 +298,24 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
             payload = json.loads(raw)
             time.sleep(0.02)
         assert payload["state"] == "ready"
-        assert payload["views"][0]["level"] == "systemContextViews"
+        assert payload["views"][0]["level"] == "systemLandscapeViews"
+        context_view = payload["views"][1]
+        assert context_view["level"] == "systemContextViews"
+        assert payload["initial_view"]["level"] == "systemContextViews"
         target = next(row for row in payload["targets"] if row["semantic_id"] == "element.person.operator")
         assert target["semantic_id"]
-        assert target["drill_choices"][0]["view_key"] == payload["views"][0]["key"]
-        assert target["drill_choices"][0]["scope_id"] == target["semantic_id"]
+        assert target["drill_choices"][1]["view_key"] == context_view["key"]
+        assert target["drill_choices"][1]["scope_id"] == target["semantic_id"]
 
-        status, svg_body, headers = _get(base + payload["views"][0]["artifact_url"])
+        status, svg_body, headers = _get(base + context_view["artifact_url"])
         assert status == 200
         assert b"data-cascade-semantic-id" in svg_body
         assert headers["ETag"].startswith('"')
 
         context_url = (
             base + f"/api/architecture/snapshots/{snapshot_id}/context"
-            f"?view={payload['views'][0]['key']}"
-            f"&level={payload['views'][0]['level']}"
+            f"?view={context_view['key']}"
+            f"&level={context_view['level']}"
         )
         status, raw, _headers = _get(context_url)
         assert status == 200

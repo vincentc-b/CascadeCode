@@ -91,20 +91,25 @@ def plan_comparison(root: Path, work_id: str) -> dict:
             paths[side] = {p for p in _git(owner.path, "ls-tree", "-r", "--name-only", rev).splitlines()
                            if p == "DESIGN.md" or p.endswith("/DESIGN.md")}
         designs = []
+        design_tree = []
         total = 0
         for path in sorted(paths["current"] | paths["proposed"]):
             before = _blob(owner.path, base, path) if path in paths["current"] else ""
             after = _blob(owner.path, revision, path) if path in paths["proposed"] else ""
-            if before == after:
+            state = ("added" if path not in paths["current"] else
+                     "removed" if path not in paths["proposed"] else
+                     "changed" if before != after else "unchanged")
+            design_tree.append({"path": path, "state": state})
+            if state == "unchanged":
                 continue
             total += len(before.encode()) + len(after.encode())
             if total > MAX_TEXT_BYTES:
                 raise ValueError("Design comparison exceeds 2 MiB")
-            designs.append(compare_document(path, before, after))
+            designs.append({**compare_document(path, before, after), "state": state})
         return {"state": "draft", "owner_work_id": owner.work_id,
                 "current_revision": base, "proposed_revision": revision,
                 "message": "Committed branch preview · current is the branch base; proposed is the latest commit. Publication and approval are separate.",
-                "plan": plans, "designs": designs}
+                "plan": plans, "designs": designs, "design_tree": design_tree}
     except (ValueError, OSError, BoardError) as exc:
         return {"state": "unavailable", "message": str(exc), "designs": []}
 
@@ -170,6 +175,37 @@ def project_target_changes(diff) -> dict[str, str]:
         if item.previous_semantic_id:
             changes[item.previous_semantic_id] = changes[item.semantic_id]
     return changes
+
+
+def comparison_metadata(artifact) -> dict[str, dict]:
+    """Expose pinned semantic attributes for before/after inspection."""
+    from cascade.workspace.c4_review import _read_semantic_workspace, _semantic_targets
+    workspace = _read_semantic_workspace(artifact)
+    identities = _semantic_targets(workspace)
+    result = {}
+    def visit(value, kind=None):
+        if isinstance(value, list):
+            for item in value:
+                visit(item, kind)
+        elif isinstance(value, dict):
+            semantic_id = value.get('properties', {}).get('cascade.semanticId')
+            if semantic_id in identities:
+                result[semantic_id] = {
+                    'type': {'people': 'Person', 'softwareSystems': 'Software system',
+                             'containers': 'Container', 'components': 'Component',
+                             'customElements': 'Code element', 'relationships': 'Relationship'}.get(kind, kind),
+                    'description': value.get('description', ''),
+                    'technology': value.get('technology', ''),
+                    'tags': value.get('tags', ''), 'url': value.get('url', ''),
+                    'parent': identities[semantic_id].parent,
+                    'properties': {key: item for key, item in value.get('properties', {}).items()
+                                   if not key.startswith('structurizr.')},
+                }
+            for key, child in value.items():
+                if key != 'properties':
+                    visit(child, key if isinstance(child, list) else kind)
+    visit(workspace['model'])
+    return result
 
 
 def draft_diagrams(root: Path, work_id: str, *, scheduler=None, snapshot_ids=None) -> dict:
@@ -254,6 +290,7 @@ def draft_diagrams(root: Path, work_id: str, *, scheduler=None, snapshot_ids=Non
             payload.update(state="invalid_artifact", summary=diff.error)
             return payload
         changes = project_target_changes(diff)
+        metadata = {side: comparison_metadata(artifact) for side, artifact in artifacts.items()}
         view_changes = {item.key: item.state for item in diff.views}
         keyed = {side: {(v["key"], v["level"]): v for v in p["views"]}
                  for side, p in projections.items()}
@@ -264,7 +301,7 @@ def draft_diagrams(root: Path, work_id: str, *, scheduler=None, snapshot_ids=Non
                 view[side] = None
                 view[side + "_state"] = "present" if item else "absent"
                 if item:
-                    targets = [{**t, "state": changes.get(t["semantic_id"], "unchanged")}
+                    targets = [{**t, **metadata[side].get(t["semantic_id"], {}), "state": changes.get(t["semantic_id"], "unchanged")}
                                for t in projections[side]["targets"] if t["semantic_id"] in item["target_ids"]]
                     view[side] = {"repository_key": selected.context.repository_key,
                                   "revision": rev, "svg": item["artifact_url"], "targets": targets}
@@ -280,4 +317,8 @@ def draft_diagrams(root: Path, work_id: str, *, scheduler=None, snapshot_ids=Non
         payload["changed_views"] = [[v["key"], v["level"]] for v in changed]
         payload["state"] = "ready" if payload["views"] else "missing_model"
         payload["summary"] += " " + diff.summary
+        from cascade.workspace.c4_comparison import attach_comparison
+        attach_comparison(payload, store.scheduler, renames={
+            item.previous_semantic_id: item.semantic_id for item in diff.identities if item.previous_semantic_id
+        })
         return payload

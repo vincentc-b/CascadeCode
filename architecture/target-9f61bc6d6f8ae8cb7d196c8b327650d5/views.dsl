@@ -64,6 +64,30 @@ custom "cascade-teams-code" {
     autoLayout lr
 }
 
+component war_room "cascade-war-room-components" {
+    title "War Room — diagram review"
+    include *
+    autoLayout lr
+}
+
+custom "cascade-diagram-review-code" {
+    title "Diagram comparison — Code"
+    properties {
+        "cascade.codeComponent" "element.component.diagram-review"
+    }
+    include code_review_pair code_review_navigation code_review_svg code_review_preview code_review_union code_review_documents code_review_document_body code_review_document_changes
+    autoLayout lr
+}
+
+custom "cascade-comparison-render-code" {
+    title "Combined comparison rendering — Code"
+    properties {
+        "cascade.codeComponent" "element.component.workspace"
+    }
+    include code_review_union code_review_layout code_review_scheduler
+    autoLayout lr
+}
+
 custom "cascade-workspace-code" {
     title "Workspace — Code"
     properties {

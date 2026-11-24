@@ -126,9 +126,15 @@ first. The source board is acquired lazily once per reconciliation call.
 ## Architecture navigation
 
 The authoritative [C4 source](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl)
-defines landscape, context, containers, supervisor components, and a focused
-`cascade-team-components` view. Static C4 describes boundaries; the owning
-designs below contain implementation and behavior.
+defines landscape, context, containers, supervisor components, a focused
+`cascade-team-components` view, and `cascade-war-room-components` for diagram
+review. The `cascade-diagram-review-code` and `cascade-comparison-render-code`
+views connect module design comparisons and review presentation to bounded C4
+rendering. Static C4 describes boundaries; the owning designs below contain
+implementation and behavior. Interactive exploration starts
+at context and follows containers → components → Code; landscape is an optional
+overview outside that level hierarchy. The navigation contract is owned by
+[War Room](war_room/DESIGN.md#integrated-c4-exploration-and-source-inspection).
 
 | Component | Implementation design |
 |---|---|
@@ -259,6 +265,10 @@ The [War Room](war_room/DESIGN.md#integrated-c4-exploration-and-source-inspectio
 owns fourth-level navigation, pinned source previews and browser interaction.
 [Workspace](workspace/DESIGN.md#c4-code-model-and-rendering-contract) owns
 semantic scope, validation, bounded rendering and historical snapshot identity.
+The plan page's [single-diagram comparison](war_room/DESIGN.md#single-diagram-architecture-differences)
+uses Workspace's [derived comparison artifacts](workspace/DESIGN.md#derived-comparison-rendering);
+these display changes across two pinned revisions without replacing either
+revision's authored model or its acceptance evidence.
 [Watchdog role skills](watchdog/DESIGN.md#architecture-authoring-skill-delivery)
 provide the authoring contract to planning, implementation and completion-review
 roles. These are linked requirements, not duplicate ownership declarations.

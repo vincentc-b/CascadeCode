@@ -24,6 +24,8 @@ def test_draft_keeps_full_context_and_all_designs_across_multiple_commits(tmp_pa
     (root / 'DESIGN.md').write_text('# Existing design\n\nUnchanged context.\n')
     (root / 'old').mkdir()
     (root / 'old/DESIGN.md').write_text('Retired component\n')
+    (root / 'stable').mkdir()
+    (root / 'stable/DESIGN.md').write_text('Stable design\n')
     base = commit(root, 'baseline')
     # A registered owner is sufficient; no architecture publication is created.
     save_registry(root, [IntegrationWorktree('epic', 'epic_001', git(root, 'branch', '--show-current'), root, base)])
@@ -52,6 +54,10 @@ def test_draft_keeps_full_context_and_all_designs_across_multiple_commits(tmp_pa
     assert designs['new/DESIGN.md']['current'] == ''
     assert designs['old/DESIGN.md']['proposed'] == ''
     assert designs['DESIGN.md']['added_lines'] == [4, 5]
+    assert {row['path']: row['state'] for row in result['design_tree']} == {
+        'DESIGN.md': 'changed', 'new/DESIGN.md': 'added',
+        'old/DESIGN.md': 'removed', 'stable/DESIGN.md': 'unchanged',
+    }
 
 
 def test_undispatched_feature_uses_owning_epic_branch(tmp_path):
@@ -214,3 +220,27 @@ def test_project_target_colors_cover_both_sides_renames_and_moves():
     assert colors['old-id'] == colors['new-id'] == 'changed'
     assert colors['moved'] == 'changed'
     assert colors['stable'] == 'unchanged'
+
+
+def test_comparison_metadata_exposes_pinned_semantic_details(tmp_path):
+    import hashlib
+    import json
+    from types import SimpleNamespace
+    from cascade.war_room.plan_comparison import comparison_metadata
+    workspace = {'model': {'softwareSystems': [{
+        'id': '1', 'name': 'Project', 'properties': {'cascade.semanticId': 'element.project'},
+        'containers': [{'id': '2', 'name': 'Service', 'description': 'Runs jobs',
+                        'technology': 'Python', 'tags': 'Worker',
+                        'properties': {'cascade.semanticId': 'element.service', 'decision': 'local'}}],
+    }]}}
+    path = tmp_path / 'workspace.json'
+    raw = json.dumps(workspace).encode()
+    path.write_bytes(raw)
+    artifact = SimpleNamespace(render=SimpleNamespace(
+        semantic_workspace=path, semantic_workspace_sha256=hashlib.sha256(raw).hexdigest()))
+    metadata = comparison_metadata(artifact)['element.service']
+    assert metadata['type'] == 'Container'
+    assert metadata['parent'] == 'element.project'
+    assert metadata['description'] == 'Runs jobs'
+    assert metadata['technology'] == 'Python'
+    assert metadata['properties']['decision'] == 'local'

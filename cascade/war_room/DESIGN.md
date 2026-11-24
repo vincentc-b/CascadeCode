@@ -158,14 +158,18 @@ verify owner-lineage and exact-revision enforcement.
 ## Integrated C4 exploration and source inspection
 
 - `REQ-WARROOM-C4-001`: Operators can navigate system context → containers →
-  components → authored Code views through verified semantic targets. Explore
+  components → authored Code views through verified semantic targets. Both branch
+  browsing and comparison review start at system context when one is available;
+  explicit view selections and deep links take precedence. Landscape is an
+  optional overview in the view selector, not a parent level: Level up stops at
+  context and never returns a landscape. If context is absent, choose an available
+  non-landscape view, falling back to landscape for landscape-only models. Explore
   opens the broadest available next-level view directly; the view selector retains
-  focused alternatives. In paired review, automatic drill-down requires a
+  focused alternatives. In comparison review, Explore requires a
   unique same-level destination whose target set contains all alternatives
-  when there are multiple choices; otherwise
-  a named chooser is scrolled into view and focused, with Escape to dismiss.
+  when there are multiple choices; otherwise a named chooser is scrolled into view and focused, with Escape to dismiss.
   Referencing an element in another view does not imply that the view expands
-  it. Paired Level up prefers the verified originating parent from navigation
+  it. Comparison Level up prefers the verified originating parent from navigation
   history, then the broadest nearest parent when there is no origin;
   browser history and deep links restore snapshot, view, level and selection.
 - `REQ-WARROOM-C4-002`: Selecting a code element exposes its source path and
@@ -175,8 +179,8 @@ verify owner-lineage and exact-revision enforcement.
   IDs fail rather than accepting caller-supplied paths.
 - `REQ-WARROOM-C4-003`: Repeated navigation reuses immutable SVG responses and
   the bounded browser SVG cache. Selecting an element preserves the existing SVG
-  and zoom in the branch browser. Paired review rebuilds preserve independent
-  zoom and pan for each unchanged pinned diagram across background refresh,
+  and zoom in the branch browser. Comparison rebuilds preserve
+  zoom and pan for each unchanged pinned combined diagram across background refresh,
   selection, discussion updates and consecutive renders before SVG loading
   completes. Fit explicitly resets that diagram; a new diagram identity starts
   fitted. Destroyed viewers cannot install late responses. Implementation
@@ -199,18 +203,18 @@ Rendering and identity guarantees belong to
 
 Verification: [HTTP tests](../../tests/war_room/test_architecture_http.py),
 [tab tests](../../tests/war_room/test_architecture_tab_ui.py), and
-[paired-view navigation](../../tests/war_room/paired_c4_review_cases.mjs).
+[comparison navigation](../../tests/war_room/paired_c4_review_cases.mjs).
 The authored team views are in the repository
 [view inventory](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
 
 
-`DEC-WARROOM-C4-002`: Paired review saves each viewer's viewBox before replacing
+`DEC-WARROOM-C4-002`: The comparison saves its viewer's viewBox before replacing
 its DOM and destroys the discarded viewer. The restoration key includes side,
 view key/level, repository, revision and SVG reference. At most 32 saved entries
 are retained for the review instance; a pending viewer with no viewBox does not
-overwrite saved coordinates. This fixes the epic_047 finding: the default
-15-second background refresh rebuilt the viewers and implicitly returned them
-to Fit. Viewport state is local presentation state, not review evidence.
+overwrite saved coordinates. The default 15-second background refresh must not
+reset the viewport to Fit. Viewport state is local presentation state, not review
+evidence.
 
 ## Committed planning comparisons and project previews
 
@@ -221,11 +225,17 @@ to Fit. Viewport state is local presentation state, not review evidence.
   uncommitted proposed plan produce an unavailable result. The plan comparison
   excludes frontmatter; design comparison includes every changed DESIGN.md,
   including additions and removals, with full unchanged context on both sides.
-- `REQ-WARROOM-COMPARE-002`: The Work tab initially shows the plan alone. When an
+- `REQ-WARROOM-COMPARE-002`: The Work tab (labeled Epic / feature / task)
+  initially shows the plan alone. When an
   original brief exists, the operator can reveal its comparison and revision
-  labels. The Design tab presents changed documents with rendered block
-  highlighting; narrow screens stack the two sides. C4 uses the full review
-  width, while contextual documentation belongs in the Design tab.
+  labels. The Design tab (labeled DESIGN.md changes) presents documents with rendered block
+  highlighting. A directory tree includes unchanged design owners as context;
+  only changed documents are selectable, with green additions, amber changes
+  and red removals. Each side offers previous/next changed-block navigation
+  with a position indicator; narrow screens stack the tree and two sides.
+  Comparisons include integrated task/feature commits regardless of author,
+  but exclude uncommitted edits and work not yet integrated into the owner branch.
+  C4 uses the full review width, while contextual documentation belongs in the Design tab.
 - `REQ-WARROOM-COMPARE-003`: Opening C4 requests the current project integration
   revision versus the expected project after applying the selected committed
   proposal. Work already integrated into the project must remain in the preview.
@@ -239,11 +249,13 @@ to Fit. Viewport state is local presentation state, not review evidence.
   publication responses or failures cannot replace it with publication data or
   an empty accepted baseline. Failed preview loads remain visible and retry via
   the project loader. Uncommitted source changes are excluded.
-- `REQ-WARROOM-COMPARE-005`: Current-side removals are red, proposed additions
-  green, and semantic edits amber on both sides, including reviewed renames and
-  containment moves. Selection/focus remains visible without hiding the change
-  color. Relationships use native SVG strokes. Dashed amber signals changes in
-  deeper verified views without reclassifying an unchanged parent as edited.
+- `REQ-WARROOM-COMPARE-005`: One diagram contains the union of both revisions:
+  removals are red, additions green, semantic edits amber, and unchanged targets
+  remain as context. Reviewed renames remain one changed target. A rewired
+  relationship shows its old connection in red and new connection in green.
+  Selection/focus remains visible without hiding change color; relationships use
+  native SVG strokes. Dashed amber signals changes in deeper verified views
+  without reclassifying an unchanged parent as edited.
 
 `DEC-WARROOM-COMPARE-001`: [plan_comparison.py](plan_comparison.py) resolves Git
 inputs on the server. Document comparisons use the registered branch base;
@@ -252,16 +264,41 @@ These baselines answer different review questions. A private temporary index and
 worktree perform a three-way merge; a deterministic commit object pins divergent
 projections without moving a branch. Ancestor cases reuse the appropriate commit.
 Git document reads have a 10-second timeout and 2 MiB output cap; changed design
-text has a cumulative 2 MiB cap. Projection Git operations have 30-second timeouts.
+text has a cumulative 2 MiB cap. The `design_tree` inventory covers the union of
+both revisions' design paths, including unchanged documents. File presence
+classifies additions and removals independently of empty content. The browser
+builds ancestor directories from those paths and renders only the selected
+changed document. `renderDocumentComparison` highlights rendered blocks;
+`appendChangeNavigation` installs per-side controls after Markdown rendering,
+wraps at each end and focuses the target without changing the pinned revisions.
+Selection survives review rerenders while its document remains changed.
+Projection Git operations have 30-second timeouts.
+
+```mermaid
+sequenceDiagram
+    participant UI as Design tab
+    participant API as Document API
+    participant Git as Registered owner branch
+    UI->>API: Load work document and comparison
+    API->>Git: Read base and committed HEAD
+    alt Revisions unavailable or read limit exceeded
+        API-->>UI: Explicit unavailable comparison
+    else Comparison available
+        API-->>UI: Design path inventory and changed document bodies
+        UI->>UI: Build directory tree; select changed module
+        UI->>UI: Render both sides and highlight changed blocks
+        UI->>UI: Previous/next focuses a highlighted block
+    end
+```
 
 `DEC-WARROOM-COMPARE-002`: `POST /api/architecture/plan-preview` accepts a work ID
 and optionally the current/proposed opaque snapshot IDs. Server-resolved context,
 shared projection evidence and ancestor checks bind the pair to its project and
 proposal. It delegates rendering to the bounded snapshot scheduler. Draft payloads
-have no approval context or reviewed tuple. The staged epic_047 publication in
-[review-units.json](../../architecture/review-units.json) retains its original
-empty accepted baseline and pinned references; it is separate from the project
-comparison and does not establish acceptance of these working-tree edits.
+have no approval context or reviewed tuple. Staged publications in
+[review-units.json](../../architecture/review-units.json) retain their original
+accepted baselines and pinned references; the project comparison does not
+rewrite publication evidence or establish acceptance of working-tree edits.
 
 `DEC-WARROOM-COMPARE-003`: Semantic target classification is shared across both
 sides, with previous IDs inheriting reviewed rename state. Descendant-change
@@ -270,9 +307,70 @@ installation removes exported inline pixel dimensions so the container controls
 SVG sizing while the viewBox controls zoom, pan and Fit.
 
 Verification: [comparison tests](../../tests/war_room/test_plan_comparison.py)
-cover ownership, multi-commit document context, project integration, conflicts and
-pinned polling; [paired review scenarios](../../tests/war_room/paired_c4_review_cases.mjs)
+cover ownership, multi-commit document context, design inventory, project integration,
+conflicts and pinned polling; [design browser scenarios](../../tests/war_room/test_design_tree_browser.py)
+cover module selection, unchanged context, additions/removals, change navigation
+and narrow screens; [comparison review scenarios](../../tests/war_room/paired_c4_review_cases.mjs)
 cover navigation, descendant markers and zoom/pan restoration, including explicit
 Fit and revision changes. [Chromium scenarios](../../tests/war_room/test_project_c4_colors.py)
 cover semantic colors, responsive SVG sizing, drill/parent choices and publication
-versus project-preview races. These fixtures do not claim live epic_047 acceptance.
+versus project-preview races. These fixtures do not claim live deployment acceptance.
+
+
+## Single-diagram architecture differences
+
+`REQ-WARROOM-C4-004`: The comparison uses one canvas with Zoom in, Zoom out and
+Fit. It has no linked-view preference or alternate two-pane mode. All targets in
+either revision's selected view remain inspectable, including removed views.
+Clicking an expandable element (or pressing Enter/Space) opens its verified deeper
+view, using the destination chooser when ambiguous. Clicking a leaf or relationship
+selects it and exposes before/after semantic attributes, identity, parent, relationship
+endpoints and available source metadata; absence is explicit. The Semantic targets
+list allows inspection of expandable elements without navigation. Explore selected
+element also opens verified deeper views from the inspection panel.
+Removed targets navigate using current evidence, and surviving/new targets use
+proposed evidence. An unavailable combined render shows pending/failure status,
+never a proposed-only diagram that would hide removals.
+
+`DEC-WARROOM-C4-003`: [initPairedC4Review](static/plan_viewer.js) retains its API
+name and underlying two-revision navigation/review evidence, but creates only one
+[createSemanticC4Viewer](static/plan_viewer.js). The display graph is a derived
+comparison artifact, not either revision's actual architecture. It uses a fresh
+layout of the union, with C4 element types as labels. Parent/containment changes
+are inspected in before/after details rather than presenting conflicting parent
+hierarchies as one real hierarchy. This avoids maintaining viewport alignment
+between independently laid-out revisions. Rendering belongs to
+[the workspace comparison contract](../workspace/DESIGN.md#derived-comparison-rendering).
+
+The authoritative [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+expose `cascade-war-room-components`, `cascade-diagram-review-code` and
+`cascade-comparison-render-code`. The diagram-review component coordinates the
+browser and project-preview endpoint; Workspace owns derived graph construction
+and bounded rendering. These responsibilities remain inside the existing runtime
+and repository boundaries.
+
+```mermaid
+sequenceDiagram
+    participant UI as Comparison page
+    participant API as Project preview
+    participant Union as Combined graph builder
+    participant Scheduler as Render scheduler
+    UI->>API: Request pinned comparison
+    API->>Union: Authorized current/proposed projections
+    Union->>Scheduler: Admit or reuse derived source closure
+    alt Render pending or failed
+        API-->>UI: Explicit state; no incomplete diagram
+    else Verified artifact ready
+        Scheduler-->>Union: Bound native SVG
+        API-->>UI: Single diagram and before/after target metadata
+        UI->>UI: Restore viewport; inspect semantic changes
+    end
+```
+
+Verification: [combined browser flow](../../tests/war_room/test_single_c4_comparison.py)
+uses a real bounded render to check the single canvas, removals/additions/edits,
+selection details, revision-side routing, refresh preservation and Fit.
+[Navigation scenarios](../../tests/war_room/test_project_c4_colors.py) cover drill
+and parent selection in the combined canvas. [Viewport regression scenarios](../../tests/war_room/paired_c4_review_cases.mjs)
+cover rapid rerenders and new pinned revisions.

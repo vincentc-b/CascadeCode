@@ -1998,7 +1998,11 @@
     "name": "revision_bound_architecture",
     "work_policies": {}
   },
-  "invalidations": {},
+  "invalidations": {
+    "architecture-review-02bd14eca71a30af51a9c18daa36ebf204d753ce658b3859a9672ac45b9dfbea": [
+      "artifact_changed"
+    ]
+  },
   "lineages": {},
   "promotion_reservations": {},
   "promotions": {},
@@ -2127,7 +2131,7 @@
         "REQ-ROOT-010"
       ],
       "rollout_version": 1,
-      "status": "staged",
+      "status": "stale",
       "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
       "view_citations": [
         "cascade-supervisor-components",
