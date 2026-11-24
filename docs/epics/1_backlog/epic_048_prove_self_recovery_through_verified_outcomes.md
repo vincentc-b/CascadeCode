@@ -12,7 +12,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-11'
-updated: '2026-11-11'
+updated: '2026-11-24'
 provider: codex
 flex_mode: false
 models:
@@ -27,6 +27,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+plan_approved_at: '2026-11-24T19:16:23.487429+00:00'
 ---
 # Prove self recovery through verified outcomes
 
