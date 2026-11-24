@@ -1177,6 +1177,26 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_0b93224a499e1cae9edd063a2b3913f2d84c0074fa07e49fe3d95c31bfff1cd1",
+      "dependency_id": "dep_setuptools",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:fbc28a7f42c120952e6d6771de160c1e0266ea04a858878e921d88d5f36b19d3",
+      "recipe_revision": "sha256:7b0c195945cf8bf3c2b81b420b8925e0bcfe882c9ee76bdbb82c175135c46762",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'setuptools'\"'\"'); assert d.version=='\"'\"'80.9.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de'\"'\"'; importlib.import_module('\"'\"'setuptools'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:17.198987+00:00",
+      "selected_version": "80.9.0",
+      "integrity_reference": "sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
