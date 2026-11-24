@@ -1,0 +1,171 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_manager",
+  "trigger": "FeaturePlanningStarted:feat_048_003",
+  "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+  "feature_revision": "3f9da069bc508ad455425fe6041c2f2e9d831ff6",
+  "purpose": "Apply the approved F3 scope and sequencing; no parent policy change, renewed approval or implementation acceptance.",
+  "observed_state": {
+    "canonical": "list_children reports F1 and F2 completed, F3 active with no Tasks, F4 backlog dependent on F3. read_architecture_amendments returned [].",
+    "f2_revision": "65f542713de31c9d13bf90fe022851e152f849af",
+    "f2_evidence_limit": "F2 closeout lists four completed children, but retained review prose still assigns timeout/legacy replay, verify_incident_postcheck closure, launch-route matrix and full browser navigation proof to Task 004 without a reconciled final evidence summary. Task 001 completed-record correction remains explicitly open. These are evidence questions, not a finding that implementation failed.",
+    "owned_checkout": "HEAD 3bcc864f retains the earlier source baseline; no child implementation is established here. Do not infer delivery acceptance from lifecycle status or substitute this checkout's APIs for F3's integrated dependency.",
+    "dependency_authority": "Supplied prerequisite projection is satisfied. Existing tooling readiness grants no installation or deployment authority."
+  },
+  "authoritative_contract": {
+    "path": "docs/epics/2_active/epic_048_prove_self_recovery_through_verified_outcomes.md",
+    "sections": [
+      "Success criteria 7-8, 10, 12-13 and 16-19",
+      "Macro-architecture / Responsibilities and durable contracts",
+      "Macro-architecture / Incident budget policy proposed for plan approval",
+      "Macro-architecture / Validation, deployment and completion boundaries",
+      "Macro-architecture / Diagram-impact inventory and ownership",
+      "Open questions / F3 to F4 operational prerequisites"
+    ],
+    "prior_handoff": "docs/epic_artifacts/epic_048_f2_planning_handoff.json"
+  },
+  "planning_constraints": [
+    "Before Task dispatch, pin F3's actually integrated F1/F2 source revisions and concrete budget, provider receipt, owner routing, delivery and Watchdog postcheck interfaces. Verify same-claim nested reservation and conservative unavailable-usage charging against delivered source/tests. Preserve one Task-owned incident budget in tracking-trunk executions.json under the lifecycle lock. Missing integration evidence needs a supported delivery handoff, not another ledger or another team's worktree edit.",
+    "Replace F3's TBD schemas/APIs and Start-to-End flow through Cascade read_doc/write_doc before feature sign-off. Specify the startup receipt, authoritative expected artifact/review input, independent comparison result, capability generation and typed waiting/refusal outcomes. Name persistence, producer, consumer, restart handling and trust boundaries. Copy applicable diagram rows into Task acceptance before dispatch.",
+    "Bind reviewed source, integrated commit, installed source/artifact identity, repository/environment identity, worker PID plus boot/start identity and capability generation separately. Capture identity from the runtime actually imported at process start; never recompute proof from a later mutable checkout HEAD or echo a caller-supplied expected SHA as observation. Define the receipt's covered modules/artifact and how mutable or mixed source is rejected. Missing, stale, dirty, wrong-checkout or unknown identity remains unresolved.",
+    "Independent postcheck must compare that loaded receipt to authoritative reviewed/integrated artifact evidence and observe the live process through supported health/UI entry points. A healthy endpoint, deployment receipt or valid loaded identity cannot waive unresolved product acceptance, unintegrated follow-up heads or the original delivery obligation. Retain separate reviewed, integrated, installed, loaded and verified states.",
+    "Use the supported launcher/worker drain and restart path and preserve queues, checkpoints, claims and usage. A lease timeout alone cannot reclaim a live owner. Demonstrate the repair of a recovery adapter through a supported bootstrap path independent of that failing adapter. When installation, credentials or operator authority is required, name the exact actor, action and evidence; do not hotpatch site-packages, dirty product trunk, call private repair functions or rewrite lifecycle state.",
+    "Compose F2's owner-tool journey with existing completed-parent/late-child repair, immutable source/target acceptance, parent integration and descendant-safe retirement. In split product/tracking repositories, retain the original incident budget and authoritative owner through cleanup and a fresh worker process. Independently compare board, execution, pending delivery, parent, review registry, loaded capability and historical incident after restart. Fix only integration gaps demonstrated by this journey; do not duplicate late-child machinery.",
+    "Crash immediately after leased push and before its completion receipt; reconcile the real remote effect before replay. Count publication, worker/Task/repair/message effects independently under repeat sweeps and competing callers. Live owners, changed target/policy, unavailable authoritative evidence and unfinished acceptance remain pending. Resolve through the production independent Watchdog verification route, never a raw success setter.",
+    "The harness must start a real worker from a pinned reviewed repair in an isolated prepared workspace, use real temporary repositories/bare remote, validators, durable stores, queues/checkpoints and scoped production tools. Script only external paid-provider/forge transports. Include stale old-worker after disk update, wrong checkout, missing/invalid receipt, dirty/unknown source and adapter stranded on a branch. Bound processes and retain failure diagnostics. This proves the isolated runtime contract, not production deployment.",
+    "Retain approved finite attempts, turn/process/runtime/elapsed bounds and original lineage across restart/bootstrap/parent escalation. No source change, new process, capability generation or policy switch resets allowance. Unknown usage remains unknown and conservatively charged; use existing independent extension authority if the journey cannot fit. Keep assigned Codex and explicit descendant model/reasoning settings.",
+    "Supply F4 a concrete operational preflight artifact: exact target environment and product/tracking/runtime roots, reviewed/integrated artifact, permitted failure injection, supported entry points, independent operator/install/credential authority, command/budget, rollback/cleanup and expected independent postcheck evidence. Unknown target or missing authority is an explicit named prerequisite; do not invent approval or use the local dependency manifest as deployment permission. Update declarations through the owning tools before using new software or another environment.",
+    "F3 owns loaded-runtime/bootstrap and cross-stage delivery proof. F2 owns reconciliation of its final acceptance evidence and Task 001 record gap; F4 owns broad adversarial CI, measured budget feasibility and the authorized controlled supervisor exercise. Do not silently absorb those scopes or declare the epic complete. Request an epic amendment if parent policy, authority, ownership or sequencing must change."
+  ],
+  "diagram_impact_inventory": [
+    {
+      "level": "context",
+      "views": [
+        "cascade-landscape",
+        "cascade-context"
+      ],
+      "designs": [
+        "DESIGN.md"
+      ],
+      "owner": "F3 with Epic Architect; F4 integrated navigation",
+      "required": "No new external system is planned. Reconcile operator/bootstrap responsibility and independent authority against final diff; change relationships only where actual responsibility changes."
+    },
+    {
+      "level": "containers",
+      "views": [
+        "cascade-containers"
+      ],
+      "designs": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/workspace/DESIGN.md"
+      ],
+      "owner": "F3",
+      "required": "Explain launcher/worker, installed versus loaded source and split-root persistence boundaries. No extra service or spendable store; C4 containers and working directories do not establish OS isolation. Record a concrete final-diff reason for unchanged views."
+    },
+    {
+      "level": "components",
+      "views": [
+        "cascade-cli-components",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-war-room-components"
+      ],
+      "designs": [
+        "cascade/DESIGN.md",
+        "cascade/workspace/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/war_room/DESIGN.md"
+      ],
+      "owner": "F3",
+      "required": "Bind worker-start evidence, independent runtime postcheck, launcher/bootstrap, health projection and existing delivery/retirement collaborators. Update producer and consumer together only for actual interface changes."
+    },
+    {
+      "level": "code",
+      "views": [
+        "cascade-workspace-commands-code",
+        "cascade-workspace-code",
+        "cascade-watchdog-code",
+        "cascade-feature-code",
+        "cascade-task-code",
+        "cascade-teams-code"
+      ],
+      "designs": [
+        "cascade/workspace/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "cascade/DESIGN.md"
+      ],
+      "owner": "F3; retain F1 Task budget and F2 Agent receipt owners",
+      "source_entries": [
+        "cascade/workspace/launcher.py:run_launcher_loop",
+        "cascade/workspace/worker.py:run_worker",
+        "cascade/workspace/worker.py:drain_and_shutdown",
+        "cascade/workspace/worker.py:_worker_supervisor_status",
+        "cascade/workspace/integration_worktree.py:prove_terminal_retirement",
+        "cascade/workspace/integration_worktree.py:retire_integration_worktree",
+        "cascade/feature/repair.py:feature_repair",
+        "cascade/feature/repair.py:resume_feature_repair",
+        "cascade/watchdog/incident_postcheck.py:reconcile_parent_lifecycle_incident",
+        "cascade/watchdog/reservations.py:verify_incident_postcheck"
+      ],
+      "required": "Add actual implemented receipt/bootstrap declarations to native custom Code views with correct component ownership, source paths/symbols and declaration kinds; update model.dsl, views.dsl, workspace.contract.json and owning designs together. Verify context-to-Code, Level up, deep-link restoration and pinned source, including renamed/deleted symbols and ownership changes. Retain render bounds and measure warm artifact reuse."
+    },
+    {
+      "level": "projection",
+      "views": [
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ],
+      "designs": [
+        "cascade/war_room/DESIGN.md"
+      ],
+      "owner": "F3 for changed health/evidence interfaces; F4 truthfulness proof",
+      "required": "Expose loaded identity versus liveness and named unresolved prerequisites without turning reads into repair or authority. Reconcile only affected producer/consumer interfaces; no dashboard redesign."
+    },
+    {
+      "level": "behavior",
+      "views": [
+        "Owning-design Mermaid flows"
+      ],
+      "designs": [
+        "cascade/workspace/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "cascade/DESIGN.md"
+      ],
+      "owner": "F3",
+      "required": "Trace reviewed/integrated/install/drain/load/independent-postcheck, broken-adapter bootstrap, late-child delivery/retirement and crash-after-push reconciliation. Show state/claim persistence and exact refusal gates; record one normal and one failure/restart trace against real source. Keep planned facts and delivery attribution in work records."
+    }
+  ],
+  "open_handoffs": [
+    {
+      "owner": "F2 Feature Lead/Architect; board lifecycle owner for completed-record correction",
+      "action": "Reconcile completed F2 evidence with retained open review statements: identify Task 004 result/source and test/browser artifacts, timeout/legacy replay, production verify_incident_postcheck resolution, provider-route matrix, and Task 001 canonical-record correction status. Report unsupported correction as a named gap; no lifecycle-file edits or state manipulation. F3 consumes only supported evidence."
+    },
+    {
+      "owner": "Architecture publication/runtime recovery owner coordinated by Epic Architect",
+      "evidence": "docs/epic_artifacts/epic_048_publication_resume.json",
+      "operation_id": "architecture-publication-f17d12c797b510fe6679b23bbf54b3c2d6b6abc55443e11ff1c8cac84192b78e",
+      "action": "Last recorded publication is terminal failed after interrupted render recovery; no newer success supplied. Preserve pinned request and accepted lineage. Use supported runtime-owner recovery; unchanged replay or a substituted snapshot does not recover it. This handoff grants no unrelated repair scope to F3. Human plan approval is current and does not prove architecture publication."
+    }
+  ],
+  "verification": {
+    "reviewed_designs": [
+      "DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/workspace/DESIGN.md",
+      "cascade/watchdog/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/feature/DESIGN.md",
+      "cascade/agent/DESIGN.md",
+      "cascade/war_room/DESIGN.md"
+    ],
+    "scope": "Read Workspace lifecycle and Watchdog independent verification sections against worker startup/status and README runtime handoff; checked affected requirement ownership and source entry points. All listed designs and architecture remain unchanged from retained reviewed c717bb36. This handoff changes no current implementation, runtime boundary, source declaration or design fact, so no design/model edit is warranted at any inventory level.",
+    "checks": "JSON parsed; all design paths and 10 source declarations resolved; all named C4 view keys exist; git diff --check passed.",
+    "tests": "No runtime tests, render or browser journeys rerun for this planning-artifact-only change; no fresh child acceptance or live deployment evidence claimed.",
+    "limitations": "Approved epic plan unchanged; no spec edit, new decision, sign-off, dependency installation, runtime restart or child acceptance. F3 must turn these existing obligations into its canonical plan and Task acceptance through Cascade MCP."
+  }
+}
