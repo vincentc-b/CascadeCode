@@ -917,6 +917,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_c5d5169f43aeef214e3f5b826c95f55340353a84863507f60503213230161e88",
+      "dependency_id": "dep_pyyaml",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:90ca9df26a1405adf966671f27119b614ec8448d52fd45e32db5a8f1eb033a29",
+      "recipe_revision": "sha256:6fe40863b4f1cff8891523c8c7cf8d4cb1c240221c2bc114ea90c3a4189b778a",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:53.764979+00:00",
+      "completed_at": "2026-11-24T16:31:55.763511+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "6.0.3",
+      "integrity_reference": "sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
