@@ -2,7 +2,7 @@
 id: feat_048_001
 title: Enforce durable incident budgets at recovery admission
 tier: feature
-status: active
+status: completed
 parent: epic_048
 children:
 - task_048_001_001
