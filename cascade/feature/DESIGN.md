@@ -30,6 +30,7 @@ flowchart LR
 | [state.py](state.py) | Defines checkpointed role, message, and queue state. |
 | [checkpoint.py](checkpoint.py) | SQLite state under `.cascade/checkpoints/<work-id>.sqlite`; thread ID is the work ID. |
 | [registry.py](registry.py) and [wiring.py](wiring.py) | Scoped tool registration and execution wiring. |
+| [repair.py](repair.py) | Persists generation-bound admission, idempotent authority, child identity, and delivery progress. |
 | [role skills](../watchdog/role_skills.py) | Resolves the default playbooks, including design authoring/review. |
 
 ## Turn lifecycle
@@ -56,6 +57,31 @@ preserved worktree before resuming the owning team. See
 
 Verification: [graph and lifecycle tests](../../tests/feature/).
 
+## Generation-bound late repair
+
+`REQ-FEATURE-REPAIR-002`: [feature_repair](repair.py) records each request in the
+existing action ledger before it emits `FeatureRepairAuthorized`. The event and
+receipt bind one generation to the exact owner, active path, source/target refs,
+and document digest. [Watchdog authorization](../watchdog/loop.py) admits the
+active introduction only while all of those bindings and, after checkpointing,
+the introducing commit and blob still agree.
+
+```mermaid
+sequenceDiagram
+    participant Feature as feature_repair
+    participant Ledger as executions.json
+    participant Queue as Feature queue
+    participant Board as Feature document
+    participant Watchdog
+    Feature->>Ledger: persist prepared generation
+    Feature->>Queue: append FeatureRepairAuthorized once (exact bindings)
+    Feature->>Board: commit exact active document
+    Feature->>Ledger: checkpoint commit and blob
+    Watchdog->>Ledger: rejoin live generation
+    Watchdog->>Board: verify path, digest, commit and blob
+    Note over Ledger,Queue: Restart joins the stable event ID before appending
+```
+
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.
 
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).
@@ -69,7 +95,14 @@ current execution ownership before resuming delivery.
 `DEC-FEATURE-REPAIR-001`: Use the existing supervised Task recovery and final
 validation boundary; a Feature tool cannot declare its own merge successful.
 [mint_task](mint.py) serializes child creation with the lifecycle lock and refuses
-blocked parents. It does not itself reactivate a completed Feature.
+blocked parents. Ordinary active Features allocate and persist a child directly.
+An active repair generation additionally requires its admitted request identity;
+[reserve_repair_child](repair.py) stores the Task ID, request fingerprint and
+rendered specification digest in `executions.json` before the Task or parent
+document is written. Restart reuses that reservation, verifies an existing Task
+against the digest, and idempotently repairs the parent child list and
+`TasksMinted` event. A completed Feature cannot mint without first passing the
+generation-bound repair admission and becoming the exact authorized active copy.
 [recover_task](recovery.py) delegates to
 [supervisor_recover_task_delivery](../task/supervisor_recovery.py).
 Both entries appear in `cascade-feature-code`, linked from the scoped registry.
@@ -77,3 +110,17 @@ The [Boss closeout](../boss/DESIGN.md#delivery-and-closeout) and
 [Workspace ownership](../workspace/DESIGN.md#work-ownership-and-retirement)
 contracts govern the receiving parent and checkout. Failed target preflight
 retains the Task; no graph checkpoint substitutes for delivery evidence.
+
+```mermaid
+sequenceDiagram
+    participant Team as mint_task
+    participant Action as feature_repair action
+    participant Task as Task document
+    participant Parent as Feature document
+    Team->>Action: verify current action and reserve ID + digests
+    Action-->>Team: same reservation on replay
+    Team->>Task: write or verify exact backlog Task
+    Team->>Parent: add child and breakdown idempotently
+    Team->>Action: checkpoint child persistence
+    Note over Action,Parent: A crash at either write resumes from the reservation
+```

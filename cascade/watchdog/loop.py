@@ -354,6 +354,11 @@ def _authorized(root: Path, meta: WorkMeta) -> bool:
     newest = _newest_authorizing_event(root, meta)
     if newest is None:
         return False
+    # Repair authority is content- and generation-fenced by the durable action
+    # receipt.  Its event may intentionally precede a crash/restart gap longer
+    # than the ordinary dispatch clock window.
+    if newest.type == "FeatureRepairAuthorized":
+        return True
     from cascade.workspace.integration_worktree import git_root_for_path
 
     try:
@@ -378,17 +383,21 @@ def _authorized(root: Path, meta: WorkMeta) -> bool:
 
 def _newest_authorizing_event(root: Path, meta: WorkMeta) -> Event | None:
     events, _offset = read_events(meta.id, 0, root=root)
-    matches = [event for event in events if _event_authorizes(meta, event)]
+    matches = [event for event in events if _event_authorizes(meta, event, root=root)]
     if not matches:
         return None
     return max(matches, key=lambda event: event.ts)
 
 
-def _event_authorizes(meta: WorkMeta, event: Event) -> bool:
+def _event_authorizes(meta: WorkMeta, event: Event, *, root: Path) -> bool:
     payload = event.payload
     if meta.tier == "epic":
         return event.type == "EpicActivated" and payload.get("epic_id") == meta.id
     if meta.tier == "feature":
+        if event.type == "FeatureRepairAuthorized":
+            from cascade.feature.repair import repair_event_authorizes
+
+            return repair_event_authorizes(meta, event, root=root)
         if event.type != "FeatureReadyToPlan":
             return False
         return payload.get("id") == meta.id or payload.get("feature_id") == meta.id

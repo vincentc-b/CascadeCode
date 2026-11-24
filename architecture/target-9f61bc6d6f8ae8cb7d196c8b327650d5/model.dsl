@@ -1869,6 +1869,15 @@ code_boss_review = element "ensure_feature_review" "Function" "Publish through r
     }
 }
 
+code_boss_review_route = element "_require_repair_review_route" "Function" "Require fresh forge URL and source/target facts before a repair review is reused or followed up." {
+    properties {
+        "cascade.semanticId" "element.code.boss.review-route"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "_require_repair_review_route"
+    }
+}
+
 code_boss_reconcile = element "reconcile_feature_review_completions" "Function" "Reconcile forge acceptance and target closeout." {
     properties {
         "cascade.semanticId" "element.code.boss.reconcile"
@@ -1884,6 +1893,24 @@ code_boss_lock = element "task_lifecycle_lock" "Function" "Tracking-root cross-p
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/task/lifecycle_lock.py"
         "cascade.sourceSymbol" "task_lifecycle_lock"
+    }
+}
+
+code_boss_obligation = element "current_feature_obligation" "Function" "Fence closeout and retirement on the current repair, child delivery, review, and integration evidence." {
+    properties {
+        "cascade.semanticId" "element.code.boss.current-obligation"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/rollup.py"
+        "cascade.sourceSymbol" "current_feature_obligation"
+    }
+}
+
+code_boss_review_generation = element "feature_review_generation" "Function" "Read one immutable Feature review generation while compatibility fields project the current one." {
+    properties {
+        "cascade.semanticId" "element.code.boss.review-generation"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_review_generation"
     }
 }
 
@@ -1959,6 +1986,24 @@ code_feature_recover = element "recover_task" "Function" "Recover the existing d
     }
 }
 
+code_feature_repair = element "feature_repair" "Function" "Persist and authorize one exact late-repair generation." {
+    properties {
+        "cascade.semanticId" "element.code.feature.repair"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "feature_repair"
+    }
+}
+
+code_feature_reserve = element "reserve_repair_child" "Function" "Persist the idempotent Task identity and rendered-spec digest before child and parent writes." {
+    properties {
+        "cascade.semanticId" "element.code.feature.reserve-repair-child"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "reserve_repair_child"
+    }
+}
+
 code_epic_recover = element "recover_feature" "Function" "Expose immediate child supervision." {
     properties {
         "cascade.semanticId" "element.code.epic.recover"
@@ -1986,12 +2031,30 @@ code_task_actions = element "resume_action" "Function" "Claim and resume durable
     }
 }
 
+code_task_revalidation = element "_request_delivery_revalidation" "Function" "Synchronize a moved Feature base and queue the original Task for an exact replacement final-validation pair." {
+    properties {
+        "cascade.semanticId" "element.code.task.delivery-revalidation"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "_request_delivery_revalidation"
+    }
+}
+
 code_task_leases = element "execution_lease_is_live" "Function" "Reject reuse while execution owner is live." {
     properties {
         "cascade.semanticId" "element.code.task.leases"
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task/execution.py"
         "cascade.sourceSymbol" "execution_lease_is_live"
+    }
+}
+
+code_task_validation = element "swe_run_tests" "Function" "Run scoped pytest and bind a clean committed Task head to its Feature base." {
+    properties {
+        "cascade.semanticId" "element.code.task.validation"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/git_tools.py"
+        "cascade.sourceSymbol" "swe_run_tests"
     }
 }
 
@@ -2079,9 +2142,33 @@ code_boss_rollup_to_review = code_boss_feature -> code_boss_review "Uses" {
     }
 }
 
+code_boss_review_to_route = code_boss_review -> code_boss_review_route "Checks fresh forge route" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-review-to-review-route"
+    }
+}
+
+code_boss_queue_to_task_revalidation = code_boss_queue -> code_task_revalidation "Queues replacement final validation when either head moves" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-queue-to-task-revalidation"
+    }
+}
+
 code_boss_rollup_to_retire = code_boss_feature -> code_boss_retire "Requests closeout cleanup" {
     properties {
         "cascade.semanticId" "relationship.code-boss-rollup-to-retire"
+    }
+}
+
+code_boss_rollup_to_obligation = code_boss_feature -> code_boss_obligation "Checks current generation" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-rollup-to-current-obligation"
+    }
+}
+
+code_boss_obligation_to_review_generation = code_boss_obligation -> code_boss_review_generation "Reads immutable current evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-obligation-to-review-generation"
     }
 }
 
@@ -2127,9 +2214,21 @@ code_feature_registry_to_mint = code_feature_registry -> code_feature_mint "Uses
     }
 }
 
+code_feature_mint_to_reserve = code_feature_mint -> code_feature_reserve "Reserves before persistence" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-mint-to-reserve-repair-child"
+    }
+}
+
 code_feature_registry_to_recover = code_feature_registry -> code_feature_recover "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-feature-registry-to-recover"
+    }
+}
+
+code_feature_registry_to_repair = code_feature_registry -> code_feature_repair "Admits exact repair generations" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-registry-to-repair"
     }
 }
 
@@ -2154,6 +2253,27 @@ code_task_registry_to_actions = code_task_registry -> code_task_actions "Uses" {
 code_task_actions_to_leases = code_task_actions -> code_task_leases "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-task-actions-to-leases"
+    }
+}
+
+code_task_validation_to_actions = code_task_validation -> code_task_actions "Publishes validated delivery to durable action" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-validation-to-actions"
+    }
+}
+
+code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event to the live action and committed active-document introduction." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.repair-authority"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "repair_event_authorizes"
+    }
+}
+
+code_watchdog_authority_to_repair = code_watchdog_authority -> code_watchdog_repair_authority "Checks generation-bound Feature repair" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-authority-to-repair-authority"
     }
 }
 

@@ -1,10 +1,12 @@
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from cascade.board.store import read_doc, write_doc
 from cascade.boss.merge import MergeResult
+from cascade.feature.repair import admit_feature_repair
 from cascade.task.action_recovery import ActionNotFound, ActionRecoveryError, load_action
 from cascade.task.execution import execution_view, mark_queued
 from cascade.task_rollup import (
@@ -16,7 +18,7 @@ from cascade.task_rollup import (
 )
 from cascade.watchdog.events import read_events
 from cascade.war_room.toasts import events_to_toasts
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, commit_board, make_repo
 
 
 def test_blocked_pending_merge_is_pruned_as_terminal(tmp_path: Path) -> None:
@@ -59,6 +61,83 @@ def test_revalidation_replaces_queue_evidence_without_duplicate_entry(tmp_path: 
     action = load_action("task_001:queued_merge", root=root)
     assert action is not None
     assert action["metadata"]["final_validation"] == second
+
+
+def test_validated_delivery_links_current_repair_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root, id="feat_001", title="Feature", tier="feature",
+        status="active", parent="epic_001",
+    )
+    add_doc(
+        root, id="task_001", title="Task", tier="task",
+        status="active", parent="feat_001",
+    )
+    monkeypatch.setattr(
+        "cascade.feature.repair.current_feature_repair_record",
+        lambda *_a, **_k: {
+            "action_id": "feature_repair:feat_001:one",
+            "generation": 3,
+            "feature_id": "feat_001",
+            "task_id": "task_001",
+        },
+    )
+    evidence = {
+        "task_id": "task_001",
+        "deliverable_sha": "deliverable",
+        "feature_base_sha": "target",
+    }
+
+    queue_task_merge("task_001", root=root, delivery_evidence=evidence)
+
+    action = load_action("task_001:queued_merge", root=root)
+    assert action["metadata"]["feature_repair"] == {
+        "action_id": "feature_repair:feat_001:one",
+        "generation": 3,
+        "feature_id": "feat_001",
+    }
+    assert pending_task_merges(root) == {"task_001"}
+
+
+def test_validated_original_task_advances_same_repair_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root, id="feat_001", title="Feature", tier="feature",
+        status="completed", parent="epic_001", children=["task_001"],
+    )
+    feature = read_doc("feat_001", root=root)
+    feature.meta.approved_at = datetime.now(timezone.utc)
+    write_doc(feature, root=root)
+    add_doc(
+        root, id="task_001", title="Original task", tier="task",
+        status="completed", parent="feat_001",
+    )
+    commit_board(root)
+    admitted = admit_feature_repair(
+        "feat_001", "task_001:queued_merge", task_id="task_001", root=root
+    )
+    evidence = {
+        "task_id": "task_001",
+        "deliverable_sha": "deliverable",
+        "feature_base_sha": "target",
+    }
+    monkeypatch.setattr(
+        "cascade.task_rollup.delivery_evidence_is_current", lambda *_a, **_k: False
+    )
+
+    queue_task_merge("task_001", root=root, delivery_evidence=evidence)
+
+    repair_action = load_action(admitted["action_id"], root=root)
+    assert repair_action is not None
+    assert repair_action["phase"] == "delivery_pending"
+    assert repair_action["task_id"] == "task_001"
+    assert repair_action["final_validation"] == evidence
 
 
 def test_conflict_is_persisted_as_semantic_block_without_repeat_merge(

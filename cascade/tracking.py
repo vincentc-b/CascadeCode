@@ -301,7 +301,10 @@ def find_merge_request(
         base = str(row.get("baseRefName") or row.get("target_branch") or "")
         url = str(row.get("url") or row.get("web_url") or "")
         state = str(row.get("state") or "").lower()
-        if base != target_branch or not url or state == "closed":
+        # This helper is an idempotent *open review* lookup.  Returning a
+        # merged row makes a later repair generation accidentally reuse an
+        # already-accepted review URL instead of opening its follow-up.
+        if base != target_branch or not url or state not in {"open", "opened"}:
             continue
         number = row.get("number") or row.get("iid")
         return MergeRequest(
@@ -326,7 +329,7 @@ def merge_request_snapshot(
     if mr.forge == "github":
         args = [
             "gh", "pr", "view", mr.url, "--json",
-            "state,isDraft,comments,reviews,url,baseRefName,commits,body,mergeCommit,mergeable,mergeStateStatus",
+            "state,isDraft,comments,reviews,url,headRefName,baseRefName,commits,body,mergeCommit,mergeable,mergeStateStatus",
         ]
     else:
         args = ["glab", "mr", "view", mr.url, "--output", "json"]
@@ -362,6 +365,7 @@ def merge_request_snapshot(
                     pass
         state = str(raw.get("state") or "").lower()
         target_branch = str(raw.get("baseRefName") or "").strip()
+        source_branch = str(raw.get("headRefName") or "").strip()
         mergeable = str(raw.get("mergeable") or "").lower()
         merge_state = str(raw.get("mergeStateStatus") or "").lower()
     else:
@@ -372,9 +376,17 @@ def merge_request_snapshot(
         target_branch = str(
             raw.get("target_branch") or raw.get("targetBranch") or ""
         ).strip()
+        source_branch = str(
+            raw.get("source_branch") or raw.get("sourceBranch") or ""
+        ).strip()
         mergeable = str(raw.get("merge_status") or raw.get("mergeStatus") or "").lower()
         merge_state = str(raw.get("detailed_merge_status") or raw.get("detailedMergeStatus") or "").lower()
-    out: dict[str, object] = {"state": state, "comments": comments, "url": mr.url}
+    observed_url = str(raw.get("url") or raw.get("web_url") or mr.url).strip()
+    out: dict[str, object] = {
+        "state": state,
+        "comments": comments,
+        "url": observed_url,
+    }
     if mergeable in {"conflicting", "cannot_be_merged", "cannot_be_merged_recheck"} or merge_state in {"dirty", "conflict", "conflicts", "cannot_be_merged"}:
         out["mergeability"] = "conflicting"
     elif mergeable in {"mergeable", "can_be_merged"}:
@@ -404,6 +416,8 @@ def merge_request_snapshot(
         out["source_revision"] = source_revision
     if target_branch:
         out["target_branch"] = target_branch
+    if source_branch:
+        out["source_branch"] = source_branch
     return out
 
 

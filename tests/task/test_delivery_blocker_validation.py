@@ -10,7 +10,12 @@ from cascade.task.action_recovery import load_action
 from cascade.task.execution import execution_view, mark_queued
 from cascade.task.wiring import clear_task_wiring_state, load_task_tools
 from cascade.task.worktree import attach_active_task_run, clear_task_runs
-from cascade.task_rollup import delivery_evidence_is_current, queued_delivery_evidence, retry_pending_task_merges
+from cascade.task_rollup import (
+    delivery_evidence_is_current,
+    pending_task_merges,
+    queued_delivery_evidence,
+    retry_pending_task_merges,
+)
 from cascade.watchdog.blockage import propagate_direct_report_blockage
 from cascade.watchdog.events import read_events
 from cascade.workspace.integration_worktree import create_integration_worktree
@@ -132,3 +137,49 @@ def test_red_validation_preserves_derived_blocker_and_parent_head(tmp_path):
     assert _git(feature.path, "rev-parse", "HEAD") == before
     assert read_doc("feat_001", root=root).meta.monitoring_blockers == blockers
     assert queued_delivery_evidence("task_001", root=root) is None
+
+
+def test_moved_feature_head_queues_same_task_for_green_revalidation(tmp_path):
+    root, feature, task = _delivery(tmp_path)
+    first = invoke_tool(
+        "task_001", "swe_run_tests",
+        {"cmd": ["python3", "-m", "pytest", "-q", "test_delivery.py"]},
+        root=root, feature_id="feat_001",
+    )["final_validation"]
+
+    (feature.path / "feature_note.py").write_text("NOTE = 'repair target moved'\n")
+    _git(feature.path, "add", "feature_note.py")
+    _git(feature.path, "commit", "-m", "advance repair target")
+
+    assert retry_pending_task_merges(root) == []
+    assert pending_task_merges(root) == set()
+    action = load_action("task_001:queued_merge", root=root)
+    assert action["metadata"]["final_validation"] == first
+    task_events, _ = read_events("task_001", 0, root=root)
+    retries = [
+        event for event in task_events
+        if event.type == "TaskValidationRetryRequested"
+        and event.payload.get("reason") == "delivery_heads_moved"
+    ]
+    assert len(retries) == 1
+    assert retries[0].payload["stale_validation"] == first
+    assert execution_view("task_001", root=root)["phase"] == "queued"
+    assert _git(task.path, "status", "--porcelain", "--untracked-files=no") == ""
+
+    red = invoke_tool(
+        "task_001", "swe_run_tests",
+        {"cmd": ["python3", "-m", "pytest", "-q", "missing_revalidation_test.py"]},
+        root=root, feature_id="feat_001",
+    )
+    assert red["exit_code"] != 0
+    assert pending_task_merges(root) == set()
+    assert load_action("task_001:queued_merge", root=root)["metadata"]["final_validation"] == first
+
+    second = invoke_tool(
+        "task_001", "swe_run_tests",
+        {"cmd": ["python3", "-m", "pytest", "-q", "test_delivery.py"]},
+        root=root, feature_id="feat_001",
+    )["final_validation"]
+    assert second["feature_base_sha"] != first["feature_base_sha"]
+    assert queued_delivery_evidence("task_001", root=root) == second
+    assert pending_task_merges(root) == {"task_001"}

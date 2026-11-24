@@ -16,6 +16,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from cascade.board.errors import BoardError, GitError, NotFound
+from cascade.board.gitutil import head_sha
 from cascade.board.store import list_board, move_doc, read_doc, read_doc_in_worktree
 from cascade.board.types import WorkMeta
 from cascade.tracking import (
@@ -77,9 +78,13 @@ class EpicCloseBlocker:
 
     def __post_init__(self) -> None:
         if not self.code.strip() or any(char.isspace() for char in self.code):
-            raise ValueError("epic close blocker code must be non-blank and contain no whitespace")
+            raise ValueError(
+                "epic close blocker code must be non-blank and contain no whitespace"
+            )
         if not self.message.strip() or "\n" in self.message or "\r" in self.message:
-            raise ValueError("epic close blocker message must be a non-blank single line")
+            raise ValueError(
+                "epic close blocker message must be a non-blank single line"
+            )
         if not isinstance(self.retryable, bool):
             raise ValueError("epic close blocker retryable must be boolean")
 
@@ -102,12 +107,19 @@ class EpicReviewSnapshot:
             raise ValueError(f"invalid forge review state: {self.forge_state!r}")
         if self.review_url is not None:
             validate_review_url(self.review_url)
-        for label, branch in (("source", self.source_branch), ("target", self.target_branch)):
-            if branch is not None and (not branch.strip() or "\n" in branch or "\r" in branch):
+        for label, branch in (
+            ("source", self.source_branch),
+            ("target", self.target_branch),
+        ):
+            if branch is not None and (
+                not branch.strip() or "\n" in branch or "\r" in branch
+            ):
                 raise ValueError(f"{label} branch must be a non-blank single line")
         if self.stage == "implementation_review_pending":
             if not self.review_url or not self.source_branch or not self.target_branch:
-                raise ValueError("pending epic review requires URL, source branch, and target branch")
+                raise ValueError(
+                    "pending epic review requires URL, source branch, and target branch"
+                )
             if self.blocker is not None:
                 raise ValueError("pending epic review cannot also have a blocker")
         if self.stage == "blocked" and self.blocker is None:
@@ -120,8 +132,15 @@ def validate_review_url(url: str) -> None:
     """Reject non-web, relative, or credential-bearing review links."""
 
     parsed = urlsplit(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
-        raise ValueError("review URL must be an absolute HTTP(S) URL without credentials")
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username
+        or parsed.password
+    ):
+        raise ValueError(
+            "review URL must be an absolute HTTP(S) URL without credentials"
+        )
 
 
 def epic_review_snapshot(epic_id: str, *, root: Path) -> EpicReviewSnapshot | None:
@@ -136,7 +155,9 @@ def epic_review_snapshot(epic_id: str, *, root: Path) -> EpicReviewSnapshot | No
     # Legacy epic records contained only MergeRequest fields. Infer the new
     # fields rather than making a rolling upgrade destructive.
     stage = str(record.get("stage") or "implementation_review_pending")
-    forge_state = str(record.get("forge_state") or ("merged" if record.get("closed") else "open"))
+    forge_state = str(
+        record.get("forge_state") or ("merged" if record.get("closed") else "open")
+    )
     blocker_raw = record.get("blocker")
     blocker = None
     if isinstance(blocker_raw, dict):
@@ -165,15 +186,21 @@ def epic_close_document_staged(meta: WorkMeta, *, root: Path) -> bool:
     ):
         return False
     entry = get_integration_worktree(locate_trunk(root), "epic", meta.id)
-    return entry is not None and meta.path.resolve().is_relative_to(entry.path.resolve())
+    return entry is not None and meta.path.resolve().is_relative_to(
+        entry.path.resolve()
+    )
 
 
-def epic_close_documents_staged(metas: list[WorkMeta], *, root: Path) -> dict[str, bool]:
+def epic_close_documents_staged(
+    metas: list[WorkMeta], *, root: Path
+) -> dict[str, bool]:
     """Project completed epic staging from one request-local registry snapshot."""
 
     candidates = [
-        meta for meta in metas
-        if meta.tier == "epic" and meta.status == "completed"
+        meta
+        for meta in metas
+        if meta.tier == "epic"
+        and meta.status == "completed"
         and meta.path.parent.name == "3_completed"
     ]
     if not candidates:
@@ -387,7 +414,9 @@ def _state_path(root: Path) -> Path:
     return Path(root) / ".cascade" / "reviews.json"
 
 
-def review_record_for_feature(feature_id: str, *, root: Path) -> dict[str, object] | None:
+def review_record_for_feature(
+    feature_id: str, *, root: Path
+) -> dict[str, object] | None:
     trunk = locate_trunk(root)
     record = _load(trunk).get(feature_id)
     return dict(record) if isinstance(record, dict) else None
@@ -404,14 +433,160 @@ def _load(root: Path) -> dict[str, dict[str, object]]:
     return raw if isinstance(raw, dict) else {}
 
 
+_GENERATION_CONTAINER_FIELDS = frozenset(
+    {"schema_version", "generations", "current_generation"}
+)
+
+
+def _generation_projection(record: dict[str, object]) -> dict[str, object]:
+    return {
+        key: value
+        for key, value in record.items()
+        if key not in _GENERATION_CONTAINER_FIELDS
+    }
+
+
+def _versioned_review_record(
+    record: dict[str, object],
+    *,
+    generation: int,
+    action_id: str | None = None,
+) -> dict[str, object]:
+    """Add immutable-generation storage while retaining compatibility fields."""
+
+    updated = dict(record)
+    generations_raw = updated.get("generations")
+    generations = dict(generations_raw) if isinstance(generations_raw, dict) else {}
+    current_raw = updated.get("current_generation")
+    seeded_legacy = False
+    if not generations and current_raw is None and record:
+        legacy = _generation_projection(record)
+        legacy.setdefault("generation", 0)
+        legacy.setdefault("action_id", None)
+        legacy.setdefault(
+            "reconciliation_status",
+            "accepted"
+            if legacy.get("closed") is True
+            and all(
+                legacy.get(field)
+                for field in (
+                    "accepted_merge_sha",
+                    "accepted_source_head",
+                    "accepted_target_head",
+                )
+            )
+            else "legacy_unverified"
+            if legacy.get("closed") is True
+            else "pending",
+        )
+        generations["0"] = legacy
+        seeded_legacy = True
+    projection = (
+        dict(generations["0"])
+        if seeded_legacy and generation == 0
+        else _generation_projection(record)
+    )
+    projection["generation"] = generation
+    projection["action_id"] = action_id
+    projection.setdefault("publication_action_id", action_id)
+    projection.setdefault("reconciliation_status", "pending")
+    generations[str(generation)] = projection
+    updated.update(projection)
+    updated["schema_version"] = 2
+    updated["generations"] = generations
+    updated["current_generation"] = generation
+    return updated
+
+
+def feature_review_generation(
+    feature_id: str, generation: int, *, root: Path
+) -> dict[str, object] | None:
+    """Read one immutable review generation without accepting its projection."""
+
+    record = review_record_for_feature(feature_id, root=root)
+    if record is None:
+        return None
+    generations = record.get("generations")
+    if isinstance(generations, dict):
+        row = generations.get(str(generation))
+        return dict(row) if isinstance(row, dict) else None
+    if generation == 0:
+        return _generation_projection(record)
+    return None
+
+
+def review_callback_is_current(
+    feature_id: str,
+    record: dict[str, object],
+    *,
+    root: Path,
+    snapshot: dict[str, object] | None = None,
+) -> bool:
+    """Fence forge observations to the generation and URL they observed."""
+
+    current = review_record_for_feature(feature_id, root=root)
+    if current is None:
+        return False
+    matches = (
+        int(current.get("current_generation") or 0)
+        == int(record.get("current_generation") or 0)
+        and current.get("url") == record.get("url")
+        and current.get("source_branch") == record.get("source_branch")
+        and current.get("target_branch") == record.get("target_branch")
+    )
+    if (
+        not matches
+        or snapshot is None
+        or int(current.get("current_generation") or 0) == 0
+    ):
+        return matches
+    return bool(
+        snapshot.get("merge_sha")
+        and snapshot.get("source_revision") == current.get("source_head")
+    )
+
+
+def _accept_current_review_generation(
+    feature_id: str,
+    record: dict[str, object],
+    snapshot: dict[str, object],
+    *,
+    root: Path,
+) -> bool:
+    if not review_callback_is_current(feature_id, record, root=root, snapshot=snapshot):
+        return False
+    merge_sha = snapshot.get("merge_sha")
+    source_revision = snapshot.get("source_revision")
+    _update_record(
+        root,
+        feature_id,
+        {
+            "closed": True,
+            "accepted_merge_sha": merge_sha if isinstance(merge_sha, str) else None,
+            "accepted_source_head": (
+                source_revision
+                if isinstance(source_revision, str)
+                else record.get("source_head")
+            ),
+            "accepted_target_head": record.get("target_head"),
+            "reconciliation_status": "accepted",
+        },
+    )
+    return True
+
+
 def _save(root: Path, state: dict[str, dict[str, object]]) -> None:
     path = _state_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_name: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", dir=path.parent,
-            prefix=".reviews.", suffix=".tmp", delete=False,
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=".reviews.",
+            suffix=".tmp",
+            delete=False,
         ) as handle:
             temp_name = handle.name
             handle.write(json.dumps(state, indent=2, sort_keys=True) + "\n")
@@ -469,9 +644,69 @@ def _update_record(
                 {str(row) for row in previous_seen}
                 | {str(row) for row in incoming_seen}
             )
+        generations_raw = updated.get("generations")
+        current_generation = updated.get("current_generation")
+        if isinstance(generations_raw, dict) and isinstance(current_generation, int):
+            generations = dict(generations_raw)
+            current = generations.get(str(current_generation))
+            if isinstance(current, dict):
+                current = dict(current)
+                current.update(
+                    {
+                        key: value
+                        for key, value in changes.items()
+                        if key not in _GENERATION_CONTAINER_FIELDS
+                    }
+                )
+                generations[str(current_generation)] = current
+                updated["generations"] = generations
         if updated != existing:
             state[feature_id] = updated
             _save(root, state)
+        return updated
+
+
+def _store_review_generation(
+    root: Path,
+    feature_id: str,
+    projection: dict[str, object],
+    *,
+    generation: int,
+    action_id: str | None,
+) -> dict[str, object]:
+    """Atomically advance the current projection without rewriting history."""
+
+    with _registry_write_lock(root):
+        state = _load(root)
+        existing = state.get(feature_id)
+        base = dict(existing) if isinstance(existing, dict) else {}
+        legacy_upgrade = bool(base) and not isinstance(base.get("generations"), dict)
+        if legacy_upgrade:
+            base = _versioned_review_record(base, generation=0, action_id=None)
+        if legacy_upgrade and generation == 0 and action_id is None:
+            state[feature_id] = base
+            _save(root, state)
+            return base
+        updated = _versioned_review_record(
+            {**base, **projection}, generation=generation, action_id=action_id
+        )
+        # ``_versioned_review_record`` seeds the new row from compatibility
+        # fields. Replace it with the exact new projection; prior rows remain.
+        generations = dict(updated.get("generations") or {})
+        generation_row = dict(projection)
+        generation_row.update(
+            generation=generation,
+            action_id=action_id,
+            publication_action_id=action_id,
+            reconciliation_status="pending",
+        )
+        generations[str(generation)] = generation_row
+        updated.update(generation_row)
+        updated["generations"] = generations
+        updated["current_generation"] = generation
+        updated["schema_version"] = 2
+        state[feature_id] = updated
+        _save(root, state)
         return updated
 
 
@@ -619,8 +854,10 @@ def ensure_epic_review(epic_id: str, *, root: Path) -> MergeRequest | None:
         persist_epic_review_snapshot(
             epic_id,
             EpicReviewSnapshot(
-                stage="implementation_review_pending", review_url=existing.url,
-                source_branch=existing.source_branch, target_branch=existing.target_branch,
+                stage="implementation_review_pending",
+                review_url=existing.url,
+                source_branch=existing.source_branch,
+                target_branch=existing.target_branch,
                 forge_state="open",
             ),
             root=trunk,
@@ -637,8 +874,10 @@ def ensure_epic_review(epic_id: str, *, root: Path) -> MergeRequest | None:
     persist_epic_review_snapshot(
         epic_id,
         EpicReviewSnapshot(
-            stage="implementation_review_pending", review_url=created.url,
-            source_branch=created.source_branch, target_branch=created.target_branch,
+            stage="implementation_review_pending",
+            review_url=created.url,
+            source_branch=created.source_branch,
+            target_branch=created.target_branch,
             forge_state="open",
         ),
         root=trunk,
@@ -665,19 +904,49 @@ def _restore_unrelated_specs_for_epic_review(
         raise GitError(f"epic worktree has uncommitted changes: {epic_id}")
     with create_verified_trunk_workspace(trunk) as workspace:
         changed = git(
-            ["diff", "--name-only", workspace.revision, "HEAD", "--", "docs/features", "docs/tasks"],
+            [
+                "diff",
+                "--name-only",
+                workspace.revision,
+                "HEAD",
+                "--",
+                "docs/features",
+                "docs/tasks",
+            ],
             epic_root,
         ).splitlines()
         number = epic_id.removeprefix("epic_")
         restore = [
-            path for path in changed
+            path
+            for path in changed
             if not Path(path).name.startswith((f"feat_{number}_", f"task_{number}_"))
             and (workspace.path / path).is_file()
         ]
         if not restore:
             return
-        git(["restore", f"--source={workspace.revision}", "--staged", "--worktree", "--", *restore], epic_root)
-        git(["-c", "commit.gpgsign=false", "commit", "-m", f"docs: preserve unrelated specs for {epic_id} review", "--", *restore], epic_root)
+        git(
+            [
+                "restore",
+                f"--source={workspace.revision}",
+                "--staged",
+                "--worktree",
+                "--",
+                *restore,
+            ],
+            epic_root,
+        )
+        git(
+            [
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "-m",
+                f"docs: preserve unrelated specs for {epic_id} review",
+                "--",
+                *restore,
+            ],
+            epic_root,
+        )
 
 
 def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None:
@@ -688,8 +957,31 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         return None
     state = _load(trunk)
     existing = state.get(feature_id)
-    if existing:
+    from cascade.feature.repair import current_feature_repair_record
+
+    repair = current_feature_repair_record(feature_id, root=trunk)
+    generation = int(repair.get("generation") or 0) if repair else 0
+    action_id = str(repair.get("action_id")) if repair else None
+    existing_generation = (
+        int(existing.get("current_generation") or 0) if existing else None
+    )
+    if existing and existing_generation == generation:
+        if "schema_version" not in existing:
+            existing = _store_review_generation(
+                trunk,
+                feature_id,
+                _generation_projection(existing),
+                generation=generation,
+                action_id=action_id,
+            )
         mr = _record_to_mr(existing)
+        if generation > 0:
+            snapshot = merge_request_snapshot(trunk, mr)
+            _require_repair_review_route(existing, snapshot, mr)
+            if snapshot.get("state") not in {"open", "opened"}:
+                if snapshot.get("state") == "merged":
+                    return mr
+                raise GitError("current repair review is not open or merged")
         _ensure_opened_toast(feature_id, mr, existing, root=trunk)
         return mr
     entry = get_integration_worktree(trunk, "feature", feature_id)
@@ -698,15 +990,17 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
     doc = read_doc(feature_id, root=entry.path)
     if doc.meta.tier != "feature" or not doc.meta.parent:
         raise NotFound(feature_id)
-    ready_for_review = doc.meta.status == "completed" and doc.meta.path.parent.name == "3_completed"
+    ready_for_review = (
+        doc.meta.status == "completed" and doc.meta.path.parent.name == "3_completed"
+    )
     if not ready_for_review:
         if doc.meta.status != "active" or doc.meta.path.parent.name != "2_active":
-            raise GitError(f"{feature_id} must be completed on its source branch before review")
+            raise GitError(
+                f"{feature_id} must be completed on its source branch before review"
+            )
         from cascade.boss.rollup import _rollup_gates_pass
 
-        if not _rollup_gates_pass(
-            feature_id, doc.body, merged_board(trunk), trunk
-        ):
+        if not _rollup_gates_pass(feature_id, doc.body, merged_board(trunk), trunk):
             raise GitError(f"{feature_id} is not ready for review publication")
     source = integration_branch("feature", feature_id)
     from cascade.stacked_dispatch import review_target_branch
@@ -718,6 +1012,21 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         raise GitError(f"epic worktree missing: {doc.meta.parent}")
     from cascade.feature.publication import prepare_feature_publication
 
+    prior: dict[str, object] | None = None
+    reuse: MergeRequest | None = None
+    route = "initial" if existing is None else "follow_up"
+    if existing is not None:
+        prior = _generation_projection(existing)
+        prior_mr = _record_to_mr(prior)
+        snapshot = merge_request_snapshot(trunk, prior_mr)
+        _require_repair_review_route(prior, snapshot, prior_mr, intended_target=target)
+        state_name = snapshot.get("state")
+        if state_name in {"open", "opened"}:
+            reuse = prior_mr
+            route = "refresh"
+        elif state_name != "merged":
+            raise GitError("historical review state is unknown or conflicting")
+
     publication = prepare_feature_publication(feature_id, root=trunk)
     push_branch(epic_entry.path, target)
     remote_lease_sha = getattr(publication, "remote_lease_sha", None)
@@ -725,8 +1034,8 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         push_branch(entry.path, source, force_with_lease=remote_lease_sha)
     else:
         push_branch(entry.path, source)
-    mr = find_merge_request(
-        entry.path, source_branch=source, target_branch=target,
+    mr = reuse or find_merge_request(
+        entry.path, source_branch=source, target_branch=target
     ) or create_merge_request(
         entry.path,
         title=f"{feature_id}: {doc.meta.title}",
@@ -738,7 +1047,7 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         target_branch=target,
         draft=False,
     )
-    record = _update_record(trunk, feature_id, {
+    projection = {
         "url": mr.url,
         "number": mr.number,
         "forge": mr.forge,
@@ -747,11 +1056,48 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         "draft": False,
         "seen_comments": [],
         "toast_notified": False,
-    }, create=True, only_if_absent=True)
-    assert record is not None
+        "source_head": head_sha(entry.path),
+        "target_head": head_sha(epic_entry.path),
+        "accepted_merge_sha": None,
+        "closed": False,
+        "route": route,
+        "previous_generation": existing_generation if existing is not None else None,
+        "previous_review_url": prior.get("url") if prior is not None else None,
+    }
+    record = _store_review_generation(
+        trunk,
+        feature_id,
+        projection,
+        generation=generation,
+        action_id=action_id,
+    )
     recorded_mr = _record_to_mr(record)
     _ensure_opened_toast(feature_id, recorded_mr, record, root=trunk)
     return mr if recorded_mr.url == mr.url else recorded_mr
+
+
+def _require_repair_review_route(
+    record: dict[str, object],
+    snapshot: dict[str, object],
+    mr: MergeRequest,
+    *,
+    intended_target: str | None = None,
+) -> None:
+    """Fail closed unless fresh forge facts confirm the recorded review route."""
+
+    target = intended_target or str(record.get("target_branch") or "")
+    observed_target = str(snapshot.get("target_branch") or "")
+    observed_source = str(snapshot.get("source_branch") or "")
+    if (
+        not target
+        or mr.target_branch != target
+        or record.get("source_branch") != mr.source_branch
+        or record.get("target_branch") != mr.target_branch
+        or observed_source != mr.source_branch
+        or observed_target != target
+        or snapshot.get("url") != mr.url
+    ):
+        raise GitError("review route conflicts with authoritative forge facts")
 
 
 def _ensure_opened_toast(
@@ -795,7 +1141,9 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
     source_board = None
     finalized: list[str] = []
     from cascade.boss.rollup import feature_completed_recorded, try_complete_feature
-    from cascade.stacked_review_recovery import persist_if_stacked_review_integration_gap
+    from cascade.stacked_review_recovery import (
+        persist_if_stacked_review_integration_gap,
+    )
 
     for feature_id, record in list(state.items()):
         if persist_if_stacked_review_integration_gap(
@@ -814,19 +1162,24 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
                 except (GitError, ValueError, KeyError):
                     continue
                 before = bool(
-                    epic_id and feature_completed_recorded(feature_id, epic_id, root=trunk)
+                    epic_id
+                    and feature_completed_recorded(feature_id, epic_id, root=trunk)
                 )
                 if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-                    if epic_id and not before and feature_completed_recorded(
-                        feature_id, epic_id, root=trunk
+                    if (
+                        epic_id
+                        and not before
+                        and feature_completed_recorded(feature_id, epic_id, root=trunk)
                     ):
                         finalized.append(feature_id)
                 continue
             feature = trunk_board.by_id.get(feature_id)
             epic = trunk_board.by_id.get(epic_id) if epic_id else None
             terminal_epic = (
-                epic is not None and epic.tier == "epic"
-                and epic.status == "completed" and epic.path.parent.name == "3_completed"
+                epic is not None
+                and epic.tier == "epic"
+                and epic.status == "completed"
+                and epic.path.parent.name == "3_completed"
                 and not is_trunk_pointer(epic)
             )
             if terminal_epic and feature is None and feature_id in epic.children:
@@ -837,15 +1190,20 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
                     source_board = merged_board(trunk)
                 feature = source_board.by_id.get(feature_id)
             if (
-                terminal_epic and feature is not None and feature.tier == "feature"
-                and feature.parent == epic_id and feature.status == "completed"
+                terminal_epic
+                and feature is not None
+                and feature.tier == "feature"
+                and feature.parent == epic_id
+                and feature.status == "completed"
                 and feature.path.parent.name == "3_completed"
             ):
                 # This acknowledges an already terminal parent's history; it
                 # neither emits completion nor changes lifecycle state. Target
                 # repair and stacked integration gaps retain priority above.
                 continue
-            if epic_id and not feature_completed_recorded(feature_id, epic_id, root=trunk):
+            if epic_id and not feature_completed_recorded(
+                feature_id, epic_id, root=trunk
+            ):
                 if try_complete_feature(feature_id, root=trunk, review_merged=True):
                     finalized.append(feature_id)
             continue
@@ -856,6 +1214,10 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
             continue
         if snapshot.get("state") != "merged":
             continue
+        if not review_callback_is_current(
+            feature_id, record, root=trunk, snapshot=snapshot
+        ):
+            continue
         record = _merged_review_record(feature_id, record, snapshot, trunk=trunk)
         mr = _record_to_mr(record)
         epic_id = _review_target_epic(record)
@@ -865,9 +1227,11 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
             else True
         )
         if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-            _update_record(trunk, feature_id, {"closed": True})
-            if epic_id and not before and feature_completed_recorded(
-                feature_id, epic_id, root=trunk
+            _accept_current_review_generation(feature_id, record, snapshot, root=trunk)
+            if (
+                epic_id
+                and not before
+                and feature_completed_recorded(feature_id, epic_id, root=trunk)
             ):
                 finalized.append(feature_id)
     return finalized
@@ -939,7 +1303,12 @@ def _finalize_merged_review_record(
         # The accepted source tree may still have an active feature document.
         # Publish its terminal lifecycle commit before acknowledging closure.
         push_branch(epic_root, mr.target_branch)
-        return try_complete_feature(feature_id, root=trunk, review_merged=True)
+        return try_complete_feature(
+            feature_id,
+            root=trunk,
+            review_merged=True,
+            review_generation=int(record.get("current_generation") or 0),
+        )
     except (BoardError, OSError) as exc:
         _LOG.warning("could not finalize merged review for %s: %s", feature_id, exc)
         return False
@@ -965,9 +1334,9 @@ def _close_merged_feature_on_target(
         raise GitError(f"merged feature target mismatch: {feature_id}")
     if doc.meta.status == "completed" and doc.meta.path.parent.name == "3_completed":
         return entry.path
-    if (
-        (doc.meta.status, doc.meta.path.parent.name)
-        not in (("backlog", "1_backlog"), ("active", "2_active"))
+    if (doc.meta.status, doc.meta.path.parent.name) not in (
+        ("backlog", "1_backlog"),
+        ("active", "2_active"),
     ):
         raise GitError(f"merged feature is not open on epic branch: {feature_id}")
     move_doc(feature_id, "completed", root=entry.path)
@@ -977,7 +1346,9 @@ def _close_merged_feature_on_target(
 def poll_feature_reviews(root: Path) -> None:
     trunk = locate_trunk(root)
     state = _load(trunk)
-    from cascade.stacked_review_recovery import persist_if_stacked_review_integration_gap
+    from cascade.stacked_review_recovery import (
+        persist_if_stacked_review_integration_gap,
+    )
 
     for feature_id, record in list(state.items()):
         if record.get("closed") or record.get("kind") == "epic_close":
@@ -991,10 +1362,16 @@ def poll_feature_reviews(root: Path) -> None:
         for row in snapshot.get("comments", []):
             if not isinstance(row, dict):
                 continue
-            comment_id = str(row.get("id") or row.get("databaseId") or row.get("created_at") or "")
+            comment_id = str(
+                row.get("id") or row.get("databaseId") or row.get("created_at") or ""
+            )
             body = str(row.get("body") or row.get("note") or "").strip()
             author_raw = row.get("author") or row.get("user") or {}
-            author = str(author_raw.get("login") or author_raw.get("username") or "reviewer") if isinstance(author_raw, dict) else str(author_raw)
+            author = (
+                str(author_raw.get("login") or author_raw.get("username") or "reviewer")
+                if isinstance(author_raw, dict)
+                else str(author_raw)
+            )
             if not comment_id or comment_id in seen or not body:
                 continue
             seen.add(comment_id)
@@ -1021,6 +1398,10 @@ def poll_feature_reviews(root: Path) -> None:
         # Merge with the latest record so parallel reviews cannot be reopened.
         _update_record(trunk, feature_id, {"seen_comments": sorted(seen)})
         if snapshot.get("state") == "merged":
+            if not review_callback_is_current(
+                feature_id, record, root=trunk, snapshot=snapshot
+            ):
+                continue
             record = _merged_review_record(feature_id, record, snapshot, trunk=trunk)
             mr = _record_to_mr(record)
             if persist_if_stacked_review_integration_gap(
@@ -1028,7 +1409,9 @@ def poll_feature_reviews(root: Path) -> None:
             ):
                 continue
             if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-                _update_record(trunk, feature_id, {"closed": True})
+                _accept_current_review_generation(
+                    feature_id, record, snapshot, root=trunk
+                )
             else:
                 # Do not acknowledge completion until the local epic worktree
                 # contains the exact tree accepted by the forge.
@@ -1094,7 +1477,9 @@ def _record_to_mr(record: dict[str, object]) -> MergeRequest:
     )
 
 
-def live_merge_request_target_branch(record: dict[str, object], *, root: Path) -> str | None:
+def live_merge_request_target_branch(
+    record: dict[str, object], *, root: Path
+) -> str | None:
     """Read the forge-reported PR/MR base branch without mutating durable state."""
 
     url = str(record.get("url") or "").strip()
@@ -1144,8 +1529,13 @@ def persist_stacked_reconciliation_review(
     if current is not None:
         prior = current.get("stacked_reconciliation")
         if isinstance(prior, dict) and prior.get("action_id") not in (None, action_id):
-            raise GitError(f"{feature_id} already has a different stacked reconciliation")
-        if current.get("url") == mr.url and current.get("target_branch") == mr.target_branch:
+            raise GitError(
+                f"{feature_id} already has a different stacked reconciliation"
+            )
+        if (
+            current.get("url") == mr.url
+            and current.get("target_branch") == mr.target_branch
+        ):
             return current
     record = _update_record(
         trunk,

@@ -9,7 +9,11 @@ Purpose: coordinate cross-tier rollups, Task merges, completion gates, and opera
 `REQ-BOSS-CLOSEOUT-001`: Normal Feature closeout checks child completion,
 comments and review gates under the canonical lifecycle lock. A completed-path
 Feature can still have an open review; document position alone is not forge
-acceptance.
+acceptance. [current_feature_obligation](rollup.py) also requires the current
+repair generation's reserved or original child to be terminal without a live lease, the
+current approval and dependencies, and either exact accepted review evidence or
+explicit local integration evidence. This predicate runs before the completed
+fast path and its result gates checkout retirement.
 `DEC-BOSS-CLOSEOUT-001`: Keep supervised Git integration and rollup outside the
 Task agent, preserving validation evidence and returning refusals to its durable
 queue instead of discarding the source checkout.
@@ -33,6 +37,9 @@ own forge state. These functions collaborate within the local supervisor.
 | [merge_task_branch](merge.py) | Lifecycle lock; validate current delivery, target, comments and architecture; merge and persist completion. |
 | [retry_pending_task_merges](../task_rollup.py) | Resume durable queued actions; retain source/target validation metadata and attempt history. |
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
+| [current_feature_obligation](rollup.py) | Fence completed closeout and retirement to the current repair and review generation. |
+| [feature_review_generation](../review.py) | Read immutable per-generation review facts; top-level fields remain the current compatibility projection. |
+| [_require_repair_review_route](../review.py) | Compare a repair review's URL and source/target route with fresh forge facts before reuse or acceptance. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
 | [prove_terminal_retirement](../workspace/integration_worktree.py) | Verify and, when needed, canonically persist every terminal descendant before best-effort checkout retirement. |
@@ -42,7 +49,7 @@ flowchart TD
     Queue[Durable validated Task action] --> Pair[Check current source and target]
     Pair -->|current and gates pass| Merge[Merge Task and persist terminal record]
     Pair -->|stale or refused| Preserve[Preserve work and recovery evidence]
-    Merge --> Rollup[Normal child and comment gates]
+    Merge --> Rollup[Current repair, child, comment and approval gates]
     Rollup --> Review[Publish Feature review; stage completed document]
     Review --> Accept[Observe forge acceptance]
     Accept --> Proof[Workspace descendant persistence + canonical readback]
@@ -50,12 +57,24 @@ flowchart TD
     Proof -->|refused| Preserve
 ```
 
-Actions in `executions.json` retain authoritative delivery evidence; the pending
-merge list is a scheduling index. Review records live in `reviews.json`. Restart
-retries queued actions and polls reviews. `not_active` is currently treated with
-transient merge waits. The already-completed closeout branch runs before normal
-child gates and may retire on a merged-review callback; it does not establish a
-separate later repair obligation. These are concrete limits of the current flow.
+An open historical review is reused for a repair generation only when a fresh
+forge snapshot confirms the same URL and intended target. Its current generation
+then records the newly published source and target heads. A merged historical
+generation retains its accepted URL and heads; publication creates or recovers a
+distinct follow-up review from the retained Feature branch to the owning Epic
+branch and links it to the prior generation. Closed, missing, unknown, or
+conflicting forge facts stop publication. Registry writes are atomic, so a
+restart after remote creation discovers the same open review instead of creating
+a duplicate.
+
+Actions in `executions.json` retain authoritative delivery and repair evidence;
+the pending merge list is a scheduling index. Feature records in `reviews.json`
+have a schema version, immutable `generations`, and `current_generation`; their
+top-level fields project the current generation for compatibility. A generation
+binds its repair action, route, observed heads, accepted merge, publication
+action and reconciliation status. Restart retries queued actions and polls the
+same current row. A stale callback fails its generation/URL/ref fence and cannot
+close or retire a newer obligation. `not_active` remains a transient merge wait.
 
 Verification: [merge tests](../../tests/boss/test_merge.py),
 [rollup tests](../../tests/boss/test_rollup.py),
