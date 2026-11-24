@@ -673,6 +673,26 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_dd6aae220891bc0d7378fc3fdea7a28803085e15e2d655b8f9ae4dca31765dad",
+      "dependency_id": "dep_gh",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:199525b26cf2496199c8067f00fb546dd9eefbd1af8d73211b9c100619c82d70",
+      "recipe_revision": "sha256:46ad65923c33b124cd1f79554636ed291fa57cf447339b469b35e64182410d5c",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/gh'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.4.0+dfsg1'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:58.332459+00:00",
+      "selected_version": "2.4.0+dfsg1",
+      "integrity_reference": "sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
