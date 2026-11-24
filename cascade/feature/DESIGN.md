@@ -113,6 +113,10 @@ the execution lease under the lifecycle lock. Its typed projection keeps
 selection, request/admission, acknowledgement, execution, refusal and verified
 postcheck evidence distinct; parent reactivation alone is never verified
 delivery.
+After closeout marks the exact repair generation verified, Watchdog separately
+checks the canonical completed Feature, current accepted review heads, surviving
+completed Task and retired owner checkouts. Feature recovery cannot clear the
+shared incident or substitute an older accepted review generation.
 Both entries appear in `cascade-feature-code`, linked from the scoped registry.
 The [Boss closeout](../boss/DESIGN.md#delivery-and-closeout) and
 [Workspace ownership](../workspace/DESIGN.md#work-ownership-and-retirement)

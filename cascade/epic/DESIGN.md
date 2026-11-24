@@ -85,6 +85,9 @@ inspect/admit/resume operation used by Feature self-recovery. Its result keeps
 request, acknowledgement, execution, verification, refusal, and next
 prerequisite separate. A live Feature graph remains an expected wait and does
 not enqueue or claim repair.
+Epic supervision supplies no independent completion assertion: the shared
+Watchdog postcheck consumes the same exact Feature repair/review generation and
+immediate-parent integration evidence before the incident becomes verified.
 
 For other Feature incidents, supervision queues a generation-keyed message and
 wakeup. [The package contract](../DESIGN.md#delivery-and-review-boundaries)

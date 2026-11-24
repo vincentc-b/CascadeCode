@@ -1986,6 +1986,33 @@ code_watchdog_executor = element "_execute_reservation" "Function" "Invoke the o
     }
 }
 
+code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Function" "Re-read canonical Task, Feature, repair, review, owner, delivery, lease and retirement facts for one exact generation." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.postcheck"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incident_postcheck.py"
+        "cascade.sourceSymbol" "reconcile_parent_lifecycle_incident"
+    }
+}
+
+code_watchdog_verify = element "verify_incident_postcheck" "Function" "Atomically convert one exact deferred incident to verified history while preserving prior attempts." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.verify"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "verify_incident_postcheck"
+    }
+}
+
+code_watchdog_incident_projection = element "_incident_projection" "Function" "Serialize bounded typed parent-lifecycle evidence into immutable audit pages." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.incident-projection"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/audit_projection.py"
+        "cascade.sourceSymbol" "_incident_projection"
+    }
+}
+
 code_feature_mint = element "mint_task" "Function" "Admit scoped child specification under lifecycle lock." {
     properties {
         "cascade.semanticId" "element.code.feature.mint"
@@ -2274,6 +2301,24 @@ code_watchdog_recover_to_executor = code_watchdog_recover -> code_watchdog_execu
 code_watchdog_executor_to_feature_recover = code_watchdog_executor -> code_feature_recover "Invokes canonical Feature repair adapter after claim acceptance" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-reservation-executor-to-feature-recover"
+    }
+}
+
+code_watchdog_audit_lane_to_postcheck = code_watchdog_audit_lane -> code_watchdog_postcheck "Reassesses deferred mismatch generations after restart and later sweeps" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-audit-lane-to-postcheck"
+    }
+}
+
+code_watchdog_postcheck_to_verify = code_watchdog_postcheck -> code_watchdog_verify "Closes only the exact proven generation" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-postcheck-to-verify"
+    }
+}
+
+code_watchdog_publish_to_incident_projection = code_watchdog_publish -> code_watchdog_incident_projection "Projects bounded typed evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-publish-to-incident-projection"
     }
 }
 

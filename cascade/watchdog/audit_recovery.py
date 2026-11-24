@@ -100,6 +100,26 @@ class AuditRecoveryWorker:
                 for recovery_request in request:
                     work_id = recovery_request["work_id"]
                     try:
+                        postcheck_generation = recovery_request.get(
+                            "postcheck_generation"
+                        )
+                        if postcheck_generation is not None:
+                            from cascade.watchdog.incident_postcheck import (
+                                reconcile_parent_lifecycle_incident,
+                            )
+
+                            postcheck = reconcile_parent_lifecycle_incident(
+                                work_id,
+                                postcheck_generation,
+                                root=self.root,
+                            )
+                            if (
+                                postcheck.get("verified") is True
+                                or recovery_request.get("postcheck_only") == "true"
+                                or recovery_request.get("authoritative_generation")
+                                == postcheck_generation
+                            ):
+                                continue
                         dispatch_audit_recovery(
                             self.root,
                             work_id,

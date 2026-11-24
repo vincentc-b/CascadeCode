@@ -176,6 +176,55 @@ def test_projects_all_stores_history_legacy_and_malformed_neighbors_without_writ
     assert {path: path.read_bytes() for path in home.iterdir()} == before
 
 
+def test_projects_typed_parent_lifecycle_detail_and_verified_postcheck(
+    tmp_path: Path,
+) -> None:
+    incident = _incident(outcome="success")
+    incident.update(
+        failure_class="parent_lifecycle_mismatch",
+        accountable_owner="feature_team:feat_001",
+        selected_capability="feature_repair",
+        evidence={
+            "feature_id": "feat_001",
+            "reason": "unresolved_recovery_reference",
+            "parent_lifecycle_evidence": {
+                "parent": {"epic_id": "epic_001"},
+                "tested_heads": {"validation": {"deliverable_sha": "source"}},
+                "review_obligation": {"generation": 1},
+            },
+        },
+        request={"reservation_id": "request"},
+        acknowledgement={"accepted": True},
+        result={
+            "adapter_result": {
+                "action_id": "repair",
+                "generation": 2,
+                "phase": "verified",
+                "executed": True,
+            },
+            "postcheck": {
+                "verified": True,
+                "verified_at": STAMP,
+                "reason": "all_generation_obligations_proven",
+            },
+        },
+    )
+    _write(
+        tmp_path / ".cascade" / "executions.json",
+        {"actions": {"repair": {"incident": incident}}},
+    )
+
+    projected = project_recovery_sources(tmp_path)
+
+    row = next(item for item in projected.history if item.work_id == "task_001")
+    assert row.verification_status == "verified"
+    assert row.last_verified_at == STAMP
+    assert row.incident["feature_id"] == "feat_001"
+    assert row.incident["epic_id"] == "epic_001"
+    assert row.incident["execution"]["executed"] is True
+    assert row.incident["verification"]["verified"] is True
+
+
 def test_large_details_are_referenced_not_copied_and_source_failures_are_coverage(
     tmp_path: Path,
 ) -> None:
@@ -237,7 +286,7 @@ def test_manifest_and_single_schema_cover_all_projection_artifacts() -> None:
     schema = projection_json_schema()
 
     assert set(schema["$defs"]["manifest"]["required"]) <= set(manifest)
-    assert manifest["schema_version"] == PROJECTION_SCHEMA_VERSION == 2
+    assert manifest["schema_version"] == PROJECTION_SCHEMA_VERSION == 3
     assert manifest["projection_kind"] == "manifest"
     assert manifest["sections"] == {
         "current": {"page_count": 1, "row_count": 1},
@@ -249,7 +298,7 @@ def test_manifest_and_single_schema_cover_all_projection_artifacts() -> None:
         "by_reason": {"source_missing": 1},
         "other_reasons": 0,
     }
-    assert schema["$id"].endswith("/v2")
+    assert schema["$id"].endswith("/v3")
     assert set(schema["$defs"]) == {"manifest", "current", "coverage", "history"}
 
 
@@ -298,7 +347,7 @@ def test_atomic_publisher_reconciles_matching_authority_and_bounds_pages(
     aggregates = manifest["coverage_aggregates"]
     assert sum(aggregates["by_status"].values()) == manifest["sections"]["coverage"]["row_count"]
     pointer = json.loads((projection_root(tmp_path) / "current.json").read_text())
-    assert pointer == {"schema_version": 2, "epoch": epoch}
+    assert pointer == {"schema_version": PROJECTION_SCHEMA_VERSION, "epoch": epoch}
     current_page = json.loads(
         (projection_root(tmp_path) / epoch / "current" / "000000.json").read_text()
     )

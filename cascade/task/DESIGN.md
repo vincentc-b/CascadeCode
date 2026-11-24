@@ -101,6 +101,10 @@ an immutable attempt. Before any later merge claim,
 [retry_pending_task_merges](../task_rollup.py) recomputes the generation; an
 unchanged observation performs no merge, turn, message or publication. A live
 Task/Feature turn and `busy` remain scheduling waits and spend no attempt.
+The Task boundary supplies the preserved validation pair and completed delivery
+action to the Watchdog postcheck. It does not treat a request, worker completion,
+or local status move as verification; original action and incident history remain
+inspectable after authoritative resolution.
 
 `REQ-TASK-DELIVERY-002`: A queued delivery is valid only for its exact Task
 source and Feature target heads. [retry_pending_task_merges](../task_rollup.py)

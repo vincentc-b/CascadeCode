@@ -331,6 +331,11 @@ accepts one claim, and only then invokes that adapter. Missing capability create
 one bounded investigation handoff when an eligible planning owner exists, or
 retains the probe's exact operator prerequisite. A wakeup, message, or accepted
 claim does not by itself perform or verify a completed-to-active transaction.
+The Watchdog-owned postcheck rereads canonical owner, board, action, execution,
+review and worktree registries and changes only the exact deferred incident to
+verified history after every owed generation fact is proven. Projection
+publication and War Room GET consume that result; neither performs the postcheck
+or schedules recovery.
 [review.py::ensure_feature_review](review.py) and
 [reconcile_feature_review_completions](review.py) persist review state and consume
 forge acceptance. Generation rows bind the repair action, forge identity,

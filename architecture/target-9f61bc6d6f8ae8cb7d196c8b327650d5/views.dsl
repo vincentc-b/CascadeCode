@@ -117,7 +117,7 @@ custom "cascade-watchdog-code" {
         "cascade.codeComponent" "element.component.watchdog"
     }
     include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish
-    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_claim code_watchdog_result
+    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
     autoLayout lr
 }
 
