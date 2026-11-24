@@ -1986,6 +1986,15 @@ code_feature_recover = element "recover_task" "Function" "Recover the existing d
     }
 }
 
+code_feature_mismatch_result = element "ParentLifecycleMismatchRecovery" "TypedDict" "Separates selected owner and operation, request, acknowledgement, execution, refusal, and verified postcheck evidence." {
+    properties {
+        "cascade.semanticId" "element.code.feature.parent-lifecycle-mismatch-recovery"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/recovery.py"
+        "cascade.sourceSymbol" "ParentLifecycleMismatchRecovery"
+    }
+}
+
 code_feature_repair = element "feature_repair" "Function" "Persist and authorize one exact late-repair generation." {
     properties {
         "cascade.semanticId" "element.code.feature.repair"
@@ -2028,6 +2037,15 @@ code_task_actions = element "resume_action" "Function" "Claim and resume durable
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task/action_recovery.py"
         "cascade.sourceSymbol" "resume_action"
+    }
+}
+
+code_task_mismatch = element "ParentLifecycleMismatch" "TypedDict" "Binds one completed-parent refusal to its canonical Feature repair generation." {
+    properties {
+        "cascade.semanticId" "element.code.task.parent-lifecycle-mismatch"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "ParentLifecycleMismatch"
     }
 }
 
@@ -2226,6 +2244,18 @@ code_feature_registry_to_recover = code_feature_registry -> code_feature_recover
     }
 }
 
+code_feature_recover_to_repair = code_feature_recover -> code_feature_repair "Routes completed-parent mismatch through exact repair generation" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-recover-to-repair"
+    }
+}
+
+code_feature_recover_to_mismatch_result = code_feature_recover -> code_feature_mismatch_result "Returns typed recovery evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-recover-to-parent-lifecycle-mismatch-recovery"
+    }
+}
+
 code_feature_registry_to_repair = code_feature_registry -> code_feature_repair "Admits exact repair generations" {
     properties {
         "cascade.semanticId" "relationship.code-feature-registry-to-repair"
@@ -2247,6 +2277,12 @@ code_epic_recover_to_supervise = code_epic_recover -> code_epic_supervise "Uses"
 code_task_registry_to_actions = code_task_registry -> code_task_actions "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-task-registry-to-actions"
+    }
+}
+
+code_task_mismatch_to_actions = code_task_mismatch -> code_task_actions "Suppresses unchanged delivery retries on the original action" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-parent-lifecycle-mismatch-to-actions"
     }
 }
 

@@ -34,6 +34,7 @@ from cascade.watchdog.incidents import (
 FailureClassification = Literal[
     "deterministic_repair",
     "transient_retry",
+    "parent_lifecycle_mismatch",
     "owner_decision",
     "human_gate",
     "terminal_blocker",
@@ -1646,6 +1647,10 @@ _RESUMABLE_STATES = frozenset(("pending", "retryable", "repaired", "ready_to_res
 _FAILURE_STATES: dict[FailureClassification, RecoveryState] = {
     "deterministic_repair": "repaired",
     "transient_retry": "retryable",
+    # The queued action remains resumable after its owning Feature performs the
+    # generation-bound repair.  task_rollup suppresses an unchanged generation
+    # before another attempt can be claimed.
+    "parent_lifecycle_mismatch": "retryable",
     "owner_decision": "awaiting_owner_decision",
     "human_gate": "awaiting_human_gate",
     "terminal_blocker": "blocked",

@@ -310,8 +310,18 @@ owns the proof and existing board, execution, review, Git and registry artifacts
 remain the only durable state. Refusal preserves the source branch and checkout.
 
 [team_supervision.py::supervise_child](team_supervision.py) delegates Task
-recovery to [Feature recovery](feature/recovery.py). Feature-child recovery
-currently inspects incidents and queues a deduplicated team wakeup.
+recovery to [Feature recovery](feature/recovery.py). A queued Task merge refused
+with `not_active` while its Feature is completed is a
+`parent_lifecycle_mismatch`, not a transient merge. The original action retains
+its validation pair, refusal and attempts; its canonical generation binds exact
+owner/status, delivery and repair identities, tested heads, review obligation,
+approval/comment/dependency gates, and execution lease. An unchanged supervisor
+sweep observes that generation without claiming another merge attempt. Feature
+recovery passes the exact generation through the existing `feature_repair`
+inspect/admit/resume operation and reports request, acknowledgement, execution,
+refusal and authoritative verification as separate fields.
+Feature-child recovery otherwise inspects incidents and queues a deduplicated
+team wakeup.
 [epic/recovery.py::recover_feature](epic/recovery.py) exposes that immediate-parent
 adapter. A wakeup does not perform a completed-to-active transaction.
 [review.py::ensure_feature_review](review.py) and
