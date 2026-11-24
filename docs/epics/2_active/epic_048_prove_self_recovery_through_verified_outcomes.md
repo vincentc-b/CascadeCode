@@ -265,6 +265,11 @@ Verification results and exact committed publication references are recorded bel
   Chose Retain proposed numerical defaults/ceilings; use one original-incident budget in the existing executions sidecar, one top-level claim and explicitly charged nested operations. Require enforceable coverage of provider shell and all expensive launch paths..
   Rationale: Generation-specific action limits alone renew allowance. Holding a provider claim while denying its nested tool would deadlock the owner-agent journey; exempting the child would permit overspending. Current CLI transport lacks normalized usage and MCP guards cannot meter unrestricted shell execution.
   Honors: Criteria 3–4 and 16–19; existing lifecycle locks and stores; honest unknown usage; independent extension authority; F1/F2 Task acceptance and F4 adversarial invocation counts..
+
+- `dec_005` · 2026-11-24 · Epic Architect · **Integrated implementation and loaded runtime**
+  Chose Extend four existing Code views with current source declarations; assign Task/Teams/Agent/Workspace ownership explicitly. Require a process-start loaded-artifact receipt and independent postcheck in F3 before F4 operational proof..
+  Rationale: The current model omits publication collaborators and worker restart detail, and worker status has no loaded-revision binding. Source HEAD, a passing render or a provider completion result cannot prove deployed recovery. Reconcile current designs now and keep new guarantees in work records until implemented.
+  Honors: Criteria 1, 6–15; design implementation-depth contract; exact pinned publication; no new deployment boundary or accepted-snapshot rewrite; explicit operational target and authorization gate..
 ## Amendment log
 
 _(none)_
