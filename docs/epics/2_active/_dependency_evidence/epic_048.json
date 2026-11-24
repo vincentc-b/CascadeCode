@@ -1795,6 +1795,118 @@
           "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
         }
       ]
+    },
+    {
+      "snapshot_id": "evidence_0e91bb09aaf747ce9727a860f1fba95b",
+      "manifest_revision": 2,
+      "created_at": "2026-11-24T16:57:39.847780+00:00",
+      "accepted": [
+        {
+          "dependency_id": "dep_python",
+          "attempt_id": "attempt_resume_b48602f39d7144c65eac7c29f5f9338e0f860663981433142987ea4364feb172",
+          "entry_revision": "sha256:87d0266faa8a104131f7c4f0ee252da5e5a9fa4af5f64793d9853b800c8302f3",
+          "recipe_revision": "sha256:ebb6a90cc38bb2cf0306d9b4318d113abf86da0d2ff88bc28ef2b506464836b8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pyyaml",
+          "attempt_id": "attempt_resume_c5d5169f43aeef214e3f5b826c95f55340353a84863507f60503213230161e88",
+          "entry_revision": "sha256:90ca9df26a1405adf966671f27119b614ec8448d52fd45e32db5a8f1eb033a29",
+          "recipe_revision": "sha256:6fe40863b4f1cff8891523c8c7cf8d4cb1c240221c2bc114ea90c3a4189b778a",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_cursor_sdk",
+          "attempt_id": "attempt_resume_7d45fead643d1af4d3f01e95b0d6fc4e2e6fdd1be52d71c0f3167b2eed82017e",
+          "entry_revision": "sha256:a395a794ff2c51141fd3f9922c023a7cd395fdf950f27d86d1fcb316a4aab211",
+          "recipe_revision": "sha256:65ad6a8a5ef0c739a3e11aab7e232efbc65a29d4f767eebb0d193ba3a8b1ee65",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph",
+          "attempt_id": "attempt_resume_70d0b340546ad6cfeeca2a30552253b65611d527e65d4aa6de97811cab5a94e4",
+          "entry_revision": "sha256:615b72c4a1c248a0002b375a13349e3cde7e507f22de5715d4961eb013ac3bab",
+          "recipe_revision": "sha256:29c44453bcd59b40128117f0ccee939e71bbdae69a4d3ea3021bac317390f9a3",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph_checkpoint_sqlite",
+          "attempt_id": "attempt_resume_47b2a10c32c79a21848ca81a5ff5cfc07a1bc0560dba89fda84158934e391564",
+          "entry_revision": "sha256:9049aee02f7f574efadf8ba62f064fc6f31d996b59c66ec2bfe343843e06f817",
+          "recipe_revision": "sha256:9a6df4267142617363e5d33413b58e3ed163b7e7c213cc39c54fc243c1837945",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pytest",
+          "attempt_id": "attempt_resume_f8d31f13d942c46d3d039f1690ff773daa47504c4c9770dd9775a40201bf0f5a",
+          "entry_revision": "sha256:7c19b51a357f6719d1061a5f153ca5c58524313c71b1f945c31a23bfb1d6a1cb",
+          "recipe_revision": "sha256:4b10cd51881dd4ff2639073f5a58c5ae3a5f68ccd19a12ce6615ebc4a3a1fb81",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_setuptools",
+          "attempt_id": "attempt_resume_0b93224a499e1cae9edd063a2b3913f2d84c0074fa07e49fe3d95c31bfff1cd1",
+          "entry_revision": "sha256:fbc28a7f42c120952e6d6771de160c1e0266ea04a858878e921d88d5f36b19d3",
+          "recipe_revision": "sha256:7b0c195945cf8bf3c2b81b420b8925e0bcfe882c9ee76bdbb82c175135c46762",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_playwright",
+          "attempt_id": "attempt_resume_fba9043f1a37efe3066e63bf32821eeee90623d0024aaa4afde92559b861de00",
+          "entry_revision": "sha256:825b241fdda48d522fe3ceaf3484ae1f001209a020c7d82a88bdeaa97a5ac108",
+          "recipe_revision": "sha256:d735f19b277214f8aee433e6b0105280ca8d5521db56369129669dbd977a83f6",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_git",
+          "attempt_id": "attempt_resume_28941df3ef943a122fc8adeaf60bf7083e5577b354b7e0f681faca7a8af44a33",
+          "entry_revision": "sha256:72c25692ecb8e994e4a12348f9e59a75a0eb5aa3710e8ce75f273bdf5aa505d0",
+          "recipe_revision": "sha256:cae3e81d148d9e47d2d3941a337db5ab6f57b6025579fb96eea480957d7df369",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_node",
+          "attempt_id": "attempt_resume_df5e6c476665c7ffcbb05df08c6bf705d8fc668a350101d63af147a558aacc9b",
+          "entry_revision": "sha256:3e4caec83aeb65eeb2804e11a28074a420be39c4c93ef18f7246dcd3b683ff3f",
+          "recipe_revision": "sha256:ce90fec0d74a381fdfca6b0957727ba72826e90047c65f002e36326d42afc347",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_docker",
+          "attempt_id": "attempt_resume_57494e17a861d0c72a4503761efe953b84f00bd6841f66a44e5aaa8eb981cb09",
+          "entry_revision": "sha256:4a9fe88af30fb4376dd8c8a8720cb2aeccdb863822b84fdfd1fb2ad67c34a51f",
+          "recipe_revision": "sha256:aa6a1a69501193732b8a5940bb7e0d290fa15ea5b7235557efa12bac8cc1d2fa",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_codex",
+          "attempt_id": "attempt_resume_c8ce29cdbfbd5b9e1530a5520f22b50a2163f65d6a6660a0d4eeb8cf26f5e011",
+          "entry_revision": "sha256:d410a4d8a381b6fb95c84380b72bfa274cf418b60e1fb969514cc6c689eaeaa1",
+          "recipe_revision": "sha256:447659572004354adb1f8ff0fb2a05e4960b2beb2914f97aa11d5ef3e9c44151",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_gh",
+          "attempt_id": "attempt_resume_eeed94f79e958c42c8a2c8952228331a5ca105d8a85798acd4aebbaf93fe5715",
+          "entry_revision": "sha256:0d9fcaa0db501eada699fb2e5071c38b4b22496dc4aa32331857e0e3f68d98ea",
+          "recipe_revision": "sha256:46ad65923c33b124cd1f79554636ed291fa57cf447339b469b35e64182410d5c",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_structurizr",
+          "attempt_id": "attempt_resume_149d93b434359c27dee9ebfbfc0e1ff9b1409263c3dcc4124c53054594bc85f0",
+          "entry_revision": "sha256:6d4f6c18d7d18c9eeecf56c065ac5fc9ef186f06c0a240ee3d4ed7c99bb0be8a",
+          "recipe_revision": "sha256:3fea0655363c3805fa7a3892ff74f69d2aef47716fdc47aba623dd6c622f81b2",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_chromium",
+          "attempt_id": "attempt_resume_77844e38998464e92042a2b8e355d21a7d42a5cf0bd25b812cc9a7df7b6d9732",
+          "entry_revision": "sha256:15b3f21a1d0c4c73267a34f66f19082ecb068464cbee952ae605637f2e6fb543",
+          "recipe_revision": "sha256:55135f9fa42355711e4feaa30deef8b29e33f739cb954147325d9bd4b9d506c8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        }
+      ]
     }
   ]
 }
