@@ -230,6 +230,10 @@ No DESIGN.md or C4 source edits are included in this manager turn. The current A
 
 - 2026-11-11 · Human · Requested a durable self-recovery contract and regression after the Epic 046 failure; approval is pending PR review and merge.
 
+- `dec_001` · 2026-11-24 · Epic Manager · **Scope and sequencing**
+  Chose Deliver four dependent slices: durable incident budgets; bounded owning-agent recovery; reviewed/loaded runtime and cross-stage proof; adversarial CI plus controlled operational evidence..
+  Rationale: The repository already contains immutable review publication, material-generation fencing, late-child repair and audit postchecks. Extend these boundaries and their real-process harness instead of duplicating lifecycle owners. Establish an executable vertical journey before expanding the negative matrix.
+  Honors: Success criteria 1–19; smallest shippable vertical slice; no parallel recovery scheduler/database; preserve Codex and explicit descendant model/reasoning settings..
 ## Amendment log
 
 _(none)_
