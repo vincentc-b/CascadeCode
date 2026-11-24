@@ -234,6 +234,11 @@ No DESIGN.md or C4 source edits are included in this manager turn. The current A
   Chose Deliver four dependent slices: durable incident budgets; bounded owning-agent recovery; reviewed/loaded runtime and cross-stage proof; adversarial CI plus controlled operational evidence..
   Rationale: The repository already contains immutable review publication, material-generation fencing, late-child repair and audit postchecks. Extend these boundaries and their real-process harness instead of duplicating lifecycle owners. Establish an executable vertical journey before expanding the negative matrix.
   Honors: Success criteria 1–19; smallest shippable vertical slice; no parallel recovery scheduler/database; preserve Codex and explicit descendant model/reasoning settings..
+
+- `dec_002` · 2026-11-24 · Epic Manager · **Budget and authority proposal**
+  Chose Separate material-generation retry admission from one persistent incident-wide allowance. Propose bounded defaults/maxima in the epic table for independent architect and human plan review; no automatic renewal or self-approved extension..
+  Rationale: admit_review_publication_generation currently grows attempt_bound for a new generation. A separate lineage reservation gate is required before tool/provider spending. Unknown provider usage remains unknown with conservative turn/time limits; independent authenticated authority owns explicit extensions.
+  Honors: Success criteria 3–4 and 16–19; preserved attempt/decision history; no self-granted spending, weaker validation or invented token/billing evidence..
 ## Amendment log
 
 _(none)_
