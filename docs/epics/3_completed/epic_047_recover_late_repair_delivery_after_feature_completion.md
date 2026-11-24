@@ -2,7 +2,7 @@
 id: epic_047
 title: Recover late repair delivery after feature completion
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_047_001
@@ -16,7 +16,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-10'
-updated: '2026-11-18'
+updated: '2026-11-24'
 provider: codex
 flex_mode: false
 models:
