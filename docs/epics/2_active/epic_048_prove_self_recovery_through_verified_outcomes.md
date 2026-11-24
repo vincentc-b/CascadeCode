@@ -260,6 +260,11 @@ Verification results and exact committed publication references are recorded bel
   Chose Require both deterministic production-adapter CI and supported real-supervisor evidence. Retain architect review of integrated Code coverage and loaded-runtime identity as a pre-sign-off gate..
   Rationale: The 20 passing baseline tests and 15 verified local software entries establish usable starting tooling, not complete owner-agent recovery or deployment. Local installed identity cannot prove a repaired worker loaded reviewed code; controlled operational execution needs a separately identified environment and current authority.
   Honors: Success criteria 8–15; design implementation-depth contract; no accepted-snapshot rewrite, installation authority by declaration, or completion from helper tests alone..
+
+- `dec_004` · 2026-11-24 · Epic Architect · **Incident accounting and nested execution**
+  Chose Retain proposed numerical defaults/ceilings; use one original-incident budget in the existing executions sidecar, one top-level claim and explicitly charged nested operations. Require enforceable coverage of provider shell and all expensive launch paths..
+  Rationale: Generation-specific action limits alone renew allowance. Holding a provider claim while denying its nested tool would deadlock the owner-agent journey; exempting the child would permit overspending. Current CLI transport lacks normalized usage and MCP guards cannot meter unrestricted shell execution.
+  Honors: Criteria 3–4 and 16–19; existing lifecycle locks and stores; honest unknown usage; independent extension authority; F1/F2 Task acceptance and F4 adversarial invocation counts..
 ## Amendment log
 
 _(none)_
