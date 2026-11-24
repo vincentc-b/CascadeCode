@@ -1145,6 +1145,277 @@
           "ping_action": "ping the team after resolving this blocker"
         }
       ]
+    },
+    {
+      "revision": 6,
+      "recorded_at": "2026-11-24T16:30:22.948541+00:00",
+      "scope": {
+        "manifest_revision": 1,
+        "entries": [
+          {
+            "dependency_id": "dep_python",
+            "source": "existing conda-forge CPython installation",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import sys,hashlib,pathlib; assert sys.version_info[:3]==(3,12,8); assert \"sha256:\"+hashlib.sha256(pathlib.Path(sys.executable).resolve().read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'; import sqlite3,venv'",
+            "paths": [
+              "/opt/conda/bin/python3.12"
+            ],
+            "destination": "/opt/conda/bin/python3.12",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_pyyaml",
+            "source": "existing Python distribution PyYAML",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_cursor_sdk",
+            "source": "existing Python distribution cursor-sdk",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'cursor-sdk'\"'\"'); assert d.version=='\"'\"'1.0.37'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638'\"'\"'; importlib.import_module('\"'\"'cursor_sdk'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_langgraph",
+            "source": "existing Python distribution langgraph",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph'\"'\"'); assert d.version=='\"'\"'1.2.14'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_langgraph_checkpoint_sqlite",
+            "source": "existing Python distribution langgraph-checkpoint-sqlite",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph-checkpoint-sqlite'\"'\"'); assert d.version=='\"'\"'3.1.1'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_pytest",
+            "source": "existing Python distribution pytest",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_setuptools",
+            "source": "existing Python distribution setuptools",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'setuptools'\"'\"'); assert d.version=='\"'\"'80.9.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de'\"'\"'; importlib.import_module('\"'\"'setuptools'\"'\"')'",
+            "paths": [
+              "/opt/conda/lib/python3.12/site-packages"
+            ],
+            "destination": "/opt/conda/lib/python3.12/site-packages",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_playwright",
+            "source": "existing Python distribution playwright",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'playwright'\"'\"'); assert d.version=='\"'\"'1.64.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"')'",
+            "paths": [
+              "/home/ubuntu/.local/lib/python3.12/site-packages"
+            ],
+            "destination": "/home/ubuntu/.local/lib/python3.12/site-packages",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_git",
+            "source": "existing executable /usr/bin/git",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/git'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.34.1'\"'\"' in r.stdout'",
+            "paths": [
+              "/usr/bin/git"
+            ],
+            "destination": "/usr/bin/git",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_node",
+            "source": "existing executable /usr/bin/node",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/node'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'20.20.2'\"'\"' in r.stdout'",
+            "paths": [
+              "/usr/bin/node"
+            ],
+            "destination": "/usr/bin/node",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_docker",
+            "source": "existing executable /usr/bin/docker",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/docker'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'28.0.0'\"'\"' in r.stdout; subprocess.run([p,\"info\",\"--format\",\"{{.ServerVersion}}\"],check=True,timeout=15)'",
+            "paths": [
+              "/usr/bin/docker"
+            ],
+            "destination": "/usr/bin/docker",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_codex",
+            "source": "existing executable /home/ubuntu/.codex/packages/standalone/releases/0.172.0-x86_64-unknown-linux-musl/bin/codex",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/home/ubuntu/.codex/packages/standalone/releases/0.172.0-x86_64-unknown-linux-musl/bin/codex'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'0.172.0'\"'\"' in r.stdout'",
+            "paths": [
+              "/home/ubuntu/.codex/packages/standalone/releases/0.172.0-x86_64-unknown-linux-musl/bin/codex"
+            ],
+            "destination": "/home/ubuntu/.codex/packages/standalone/releases/0.172.0-x86_64-unknown-linux-musl/bin/codex",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_gh",
+            "source": "existing executable /usr/bin/gh",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/gh'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.4.0+dfsg1'\"'\"' in r.stdout'",
+            "paths": [
+              "/usr/bin/gh"
+            ],
+            "destination": "/usr/bin/gh",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_structurizr",
+            "source": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import subprocess,json; d=json.loads(subprocess.run([\"/usr/bin/docker\",\"image\",\"inspect\",'\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"'],capture_output=True,text=True,check=True,timeout=15).stdout)[0]; assert '\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"' in d[\"RepoDigests\"]; assert d[\"Architecture\"]==\"amd64\"; assert d[\"Os\"]==\"linux\"'",
+            "paths": [
+              "local Docker image store"
+            ],
+            "destination": "local Docker image store",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          },
+          {
+            "dependency_id": "dep_chromium",
+            "source": "existing Playwright chromium-1248 browser cache",
+            "integrity_reference": "Observed installed artifact identity (not a claim of upstream provenance): sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+            "setup_operation": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+            "check_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib; from playwright.sync_api import sync_playwright; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025'\"'\"'\nwith sync_playwright() as pw:\n b=pw.chromium.launch(headless=True); assert b.version==\"156.0.8078.4\"; b.close()'",
+            "paths": [
+              "/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome"
+            ],
+            "destination": "/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome",
+            "cleanup": "Read-only verification; retain existing installation; no cleanup required"
+          }
+        ],
+        "feasibility_artifacts": [],
+        "limits": {
+          "timeout_seconds": 180,
+          "max_attempts": 5,
+          "max_output_bytes": 32768,
+          "memory_bytes": null
+        }
+      },
+      "authorization": null,
+      "checking": false,
+      "feasibility_results": [],
+      "blockers": [
+        {
+          "dependency_id": "dep_python",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-24T16:29:59.714572+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import sys,hashlib,pathlib; assert sys.version_info[:3]==(3,12,8); assert \"sha256:\"+hashlib.sha256(pathlib.Path(sys.executable).resolve().read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'; import sqlite3,venv'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+          "expected_verification": "Exit 0 only when exact installed version and declared integrity identity match; operational checks must succeed",
+          "cleanup": "Read-only verification; retain existing installation; no cleanup required",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_pyyaml",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-24T16:30:06.953509+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+          "expected_verification": "Exit 0 only when exact installed version and declared integrity identity match; operational checks must succeed",
+          "cleanup": "Read-only verification; retain existing installation; no cleanup required",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_cursor_sdk",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-24T16:30:12.837125+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'cursor-sdk'\"'\"'); assert d.version=='\"'\"'1.0.37'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638'\"'\"'; importlib.import_module('\"'\"'cursor_sdk'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+          "expected_verification": "Exit 0 only when exact installed version and declared integrity identity match; operational checks must succeed",
+          "cleanup": "Read-only verification; retain existing installation; no cleanup required",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_langgraph",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-24T16:30:17.370580+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph'\"'\"'); assert d.version=='\"'\"'1.2.14'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+          "expected_verification": "Exit 0 only when exact installed version and declared integrity identity match; operational checks must succeed",
+          "cleanup": "Read-only verification; retain existing installation; no cleanup required",
+          "ping_action": "ping the team after resolving this blocker"
+        },
+        {
+          "dependency_id": "dep_langgraph_checkpoint_sqlite",
+          "artifact_id": null,
+          "actor": "human",
+          "last_checked_at": "2026-11-24T16:30:21.925714+00:00",
+          "failed_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph-checkpoint-sqlite'\"'\"'); assert d.version=='\"'\"'3.1.1'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"')'",
+          "environment": "{\"architecture\": \"x86_64\", \"container_digest\": \"not_applicable\", \"environment_id\": \"ip-172-31-37-14\", \"kind\": \"host\", \"platform\": \"linux\", \"repository\": \"/home/ubuntu/dev/CascadeCode\", \"runner\": \"ip-172-31-37-14\", \"runtime\": \"/opt/conda/bin/python3.12\", \"sandbox\": \"host\", \"worktree\": \"/home/ubuntu/dev/CascadeCode\"}",
+          "redacted_output": "",
+          "investigation_steps": "record a current per-entry installation approval or install it manually, then ping again",
+          "install_steps": "printf '%s\\n' 'Installation not authorized by this declaration' >&2; exit 1",
+          "expected_verification": "Exit 0 only when exact installed version and declared integrity identity match; operational checks must succeed",
+          "cleanup": "Read-only verification; retain existing installation; no cleanup required",
+          "ping_action": "ping the team after resolving this blocker"
+        }
+      ]
     }
   ]
 }
