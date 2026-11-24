@@ -413,5 +413,39 @@
     "verification": "Canonical epic/Feature reads and empty amendment result; retained sign-off revisions; design-path resolution; source/design/model diff; JSON parse and git diff --check. No runtime tests, render or browser checks rerun. Child Task records remain outside the previously established content-access boundary.",
     "publication": "The preserved Epic publication request remains terminal failed with no new recovery evidence or supported retry tool supplied. Runtime-owner recovery is still required; reported Feature review does not recover the separate Epic operation or permit substitution of its pinned references.",
     "handoff": "F3 owns Task-record correction and final runtime/cross-stage/diagram proof. Acknowledge its existing handoff and finish this planning turn so child delivery can proceed. Resume on corrected-record, supported refusal or delivery evidence; no polling."
+  },
+  "manager_acceptance_reconciliation_followup": {
+    "role": "epic_manager",
+    "trigger": "TeamMessage feat_048_003:feat_048_003:task-acceptance-reconciliation-20261124",
+    "review_base": "365e44cb",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "a4a20bd3e791e251f3882a60b1314bcbd58cb5b6",
+    "assessment": "Canonical epic and Feature plans are unchanged and no architecture amendments are open. The report supplies the previously requested refusal, recovery owner and next supported action; it does not correct Task 001 acceptance or satisfy implementation delivery. No parent scope change, policy decision, spec write or renewed sign-off is required.",
+    "reported_evidence": {
+      "task_001": {
+        "refusal": "task_048_003_001 cannot be revised while active",
+        "state": "Active with live execution lease; acceptance remains TBD; no child implementation delivered to the Feature integration branch, as reported by F3.",
+        "recovery_owner": "Task 001 SWE, coordinated by F3 Feature Lead",
+        "next_supported_action": "Correct the Task contract when the lifecycle permits (blocked/backlog/ready_to_plan without live lease), or retain the refusal as an unresolved delivery gate. Do not force that transition or interrupt live execution solely to edit the contract."
+      },
+      "task_002": {
+        "revision": "1190eed23e4b5f4e69af03878520daba89b70c39",
+        "change": "Acceptance explicitly names cascade-teams-code for shared publication."
+      },
+      "task_003": {
+        "revision": "af34b6f38c25bf03cbfb4d759157113c2a538542",
+        "change": "Final closure explicitly names cascade-war-room-components, cascade-dashboard-code, cascade-war-room-http-code and cascade-teams-code."
+      },
+      "evidence_boundary": "Task revisions, active lease, refusal and owner routing are reported by the owning Feature; child Task bodies were not independently inspected. Canonical Feature plan a4a20bd3 was read. Its matching architecture review remains reported evidence, not runtime/render/browser acceptance."
+    },
+    "delivery_disposition": "Retain unresolved Task 001 acceptance-record correction before delivery. The complete Feature contract and existing owner handoff remain execution guidance, not a corrected Task record. F3 must return the resulting supported correction revision when available and reconcile implementation, tests and all diagram obligations at closeout. No duplicate owner correction request, parent takeover or repeated active-edit attempt is needed.",
+    "design_closeout": {
+      "reviewed_evidence": "Retained Manager/Architect review and seven-design inventory; all design paths resolve. git diff c717bb36 over cascade, DESIGN.md and docs/architecture is empty.",
+      "impact": "This artifact records Task acceptance ownership and evidence only. No context actor/authority, container/store, component/interface, Code declaration/ownership or execution/recovery transition changes. Retain the existing per-view diagram-impact inventory; the newly reported Task revisions explicitly cover shared publication and health consumers. No DESIGN/model edit is warranted.",
+      "checks": "Canonical epic/Feature reads; empty architecture amendment result; retained design-path resolution; unchanged source/design/model; JSON parse and git diff --check.",
+      "limits": "No runtime tests, rendering or browser journeys rerun for this artifact-only update. No child implementation, deployment, full-tree documentation completeness or delivery acceptance claimed."
+    },
+    "remaining_owners": "F3 owns Task-record correction and runtime/cross-stage/navigation proof. F2 retains closeout evidence reconciliation; F4 retains operational proof. Terminal Epic architecture publication still requires supported runtime-owner recovery coordinated by Epic Architect; no recovery evidence was supplied.",
+    "handoff": "Acknowledge the concrete refusal/owner/next action and reported backlog acceptance revisions. Finish this planning turn to allow child delivery. Next substantive update should contain a corrected record, changed recovery prerequisite or implementation delivery evidence; no acknowledgement-only response or polling is needed."
   }
 }
