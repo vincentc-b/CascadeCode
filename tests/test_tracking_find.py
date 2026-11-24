@@ -18,6 +18,7 @@ def test_find_merge_request_reuses_matching_open_review(
     rows = [
         {"url": "https://github.example/pull/1", "number": 1, "baseRefName": "other", "isDraft": False, "state": "OPEN"},
         {"url": "https://github.example/pull/2", "number": 2, "baseRefName": "main", "isDraft": False, "state": "CLOSED"},
+        {"url": "https://github.example/pull/merged", "number": 8, "baseRefName": "main", "isDraft": False, "state": "MERGED"},
         {"url": "https://github.example/pull/3", "number": 3, "baseRefName": "main", "isDraft": True, "state": "OPEN"},
     ]
 
@@ -52,12 +53,13 @@ def test_github_snapshot_uses_supported_query_and_last_commit_as_source_revision
             assert args == [
                 "gh", "pr", "view", mr.url, "--json",
                 (
-                    "state,isDraft,comments,reviews,url,baseRefName,commits,body,"
+                    "state,isDraft,comments,reviews,url,headRefName,baseRefName,commits,body,"
                     "mergeCommit,mergeable,mergeStateStatus"
                 ),
             ]
             return subprocess.CompletedProcess(args, 0, json.dumps({
-                "state": "MERGED", "baseRefName": "main", "mergeCommit": {"oid": sha},
+                "state": "MERGED", "headRefName": "epic/epic_001",
+                "baseRefName": "main", "mergeCommit": {"oid": sha},
                 "commits": [
                     {"oid": previous_sha, "messageHeadline": "First commit"},
                     {"oid": source_sha, "messageHeadline": "PR head commit"},
@@ -74,6 +76,7 @@ def test_github_snapshot_uses_supported_query_and_last_commit_as_source_revision
     assert snapshot["mergeability"] == "mergeable"
     assert snapshot["description"] == "Review description"
     assert snapshot["source_revision"] == source_sha
+    assert snapshot["source_branch"] == "epic/epic_001"
 
 
 def test_review_snapshot_exposes_conflicting_mergeability(tmp_path: Path) -> None:

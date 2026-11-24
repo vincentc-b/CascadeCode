@@ -129,6 +129,7 @@
     {"dsl_identifier": "code_boss_evidence", "semantic_id": "element.code.boss.evidence", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_retire", "semantic_id": "element.code.boss.retire", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_review", "semantic_id": "element.code.boss.review", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_boss_review_route", "semantic_id": "element.code.boss.review-route", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_obligation", "semantic_id": "element.code.boss.current-obligation", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_review_generation", "semantic_id": "element.code.boss.review-generation", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_reconcile", "semantic_id": "element.code.boss.reconcile", "fragment": "model.dsl"},
@@ -146,6 +147,7 @@
     {"dsl_identifier": "code_epic_recover", "semantic_id": "element.code.epic.recover", "fragment": "model.dsl"},
     {"dsl_identifier": "code_epic_supervise", "semantic_id": "element.code.epic.supervise", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_actions", "semantic_id": "element.code.task.actions", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_task_revalidation", "semantic_id": "element.code.task.delivery-revalidation", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_leases", "semantic_id": "element.code.task.leases", "fragment": "model.dsl"}
   ],
   "fragments": [
@@ -296,6 +298,8 @@
     {"dsl_identifier": "code_boss_merge_to_lock", "semantic_id": "relationship.code-boss-merge-to-lock", "source": "code_boss_merge", "destination": "code_boss_lock", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_rollup_to_lock", "semantic_id": "relationship.code-boss-rollup-to-lock", "source": "code_boss_feature", "destination": "code_boss_lock", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_rollup_to_review", "semantic_id": "relationship.code-boss-rollup-to-review", "source": "code_boss_feature", "destination": "code_boss_review", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_boss_review_to_route", "semantic_id": "relationship.code-boss-review-to-review-route", "source": "code_boss_review", "destination": "code_boss_review_route", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_boss_queue_to_task_revalidation", "semantic_id": "relationship.code-boss-queue-to-task-revalidation", "source": "code_boss_queue", "destination": "code_task_revalidation", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_rollup_to_retire", "semantic_id": "relationship.code-boss-rollup-to-retire", "source": "code_boss_feature", "destination": "code_boss_retire", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_rollup_to_obligation", "semantic_id": "relationship.code-boss-rollup-to-current-obligation", "source": "code_boss_feature", "destination": "code_boss_obligation", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_obligation_to_review_generation", "semantic_id": "relationship.code-boss-obligation-to-review-generation", "source": "code_boss_obligation", "destination": "code_boss_review_generation", "fragment": "model.dsl"},

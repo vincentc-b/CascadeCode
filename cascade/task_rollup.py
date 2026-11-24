@@ -82,6 +82,9 @@ def _queued_merge_action(
     metadata: dict[str, object] = {"task_id": task_id}
     if delivery_evidence is not None:
         metadata["final_validation"] = dict(delivery_evidence)
+        repair_link = _feature_repair_delivery_link(task_id, root)
+        if repair_link is not None:
+            metadata["feature_repair"] = repair_link
     action = create_or_load_action(
         _queued_merge_action_id(task_id),
         _QUEUED_MERGE_KIND,
@@ -111,6 +114,36 @@ def _queued_merge_action(
         # head here invalidates the exact pair that just passed validation.
         # Reconcile derived blockers only after the canonical merge succeeds.
     return action
+
+
+def _feature_repair_delivery_link(
+    task_id: str, root: Path
+) -> dict[str, object] | None:
+    """Bind current queue evidence to the repair generation that owns the Task."""
+
+    try:
+        feature_id = read_doc(task_id, root=root).meta.parent
+    except NotFound:
+        return None
+    if not feature_id:
+        return None
+    from cascade.feature.repair import current_feature_repair_record
+
+    repair = current_feature_repair_record(feature_id, root=root)
+    if repair is None or (
+        repair.get("task_id") != task_id
+        and repair.get("request_id") != _queued_merge_action_id(task_id)
+    ):
+        return None
+    action_id = repair.get("action_id")
+    generation = repair.get("generation")
+    if not isinstance(action_id, str) or not isinstance(generation, int):
+        return None
+    return {
+        "action_id": action_id,
+        "generation": generation,
+        "feature_id": feature_id,
+    }
 
 
 def queue_task_merge(
@@ -262,10 +295,12 @@ def retry_pending_task_merges(root: Path, *, feature_id: str | None = None) -> l
             and _merge_head_pair(task_id, repo) is not None
             and not delivery_evidence_is_current(task_id, evidence, root=repo)
         ):
-            # A branch moved after validation.  Do not execute an old merge;
-            # the next final validation will publish a replacement handoff.
-            invalidate_task_merge(task_id, root=repo)
-            removable.append(task_id)
+            # A branch moved after validation. Synchronize through the normal
+            # guarded branch service, then return the original Task to the
+            # supervised final gate. The old action and validation stay in the
+            # ledger as history, but cannot authorize this new head pair.
+            if _request_delivery_revalidation(task_id, evidence, repo):
+                removable.append(task_id)
             continue
         if _already_completed_equivalent(task_id, repo):
             from cascade.task.action_recovery import reconcile_completed_task_delivery
@@ -302,6 +337,60 @@ def retry_pending_task_merges(root: Path, *, feature_id: str | None = None) -> l
             removed = set(removable)
             _write(repo, [task_id for task_id in latest if task_id not in removed])
     return completed
+
+
+def _request_delivery_revalidation(
+    task_id: str, evidence: dict[str, str], root: Path
+) -> bool:
+    """Synchronize a stale delivery and queue one exact-pair validation turn."""
+
+    from cascade.task.execution import mark_stall_recovery_queued
+    from cascade.task.wiring import invalidate_validated_delivery
+    from cascade.watchdog.events import read_events
+    from cascade.workspace.branch_synchronization import update_integration_branch
+
+    synchronization = update_integration_branch(task_id, root=root)
+    if not synchronization.ok:
+        return False
+    heads = _merge_head_pair(task_id, root)
+    if heads is None:
+        return False
+    replacement = {
+        "task_id": task_id,
+        "deliverable_sha": heads[0],
+        "feature_base_sha": heads[1],
+    }
+    invalidate_validated_delivery(task_id, root=root)
+    events, _ = read_events(task_id, 0, root=root)
+    if not any(
+        event.type == "TaskValidationRetryRequested"
+        and event.payload.get("reason") == "delivery_heads_moved"
+        and event.payload.get("replacement_pair") == replacement
+        for event in events
+    ):
+        append_event(
+            task_id,
+            Event(
+                type="TaskValidationRetryRequested",
+                ts=datetime.now(timezone.utc),
+                payload={
+                    "task_id": task_id,
+                    "reason": "delivery_heads_moved",
+                    "stale_validation": dict(evidence),
+                    "replacement_pair": replacement,
+                    "instruction": (
+                        "The Task source or Feature target moved after final validation. "
+                        "Use the existing checkout and implementation, run the scoped "
+                        "Cascade swe_run_tests command on the clean committed tree, and "
+                        "publish replacement evidence only after it is green."
+                    ),
+                },
+                dest=task_id,
+            ),
+            root=root,
+        )
+    mark_stall_recovery_queued(task_id, root=root)
+    return True
 
 
 def _owned_by_feature(task_id: str, feature_id: str, root: Path) -> bool:

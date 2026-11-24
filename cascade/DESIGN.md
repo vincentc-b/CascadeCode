@@ -286,6 +286,13 @@ Feature registry entry retains immutable generation rows and one current
 compatibility projection. Only a callback matching the current generation,
 URL and source/target route can satisfy closeout; historical acceptance remains
 inspectable but cannot approve later repair code.
+`REQ-REVIEW-REPAIR-002`: Repair publication observes the recorded review at the
+forge before selecting a route. A confirmed open review can be refreshed at the
+same URL; a confirmed merged review requires a linked follow-up from the retained
+Feature branch to its owning Epic branch. Unknown or conflicting state fails
+closed. Reconciliation binds callbacks to their immutable generation and exact
+accepted source/target heads, while independent target integration remains a
+separate closeout obligation.
 `DEC-CASCADE-RECOVERY-001`: Preserve a single local lifecycle authority across
 team adapters, watchdog claims and Boss delivery, with repository-specific state
 resolved through Workspace.

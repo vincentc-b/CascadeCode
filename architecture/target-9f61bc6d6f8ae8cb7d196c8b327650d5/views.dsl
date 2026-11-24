@@ -51,7 +51,7 @@ custom "cascade-task-code" {
         "cascade.codeComponent" "element.component.task-team"
     }
     include code_task_graph code_task_state code_task_checkpoint code_task_wiring code_task_registry code_task_guard code_task_runtime code_task_provider
-    include code_task_actions code_task_leases
+    include code_task_actions code_task_leases code_task_revalidation
     autoLayout lr
 }
 
@@ -127,7 +127,7 @@ custom "cascade-boss-code" {
         "cascade.codeComponent" "element.component.boss"
     }
     include code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_feature code_boss_epic
-    include code_boss_evidence code_boss_retire code_boss_review code_boss_reconcile code_boss_lock code_boss_obligation code_boss_review_generation
+    include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_reconcile code_boss_lock code_boss_obligation code_boss_review_generation
     autoLayout lr
 }
 

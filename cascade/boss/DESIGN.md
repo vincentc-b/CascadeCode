@@ -39,6 +39,7 @@ own forge state. These functions collaborate within the local supervisor.
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
 | [current_feature_obligation](rollup.py) | Fence completed closeout and retirement to the current repair and review generation. |
 | [feature_review_generation](../review.py) | Read immutable per-generation review facts; top-level fields remain the current compatibility projection. |
+| [_require_repair_review_route](../review.py) | Compare a repair review's URL and source/target route with fresh forge facts before reuse or acceptance. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
 | [prove_terminal_retirement](../workspace/integration_worktree.py) | Verify and, when needed, canonically persist every terminal descendant before best-effort checkout retirement. |
@@ -55,6 +56,16 @@ flowchart TD
     Proof -->|complete| Close[Attempt retirement]
     Proof -->|refused| Preserve
 ```
+
+An open historical review is reused for a repair generation only when a fresh
+forge snapshot confirms the same URL and intended target. Its current generation
+then records the newly published source and target heads. A merged historical
+generation retains its accepted URL and heads; publication creates or recovers a
+distinct follow-up review from the retained Feature branch to the owning Epic
+branch and links it to the prior generation. Closed, missing, unknown, or
+conflicting forge facts stop publication. Registry writes are atomic, so a
+restart after remote creation discovers the same open review instead of creating
+a duplicate.
 
 Actions in `executions.json` retain authoritative delivery and repair evidence;
 the pending merge list is a scheduling index. Feature records in `reviews.json`

@@ -1869,6 +1869,15 @@ code_boss_review = element "ensure_feature_review" "Function" "Publish through r
     }
 }
 
+code_boss_review_route = element "_require_repair_review_route" "Function" "Require fresh forge URL and source/target facts before a repair review is reused or followed up." {
+    properties {
+        "cascade.semanticId" "element.code.boss.review-route"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "_require_repair_review_route"
+    }
+}
+
 code_boss_reconcile = element "reconcile_feature_review_completions" "Function" "Reconcile forge acceptance and target closeout." {
     properties {
         "cascade.semanticId" "element.code.boss.reconcile"
@@ -2022,6 +2031,15 @@ code_task_actions = element "resume_action" "Function" "Claim and resume durable
     }
 }
 
+code_task_revalidation = element "_request_delivery_revalidation" "Function" "Synchronize a moved Feature base and queue the original Task for an exact replacement final-validation pair." {
+    properties {
+        "cascade.semanticId" "element.code.task.delivery-revalidation"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "_request_delivery_revalidation"
+    }
+}
+
 code_task_leases = element "execution_lease_is_live" "Function" "Reject reuse while execution owner is live." {
     properties {
         "cascade.semanticId" "element.code.task.leases"
@@ -2112,6 +2130,18 @@ code_boss_rollup_to_lock = code_boss_feature -> code_boss_lock "Uses" {
 code_boss_rollup_to_review = code_boss_feature -> code_boss_review "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-boss-rollup-to-review"
+    }
+}
+
+code_boss_review_to_route = code_boss_review -> code_boss_review_route "Checks fresh forge route" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-review-to-review-route"
+    }
+}
+
+code_boss_queue_to_task_revalidation = code_boss_queue -> code_task_revalidation "Queues replacement final validation when either head moves" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-queue-to-task-revalidation"
     }
 }
 

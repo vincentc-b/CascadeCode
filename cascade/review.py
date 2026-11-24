@@ -975,6 +975,13 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
                 action_id=action_id,
             )
         mr = _record_to_mr(existing)
+        if generation > 0:
+            snapshot = merge_request_snapshot(trunk, mr)
+            _require_repair_review_route(existing, snapshot, mr)
+            if snapshot.get("state") not in {"open", "opened"}:
+                if snapshot.get("state") == "merged":
+                    return mr
+                raise GitError("current repair review is not open or merged")
         _ensure_opened_toast(feature_id, mr, existing, root=trunk)
         return mr
     entry = get_integration_worktree(trunk, "feature", feature_id)
@@ -1005,6 +1012,21 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         raise GitError(f"epic worktree missing: {doc.meta.parent}")
     from cascade.feature.publication import prepare_feature_publication
 
+    prior: dict[str, object] | None = None
+    reuse: MergeRequest | None = None
+    route = "initial" if existing is None else "follow_up"
+    if existing is not None:
+        prior = _generation_projection(existing)
+        prior_mr = _record_to_mr(prior)
+        snapshot = merge_request_snapshot(trunk, prior_mr)
+        _require_repair_review_route(prior, snapshot, prior_mr, intended_target=target)
+        state_name = snapshot.get("state")
+        if state_name in {"open", "opened"}:
+            reuse = prior_mr
+            route = "refresh"
+        elif state_name != "merged":
+            raise GitError("historical review state is unknown or conflicting")
+
     publication = prepare_feature_publication(feature_id, root=trunk)
     push_branch(epic_entry.path, target)
     remote_lease_sha = getattr(publication, "remote_lease_sha", None)
@@ -1012,10 +1034,8 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         push_branch(entry.path, source, force_with_lease=remote_lease_sha)
     else:
         push_branch(entry.path, source)
-    mr = find_merge_request(
-        entry.path,
-        source_branch=source,
-        target_branch=target,
+    mr = reuse or find_merge_request(
+        entry.path, source_branch=source, target_branch=target
     ) or create_merge_request(
         entry.path,
         title=f"{feature_id}: {doc.meta.title}",
@@ -1040,6 +1060,9 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         "target_head": head_sha(epic_entry.path),
         "accepted_merge_sha": None,
         "closed": False,
+        "route": route,
+        "previous_generation": existing_generation if existing is not None else None,
+        "previous_review_url": prior.get("url") if prior is not None else None,
     }
     record = _store_review_generation(
         trunk,
@@ -1051,6 +1074,30 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
     recorded_mr = _record_to_mr(record)
     _ensure_opened_toast(feature_id, recorded_mr, record, root=trunk)
     return mr if recorded_mr.url == mr.url else recorded_mr
+
+
+def _require_repair_review_route(
+    record: dict[str, object],
+    snapshot: dict[str, object],
+    mr: MergeRequest,
+    *,
+    intended_target: str | None = None,
+) -> None:
+    """Fail closed unless fresh forge facts confirm the recorded review route."""
+
+    target = intended_target or str(record.get("target_branch") or "")
+    observed_target = str(snapshot.get("target_branch") or "")
+    observed_source = str(snapshot.get("source_branch") or "")
+    if (
+        not target
+        or mr.target_branch != target
+        or record.get("source_branch") != mr.source_branch
+        or record.get("target_branch") != mr.target_branch
+        or observed_source != mr.source_branch
+        or observed_target != target
+        or snapshot.get("url") != mr.url
+    ):
+        raise GitError("review route conflicts with authoritative forge facts")
 
 
 def _ensure_opened_toast(
