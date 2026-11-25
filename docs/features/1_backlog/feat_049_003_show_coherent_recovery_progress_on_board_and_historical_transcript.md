@@ -54,17 +54,46 @@ Architecture contract resolved by Epic decisions dec_004–dec_006. Required Tas
 
 ## Data structures
 
-TBD.
+### Confirmed upstream planning handoff
+
+Feature 2 confirmation `feat_049_002:feat_049_002:ack_detail_contract_confirmed_20261125` is persisted in its canonical spec (reviewed revision `ac9ddcf32cd67965da38682847f59e183f78b1d7`, decisions dec_007–dec_008). This confirms planned interfaces, not completed implementation. Feature 2 owns their authoritative storage/API definitions; final source revision and route/error fixtures must arrive through the parent before UI integration acceptance.
+
+Consume producer revision `dc47068cebf5643c319d37785edf35882fb96941` and `tests/war_room/fixtures/recovery_progress_v1_epic_044.json`, with `tests/war_room/test_recovery_progress_api.py` and `tests/war_room/test_http_read.py`. That fixture covers a waiting blocker, not the full operational timeline required above. Preserve receipt_id and entry_id unchanged, nullable legacy occurrence, safe target/provenance and ordered references. Success includes entry_count and entry schema_version/entry_revision; pending omits entry_count.
+
+Feature 2 Task 002 owns `append_committed_recovery_receipt(root, receipt, snapshot)` and `recovery_progress.publisher.record_transcript_milestone(root, ack)`. The acknowledgement carries receipt_id, entry_id, graph_id, message_id, incarnation and append_sequence. JSONL fsync and index commit precede graph-fence release and publisher mapping; replay retries the same receipt through an append-before-ack crash and advances its source cursor only after durable mapping. UI consumes committed milestone_refs and renders delivery lag honestly; it must not synthesize anchors from unacknowledged receipts. Final fixtures must demonstrate an anchor resolving after replay without duplicate lines.
+
+Transcript items distinguish recovery_milestone, role_reply and human, with nullable occurred_at separate from appended_at and direct/reconciled/legacy_unknown provenance. Feature 2 owns serialization; UI preserves these distinctions and safe rendering.
 
 ## API contracts
 
-TBD.
+Consume Feature 1's completed `GET /api/recovery/progress?work_id=<id>&cursor=<opaque>`. Progress cursors bind work and projection revision; 400 invalid_request and 409 revision_changed remain distinct, with restart plus previous_revision/current_revision on conflict. Preserve typed pending evidence states rather than interpreting them as healthy empty recovery.
+
+Feature 2 owns these confirmed planned endpoints:
+- `GET /api/transcript/v1/<graph_id>?direction=older|after&cursor=<opaque>&limit=<n>`: latest 50 by default, maximum 100; envelope includes schema_version, graph_id, incarnation, high_water_mark, completeness, observed_at, items, older_cursor, after_cursor and has_more. Older paging retains its high-water across appends; incremental paging follows committed append sequence.
+- `GET /api/chat/<graph_id>`: bounded legacy array with Link continuation and X-Transcript-Completeness, X-Transcript-Incarnation and X-Transcript-Has-More headers. Typed 503 transcript_unavailable must not appear as a healthy empty history.
+- `GET /api/transcript/v1/<graph_id>/items/<message_id>/detail?cursor=<opaque>`: detail_truncated/detail_url/detail_cursor preview metadata leads to immutable UTF-8-aligned chunks of at most 64 KiB. Envelope contains schema_version, graph_id, message_id, incarnation, encoding, chunk, next_cursor and complete; verify exact serialized chunk field against final fixtures before implementation.
+
+Transcript page cursors bind graph/incarnation/direction/position/high-water; detail cursors bind graph/incarnation/message/digest/offset. Consume typed 400 invalid_request, 409 cursor_restart and 503 history_pending using Feature 2's final fixtures; restart conflicts include restart, current_incarnation and restart_url for transcript pages. Reject late responses from a replaced graph/incarnation, keep progress revision separate from transcript incarnation, and never splice incompatible detail chunks. Explicitly show incomplete import and pending history.
+
+Required UI acceptance includes preview-to-detail continuation, stale detail cursor recovery and a wrong-graph rejection. All endpoints retain 1 MiB aggregate source and 256 KiB response budgets and read only immutable projections. No UI refresh repairs storage or invokes providers, Git, checkpoints or recovery.
 
 ## Logic flow
 
+Planned consumer flow; reconcile with final upstream fixtures and implemented UI:
+
 ```mermaid
 flowchart TD
-  A[Start] --> B[End]
+  A[Select work and owning graph] --> P[Read progress projection]
+  A --> H[Read latest transcript page]
+  P --> S[Render current summary and committed milestone links]
+  H --> T[Render dated authored history and system milestones]
+  T --> O[Load older or poll after cursor]
+  T --> D[Follow bounded detail continuation]
+  O --> V{Matching graph and incarnation?}
+  D --> V
+  V -->|Yes| T
+  V -->|No| R[Restart affected history read without mixing pages]
+  S --> L[Resolve committed message anchor in history]
 ```
 
 ## Task breakdown
