@@ -2,7 +2,8 @@
 
 Purpose: expose the Python package and CLI composition root for repository-local delivery. Interfaces are `cascade.cli` and the domain packages below. Owns `REQ-CASCADE-001` (one local composition root) and `DEC-CASCADE-001` (domain packages remain independently testable).
 
-
+Known gaps: authoritative recovery source ledgers remain monolithic, so source
+write and replay cost is measured rather than claimed to be byte-bounded.
 
 ## Parent interfaces
 

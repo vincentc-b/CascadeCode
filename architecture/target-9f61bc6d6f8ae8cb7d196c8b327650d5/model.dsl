@@ -3153,21 +3153,21 @@ code_cli_drain_to_code_agent_cancel = code_cli_drain -> code_agent_cancel "Cance
     }
 }
 
-code_dashboard_recovery = element "recovery_incident_from_action" "Function" "Projects routing and blocker evidence; does not establish live execution." {
+code_dashboard_recovery = element "board_recovery_projection" "Function" "Projects the published primary entry into the compatible board summary and additive version metadata." {
     properties {
         "cascade.semanticId" "element.code.dashboard.recovery"
         "cascade.parent" "element.component.dashboard"
-        "cascade.sourcePath" "cascade/war_room/recovery_incident.py"
-        "cascade.sourceSymbol" "recovery_incident_from_action"
+        "cascade.sourcePath" "cascade/war_room/recovery_progress.py"
+        "cascade.sourceSymbol" "board_recovery_projection"
     }
 }
 
-code_dashboard_incidents = element "recovery_incidents_by_work_id" "Function" "Selects one non-completed action per affected work item from the action snapshot." {
+code_dashboard_incidents = element "read_recovery_progress" "Function" "Reads revision-bound immutable work pages with no-follow opens and aggregate source, row and response ceilings." {
     properties {
         "cascade.semanticId" "element.code.dashboard.incidents"
         "cascade.parent" "element.component.dashboard"
-        "cascade.sourcePath" "cascade/war_room/recovery_incident.py"
-        "cascade.sourceSymbol" "recovery_incidents_by_work_id"
+        "cascade.sourcePath" "cascade/war_room/recovery_progress.py"
+        "cascade.sourceSymbol" "read_recovery_progress"
     }
 }
 
@@ -3333,9 +3333,15 @@ code_task_executor_live_identity = element "_executor_live_identity" "Function" 
     }
 }
 
-dashboard_incidents_to_dashboard_recovery = code_dashboard_incidents -> code_dashboard_recovery "Projects each retained action" {
+dashboard_incidents_to_dashboard_recovery = code_dashboard_incidents -> code_dashboard_recovery "Projects the exact published primary into board compatibility fields" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-incidents-to-dashboard-recovery"
+    }
+}
+
+dashboard_router_to_progress_reader = code_dashboard_router -> code_dashboard_incidents "Dispatches bounded recovery progress reads" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-router-to-progress-reader"
     }
 }
 

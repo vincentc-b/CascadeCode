@@ -635,6 +635,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
     def _exact_get_routes(cls) -> dict[str, GetRoute]:
         routes = {
             "/api/board": lambda h: h._handle_board(),
+            "/api/recovery/progress": lambda h: h._handle_recovery_progress(),
             "/api/brief/template": lambda h: h._handle_brief_template(),
             "/api/boss_view": lambda h: h._handle_boss_view(),
             "/api/orphans": lambda h: h._handle_orphans(),
@@ -702,6 +703,72 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             )
         except (ValueError, OSError) as exc:
             self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._json_response(HTTPStatus.OK, payload)
+
+    def _handle_recovery_progress(self) -> None:
+        from cascade.war_room.recovery_progress import (
+            RecoveryProgressRequestError,
+            RecoveryProgressRevisionChanged,
+            read_recovery_progress,
+        )
+
+        try:
+            query = urllib.parse.parse_qs(
+                urllib.parse.urlsplit(self.path).query,
+                keep_blank_values=True,
+                strict_parsing=True,
+            )
+        except ValueError as exc:
+            self._json_response(
+                HTTPStatus.BAD_REQUEST,
+                {"error": {"code": "invalid_request", "message": str(exc)}},
+            )
+            return
+        if any(key not in {"work_id", "cursor", "limit"} for key in query):
+            self._json_response(
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "error": {
+                        "code": "invalid_request",
+                        "message": "unknown recovery progress parameter",
+                    }
+                },
+            )
+            return
+        if (
+            len(query.get("work_id", [])) != 1
+            or len(query.get("cursor", [])) > 1
+            or len(query.get("limit", [])) > 1
+        ):
+            self._json_response(
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "error": {
+                        "code": "invalid_request",
+                        "message": "work_id must occur exactly once",
+                    }
+                },
+            )
+            return
+        work_id = query["work_id"][0]
+        cursor = query.get("cursor", [None])[0]
+        try:
+            limit = int(query.get("limit", ["50"])[0])
+            payload = read_recovery_progress(
+                self.server.root,
+                work_id,
+                cursor=cursor,
+                limit=limit,
+            )
+        except (RecoveryProgressRequestError, ValueError) as exc:
+            self._json_response(
+                HTTPStatus.BAD_REQUEST,
+                {"error": {"code": "invalid_request", "message": str(exc)}},
+            )
+            return
+        except RecoveryProgressRevisionChanged as exc:
+            self._json_response(HTTPStatus.CONFLICT, exc.to_dict())
             return
         self._json_response(HTTPStatus.OK, payload)
 

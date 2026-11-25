@@ -228,6 +228,7 @@
   ],
   "relationships": [
     {"dsl_identifier": "dashboard_incidents_to_dashboard_recovery", "semantic_id": "relationship.code-dashboard-incidents-to-dashboard-recovery", "source": "code_dashboard_incidents", "destination": "code_dashboard_recovery", "fragment": "model.dsl"},
+    {"dsl_identifier": "dashboard_router_to_progress_reader", "semantic_id": "relationship.code-dashboard-router-to-progress-reader", "source": "code_dashboard_router", "destination": "code_dashboard_incidents", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_router_to_dashboard_chat_get", "semantic_id": "relationship.code-dashboard-router-to-dashboard-chat-get", "source": "code_dashboard_router", "destination": "code_dashboard_chat_get", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_chat_get_to_dashboard_chat_read", "semantic_id": "relationship.code-dashboard-chat-get-to-dashboard-chat-read", "source": "code_dashboard_chat_get", "destination": "code_dashboard_chat_read", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_transcript_to_dashboard_chat_append", "semantic_id": "relationship.code-dashboard-transcript-to-dashboard-chat-append", "source": "code_dashboard_transcript", "destination": "code_dashboard_chat_append", "fragment": "model.dsl"},

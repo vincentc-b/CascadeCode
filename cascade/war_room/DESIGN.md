@@ -26,9 +26,14 @@ expired, corrupt, identity-mismatched or incomplete evidence must remain explici
 pending/unavailable metadata rather than a healthy empty result.
 
 The Watchdog [materializes this contract](../watchdog/DESIGN.md#current-recovery-progress-publication).
-The existing `recovery_incident` board summary remains the current coarse reader
-until the bounded progress route consumes those files; it must not reinterpret a
-queued marker or attempt result as live execution or verified resolution.
+`GET /api/recovery/progress` and board serialization share
+[`read_recovery_progress`](recovery_progress.py). The route defaults to 50 and
+caps at 100 entries; its opaque cursor binds exact work ID, immutable revision
+and row offset. A superseded revision returns a typed restart conflict. The
+compatible `recovery_incident` board field is derived from the same selected
+entry and carries additive version, revision, entry, freshness, count and
+continuation metadata under `recovery_progress`. Across board rows, reads share
+the 100-entry, 1 MiB source budget and each response remains below 256 KiB.
 
 `REQ-WARROOM-TRANSCRIPT-001`: Historical chat preserves the owning Epic or
 Feature's human and presentable role messages. Reading chat does not invoke a
@@ -49,7 +54,8 @@ the transcript library within the same Python runtime.
 
 | Entry point | Input, output and boundary |
 |---|---|
-| [recovery_incidents_by_work_id / recovery_incident_from_action](recovery_incident.py) | Consume the shared action snapshot, omit completed actions and select one summary per affected work item by update time. Explicit blockers produce blocked; an enqueued routing marker produces investigating; otherwise the summary is failed. This coarse label does not prove an executing attempt. |
+| [read_recovery_progress / read_recovery_progress_many](recovery_progress.py) | Open only a work-hashed direct no-follow pointer, its immutable manifest and requested pages. Validate exact work/repository identity, freshness, revision and row shape while enforcing aggregate source, row and response budgets. Missing, stale, corrupt and wrong-root evidence is typed pending. |
+| [board_recovery_projection](recovery_progress.py) | Preserve the coarse `recovery_incident` surface while selecting its action and revision from the same safe entry returned to room consumers. Presentation never grants retry authority. |
 | [handle_get_chat](sidecar_routes.py) | Validates the graph ID and returns the existing JSONL rows through `read_messages`; no sync occurs on GET. |
 | [read_messages / _chat_read_path](chat_store.py) | Resolve the registered room without building the merged board, read the whole file and ignore malformed JSON lines. Missing history returns an empty list. This interface has no pagination or source-byte bound. |
 | [append_transcript_message / remove_message](chat_store.py) | Append a UUID, author, body and append-time `ts`; remove a failed human-ingest row by rewriting the file. Both use `process_lock`, which fences threads only. |
@@ -81,7 +87,8 @@ Action attempts and acknowledgements persist independently in the
 Chat has no cross-process uniqueness fence, source-occurrence timestamp or
 live attempt milestone protocol. A queued summary, checkpoint or historical
 message therefore cannot establish live execution or verified resolution.
-Verification: [projection scenarios](../../tests/war_room/test_recovery_incident_projection.py),
+Verification: [bounded progress scenarios](../../tests/war_room/test_recovery_progress_api.py),
+[projection scenarios](../../tests/war_room/test_recovery_incident_projection.py),
 [transcript scenarios](../../tests/war_room/test_planning_transcript.py) and
 [read routing](../../tests/war_room/test_chat_poll_routing.py) exercise these
 current boundaries, including GET without graph construction.
