@@ -2,7 +2,7 @@
 id: feat_048_004
 title: Gate recovery with adversarial CI and controlled supervisor evidence
 tier: feature
-status: active
+status: completed
 parent: epic_048
 children:
 - task_048_004_001
