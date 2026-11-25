@@ -14,6 +14,13 @@ repair generation's reserved or original child to be terminal without a live lea
 current approval and dependencies, and either exact accepted review evidence or
 explicit local integration evidence. This predicate runs before the completed
 fast path and its result gates checkout retirement.
+Epic closeout accepts a Feature in `3_completed` with status `cancelled` only
+when cleanup completed without error and the canonical Epic contains the matching
+resolved `continue_reduced_scope` feedback (same child, parent, reason and
+cancellation timestamp). The cancelled Feature remains historical, not delivered;
+missing, stale, unresolved, replacement/replan or parent-cancellation dispositions
+still block this gate. The publication checkout must not contain an open child copy.
+All normal review, architecture, and comment gates continue to apply.
 `DEC-BOSS-CLOSEOUT-001`: Keep supervised Git integration and rollup outside the
 Task agent, preserving validation evidence and returning refusals to its durable
 queue instead of discarding the source checkout.
