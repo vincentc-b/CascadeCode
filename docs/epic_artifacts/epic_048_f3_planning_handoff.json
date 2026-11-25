@@ -676,5 +676,44 @@
     },
     "publication": "Separate Epic architecture publication remains terminal failed in epic_048_publication_resume.json. Supported runtime-owner recovery coordinated by Epic Architect is still required; this event supplies no changed recovery prerequisite.",
     "handoff": "Proceed with the existing Task 003 then Task 004 sequence. Return with substantive delivery or a changed blocker; no acknowledgement-only reply requested. End this planning turn to permit child delivery."
+  },
+  "architect_task002_gap_review": {
+    "role": "epic_architect",
+    "trigger": "TeamMessage feat_048_003:feat_048_003:task002-integration-gap-task004-06fdb44b",
+    "reviewed_manager_commit": "09556ee9d77f5e90c3f429e2072b26c84b3b65f2",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "06fdb44b53fa9fbe26c717d0e47672ce975bdc63",
+    "assessment": "Concur with manager_task002_gap_review. The canonical Feature revision assigns two unmet existing proofs to Task 004 after Task 003, within approved Epic scope. No parent contract amendment, spec write or renewed Epic sign-off is needed. Architecture amendments are empty. Final Feature architecture review must cover the later Task 004 diff and final canonical revision; the earlier a4a20bd3 review does not certify those changes.",
+    "evidence_boundary": "Task 002 merge f238169dfcb8a32768fb5d13c9314a8b1a49de72, real-worker convergence and Task 004 acceptance revision 05b1296f are reported by F3. Read the canonical Feature contract independently; did not inspect child source or guarded Task content. Owned Epic source/design/model remain unchanged from c717bb36. No child runtime, render or browser acceptance is established here.",
+    "required_proof": [
+      "Task 004 must interrupt the production publication path after a successful remote push and before its local completion receipt. Resume through supported recovery, observe the authoritative remote before replay, count effects independently and prove one publication effect and eventual original-incident closure. A manual push followed by repeated reconciliation is insufficient. Unavailable remote evidence must stay pending without a blind repush.",
+      "Task 004 must read the original incident budget through read_incident_budget before bootstrap, after restart and after resumed recovery, including split roots. Preserve incident/account identity, prior consumption, receipt/history and reservation reconciliation; replacement runtime/action generations cannot create allowance. Retained consumption may increase for real work but cannot reset. Prove exhaustion refuses expensive work without an independently authorized extension.",
+      "Task 003 owns preflight and architecture verification of its pinned input. Task 004 and Feature reviewers then reconcile the final implementation diff, refresh affected source/design/model/browser evidence and provide a concrete reason for each unchanged level. Preserve prior proof only where its source and boundary remain applicable.",
+      "Feature Lead retains Task 001 completed-record TBD acceptance/test-plan limitation, exact active/completed edit refusals and obligation-to-evidence mapping. Do not repeat guarded edits without changed prerequisites. F4 retains operational proof and measured budget feasibility; no installation or live deployment is authorized."
+    ],
+    "diagram_impact_reconciliation": {
+      "inventory": "Retain diagram_impact_inventory and architect_contract_review. Task 004 inherits the applicable rows in its own acceptance; Feature reviewers verify the reported Task acceptance revision through the supported board route.",
+      "context_containers": "cascade-landscape, cascade-context and cascade-containers: no actor, authority, runtime or store changes in this artifact-only diff. Task 004 checks final bootstrap, split-root persistence and remote boundaries against root, package and Workspace designs.",
+      "components": "cascade-cli-components, cascade-supervisor-components, cascade-team-components and cascade-war-room-components: this handoff changes no interface. Task 004 checks changed runtime/publication/postcheck producers and health consumers together.",
+      "code": "cascade-workspace-commands-code, cascade-workspace-code, cascade-watchdog-code, cascade-feature-code, cascade-task-code and cascade-teams-code retain implementation ownership. Trace read_incident_budget/reserve_incident_operation/settle_incident_operation, launcher/worker restart, publication/reconciliation and reconcile_parent_lifecycle_incident against actual delivered symbols. Include cascade-dashboard-code and cascade-war-room-http-code for changed health interfaces. This artifact changes no declaration, kind or ownership.",
+      "behavior": "Task 004 reconciles owning-design normal and failure/resume flows with actual lost-receipt and original-budget transitions. No transition changes in this handoff.",
+      "verification_required": "For affected final views, synchronize native Code metadata and source contract, validate symbol kinds/ownership and stale renamed/deleted links, resolve design links, retain bounded rendering, verify context-to-Code, Level up, deep-link and pinned-source navigation, and record measured warm artifact reuse. A test-only final diff may retain prior UI evidence with exact revision applicability and a concrete no-change explanation."
+    },
+    "design_closeout": {
+      "reviewed_designs": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/workspace/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "cascade/war_room/DESIGN.md"
+      ],
+      "review": "Reviewed retained all-level inventory and Manager gap disposition; reread Workspace lifecycle/runtime limitations and Watchdog reservation/postcheck persistence and recovery. Child design reconciliation remains F3-owned pending integration. No DESIGN/model edit warranted for this artifact-only review; no new current-design claim or delivery attribution is added.",
+      "checks": "Canonical Epic/Feature reads; empty architecture amendments; seven design paths resolve; empty diff from c717bb36 over cascade, DESIGN.md and architecture; JSON parse and git diff --check.",
+      "limits": "No runtime tests, render or browser journey rerun. No child implementation acceptance or full-tree documentation completeness claimed."
+    },
+    "publication": "Separate pinned Epic publication remains terminal failed in epic_048_publication_resume.json. No supported terminal publication/render retry appears in the current tool catalog and no changed recovery prerequisite was supplied. Preserve exact request, attempt history and lineage for the architecture runtime owner; do not replay or fabricate a replacement publication.",
+    "handoff": "Send the architect disposition to F3. Task 003 continues, Task 004 follows, and final Feature review incorporates both. End the planning turn to permit child delivery; no acknowledgement-only reply or polling needed."
   }
 }
