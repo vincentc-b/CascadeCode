@@ -204,5 +204,64 @@
       ]
     },
     "approval_publication": "Epic spec and existing approval unchanged. Known already-approved sign-off refusal not repeated. Original failed publication stays pinned in epic_048_publication_resume.json; no replacement request, snapshot or successful publication claimed."
+  },
+  "manager_fourth_red_reconciliation": {
+    "trigger": "feat_048_004:feat_048_004:task3-fourth-red-f1-gate-107d3a26",
+    "owned_base": "a63c3000",
+    "epic_revision": "ed2fe1b08d6bb7e4589fa694b981abd4de5466da",
+    "canonical_feature_revision": "107d3a267da1153e77d5818188e7abd19f35389d",
+    "assessment": "Canonical read matches the incoming revision. Record-only changes preserve dec_008, F1 correction ownership and all existing acceptance. No Epic spec/decision amendment or new Feature/Task acceptance edit is needed.",
+    "reported_fourth_run": {
+      "revision": "ab5de09224d8fa849fe2e163c7e9d88ef7d23f3d",
+      "passed": 161,
+      "failed": 1,
+      "seconds": 212.73,
+      "failure": "test_validation_and_publication_failures_remain_owned_and_retryable: expected completed, observed awaiting_owner_decision",
+      "state": "Task 3 blocked and unmerged"
+    },
+    "evidence_boundary": "Fourth observation is distinct from 373cbb17, e9ea4848 and 10b9dd73. Results and forge observation (PR #251 open, review-recovery failure at ff3cd399) are owner-reported, not independently rerun. Canonical F4 record and scoped Git changed-path inventory were checked; no scoped Task contents accessed.",
+    "f1_inspection": {
+      "canonical_revision": "ff3cd399d1523ba6c4e123825c811f8c0b700e7c",
+      "supervise_child": {
+        "child_id": "feat_048_001",
+        "status": "completed",
+        "incidents": [],
+        "action": "inspect"
+      },
+      "interpretation": "Read-only status does not establish repair admission or a runtime refusal. Existing stable dispatch and repair request remain in epic_048_pr251_f1_repair_dispatch.json; unchanged recovery was not redispatched."
+    },
+    "next_owner_action": "F1 returns admitted action/generation or exact loaded-runtime refusal, prerequisite and supported alternative, then repairs existing branch/PR through normal review. Preserve original budget/history and numerical/human/retry gates, unchanged-material fences, bounded genuine changed-material retry and real-validator/Git regression proof. Green review-recovery at corrected PR #251 head before merge, then supported F4 integration and full bounded CI/final architecture dossier; Epic Manager retains final Epic CI.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:f4-fourth-red-107d3a26-ack",
+      "status": "enqueued",
+      "instruction": "Retain blocked deliverable and existing Architect review request for 107d3a26. Acknowledgement needs no plan edit, Task redispatch or unchanged validation. Store acknowledgement-only evidence in closeout artifacts."
+    },
+    "design_closeout": {
+      "reviewed": [
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md"
+      ],
+      "source_checks": [
+        "cascade/epic/recovery.py:recover_feature",
+        "cascade/team_supervision.py:supervise_child",
+        "cascade/feature/repair.py:feature_repair",
+        "cascade/feature/repair.py:_admission_gates",
+        "cascade/feature/repair.py:_recheck_action"
+      ],
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers unchanged: evidence-only diff adds no actors, runtime, storage or isolation boundaries.",
+      "components_code": "cascade-supervisor-components/cascade-team-components/cascade-epic-code/cascade-feature-code unchanged: no implementation, source-symbol, responsibility or interface change. Existing source-linked recovery and guarded admission views remain applicable. F1 retains correction view updates; F4 retains final integrated verification.",
+      "behavior": "Existing designs distinguish queued coordination from persistent generation-bound admission and restart, with approval, checkout, dependency, owner and target-drift gates. Record-only changes add no flow or state transition.",
+      "verification": "Canonical reads and read-only child inspection; git diff --name-only 89c1bbd4 107d3a26 contains Feature/Task records only; design/source trace; artifact JSON, source/design references and git diff --check. No runtime, render, browser or hosted CI rerun.",
+      "gaps": [
+        "F1 admission or precise runtime refusal",
+        "F1 correction and green PR #251",
+        "Matching F4 plan review through existing queued request",
+        "Final integrated CI/design/navigation and Epic CI",
+        "Separate controlled-supervisor authority/evidence",
+        "Supported terminal architecture-publication recovery"
+      ]
+    },
+    "approval_publication": "Epic spec and existing approval unchanged. No known-refused sign-off retry, replacement publication or accepted-snapshot rewrite."
   }
 }
