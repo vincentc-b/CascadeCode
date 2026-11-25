@@ -631,5 +631,50 @@
     },
     "publication": "Separate pinned Epic publication remains terminal failed in epic_048_publication_resume.json. The exposed tool catalog has no terminal publication/render retry operation and no changed recovery prerequisite was supplied. Preserve its exact request and lineage for supported runtime-owner recovery.",
     "handoff": "F3 proceeds with existing Task 002/003 ownership and substantive closeout. End this planning turn to permit child delivery; return on new delivery or changed recovery prerequisites."
+  },
+  "manager_task002_gap_review": {
+    "role": "epic_manager",
+    "trigger": "TeamMessage feat_048_003:feat_048_003:task002-integration-gap-task004-06fdb44b",
+    "review_base": "c4ad3bae",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "06fdb44b53fa9fbe26c717d0e47672ce975bdc63",
+    "assessment": "Canonical F3 now assigns two existing acceptance gaps to Task 004 after Task 003. This is bounded completion of approved criteria 7, 8, 10, 13 and 16-18, not additional epic scope. No parent spec change, new policy decision or renewed Epic sign-off is needed; architecture amendments are empty.",
+    "evidence_boundary": {
+      "canonical": "Read Epic and Feature through Cascade MCP. Feature includes Task 004 and its dependency on Task 003, and explicitly retains both gaps.",
+      "reported": "Task 002 merge f238169dfcb8a32768fb5d13c9314a8b1a49de72, fresh live-worker postcheck and colocated/split-root restart test are Feature-reported implementation evidence. Task 004 own acceptance revision 05b1296f is reported, not independently read. No child source or guarded Task record was inspected in this turn.",
+      "owned": "Epic source, designs and architecture remain unchanged from c717bb36. No runtime, render or browser result is newly verified."
+    },
+    "delivery_gates": [
+      {
+        "owner": "F3 Task 004 and Feature reviewers",
+        "requirement": "Inject interruption on the production publication path after the remote push succeeds and before its local completion receipt. Restart/re-enter through supported recovery, observe the authoritative remote before replay, independently count publication effects and prove exactly one effect plus eventual original-incident closure. A manual push followed by repeated reconciliation does not satisfy this gate; do not fabricate successful receipts or mutate lifecycle state."
+      },
+      {
+        "owner": "F3 Task 004 and Feature reviewers",
+        "requirement": "Read the original Task incident budget through its public API before bootstrap, after bootstrap/restart and after resumed recovery, including split roots. Assert the same incident/account identity, retained prior consumption/history/reservations and finite allowance; new action or runtime generations cannot replenish it. Show exhausted allowance refuses further expensive work without an authorized extension. Reuse existing fixtures and production adapters; keep proof focused on these gaps."
+      },
+      {
+        "owner": "F3 Task 003, then Task 004 and final Feature reviewers",
+        "requirement": "Task 003 retains read-only operational preflight and all-view verification of its pinned merged revision. Task 004 must reconcile the later diff and refresh affected source/design/model/navigation evidence before Feature acceptance. A Task 003 result cannot certify later changes; an unchanged level needs a concrete diff-based reason."
+      },
+      {
+        "owner": "F3 Feature Lead",
+        "requirement": "Retain Task 001 completed acceptance/test-plan TBD limitation, both active/completed edit refusals and evidence mapping in final closeout. Do not repeat refused edits absent changed prerequisites. Provide one final obligation-to-evidence map including exact revisions, commands/results and unresolved gaps."
+      }
+    ],
+    "sequencing": "Task 003 continues; Task 004 follows it as recorded in the canonical Feature contract. F4 retains adversarial CI, measured feasibility and separately authorized operational proof. No installation or live deployment authority is added.",
+    "design_closeout": {
+      "reviewed": "Retained diagram_impact_inventory and architect_contract_review; reread cascade/workspace/DESIGN.md lifecycle/loaded-identity boundary and cascade/watchdog/DESIGN.md admission/postcheck persistence. All seven retained owning design paths resolve.",
+      "context": "This handoff changes no actor, external dependency or authority boundary.",
+      "containers": "This handoff changes no worker/process, runtime or persistence boundary.",
+      "components": "This handoff changes no producer/consumer or public interface.",
+      "code": "This handoff changes no source symbol, declaration kind or component ownership; retain all existing Code view assignments including shared publication and War Room consumers.",
+      "behavior": "This handoff changes no state transition; it keeps interruption/restart and budget-continuity evidence open for the final implementation.",
+      "changes": "No DESIGN/model edit warranted for this artifact-only diff. Task 004 owns reconciliation of any later implementation change, including affected Task budget design/source and existing native Code views.",
+      "checks": "Canonical Epic/Feature reads; empty architecture amendments; design-path resolution; empty diff from c717bb36 over cascade, DESIGN.md and architecture; JSON parse and git diff --check.",
+      "limits": "No runtime tests, render or browser journey rerun; no full-tree documentation completeness or child implementation acceptance claimed."
+    },
+    "publication": "Separate Epic architecture publication remains terminal failed in epic_048_publication_resume.json. Supported runtime-owner recovery coordinated by Epic Architect is still required; this event supplies no changed recovery prerequisite.",
+    "handoff": "Proceed with the existing Task 003 then Task 004 sequence. Return with substantive delivery or a changed blocker; no acknowledgement-only reply requested. End this planning turn to permit child delivery."
   }
 }
