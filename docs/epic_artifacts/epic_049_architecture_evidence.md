@@ -240,3 +240,39 @@ row without scheduling; the special retry branch applies only to
 change reviewed pins to manufacture a new operation. The exact request and
 operation IDs above remain the runtime recovery handoff. Publication is still
 incomplete; this turn does not claim a retry or a new publication result.
+
+## Progress v1 consumer contract routing
+
+Handled TeamMessage `feat_049_001:feat_049_001_contract_handoff_20261125`.
+Read the canonical Epic and both Feature specs through Cascade. Feature 1
+revision `9c97b16f8c3d6853c7a1903cbaddd71c1fcd83e0` owns the proposed receipt,
+entry and bounded progress API contract. Feature 2 remains backlog, dependent
+on Feature 1. Saved the producer handoff into Feature 2's Data structures,
+API contracts and Risks sections through `write_doc`, then read back revision
+`f93d076a2ae29233bff668aa4f76ad320315c1c2`. Existing scope, lifecycle metadata,
+model selections, dependency order and transcript acceptance are preserved.
+
+Cascade enqueued `epic_049:progress_v1_consumer_confirmation_20261125` to
+Feature 2 and `epic_049:progress_v1_handoff_routed_20261125` to Feature 1.
+Consumer agreement is pending, not implied by this parent review. Feature 2
+must return agreement or exact identity/field/route/error/cursor/sanitization
+mismatches through the parent. Feature 1 Task 4 supplies fixture paths and
+revisions, including canonical identity serialization, absent-value treatment,
+nested payloads/error discriminators and receipt-to-milestone linkage. Ordered
+milestone references remain pending until the transcript event is durable.
+The separate transcript API remains Feature 2's responsibility.
+
+Reviewed the War Room recovery/transcript, Task action-evidence and Workspace
+invocation/transcript design sections and their parent/Watchdog references.
+No design/model edit is warranted for this routing-only change: context actors
+and container boundaries are unchanged; component ownership and current Code
+symbols are unchanged; no implemented execution, persistence or recovery flow
+changed. The existing diagram-impact inventory and Task verification ownership
+remain in force. Proposed interface detail stays in work records until source
+implementation. The Epic revision/sign-offs are unchanged. Architecture
+publication remains an unresolved runtime-recovery handoff, as recorded above.
+
+Verification: canonical Feature 2 readback confirmed the saved handoff and
+preserved metadata; both message calls returned `enqueued`; `git diff --check`
+passed. No executable code changed, and no new test or browser run is claimed.
+Return control for child work; relay the consumer response on its next event.
