@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from cascade.agent.discovery.types import ProviderCompatibilityEvidence
 from cascade.board.errors import GitError
 from cascade.board.store import move_doc, read_doc
 from cascade.boss.merge import merge_task_branch
@@ -28,6 +29,10 @@ def _provider_inventory(monkeypatch):
     inventory = _inventory("offered")
     monkeypatch.setattr("cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory)
     monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr(
+        "cascade.agent.selection_preflight.probe_provider_compatibility",
+        lambda _provider: ProviderCompatibilityEvidence(True, True, True),
+    )
     monkeypatch.setattr("cascade.review.find_merge_request", lambda *args, **kwargs: None)
 
 

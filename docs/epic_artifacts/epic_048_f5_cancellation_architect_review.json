@@ -1,0 +1,74 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_architect",
+  "reviewed_plan_revision": "af7af906a3bbc0084734ee169ca0af922085ce20",
+  "reviewed_child_revision": "0588442acee31bb524da4de8d3ce0d2ada77b45a",
+  "assessment": "The reduced scope agrees with dec_008/dec_009 supersession, human dec_011 and Manager dec_012. F5 cancellation is complete; its analysis is retained historical evidence. F1 owns correction acceptance and F4 owns final integrated acceptance. No additional implementation, replacement Feature or plan edit is needed.",
+  "canonical_evidence": {
+    "source": "Cascade read_doc(epic_048), read_doc(feat_048_005) and list_children",
+    "child_status": "cancelled",
+    "cancellation_step": "complete",
+    "cancellation_error": null,
+    "reason": "Superseded by accepted Feature 001 correction (PR #251, 51cffe14); no independent implementation remains required",
+    "cancelled_at": "2026-11-25T05:06:14.533072+00:00",
+    "preserved_approval": "2026-11-25T04:56:14.346929+00:00",
+    "parent": "epic_048",
+    "children": [],
+    "preserved_history": "Technical diagnosis, proposed acceptance, architecture inventory, original dependencies and parent linkage remain in the cancelled Feature record. Its superseded production assignment is not executable scope.",
+    "parent_disposition": "continue_reduced_scope",
+    "disposition_resolved_at": "2026-11-25T05:07:03.653261+00:00",
+    "architecture_amendments": []
+  },
+  "lifecycle_boundary": {
+    "available_tools": "Current Epic MCP catalog exposes no cancellation or cancellation-disposition operation. The operator route is cascade cancel <work_id> --reason <reason> --root <repository>, invoking cascade.cancellation.cancel_work_item; parent disposition uses the human cancellation-feedback flow. Both prerequisites are already fulfilled here.",
+    "normal_trace": "cancel_work_item checkpoints cancelling, completes owned artifact teardown, persists cancelled/complete, and records parent feedback; choose_cancellation_disposition records the human decision and releases the cancellation feedback gate for reduced scope.",
+    "failure_resume_trace": "Incomplete teardown preserves cancelling with step/error. Replay resumes owned teardown; an already-cancelled record returns its preserved result and idempotent parent feedback. Completed work cannot be relabelled through cancellation.",
+    "rollup": "The canonical Epic records the Manager's single refusal: Epic recovery action is no longer admitted. This review does not repeat that call or assert completed Epic state. Current admitted recovery/closeout evidence and outstanding acceptance remain prerequisites."
+  },
+  "design_closeout": {
+    "reviewed_designs": [
+      "cascade/epic/DESIGN.md",
+      "cascade/feature/DESIGN.md"
+    ],
+    "source_references": [
+      "cascade/cancellation.py:cancel_work_item",
+      "cascade/cancellation_feedback.py:choose_cancellation_disposition",
+      "cascade/cli.py",
+      "cascade/epic/registry.py",
+      "cascade/epic/planning_signoffs.py"
+    ],
+    "diff": "0366356d..af7af906 changes only the Epic work record. No production source, design, DSL or source-contract delta.",
+    "diagram_impact": {
+      "cascade-landscape / cascade-context": "No actor or external-system change; cancellation records existing operator authority.",
+      "cascade-containers": "No runtime, communication, persistence or isolation boundary changes.",
+      "cascade-supervisor-components / cascade-team-components": "No changed responsibility or interface; the scoped team remains distinct from the operator lifecycle service.",
+      "cascade-epic-code / cascade-feature-code": "No source symbol, declaration kind or component ownership changes; existing integrated views and source links remain applicable.",
+      "supplementary_behavior": "Existing checkpoint/restart and scoped refusal flows remain accurate. The recorded lifecycle transition does not add or alter behavior."
+    },
+    "verification": "Reviewed canonical records, full scoped diff, owning designs, cancellation success/failure/resume source and CLI entry point; checked retained view keys and local design links, JSON syntax and git diff --check. No runtime, renderer, browser or CI rerun is warranted for this evidence-only change.",
+    "documentation_result": "No DESIGN.md edit required. The scope change and historical attribution belong in work records; durable requirements retain their existing owners."
+  },
+  "publication_boundary": "This is a scope reconciliation review, not renewed plan sign-off, accepted architecture publication or Epic acceptance. Preserve the approved baseline and the terminal publication request in epic_048_publication_resume.json. Its internal_error/interrupted render requires supported runtime-owner recovery; no replacement tuple, snapshot or unchanged retry is created. The known already-approved sign-off refusal is not repeated.",
+  "remaining_gates": [
+    "F1 owning acceptance reconciliation receipt",
+    "F4 supported review-resolution and final Epic integration/validation",
+    "Controlled operational authority and recovery evidence",
+    "Supported recovery of terminal Epic architecture publication",
+    "Admitted Epic closeout/rollup with acceptance evidence"
+  ],
+  "monitoring_intervention_review": {
+    "reviewed_plan_revision": "02baa333f1b9a571a5bbdec2907fc2d0681ded6e",
+    "canonical_verification": "Cascade read_doc confirms F5 cancelled/complete without error, preserved approval and analysis, and resolved continue_reduced_scope on the active Epic worktree copy. Operator performed cancellation and parent feedback; no team cancellation is claimed.",
+    "scope": "The 2d848575..02baa333 diff adds only twelve lines to the Epic work record. F1 correction acceptance and F4 integrated acceptance remain assigned; no replacement implementation is required.",
+    "capability_gaps": [
+      "Operator cancellation must resolve the canonical active parent automatically; the observed root/backlog-copy behavior remains an open lifecycle-owner gap.",
+      "The owning Epic lacks a scoped cancellation capability for a superseded backlog child; no cancellation or feedback mutation tool is exposed in the inspected catalog."
+    ],
+    "rollup_prerequisite": "Manager recorded Epic recovery action is no longer admitted. Source cascade/epic/recovery.py:_admit_epic_action requires a current, ungated parent_action naming this Epic and reconcile_completion_rollup. Dependency readiness and reduced-scope disposition alone do not admit it. No unchanged retry was performed.",
+    "architecture_review": "Re-read cascade/epic/DESIGN.md and cascade/feature/DESIGN.md and traced cancellation, parent feedback and rollup admission source. The existing five-level diagram-impact inventory remains applicable: no source, actor, runtime/store boundary, component, Code symbol or lifecycle behavior changed. Capability gaps are proposed work, not implemented design guarantees.",
+    "f4_boundary": "F4 live validation and review-resolution work is undisturbed. Preserve reported 31a9e967 local 163 passes/223.07s separately from accepted Task gates and remote results. No new remote outcome or integration is asserted.",
+    "publication_boundary": "Retain terminal publication and accepted-lineage history. This evidence-only review does not replace the failed publication tuple, repeat sign-off, or assert Epic completion.",
+    "verification": "Canonical metadata, scoped diff, source admission/refusal path, local owning-design links, artifact JSON and git diff --check. No runtime, render, browser or unchanged CI rerun.",
+    "verified_local_links": 41
+  }
+}

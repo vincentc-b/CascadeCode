@@ -17,7 +17,13 @@ from urllib.parse import urlsplit
 
 from cascade.board.errors import BoardError, GitError, NotFound
 from cascade.board.gitutil import head_sha
-from cascade.board.store import list_board, move_doc, read_doc, read_doc_in_worktree
+from cascade.board.store import (
+    list_board,
+    move_doc,
+    read_doc,
+    read_doc_in_worktree,
+    save_doc,
+)
 from cascade.board.types import WorkMeta
 from cascade.tracking import (
     MergeRequest,
@@ -987,7 +993,25 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
     entry = get_integration_worktree(trunk, "feature", feature_id)
     if entry is None:
         raise GitError(f"feature worktree missing: {feature_id}")
-    doc = read_doc(feature_id, root=entry.path)
+    if repair:
+        # A validated Task cut from the superseded completed generation can
+        # carry that old parent path back onto the repaired Feature branch.
+        # Normalize the exact paths named by the durable repair receipt before
+        # pinning and publishing the source revision.
+        from cascade.boss.merge import _remove_superseded_feature_copy
+
+        _remove_superseded_feature_copy(entry.path, feature_id, trunk)
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    planning_root = (
+        project.tracking.root
+        if project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+        and trunk.resolve() == project.target.root.resolve()
+        else entry.path
+    )
+    doc = read_doc(feature_id, root=planning_root)
     if doc.meta.tier != "feature" or not doc.meta.parent:
         raise NotFound(feature_id)
     ready_for_review = (
@@ -1034,19 +1058,24 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         push_branch(entry.path, source, force_with_lease=remote_lease_sha)
     else:
         push_branch(entry.path, source)
-    mr = reuse or find_merge_request(
-        entry.path, source_branch=source, target_branch=target
-    ) or create_merge_request(
-        entry.path,
-        title=f"{feature_id}: {doc.meta.title}",
-        body=(
-            f"Implements `{feature_id}` for `{doc.meta.parent}`. This review is managed by "
-            "Cascade; review comments are delivered to the Feature Team."
-        ),
-        source_branch=source,
-        target_branch=target,
-        draft=False,
+    found = (
+        find_merge_request(entry.path, source_branch=source, target_branch=target)
+        if reuse is None
+        else None
     )
+    mr = reuse or found
+    if mr is None:
+        mr = create_merge_request(
+            entry.path,
+            title=f"{feature_id}: {doc.meta.title}",
+            body=(
+                f"Implements `{feature_id}` for `{doc.meta.parent}`. This review is managed by "
+                "Cascade; review comments are delivered to the Feature Team."
+            ),
+            source_branch=source,
+            target_branch=target,
+            draft=False,
+        )
     projection = {
         "url": mr.url,
         "number": mr.number,
@@ -1064,6 +1093,18 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         "previous_generation": existing_generation if existing is not None else None,
         "previous_review_url": prior.get("url") if prior is not None else None,
     }
+    if found is not None:
+        # A prior process may have published the exact ref and opened the
+        # review before it could persist this generation. Re-read both forge
+        # heads before converting that remote effect into a local receipt;
+        # finding a route-shaped review is not authoritative evidence that its
+        # source and target still match this publication attempt.
+        snapshot = merge_request_snapshot(trunk, found)
+        _require_repair_review_route(projection, snapshot, found)
+        if snapshot.get("state") not in {"open", "opened"}:
+            raise GitError("recovered review is not open")
+        if snapshot.get("target_revision") != projection["target_head"]:
+            raise GitError("recovered review target changed before receipt persistence")
     record = _store_review_generation(
         trunk,
         feature_id,
@@ -1150,33 +1191,34 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
     )
 
     for feature_id, record in list(state.items()):
+        epic_id = _review_target_epic(record)
+        if record.get("closed") and _closed_review_has_incomplete_target(
+            feature_id, record, trunk=trunk
+        ):
+            # Target lifecycle repair is part of accepting the immutable merge,
+            # and must run before stacked-review recovery can short-circuit the
+            # sweep for an already accepted generation.
+            try:
+                mr = _record_to_mr(record)
+            except (GitError, ValueError, KeyError):
+                continue
+            before = bool(
+                epic_id
+                and feature_completed_recorded(feature_id, epic_id, root=trunk)
+            )
+            if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
+                if (
+                    epic_id
+                    and not before
+                    and feature_completed_recorded(feature_id, epic_id, root=trunk)
+                ):
+                    finalized.append(feature_id)
+            continue
         if persist_if_stacked_review_integration_gap(
             feature_id, record, root=trunk, accepted=bool(record.get("closed"))
         ):
             continue
         if record.get("closed"):
-            epic_id = _review_target_epic(record)
-            if _closed_review_has_incomplete_target(feature_id, record, trunk=trunk):
-                # Older supervisors could record closure before completing the
-                # accepted feature copy on its epic branch. A completed source
-                # worktree can hide that copy in merged_board, so inspect the
-                # target checkout directly even if an event was already emitted.
-                try:
-                    mr = _record_to_mr(record)
-                except (GitError, ValueError, KeyError):
-                    continue
-                before = bool(
-                    epic_id
-                    and feature_completed_recorded(feature_id, epic_id, root=trunk)
-                )
-                if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-                    if (
-                        epic_id
-                        and not before
-                        and feature_completed_recorded(feature_id, epic_id, root=trunk)
-                    ):
-                        finalized.append(feature_id)
-                continue
             feature = trunk_board.by_id.get(feature_id)
             epic = trunk_board.by_id.get(epic_id) if epic_id else None
             terminal_epic = (
@@ -1343,7 +1385,12 @@ def _close_merged_feature_on_target(
         ("active", "2_active"),
     ):
         raise GitError(f"merged feature is not open on epic branch: {feature_id}")
-    move_doc(feature_id, "completed", root=entry.path)
+    previous_path = doc.meta.path
+    doc.meta.status = "completed"
+    doc.meta.path = (
+        entry.path / "docs/features/3_completed" / previous_path.name
+    ).resolve()
+    save_doc(doc, previous_path=previous_path, root=entry.path)
     return entry.path
 
 

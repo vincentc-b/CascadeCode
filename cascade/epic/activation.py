@@ -6,7 +6,7 @@ from pathlib import Path
 
 from cascade.board.gitutil import commit_paths, has_git
 from cascade.board.paths import column_dir
-from cascade.board.store import read_doc, write_doc
+from cascade.board.store import move_doc, read_doc, write_doc
 from cascade.board.types import WorkDoc
 from cascade.board.validate import missing_required_headings
 from cascade.workspace.integration_worktree import IntegrationWorktree, merged_board
@@ -57,6 +57,26 @@ def activate_epic_on_worktree(
     """Move the live epic doc into the epic worktree; leave a trunk pointer."""
 
     from cascade.workspace.backlog_snapshot import is_snapshot_only_epic, snapshot_root
+
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    if (
+        project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+        and trunk.resolve() == project.target.root.resolve()
+    ):
+        # The product revision still supplies the reviewed branch base, but in
+        # a split project the tracking checkout is the sole document owner.
+        # Do not create a second live copy in the product worktree.
+        move_doc(work_id, "active", root=trunk)
+        live = read_doc(work_id, root=trunk)
+        live.meta.integration_branch = epic_wt.branch
+        live.meta.integration_worktree = epic_wt.path.relative_to(
+            trunk.resolve()
+        ).as_posix()
+        write_doc(live, root=trunk)
+        return
 
     # A returned Epic can leave a local backlog copy behind as lifecycle
     # evidence.  Once an edit is approved, the merged snapshot supersedes

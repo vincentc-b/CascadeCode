@@ -21,15 +21,32 @@ from cursor_sdk import CursorAgentError as SdkCursorAgentError
 from cascade.agent.credentials import resolve_credential
 from cascade.agent.errors import (
     CursorAgentError,
+    ProviderCliError,
+    ProviderCliTimeoutError,
     ProviderNotAuthenticatedError,
     ProviderNotImplementedError,
     ProviderNotInstalledError,
+    ProviderToolHostError,
     TurnCancelledForDrain,
+)
+from cascade.agent.provider_metering import (
+    admit_provider_turn,
+    provider_invocation_id,
+    settle_provider_turn,
+    with_invocation,
 )
 from cascade.agent.turn_registry import register_turn
 from cascade.agent.providers import parse_provider_id, probe_provider
 from cascade.agent.recovery_contract import report_provider_recovery
-from cascade.agent.types import RoleId, RoleResult, RoleResultStatus, RoleTurn
+from cascade.agent.types import (
+    ProviderInvocationReceipt,
+    ProviderTokenUsage,
+    ProviderUsageValue,
+    RoleId,
+    RoleResult,
+    RoleResultStatus,
+    RoleTurn,
+)
 
 _PLANNING_ROLES: frozenset[RoleId] = frozenset(
     {
@@ -95,6 +112,11 @@ def build_agent_options(turn: RoleTurn, *, api_key: str) -> AgentOptions:
         cloud=None,
         mcp_servers=mcp_servers,
         tools=builtin_tools,
+        idempotency_key=(
+            provider_invocation_id(turn.incident_turn)
+            if turn.incident_turn is not None
+            else None
+        ),
     )
 
 
@@ -142,10 +164,37 @@ async def _run_cursor_role(turn: RoleTurn, *, api_key: str) -> RoleResult:
     except SdkCursorAgentError as err:
         raise CursorAgentError.from_sdk(err) from err
 
+    usage = sdk_result.usage
+    token_usage = (
+        ProviderTokenUsage(
+            input=ProviderUsageValue("known", usage.input_tokens),
+            output=ProviderUsageValue("known", usage.output_tokens),
+            cached_input=ProviderUsageValue("known", usage.cache_read_tokens),
+        )
+        if usage is not None
+        else ProviderTokenUsage()
+    )
     return RoleResult(
         text=sdk_result.result or "",
         status=_role_status_from_sdk(str(sdk_result.status)),
         tool_effects=[],
+        invocation=ProviderInvocationReceipt(
+            provider="cursor",
+            model_id=turn.model_id,
+            invocation_id=sdk_result.id,
+            usage=token_usage,
+            outcome=("success" if str(sdk_result.status) == "finished" else "error"),
+            cancellation_bound=(
+                turn.incident_turn.cancellation_bound
+                if turn.incident_turn is not None
+                else "local_transport"
+            ),
+            output_token_limit=(
+                turn.incident_turn.output_token_limit
+                if turn.incident_turn is not None
+                else None
+            ),
+        ),
     )
 
 
@@ -208,15 +257,50 @@ async def run_role(turn: RoleTurn) -> RoleResult:
         )
 
     with register_turn(turn.role) as live:
+        admission = admit_provider_turn(turn, provider=provider)
         try:
             result = await _dispatch_role(turn, provider=provider, credential=credential)
         except asyncio.CancelledError:
+            if admission is not None:
+                settle_provider_turn(admission, outcome="interrupted")
             _raise_if_turn_cancelled(turn.role, live)
             raise
-        except Exception:
+        except Exception as exc:
+            if admission is not None:
+                interrupted = isinstance(exc, ProviderCliTimeoutError)
+                not_started = isinstance(
+                    exc, (CursorAgentError, ProviderToolHostError)
+                ) or (isinstance(exc, ProviderCliError) and not interrupted)
+                failure_class = (
+                    "transient"
+                    if getattr(exc, "retryable", False) is True
+                    else None
+                )
+                settle_provider_turn(
+                    admission,
+                    outcome=(
+                        "interrupted"
+                        if interrupted
+                        else "error"
+                        if not_started
+                        else "unknown"
+                    ),
+                    failure_class=failure_class,
+                    provider_started=not not_started,
+                )
             _raise_if_turn_cancelled(turn.role, live)
             raise
-        _raise_if_turn_cancelled(turn.role, live)
+        if live is not None and live.cancelled:
+            if admission is not None:
+                settle_provider_turn(admission, outcome="interrupted")
+            _raise_if_turn_cancelled(turn.role, live)
+        if admission is not None:
+            receipt = settle_provider_turn(
+                admission,
+                result=result,
+                outcome="success" if result.status == "finished" else "error",
+            )
+            result = with_invocation(result, receipt)
         if turn.recovery is None:
             return result
         report = report_provider_recovery(
@@ -227,4 +311,5 @@ async def run_role(turn: RoleTurn) -> RoleResult:
             status=result.status,
             tool_effects=result.tool_effects,
             recovery=report,
+            invocation=result.invocation,
         )

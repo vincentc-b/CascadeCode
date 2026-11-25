@@ -10,6 +10,31 @@ from cascade.watchdog.capabilities import CapabilityProbe, CapabilityRegistry
 from cascade.watchdog.reservations import IncidentReservation
 
 
+def test_parent_lifecycle_owner_work_binds_original_task_budget(tmp_path: Path) -> None:
+    from cascade.task.action_recovery import create_or_load_action, load_action
+    from cascade.task.incident_budget import read_incident_budget
+
+    action_id = "task_001:queued_merge"
+    action = create_or_load_action(
+        action_id,
+        "queued_task_merge",
+        root=tmp_path,
+        attempt_bound=3,
+        owning_team={"kind": "feature_team", "work_id": "feat_001"},
+        evidence={"affected_work_id": "task_001"},
+    )
+    assert (
+        audit_recovery._bind_original_incident("task_001", root=tmp_path) == action_id
+    )
+    assert read_incident_budget(action_id, root=tmp_path) is not None
+    assert load_action(action_id, root=tmp_path)["incident_budget_id"] == action_id
+    assert action["incident"]["authoritative_generation"] in {
+        generation
+        for binding in read_incident_budget(action_id, root=tmp_path)["bindings"]
+        for generation in binding["generations"]
+    }
+
+
 def test_registry_names_bounded_parent_lifecycle_capability() -> None:
     descriptor = next(
         row
@@ -63,10 +88,16 @@ def test_audit_contract_binds_feature_repair_to_exact_mismatch_generation(
             "evidence": {"tested_heads": {"current": ["source", "target"]}},
         },
     )
+    monkeypatch.setattr(
+        audit_recovery,
+        "_bind_original_incident",
+        lambda *_a, **_k: "task_001:queued_merge",
+    )
 
     contract = audit_recovery._incident_contract(observation, root=tmp_path)
 
     assert contract is not None
+    assert contract["original_incident_id"] == "task_001:queued_merge"
     assert contract["selected_capability"] == "feature_repair"
     assert contract["accountable_owner"] == "feature_team:feat_001"
     assert contract["evidence"]["parent_lifecycle_generation"] == generation
@@ -145,8 +176,9 @@ def test_audit_executor_records_unverified_repair_as_deferred(
     monkeypatch.setattr(
         audit_recovery,
         "record_result",
-        lambda _reservation, _ack, result, **_k: recorded.append(dict(result))
-        or result,
+        lambda _reservation, _ack, result, **_k: (
+            recorded.append(dict(result)) or result
+        ),
     )
 
     audit_recovery._execute_reservation(
@@ -182,9 +214,13 @@ def test_missing_repair_capability_creates_scoped_handoff(
         "accountable_owner": "feature_team:feat_001",
         "evidence": {"parent_lifecycle_generation": "mismatch-generation"},
     }
-    monkeypatch.setattr(audit_recovery, "_bounded_observation", lambda *_a, **_k: observation)
+    monkeypatch.setattr(
+        audit_recovery, "_bounded_observation", lambda *_a, **_k: observation
+    )
     monkeypatch.setattr(audit_recovery, "_repair_target", lambda *_a, **_k: observation)
-    monkeypatch.setattr(audit_recovery, "_incident_contract", lambda *_a, **_k: contract)
+    monkeypatch.setattr(
+        audit_recovery, "_incident_contract", lambda *_a, **_k: contract
+    )
     monkeypatch.setattr(
         audit_recovery,
         "project_incident",
@@ -226,9 +262,7 @@ def test_missing_repair_capability_creates_scoped_handoff(
                 "generation": "audit-generation",
                 "selected_capability": "feature_repair",
                 "owner_id": "feat_001",
-                "evidence": {
-                    "parent_lifecycle_generation": "mismatch-generation"
-                },
+                "evidence": {"parent_lifecycle_generation": "mismatch-generation"},
             },
         )
     ]

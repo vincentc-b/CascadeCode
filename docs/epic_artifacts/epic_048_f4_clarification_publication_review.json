@@ -1,0 +1,43 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_architect",
+  "reviewed_plan_revision": "a17c8b3952167b629f729b328f3e9016546ae11d",
+  "assessment": "dec_013 correctly separates completed publication from the unpublished clarification. No additional plan or architecture change is required for this documentation-only delta. F5 cancellation and canonical continue_reduced_scope remain preserved; F1 and F4 acceptance obligations remain assigned.",
+  "independent_evidence": {
+    "forge": "PR #256 is open/clean at 31a9e9674044e2cce6135c27f4b245380229bfb3, with Recovery contract completed/SUCCESS and reviews empty, inspected through gh api and gh pr view.",
+    "check_url": "https://github.com/vincentc-b/CascadeCode/actions/runs/45551448760/job/138993324248",
+    "local_clarification": "9353de4e22163748ff0d449bf85c754ef30bbaf0 changes only the test_late_repair_convergence module docstring and Task 004 evidence dossier. It accurately identifies deterministic forge/provider inventory/compatibility fixtures and does not claim installed CLI compatibility.",
+    "canonical_plan": "Cascade read_doc(epic_048) retains active state, cancelled F5 feedback resolved as continue_reduced_scope, F1/F4 acceptance and dec_013. read_architecture_amendments returned an empty list.",
+    "reported_validation": "F4 reports 11 focused passes in 158.04s for the local clarification; this review did not rerun or independently reproduce them. Hosted success applies only to 31a9e967."
+  },
+  "publication_prerequisite": {
+    "source": "cascade/task/action_recovery.py:admit_review_publication_generation refuses completed actions without admitting a generation. cascade/team_review_recovery.py:publish_team_review_resolution returns the existing completed state and attempt count; that response does not prove publication of a newer local head.",
+    "required_owner_action": "Operator/platform owner must provide a supported fresh guarded publication admission for the clarification, retaining immutable tested head, current target/source lease, original incident allowance and history. No fresh-admission tool is exposed to this Epic team. Internal admission functions are not an operator command.",
+    "normal_trace": "An eligible material generation binds the original incident, reserves validation allowance, validates the immutable source and rechecks policy/remote authority before leased publication.",
+    "terminal_trace": "Replaying the completed action returns its existing durable outcome before validator reservation or push. Restart does not supply new publication authority; preserve the local clarification until a supported admission exists."
+  },
+  "design_closeout": {
+    "reviewed_designs": ["cascade/DESIGN.md", "cascade/task/DESIGN.md"],
+    "reviewed_sources": ["cascade/team_review_recovery.py:publish_team_review_resolution", "cascade/task/action_recovery.py:admit_review_publication_generation"],
+    "diagram_impact": {
+      "cascade-context": "The clarification adds no actor or external dependency; fixture limitations belong in test/work evidence.",
+      "cascade-containers": "No runtime, communication, persistence or isolation boundary changes.",
+      "cascade-supervisor-components": "Task admission and Teams publication responsibilities and interfaces are unchanged.",
+      "cascade-task-code / cascade-teams-code": "No declaration, source path, component ownership or contract metadata changes; existing source-linked views remain applicable.",
+      "supplementary_behavior": "No execution or recovery transition changes; the completed-action refusal is existing behavior, not a newly implemented capability."
+    },
+    "integration_limit": "Epic checkout still awaits final F4 integration. F4 Task design at 9353de4e retains the review_rebase-only fence, material_fingerprint and attributes.parent_operation_id reconciliation; this review does not substitute stale Epic design content for final integrated verification.",
+    "verification": "Inspected full clarification and Epic work-record diffs, normal and terminal source paths, design ownership and retained view keys. JSON parsing and git diff --check passed. No runtime, renderer, browser or unchanged-source CI rerun was warranted.",
+    "result": "No DESIGN/model/contract edit required for this clarification; historical evidence remains in work records."
+  },
+  "remaining_gates": [
+    "Fresh guarded admission and exact-head publication/validation of the clarification",
+    "F4 supported integration and final Epic validation",
+    "F1 owning acceptance reconciliation receipt",
+    "Controlled operational authority and recovery evidence",
+    "Supported completed-record correction",
+    "Original terminal architecture-publication recovery and accepted lineage",
+    "Current admitted Epic rollup/closeout"
+  ],
+  "publication_boundary": "Retain the exact terminal failed request in epic_048_publication_resume.json and F4 staged review a990d84a for plan aaca5e02. No replacement publication, accepted snapshot, repeated already-approved sign-off, duplicate handoff or lifecycle override is created. This is an evidence review, not Epic completion."
+}

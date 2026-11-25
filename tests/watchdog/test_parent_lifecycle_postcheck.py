@@ -91,6 +91,11 @@ def test_exact_postcheck_is_the_only_path_to_verified_history(tmp_path: Path) ->
     row = payload["actions"]["reservation"]
     assert row["incident"]["outcome"] == "success"
     assert row["incident"]["result"]["postcheck"]["verified"] is True
+    assert [receipt["stage"] for receipt in row["incident"]["stage_receipts"]] == [
+        "verifying",
+        "resolved",
+    ]
+    assert row["incident"]["stage_receipts"][-1]["verification_reference"] == GENERATION
     assert row["incident_history"][-1]["outcome"] == "deferred"
     assert row["recovery_state"] == "completed"
     assert not verify_incident_postcheck(
@@ -138,6 +143,7 @@ def test_repeated_and_restarted_postcheck_does_not_reexecute_same_generation(
     [
         ("none", "all_generation_obligations_proven"),
         ("review", "pending:review_generation_accepted"),
+        ("runtime", "pending:loaded_runtime_current"),
         ("lease", "pending:execution_lease_retired"),
         ("feature_worktree", "pending:feature_worktree_retired"),
     ],
@@ -152,7 +158,9 @@ def test_postcheck_fails_closed_when_a_relevant_fact_changes(
 
     incident = _contract()
     monkeypatch.setattr(subject, "_incident", lambda *_args: incident)
-    monkeypatch.setattr(subject, "verify_incident_postcheck", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        subject, "verify_incident_postcheck", lambda *_args, **_kwargs: True
+    )
     monkeypatch.setattr(subject, "task_lifecycle_lock", lambda **_kwargs: nullcontext())
     monkeypatch.setattr(
         subject,
@@ -160,17 +168,20 @@ def test_postcheck_fails_closed_when_a_relevant_fact_changes(
         lambda *_args, **_kwargs: {
             "recovery_state": "completed",
             "metadata": {
-                "final_validation": incident["evidence"]
-                ["parent_lifecycle_evidence"]["tested_heads"]["validation"]
+                "final_validation": incident["evidence"]["parent_lifecycle_evidence"][
+                    "tested_heads"
+                ]["validation"]
             },
         },
     )
+
     def completed(work_id: str) -> SimpleNamespace:
         return SimpleNamespace(
             id=work_id,
             status="completed",
             path=tmp_path / "docs" / "tasks" / "3_completed" / f"{work_id}.md",
         )
+
     board = SimpleNamespace(
         by_id={"task_001": completed("task_001"), "feat_001": completed("feat_001")}
     )
@@ -183,9 +194,9 @@ def test_postcheck_fails_closed_when_a_relevant_fact_changes(
     )
     monkeypatch.setattr(
         "cascade.workspace.integration_worktree.get_integration_worktree",
-        lambda _root, kind, _work_id: object()
-        if changed == "feature_worktree" and kind == "feature"
-        else None,
+        lambda _root, kind, _work_id: (
+            object() if changed == "feature_worktree" and kind == "feature" else None
+        ),
     )
     monkeypatch.setattr(
         "cascade.feature.repair.feature_repair_actions",
@@ -215,6 +226,20 @@ def test_postcheck_fails_closed_when_a_relevant_fact_changes(
         "cascade.task.execution.execution_lease_is_live",
         lambda *_args, **_kwargs: changed == "lease",
     )
+    monkeypatch.setattr(
+        "cascade.workspace.supervisor_status.read_supervisor_status",
+        lambda *_args, **_kwargs: {
+            "runtime_identity": {"authority_manifest_id": "authority"}
+        },
+    )
+    monkeypatch.setattr(
+        "cascade.workspace.runtime_identity.verify_current_loaded_runtime_identity",
+        lambda *_args, **_kwargs: {
+            "state": "refused" if changed == "runtime" else "current",
+            "reason": "stale process" if changed == "runtime" else None,
+            "identity": None,
+        },
+    )
 
     result = reconcile_parent_lifecycle_incident(
         "task_001", GENERATION, root=tmp_path, now=STAMP
@@ -222,4 +247,3 @@ def test_postcheck_fails_closed_when_a_relevant_fact_changes(
 
     assert result["verified"] is (changed == "none")
     assert result["reason"] == reason
-

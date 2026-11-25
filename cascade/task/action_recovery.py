@@ -1912,11 +1912,12 @@ def admit_review_publication_generation(
     action_id: str, generation: Mapping[str, Any], *, root: Path,
     allow_legacy_policy_upgrade: bool = False,
 ) -> tuple[dict[str, Any], bool]:
-    """Admit one check run per resolved head and repository validation policy.
+    """Record material review-publication evidence without granting allowance.
 
-    Called only after the owning review adapter verifies its admitted refs and
-    clean resolution. Preserve all old attempts; a materially new generation
-    can extend an exhausted budget by one, never reset it or waive a human gate.
+    Generation admission is only the first gate.  The incident budget must
+    separately reserve every expensive validator operation.  This function
+    therefore never grows the legacy attempt bound and never treats a changed
+    clock or report as authority to retry.
     """
     identity = _validate_metadata(generation, field="review publication generation")
     repo = resolve_root(root)
@@ -1931,15 +1932,10 @@ def admit_review_publication_generation(
         if (action.get("recovery") or {}).get("human_blocker"):
             return _copy(action), False
         generations = action.get("review_publication_generations", [])
-        existing_generation = any(row.get("identity") == identity for row in generations)
-        if existing_generation:
-            attempted = any(
-                (attempt.get("completion_metadata") or {}).get("publication_generation") == identity
-                for attempt in action.get("attempts", [])
-            )
-            # Admission may have been interrupted before resume_action claimed
-            # an attempt. It is safe to reach that atomic claim again.
-            return _copy(action), not attempted
+        if generations and generations[-1].get("identity") == identity:
+            # Material evidence is still eligible for a bounded transient retry;
+            # the cumulative gate owns backoff, classification and remaining use.
+            return _copy(action), True
         if state == "blocked":
             attempts = action.get("attempts") or []
             latest = attempts[-1] if attempts else {}
@@ -1957,9 +1953,6 @@ def admit_review_publication_generation(
             "identity": identity, "at": _iso(None), "previous_state": state,
             "previous_attempt_count": int(action.get("attempt_count") or 0),
         })
-        action["attempt_bound"] = max(
-            int(action.get("attempt_bound") or 1), int(action.get("attempt_count") or 0) + 1
-        )
         action["updated_at"] = _iso(None)
         _refresh_incident(action)
         payload["actions"][action_id] = action
@@ -2100,6 +2093,11 @@ def _refresh_incident(action: dict[str, Any], *, now: datetime | None = None) ->
         generation=generation,
         evidence=evidence,
         selected_capability=action_kind,
+        original_incident_id=(
+            str(action["incident_budget_id"])
+            if isinstance(action.get("incident_budget_id"), str)
+            else None
+        ),
         request={
             "original_action": recovery.get("original_action")
             or {"action_id": action.get("action_id"), "action_kind": action_kind}

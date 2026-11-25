@@ -1,8 +1,111 @@
 # Workspace and architecture design
 
-Purpose: resolve repository roles, manage integration worktrees, and enforce revision-pinned architecture/C4 review contracts. Interfaces are `ProjectContext`, ownership/artifact references, C4 closure/render/diff/review, integration worktrees, inventory, and receipts. Owns `REQ-WORKSPACE-001` (repository roles/destinations are explicit), `REQ-WORKSPACE-002` (reviewed artifacts are revision-bound), and `DEC-WORKSPACE-001` (unreviewed proposals never become accepted lineage).
+Purpose: resolve repository roles, manage integration worktrees, and enforce revision-pinned architecture/C4 review contracts. Interfaces are `ProjectContext`, ownership/artifact references, C4 closure/render/diff/review, integration worktrees, inventory, and receipts. Owns `REQ-WORKSPACE-001` (repository roles/destinations are explicit), `REQ-WORKSPACE-002` (reviewed artifacts are revision-bound), `REQ-WORKSPACE-RUNTIME-001` (loaded repair evidence binds reviewed, integrated, installed and executing identities), `DEC-WORKSPACE-001` (unreviewed proposals never become accepted lineage), and `DEC-WORKSPACE-RUNTIME-001` (bootstrap authority and worker attestation are separate fail-closed checks).
 
 
+
+## Worker lifecycle and runtime identity
+
+`REQ-WORKSPACE-RUNTIME-001`: A reviewed runtime repair is current only when an
+accepted source revision, its guarded integrated target, an authenticated
+installation receipt and installed-source digest, and the executing worker's
+independently inspected process and import closure all agree. The process proof
+includes PID, host boot and process-start identities, module origins and
+digests, and the capability generation. Missing, dirty, stale, mixed-root or
+conflicting evidence remains unverified and cannot close a recovery incident.
+
+`DEC-WORKSPACE-RUNTIME-001`: Keep installation authority, worker self-report and
+host verification as separate fail-closed boundaries, using the existing
+supervision/health receipt and recovery stores. A broken recovery adapter is
+bootstrapped only through the separately authorized drain, install and restart
+path. This prevents the adapter under repair, a healthy endpoint, or a
+caller-supplied revision from attesting its own deployment, while avoiding a
+second runtime or recovery ledger.
+
+The [package index](../DESIGN.md#architecture-navigation) and authoritative
+[model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+connect `cascade-cli-components` → `cascade-workspace-commands-code`.
+`element.component.workspace-commands` owns launcher/worker lifecycle code;
+`cascade-workspace-code` owns repository identity and retained worktrees.
+These are collaborating implementation responsibilities, not extra deployments.
+
+| Source entry | Current behavior |
+|---|---|
+| [run_launcher_loop](launcher.py) | Own the listen socket, spawn workers with a readiness handshake and Python safe-path mode, classify exits and bound startup retries/backoff. Safe-path mode prevents an unreviewed `cascade/` in the product root from shadowing the reviewed import root. |
+| [run_worker](worker.py) | Start HTTP, watchdog and recovery lanes; exit for stop, update or crash. |
+| [drain_and_shutdown](worker.py) | Stop admitting work, join handlers and wait for/cancel live agent turns before shutdown. |
+| [create_runtime_authority](runtime_identity.py) | Authenticate an installation actor's signed receipt, then bind its accepted review and guarded integration lineage to two clean exact checkouts and installed Python bytes. It does not issue approval or install software. |
+| [validate_runtime_authority](runtime_identity.py) | Reauthenticate the manifest and reject moved, dirty, stale, unintegrated or byte-mismatched evidence before each spawn. |
+| [loaded_runtime_identity](runtime_identity.py) | Report the importing worker's repair/delivery/postcheck module origins and digests, PID/start identity, executable, workspace and capability generation without self-asserting verification. |
+| [verify_loaded_runtime_identity](runtime_identity.py) | Independently inspect the live child through Linux `/proc`, re-read module/package bytes and compare the launcher generation, returning `current`, `pending` or `refused`; only `current` sets `verified`. |
+| [verify_current_loaded_runtime_identity](runtime_identity.py) | Reinspect a launcher-verified receipt before incident closeout, including the live PID/start identity, import root, module bytes, clean reviewed/integrated checkouts, ancestry and capability generation. |
+| [_worker_supervisor_status](worker.py) | Publish lifecycle state and the worker receipt through the existing health projection. Missing authority is explicitly unverified. |
+
+```mermaid
+stateDiagram-v2
+    [*] --> Starting: launcher spawns worker
+    Starting --> Running: readiness; host verification when authority supplied
+    Starting --> Backoff: startup failure
+    Backoff --> Starting: bounded retry
+    Backoff --> Degraded: startup allowance exhausted
+    Running --> Draining: update or stop
+    Running --> Draining: crash or launcher lost
+    Draining --> Starting: update / supervised restart
+    Draining --> [*]: stop
+```
+
+The launcher retains process supervision while a worker restarts. Durable queues,
+graph checkpoints, action claims and registered worktrees belong to their existing
+owners; restart does not reset delivery or grant authority. Drain cancellation
+uses the [Agent registry](../agent/DESIGN.md#state-failure-and-isolation).
+The operator first obtains a signed deployment receipt and trust key from the
+separate installation authority. `runtime-bootstrap` authenticates that receipt,
+requires exact clean accepted-review and guarded-integration checkouts, proves
+review ancestry, and matches receipt, checkout and installed bytes. `cascade up`
+reauthenticates the manifest before every spawn and passes only its immutable
+snapshot to the worker. The worker imports and reports the registered repair,
+delivery, publication, postcheck and capability callables. The launcher reads
+the live PID's Linux boot/start identity, executable and selected `PYTHONPATH`
+root, re-reads every reported module and independently computes the capability
+generation before it sets `verified`. A restart clears the old receipt and
+requires a new process-local observation.
+The worker starts with Python safe-path mode, so a product checkout that contains
+the adapter being repaired cannot outrank the reviewed source selected by the
+launcher. The independent Watchdog postcheck reopens the process and source facts;
+a stale status file or dead prior worker cannot close the incident.
+The versioned receipt names the accepted review URL, authorized actor,
+environment, repository identities/revisions and installed source digest. Its
+HMAC trust key is an external credential: possessing it is deployment-receipt
+authority, so Cascade neither creates nor recovers it.
+
+```mermaid
+sequenceDiagram
+    actor Operator
+    participant Bootstrap as runtime-bootstrap
+    participant Launcher
+    participant Worker
+    participant Health as /api/health
+    Operator->>Bootstrap: signed install receipt + trust key + exact checkouts
+    Bootstrap->>Bootstrap: authenticate; prove clean lineage and installed digest
+    Operator->>Launcher: up --runtime-authority manifest + trust key
+    Launcher->>Launcher: reauthenticate receipt binding before spawn
+    Launcher->>Worker: immutable authority snapshot + inherited descriptors
+    Worker->>Worker: import registered callables and report origins/digests
+    Worker-->>Launcher: readiness + unverified process-local report
+    Launcher->>Launcher: inspect /proc, import root, bytes and capability generation
+    Launcher-->>Health: publish serving status and receipt
+```
+
+Ordinary local startup without a manifest remains available and is host-observed,
+but its receipt is
+`runtime_authority_missing` and cannot prove deployment. Invalid supplied
+authority or Linux process evidence prevents verified startup. These facts do not waive review acceptance,
+integration, pending delivery or product postchecks, and the manifest is not an
+installation credential. The worker and launcher share an OS process tree and
+environment; the evidence does not claim container or credential isolation.
+
+Verification references: [startup recovery](../../tests/workspace/test_worker_startup_recovery.py)
+and [runtime identity integration](../../tests/workspace/test_runtime_identity.py).
 
 ## Repository initialization and guidance
 

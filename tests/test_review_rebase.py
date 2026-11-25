@@ -376,7 +376,7 @@ def test_recovery_workflow_persists_semantic_conflict_as_owner_blocker(tmp_path:
     assert reloaded["checkpoint"]["resume_instructions"]
 
 
-@pytest.mark.parametrize("checkpoint", ["rebased", "published"])
+@pytest.mark.parametrize("checkpoint", ["rebased", "remote_only", "published"])
 def test_recovery_resumes_interrupted_checkpoint_without_duplicate_publication(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, checkpoint: str
 ) -> None:
@@ -402,9 +402,10 @@ def test_recovery_resumes_interrupted_checkpoint_without_duplicate_publication(
         resume_instructions="Run the repository checks and publish the rebased source with its recorded lease.",
         rebased_head=execution.source_head,
     )
-    if checkpoint == "published":
+    if checkpoint in {"remote_only", "published"}:
         publication = check_and_publish_review_rebase(turn, execution)
         assert publication.published is True
+    if checkpoint == "published":
         review_rebase._record_rebase_checkpoint(
             turn.action_id, "published", turn, root=root, affected_paths=execution.modified_paths,
             command_summary="git push --force-with-lease completed", test_summary="passed",

@@ -63,8 +63,16 @@ def reconcile_parent_lifecycle_incident(
         return _pending("repair_execution_unproven")
 
     feature_id = evidence.get("feature_id")
+    acknowledgement = adapter.get("acknowledgement")
+    acknowledgement = (
+        acknowledgement if isinstance(acknowledgement, Mapping) else {}
+    )
     repair_generation = adapter.get("generation")
+    if repair_generation is None:
+        repair_generation = acknowledgement.get("repair_generation")
     repair_action_id = adapter.get("action_id")
+    if repair_action_id is None:
+        repair_action_id = acknowledgement.get("repair_action_id")
     if (
         not isinstance(feature_id, str)
         or type(repair_generation) is not int
@@ -78,11 +86,16 @@ def reconcile_parent_lifecycle_incident(
         from cascade.feature.repair import feature_repair_actions
         from cascade.review import review_enabled, review_record_for_feature
         from cascade.task.execution import execution_lease_is_live
+        from cascade.watchdog.capabilities import default_capability_registry
         from cascade.workspace.integration_worktree import (
             get_integration_worktree,
             merged_board,
             resolve_mutation_owner,
         )
+        from cascade.workspace.runtime_identity import (
+            verify_current_loaded_runtime_identity,
+        )
+        from cascade.workspace.supervisor_status import read_supervisor_status
 
         board = merged_board(repo)
         task = board.by_id.get(task_id)
@@ -99,6 +112,17 @@ def reconcile_parent_lifecycle_incident(
         )
         delivery = load_action(f"{task_id}:queued_merge", root=repo)
         review = review_record_for_feature(feature_id, root=repo)
+        supervisor = read_supervisor_status(repo)
+        runtime_identity = (
+            supervisor.get("runtime_identity")
+            if isinstance(supervisor, Mapping)
+            else None
+        )
+        runtime = verify_current_loaded_runtime_identity(
+            runtime_identity,
+            expected_workspace_root=repo,
+            expected_capability_generation=default_capability_registry().fingerprint(),
+        )
         try:
             owner_root = resolve_mutation_owner(feature_id, trunk=repo).resolve()
             owner_known = owner_root.is_dir()
@@ -154,6 +178,7 @@ def reconcile_parent_lifecycle_incident(
             "repair_generation_verified": isinstance(repair, Mapping)
             and repair.get("phase") == "verified",
             "review_generation_accepted": review_current,
+            "loaded_runtime_current": runtime.get("state") == "current",
             "execution_lease_retired": not execution_lease_is_live(task_id, root=repo),
             "task_worktree_retired": get_integration_worktree(
                 repo, "task", task_id
@@ -199,6 +224,45 @@ def reconcile_parent_lifecycle_incident(
             if isinstance(review, Mapping)
             else None
         ),
+        "runtime": {
+            "state": runtime.get("state"),
+            "reason": runtime.get("reason"),
+            "authority_manifest_id": (
+                runtime_identity.get("authority_manifest_id")
+                if isinstance(runtime_identity, Mapping)
+                else None
+            ),
+            "deployment_receipt_id": (
+                runtime_identity.get("deployment_receipt_id")
+                if isinstance(runtime_identity, Mapping)
+                else None
+            ),
+            "worker_pid": (
+                runtime_identity.get("worker_pid")
+                if isinstance(runtime_identity, Mapping)
+                else None
+            ),
+            "process_start_id": (
+                runtime_identity.get("process_start_id")
+                if isinstance(runtime_identity, Mapping)
+                else None
+            ),
+            "reviewed_revision": (
+                runtime_identity.get("reviewed_revision")
+                if isinstance(runtime_identity, Mapping)
+                else None
+            ),
+            "integrated_revision": (
+                runtime_identity.get("integrated_revision")
+                if isinstance(runtime_identity, Mapping)
+                else None
+            ),
+            "capability_generation": (
+                runtime_identity.get("capability_generation")
+                if isinstance(runtime_identity, Mapping)
+                else None
+            ),
+        },
         "checks": checks,
     }
     if failed:

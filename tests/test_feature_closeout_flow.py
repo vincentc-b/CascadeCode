@@ -116,6 +116,9 @@ def test_review_open_toast_is_linked_idempotent_and_restart_safe(
         "cascade.feature.publication.prepare_feature_publication",
         lambda *_args, **_kwargs: publication_order.append("prepare"),
     )
+    monkeypatch.setattr(
+        "cascade.review.find_merge_request", lambda *_args, **_kwargs: None
+    )
     from cascade.boss.rollup import write_closeout
 
     write_closeout("feat_001", "Done.", root=root)
@@ -179,6 +182,9 @@ def test_saved_review_retries_linked_toast_after_append_failure(
     monkeypatch.setattr(
         "cascade.feature.publication.prepare_feature_publication",
         lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "cascade.review.find_merge_request", lambda *_args, **_kwargs: None
     )
     from cascade.boss.rollup import write_closeout
 

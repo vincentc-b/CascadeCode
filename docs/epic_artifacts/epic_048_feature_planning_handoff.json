@@ -1,0 +1,156 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_manager",
+  "trigger": "FeaturePlanningStarted:feat_048_001",
+  "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+  "purpose": "Planning handoff against the approved contract; no new scope, policy decision or plan amendment.",
+  "observed_state": {
+    "approval": "EpicPlanApproved event received; list_children confirms F1 active and F2-F4 backlog with the approved dependency chain.",
+    "sequence": [
+      "feat_048_001",
+      "feat_048_002",
+      "feat_048_003",
+      "feat_048_004"
+    ],
+    "feature_parent_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "architecture_amendments": [],
+    "dependencies": "Canonical projection supplied for this turn reports satisfied. No installation performed."
+  },
+  "authoritative_contract": {
+    "path": "docs/epics/2_active/epic_048_prove_self_recovery_through_verified_outcomes.md",
+    "sections": [
+      "Macro-architecture / Responsibilities and durable contracts",
+      "Macro-architecture / Incident budget policy proposed for plan approval",
+      "Macro-architecture / Validation, deployment and completion boundaries",
+      "Macro-architecture / Diagram-impact inventory and ownership",
+      "Decision log / dec_004, dec_005, dec_006"
+    ],
+    "feature_read_revision": "be0e40b69049a9d93811c15f6d85ac5092bc73af"
+  },
+  "f1_planning_handoff": [
+    "Carry the approved parent reservation contract into concrete feature schemas, entry points and Task acceptance: one tracking-trunk executions sidecar and lifecycle lock, stable original-incident identity, atomic reservation, exactly-once settlement and independent bounded extension. Split product/tracking roots must not create a second spendable ledger.",
+    "Specify F2's consumer interface before dispatch: incident, claim and operation identities, reservation and settlement receipts, version compatibility, named refusals and crash reconciliation. Preserve one top-level claim while charging serialized nested tool operations; a competing caller remains pending. Retain the parent-required real provider-to-MCP-to-validator acceptance path across F1/F2.",
+    "Keep the first vertical proof in F1: a real timeout, process-group cleanup, restart suppression of unchanged failure, authorized material correction or extension, one useful next publication and independent remote verification. Preserve old attempts and resolved decisions; unknown lineage or consumption fails closed.",
+    "Use the approved numerical policy by reference. Material generations, replacement action IDs, policy cycles and wakeups never renew incident allowance. Do not weaken validation to fit a budget or grant extensions to the retrying team.",
+    "Keep complete provider launch enforcement and capability/usage evidence in F2, loaded-runtime/bootstrap proof in F3, and broad adversarial CI plus controlled operational proof in F4. F1 must leave an implementable shared interface without claiming those later obligations complete.",
+    "Propagate applicable diagram-impact rows into Tasks, including the Task budget owner, Watchdog consumers and Teams publication Code declarations. Reconcile actual source symbols, declaration kinds, contract/model/design links, normal and failure/restart flows, browser navigation and bounds against the delivered diff.",
+    "Use propose_epic_amendment for any needed parent contract, ownership, policy or sequencing change. Do not silently change the approved parent or another team's worktree."
+  ],
+  "architecture_publication_gap": {
+    "evidence": "docs/epic_artifacts/epic_048_publication_resume.json",
+    "operation_id": "architecture-publication-f17d12c797b510fe6679b23bbf54b3c2d6b6abc55443e11ff1c8cac84192b78e",
+    "last_recorded_result": "failed: render worker interrupted after automatic recovery attempt; no review_unit_id",
+    "owner": "Architecture publication/runtime recovery owner, coordinated by Epic Architect",
+    "constraint": "Plan approval does not establish architecture publication success. Preserve pinned references, accepted lineage and attempt history; route a blocked publication through supported recovery. No ledger rewrite, snapshot substitution or unchanged replay loop. This handoff does not assign unrelated runtime repair implementation to F1."
+  },
+  "verification": {
+    "reads": "Cascade read_doc for epic and F1, list_children, read_architecture_amendments; retained architect review, sign-offs and publication failure evidence.",
+    "designs_checked_for_change": [
+      "DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/watchdog/DESIGN.md",
+      "cascade/agent/DESIGN.md",
+      "cascade/workspace/DESIGN.md"
+    ],
+    "diff_check": "git diff --stat c717bb36 HEAD over the six reviewed designs and architecture directory produced no changes.",
+    "diagram_impact": "This handoff changes no code, system/container/component boundary, source declaration or behavior. The approved inventory and retained render/browser evidence remain applicable; implementation reconciliation remains assigned to F1-F4.",
+    "tests": "No tests rerun: only a handoff evidence artifact is added. No fresh rendering, browser or product acceptance result is claimed.",
+    "limitations": "No plan/spec edit, new sign-off, deployment, dependency installation or child implementation acceptance. Historical review prose describes its review-time status; the current approval event governs planning progression."
+  },
+  "architect_review": {
+    "role": "epic_architect",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "be0e40b69049a9d93811c15f6d85ac5092bc73af",
+    "decision": "Manager handoff agrees with the approved contract. F1 is a planning stub with no Tasks; complete its data structures, API contracts and execution flow before feature sign-off. No parent amendment or renewed epic sign-off is needed for this handoff.",
+    "planning_acceptance": [
+      "Name concrete reserve, settle, reconcile and independently authorized extension entry points and their receipt/refusal schemas. Keep original incident, material generation, top-level claim and nested operation identities distinct; specify replay and uncertain in-flight consumption before F2 consumes the interface.",
+      "Trace normal admission through publication and independent observation, then crash/restart through the same tracking-trunk ledger and lock. Prove that a second caller cannot reclaim a live claim or obtain new allowance from another checkout, action or generation. Parent model time includes waiting for tools; serialized validator work charges the separate process dimension. Settle each physical invocation once in its own dimension.",
+      "Task acceptance must name the owning design and exact integrated views below, with final implemented source symbols/kinds and source-contract entries. Proposed function names must not be represented as existing source declarations.",
+      "Retain the F1 real timeout/restart/publication proof and the F1/F2 provider-to-MCP-to-validator seam. Provider enforcement remains F2 work, loaded-runtime/bootstrap proof remains F3 work, and integrated adversarial/operational evidence remains F4 work."
+    ],
+    "diagram_impact_inventory": [
+      {
+        "level": "context",
+        "views": [
+          "cascade-landscape",
+          "cascade-context"
+        ],
+        "designs": [
+          "DESIGN.md"
+        ],
+        "owner": "Epic Architect; F4 verification",
+        "review": "Handoff adds no actor or external system. Preserve operator extension authority; revisit only if implementation changes that boundary."
+      },
+      {
+        "level": "containers",
+        "views": [
+          "cascade-containers"
+        ],
+        "designs": [
+          "DESIGN.md",
+          "cascade/DESIGN.md"
+        ],
+        "owner": "F1 persistence; F3 runtime identity",
+        "review": "Use existing repository artifacts and process boundaries. One tracking-trunk ledger is not a new database or isolated service."
+      },
+      {
+        "level": "components",
+        "views": [
+          "cascade-supervisor-components",
+          "cascade-team-components"
+        ],
+        "designs": [
+          "cascade/DESIGN.md",
+          "cascade/task/DESIGN.md",
+          "cascade/watchdog/DESIGN.md"
+        ],
+        "owner": "F1 with F2 consumers",
+        "review": "Task owns budget state; Watchdog and Teams consume admission and receipts. Reconcile actual collaborator relationships during implementation."
+      },
+      {
+        "level": "code",
+        "views": [
+          "cascade-task-code",
+          "cascade-watchdog-code",
+          "cascade-teams-code"
+        ],
+        "designs": [
+          "cascade/task/DESIGN.md",
+          "cascade/watchdog/DESIGN.md",
+          "cascade/DESIGN.md"
+        ],
+        "owner": "F1",
+        "source_entries": [
+          "cascade/task/action_recovery.py:_path,start_attempt,resume_action,admit_review_publication_generation",
+          "cascade/task/lifecycle_lock.py:lifecycle_root,task_lifecycle_lock",
+          "cascade/team_review_recovery.py:publish_team_review_resolution",
+          "cascade/review_rebase.py:check_and_publish_review_rebase",
+          "cascade/review_validation.py:run_review_validation"
+        ],
+        "review": "Extend the existing Task budget owner with real implemented declarations; keep Watchdog consumer and Teams publication links synchronized with the contract. Verify context-to-Code, Level up, deep links, pinned source and warm artifact reuse under retained render bounds."
+      },
+      {
+        "level": "behavior",
+        "views": [
+          "Owning-design Mermaid flows"
+        ],
+        "designs": [
+          "cascade/task/DESIGN.md",
+          "cascade/watchdog/DESIGN.md",
+          "cascade/DESIGN.md"
+        ],
+        "owner": "F1; F2 provider seam",
+        "review": "Show reserve/run/settle/exhaust/extend plus crash reconciliation, serialized nested work and independent outcome verification. Existing diagrams remain current baseline; new guarantees become design facts only after implementation."
+      }
+    ],
+    "verification": {
+      "canonical_reads": "Epic and F1 read_doc; read_architecture_amendments returned []. Current epic revision and both retained sign-offs match ffcb9a10.",
+      "source_inspection": "action_recovery._path uses lifecycle_root; lifecycle_root resolves locate_trunk(resolve_tracking_root(root)); task_lifecycle_lock locks the same root. Publication generation admission still grows attempt_bound for material change, confirming the planned F1 gap remains.",
+      "design_review": "Read current Task durable-delivery, Watchdog recovery-admission and parent publication sections against their source boundaries. All six previously reviewed designs and architecture sources are unchanged from c717bb36 through HEAD. No design edit is needed for a planning handoff; planned budget guarantees stay in work records.",
+      "tests": "No tests, renderer or browser checks rerun for this artifact-only change. Retained evidence remains in epic_048_architecture_review.json and epic_048_architect_rereview.json; no fresh implementation verification is claimed.",
+      "publication": "Last recorded publication is terminally failed; no new recovery event is supplied and current Cascade tool catalog exposes no architecture publication/render retry. Do not replay a terminal request as a recovery mechanism. Keep exact request and runtime-owner recovery handoff in epic_048_publication_resume.json.",
+      "limitations": "Human plan approval is current. F1 has not yet supplied concrete schemas or Tasks. Publication recovery and implementation acceptance remain open; this review changes no plan/spec, runtime, dependency or accepted snapshot."
+    }
+  }
+}

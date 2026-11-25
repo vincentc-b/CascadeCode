@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  review-recovery:
+  recovery-contract:
+    name: Recovery contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -20,5 +21,67 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e '.[dev]'
-      - name: Exercise durable recovery with real validation processes and Git publication
-        run: python -m pytest -q tests/test_review_recovery_journey.py tests/test_review_health.py tests/test_review_rebase.py tests/test_resolution_actions.py
+      - name: Exercise the bounded recovery contract
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .recovery-contract
+          timeout --kill-after=10s 8m \
+            python -m pytest -q \
+              tests/test_late_repair_convergence.py \
+              tests/task/test_incident_budget.py \
+              tests/agent/test_provider_recovery_contract.py \
+              tests/test_review_publication_safeguards.py \
+              tests/test_review_recovery_journey.py \
+              tests/test_review_health.py \
+              tests/test_review_rebase.py \
+              tests/test_resolution_actions.py \
+              tests/watchdog/test_reservations.py \
+              tests/watchdog/test_audit_investigation.py \
+              tests/watchdog/test_parent_lifecycle_postcheck.py \
+              tests/feature/test_publication.py::test_review_recovers_remote_creation_before_local_registry_write \
+              --tb=short 2>&1 | tee .recovery-contract/pytest.raw.log
+      - name: Sanitize bounded failure evidence
+        if: failure()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          source = Path(".recovery-contract/pytest.raw.log")
+          text = source.read_text(encoding="utf-8", errors="replace") if source.exists() else "pytest produced no retained output\n"
+          text = text.replace(str(Path.cwd()), "<checkout>")
+          text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+          text = re.sub(
+              r"(?i)\b(token|secret|password|authorization|api[_-]?key)(\s*[:=]\s*)(\S+)",
+              r"\1\2<redacted>",
+              text,
+          )
+          text = re.sub(
+              r"\b(gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,})\b",
+              "<redacted>",
+              text,
+          )
+          for name, value in os.environ.items():
+              sensitive_name = re.search(
+                  r"(?i)(token|secret|password|key|credential|auth)", name
+              )
+              if value and len(value) >= 4 and sensitive_name:
+                  text = text.replace(value, "<redacted>")
+          text = "".join(char for char in text if char in "\n\t" or ord(char) >= 32)
+          Path(".recovery-contract/failure.log").write_text(text[-65536:], encoding="utf-8")
+          PY
+      - name: Retain sanitized recovery failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: recovery-contract-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .recovery-contract/failure.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove unsanitized local diagnostics
+        if: always()
+        shell: bash
+        run: rm -f .recovery-contract/pytest.raw.log

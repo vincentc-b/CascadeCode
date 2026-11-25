@@ -91,6 +91,106 @@ owner exit, PID reuse, live/unknown owners and durable exactly-once handoff.
 
 These safeguards remain inside the existing supervisor, lifecycle-recovery and
 review-publication components; they add no C4 container or external service.
+The Task lifecycle lock and tracking-root ledger are local serialization and
+persistence boundaries, not operating-system isolation for validators or remote
+provider work. Landscape/context and container boundaries are unchanged because
+the budget adds no person, external system, runtime process, database or network
+path; the supervisor component view shows Watchdog consuming Task's gate.
+
+`REQ-CASCADE-RECOVERY-002`: a bounded recovery journey exposes durable stage
+receipts for detected, admitted, assigned, executing, validating, publishing,
+verifying, resolved, and waiting states. Every receipt identifies its actor,
+scoped capability, permitted input names, authority revision and durable result.
+Owner execution, provider completion, queue acknowledgement, or push is never
+resolution. Only Watchdog may append `resolved`, after a fresh postcheck of the
+original obligation and exact authoritative generation.
+
+The stage envelope is additive to the existing tracking-root action and incident
+records. Task remains the sole incident-budget authority; tier teams remain the
+repair and publication owners; Watchdog owns independent verification. Restart
+reuses the claim, generation, operation and immutable receipt identities. Native
+shell, child processes and remote provider work are not isolated by this local
+ledger or by C4 component boundaries.
+
+Every production validator is admitted separately from its material publication
+generation. `publish_team_review_resolution` binds the canonical incident and
+policy-bearing generation, then resolves a named validation profile and reserves
+the approved worst-case validator runtime
+under one top-level claim and one unique operation receipt. A changed source,
+target, validation profile, policy version, or interpreter environment can make a
+generation materially eligible, but only remaining incident-wide allowance grants
+a permit. The profile binds exact argv, coverage class, policy owner, approval
+revision and finite timeout/attempt budget; executable and working-directory
+feasibility is checked before spawn. Clocks and diagnostic reports are absent
+from the generation. Unknown classification fails closed. A deterministic
+`review_rebase` validator failure fences the settled receipt's validation
+material (source tree, command, timeout, policy and runtime identity), not the
+remaining incident allowance. Previously failed material stays fenced across
+restart and A–B–A changes. Legacy receipts without verified material remain
+conservative. Validators linked to a different original action retain the
+incident-wide deterministic failure gate. Transient failure retains persisted
+bounded backoff and at most three operations.
+The legacy action attempt bound is never enlarged by generation admission.
+
+`run_review_validation` verifies the live receipt before `Popen`, starts a local
+process group, and settles known runtime on green, red, launch failure and timeout.
+Timeout or interruption stops the complete local group; interruption retains the
+worst-case reservation conservatively. Provider work is metered separately at
+the shared Agent adapter boundary, which reserves a paid turn and worst-case model
+runtime before dispatch and settles one normalized invocation receipt. A green check
+is still insufficient to publish after source, target, validation policy,
+authorization, credentials or remote lease drift. Remote ancestry reconciliation
+is the authoritative completion check after an interrupted push.
+
+### Publication implementation and recovery
+
+The [model](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+connect `cascade-supervisor-components` → `cascade-teams-code` to the shared
+publication pipeline. `element.component.teams` owns that pipeline;
+`element.component.task-team` owns the action ledger in `cascade-task-code`.
+
+| Source entry | Responsibility |
+|---|---|
+| [publish_team_review_resolution](team_review_recovery.py) | Carry canonical incident, claim and validator-operation identities from material admission through publication. |
+| [admit_review_publication_generation / resume_action](task/action_recovery.py) | Preserve decisions and attempts; record material evidence without granting allowance or growing the attempt bound. |
+| [bind_incident_budget / read_incident_budget](task/incident_budget.py) | Anchor every linked action and material generation to one original incident policy and expose its bounded restart-safe projection. |
+| [reserve_incident_operation / settle_incident_operation](task/incident_budget.py) | Atomically issue one bounded receipt under the live claim and charge actual or conservatively retained use exactly once. |
+| [admit_provider_turn / settle_provider_turn](agent/provider_metering.py) | Consume the Task-owned allowance immediately around an incident-related provider dispatch and retain normalized invocation evidence plus the validated launch route without granting route-specific allowance. |
+| [extend_incident_budget / record_incident_budget_exhaustion](task/incident_budget.py) | Retain one exhaustion escalation and accept only independently authenticated finite additions within trusted maxima. |
+| [reserve_budgeted_operation / settle_budgeted_operation](watchdog/reservations.py) | Consume the Task gate after a distinct Watchdog capability claim without owning another allowance. |
+| [check_and_publish_review_rebase](review_rebase.py) | Check the immutable local source, validate, recheck policy/remote authority and push that SHA under the source lease. |
+| [reserve_review_validation / run_review_validation](review_validation.py) | Reserve worst-case runtime before spawn, optionally bind the receipt to its live provider parent, verify the receipt, stop the process group, bound diagnostics and settle every exit. |
+
+```mermaid
+flowchart TD
+    Owner[Owner publication request] --> Generation[Recheck exact generation and durable claim]
+    Generation -->|eligible| Budget[Reserve cumulative allowance under live claim]
+    Budget -->|permit| Checks[Validate immutable source and board]
+    Budget -->|pending / exhausted / owner decision| Pending[Retain pending or refusal]
+    Generation -->|not material / live / gated| Pending[Retain pending or refusal]
+    Checks --> Settle[Settle exact receipt]
+    Settle -->|red / timeout / interrupted| Preserve[Preserve checkout and conservative charge]
+    Settle -->|green| Recheck[Recheck source, policy, remote heads and authority]
+    Recheck -->|match| Push[Lease-publish tested SHA]
+    Recheck -->|drift| Preserve
+    Push --> Receipt[Record publication evidence]
+    Receipt --> Verify[Independent obligation-specific postcheck]
+```
+
+The action ledger and review registry survive restart. A reserved operation whose
+owner disappears remains charged and cannot be replayed as a fresh permit. An
+interruption after a remote effect requires independent remote-SHA observation
+before another execution; publication evidence alone does not close the original
+delivery obligation.
+For split product/tracking roots, planning readiness and completed-child identity
+come from the tracking owner, while immutable source history, validation, remote
+leases and pushes remain product-worktree operations. Board cache invalidation
+expires both repository-role projections so a newly minted or moved tracking
+document is immediately visible to product-side dispatch and recovery.
+The [Watchdog postcheck](watchdog/DESIGN.md#recovery-admission-and-active-path-authority)
+owns that distinction. [The real publication journey](../tests/test_review_recovery_journey.py)
+exercises timeout, restart, exhausted decisions and immutable publication.
 
 ### Historical review reconciliation and queue retention
 
@@ -293,6 +393,11 @@ Feature branch to its owning Epic branch. Unknown or conflicting state fails
 closed. Reconciliation binds callbacks to their immutable generation and exact
 accepted source/target heads, while independent target integration remains a
 separate closeout obligation.
+If a process stops after pushing and opening a review but before storing its
+generation, recovery may reuse the discovered review only after a fresh forge
+snapshot reports the exact source and target refs and heads for the prepared
+publication and an open state. Missing or changed authoritative evidence keeps
+the generation unpublished; a route-shaped review alone is not a receipt.
 `DEC-CASCADE-RECOVERY-001`: Preserve a single local lifecycle authority across
 team adapters, watchdog claims and Boss delivery, with repository-specific state
 resolved through Workspace.
@@ -347,6 +452,11 @@ position or a historical URL. GitHub observations request the CLI-supported
 malformed commit list is unavailable evidence. Repair publication also requires
 that observed OID to equal the generation's recorded source head, so a moving
 source branch is refused before publication.
+Late delivery can carry a superseded completed Feature path back onto the source
+branch. Review preparation restores only the exact active path named by the
+durable repair receipt before pinning the tested publication SHA. After forge
+acceptance, target closeout mutates the Epic checkout directly; an accepted
+stacked-review projection cannot bypass that target postcondition.
 
 Implementation ownership and integrated Code views are in
 [Workspace](workspace/DESIGN.md#work-ownership-and-retirement),
@@ -359,4 +469,7 @@ are not separately deployed services. Guarded tools constrain agent operations;
 repository locks serialize mutations, without claiming OS filesystem isolation.
 Verification: [supervision tests](../tests/test_planning_manifest_and_team_controls.py),
 [review health](../tests/test_review_health.py), and
-[tracking adapter](../tests/test_tracking_find.py).
+[tracking adapter](../tests/test_tracking_find.py). The real-repository
+[late-repair convergence test](../tests/test_late_repair_convergence.py) injects
+the post-push/pre-receipt stop and checks unavailable, changed and exact replay
+evidence across colocated and split roots.

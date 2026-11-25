@@ -54,6 +54,13 @@ authorize advancing lifecycle state. Recovery inspects durable state and the
 preserved worktree before resuming the owning team. See
 [shared supervision](../team_supervision.py) and
 [branch recovery](../team_branch_recovery.py).
+An incident-related lead or architect turn carries the original incident, claim
+and unique provider-operation identity through the shared Agent runner; missing
+or refused Task-owned budget admission launches no provider.
+Watchdog assignment names the exact Feature owner, registered capability,
+permitted evidence keys and capability-authority revision. Feature repair and
+publication write owner evidence but cannot mark the originating incident
+resolved; the independent Watchdog postcheck owns that terminal receipt.
 
 Verification: [graph and lifecycle tests](../../tests/feature/).
 
@@ -83,6 +90,13 @@ sequenceDiagram
 ```
 
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.
+
+In a split project, Feature and Task lifecycle documents remain in the tracking
+checkout while their implementation branches and worktrees remain in the product
+repository. Dispatch records the registered product branch/worktree on the
+tracking document without relocating a second mutable copy. Review readiness and
+completed-child enumeration read tracking; publication history, leases, validation
+and pushes continue to use the physical product Feature worktree.
 
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).
 
