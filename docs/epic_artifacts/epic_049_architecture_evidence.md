@@ -1108,6 +1108,43 @@ change. Epic publication recovery and canonical Task correction remain
 unresolved; neither is represented as repaired. Return control to child
 execution and supervisor integration between parent turns.
 
+## Manager shared-store acceptance gate confirmation
+
+Reviewed the Feature 2 repair-gate handoff against canonical readback
+`9215a0ee162689b6c550d6676bb164b034d03998`, newer than the reported
+`4764c8dc`. The current spec explicitly retains independent Task 2/3 implementation
+scope while gating their acceptance on Task 5 durability and restart evidence;
+Task 4 includes integrated crash acceptance. Required evidence covers full-tail
+fsync before index commit, pending intent on fsync failure, and room movement
+through owner switching, terminal checkout retirement and index reset. This
+closes the planning clarification, not the implementation acceptance gap.
+The Feature branch is at `9215a0ee`; its diff from `64f99761` contains no changes
+under `cascade`, `architecture` or `tests`. No repair delivery is claimed.
+
+Epic `03280933` and both saved role sign-offs remain unchanged; architecture
+amendments are empty. Sent `manager_repair_gate_readback_20261125` to Feature 2
+through Cascade; result was `enqueued`. No status-only reply was requested.
+Canonical Task-record correction remains separate from repair acceptance, with
+the operator handoff above still unresolved. No restricted Task records were
+read and no board changes were necessary.
+
+Design closeout: reviewed owned `cascade/war_room/DESIGN.md` transcript structure
+and sequence, `cascade/workspace/DESIGN.md` invocation/restart interface, and
+`cascade/DESIGN.md` navigation table. This evidence-only diff changes no context
+actors (`cascade-context`), runtime/data boundaries (`cascade-containers`),
+component responsibilities (`cascade-war-room-components`,
+`cascade-supervisor-components`), Code symbols (`cascade-dashboard-code`,
+`cascade-workspace-code`) or behavior diagrams. No current-design/model edit or
+render is warranted. Feature 2 retains final repair source/design/Code and
+normal/failure/restart verification obligations; no new verification is claimed.
+
+Validation: canonical Epic/Feature reads, amendment read, saved sign-off
+comparison, Feature source-diff inspection and `git diff --check`. No executable
+tests were rerun for this work-record-only change. Repair acceptance, canonical
+Task corrections, producer design ownership, final consumer fixtures and failed
+Epic architecture publication recovery remain open. Return control to child
+execution and supervisor integration.
+
 ## Architect Task-record escalation review
 
 Reviewed the latest Task 1/5 correction handoff against canonical Epic
