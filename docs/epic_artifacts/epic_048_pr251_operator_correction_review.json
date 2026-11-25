@@ -199,5 +199,47 @@
       "verification": "Canonical Epic/F1 reads, child inspection/recovery, independent forge head/check/reviews, source/design route inspection, JSON parse and git diff --check. No runtime/render/browser or unchanged Recovery contract rerun."
     },
     "boundary": "No merge, acceptance, integration or Task resumption is claimed. Supervisor integrates validated children between parent turns. Existing installations are ready; no installation or controlled live incident authority is inferred."
+  },
+  "architect_green_resume_review": {
+    "role": "epic_architect",
+    "owned_base": "275a89f7",
+    "epic_plan_revision": "8bad293119bc985b12a5767192d99d0d82228b7f",
+    "assessment": "Reviewed manager green-CI resume handoff; existing dec_009 already owns the requested sequence. No plan rewrite, new decision or additional implementation dispatch is needed.",
+    "forge_observation": {
+      "head": "51cffe146b8b423027266f8469678c482e321c79",
+      "state": "open",
+      "merged": false,
+      "mergeable_state": "clean",
+      "reviews": [],
+      "review_recovery": "completed/success",
+      "url": "https://github.com/vincentc-b/CascadeCode/actions/runs/45537440729/job/138947405016"
+    },
+    "reviewed_designs": [
+      "51cffe14:cascade/DESIGN.md",
+      "51cffe14:cascade/task/DESIGN.md",
+      "cascade/epic/DESIGN.md",
+      "cascade/feature/DESIGN.md"
+    ],
+    "diagram_impact": {
+      "context_containers": "cascade-landscape, cascade-context, cascade-containers: handoff changes no actors, runtime, persistence or isolation boundaries.",
+      "components": "cascade-supervisor-components and cascade-team-components: existing Task receipt/admission and Teams publication ownership remains applicable; F1 final review retains both sides of the interface.",
+      "code": "cascade-task-code and cascade-teams-code: correction retains existing reserve/settle/generation/publication entry points and ownership. cascade-epic-code and cascade-feature-code: routing follows existing recovery adapters without code changes. Prior exact-correction inventory remains authoritative for final F1/F4 checks.",
+      "behavior": "Source and owning designs distinguish queued recovery from acceptance. F1 still owns the routed Task receipt material_fingerprint schema, failed-material flow and removal of F2 delivery attribution; F4 verifies integrated normal/failure/restart and navigation evidence."
+    },
+    "verification": "Canonical epic read and empty architecture amendments; exact forge head/check/reviews; five-file correction diff, Task/package design and Epic/Feature recovery interface inspection; git diff-tree --check on correction, artifact JSON parse and git diff --check. No runtime, render, browser or unchanged-source Recovery contract rerun.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:architect:green-resume-confirmation-51cffe14",
+      "status": "enqueued",
+      "sequence": "Existing F1 owning review/acceptance and supported disposition; normal reviewed integration; verify Task 003 base contains correction; supported recovery; full bounded Recovery contract and final design/model/navigation/consumer dossier at integrated SHA."
+    },
+    "remaining_gates": [
+      "F1 owning review and routed design closeout",
+      "Supported PR disposition and reviewed integration",
+      "Task 003 corrected base, supported resume and full bounded gate",
+      "Final epic CI and separately authorized operational evidence",
+      "Supported recovery of original terminal architecture publication"
+    ],
+    "publication": "No new architecture decision or plan revision. Existing human-approved baseline retained; no repeated already-approved sign-off, substitute publication or accepted-snapshot rewrite. Original pinned failed publication and runtime-owner recovery remain recorded in epic_048_publication_resume.json."
   }
 }
