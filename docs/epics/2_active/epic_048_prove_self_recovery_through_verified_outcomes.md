@@ -413,6 +413,11 @@ Design closeout: reviewed cascade/DESIGN.md, cascade/epic/DESIGN.md and cascade/
   Chose Recognize canonical feat_048_005 cancellation with cleanup complete and retain human dec_011 continue_reduced_scope. Keep F5 analysis, approval history and parent linkage; no independent implementation or replacement Feature. F1 owns correction acceptance and F4 final integrated verification..
   Rationale: Canonical read_doc/list_children show cancelled at 2026-11-25 05:06:14 UTC with the PR #251/51cffe14 supersession reason, original approval retained, no Tasks, and resolved parent feedback at 05:07:03 UTC. Epic tools expose no cancellation operation, but operator lifecycle has already completed. One supported reconcile_completion_rollup call returned 'Epic recovery action is no longer admitted'; record the refusal and retain active Epic status.
   Honors: Operator request; dec_008/dec_009 supersession and dec_011 human disposition; preserve technical/approval history and original acceptance gates; no duplicate dispatch, topology bypass, synthetic completion, review override or test rerun. No comment ID was supplied..
+
+- `dec_013` · 2026-11-25 · Epic Manager · **F4 unpublished clarification requires fresh guarded admission**
+  Chose Preserve completed publication of 31a9e967 and local clarification 9353de4e as separate evidence. Require an operator/platform-owned supported fresh admission before F4 publication; retain F5 cancellation and reduced parent scope. No duplicate dispatch or completed-action replay..
+  Rationale: Forge confirms PR #256 OPEN/CLEAN and Recovery contract SUCCESS at 31a9e967. Durable action completed after 117 publication checks in 42.52s. The completed generation cannot admit the newer local clarification, clean-review health creates no new admission, and no fresh admission tool is exposed to the Epic. Internal normalization/admission functions do not establish a supported operator command.
+  Honors: Original immutable-head, owner, lease, incident-budget and acceptance gates; F1/F4 evidence and cancelled F5 history; no direct push, private lifecycle mutation, manufactured conflict, duplicate work or unchanged test rerun. No comment ID supplied..
 ## Amendment log
 
 _(none)_
