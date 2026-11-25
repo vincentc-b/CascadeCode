@@ -395,5 +395,41 @@
         "Supported recovery of terminal Epic architecture publication"
       ]
     }
+  },
+  "f4_final_revision_architect_review": {
+    "role": "epic_architect",
+    "triggers": [
+      "feat_048_004:feat_048_004:f5-ownership-recorded-20261125",
+      "feat_048_004:feat_048_004:f5-final-plan-revision-20261125"
+    ],
+    "epic_plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "verified_f4_plan_revision": "3748929904b7040dad064eacb155c0e9a88e5006",
+    "owned_checkout_revision": "281e74d272619e9f72126180d5e081844b80e349",
+    "assessment": "The canonical F4 read confirms the final revision already assessed in f4_acknowledgement_architect_review, including dec_002, mandatory original regression, full bounded CI after F5 integration and final dossier/design refresh. The intermediate a71c608f revision is not the review target. No new parent scope, decision or spec edit is required.",
+    "review_boundary": "Epic allocation review is current for 37489299; it does not substitute for a matching Feature-owned architecture publication. F4 reports its prior publication is pinned to 796aeee2. Refresh remains pending with the Feature Architect through the supported Feature lifecycle. Task 4 acceptance revision a2953bbedfd6745791927d35f7c48bb324264e2e and Task 3 execution state are reported evidence, not independently inspected Task records.",
+    "handoff": "Retain the Manager queued request epic_048:epic_048:f4-final-plan-review-routing-37489299 and F5 coordination request epic_048:epic_048:f5-f4-final-plan-37489299. Their requested ownership and exact review revision are correct; no duplicate queue message or cross-team publication attempted.",
+    "resolution_path": "F5 owns reviewed production correction and real-validator/Git proof preserving original identity, consumption, failed-material history, numerical bounds and human gates. F4 pins supported integration and reruns the full mandatory gate plus final architecture/dossier checks. Epic Manager owns reviewed PR #251 correction or explicit reviewed successor and fresh corrected-review/final-Epic CI. No implementation or CI success is established by these planning records.",
+    "design_closeout": {
+      "reviewed": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "architect_review.diagram_impact_inventory in this artifact",
+        "F4 canonical diagram-impact inventory and external correction dependency"
+      ],
+      "context_containers": "Only review-routing evidence changed since 36e223db; no actor, external system, runtime or persistence boundary changed. Retain the existing inventory and F5/F4 ownership.",
+      "components_code": "No interface, declaration, component ownership or source-contract change in this diff. Native Task/Teams and affected consumer Code verification remains assigned to F5 implementation and F4 final integration; the Epic baseline does not establish delivered child behavior.",
+      "behavior": "No state-transition change in this artifact. Original-budget material-change admission and unchanged/exhausted refusal still require F5 source-backed flows and real-validator/Git evidence, then F4 integrated verification.",
+      "verification": "Read canonical Epic/F4 records and empty architecture amendments; reviewed local parent/Task design sections, retained view inventory and Manager-only artifact diff. JSON, design/view references and git diff --check passed. No runtime tests, render, browser or hosted CI rerun for this work-record-only update.",
+      "remaining_gates": [
+        "F4 matching architecture publication on 37489299",
+        "F5 concrete contract, production correction and real-validator/Git evidence",
+        "F4 corrected integrated CI and final design/source/navigation/dossier evidence",
+        "PR #251 reviewed disposition and final Epic hosted CI",
+        "Separately authorized supervisor evidence",
+        "Supported terminal Epic architecture publication recovery"
+      ]
+    },
+    "approval_and_publication": "No renewed already-approved Epic sign-off or replacement publication claimed. Preserve the exact terminal failed request in epic_048_publication_resume.json. Current Cascade tools expose publication but no terminal publication/render recovery operation; unrelated integration retry is not a recovery route for that operation."
   }
 }
