@@ -148,5 +148,56 @@
       "Supported terminal architecture-publication recovery"
     ],
     "approval_publication": "Existing human-approved baseline ffcb9a10 retained. No renewed sign-off call after known already-approved refusal. Original terminal publication remains pinned in epic_048_publication_resume.json; internal_error requires supported runtime-owner recovery. No replacement publication, accepted-snapshot rewrite, or check override."
+  },
+  "green_ci_resume_handoff": {
+    "role": "epic_manager",
+    "epic_plan_revision": "8bad293119bc985b12a5767192d99d0d82228b7f",
+    "operator_request": "Proceed with normal review/integration; resume task_048_004_003 once its base incorporates the corrected revision.",
+    "forge_rechecked": {
+      "head": "51cffe146b8b423027266f8469678c482e321c79",
+      "base": "epic/epic_048",
+      "state": "open",
+      "merged": false,
+      "mergeable_state": "clean",
+      "reviews": [],
+      "review_recovery": "completed/success",
+      "url": "https://github.com/vincentc-b/CascadeCode/actions/runs/45537440729/job/138947405016"
+    },
+    "operator_ci_report": "55 passed in 21.18s; test count/duration not independently rerun.",
+    "canonical_f1": "completed; no incidents returned by supervise_child inspect",
+    "recover_feature": {
+      "outcome": "pending_feature_result",
+      "durable_result": false,
+      "status": "completed",
+      "incidents": []
+    },
+    "handoffs": [
+      {
+        "recipient": "feat_048_001",
+        "request_id": "epic_048:epic_048:pr251-green-review-disposition-51cffe14",
+        "status": "enqueued",
+        "required_result": "Exact owning reviewed SHA, acceptance/design closeout, supported PR disposition/integration receipt; otherwise actual tool refusal, prerequisite, owner and supported alternative."
+      },
+      {
+        "recipient": "feat_048_004",
+        "request_id": "epic_048:epic_048:f4-green-f1-resume-sequence-51cffe14",
+        "status": "enqueued",
+        "required_result": "Integrate reviewed F1 correction; verify Task 003 base ancestry before supported recovery; run full bounded Recovery contract and final architecture/consumer dossier at exact integrated SHA."
+      }
+    ],
+    "plan_assessment": "Existing dec_009 and corrective follow-up section already require this sequence. No new scope or decision; no canonical plan rewrite or repeated architecture-review churn.",
+    "design_closeout": {
+      "reviewed": [
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "cascade/epic/recovery.py:recover_feature",
+        "cascade/team_supervision.py:supervise_child"
+      ],
+      "impact": "Artifact-only routing confirmation. Context, containers, components and integrated Code views have no source/interface/persistence change. Prior correction inventory remains with F1 final review and F4 integrated verification.",
+      "trace": "Normal direct-child recovery queues the Feature owner; the no-incident completed path returns pending rather than acceptance or integration. No completed-parent guard is bypassed.",
+      "retained_gap": "F1 must reconcile Task receipt schema/behavior and delivery attribution previously routed by Epic Architect; final integrated design/model/navigation verification remains F4-owned.",
+      "verification": "Canonical Epic/F1 reads, child inspection/recovery, independent forge head/check/reviews, source/design route inspection, JSON parse and git diff --check. No runtime/render/browser or unchanged Recovery contract rerun."
+    },
+    "boundary": "No merge, acceptance, integration or Task resumption is claimed. Supervisor integrates validated children between parent turns. Existing installations are ready; no installation or controlled live incident authority is inferred."
   }
 }
