@@ -88,7 +88,7 @@ legacy provenance, and `detail_truncated` without opening a recovery ledger.
 flight, boss, chat, audit or provider panels. The board and pending-brief
 cancellation lookup run concurrently, but both must finish before board actions
 are enabled; cancellation safety is not traded for responsiveness. Optional panel
-requests no longer delay startup polling. Existing forced post-action freshness and
+requests do not delay startup polling. Existing forced post-action freshness and
 single-flight board reads remain intact.
 
 `DEC-WARROOM-REFRESH-001`: serialize Epic readiness from the same request-scoped
