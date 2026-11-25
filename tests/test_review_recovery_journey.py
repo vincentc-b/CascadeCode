@@ -23,10 +23,19 @@ from tests.test_review_rebase import _execution_ready_turn
 from tests.test_review_health import _git, _conflicting_snapshot
 
 
-def _policy(root, command, timeout):
+def _policy(
+    root,
+    command,
+    timeout,
+    *,
+    owner='repository_operator',
+    profile='cascade.review-publication',
+):
     (root / 'cascade.toml').write_text(
         '[validation]\nreview_command = ' + json.dumps(command) +
-        f'\nreview_timeout_seconds = {timeout}\n'
+        f'\nreview_timeout_seconds = {timeout}\n' +
+        'review_policy_owner = ' + json.dumps(owner) + '\n' +
+        'review_profile_id = ' + json.dumps(profile) + '\n'
     )
 
 
@@ -151,6 +160,101 @@ time.sleep(2)
     assert not calls.with_suffix('.orphan').exists(), 'timed-out validator children must be stopped'
     assert load_action(turn.action_id, root=root)['recovery_state'] == 'completed'
     assert len(pushes.read_text().splitlines()) == 1
+
+
+def test_unavailable_policy_profile_waits_before_claim_then_resumes_same_incident(
+    tmp_path, monkeypatch
+):
+    """Preflight refusal survives sweeps without consuming or publishing."""
+
+    root, turn = _resolved_review(tmp_path, monkeypatch)
+    tested_head = _git(root, 'rev-parse', 'HEAD')
+    remote_head = _git(
+        root, 'ls-remote', 'origin', 'refs/heads/feat/feat_035_001'
+    ).split()[0]
+    calls = tmp_path / 'corrected-profile-calls.jsonl'
+    unavailable = tmp_path / 'policy-owner-validator-unavailable'
+    _policy(
+        root,
+        [str(unavailable)],
+        10,
+        owner='release-policy-owner',
+        profile='release.review-recovery',
+    )
+
+    first = reconcile_open_review_health(root)
+    assert first[0]['outcome'] == 'blocked'
+    waiting = load_action(turn.action_id, root=root)
+    assert waiting['recovery_state'] == 'pending'
+    assert waiting['attempt_count'] == 0
+    assert read_incident_budget(turn.action_id, root=root) is None
+    assert _git(
+        root, 'ls-remote', 'origin', 'refs/heads/feat/feat_035_001'
+    ).split()[0] == remote_head
+
+    for _ in range(2):
+        reconcile_open_review_health(root)
+    restarted = _monitor_in_new_process(root)
+    assert 'blocked' in restarted.stdout
+    assert load_action(turn.action_id, root=root) == waiting
+    assert read_incident_budget(turn.action_id, root=root) is None
+    assert not calls.exists()
+
+    validator = tmp_path / 'approved_policy_validator.py'
+    validator.write_text(
+        "import json, pathlib, sys\n"
+        "root, log = map(pathlib.Path, sys.argv[1:])\n"
+        "assert (root / 'source.txt').read_text().strip() == 'source'\n"
+        "assert (root / 'target.txt').read_text().strip() == 'target'\n"
+        "with log.open('a') as handle: handle.write(json.dumps({'head': 'tested'}) + '\\\\n')\n"
+    )
+    command = [sys.executable, str(validator), str(root), str(calls)]
+    _policy(
+        root,
+        command,
+        10,
+        owner='release-policy-owner',
+        profile='release.review-recovery',
+    )
+    load_feature_tools()
+    result = invoke_feature_tool(
+        'feat_035_001', 'publish_review_resolution',
+        {'action_id': turn.action_id}, root=root,
+    )
+
+    assert result['recovery_state'] == 'completed'
+    assert result['incident_id'] == turn.action_id
+    assert result['claim_id'] == f'review-publication:{turn.action_id}'
+    completed = load_action(turn.action_id, root=root)
+    assert completed['attempt_count'] == 1
+    generation = completed['attempts'][0]['completion_metadata'][
+        'publication_generation'
+    ]
+    assert generation['source_head'] == tested_head
+    assert generation['validation_command'] == command
+    assert generation['validation_profile'] == {
+        'id': 'release.review-recovery',
+        'coverage_class': 'review_publication',
+        'policy_owner': 'release-policy-owner',
+        'approval_version': '1',
+        'attempt_budget': 1,
+    }
+    budget = read_incident_budget(turn.action_id, root=root)
+    assert budget is not None
+    operation = budget['operations'][result['operation_id']]
+    assert operation['claim_id'] == result['claim_id']
+    assert operation['state'] == 'settled'
+    assert operation['attributes']['validation_profile']['id'] == generation[
+        'validation_profile'
+    ]['id']
+    assert len(calls.read_text().splitlines()) == 1
+    assert _git(
+        root, 'ls-remote', 'origin', 'refs/heads/feat/feat_035_001'
+    ).split()[0] == tested_head
+
+    _monitor_in_new_process(root)
+    assert len(calls.read_text().splitlines()) == 1
+    assert load_action(turn.action_id, root=root) == completed
 
 
 def test_exhausted_legacy_review_is_not_rearmed_by_policy_change(tmp_path, monkeypatch):
