@@ -92,5 +92,35 @@
       "request_id": "epic_048:architect-f258bca3-integrated-design-review",
       "status": "enqueued"
     }
+  },
+  "architect_task_followup": {
+    "observed_task_revision": "67ab026adb15861fe59dff7420aa429aebaacad1",
+    "plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "ancestry": {
+      "51cffe146b8b423027266f8469678c482e321c79": true,
+      "b9c2129558beaffd235a6c28ab25693a5cd71813": false,
+      "f258bca3a0beaee66d3eedd1483218245e838ea7": false
+    },
+    "source_comparison": "Task incident_budget.py and team_review_recovery.py are byte-identical to f258bca3. Missing merge ancestry is not evidence of missing production correction. Publication safeguard delta is only a test name.",
+    "reviewed_paths": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "docs/task_artifacts/task_048_004_003_recovery_contract_ci_closeout.md"
+    ],
+    "documentation_gap": "Task package design omits the integrated review_rebase-only material-fence scope and non-rebase conservative failure gate. Task design adds fingerprint/restart/A-B-A/remaining-allowance prose but still needs that scope and explicit attributes/parent_operation_id/material_fingerprint receipt coexistence. F4 owns reconciliation before final acceptance.",
+    "diagram_impact": "No new actor/container/component or implementation declaration changes in this Task delta. Existing Task/Teams integrated Code inventory and required final source-contract/render/navigation review remain applicable; behavioral documentation must agree with the review_rebase-only source gate.",
+    "verification": [
+      "Git ancestry at exact observed Task SHA",
+      "Exact diff against f258bca3 for package/Task design and publication safeguard",
+      "read_architecture_amendments returned []",
+      "git diff --check passed"
+    ],
+    "limitations": "Task closeout reports checks, but full supervised gate result is deferred to delivery receipt and not independently verified here. No runtime tests, browser runs, recovery or publication retries. Existing terminal architecture publication refusal remains unchanged.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:architect-task67ab026a-base-design-gap",
+      "status": "enqueued"
+    },
+    "decision": "Existing plan and acceptance inventory sufficient; no plan revision or new sign-off/publication."
   }
 }
