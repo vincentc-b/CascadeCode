@@ -1,0 +1,86 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_manager",
+  "trigger": "Human CI investigation and correction request for PR #251",
+  "assessed_revision": "ff3cd399d1523ba6c4e123825c811f8c0b700e7c",
+  "plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+  "corrective_feature": "feat_048_005",
+  "feature_initial_revision": "c2ade1e50726c81148dc4fa9d3142ac73f7e9079",
+  "decision": "dec_007",
+  "independent_evidence": {
+    "github": {
+      "pr": 251,
+      "state": "open",
+      "source": "feat/feat_048_001",
+      "target": "epic/epic_048",
+      "job": "review-recovery",
+      "conclusion": "failure",
+      "url": "https://github.com/vincentc-b/CascadeCode/actions/runs/45503157539/job/138831403366",
+      "head_sha": "ff3cd399d1523ba6c4e123825c811f8c0b700e7c"
+    },
+    "reproduction": {
+      "method": "git archive of exact assessed revision into isolated temporary directory; existing installed Python/pytest; no installation",
+      "command": "/opt/conda/bin/python3.12 -m pytest -q tests/test_review_health.py::test_validation_and_publication_failures_remain_owned_and_retryable",
+      "result": "1 failed in 2.67s",
+      "assertion": "Expected completed; actual awaiting_owner_decision",
+      "source_trace": [
+        "review_validation.run_review_validation: nonzero exit classified deterministic",
+        "incident_budget.settle_incident_operation: deterministic failure calls _exhaust",
+        "incident_budget.reserve_incident_operation: exhausted status refused unconditionally",
+        "bind_incident_budget appends bindings without restoring eligibility"
+      ]
+    },
+    "checks": "git diff --check a6f6cbe3..46b045c2 passed; 10 assessed-revision Python source declarations, 11 local C4 view keys and 6 owning design paths resolve."
+  },
+  "operator_reported_evidence": "53 passed, 1 failed; two publication generations, one attempt, one process-second charged; deterministic failure exhausted / bounded_extension_required. Aggregate counts and durable charge snapshot are operator-reported, not independently remeasured in this turn.",
+  "ownership": {
+    "feat_048_005": "Production semantics, conservative persisted-record reconciliation, preserved regression plus real governed-policy/validator/Git proof, Task acceptance and affected design/Code reconciliation, normal corrective review.",
+    "feat_048_004": "Shared harness/workflow, mandatory regression selection and final integrated CI/dossier including F5 revision; separate operational proof.",
+    "epic_manager": "Coordinate overlap, supported PR #251 update or explicit reviewed corrective successor/supersession, exact corrected-review and final-Epic hosted CI evidence.",
+    "epic_architect": "Review corrective scope and diagram inventory on current plan through supported already-approved-plan lifecycle; existing terminal architecture-publication recovery remains separate."
+  },
+  "handoffs": [
+    {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:pr251-material-retry-correction-ownership",
+      "status": "enqueued"
+    },
+    {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:feat048005-ci-integration-gate",
+      "status": "enqueued"
+    },
+    {
+      "recipient": "feat_048_005",
+      "request_id": "epic_048:epic_048:feat048005-correction-contract-handoff",
+      "status": "enqueued"
+    }
+  ],
+  "design_closeout": {
+    "reviewed": [
+      "DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+      "F1 archived budget/publication implementation and Task design at assessed_revision"
+    ],
+    "no_change_reason": "Owned Epic source does not yet contain delivered budget implementation. This turn changes canonical work ownership and acceptance only, with no runtime/data/interface/model change. Existing current baseline boundaries remain truthful. F5 owns implementation/design reconciliation, affected consumer contracts and final source/render/navigation proof.",
+    "inventory": "Canonical F5 and Epic records contain context, containers, components, native Task/Teams Code, affected consumer Code and behavior rows with owners, source symbols and verification obligations.",
+    "gaps": "Feature Team must finish concrete schema/API/flow and own Task acceptance before Task dispatch. No corrected implementation, runtime green result, render/browser acceptance, hosted CI success or operational closure is claimed."
+  },
+  "signoff_attempt": {
+    "requested_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "result": "refused",
+    "exact_reason": "epic plan for epic_048 is already approved",
+    "action": "Preserve existing approval and use supported follow-up Feature planning/review. No lifecycle rollback or claim of renewed Manager/Architect sign-off."
+  },
+  "remaining_gates": [
+    "F5 implementation and focused red-to-green proof",
+    "F4 coordination and final integrated CI including correction",
+    "PR #251 explicit reviewed resolution and hosted checks",
+    "Final Epic hosted CI",
+    "Existing terminal architecture publication supported recovery",
+    "Separate authorized operational supervisor evidence"
+  ],
+  "scope_limits": "No other team worktree or product trunk mutation; no dependency installation, live deployment, CI rerun, test alteration or budget reset."
+}
