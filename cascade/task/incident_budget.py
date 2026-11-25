@@ -627,7 +627,8 @@ def reserve_incident_operation(
         if not material_bound:
             return _decision("owner_decision", "material_generation_unbound")
         material = None
-        if kind == "review_validator":
+        action = _actions(payload).get(record.get("original_action_id"), {})
+        if kind == "review_validator" and action.get("action_kind") == "review_rebase":
             material = _review_validator_material(record, _actions(payload), operation_id)
             if material is None:
                 return _decision("owner_decision", "review_material_unbound")

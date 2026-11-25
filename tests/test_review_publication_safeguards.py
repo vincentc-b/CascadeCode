@@ -278,10 +278,8 @@ def test_malformed_board_document_is_not_silently_omitted(tmp_path):
         validate_publication_board(tmp_path)
 
 
-def test_unchanged_failed_publication_waits_until_policy_changes(tmp_path, monkeypatch):
-    from cascade.epic.dependency_approvals import AuthenticatedHuman
+def test_changed_validation_material_uses_remaining_original_budget(tmp_path, monkeypatch):
     from cascade.feature.review_recovery import publish_review_resolution
-    from cascade.task.incident_budget import extend_incident_budget
 
     root, turn = _execution_ready_turn(tmp_path)
     (root / ".git/info/exclude").write_text(".cascade/\ndocs/_queue/\n")
@@ -300,23 +298,10 @@ def test_unchanged_failed_publication_waits_until_policy_changes(tmp_path, monke
     monkeypatch.setattr(
         review_rebase, "validation_command", lambda r: (sys.executable, "-c", "")
     )
-    unchanged = publish_review_resolution(
+    changed = publish_review_resolution(
         turn.action_id, feature_id="feat_035_001", root=root
     )
-    assert unchanged["recovery_state"] == "awaiting_owner_decision"
-    assert actions.load_action(turn.action_id, root=root)["attempt_count"] == 1
-    extend_incident_budget(
-        turn.action_id,
-        AuthenticatedHuman("human:review-operator"),
-        "approved corrected validation policy",
-        {"source": "review-policy-approval"},
-        {"tool_attempts": 1},
-        root=root,
-    )
-    result = publish_review_resolution(
-        turn.action_id, feature_id="feat_035_001", root=root
-    )
-    assert result["recovery_state"] == "completed"
+    assert changed["recovery_state"] == "completed"
     assert actions.load_action(turn.action_id, root=root)["attempt_count"] == 2
 
 
