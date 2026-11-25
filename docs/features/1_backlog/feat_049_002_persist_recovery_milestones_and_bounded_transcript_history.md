@@ -55,11 +55,24 @@ Architecture contract resolved by Epic decisions dec_004–dec_006. Required Tas
 
 ## Data structures
 
-TBD.
+### Progress v1 producer handoff — consumer confirmation pending
+
+Feature feat_049_001 owns the shared progress contract. The parent routed request `feat_049_001:feat_049_001_contract_handoff_20261125` before producer delivery; these are the proposed consumer inputs, not evidence of Feature 2 agreement or implementation.
+
+- `receipt_id`: deterministic hash of canonical source kind/key, action, original incident when known, authoritative generation, owning graph/affected work, attempt/claim, per-source transition sequence and transition kind. Observation refresh and message text are not identity. Distinct repeated stages retain distinct source sequences.
+- `entry_id`: stable action + generation + attempt identity. Consume producer identities unchanged; do not derive independent identities in transcript serialization.
+- Safe entry fields: `action_id`, `original_incident_id?`, `generation`, `graph_id`, `affected_work_id`, `owner`, `attempt_number?`, `claim_id?`, `state`, `stage?`, `occurred_at?`, `observed_at`, `valid_until?`, `freshness`, `provenance`, `safe_reason`, `prerequisite?`, `next_step`, allowlisted `target?` and `verification_ref?`, ordered `receipt_refs` and `milestone_refs`. Missing occurrence time stays null. Milestone references remain pending until this consumer durably commits the matching transcript event.
+- Feature 1 Task 4 supplies API/identity fixtures. Confirm canonical identity encoding, absent-value treatment, nested field shapes, target/provenance sanitization and receipt-to-milestone linkage against those fixtures; the field list alone does not freeze byte-level encoding.
+
+Transcript event, append intent, index and role-summary structures remain for Feature 2 planning under the parent protocol.
 
 ## API contracts
 
-TBD.
+Consumer input from Feature 1: `GET /api/recovery/progress?work_id=<id>&cursor=<opaque>`. The versioned envelope contains `schema_version: 1`, exact `work_id`, `revision`, `observed_at`, `expires_at`, `completeness`, `lag`, `primary`, `items`, and `next_cursor`. Completeness is `complete|incomplete|pending`; lag exposes backlog/oldest pending when known. Default page is 50, maximum 100 entries.
+
+Cursor binds work ID, revision and sort position. Mismatched input returns 400; a superseded revision returns typed 409 restart with current revision. Missing/corrupt/incompatible/stale/wrong-root evidence exposes pending/unavailable metadata, never healthy emptiness. Confirm exact error discriminators and nested payloads with the producer's Task 4 fixtures before accepting the handoff. Preserve its sanitized target/provenance and ordered references.
+
+This progress route does not replace the separately required paginated chat interface. Feature 2 still owns the transcript route/header names, Link continuation, incarnation/append-sequence cursor and typed legacy-unavailable shape; freeze those before Feature 3 dispatch.
 
 ## Logic flow
 
@@ -74,7 +87,7 @@ _(empty — Feature Team mints tasks after dispatch)_
 
 ## Risks & upward questions
 
-None.
+Consumer agreement on the routed progress v1 handoff is pending. Feature 2 must respond through epic_049 with explicit agreement or exact mismatches on identity, field names, route/error/cursor shape and sanitized target/provenance; the parent relays the result to Feature 1. This request does not change dependency order or authorize early implementation. Feature 1 remains the producer contract owner and supplies Task 4 fixtures; Feature 2's backlog state must not be reported as confirmation.
 
 ## Decision log
 
