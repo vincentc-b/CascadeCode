@@ -21,9 +21,8 @@ from pathlib import Path
 
 from cascade.board.context import resolve_root
 from cascade.board.errors import GitError, NotFound
-from cascade.board.paths import column_for_status
 from cascade.board.store import move_doc, read_doc
-from cascade.board.types import WorkId
+from cascade.board.types import WorkId, WorkMeta
 from cascade.comments.store import read_comments
 from cascade.review import (
     EpicCloseBlocker,
@@ -72,7 +71,7 @@ def reset_epic_close_prompt_surfaces() -> None:
 
 
 def epic_ready_to_close(epic_id: WorkId, *, root: Path | None = None) -> bool:
-    """True when every child feature is completed and the epic has no open human comments."""
+    """True when every child feature is delivered or explicitly removed from scope."""
 
     repo = resolve_root(root)
     from cascade.workspace.integration_worktree import locate_trunk, merged_board
@@ -118,7 +117,7 @@ def _epic_close_blocker(
                 if (
                     meta is not None
                     and meta.tier == "feature"
-                    and (meta.status != "completed" or meta.path.parent.name != "3_completed")
+                    and not _child_feature_satisfies_closeout(meta, epic_meta)
                 ):
                     incomplete.add(feature_id)
     if incomplete:
@@ -590,9 +589,39 @@ def _all_child_features_completed(epic_id: WorkId, board) -> bool:
     return incomplete == set()
 
 
+def _child_feature_satisfies_closeout(child: WorkMeta, parent: WorkMeta) -> bool:
+    """Accept delivery or an exact, fully reconciled reduced-scope cancellation."""
+    if child.path.parent.name != "3_completed":
+        return False
+    if child.status == "completed":
+        return True
+    if (
+        child.status != "cancelled"
+        or child.parent != parent.id
+        or child.cancellation_step != "complete"
+        or child.cancellation_error is not None
+        or child.cancelled_at is None
+        or not child.cancellation_reason
+    ):
+        return False
+    feedback = [item for item in parent.cancellation_feedback if item.child_id == child.id]
+    if len(feedback) != 1:
+        return False
+    disposition = feedback[0]
+    return (
+        disposition.child_tier == "feature"
+        and disposition.parent_id == parent.id
+        and disposition.cancelled_at == child.cancelled_at
+        and disposition.reason == child.cancellation_reason
+        and disposition.disposition == "continue_reduced_scope"
+        and disposition.resolved_at is not None
+    )
+
+
 def _incomplete_child_feature_ids(epic_id: WorkId, board) -> set[WorkId] | None:
     """Return incomplete/missing children, or ``None`` when no features exist."""
 
+    parent = board.by_id[epic_id]
     feature_ids = _child_feature_ids(epic_id, board)
     # An activated brief with no minted features is not delivered work.  In
     # particular, do not let the universal "all children completed" check pass
@@ -606,11 +635,7 @@ def _incomplete_child_feature_ids(epic_id: WorkId, board) -> set[WorkId] | None:
         if meta is None or meta.tier != "feature":
             incomplete.add(feature_id)
             continue
-        if (
-            meta.status != "completed"
-            or column_for_status(meta.status) != "completed"
-            or meta.path.parent.name != "3_completed"
-        ):
+        if not _child_feature_satisfies_closeout(meta, parent):
             incomplete.add(feature_id)
     return incomplete
 
