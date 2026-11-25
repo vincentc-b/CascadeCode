@@ -3,10 +3,95 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import platform
 import signal
 import subprocess
+import sys
 import tempfile
 import tomllib
+import time
+from dataclasses import dataclass
+
+from cascade.task.incident_budget import (
+    IncidentOperationDecision,
+    IncidentOperationPermit,
+    POLICY_VERSION,
+    read_incident_budget,
+    reserve_incident_operation,
+    settle_incident_operation,
+)
+
+
+class ReviewValidationAdmissionError(RuntimeError):
+    """The cumulative incident gate did not authorize a validator spawn."""
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewValidationOperation:
+    """Canonical identities and the durable permit for one validator process."""
+
+    incident_id: str
+    claim_id: str
+    operation_id: str
+    root: Path
+    permit: IncidentOperationPermit
+    environment_revision: dict[str, str]
+
+
+def review_validation_environment() -> dict[str, str]:
+    """Return material local runtime identity; excludes clocks and reports."""
+
+    return {
+        "implementation": platform.python_implementation(),
+        "python": platform.python_version(),
+        "executable": os.path.realpath(sys.executable),
+    }
+
+
+def reserve_review_validation(
+    incident_id: str,
+    claim_id: str,
+    operation_id: str,
+    *,
+    root: Path,
+    timeout: float,
+    environment_revision: dict[str, str],
+) -> tuple[IncidentOperationDecision, ReviewValidationOperation | None]:
+    """Reserve the validator's worst-case runtime before any process spawn."""
+
+    decision = reserve_incident_operation(
+        incident_id,
+        operation_id,
+        "review_validator",
+        {"tool_attempts": 1, "process_seconds": max(1, int(timeout + 0.999999))},
+        claim_id,
+        POLICY_VERSION,
+        root=root,
+    )
+    operation = (
+        ReviewValidationOperation(
+            incident_id,
+            claim_id,
+            operation_id,
+            root,
+            decision.permit,
+            dict(environment_revision),
+        )
+        if decision.admitted and decision.permit is not None
+        else None
+    )
+    return decision, operation
+
+
+def settle_unused_review_validation(operation: ReviewValidationOperation) -> None:
+    """Release a reservation when a later local precondition prevents spawn."""
+
+    settle_incident_operation(
+        operation.incident_id,
+        operation.operation_id,
+        {"outcome": "success", "quality": "known", "usage": {}},
+        root=operation.root,
+    )
 
 
 def review_validation_command(root: Path) -> tuple[str, ...]:
@@ -34,14 +119,57 @@ def review_validation_timeout(root: Path) -> float:
     return float(value)
 
 
-def run_review_validation(command: tuple[str, ...], *, cwd: Path, timeout: float) -> subprocess.CompletedProcess:
+def run_review_validation(
+    command: tuple[str, ...],
+    *,
+    cwd: Path,
+    timeout: float,
+    operation: ReviewValidationOperation | None = None,
+) -> subprocess.CompletedProcess:
     # Files avoid unbounded in-memory capture; report only bounded diagnostic tails.
     def tail(handle):
         handle.seek(max(0, handle.tell() - 65536))
         return handle.read(65536).decode('utf-8', errors='replace')
 
+    if operation is not None:
+        budget = read_incident_budget(operation.incident_id, root=operation.root)
+        receipt = (budget or {}).get("operations", {}).get(operation.operation_id)
+        if (
+            not isinstance(receipt, dict)
+            or receipt.get("state") != "reserved"
+            or receipt.get("receipt_id") != operation.permit.receipt_id
+            or receipt.get("claim_id") != operation.claim_id
+            or (budget or {}).get("policy", {}).get("version")
+            != operation.permit.policy_version
+            or review_validation_environment() != operation.environment_revision
+        ):
+            raise ReviewValidationAdmissionError(
+                "validator operation has no live cumulative-budget permit"
+            )
+
+    started = time.monotonic()
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
-        process = subprocess.Popen(command, cwd=cwd, stdout=stdout, stderr=stderr, start_new_session=True)
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=cwd,
+                stdout=stdout,
+                stderr=stderr,
+                start_new_session=True,
+            )
+        except BaseException:
+            if operation is not None:
+                settle_incident_operation(
+                    operation.incident_id,
+                    operation.operation_id,
+                    {
+                        "outcome": "error",
+                        "quality": "known",
+                        "usage": {"tool_attempts": 1},
+                    },
+                    root=operation.root,
+                )
+            raise
         try:
             process.wait(timeout=timeout)
         except BaseException as error:
@@ -54,8 +182,64 @@ def run_review_validation(command: tuple[str, ...], *, cwd: Path, timeout: float
             process.wait()
             if isinstance(error, subprocess.TimeoutExpired):
                 error.output, error.stderr = tail(stdout), tail(stderr)
+            if operation is not None:
+                elapsed = max(0, int(time.monotonic() - started + 0.999999))
+                settle_incident_operation(
+                    operation.incident_id,
+                    operation.operation_id,
+                    {
+                        "outcome": (
+                            "timeout"
+                            if isinstance(error, subprocess.TimeoutExpired)
+                            else "interrupted"
+                        ),
+                        "failure_class": (
+                            "transient"
+                            if isinstance(error, subprocess.TimeoutExpired)
+                            else None
+                        ),
+                        "quality": (
+                            "known"
+                            if isinstance(error, subprocess.TimeoutExpired)
+                            else "unavailable"
+                        ),
+                        "usage": {"tool_attempts": 1, "process_seconds": elapsed},
+                    },
+                    root=operation.root,
+                )
             raise
-        return subprocess.CompletedProcess(command, process.returncode, tail(stdout), tail(stderr))
+        result = subprocess.CompletedProcess(
+            command, process.returncode, tail(stdout), tail(stderr)
+        )
+        if operation is not None:
+            elapsed = max(0, int(time.monotonic() - started + 0.999999))
+            environment_changed = (
+                review_validation_environment() != operation.environment_revision
+            )
+            settle_incident_operation(
+                operation.incident_id,
+                operation.operation_id,
+                {
+                    "outcome": (
+                        "success"
+                        if process.returncode == 0 and not environment_changed
+                        else "error"
+                    ),
+                    "failure_class": (
+                        None
+                        if process.returncode == 0 and not environment_changed
+                        else "deterministic"
+                    ),
+                    "quality": "known",
+                    "usage": {"tool_attempts": 1, "process_seconds": elapsed},
+                },
+                root=operation.root,
+            )
+            if environment_changed:
+                raise ReviewValidationAdmissionError(
+                    "validator environment changed during repository checks"
+                )
+        return result
 
 
 def validate_publication_board(worktree: Path) -> None:

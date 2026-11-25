@@ -94,6 +94,7 @@ def incident_record(
     reassessment_seconds: int = DEFAULT_REASSESSMENT_SECONDS,
     claim_seconds: int = DEFAULT_CLAIM_SECONDS,
     attempt_bound: int = 3,
+    original_incident_id: str | None = None,
 ) -> dict[str, Any]:
     """Build the common JSON record embedded by each existing ledger."""
 
@@ -110,6 +111,12 @@ def incident_record(
         raise ValueError("incident generation must be a full sha256 identity")
     if reassessment_seconds < 1 or claim_seconds < 1 or attempt_bound < 1:
         raise ValueError("incident retry policy values must be positive")
+    if original_incident_id is not None and (
+        not isinstance(original_incident_id, str)
+        or not original_incident_id
+        or original_incident_id.strip() != original_incident_id
+    ):
+        raise ValueError("original incident identity must be a nonempty stable string")
     stamped = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     retry_at = None
     claim_expires_at = None
@@ -125,6 +132,7 @@ def incident_record(
         "accountable_owner": accountable_owner,
         "failure_class": failure_class,
         "authoritative_generation": generation,
+        "original_incident_id": original_incident_id,
         "evidence": _json_copy(evidence),
         "selected_capability": selected_capability,
         "request": _json_copy(request or {}),
@@ -141,6 +149,19 @@ def incident_record(
         "outcome": outcome,
         "recorded_at": stamped.isoformat(),
     }
+
+
+def incident_budget_identity(incident: Mapping[str, Any]) -> str | None:
+    """Return the separately bound original identity without inventing one."""
+
+    value = incident.get("original_incident_id")
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value or value.strip() != value:
+        raise ValueError("original incident identity is malformed")
+    if value == incident.get("authoritative_generation"):
+        raise ValueError("incident identity cannot be its material generation")
+    return value
 
 
 def project_incident(
@@ -262,5 +283,6 @@ __all__ = [
     "authoritative_generation",
     "capability_authority_fingerprint",
     "incident_record",
+    "incident_budget_identity",
     "project_incident",
 ]

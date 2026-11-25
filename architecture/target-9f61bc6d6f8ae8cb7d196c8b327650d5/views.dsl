@@ -53,6 +53,7 @@ custom "cascade-task-code" {
     include code_task_graph code_task_state code_task_checkpoint code_task_wiring code_task_registry code_task_guard code_task_runtime code_task_provider
     include code_task_actions code_task_mismatch code_task_leases code_task_validation code_task_revalidation
     include code_task_generation
+    include code_task_budget_bind code_task_budget_read code_task_budget_extend code_task_budget_exhaust code_task_budget_reserve code_task_budget_settle
     autoLayout lr
 }
 
@@ -62,7 +63,7 @@ custom "cascade-teams-code" {
         "cascade.codeComponent" "element.component.teams"
     }
     include code_teams_epic code_teams_feature code_teams_task code_teams_skills code_teams_runtime code_teams_swe
-    include code_teams_publication code_teams_validate_publish code_teams_validator
+    include code_teams_publication code_teams_budget_reserve code_teams_validation_operation code_teams_validate_publish code_teams_validator
     autoLayout lr
 }
 
@@ -120,7 +121,7 @@ custom "cascade-watchdog-code" {
         "cascade.codeComponent" "element.component.watchdog"
     }
     include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish
-    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
+    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_incident_record code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
     autoLayout lr
 }
 

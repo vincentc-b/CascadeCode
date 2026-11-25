@@ -198,6 +198,18 @@ watchdog_dispatches_teams = watchdog_component -> team_component "Dispatches eli
         "cascade.semanticId" "relationship.watchdog-dispatches-teams"
     }
 }
+
+watchdog_uses_task_budget = watchdog_component -> task_team "Consumes the Task-owned incident operation gate after a distinct observation claim" {
+    properties {
+        "cascade.semanticId" "relationship.watchdog-uses-task-budget"
+    }
+}
+
+teams_use_task_budget = team_component -> task_team "Reserves and settles cumulative allowance for each review validator operation" {
+    properties {
+        "cascade.semanticId" "relationship.teams-use-task-budget"
+    }
+}
 teams_use_agent = team_component -> agent_component "Run role turns through" {
     properties {
         "cascade.semanticId" "relationship.teams-use-agent"
@@ -1953,6 +1965,24 @@ code_watchdog_reservation = element "reserve_after_recheck" "Function" "Reserve 
     }
 }
 
+code_watchdog_budget_reserve = element "reserve_budgeted_operation" "Function" "Use the accepted Watchdog claim to request a distinct Task-owned bounded operation permit." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.budget-reserve"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "reserve_budgeted_operation"
+    }
+}
+
+code_watchdog_budget_settle = element "settle_budgeted_operation" "Function" "Settle the distinct Task-owned operation receipt without creating a Watchdog budget." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.budget-settle"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "settle_budgeted_operation"
+    }
+}
+
 code_watchdog_claim = element "accept_claim" "Function" "Accept exact durable execution claim." {
     properties {
         "cascade.semanticId" "element.code.watchdog.claim"
@@ -1977,6 +2007,15 @@ code_watchdog_contract = element "_incident_contract" "Function" "Bind an observ
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/watchdog/audit_recovery.py"
         "cascade.sourceSymbol" "_incident_contract"
+    }
+}
+
+code_watchdog_incident_record = element "incident_record" "Function" "Keep original incident identity separate from changing material generation evidence." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.incident-record"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incidents.py"
+        "cascade.sourceSymbol" "incident_record"
     }
 }
 
@@ -2094,6 +2133,60 @@ code_task_actions = element "resume_action" "Function" "Claim and resume durable
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task/action_recovery.py"
         "cascade.sourceSymbol" "resume_action"
+    }
+}
+
+code_task_budget_bind = element "bind_incident_budget" "Function" "Anchor canonical actions and material generations to one original incident policy." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-bind"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "bind_incident_budget"
+    }
+}
+
+code_task_budget_read = element "read_incident_budget" "Function" "Project one restart-safe cumulative budget without spending allowance." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-read"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "read_incident_budget"
+    }
+}
+
+code_task_budget_extend = element "extend_incident_budget" "Function" "Append an independently authenticated finite extension within trusted maxima." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-extend"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "extend_incident_budget"
+    }
+}
+
+code_task_budget_exhaust = element "record_incident_budget_exhaustion" "Function" "Persist one stable escalation for exhausted cumulative allowance." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-exhaust"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "record_incident_budget_exhaustion"
+    }
+}
+
+code_task_budget_reserve = element "reserve_incident_operation" "Function" "Atomically verify lineage, policy, material generation, backoff, elapsed deadline, live claim and cumulative remaining allowance." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-reserve"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "reserve_incident_operation"
+    }
+}
+
+code_task_budget_settle = element "settle_incident_operation" "Function" "Idempotently charge observed use or retain an uncertain reservation conservatively." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-settle"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "settle_incident_operation"
     }
 }
 
@@ -2409,6 +2502,60 @@ code_task_validation_to_actions = code_task_validation -> code_task_actions "Pub
     }
 }
 
+code_task_budget_bind_to_actions = code_task_budget_bind -> code_task_actions "Verifies and annotates the canonical durable action" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-bind-to-actions"
+    }
+}
+
+code_task_budget_read_to_bind = code_task_budget_read -> code_task_budget_bind "Projects the bound original incident record" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-read-to-bind"
+    }
+}
+
+code_task_budget_extend_to_bind = code_task_budget_extend -> code_task_budget_bind "Extends the bound trusted policy" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-extend-to-bind"
+    }
+}
+
+code_task_budget_exhaust_to_bind = code_task_budget_exhaust -> code_task_budget_bind "Retains one escalation on the bound policy" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-exhaust-to-bind"
+    }
+}
+
+code_task_budget_bind_to_watchdog_incident = code_task_budget_bind -> code_watchdog_incident_record "Verifies material generation and persists original identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-bind-to-watchdog-incident-record"
+    }
+}
+
+code_watchdog_budget_reserve_to_task_budget_reserve = code_watchdog_budget_reserve -> code_task_budget_reserve "Consumes the Task-owned cumulative gate after a distinct capability claim" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-budget-reserve-to-task-budget-reserve"
+    }
+}
+
+code_watchdog_budget_settle_to_task_budget_settle = code_watchdog_budget_settle -> code_task_budget_settle "Settles the exact charged receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-budget-settle-to-task-budget-settle"
+    }
+}
+
+code_task_budget_reserve_to_bind = code_task_budget_reserve -> code_task_budget_bind "Verifies the canonical bound material generation and policy" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-reserve-to-bind"
+    }
+}
+
+code_task_budget_settle_to_reserve = code_task_budget_settle -> code_task_budget_reserve "Settles the unique durable reservation identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-settle-to-reserve"
+    }
+}
+
 code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event to the live action and committed active-document introduction." {
     properties {
         "cascade.semanticId" "element.code.watchdog.repair-authority"
@@ -2499,12 +2646,30 @@ code_agent_cancel = element "cancel_live_turns" "Function" "Cancel registered lo
     }
 }
 
-code_teams_publication = element "publish_team_review_resolution" "Function" "Admit exact publication generation and resume owner-scoped validation/publication." {
+code_teams_publication = element "publish_team_review_resolution" "Function" "Carry canonical incident, claim and operation identities through cumulative admission and exact-SHA publication." {
     properties {
         "cascade.semanticId" "element.code.teams.publication"
         "cascade.parent" "element.component.teams"
         "cascade.sourcePath" "cascade/team_review_recovery.py"
         "cascade.sourceSymbol" "publish_team_review_resolution"
+    }
+}
+
+code_teams_budget_reserve = element "reserve_review_validation" "Function" "Atomically reserve the validator's approved worst-case runtime before any process spawn." {
+    properties {
+        "cascade.semanticId" "element.code.teams.budget-reserve"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "reserve_review_validation"
+    }
+}
+
+code_teams_validation_operation = element "ReviewValidationOperation" "Dataclass" "Carry the canonical incident, top-level claim, operation identity and durable permit to the validator." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validation-operation"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ReviewValidationOperation"
     }
 }
 
@@ -2517,7 +2682,7 @@ code_teams_validate_publish = element "check_and_publish_review_rebase" "Functio
     }
 }
 
-code_teams_validator = element "run_review_validation" "Function" "Run bounded repository checks with process-group cleanup and diagnostic tails." {
+code_teams_validator = element "run_review_validation" "Function" "Verify a live permit, run one bounded process group, and settle success, failure, timeout or interruption." {
     properties {
         "cascade.semanticId" "element.code.teams.validator"
         "cascade.parent" "element.component.teams"
@@ -2526,7 +2691,7 @@ code_teams_validator = element "run_review_validation" "Function" "Run bounded r
     }
 }
 
-code_task_generation = element "admit_review_publication_generation" "Function" "Fence unchanged publication generations while preserving action decisions and attempts." {
+code_task_generation = element "admit_review_publication_generation" "Function" "Record material publication evidence without granting allowance or growing the attempt bound." {
     properties {
         "cascade.semanticId" "element.code.task.generation"
         "cascade.parent" "element.component.task-team"
@@ -2616,9 +2781,39 @@ code_teams_publication_to_code_teams_validate_publish = code_teams_publication -
     }
 }
 
+code_teams_publication_to_code_teams_budget_reserve = code_teams_publication -> code_teams_budget_reserve "Reserves before action execution or validator spawn" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-code-teams-budget-reserve"
+    }
+}
+
+code_teams_budget_reserve_to_code_task_budget_reserve = code_teams_budget_reserve -> code_task_budget_reserve "Consumes the Task-owned cumulative gate" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-budget-reserve-to-code-task-budget-reserve"
+    }
+}
+
+code_teams_budget_reserve_to_code_teams_validation_operation = code_teams_budget_reserve -> code_teams_validation_operation "Issues canonical validator permit" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-budget-reserve-to-code-teams-validation-operation"
+    }
+}
+
 code_teams_validate_publish_to_code_teams_validator = code_teams_validate_publish -> code_teams_validator "Runs repository checks" {
     properties {
         "cascade.semanticId" "relationship.code-teams-validate-publish-to-code-teams-validator"
+    }
+}
+
+code_teams_validator_to_code_teams_validation_operation = code_teams_validator -> code_teams_validation_operation "Verifies the live receipt before spawn" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-validator-to-code-teams-validation-operation"
+    }
+}
+
+code_teams_validator_to_code_task_budget_settle = code_teams_validator -> code_task_budget_settle "Settles observed or conservative process usage" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-validator-to-code-task-budget-settle"
     }
 }
 
