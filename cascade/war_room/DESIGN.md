@@ -199,6 +199,13 @@ refresh persistence and storage failure.
 ## Architecture review boundary
 
 The War Room presents revision-pinned architecture resources and review state.
+Snapshot view limits are maxima. [snapshot_projection](architecture_routes.py)
+reduces a view page when its shared target/navigation metadata and requested
+views exceed the 256 KiB response cap, preserving all targets and a strictly
+advancing continuation cursor. The browser follows that continuation. If the
+metadata and one view cannot fit, the route returns HTTP 413; it never raises the
+cap or returns a nonadvancing empty page. [HTTP coverage](../../tests/war_room/test_architecture_http.py)
+exercises lossless continuation and the minimum-page refusal.
 Publication, artifact ownership, destination, generation, ancestry and byte-digest
 validation belong to the [workspace design](../workspace/DESIGN.md), specifically
 [REQ-WORKSPACE-001](../workspace/DESIGN.md),

@@ -377,7 +377,19 @@ def _snapshot_projection(
             "next_cursor": cursor + len(page) if cursor + len(page) < len(views) else None,
         },
     })
-    return _bounded_snapshot_payload(payload)
+    # The requested limit is a maximum. A large, valid model can fit its shared
+    # target metadata while the requested view list pushes the page over budget.
+    # Keep continuation lossless and retain the hard error when even one view
+    # cannot fit; reducing the page must never hide targets or return no progress.
+    while True:
+        try:
+            return _bounded_snapshot_payload(payload)
+        except ArchitectureHTTPError as exc:
+            if exc.status != 413 or len(page) <= 1:
+                raise
+            page = page[:len(page) // 2]
+            payload["views"] = page
+            payload["pagination"]["next_cursor"] = cursor + len(page)
 
 
 

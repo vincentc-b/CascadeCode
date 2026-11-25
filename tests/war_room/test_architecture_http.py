@@ -330,6 +330,41 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
         assert target["drill_choices"][1]["view_key"] == context_view["key"]
         assert target["drill_choices"][1]["scope_id"] == target["semantic_id"]
 
+        # A requested page can exceed the metadata budget even when each view
+        # fits. Exercise the real HTTP continuation without dropping source or
+        # navigation metadata, then retain a hard failure for an unfit page.
+        from cascade.war_room import architecture_routes
+
+        page_sizes = []
+        for cursor in range(2):
+            sample = {**payload, "views": payload["views"][cursor:cursor + 1],
+                      "pagination": {"cursor": cursor, "limit": 25, "total": 2,
+                                     "next_cursor": 1 if cursor == 0 else None}}
+            page_sizes.append(len(json.dumps(sample, separators=(",", ":")).encode()))
+        page_budget = max(page_sizes) + 8
+        assert page_budget < len(json.dumps(payload, separators=(",", ":")).encode())
+        with monkeypatch.context() as bounded:
+            bounded.setattr(architecture_routes, "MAX_METADATA_BYTES", page_budget)
+            collected = []
+            cursor = 0
+            while cursor is not None:
+                status, raw, _ = _get(
+                    base + f"/api/architecture/snapshots/{snapshot_id}?cursor={cursor}"
+                )
+                assert status == 200
+                chunk = json.loads(raw)
+                assert len(json.dumps(chunk, separators=(",", ":")).encode()) <= page_budget
+                assert chunk["targets"] == payload["targets"]
+                collected.extend(chunk["views"])
+                next_cursor = chunk["pagination"]["next_cursor"]
+                assert next_cursor is None or next_cursor > cursor
+                cursor = next_cursor
+            assert collected == payload["views"]
+            bounded.setattr(architecture_routes, "MAX_METADATA_BYTES", 1)
+            status, raw, _ = _get(base + f"/api/architecture/snapshots/{snapshot_id}")
+            assert status == 413
+            assert "exceeds 256 KiB" in json.loads(raw)["error"]
+
         status, svg_body, headers = _get(base + context_view["artifact_url"])
         assert status == 200
         assert b"data-cascade-semantic-id" in svg_body
