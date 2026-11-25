@@ -830,5 +830,60 @@
       "Original terminal architecture publication recovery"
     ],
     "turn_boundary": "End parent planning turn for queued child processing; do not poll or redispatch unchanged recovery."
+  },
+  "architect_f3_completion_hosted_gate_review": {
+    "role": "epic_architect",
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "reviewed_epic_revision": "f1e462d7497e4f8c0602137eb733a2992e261fcb",
+    "reviewed_f4_fixture_revision": "498170bbb286a0423aab0d25b668c82fff3cf865",
+    "integration": "F3 merge 0f8d1e04 is an ancestor. Production/design/model/test trees are unchanged from prior architect review 69cc7b57; its 14 C4 source-contract passes and 291 resolving links are retained evidence, not rerun results.",
+    "hosted_evidence": {
+      "pr": "https://github.com/vincentc-b/CascadeCode/pull/256",
+      "head": "a273e921f145e905383a37a37fc7b36c39a67e0a",
+      "state": "open/dirty",
+      "check": "Recovery contract",
+      "conclusion": "failure",
+      "url": "https://github.com/vincentc-b/CascadeCode/actions/runs/45547903762/job/138981813319",
+      "reported_summary": "Manager records 12 failed, 151 passed in 33.61s; no replacement green result observed."
+    },
+    "reviewed_paths": [
+      "cascade/workspace/DESIGN.md",
+      "cascade/watchdog/DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/agent/selection_preflight.py",
+      "498170bb:tests/feature/test_publication.py",
+      "498170bb:tests/test_late_repair_convergence.py"
+    ],
+    "diagram_impact": {
+      "context_containers": "cascade-landscape, cascade-context, cascade-containers unchanged: fixture correction supplies deterministic provider compatibility evidence, with no production actor, runtime, communication or store boundary change.",
+      "components": "Supervisor/team responsibilities and Workspace loaded-identity producer/Watchdog independent consumer unchanged. No production interface or isolation change.",
+      "code": "cascade-agent-code, cascade-task-code, cascade-teams-code, cascade-watchdog-code and cascade-workspace-commands-code retain source declarations and ownership. Fixture-only diff does not rename/delete implementation symbols or change model/contract; no model edit warranted.",
+      "behavior": "Existing runtime normal/restart/refusal flow remains: signed authority and current independent process/import inspection are required; missing or stale evidence cannot close the incident. F4 package/Task review_rebase-only material fencing and receipt-field prose remain pending normal integration.",
+      "verification_owner": "F4 validates corrected immutable head through admitted review resolution and hosted Recovery contract, preserves final design/dossier and confirms integrated source/model/navigation evidence; Epic performs final integration review after delivery."
+    },
+    "fixture_assessment": "Two autouse fixtures now replace selection_preflight.probe_provider_compatibility with positive ProviderCompatibilityEvidence, alongside synthetic inventory. Production preflight, real Git/validator paths, publication and independent postcheck implementations are unchanged. This is host-CLI-independent harness setup, not installed CLI compatibility evidence. Opening Only-the-forge claim needs qualification; owner notified. No final acceptance inferred from source inspection.",
+    "verification": [
+      "Canonical Epic read inspected; read_architecture_amendments returned [].",
+      "Git ancestry and empty production/design/model/test delta from 69cc7b57 confirmed.",
+      "Forge read confirms PR 256 open/dirty at a273e921 and failed Recovery contract.",
+      "Inspected exact fixture diff, preflight consumer, Workspace lifecycle/attestation design and pending F4 package/Task design delta.",
+      "JSON parse and git diff --check passed."
+    ],
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:architect:498170bb-fixture-evidence-boundary",
+      "status": "enqueued",
+      "scope": "Qualify synthetic compatibility evidence in convergence docstring/dossier; preserve existing negative-preflight and process/adapter coverage. Existing admitted resolution and hosted gate remain authoritative."
+    },
+    "decision": "Existing plan/dec_010 and architecture inventory remain sufficient. No plan edit, new decision, renewed sign-off or replacement publication.",
+    "remaining": [
+      "F4 corrected hosted gate, supported review resolution and integration",
+      "F1 owning reconciliation receipt and completed-record limitations",
+      "Final Epic validation and architecture reconciliation",
+      "Controlled-supervisor authorized target/install/trust/fault/incident/rollback manifest and operational evidence",
+      "Original terminal architecture publication recovery: exact failed references retained in epic_048_publication_resume.json"
+    ],
+    "limitations": "No tests/render/browser rerun, duplicate recovery, dependency installation, runtime operation, accepted-lineage mutation or completion claim. End planning turn for child processing."
   }
 }
