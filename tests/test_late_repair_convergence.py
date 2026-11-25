@@ -354,9 +354,11 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
             root=root, feature_id="feat_001",
         )
         task_validations.append(red)
-        assert red["exit_code"] != 0
+        assert red["exit_code"] == 1 and "assert 0 == 1" in red["output"], red["output"]
+        # CPython's timestamp-based bytecode cache uses whole seconds and size.
+        # A same-size edit on a fast runner can otherwise reuse the red module.
         invoke_tool(
-            task_id, "swe_write", {"path": "product.py", "content": "VALUE = 1\n"},
+            task_id, "swe_write", {"path": "product.py", "content": "VALUE = 1  # repaired\n"},
             root=root, feature_id="feat_001",
         )
         invoke_tool(
@@ -368,7 +370,8 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
             root=root, feature_id="feat_001",
         )
         task_validations.append(green)
-        assert green["exit_code"] == 0 and green["final_validation"]["task_id"] == task_id
+        assert green["exit_code"] == 0, green["output"]
+        assert green["final_validation"]["task_id"] == task_id
         return RoleResult(text="repair tested and queued", status="finished")
 
     from cascade.task.graph import set_task_run_role_fn
