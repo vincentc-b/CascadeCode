@@ -73,7 +73,10 @@
       "status": "enqueued"
     },
     "design_closeout": {
-      "reviewed": ["cascade/epic/DESIGN.md", "cascade/feature/DESIGN.md"],
+      "reviewed": [
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md"
+      ],
       "context_containers": "Evidence-only artifact update changes no actors, runtime or persistence boundary; existing context/container inventory remains applicable.",
       "components_code": "No implementation/interface/source declaration changes. Existing cascade-epic-code and cascade-feature-code document scoped coordination versus guarded admission. Retain F1 Task/Teams and affected-consumer Code obligations and F4 final navigation checks.",
       "behavior": "Existing normal generation-bound admission, restart and refusal flows remain accurate. This artifact records a matching planning review only; no corrected retry behavior is asserted.",
@@ -121,5 +124,50 @@
       ]
     },
     "approval_publication": "Existing approval and original terminal publication request are preserved. The known already-approved sign-off refusal is not retried. No replacement publication or accepted snapshot is created; the terminal operation still requires supported runtime-owner recovery. No renewed sign-off or successful architecture publication claimed."
+  },
+  "architect_matching_review_followup": {
+    "role": "epic_architect",
+    "owned_base": "65788805",
+    "trigger": "feat_048_004:feat_048_004:architect:a4776fbe-review",
+    "epic_revision": "ed2fe1b08d6bb7e4589fa694b981abd4de5466da",
+    "reported_review": "architecture-review-b8d2efc86d10ee1a6caed28dab9f8897f41b5e404c3a35156ce06aff4fe921a6",
+    "reviewed_feature_revision": "a4776fbe9193a62303a6a2bcae40eb7dbdaef917",
+    "current_feature_revision": "89c1bbd4cc52f5600dd99f3bc2abd91a43d6d7f3",
+    "assessment": "The reported publication closes the matching-review gap for a4776fbe only. Canonical F4 has advanced to 89c1bbd4 with Task 3 supervised retry evidence and an unchanged-source retry restriction. The Feature-only diff preserves F1 ownership and all acceptance gates. Route matching review of the current plan through the Feature team; no Epic scope, spec or decision change is needed.",
+    "evidence_boundary": "The review artifact and reported 14 source tests were not independently retrieved or rerun. Current Feature text reports Task 3 deliverable 10b9dd739383befe7dae96585002bb82aa82b406 with 161 passed/1 failed in 203.12s, separate from 373cbb17 and e9ea4848. These remain reported red evidence, not final CI. Task record acceptance remains owner-reported; no scoped-access workaround used.",
+    "f1": "Canonical read remains completed at ff3cd399d1523ba6c4e123825c811f8c0b700e7c with three original children. Existing dispatch remains pending; no durable admission/generation, exact loaded-runtime refusal, corrected source or green check is supplied. Retain the existing request and do not repeat unchanged recovery calls while its owner work is pending.",
+    "repair_acceptance": "F1 owns correction on feat/feat_048_001 and PR #251 via supported repair. Preserve original identity, allowance, consumption/history and retry bounds; block unchanged/cosmetic/A-B-A deterministic evidence across restart; admit genuinely changed authoritative material only within remaining allowance and independent human gates. Keep legacy reconciliation conservative and retain existing regression plus real-validator/Git proof. Require normal review and fresh green review-recovery on the exact corrected PR head before merge.",
+    "integration_acceptance": "F4 retains mandatory regression and full bounded CI at the exact supported integrated F1 correction SHA, including F2/F3 consumer reconciliation and final design/model/navigation/dossier. Do not rerun expensive checks solely on unchanged source. Final Epic CI, separately authorized operational evidence and terminal Epic publication recovery remain open.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:architect:f4-review-revision-89c1bbd4",
+      "status": "enqueued"
+    },
+    "design_closeout": {
+      "reviewed": [
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl"
+      ],
+      "source_checks": [
+        "cascade/epic/recovery.py:recover_feature",
+        "cascade/feature/repair.py:_admission_gates"
+      ],
+      "context": "cascade-landscape and cascade-context: evidence-only work-record changes introduce no actors or external systems.",
+      "containers": "cascade-containers: no process, storage or isolation boundary changes. Original ledger persistence and restart acceptance remain with F1.",
+      "components": "cascade-supervisor-components and cascade-team-components: no changed responsibilities or interfaces; current designs distinguish coordination from guarded admission.",
+      "code": "cascade-epic-code and cascade-feature-code remain accurate for inspected recovery/admission source. No code declaration changed. F1 retains cascade-task-code/cascade-teams-code and affected consumer updates; F4 retains final integrated source-contract and browser navigation verification.",
+      "behavior": "Existing generation-bound normal, refusal and restart flows remain accurate. No implemented material-retry correction is asserted. F1 must reconcile the failed-material fence versus cumulative-exhaustion flow against actual implementation.",
+      "verification": "Canonical Epic/F1/F4 reads; empty architecture amendments; committed F4 Feature-body diff and overall changed-path inventory; owning designs and recovery/admission source review; retained view keys and file references; JSON parse and git diff --check. No runtime, renderer, browser or hosted CI rerun for this artifact-only change.",
+      "gaps": [
+        "F1 durable admission or exact refusal/prerequisite",
+        "F1 production/test correction and green PR #251",
+        "Matching Feature review for 89c1bbd4",
+        "Final integrated CI/design/navigation and Epic CI",
+        "Separately authorized operational evidence",
+        "Supported recovery of terminal Epic architecture publication"
+      ]
+    },
+    "approval_publication": "Epic plan unchanged. Existing approval retained; known already-approved sign-off refusal not repeated. Original terminal architecture-publication request remains preserved and requires supported runtime-owner recovery; no replacement operation or snapshot created."
   }
 }
