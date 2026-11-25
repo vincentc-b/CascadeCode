@@ -168,3 +168,40 @@ the renderer. The Architect's available Cascade tools expose publication but no
 failed-publication retry. No direct ledger edit, accepted-snapshot rewrite,
 replacement proposal or runtime restart was attempted. Both plan sign-offs remain
 on the same revision; architecture publication is still incomplete.
+
+## Epic Manager feature-planning handoff
+
+Reviewed the `FeaturePlanningStarted` event for `feat_049_001` against canonical
+Epic revision `032809336f3fcf3810c7270c28195da9c85a3bf6`, Feature 1 draft
+`5de5f2d41d3af751dac47a9dd43639fe010be942`, and both dependent Feature specs.
+Cascade returned no architecture amendments. Feature 1 is active; Feature 2
+depends on Feature 1, and Feature 3 depends on both. The existing Epic contract
+and role sign-offs remain unchanged; this handoff adds no requirement or decision.
+
+The Feature 1 draft now assigns source receipts, invocation/executor observations,
+materialization and read APIs to four task slices. Its acceptance carries the
+approved identity, after-lock notification, pre-executor publication, bounded
+supervisor replay, 30-second liveness ceiling and aggregate read budgets.
+Preserve these boundaries when minting Tasks. Deliver the frozen receipt/entry
+identity and API contract as shared artifacts for Feature 2's subsequent planning;
+pending milestone references remain explicit until that consumer commits them.
+Feature 2 owns append/deduplication and bounded history; Feature 3 owns the held
+final-reply operational journey and coherent UI. Feature 1 delivery must not
+claim either downstream acceptance has already passed.
+
+Reviewed the Task action-evidence, Workspace invocation and War Room transcript
+design sections and their parent/Watchdog interface references. No design or
+model change is needed for this planning event: source behavior and architecture
+boundaries are unchanged. The existing level-by-level inventory remains assigned
+to the Feature teams; Feature 1's task breakdown explicitly includes actual
+source symbols, native Code views, normal/dead-owner/restart cases and navigation
+verification. Its implementers must reconcile these against their final diff.
+
+The terminal architecture-publication failure above remains open with the
+runtime recovery owner and Epic Architect. Feature work proceeds under the
+approved plan, but the publication gap must remain visible in delivery evidence;
+local rendering and signed planning are not successful publication. No retry,
+replacement publication or accepted-artifact change was attempted here.
+
+Verification for this handoff is canonical spec/dependency-order review and
+`git diff --check`; no executable code changed and no test run is claimed.
