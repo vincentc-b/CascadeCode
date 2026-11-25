@@ -1001,7 +1001,17 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         from cascade.boss.merge import _remove_superseded_feature_copy
 
         _remove_superseded_feature_copy(entry.path, feature_id, trunk)
-    doc = read_doc(feature_id, root=entry.path)
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    planning_root = (
+        project.tracking.root
+        if project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+        and trunk.resolve() == project.target.root.resolve()
+        else entry.path
+    )
+    doc = read_doc(feature_id, root=planning_root)
     if doc.meta.tier != "feature" or not doc.meta.parent:
         raise NotFound(feature_id)
     ready_for_review = (

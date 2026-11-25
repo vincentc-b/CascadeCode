@@ -15,13 +15,14 @@ These are collaborating implementation responsibilities, not extra deployments.
 
 | Source entry | Current behavior |
 |---|---|
-| [run_launcher_loop](launcher.py) | Own the listen socket, spawn workers with a readiness handshake, classify exits and bound startup retries/backoff. |
+| [run_launcher_loop](launcher.py) | Own the listen socket, spawn workers with a readiness handshake and Python safe-path mode, classify exits and bound startup retries/backoff. Safe-path mode prevents an unreviewed `cascade/` in the product root from shadowing the reviewed import root. |
 | [run_worker](worker.py) | Start HTTP, watchdog and recovery lanes; exit for stop, update or crash. |
 | [drain_and_shutdown](worker.py) | Stop admitting work, join handlers and wait for/cancel live agent turns before shutdown. |
 | [create_runtime_authority](runtime_identity.py) | Authenticate an installation actor's signed receipt, then bind its accepted review and guarded integration lineage to two clean exact checkouts and installed Python bytes. It does not issue approval or install software. |
 | [validate_runtime_authority](runtime_identity.py) | Reauthenticate the manifest and reject moved, dirty, stale, unintegrated or byte-mismatched evidence before each spawn. |
 | [loaded_runtime_identity](runtime_identity.py) | Report the importing worker's repair/delivery/postcheck module origins and digests, PID/start identity, executable, workspace and capability generation without self-asserting verification. |
 | [verify_loaded_runtime_identity](runtime_identity.py) | Independently inspect the live child through Linux `/proc`, re-read module/package bytes and compare the launcher generation, returning `current`, `pending` or `refused`; only `current` sets `verified`. |
+| [verify_current_loaded_runtime_identity](runtime_identity.py) | Reinspect a launcher-verified receipt before incident closeout, including the live PID/start identity, import root, module bytes, clean reviewed/integrated checkouts, ancestry and capability generation. |
 | [_worker_supervisor_status](worker.py) | Publish lifecycle state and the worker receipt through the existing health projection. Missing authority is explicitly unverified. |
 
 ```mermaid
@@ -52,6 +53,10 @@ the live PID's Linux boot/start identity, executable and selected `PYTHONPATH`
 root, re-reads every reported module and independently computes the capability
 generation before it sets `verified`. A restart clears the old receipt and
 requires a new process-local observation.
+The worker starts with Python safe-path mode, so a product checkout that contains
+the adapter being repaired cannot outrank the reviewed source selected by the
+launcher. The independent Watchdog postcheck reopens the process and source facts;
+a stale status file or dead prior worker cannot close the incident.
 The versioned receipt names the accepted review URL, authorized actor,
 environment, repository identities/revisions and installed source digest. Its
 HMAC trust key is an external credential: possessing it is deployment-receipt

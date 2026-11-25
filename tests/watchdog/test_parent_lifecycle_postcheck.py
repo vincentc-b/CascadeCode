@@ -143,6 +143,7 @@ def test_repeated_and_restarted_postcheck_does_not_reexecute_same_generation(
     [
         ("none", "all_generation_obligations_proven"),
         ("review", "pending:review_generation_accepted"),
+        ("runtime", "pending:loaded_runtime_current"),
         ("lease", "pending:execution_lease_retired"),
         ("feature_worktree", "pending:feature_worktree_retired"),
     ],
@@ -224,6 +225,20 @@ def test_postcheck_fails_closed_when_a_relevant_fact_changes(
     monkeypatch.setattr(
         "cascade.task.execution.execution_lease_is_live",
         lambda *_args, **_kwargs: changed == "lease",
+    )
+    monkeypatch.setattr(
+        "cascade.workspace.supervisor_status.read_supervisor_status",
+        lambda *_args, **_kwargs: {
+            "runtime_identity": {"authority_manifest_id": "authority"}
+        },
+    )
+    monkeypatch.setattr(
+        "cascade.workspace.runtime_identity.verify_current_loaded_runtime_identity",
+        lambda *_args, **_kwargs: {
+            "state": "refused" if changed == "runtime" else "current",
+            "reason": "stale process" if changed == "runtime" else None,
+            "identity": None,
+        },
     )
 
     result = reconcile_parent_lifecycle_incident(

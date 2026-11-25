@@ -43,7 +43,7 @@ from cascade.workspace.up import (
     submit_recovered_turns,
 )
 
-# Launcher passes these when spawning ``python -m cascade.workspace.worker``.
+# Launcher passes these when spawning ``python -P -m cascade.workspace.worker``.
 ENV_LISTEN_FD = "CASCADE_SUPERVISOR_LISTEN_FD"
 ENV_READINESS_FD = "CASCADE_SUPERVISOR_READINESS_FD"
 ENV_LOCK_TOKEN = "CASCADE_SUPERVISOR_LOCK_TOKEN"

@@ -91,6 +91,23 @@ def _merge_task_branch(task_id: str, *, root: Path) -> MergeResult:
     feature_id = task.meta.parent
     if not feature_id:
         return MergeResult(ok=False, reason="missing_parent", branch=branch)
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    if (
+        project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+    ):
+        from cascade.workspace.integration_worktree import merged_board
+
+        feature = merged_board(trunk).by_id.get(feature_id)
+        if (
+            feature is None
+            or feature.tier != "feature"
+            or feature.status != "active"
+            or feature.path.parent.name != "2_active"
+        ):
+            return MergeResult(ok=False, reason="not_active", branch=branch)
     from cascade.comments.gate import refusal_if_blocked
 
     if blocked := refusal_if_blocked(task_id, root=trunk):

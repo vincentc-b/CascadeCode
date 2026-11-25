@@ -91,6 +91,13 @@ sequenceDiagram
 
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.
 
+In a split project, Feature and Task lifecycle documents remain in the tracking
+checkout while their implementation branches and worktrees remain in the product
+repository. Dispatch records the registered product branch/worktree on the
+tracking document without relocating a second mutable copy. Review readiness and
+completed-child enumeration read tracking; publication history, leases, validation
+and pushes continue to use the physical product Feature worktree.
+
 Libraries, provider/MCP wiring, and the precise sandbox boundaries are described in [Team libraries, wiring, and isolation](../DESIGN.md#team-libraries-wiring-and-isolation).
 
 The integrated Structurizr code view is `cascade-feature-code`. From the supervisor components view, Explore **Feature team**; select a code node for its pinned source. This view is the navigable implementation structure; the diagrams above supplement it with lifecycle context.

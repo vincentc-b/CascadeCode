@@ -291,7 +291,7 @@ delivery consumer. War Room consumes the bounded projection described above.
 | [_incident_contract](audit_recovery.py) | Bind a completed-parent Task mismatch to its exact Feature owner and mismatch generation before reservation. |
 | [_bind_original_incident](audit_recovery.py) | Bind the queued delivery action and its canonical generation to the sole Task-owned incident allowance before owner work. |
 | [_execute_reservation](audit_recovery.py) | Invoke the selected owning-team adapter after exact claim acceptance and record its structured result. |
-| [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation from the adapter acknowledgement, accepted heads, lease, descendant and retirement facts. |
+| [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation from the adapter acknowledgement, accepted heads, lease, descendant and retirement facts, then require a fresh host inspection of the reviewed worker receipt and capability generation. |
 | [verify_incident_postcheck](reservations.py) | Atomically close only the matching generation and retain its deferred attempt in history. |
 | [_incident_projection](audit_projection.py) | Serialize bounded typed lifecycle evidence into immutable pages. |
 
@@ -317,6 +317,13 @@ for Epics, checking introduction timestamps. For a generation-bound repair,
 [repair_event_authorizes](../feature/repair.py) joins `FeatureRepairAuthorized`
 to the live action, exact owner/path/ref bindings, and the committed introduction
 blob. An arbitrary active-path move therefore lacks recovery authority.
+
+The parent-lifecycle postcheck treats missing, unverified, dead, stale, dirty,
+mixed-root, unintegrated or capability-mismatched runtime evidence as pending.
+Review validation and accepted Git heads cannot substitute for that process-local
+proof. It records only bounded receipt identities in the incident result and uses
+the existing exact-generation verification transition; it does not create a
+runtime success setter or a second lifecycle ledger.
 
 The `feature.feature_repair` capability is limited to Task-tier
 `parent_lifecycle_mismatch` incidents owned by the exact direct Feature. Its

@@ -18,6 +18,7 @@ from cascade.watchdog.capabilities import default_capability_registry
 from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.runtime_identity import (
     validate_loaded_runtime_identity,
+    verify_current_loaded_runtime_identity,
     verify_loaded_runtime_identity,
 )
 from cascade.workspace.source_fingerprint import source_fingerprint
@@ -235,12 +236,25 @@ def test_real_worker_reports_host_verified_import_closure_and_restart(tmp_path: 
             assert first["host_boot_id"] in first["process_start_id"]
             assert len(first["loaded_modules"]) == 6
             assert all(Path(row["origin"]).is_relative_to(reviewed / "cascade") for row in first["loaded_modules"].values())
+            current = verify_current_loaded_runtime_identity(
+                first,
+                expected_workspace_root=product,
+                expected_capability_generation=default_capability_registry().fingerprint(),
+            )
+            assert current["state"] == "current"
 
             os.kill(first_pid, signal.SIGKILL)
             poll_until(lambda: bool(_identity().get("verified")) and _identity().get("worker_pid") != first_pid, timeout=60)
             restarted = _identity()
             assert restarted["process_start_id"] != first["process_start_id"]
             assert restarted["capability_generation"] == first["capability_generation"]
+            stale = verify_current_loaded_runtime_identity(
+                first,
+                expected_workspace_root=product,
+                expected_capability_generation=default_capability_registry().fingerprint(),
+            )
+            assert stale["state"] == "refused"
+            assert "process" in str(stale["reason"])
         finally:
             launcher.send_signal(signal.SIGTERM)
             launcher.wait(timeout=60)

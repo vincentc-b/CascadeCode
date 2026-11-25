@@ -388,7 +388,10 @@ def _spawn_worker(
 
     try:
         proc = subprocess.Popen(
-            [sys.executable, "-m", _WORKER_MODULE],
+            # The workspace may itself contain a Cascade repair.  Safe-path
+            # mode prevents that cwd copy from preceding the launcher's
+            # reviewed source parent on sys.path.
+            [sys.executable, "-P", "-m", _WORKER_MODULE],
             cwd=workspace_root,
             env=env,
             pass_fds=(listen_fd, readiness_w, lock_fd, log_stderr_fd),

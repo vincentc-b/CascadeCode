@@ -214,7 +214,7 @@ def up(
 
     Takes ``.cascade/supervisor.lock`` for the root; a second ``up`` refuses while held.
     The launcher binds the War Room listen socket once and respawns
-    ``python -m cascade.workspace.worker`` on source updates (exit 75) or crashes.
+    ``python -P -m cascade.workspace.worker`` on source updates (exit 75) or crashes.
     Lock and listener stay up across worker restarts until operator stop or ``stop_when``.
     """
 

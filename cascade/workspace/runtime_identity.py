@@ -343,6 +343,92 @@ def verify_loaded_runtime_identity(
     return {"state": "current", "reason": None, "identity": checked}
 
 
+def verify_current_loaded_runtime_identity(
+    identity: object,
+    *,
+    expected_workspace_root: Path,
+    expected_capability_generation: str,
+) -> RuntimeVerificationResult:
+    """Reinspect a launcher's verified receipt before an obligation closes.
+
+    The launcher is the only component that can turn the worker's startup
+    report into verified evidence.  A later postcheck still has to prove that
+    the named process and source lineage remain current; a persisted status
+    payload alone is not sufficient after a crash, restart, or checkout edit.
+    """
+
+    if not isinstance(identity, dict):
+        return {
+            "state": "pending",
+            "reason": "loaded runtime evidence is unavailable",
+            "identity": None,
+        }
+    try:
+        if identity.get("verified") is not True or identity.get("reason") is not None:
+            raise WorkspaceError("loaded runtime evidence is not host verified")
+        required_authority = (
+            "authority_manifest_id",
+            "deployment_receipt_id",
+            "accepted_review_url",
+            "authorized_actor",
+            "environment",
+            "reviewed_repository",
+            "reviewed_revision",
+            "integrated_repository",
+            "integrated_revision",
+        )
+        if any(not isinstance(identity.get(name), str) or not identity[name] for name in required_authority):
+            raise WorkspaceError("loaded runtime deployment authority is incomplete")
+        if identity.get("workspace_root") != str(Path(expected_workspace_root).resolve()):
+            raise WorkspaceError("loaded runtime names a different workspace root")
+        if identity.get("capability_generation") != expected_capability_generation:
+            raise WorkspaceError("loaded runtime capability generation is stale")
+
+        pid = identity.get("worker_pid")
+        if type(pid) is not int or pid <= 0:
+            raise WorkspaceError("loaded runtime worker PID is invalid")
+        process = _inspect_process(pid)
+        process_start = identity.get("process_start_id")
+        if (
+            process_start != process["start_id"]
+            or identity.get("host_process_start_id") != process["start_id"]
+            or identity.get("host_boot_id") != process["boot_id"]
+        ):
+            raise WorkspaceError("loaded runtime process-start identity is stale")
+        if identity.get("python_executable") != process["executable"]:
+            raise WorkspaceError("loaded runtime executable no longer matches the process")
+
+        installed_root_value = identity.get("installed_source_root")
+        if not isinstance(installed_root_value, str):
+            raise WorkspaceError("loaded runtime installed source root is invalid")
+        installed_root = Path(installed_root_value).resolve()
+        if process["import_root"] != str(installed_root.parent):
+            raise WorkspaceError("loaded runtime process selected a different import root")
+        installed_digest = source_fingerprint(installed_root)
+        if identity.get("installed_source_sha256") != installed_digest:
+            raise WorkspaceError("loaded runtime installed source changed after startup")
+        _verify_loaded_module_closure(identity.get("loaded_modules"), installed_root)
+
+        reviewed = Path(str(identity["reviewed_repository"])).resolve()
+        integrated = Path(str(identity["integrated_repository"])).resolve()
+        reviewed_revision = str(identity["reviewed_revision"])
+        integrated_revision = str(identity["integrated_revision"])
+        _require_clean_exact_checkout(reviewed, reviewed_revision, "reviewed")
+        _require_clean_exact_checkout(integrated, integrated_revision, "integrated")
+        _require_commit(integrated, reviewed_revision, "accepted review revision")
+        if not _is_ancestor(integrated, reviewed_revision, integrated_revision):
+            raise WorkspaceError("accepted review is no longer in the integrated target")
+        if source_fingerprint(reviewed / "cascade") != installed_digest:
+            raise WorkspaceError("loaded runtime no longer matches accepted review source")
+    except (OSError, WorkspaceError) as exc:
+        return {"state": "refused", "reason": str(exc), "identity": None}
+    return {
+        "state": "current",
+        "reason": None,
+        "identity": identity,  # type: ignore[typeddict-item]
+    }
+
+
 def _loaded_module_closure(root: Path) -> dict[str, LoadedModule]:
     rows: dict[str, LoadedModule] = {}
     for module_name, callable_names in REQUIRED_RUNTIME_CALLABLES.items():
@@ -539,5 +625,5 @@ __all__ = [
     "authority_from_environment", "create_runtime_authority", "encode_runtime_authority",
     "installed_source_root", "load_runtime_authority", "loaded_runtime_identity",
     "validate_loaded_runtime_identity", "validate_runtime_authority",
-    "verify_loaded_runtime_identity",
+    "verify_current_loaded_runtime_identity", "verify_loaded_runtime_identity",
 ]

@@ -177,6 +177,11 @@ owner disappears remains charged and cannot be replayed as a fresh permit. An
 interruption after a remote effect requires independent remote-SHA observation
 before another execution; publication evidence alone does not close the original
 delivery obligation.
+For split product/tracking roots, planning readiness and completed-child identity
+come from the tracking owner, while immutable source history, validation, remote
+leases and pushes remain product-worktree operations. Board cache invalidation
+expires both repository-role projections so a newly minted or moved tracking
+document is immediately visible to product-side dispatch and recovery.
 The [Watchdog postcheck](watchdog/DESIGN.md#recovery-admission-and-active-path-authority)
 owns that distinction. [The real publication journey](../tests/test_review_recovery_journey.py)
 exercises timeout, restart, exhausted decisions and immutable publication.

@@ -112,6 +112,14 @@ def _try_complete_feature(
         and feature_meta.path.parent.name == "3_completed"
     ):
         if obligation.generation and not obligation.satisfied:
+            if (
+                not review_merged
+                and obligation.reason == "current review is not published"
+            ):
+                from cascade.review import ensure_feature_review, review_enabled
+
+                if review_enabled(repo):
+                    ensure_feature_review(feature_id, root=repo)
             return False
         if review_merged and feature_meta.parent:
             _record_satisfied_repair(feature_id, obligation, repo)

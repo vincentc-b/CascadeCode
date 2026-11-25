@@ -2052,7 +2052,7 @@ code_watchdog_executor = element "_execute_reservation" "Function" "Invoke the o
     }
 }
 
-code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Function" "Re-read canonical Task, Feature, repair, review, owner, delivery, lease and retirement facts for one exact generation." {
+code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Function" "Re-read canonical Task, Feature, repair, review, owner, delivery, lease, retirement and live reviewed-runtime facts for one exact generation." {
     properties {
         "cascade.semanticId" "element.code.watchdog.postcheck"
         "cascade.parent" "element.component.watchdog"
@@ -2781,7 +2781,7 @@ code_task_generation = element "admit_review_publication_generation" "Function" 
     }
 }
 
-code_cli_launcher = element "run_launcher_loop" "Function" "Supervise worker handshake, bounded startup retries and restart." {
+code_cli_launcher = element "run_launcher_loop" "Function" "Supervise safe-path worker startup, handshake, bounded retries and restart." {
     properties {
         "cascade.semanticId" "element.code.cli.launcher"
         "cascade.parent" "element.component.workspace-commands"
@@ -2841,6 +2841,15 @@ code_cli_host_verify_runtime = element "verify_loaded_runtime_identity" "Functio
         "cascade.parent" "element.component.workspace-commands"
         "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
         "cascade.sourceSymbol" "verify_loaded_runtime_identity"
+    }
+}
+
+code_cli_current_runtime = element "verify_current_loaded_runtime_identity" "Function" "Reinspect a launcher-verified receipt, live process, reviewed/integrated lineage, module bytes and capability generation before closeout." {
+    properties {
+        "cascade.semanticId" "element.code.cli.current-runtime"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
+        "cascade.sourceSymbol" "verify_current_loaded_runtime_identity"
     }
 }
 
@@ -3048,12 +3057,6 @@ code_cli_loaded_runtime_to_code_cli_status = code_cli_loaded_runtime -> code_cli
     }
 }
 
-code_cli_loaded_runtime_to_code_cli_validate_runtime = code_cli_loaded_runtime -> code_cli_validate_runtime "Reads the immutable authority snapshot" {
-    properties {
-        "cascade.semanticId" "relationship.code-cli-loaded-runtime-to-validate-runtime"
-    }
-}
-
 code_cli_launcher_to_code_cli_host_verify_runtime = code_cli_launcher -> code_cli_host_verify_runtime "Independently verifies the spawned child" {
     properties {
         "cascade.semanticId" "relationship.code-cli-launcher-to-host-verify-runtime"
@@ -3069,6 +3072,18 @@ code_cli_loaded_runtime_to_code_cli_host_verify_runtime = code_cli_loaded_runtim
 code_cli_host_verify_runtime_to_code_cli_status = code_cli_host_verify_runtime -> code_cli_status "Publishes host-verified identity" {
     properties {
         "cascade.semanticId" "relationship.code-cli-host-verify-runtime-to-status"
+    }
+}
+
+code_cli_status_to_code_cli_current_runtime = code_cli_status -> code_cli_current_runtime "Supplies the launcher-verified receipt for fresh inspection" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-status-to-current-runtime"
+    }
+}
+
+code_watchdog_postcheck_to_code_cli_current_runtime = code_watchdog_postcheck -> code_cli_current_runtime "Requires current loaded-runtime evidence before incident closeout" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-postcheck-to-current-runtime"
     }
 }
 

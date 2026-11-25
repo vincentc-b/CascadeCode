@@ -359,12 +359,30 @@ def _dispatch_feature(
         trunk=root,
     )
 
-    _relocate_active(
-        work_id,
-        source_root=source_root,
-        dest_root=feat_wt.path,
-        trunk=root,
-    )
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    if (
+        project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+        and root.resolve() == project.target.root.resolve()
+    ):
+        # The product worktree owns implementation history; the tracking
+        # checkout remains the sole planning-document mutation owner.
+        move_doc(work_id, "active", root=root)
+        live = read_doc(work_id, root=root)
+        live.meta.integration_branch = feat_wt.branch
+        live.meta.integration_worktree = feat_wt.path.relative_to(
+            root.resolve()
+        ).as_posix()
+        write_doc(live, root=root)
+    else:
+        _relocate_active(
+            work_id,
+            source_root=source_root,
+            dest_root=feat_wt.path,
+            trunk=root,
+        )
 
     event = _emit(
         root,
@@ -631,6 +649,21 @@ def _place_task_active(
         doc.meta.skills = [Path(item) for item in skill_paths]
         doc.body = rewrite_skills_section(doc.body, skill_paths)
     doc.meta.status = "active"
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    if (
+        project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+        and trunk.resolve() == project.target.root.resolve()
+    ):
+        doc.meta.path = (
+            project.tracking.root
+            / column_dir("task", "active")
+            / previous.name
+        ).resolve()
+        save_doc(doc, previous_path=previous, root=project.tracking.root)
+        return
     doc.meta.path = (
         board_root / column_dir("task", "active") / previous.name
     ).resolve()
