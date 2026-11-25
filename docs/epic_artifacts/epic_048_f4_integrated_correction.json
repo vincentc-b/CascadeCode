@@ -122,5 +122,24 @@
       "status": "enqueued"
     },
     "decision": "Existing plan and acceptance inventory sufficient; no plan revision or new sign-off/publication."
+  },
+  "manager_corrected_base_followup": {
+    "observed_task_revision": "cf3ea5594d6d8381ce80441067bfc04427000723",
+    "verified_ancestors": [
+      "51cffe146b8b423027266f8469678c482e321c79",
+      "b9c2129558beaffd235a6c28ab25693a5cd71813",
+      "f258bca3a0beaee66d3eedd1483218245e838ea7"
+    ],
+    "finding": "Corrected integrated base is present at the observed Task ref. This supersedes the earlier local-ref ancestry limitation, not the historical red results.",
+    "validation": "git merge-base --is-ancestor succeeds for all three revisions; git diff --check f258bca3 cf3ea559 passes. No runtime tests rerun by Epic Manager.",
+    "next_gate": "Existing active Task execution runs the full bounded Recovery contract and returns actual tested HEAD, command and result. No duplicate recovery dispatch.",
+    "design_review_scope": "This change records ancestry evidence only. Task design differs from f258bca3; final source/design/Code/navigation review remains assigned to F4 under existing acceptance inventory. No final architecture sign-off or publication claimed.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:task003-cf3ea559-integrated-base-confirmed",
+      "status": "enqueued"
+    },
+    "decision": "Existing dec_010 and plan remain sufficient; no scope or plan revision.",
+    "remaining": "Full bounded gate, final integrated architecture/dossier, F1 acceptance receipt, separate controlled-supervisor evidence and architecture publication recovery remain open."
   }
 }
