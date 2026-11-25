@@ -153,6 +153,55 @@ time.sleep(2)
     assert len(pushes.read_text().splitlines()) == 1
 
 
+def test_deterministic_review_retries_require_new_material_within_original_budget(tmp_path, monkeypatch):
+    root, turn = _resolved_review(tmp_path, monkeypatch)
+    calls = tmp_path / "validator-calls.txt"
+    validator = tmp_path / "validator.py"
+    validator.write_text(
+        "import pathlib, sys\n"
+        "assert pathlib.Path('source.txt').read_text().strip() == 'source'\n"
+        "with pathlib.Path(sys.argv[1]).open('a') as log: log.write(sys.argv[2] + '\\n')\n"
+        "raise SystemExit(int(sys.argv[2]))\n"
+    )
+    command = [sys.executable, str(validator), str(calls)]
+    _policy(root, [*command, "1"], 10)
+    load_feature_tools()
+
+    def publish():
+        return invoke_feature_tool(
+            'feat_035_001', 'publish_review_resolution',
+            {'action_id': turn.action_id}, root=root,
+        )
+
+    assert publish()['recovery_state'] == 'awaiting_owner_decision'
+    original = read_incident_budget(turn.action_id, root=root)
+    assert original['charged']['tool_attempts'] == 1
+    assert publish()['reason'] == 'validation_budget_deterministic_material_unchanged'
+    _monitor_in_new_process(root)
+    _git(root, 'commit', '--allow-empty', '-m', 'Cosmetic commit')
+    assert publish()['reason'] == 'validation_budget_deterministic_material_unchanged'
+    assert calls.read_text().splitlines() == ['1']
+
+    _policy(root, [*command, "2"], 10)
+    assert publish()['recovery_state'] == 'awaiting_owner_decision'
+    _policy(root, [*command, "1"], 10)
+    assert publish()['reason'] == 'validation_budget_deterministic_material_unchanged'
+    assert calls.read_text().splitlines() == ['1', '2']
+    assert _git(root, 'ls-remote', 'origin', 'refs/heads/feat/feat_035_001').split()[0] == turn.observed_source_sha
+
+    _policy(root, [*command, "0"], 10)
+    assert publish()['recovery_state'] == 'completed'
+    budget = read_incident_budget(turn.action_id, root=root)
+    assert budget['incident_id'] == original['incident_id']
+    assert budget['original_admitted_at'] == original['original_admitted_at']
+    assert budget['policy'] == original['policy']
+    assert budget['charged']['tool_attempts'] == 3
+    assert len(budget['operations']) == 3
+    assert load_action(turn.action_id, root=root)['attempt_count'] == 3
+    assert calls.read_text().splitlines() == ['1', '2', '0']
+    assert _git(root, 'ls-remote', 'origin', 'refs/heads/feat/feat_035_001').split()[0] == _git(root, 'rev-parse', 'HEAD')
+
+
 def test_exhausted_legacy_review_is_not_rearmed_by_policy_change(tmp_path, monkeypatch):
     root, turn = _resolved_review(tmp_path, monkeypatch)
     create_or_load_action(turn.action_id, 'review_rebase', root=root, attempt_bound=1,

@@ -174,6 +174,7 @@ def publish_team_review_resolution(
 
     generation = {
         "source_head": _git(worktree, "rev-parse", "HEAD"),
+        "source_tree": _git(worktree, "rev-parse", "HEAD^{tree}"),
         "observed_heads": list(heads),
         "validation_command": list(validation_command(trunk)),
         "validation_timeout_seconds": review_validation_timeout(trunk),

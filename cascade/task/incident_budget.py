@@ -525,6 +525,35 @@ def _operation_receipt_id(incident_id: str, operation_id: str) -> str:
     return f"sha256:{digest}"
 
 
+def _review_validator_material(
+    record: Mapping[str, Any], actions: Mapping[str, Mapping[str, Any]], operation_id: str
+) -> str | None:
+    """Bind review checks to admitted inputs, not changing attempts or commit metadata."""
+    action_id = record.get("original_action_id")
+    action = actions.get(action_id, {})
+    if action.get("action_kind") != "review_rebase":
+        return None
+    generations = action.get("review_publication_generations") or []
+    identity = generations[-1].get("identity") if generations else None
+    if not isinstance(identity, Mapping):
+        return None
+    generation_digest = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if not operation_id.startswith(f"review-validator:{action_id}:{generation_digest}:"):
+        return None
+    keys = (
+        "source_tree", "validation_command", "validation_timeout_seconds",
+        "budget_policy", "environment_revision",
+    )
+    if any(identity.get(key) is None for key in keys):
+        return None
+    material = {key: identity[key] for key in keys}
+    return hashlib.sha256(
+        json.dumps(material, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
 def reserve_incident_operation(
     incident_id: str,
     operation_id: str,
@@ -586,6 +615,22 @@ def reserve_incident_operation(
             return _decision("exhausted", "bounded_extension_required")
         if not material_bound:
             return _decision("owner_decision", "material_generation_unbound")
+        material = None
+        if kind == "review_validator":
+            material = _review_validator_material(record, _actions(payload), operation_id)
+            if material is None:
+                return _decision("owner_decision", "review_material_unbound")
+            for receipt in operations.values():
+                if receipt.get("kind") != kind or receipt.get("state") != "settled":
+                    continue
+                observation = receipt.get("observation") or {}
+                if observation.get("failure_class") != "deterministic":
+                    continue
+                failed_material = receipt.get("material_fingerprint")
+                if failed_material is None:
+                    return _decision("owner_decision", "legacy_review_material_unverified")
+                if failed_material == material:
+                    return _decision("pending", "deterministic_material_unchanged")
         next_eligible = record.get("next_eligible_at")
         if next_eligible is not None:
             try:
@@ -655,6 +700,8 @@ def reserve_incident_operation(
             "started_at": stamped.isoformat(),
             "owner_process": current_review_owner(),
         }
+        if material is not None:
+            receipt["material_fingerprint"] = material
         operations = dict(operations)
         operations[operation_id] = receipt
         record["operations"] = operations
@@ -790,7 +837,10 @@ def settle_incident_operation(
                 else:
                     _exhaust(record, "transient attempts exhausted", stamped)
             elif failure_class == "deterministic":
-                _exhaust(record, "deterministic failure exhausted", stamped)
+                # A review validator receipt fences these exact inputs. A new
+                # material generation may use only the remaining original budget.
+                if receipt.get("kind") != "review_validator" or not receipt.get("material_fingerprint"):
+                    _exhaust(record, "deterministic failure exhausted", stamped)
             else:
                 record["status"] = "awaiting_owner_decision"
                 record["wait_reason"] = "failure_classification_unknown"
