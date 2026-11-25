@@ -49,6 +49,8 @@ Architecture closeout: reconcile the epic inventory against the integrated diff 
 
 Preserve Codex feature_lead/feature_architect gpt-6-sol high and SWE gpt-5.6-sol medium. Use verified local Python/Node/Playwright/Chromium and pinned Structurizr tools without installation. Return focused commands/results and supported-entry-point evidence for Epic acceptance.
 
+Architecture contract resolved by Epic decisions dec_004–dec_006. Required Task acceptance consumes the selected immutable progress/transcript pages and their distinct revision/incarnation contracts, renders pending milestone delivery and incomplete legacy import, preserves older-page cursors across ordinary appends, and rejects stale incarnation/cross-graph cursors. Test execution evidence with a queued live worker lacking an invocation token as a negative case. Verify both start fast path and supervisor replay while the authored final reply is held. Reconcile the current-source planning baseline's 13 Code nodes against actual producer/index/page implementations; no proposed function may remain represented as an implemented node.
+
 ## Data structures
 
 TBD.
