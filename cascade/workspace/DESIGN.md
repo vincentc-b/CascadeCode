@@ -54,8 +54,16 @@ stateDiagram-v2
     Draining --> [*]: stop
 ```
 
-The launcher retains process supervision while a worker restarts. Durable queues,
-graph checkpoints, action claims and registered worktrees belong to their existing
+The launcher retains process supervision while a worker restarts. The
+editable-source fingerprint update path replaces the worker process, not the
+in-memory launcher. The current launcher accepts the plain readiness line and
+the structured readiness identity; an older launcher may not accept a newer
+worker receipt. A protocol-changing update therefore requires stopping and
+restarting the full launcher with the intended environment. Startup retry and
+backoff are bounded; coordinated compatibility admission and automatic rollback
+of launcher upgrades are not implemented.
+
+Durable queues, graph checkpoints, action claims and registered worktrees belong to their existing
 owners; restart does not reset delivery or grant authority. Drain cancellation
 uses the [Agent registry](../agent/DESIGN.md#state-failure-and-isolation).
 The operator first obtains a signed deployment receipt and trust key from the

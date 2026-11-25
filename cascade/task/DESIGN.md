@@ -197,6 +197,15 @@ the work's graph state. Queue offsets prevent already consumed events from being
 treated as new input. Checkpoints retain execution context; Markdown work state,
 Git history, and durable action receipts remain the delivery evidence.
 
+Dispatch pins the Feature plan in the Task and `TaskDispatched` event before
+cutting the execution branch. The boot hook verifies the dispatched parent
+revision and task/feature identities; a later sibling mint does not invalidate
+a valid dispatched pin. Task wiring loads the role skills and transitions the
+worktree from `booting` to `coding`. Both direct kickoff and queued delivery
+refuse to start a Task that is not active or whose run is still booting. The
+scripted-provider recovery tests install these same boot hooks instead of
+bypassing the gate.
+
 Provider failures, tool authorization failures, and blocked review gates do not
 authorize advancing lifecycle state. Recovery inspects durable state and the
 preserved worktree before resuming the owning team. See

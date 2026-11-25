@@ -53,7 +53,12 @@ lease still match. `review_validation.validate_publication_board` scans the actu
 source checkout, including in split-repository sessions; it does not redirect to a
 tracking root or silently omit malformed drafts as a normal board projection may.
 Duplicate backlog/completed copies are rejected without choosing or deleting one.
-This check establishes document consistency, not full Epic acceptance.
+This check establishes document consistency, not full Epic acceptance. It
+runs on the guarded review-publication source worktree; it is not a universal
+precondition on every forge merge of a changed target. Successful source
+publication or forge merge alone does not prove that the actual merged target
+has unique board IDs or passes its own configured CI. An independent target
+check and local/remote trunk convergence remain separate evidence.
 
 `DEC-REVIEW-PUBLISH-001`: `review_rebase.check_and_publish_review_rebase` checks the
 board before spawning validation. Review publication uses changed Python test files,

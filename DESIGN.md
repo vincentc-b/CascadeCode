@@ -70,7 +70,23 @@ flowchart LR
 
 After activation the Epic Team starts planning immediately. Its Feature documents remain queued until the human selects **Approve plan** on the active Epic. That approval is durable in `.cascade/approvals.json` and releases automatic, dependency-ordered Feature execution.
 
-Feature completion first pushes the target `epic/{epic_id}` branch and source `feat/{feature_id}` branch, then opens a draft MR from `feat/{feature_id}` to `epic/{epic_id}` when the configured forge CLI is available. It does not push `main`. The watchdog polls tracked MRs. New review comments become `MergeRequestComment` events for the persistent Feature Team, including the MR URL and comment identity. The team evaluates the comment against the whole Feature plan, mints fixer Tasks when code must change, and can answer through `reply_merge_request_comment`. A merged MR releases the feature closeout gate and informs the Epic Team. Without a recognized/authenticated forge CLI, Cascade retains the local merge path for offline workspaces.
+Feature completion first pushes the target `epic/{epic_id}` branch and source
+`feat/{feature_id}` branch, then opens a draft MR from `feat/{feature_id}` to
+`epic/{epic_id}` when the configured forge CLI is available. It does not push
+`main`. The watchdog polls tracked MRs. New review comments become
+`MergeRequestComment` events for the persistent Feature Team, including the MR
+URL and comment identity. The team evaluates the comment against the whole
+Feature plan, mints fixer Tasks when code must change, and can answer through
+`reply_merge_request_comment`. A merged MR releases the feature closeout gate
+and informs the Epic Team.
+
+A completed-path Feature can still have an open review. Ordinary queue delivery
+for a completed team is limited to pending durable recovery actions; generic
+messages alone do not guarantee a new repair turn. Current review health checks
+route conflict recovery, but a green source check and a merged review do not
+establish the later target integration's CI or the operator checkout's sync
+state. Without a recognized/authenticated forge CLI, Cascade retains the local
+merge path for offline workspaces.
 
 Configuration:
 

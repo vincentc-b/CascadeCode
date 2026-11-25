@@ -17,6 +17,17 @@ registered ownership fails before a document move or write. The exact ownership
 contract and typed refusal belong to
 [`REQ-WORKSPACE-OWNER-001`](../workspace/DESIGN.md#work-ownership-and-retirement).
 
+[`list_board`](store.py) rejects two valid files with the same work ID in one
+physical checkout, including stale backlog and completed copies. It does not
+pick a winner or mutate files. The merged-board projection can combine
+historical copies from distinct checkouts, but a malformed checkout can still
+prevent the merged board from loading. The guarded publication board validator
+also rejects duplicate IDs and malformed documents in the actual source
+checkout. This does not yet establish integrity of every prospective forge
+merge result; accepted target trees must retain a unique terminal record and
+any matching cancellation feedback. Board consistency is separate from the
+operator trunk synchronization and review acceptance gates.
+
 ## Safe frontmatter scan performance
 
 Worktree board scans may read thousands of records during a cold War Room request.

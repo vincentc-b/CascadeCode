@@ -67,7 +67,13 @@ timeout --kill-after=10s 8m \
 
 Exit status `124` means the local eight-minute command bound expired and is a
 failure. CI keeps the job-level ten-minute limit and retains only a redacted,
-bounded diagnostic tail when the selection fails.
+bounded diagnostic tail when the selection fails. The late-repair fixture uses
+production Task boot/skill wiring, real Git and validators, and actual worker
+restart/postcheck; provider/forge transport and discovery evidence are scripted.
+It requires no installed provider CLI. Its synthetic red/green source edit
+changes byte length to avoid timestamp-based Python bytecode cache reuse on
+fast runners. The gate runs on relevant PRs and on `main`; inspect the exact
+merged revision's result rather than relying solely on the PR check.
 
 ## Initialize a product repository
 
@@ -187,8 +193,44 @@ The usual branch shape is `task/* → feat/* → epic/* → main`. Follow the re
 links and readiness state shown by the War Room rather than moving work records
 between directories by hand.
 
+### After merging a review
+
+A green source-branch check is not proof that the final merge result is green.
+Check the required CI on the actual merged trunk revision. With automation
+enabled, **Pull main** refreshes a read-only remote backlog snapshot; it does
+not synchronize the operator's local Git branch. With automation disabled, it
+uses the existing fast-forward-only trunk path. When you need the local code
+checkout to match the remote trunk, inspect and synchronize it explicitly:
+
+```bash
+git branch --show-current
+git status --short
+git fetch origin main
+git rev-list --left-right --count main...origin/main
+```
+
+On the checked-out `main`, use `git pull --ff-only origin main` when the incoming
+changes can be fast-forwarded without overwriting local work. Substitute the
+configured remote/trunk names as needed. If it refuses, preserve local changes
+and resolve the divergence through the normal Git review/integration path; do
+not reset or force-push. Verify both `git rev-parse main origin/main` values
+match after synchronization. Review approval, branch synchronization, the
+post-merge CI result, and the running supervisor revision are separate facts.
+
+Epic closeout accepts a cancelled Feature only if cleanup is complete and the
+canonical Epic records the exact resolved `continue_reduced_scope` disposition.
+The cancelled document remains in `3_completed` with status `cancelled`;
+this does not count as delivered implementation or waive other review gates.
+
 Stop the foreground supervisor with Ctrl-C; restart with `cascade up` from the
 same trunk. Durable work records and runtime state support continuation.
+The editable-source update path can restart the worker under the existing
+launcher; it does not replace the already-imported launcher code. If an update
+changes the launcher/worker handshake or otherwise requires a new launcher,
+stop the complete supervisor gracefully and rerun `cascade up` with the same
+workspace, environment, host and port. Check `/api/health` for `serving` and
+`automation.ready`, and `/api/board` for a successful board response. An
+ordinary local health check does not attest a reviewed runtime repair.
 New workspaces enable automation. Setting `[automation].enabled = false` opts
 into manual lifecycle controls; it does not configure providers or disable
 independently configured health audits. Some delivery paths support local
@@ -379,6 +421,17 @@ and [workspace design](cascade/workspace/DESIGN.md) for routing details.
   the repository's unambiguous product trunk.
 - **Brief missing from backlog:** confirm its review is merged into the configured
   remote trunk, then refresh with **Pull main**.
+- **Board unavailable: duplicate id:** the error names physical files in a
+  checkout. Inspect both against the accepted review and canonical owner before
+  reconciling the stale copy; preserve the terminal record, cancellation feedback
+  and history. Correct the published source/target tree through normal Git
+  integration, then synchronize any affected clean worktree. Do not change a
+  document's status or delete an arbitrary duplicate just to make the board load.
+- **503 after updating Cascade:** inspect `/api/health` and the local supervisor
+  status. If the old launcher rejects the newer worker's readiness message,
+  gracefully stop and restart the complete launcher from the updated, intended
+  environment instead of repeating worker-only startup attempts. Confirm both
+  health and board availability after restart.
 - **Architecture rendering unavailable:** check Docker and the pinned local image;
   retain the reported verification gap until rendering succeeds.
 
