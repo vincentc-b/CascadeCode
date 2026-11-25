@@ -358,5 +358,31 @@
     ],
     "publication": "The matching Feature review does not repair the Epic publication. Preserve the failed exact operation and references in epic_048_publication_resume.json; no new retry capability or authorization observed.",
     "limitations": "Evidence reconciliation only; not final acceptance, renewed plan sign-off, accepted-lineage mutation or replacement publication."
+  },
+  "architect_task004_dossier_preflight": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "feature_plan_revision": "e41b5be5d6581d4ed29347cafa47213d2052f743",
+    "observed_task_revision": "f26f5af7f918d0c5bcf56237784d0a9d765632ff",
+    "reviewed_paths": [
+      "docs/task_artifacts/task_048_004_004_controlled_supervisor_evidence_dossier.md"
+    ],
+    "decision": "Existing Epic acceptance inventory and matching F4 architecture review 518cf87b remain sufficient. Active Task evidence review only; no plan/design/model revision or replacement publication.",
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers: dossier-only delta changes no actors, runtime, communication or persistence boundaries.",
+      "components_code": "Existing supervisor/team/CLI/War Room components and integrated Code views retain source declarations, kinds, ownership and wiring; no source/design/model/contract delta from reviewed e41b5be5.",
+      "behavior": "Dossier retains normal admission/publication/independent-postcheck and failure/restart narratives. Operational refusal preserves missing target, signed installation/trust binding, permitted fault, selected incident and rollback as prerequisites; dependency readiness does not supply authority."
+    },
+    "open_evidence_corrections": [
+      "Retain cf3ea559 163 passes/231.25s as earlier evidence and identify accepted c2e8b608 supervised final_validation 163 passes/165.69s separately.",
+      "Label sha256:97681b22557abb2044ff2b67ae374956824c01da46b76be60858281adf678864 as local image ID, separately from pinned Structurizr RepoDigest sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c."
+    ],
+    "routing": "F4 Architect already sent both corrections to active Task 004; no duplicate message, recovery or validation request.",
+    "verification": [
+      "Read canonical Epic plan and current Task dossier delta",
+      "Verified e41b5be5 ancestry in f26f5af7 and dossier-only changed-path inventory",
+      "git diff --check e41b5be5 f26f5af7 passed",
+      "read_architecture_amendments returned []"
+    ],
+    "limitations": "No runtime/render/browser checks rerun. Dossier is active and unmerged; not final architecture or operational acceptance. F1 owning acceptance receipt, final Epic integration/validation, controlled-supervisor authority/evidence, completed-record limitations and terminal architecture publication recovery remain open. Existing failed exact publication requires its recorded supported runtime-owner recovery; no substitute references or retry capability observed."
   }
 }
