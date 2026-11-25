@@ -184,5 +184,60 @@
       "Original terminal architecture publication recovery via its recorded runtime-owner prerequisite"
     ],
     "limitations": "Not final Feature/Epic acceptance. No runtime tests or repeated terminal publication retry; no lifecycle, accepted-lineage or dependency changes."
+  },
+  "manager_final_gate_reconciliation": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_revision": "e41b5be5d6581d4ed29347cafa47213d2052f743",
+    "delivered_task_revision": "c2e8b60895beb0d304c51c382be13fe00c0b4d5c",
+    "verified_ancestors": [
+      "51cffe146b8b423027266f8469678c482e321c79",
+      "b9c2129558beaffd235a6c28ab25693a5cd71813",
+      "f258bca3a0beaee66d3eedd1483218245e838ea7"
+    ],
+    "task_is_feature_ancestor": true,
+    "reported_validation": {
+      "source": "F4 TeamMessage task3-merged-final-ci-e41b5be5 and canonical Feature final integrated gate section",
+      "phase": "final_validation",
+      "exit_code": 0,
+      "passed": 163,
+      "warnings": 2,
+      "seconds": 165.69,
+      "tested_revision": "c2e8b60895beb0d304c51c382be13fe00c0b4d5c",
+      "independently_rerun": false,
+      "limitation": "Task delivery receipt remains authoritative; Epic Manager verified source ancestry and Feature report, not a fresh execution."
+    },
+    "history": "Four pre-correction red observations remain separate. Earlier base/documentation gaps are resolved at this Task revision, without overwriting historical observations.",
+    "design_closeout": {
+      "reviewed": [
+        "c2e8b608:cascade/task/DESIGN.md",
+        "c2e8b608:cascade/DESIGN.md",
+        "c2e8b608:docs/task_artifacts/task_048_004_003_recovery_contract_ci_closeout.md",
+        "e41b5be5:Feature diagram-impact inventory and final integrated gate"
+      ],
+      "resolved": "Task prose explicitly scopes fingerprint fencing to review_validator under original review_rebase, preserves attributes.parent_operation_id alongside material_fingerprint, distinguishes non-rebase conservative exhaustion, and explains restart/A-B-A/remaining-allowance/independent-extension behavior.",
+      "diagram_impact": {
+        "landscape_context": "cascade-landscape/cascade-context unchanged: f258bca3..c2e8b608 adds workflow, runbook, Task design and work-record content only; no actor or responsibility boundary changes.",
+        "containers": "cascade-containers unchanged: no runtime, communication or durable store boundary changed in the delivered Task diff.",
+        "components": "cascade-supervisor-components/cascade-team-components unchanged: production interfaces and Task/Teams/Agent collaborators are unchanged from integrated base.",
+        "code": "cascade-task-code/cascade-teams-code and consumer Code views: no source/model/contract declarations changed in the Task diff. F4 Architect must reconcile descriptions, real symbols and navigation evidence at final integrated revision.",
+        "behavior": "Task-owned prose resolves the previously routed material/receipt failure-resume gap. Final normal/refusal/restart and consumer evidence belongs in active Task 004 dossier."
+      },
+      "verification": "Read exact integrated design diff and closeout; verified all three prerequisite ancestors and delivered Task ancestry in F4; git diff --check passed; mandatory review-health selection and ten-minute workflow bound retained.",
+      "limits": "No runtime/render/browser rerun; no final architecture acceptance or publication claimed. Reported source/navigation and renderer evidence remains subject to final F4 review."
+    },
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:f4-e41b5be5-final-gate-architecture-review",
+      "status": "enqueued",
+      "request": "Matching Feature Architect review for exact e41b5be5; continue active Task 004 final dossier without duplicate recovery or unchanged-source full gate."
+    },
+    "decision": "Existing dec_010 and approved acceptance inventory suffice; no scope/plan revision or new decision-log entry.",
+    "remaining": [
+      "Matching F4 architecture review at e41b5be5 and final integrated dossier",
+      "F1 owning acceptance/design reconciliation receipt",
+      "Final Epic integration and CI",
+      "Separately authorized controlled-supervisor evidence",
+      "Completed-record evidence limitations and original architecture publication recovery"
+    ]
   }
 }
