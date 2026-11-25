@@ -2,6 +2,61 @@
 
 Purpose: observe canonical state, admit dependency-ready work, and coordinate bounded recovery. Interfaces are dispatch/activation, queues, poll loop, capability registry, incidents/reservations, health audit, and model resolution. Owns `REQ-WATCHDOG-001` (automation obeys lifecycle gates) and `DEC-WATCHDOG-001` (generation-bound reservations converge recovery).
 
+## Current recovery progress publication
+
+`REQ-WATCHDOG-PROGRESS-001`: The supervisor projects committed action and
+incident receipts into bounded current recovery evidence without changing repair
+authority. Exact action generation, attempt and claim identity joins receipts to
+live invocation or executor observations. An attempt result remains verification
+pending until a fresh same-generation authoritative postcheck; missing, expired,
+dead, inaccessible, legacy or conflicting live evidence is unavailable rather
+than execution proof.
+
+`DEC-WATCHDOG-PROGRESS-001`: Use a disposable writer-only SQLite index for
+receipt deduplication, dirty work aliases and fair replay cursors. Authoritative
+actions and incidents remain in their existing ledgers. The producer writes
+immutable bounded pages and manifests below
+`.cascade/recovery_progress/v1/work/<sha256(work-id)>/`, then atomically replaces
+that work ID's `current.json`. Owning-graph and affected-work aliases published
+in one batch share the entry identity, entry revision and manifest revision.
+
+[`publish_committed_transition`](../recovery_progress/publisher.py) is the
+best-effort after-lock path. [`drain_recovery_progress`](../recovery_progress/publisher.py)
+replays missed committed receipts on startup and at the beginning of
+`watchdog_tick`, before `process_lock` and slow lifecycle, Git or provider work.
+A pass admits at most 100 receipts and 100 dirty owners or one second; the fast
+path has a 250 ms deadline. A partial or failed publication retains explicit
+dirty lag for a later pass. Each source ledger is loaded at most once per pass,
+and measured load duration is returned with the drain result rather than
+represented as a constant latency guarantee. Legacy coverage stays incomplete
+until the resumable import reaches a complete pass.
+
+```mermaid
+sequenceDiagram
+    participant S as Action or incident source
+    participant P as Progress publisher
+    participant I as Disposable writer index
+    participant F as Immutable work pages
+    S->>S: Commit transition receipt under lifecycle lock
+    S-->>P: Notify after outer lock
+    P->>I: Join exact receipt, snapshot and live token
+    P->>F: Publish affected aliases and atomic pointers
+    alt Notification missed or process restarted
+        P->>S: Bounded fair source replay
+        P->>I: Import unseen receipt identities
+        P->>F: Publish dirty aliases with lag/completeness
+    else Live evidence expired or inaccessible
+        P->>F: Retain last blocker priority as unavailable
+    end
+```
+
+The `cascade-watchdog-code` view links the tick, bounded drain and immutable
+publisher. [Producer integration tests](../../tests/recovery_progress/test_publisher.py)
+exercise state evidence, exact live matching, immutable alias revisions, missed
+notifications, fair continuation, ordering, sanitization and measured source
+cost. Task owns source receipt durability; War Room owns the safe entry contract
+and bounded read surface.
+
 ## Dispatch ownership transition
 
 Feature dispatch binds the dependency-checked board selection to its source

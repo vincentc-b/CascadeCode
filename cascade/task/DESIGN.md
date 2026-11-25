@@ -208,6 +208,14 @@ preflight refusal and a held executor whose start is visible before completion.
 cover held execution, exact matching, expiry, inaccessible/dead processes and
 worker generation changes.
 
+The Watchdog-owned [current progress publisher](../watchdog/DESIGN.md#current-recovery-progress-publication)
+consumes these receipts after commit and by restart replay. Its SQLite index is
+derived and disposable: it does not replace `executions.json`, allocate claims,
+or authorize a retry. Consequently an enqueue, `mutation_ready`, execution-start
+receipt, successful attempt, or completed publication remains evidence of only
+that transition; none establishes verified resolution without the independent
+same-generation postcheck.
+
 ## Interrupted review publication attempts
 
 Review-rebase attempts claimed through `resume_action` additionally persist the

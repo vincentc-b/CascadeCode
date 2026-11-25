@@ -1,6 +1,7 @@
 {
   "elements": [
     {"dsl_identifier": "code_dashboard_recovery", "semantic_id": "element.code.dashboard.recovery", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_dashboard_progress_contract", "semantic_id": "element.code.dashboard.progress-contract", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_incidents", "semantic_id": "element.code.dashboard.incidents", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_chat_get", "semantic_id": "element.code.dashboard.chat.get", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_chat_read", "semantic_id": "element.code.dashboard.chat.read", "fragment": "model.dsl"},
@@ -17,6 +18,8 @@
     {"dsl_identifier": "code_task_executor_live_identity", "semantic_id": "element.code.task.executor-live-identity", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_transition_receipt", "semantic_id": "element.code.watchdog.transition-receipt", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_transition_notify", "semantic_id": "element.code.watchdog.transition-notify", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_watchdog_progress_drain", "semantic_id": "element.code.watchdog.progress-drain", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_watchdog_progress_publish", "semantic_id": "element.code.watchdog.progress-publish", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_invoke", "semantic_id": "element.code.workspace.invoke", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_owner_live", "semantic_id": "element.code.workspace.owner.live", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_kickoff_live", "semantic_id": "element.code.workspace.kickoff-live", "fragment": "model.dsl"},
@@ -435,6 +438,9 @@
     {"dsl_identifier": "code_boss_obligation_to_review_generation", "semantic_id": "relationship.code-boss-obligation-to-review-generation", "source": "code_boss_obligation", "destination": "code_boss_review_generation", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_reconcile_to_rollup", "semantic_id": "relationship.code-boss-reconcile-to-rollup", "source": "code_boss_reconcile", "destination": "code_boss_feature", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_tick_to_authority", "semantic_id": "relationship.code-watchdog-tick-to-authority", "source": "code_watchdog_tick", "destination": "code_watchdog_authority", "fragment": "model.dsl"},
+    {"dsl_identifier": "watchdog_tick_to_progress_drain", "semantic_id": "relationship.code-watchdog-tick-to-progress-drain", "source": "code_watchdog_tick", "destination": "code_watchdog_progress_drain", "fragment": "model.dsl"},
+    {"dsl_identifier": "watchdog_progress_drain_to_publish", "semantic_id": "relationship.code-watchdog-progress-drain-to-publish", "source": "code_watchdog_progress_drain", "destination": "code_watchdog_progress_publish", "fragment": "model.dsl"},
+    {"dsl_identifier": "dashboard_recovery_to_progress_contract", "semantic_id": "relationship.code-dashboard-recovery-to-progress-contract", "source": "code_dashboard_recovery", "destination": "code_dashboard_progress_contract", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_authority_to_repair", "semantic_id": "relationship.code-watchdog-authority-to-repair-authority", "source": "code_watchdog_authority", "destination": "code_watchdog_repair_authority", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_recover_to_capability", "semantic_id": "relationship.code-watchdog-recover-to-capability", "source": "code_watchdog_recover", "destination": "code_watchdog_capability", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_recover_to_reservation", "semantic_id": "relationship.code-watchdog-recover-to-reservation", "source": "code_watchdog_recover", "destination": "code_watchdog_reservation", "fragment": "model.dsl"},

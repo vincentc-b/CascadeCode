@@ -121,7 +121,7 @@ custom "cascade-watchdog-code" {
     properties {
         "cascade.codeComponent" "element.component.watchdog"
     }
-    include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish
+    include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish code_watchdog_progress_drain code_watchdog_progress_publish
     include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
     autoLayout lr
 }
@@ -169,7 +169,7 @@ custom "cascade-dashboard-code" {
         "cascade.codeComponent" "element.component.dashboard"
     }
     include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader
-    include code_dashboard_recovery code_dashboard_incidents code_dashboard_chat_get code_dashboard_chat_read code_dashboard_chat_append code_dashboard_transcript code_dashboard_backfill
+    include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_chat_read code_dashboard_chat_append code_dashboard_transcript code_dashboard_backfill
     autoLayout lr
 }
 

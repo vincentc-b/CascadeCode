@@ -8,6 +8,28 @@ audit fixtures do not establish post-deployment live acceptance.
 
 ## Recovery summaries and planning transcripts
 
+`REQ-WARROOM-PROGRESS-001`: A safe current recovery entry distinguishes
+requested/queued, acknowledged, investigating, executing, waiting/blocked with
+a prerequisite and owner, retryable failure, exhausted attempts, verification
+pending, verified completion, and stale/unavailable evidence. It carries stable
+action/generation/attempt identity, nullable source occurrence time, observation
+freshness, safe next step, sanitized target/reason and bounded receipt references.
+Concurrent entries order unresolved blockers first, other unresolved work next,
+and verified completion last; material occurrence and stable entry identity break
+ties. A stale entry retains its last supported blocker priority.
+
+`DEC-WARROOM-PROGRESS-001`: The safe presentation contract is version 1 and is
+published ahead of GET under product-root work-ID hashes. Public consumers use
+only an atomic pointer, its immutable manifest and bounded pages. The producer's
+writer index and raw action/incident ledgers are not read surfaces. Missing,
+expired, corrupt, identity-mismatched or incomplete evidence must remain explicit
+pending/unavailable metadata rather than a healthy empty result.
+
+The Watchdog [materializes this contract](../watchdog/DESIGN.md#current-recovery-progress-publication).
+The existing `recovery_incident` board summary remains the current coarse reader
+until the bounded progress route consumes those files; it must not reinterpret a
+queued marker or attempt result as live execution or verified resolution.
+
 `REQ-WARROOM-TRANSCRIPT-001`: Historical chat preserves the owning Epic or
 Feature's human and presentable role messages. Reading chat does not invoke a
 graph or backfill a checkpoint. Task teams do not accept persistent-room chat.

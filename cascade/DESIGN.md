@@ -254,6 +254,12 @@ behavior and verification behind each Code view.
 | Service | Workspace | `cascade-workspace-code`, `cascade-comparison-render-code` | [Workspace](workspace/DESIGN.md#c4-code-model-and-rendering-contract) |
 | Service | Comments and amendments | `cascade-collaboration-code` | [Comments](comments/DESIGN.md), [Amendments](amendments/DESIGN.md) |
 
+Current recovery progress crosses the Task, Watchdog and Dashboard boundaries:
+Task retains authoritative transition receipts, Watchdog joins exact live and
+postcheck evidence into immutable work-addressed pages, and Dashboard owns the
+safe versioned presentation contract. The producer and restart/failure flow is
+documented in [Current recovery progress publication](watchdog/DESIGN.md#current-recovery-progress-publication).
+
 ## Team execution
 
 A team is a persisted graph plus scoped tools, role configuration, and an owned

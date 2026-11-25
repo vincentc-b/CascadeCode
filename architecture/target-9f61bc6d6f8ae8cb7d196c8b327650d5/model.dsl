@@ -32,7 +32,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
             }
         }
 
-        dashboard = component "Dashboard and audit reads" "Shows work state, routing-based recovery summaries, team transcripts and published health-audit projections." "cascade.war_room" {
+        dashboard = component "Dashboard and audit reads" "Owns the safe recovery-progress entry contract and shows work state, routing summaries, team transcripts and published projections." "cascade.war_room" {
             properties {
                 "cascade.semanticId" "element.component.dashboard"
                 "cascade.designPath" "cascade/war_room/DESIGN.md"
@@ -78,7 +78,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.designPath" "cascade/task/DESIGN.md"
             }
         }
-        watchdog_component = component "Watchdog" "Admits ready work and retains generation-bound recovery stage receipts for bounded recovery." "cascade.watchdog" {
+        watchdog_component = component "Watchdog" "Admits ready work, retains generation-bound recovery stages, and materializes bounded current progress." "cascade.watchdog / cascade.recovery_progress" {
             properties {
                 "cascade.semanticId" "element.component.watchdog"
                 "cascade.designPath" "cascade/watchdog/DESIGN.md"
@@ -1277,6 +1277,24 @@ code_watchdog_publish = element "publish_audit_projection" "Function" "Publishes
     }
 }
 
+code_watchdog_progress_drain = element "drain_recovery_progress" "Function" "Fairly replays at most 100 retained receipts and publishes at most 100 dirty work aliases within one second." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.progress-drain"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/recovery_progress/publisher.py"
+        "cascade.sourceSymbol" "drain_recovery_progress"
+    }
+}
+
+code_watchdog_progress_publish = element "publish_committed_transition" "Function" "Joins exact receipt and live/postcheck evidence, updates the disposable index, and publishes immutable work-addressed pages." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.progress-publish"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/recovery_progress/publisher.py"
+        "cascade.sourceSymbol" "publish_committed_transition"
+    }
+}
+
 watchdog_tick_to_dispatch = code_watchdog_tick -> code_watchdog_dispatch "Advances eligible Tasks through automation" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-tick-to-dispatch"
@@ -1292,6 +1310,18 @@ watchdog_tick_to_health = code_watchdog_tick -> code_watchdog_health "Runs sched
 watchdog_audit_lane_to_publish = code_watchdog_audit_lane -> code_watchdog_publish "Publishes completed observation evidence" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-audit-lane-to-publish"
+    }
+}
+
+watchdog_tick_to_progress_drain = code_watchdog_tick -> code_watchdog_progress_drain "Drains committed progress before slow watchdog work" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-tick-to-progress-drain"
+    }
+}
+
+watchdog_progress_drain_to_publish = code_watchdog_progress_drain -> code_watchdog_progress_publish "Publishes each bounded dirty owner batch" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-progress-drain-to-publish"
     }
 }
 
@@ -1610,6 +1640,15 @@ code_dashboard_reader = element "read_audit_projection" "Function" "Reads a boun
     }
 }
 
+code_dashboard_progress_contract = element "_derive_entry" "Function" "Defines the versioned safe recovery states, ordering priority, freshness and sanitized presentation fields materialized for Dashboard consumers." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.progress-contract"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/recovery_progress/publisher.py"
+        "cascade.sourceSymbol" "_derive_entry"
+    }
+}
+
 dashboard_router_to_render = code_dashboard_router -> code_dashboard_render "Serves the dashboard page" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-router-to-render"
@@ -1627,7 +1666,6 @@ dashboard_audit_to_reader = code_dashboard_audit -> code_dashboard_reader "Reads
         "cascade.semanticId" "relationship.code-dashboard-audit-to-reader"
     }
 }
-
 
 // Workspace commands — implementation.
 
@@ -3298,6 +3336,12 @@ code_task_executor_live_identity = element "_executor_live_identity" "Function" 
 dashboard_incidents_to_dashboard_recovery = code_dashboard_incidents -> code_dashboard_recovery "Projects each retained action" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-incidents-to-dashboard-recovery"
+    }
+}
+
+dashboard_recovery_to_progress_contract = code_dashboard_recovery -> code_dashboard_progress_contract "Shares the safe current presentation vocabulary without treating coarse routing as execution proof" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-recovery-to-progress-contract"
     }
 }
 
