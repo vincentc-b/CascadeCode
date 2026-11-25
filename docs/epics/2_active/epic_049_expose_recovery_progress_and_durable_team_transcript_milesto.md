@@ -263,6 +263,11 @@ Architecture verification results and pinned publication references are recorded
   Chose Publish a diagram-change planning baseline with real recovery/transcript Code nodes and current-design limits; assign future producer/replay/UI reconciliation and acceptance to the three sequenced Features..
   Rationale: The generic Dashboard view omitted current recovery and transcript implementation paths. Current functions can be modeled truthfully now, while proposed storage and live evidence stay in work records until implemented. Context/container topology and existing Watchdog verification remain accurate. Historical accepted-lineage evidence for related epics is not available within this team's scope.
   Honors: Design skill implementation-depth, single ownership and current-fact contract; revision-pinned architecture publication; Task-level navigation, crash, freshness and operational acceptance..
+
+- `dec_007` · 2026-11-25 · Epic Architect · **Macro-architecture**
+  Chose Keep the 256 KiB architecture metadata cap and return smaller view pages with lossless continuation; make document-context lookup follow the same continuation..
+  Rationale: The expanded current-code model rendered successfully but the supported browser received HTTP 413 for a 271,703-byte default page. A one-view page fits, and the existing browser already follows cursors. Adaptive page sizing fixes this concrete publication/navigation blocker without changing target identity, render bounds, accepted snapshots or process startup policy.
+  Honors: Design-skill actual navigation and warm-reuse verification; bounded metadata, nonempty advancing pages, pinned source identity and typed refusal if the minimum page cannot fit..
 ## Amendment log
 
 _(none)_
