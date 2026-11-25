@@ -770,13 +770,21 @@ def _record_result(
         )
         budget_incident_id = incident_budget_identity(current)
         if isinstance(budget_operation_id, str) and budget_incident_id is not None:
+            # The budget accounts for whether the bounded adapter invocation
+            # completed, not whether the wider lifecycle incident is already
+            # terminal. Deferred, refused, and no-op owner results are known
+            # completed invocations and must release the claim after charging
+            # their attempt. Only execution errors and unsafe results retain
+            # failure semantics in the incident allowance.
+            budget_outcome = (
+                "error" if adapter_executed and outcome in {"error", "unsafe"}
+                else "success"
+            )
             settle_incident_operation(
                 budget_incident_id,
                 budget_operation_id,
                 {
-                    "outcome": "success"
-                    if outcome == "success" or not adapter_executed
-                    else "error",
+                    "outcome": budget_outcome,
                     "failure_class": result.get("failure_class"),
                     "quality": "known",
                     "usage": {"tool_attempts": 1 if adapter_executed else 0},

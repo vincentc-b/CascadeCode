@@ -1020,8 +1020,20 @@ def _boards_for_trunk(trunk: Path, *, readonly: bool = False) -> list[BoardIndex
 def invalidate_merged_board(trunk: Path) -> None:
     """Drop the shared supervisor-board snapshot after a board or registry write."""
 
+    roots = {locate_trunk(trunk).resolve()}
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    if project is not None:
+        roots.update(
+            {
+                project.target.root.resolve(),
+                project.tracking.root.resolve(),
+            }
+        )
     with _merged_board_cache_lock:
-        _merged_board_cache.pop(locate_trunk(trunk).resolve(), None)
+        for root in roots:
+            _merged_board_cache.pop(root, None)
 
 
 def merged_board(trunk: Path) -> BoardIndex:

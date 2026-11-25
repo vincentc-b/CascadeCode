@@ -7,7 +7,9 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
+
+from cascade.workspace.runtime_identity import LoadedRuntimeIdentity
 
 SupervisorState = Literal[
     "serving", "draining", "restarting", "update_blocked", "degraded"
@@ -31,6 +33,7 @@ class SupervisorStatus(TypedDict):
     trunk_lock_warning: str | None
     since: str
     updated_at: str
+    runtime_identity: NotRequired[LoadedRuntimeIdentity]
 
 
 def status_path(workspace_root: Path) -> Path:

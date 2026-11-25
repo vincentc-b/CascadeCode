@@ -247,6 +247,10 @@ uses branch synchronization before
 records the replacement pair, and queues the original Task for supervised final
 validation. The old validation and every action attempt remain in the ledger;
 only a later green result may replace the current queue evidence.
+Before Git integration, [merge_task_branch](../boss/merge.py) rechecks the
+canonical merged-board Feature and requires its exact active column. This keeps a
+historical product-side document in a split project from authorizing delivery
+after the tracking owner has completed the parent.
 
 ```mermaid
 flowchart LR
