@@ -900,3 +900,65 @@ Epic architecture publication remain unresolved. Verification: canonical
 Epic/Feature reads, explicit Task access refusal, one child-supervision read,
 Git reference and revision-guard inspection, handoff enqueue, design review and
 `git diff --check`. Return control for supervisor integration between turns.
+
+## Architect Task 1 integration and crash-boundary review
+
+Read-only reference inspection now finds both `feat/feat_049_002` and
+`task/task_049_002_001` at `bd152f61d39912f920830250c62efc57050d689c`.
+This supersedes the earlier branch-integration-pending observation; it does not
+establish canonical Task acceptance. One direct-child supervision inspection
+reports Feature 2 active with no incidents. The owner-reported canonical Task
+record correction remains unverified; no denied Task content was read through
+an alternate path and no lifecycle guard was bypassed.
+
+Reviewed the source/design/model diff `0711aca6..bd152f61` through Git, without
+editing the child checkout. War Room owns `REQ-WARROOM-TRANSCRIPT-002` and
+`DEC-WARROOM-TRANSCRIPT-002`, source-linked append/fence/index/move functions,
+and the intent → JSONL fsync → unique-index commit sequence. Workspace links
+room movement to integration creation and retirement. The native model and
+contract add four Function nodes and six relationships; Dashboard and Workspace
+Code views include the new nodes. Current-design prose contains no delivery
+attribution in this diff. Parent navigation in `cascade/DESIGN.md` remains
+consistent with those component owners.
+
+Static tracing found two material recovery gaps in the delivered source:
+
+- `cascade/war_room/chat_store.py::_repair_pending`, lines 279–303: when a full
+  intended line is visible, replay skips `_append_and_fsync` and clears the
+  intent through `_commit_intent`. A process can die after write but before
+  fsync; matching bytes alone do not prove durability. Every replay path needs
+  file and required directory durability before index commit/acknowledgement.
+  The existing complete-tail test asserts bytes, not durability ordering.
+- `move_transcript_room`, lines 217–240: source unlink and directory fsync
+  precede owner switch and index reset. Process death in that interval leaves
+  destination bytes with the old indexed room. Retry rejects the absent-source,
+  present-destination state as uncertain; exception restoration does not cover
+  process death. The owner must provide resumable movement preserving routable
+  history and test interruptions around copy, unlink, switch and index reset.
+
+Routed both findings and the updated branch observation to Feature 2 using
+`epic_049:architect_task1_crash_boundary_review_20261125`; Cascade returned
+`enqueued`. The handoff retains the Manager's canonical-record correction route
+and requires owner verification before acceptance. These are source-traced
+findings, not executed fault-injection results or a completed Task review.
+
+Diagram-impact reconciliation: context (`cascade-context`) actors remain the
+same; containers (`cascade-containers`) retain runtime ownership, with new
+writer-index persistence explained in the War Room design. Component ownership
+in `cascade-war-room-components` and `cascade-supervisor-components` is unchanged.
+`cascade-dashboard-code` and `cascade-workspace-code` now model append fencing
+and room movement; their recovery semantics and supplementary sequence require
+reconciliation with the corrections. Other Epic inventory views have no source
+changes in this Task diff. Feature 2 owns source-contract validation, supported
+rendering, actual Code/Level-up/deep-link/source navigation and bounded warm
+reuse verification; no successful render or navigation is inferred here.
+
+Validation: canonical Epic read still returns `03280933`, both saved sign-offs
+match, and architecture amendments are empty. Child-range `git diff --check`
+reports one extra EOF blank line in `tests/war_room/test_durable_chat_store.py:318`.
+No executable tests or browser/render checks were rerun in the Epic checkout,
+which does not yet contain this child implementation. The owned evidence diff
+passes `git diff --check`. Epic plan, sign-offs and saved publication pins are
+unchanged; terminal publication recovery, producer design ownership, final
+consumer fixtures and canonical Task correction remain open. Return control to
+Feature review and supervisor integration between turns.
