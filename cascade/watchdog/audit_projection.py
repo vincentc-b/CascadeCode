@@ -1141,6 +1141,8 @@ def _incident_projection(incident: Mapping[str, Any]) -> dict[str, Any]:
     result = result if isinstance(result, Mapping) else {}
     adapter = result.get("adapter_result")
     adapter = adapter if isinstance(adapter, Mapping) else {}
+    adapter_ack = adapter.get("acknowledgement")
+    adapter_ack = adapter_ack if isinstance(adapter_ack, Mapping) else {}
     postcheck = result.get("postcheck")
     postcheck = postcheck if isinstance(postcheck, Mapping) else {}
     request = incident.get("request")
@@ -1153,8 +1155,11 @@ def _incident_projection(incident: Mapping[str, Any]) -> dict[str, Any]:
             if isinstance(parent.get("parent"), Mapping)
             else None
         ),
-        "recovery_action_id": adapter.get("action_id"),
-        "recovery_generation": adapter.get("generation"),
+        "recovery_action_id": adapter.get("action_id")
+        or adapter_ack.get("repair_action_id"),
+        "recovery_generation": adapter.get("generation")
+        if adapter.get("generation") is not None
+        else adapter_ack.get("repair_generation"),
         "failure_reason": evidence.get("reason"),
         "blocked_operation": incident.get("selected_capability"),
         "blocked_owner": incident.get("accountable_owner"),

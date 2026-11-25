@@ -1,0 +1,186 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_architect",
+  "reviewed_plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+  "request": {
+    "expected_generation": null,
+    "expected_plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "proposal": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "epic_048",
+        "feat_048_001",
+        "feat_048_002",
+        "feat_048_003",
+        "feat_048_004"
+      ],
+      "architecture_impact": "diagram_change",
+      "authorized_owner": "epic_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "376592801b44196e71be541a9ec36e750461d9e44151359953a796fb3c160e90",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "epic_048",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "c717bb36c27c9de56d797205f95f52037e1fb935",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": "cascade",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "Expose existing publication generation, validator and leased push, provider result/tool/cancellation, and launcher/worker lifecycle declarations through four integrated Code views. Reconcile owning designs with current source and its usage/loaded-revision gaps; planned budget and deployed-runtime guarantees remain assigned implementation work. System and deployment boundaries are unchanged.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "epic_048",
+      "plan": {
+        "content_digest": "dd0c002986bbee24d2c7a442362813359e0bc78964a5250c17f31660c9787979",
+        "path": "docs/epics/2_active/epic_048_prove_self_recovery_through_verified_outcomes.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": {
+        "contract": {
+          "content_digest": "56791c597a1b81ffc4b0f086f3704eec4f53e5df3b64d680fbdba0401e633a30",
+          "reference": {
+            "code_directory": "cascade",
+            "design_owner_directory": "cascade",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "owning_work": "epic_048",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+            "revision": "c717bb36c27c9de56d797205f95f52037e1fb935",
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+          }
+        },
+        "render_identity": "8374ce056d2b9a8249cc233ced3436f7164b81a9cd7befec6df6376d20b70028",
+        "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+        "renderer_settings": {
+          "cpus": "2",
+          "memory": "1536m",
+          "pids_limit": 256,
+          "timeout_seconds": 180,
+          "tmpfs_size": "512m"
+        },
+        "semantic_artifact_digest": "1317365e9664116da9a22888a1895241b37caa683be34ff948b94c193446b065",
+        "source_closure_digest": "44f507d681a81350f7fddf2c4c80d66ea049485bf8cf284f192e8c67c90b8eab",
+        "sources": [
+          {
+            "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a",
+            "reference": {
+              "code_directory": "cascade",
+              "design_owner_directory": "cascade",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "epic_048",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+              "revision": "c717bb36c27c9de56d797205f95f52037e1fb935",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          },
+          {
+            "content_digest": "4b207a45cd22c9d30a7c497c0c34834b22975423a474bde1964795bd2e3d360b",
+            "reference": {
+              "code_directory": "cascade",
+              "design_owner_directory": "cascade",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "epic_048",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+              "revision": "c717bb36c27c9de56d797205f95f52037e1fb935",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          },
+          {
+            "content_digest": "be9a911705ab2ebcca5439255b34d37e729993b98a1f34e500567054066e2cca",
+            "reference": {
+              "code_directory": "cascade",
+              "design_owner_directory": "cascade",
+              "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+              "destination_repository_role": "target",
+              "owning_work": "epic_048",
+              "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+              "revision": "c717bb36c27c9de56d797205f95f52037e1fb935",
+              "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+            }
+          }
+        ]
+      },
+      "requirement_citations": [
+        "REQ-REVIEW-PUBLISH-001",
+        "REQ-REVIEW-PUBLISH-002"
+      ],
+      "rollout_version": 1,
+      "status": "draft",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-cli-components",
+        "cascade-teams-code",
+        "cascade-agent-code",
+        "cascade-task-code",
+        "cascade-workspace-commands-code"
+      ]
+    }
+  },
+  "result": {
+    "operation_id": "architecture-publication-f17d12c797b510fe6679b23bbf54b3c2d6b6abc55443e11ff1c8cac84192b78e",
+    "status": "failed",
+    "render_operation_id": "c4-render-8374ce056d2b9a8249cc233ced3436f7164b81a9cd7befec6df6376d20b70028",
+    "baseline_render_operation_id": null,
+    "review_unit_id": null,
+    "reviewed_tuple_digest": "422218405db4254c756fe6beecab5409e8e767168c1ae3b951da2dd3c49c1797",
+    "amendment_id": null,
+    "reason_code": "internal_error",
+    "message": "render worker was interrupted after its automatic recovery attempt"
+  },
+  "verification": {
+    "reviewed_designs": [
+      "DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/watchdog/DESIGN.md",
+      "cascade/agent/DESIGN.md",
+      "cascade/workspace/DESIGN.md"
+    ],
+    "final_diff": "Six reviewed designs and architecture closure unchanged from c717bb36 through HEAD; reviewed original design additions and retained rereview evidence. No design edit needed.",
+    "pinned_artifacts": "Committed design, contract and three DSL source SHA-256 digests verified against the durable request; current plan bytes equal pinned ffcb9a10.",
+    "amendments": "read_architecture_amendments returned []; both sign-offs remain current for ffcb9a10.",
+    "tests": "No tests rerun: no source, plan, design or model changes. Retained test/render/browser evidence remains in epic_048_architecture_review.json and epic_048_architect_rereview.json.",
+    "diagram_impact": "Context/container/component boundaries unchanged; four integrated Code views and supplementary behavior remain as reviewed. F1-F4 implementation obligations remain assigned in the signed plan."
+  },
+  "failure_evidence": {
+    "render_attempts": 2,
+    "automatic_recovery_attempts": 1,
+    "explicit_retries": 0,
+    "stage": "scheduler",
+    "artifact": null,
+    "source": "Read-only inspection of canonical c4-render-operations.json.",
+    "replay_behavior": "architecture_publication.discover_architecture_publication returns terminal records unchanged; another identical replay alone cannot repair failed status.",
+    "available_tool_gap": "No architecture-publication or render retry operation is exposed in the current Cascade tool catalog."
+  },
+  "handoff": {
+    "owner": "Architecture publication/runtime recovery owner",
+    "action": "Investigate interrupted render execution and provide supported recovery of this exact terminal publication and render operation. Preserve source references, bounds, attempt history and accepted lineage. A render-only retry does not reopen the terminal publication.",
+    "plan_status": "Both planning sign-offs retained; architecture publication failed and human plan approval remains pending.",
+    "limitations": "No private recovery function invoked, runtime restarted, ledger rewritten, snapshot substituted, dependency installed or product acceptance claimed."
+  }
+}

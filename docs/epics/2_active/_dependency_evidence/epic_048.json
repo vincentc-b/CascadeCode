@@ -1,0 +1,2024 @@
+{
+  "version": 1,
+  "epic_id": "epic_048",
+  "events": [
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_0a11146111ff9ab3958d92ee5649aa44be0adc7dffb13c486b759323c91a53e9",
+      "dependency_id": "dep_python",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:a1fbdf8d78c69cc028c174f5b13299aec0edd8105a07e61776d5113189e25f24",
+      "recipe_revision": "sha256:ebb6a90cc38bb2cf0306d9b4318d113abf86da0d2ff88bc28ef2b506464836b8",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import sys,hashlib,pathlib; assert sys.version_info[:3]==(3,12,8); assert \"sha256:\"+hashlib.sha256(pathlib.Path(sys.executable).resolve().read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'; import sqlite3,venv'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:29:56.816297+00:00",
+      "selected_version": "3.12.8",
+      "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_0a11146111ff9ab3958d92ee5649aa44be0adc7dffb13c486b759323c91a53e9",
+      "dependency_id": "dep_python",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:a1fbdf8d78c69cc028c174f5b13299aec0edd8105a07e61776d5113189e25f24",
+      "recipe_revision": "sha256:ebb6a90cc38bb2cf0306d9b4318d113abf86da0d2ff88bc28ef2b506464836b8",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import sys,hashlib,pathlib; assert sys.version_info[:3]==(3,12,8); assert \"sha256:\"+hashlib.sha256(pathlib.Path(sys.executable).resolve().read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'; import sqlite3,venv'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:29:56.816297+00:00",
+      "completed_at": "2026-11-24T16:29:59.714572+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "3.12.8",
+      "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_2cb8d1f06be4331ea54225abc5076b567914adebf6384d7eab07c9bc84972583",
+      "dependency_id": "dep_pyyaml",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:56da32e98169bb20c39a8930a215bcda72b34ef41d175dbf8949c25065206097",
+      "recipe_revision": "sha256:6fe40863b4f1cff8891523c8c7cf8d4cb1c240221c2bc114ea90c3a4189b778a",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:04.581354+00:00",
+      "selected_version": "6.0.3",
+      "integrity_reference": "sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_2cb8d1f06be4331ea54225abc5076b567914adebf6384d7eab07c9bc84972583",
+      "dependency_id": "dep_pyyaml",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:56da32e98169bb20c39a8930a215bcda72b34ef41d175dbf8949c25065206097",
+      "recipe_revision": "sha256:6fe40863b4f1cff8891523c8c7cf8d4cb1c240221c2bc114ea90c3a4189b778a",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:04.581354+00:00",
+      "completed_at": "2026-11-24T16:30:06.953509+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "6.0.3",
+      "integrity_reference": "sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_c688b3829301f656c11479b00f703812a8f56c565011c31d64744f8d6f1705a0",
+      "dependency_id": "dep_cursor_sdk",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:e82339d910f56bd839f853262120b3dbf5d4622d249d6d86ccd4a1b7d0e16f01",
+      "recipe_revision": "sha256:65ad6a8a5ef0c739a3e11aab7e232efbc65a29d4f767eebb0d193ba3a8b1ee65",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'cursor-sdk'\"'\"'); assert d.version=='\"'\"'1.0.37'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638'\"'\"'; importlib.import_module('\"'\"'cursor_sdk'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:09.982753+00:00",
+      "selected_version": "1.0.37",
+      "integrity_reference": "sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_c688b3829301f656c11479b00f703812a8f56c565011c31d64744f8d6f1705a0",
+      "dependency_id": "dep_cursor_sdk",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:e82339d910f56bd839f853262120b3dbf5d4622d249d6d86ccd4a1b7d0e16f01",
+      "recipe_revision": "sha256:65ad6a8a5ef0c739a3e11aab7e232efbc65a29d4f767eebb0d193ba3a8b1ee65",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'cursor-sdk'\"'\"'); assert d.version=='\"'\"'1.0.37'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638'\"'\"'; importlib.import_module('\"'\"'cursor_sdk'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:09.982753+00:00",
+      "completed_at": "2026-11-24T16:30:12.837125+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "1.0.37",
+      "integrity_reference": "sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_9ec25166dabb04dd18c181d779f20c37d1e0d70d5714a660d242edc2ce12e577",
+      "dependency_id": "dep_langgraph",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:623c374e8da1a0d7dbdc0f34849b0163f9758bf9f680306078a4bcc4f35ebfd7",
+      "recipe_revision": "sha256:29c44453bcd59b40128117f0ccee939e71bbdae69a4d3ea3021bac317390f9a3",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph'\"'\"'); assert d.version=='\"'\"'1.2.14'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:15.977840+00:00",
+      "selected_version": "1.2.14",
+      "integrity_reference": "sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_9ec25166dabb04dd18c181d779f20c37d1e0d70d5714a660d242edc2ce12e577",
+      "dependency_id": "dep_langgraph",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:623c374e8da1a0d7dbdc0f34849b0163f9758bf9f680306078a4bcc4f35ebfd7",
+      "recipe_revision": "sha256:29c44453bcd59b40128117f0ccee939e71bbdae69a4d3ea3021bac317390f9a3",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph'\"'\"'); assert d.version=='\"'\"'1.2.14'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:15.977840+00:00",
+      "completed_at": "2026-11-24T16:30:17.370580+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "1.2.14",
+      "integrity_reference": "sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_528c4c2d89a3cc6329b29e70a06d1dd0f9090c24e50f2025c3b4c0873f68ac60",
+      "dependency_id": "dep_langgraph_checkpoint_sqlite",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:aa859102717372c2acbf925e96bff5396e962babf96738e82a8a8f3097059487",
+      "recipe_revision": "sha256:9a6df4267142617363e5d33413b58e3ed163b7e7c213cc39c54fc243c1837945",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph-checkpoint-sqlite'\"'\"'); assert d.version=='\"'\"'3.1.1'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:19.581474+00:00",
+      "selected_version": "3.1.1",
+      "integrity_reference": "sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_528c4c2d89a3cc6329b29e70a06d1dd0f9090c24e50f2025c3b4c0873f68ac60",
+      "dependency_id": "dep_langgraph_checkpoint_sqlite",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:aa859102717372c2acbf925e96bff5396e962babf96738e82a8a8f3097059487",
+      "recipe_revision": "sha256:9a6df4267142617363e5d33413b58e3ed163b7e7c213cc39c54fc243c1837945",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph-checkpoint-sqlite'\"'\"'); assert d.version=='\"'\"'3.1.1'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:19.581474+00:00",
+      "completed_at": "2026-11-24T16:30:21.925714+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "3.1.1",
+      "integrity_reference": "sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_f53db459158d9740b714a7af94dfe6f1f4e9a0df823454eccfb1113940f52963",
+      "dependency_id": "dep_pytest",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:998d136d376b47a29e31d9ec13be9099c1d6465415d0355584d4971ffc984610",
+      "recipe_revision": "sha256:4b10cd51881dd4ff2639073f5a58c5ae3a5f68ccd19a12ce6615ebc4a3a1fb81",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:23.982282+00:00",
+      "selected_version": "9.0.3",
+      "integrity_reference": "sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_f53db459158d9740b714a7af94dfe6f1f4e9a0df823454eccfb1113940f52963",
+      "dependency_id": "dep_pytest",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:998d136d376b47a29e31d9ec13be9099c1d6465415d0355584d4971ffc984610",
+      "recipe_revision": "sha256:4b10cd51881dd4ff2639073f5a58c5ae3a5f68ccd19a12ce6615ebc4a3a1fb81",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:23.982282+00:00",
+      "completed_at": "2026-11-24T16:30:25.221088+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "9.0.3",
+      "integrity_reference": "sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_00208cb1dee8188c9fbf7d0df84b70fe159e274df5c07a8ff4cdb3397e61da9f",
+      "dependency_id": "dep_setuptools",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:f328e0df197d13df5a413df08748b58fa50868913b5d8db5157670ae4f23c3ff",
+      "recipe_revision": "sha256:7b0c195945cf8bf3c2b81b420b8925e0bcfe882c9ee76bdbb82c175135c46762",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'setuptools'\"'\"'); assert d.version=='\"'\"'80.9.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de'\"'\"'; importlib.import_module('\"'\"'setuptools'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:26.871920+00:00",
+      "selected_version": "80.9.0",
+      "integrity_reference": "sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_00208cb1dee8188c9fbf7d0df84b70fe159e274df5c07a8ff4cdb3397e61da9f",
+      "dependency_id": "dep_setuptools",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:f328e0df197d13df5a413df08748b58fa50868913b5d8db5157670ae4f23c3ff",
+      "recipe_revision": "sha256:7b0c195945cf8bf3c2b81b420b8925e0bcfe882c9ee76bdbb82c175135c46762",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'setuptools'\"'\"'); assert d.version=='\"'\"'80.9.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de'\"'\"'; importlib.import_module('\"'\"'setuptools'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:26.871920+00:00",
+      "completed_at": "2026-11-24T16:30:28.061527+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "80.9.0",
+      "integrity_reference": "sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_c2aca4c4638e83aedfa75c74c196c4ecb0feb96a381ef262d3707ebe9b9fdf97",
+      "dependency_id": "dep_playwright",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:6b8e39f24dc2ed11fdc868a18d15f71967eb3d194eb400258ed9115aea649787",
+      "recipe_revision": "sha256:d735f19b277214f8aee433e6b0105280ca8d5521db56369129669dbd977a83f6",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'playwright'\"'\"'); assert d.version=='\"'\"'1.64.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:29.735960+00:00",
+      "selected_version": "1.64.0",
+      "integrity_reference": "sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8",
+      "lock_references": [
+        "tests/war_room/test_architecture_browsing_browser_journey.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_c2aca4c4638e83aedfa75c74c196c4ecb0feb96a381ef262d3707ebe9b9fdf97",
+      "dependency_id": "dep_playwright",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:6b8e39f24dc2ed11fdc868a18d15f71967eb3d194eb400258ed9115aea649787",
+      "recipe_revision": "sha256:d735f19b277214f8aee433e6b0105280ca8d5521db56369129669dbd977a83f6",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'playwright'\"'\"'); assert d.version=='\"'\"'1.64.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:29.735960+00:00",
+      "completed_at": "2026-11-24T16:30:31.201380+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "1.64.0",
+      "integrity_reference": "sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8",
+      "lock_references": [
+        "tests/war_room/test_architecture_browsing_browser_journey.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_ebdc08ddb044705a19e617c7bfd5eb53c30cda3de3cb10e1d3b0375956fbe0dc",
+      "dependency_id": "dep_git",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:b03d7b54bebc5ebb4713529520f7acc4bda2303f834947f7a1a54cb17df1c056",
+      "recipe_revision": "sha256:cae3e81d148d9e47d2d3941a337db5ab6f57b6025579fb96eea480957d7df369",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/git'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.34.1'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:34.286527+00:00",
+      "selected_version": "2.34.1",
+      "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_ebdc08ddb044705a19e617c7bfd5eb53c30cda3de3cb10e1d3b0375956fbe0dc",
+      "dependency_id": "dep_git",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:b03d7b54bebc5ebb4713529520f7acc4bda2303f834947f7a1a54cb17df1c056",
+      "recipe_revision": "sha256:cae3e81d148d9e47d2d3941a337db5ab6f57b6025579fb96eea480957d7df369",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/git'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.34.1'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:34.286527+00:00",
+      "completed_at": "2026-11-24T16:30:35.851384+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "2.34.1",
+      "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_a2e62bb9183f34f7356b6a3674e5431f8a71cac1f1af14df46b35b530bb08a5d",
+      "dependency_id": "dep_node",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:fd90ae2d47345a8f2c94877f68bb18037e699b920670073edb4438c20565395f",
+      "recipe_revision": "sha256:ce90fec0d74a381fdfca6b0957727ba72826e90047c65f002e36326d42afc347",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/node'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'20.20.2'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:38.087531+00:00",
+      "selected_version": "20.20.2",
+      "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_a2e62bb9183f34f7356b6a3674e5431f8a71cac1f1af14df46b35b530bb08a5d",
+      "dependency_id": "dep_node",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:fd90ae2d47345a8f2c94877f68bb18037e699b920670073edb4438c20565395f",
+      "recipe_revision": "sha256:ce90fec0d74a381fdfca6b0957727ba72826e90047c65f002e36326d42afc347",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/node'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'20.20.2'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:38.087531+00:00",
+      "completed_at": "2026-11-24T16:30:40.296627+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "20.20.2",
+      "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_675047ede0bb3df7ae0404edebb50a8c3248ac6f01009b877f62da60cb961c5b",
+      "dependency_id": "dep_docker",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:d453b04e16565b2747ca4a2ec0e8d748b64eea34e29296a50156d52fc580ee5f",
+      "recipe_revision": "sha256:aa6a1a69501193732b8a5940bb7e0d290fa15ea5b7235557efa12bac8cc1d2fa",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/docker'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'28.0.0'\"'\"' in r.stdout; subprocess.run([p,\"info\",\"--format\",\"{{.ServerVersion}}\"],check=True,timeout=15)'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:43.884098+00:00",
+      "selected_version": "28.0.0",
+      "integrity_reference": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_675047ede0bb3df7ae0404edebb50a8c3248ac6f01009b877f62da60cb961c5b",
+      "dependency_id": "dep_docker",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:d453b04e16565b2747ca4a2ec0e8d748b64eea34e29296a50156d52fc580ee5f",
+      "recipe_revision": "sha256:aa6a1a69501193732b8a5940bb7e0d290fa15ea5b7235557efa12bac8cc1d2fa",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/docker'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'28.0.0'\"'\"' in r.stdout; subprocess.run([p,\"info\",\"--format\",\"{{.ServerVersion}}\"],check=True,timeout=15)'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:43.884098+00:00",
+      "completed_at": "2026-11-24T16:30:47.078253+00:00",
+      "result": "succeeded",
+      "redacted_output": "28.0.0\n",
+      "selected_version": "28.0.0",
+      "integrity_reference": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_b19a278de2964164865294ea5c7a05e3c6d503f785ee51db5466dc585eb18fb0",
+      "dependency_id": "dep_codex",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:4d0fe1767b693018852b5979b3096dec3316d9ac9d59893245936a7a6a4f438b",
+      "recipe_revision": "sha256:447659572004354adb1f8ff0fb2a05e4960b2beb2914f97aa11d5ef3e9c44151",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/home/ubuntu/.codex/packages/standalone/releases/0.172.0-x86_64-unknown-linux-musl/bin/codex'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'0.172.0'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:50.348108+00:00",
+      "selected_version": "0.172.0",
+      "integrity_reference": "sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_b19a278de2964164865294ea5c7a05e3c6d503f785ee51db5466dc585eb18fb0",
+      "dependency_id": "dep_codex",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:4d0fe1767b693018852b5979b3096dec3316d9ac9d59893245936a7a6a4f438b",
+      "recipe_revision": "sha256:447659572004354adb1f8ff0fb2a05e4960b2beb2914f97aa11d5ef3e9c44151",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/home/ubuntu/.codex/packages/standalone/releases/0.172.0-x86_64-unknown-linux-musl/bin/codex'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'0.172.0'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:50.348108+00:00",
+      "completed_at": "2026-11-24T16:30:55.666104+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "0.172.0",
+      "integrity_reference": "sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_dd6aae220891bc0d7378fc3fdea7a28803085e15e2d655b8f9ae4dca31765dad",
+      "dependency_id": "dep_gh",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:199525b26cf2496199c8067f00fb546dd9eefbd1af8d73211b9c100619c82d70",
+      "recipe_revision": "sha256:46ad65923c33b124cd1f79554636ed291fa57cf447339b469b35e64182410d5c",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/gh'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.4.0+dfsg1'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:58.332459+00:00",
+      "selected_version": "2.4.0+dfsg1",
+      "integrity_reference": "sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_dd6aae220891bc0d7378fc3fdea7a28803085e15e2d655b8f9ae4dca31765dad",
+      "dependency_id": "dep_gh",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:199525b26cf2496199c8067f00fb546dd9eefbd1af8d73211b9c100619c82d70",
+      "recipe_revision": "sha256:46ad65923c33b124cd1f79554636ed291fa57cf447339b469b35e64182410d5c",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/gh'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.4.0+dfsg1'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:30:58.332459+00:00",
+      "completed_at": "2026-11-24T16:31:00.347558+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "2.4.0+dfsg1",
+      "integrity_reference": "sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_4ef08fef9cc8f2f9e72b6403f46558c0a043d76785a8f037b50285ced744d69e",
+      "dependency_id": "dep_structurizr",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:c93200453f2c2dbcf6097aefbf84eb9684ea9a6ba7e097aa20396c044be79918",
+      "recipe_revision": "sha256:3fea0655363c3805fa7a3892ff74f69d2aef47716fdc47aba623dd6c622f81b2",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import subprocess,json; d=json.loads(subprocess.run([\"/usr/bin/docker\",\"image\",\"inspect\",'\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"'],capture_output=True,text=True,check=True,timeout=15).stdout)[0]; assert '\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"' in d[\"RepoDigests\"]; assert d[\"Architecture\"]==\"amd64\"; assert d[\"Os\"]==\"linux\"'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:02.703567+00:00",
+      "selected_version": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "lock_references": [
+        "cascade/workspace/c4_render.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_4ef08fef9cc8f2f9e72b6403f46558c0a043d76785a8f037b50285ced744d69e",
+      "dependency_id": "dep_structurizr",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:c93200453f2c2dbcf6097aefbf84eb9684ea9a6ba7e097aa20396c044be79918",
+      "recipe_revision": "sha256:3fea0655363c3805fa7a3892ff74f69d2aef47716fdc47aba623dd6c622f81b2",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import subprocess,json; d=json.loads(subprocess.run([\"/usr/bin/docker\",\"image\",\"inspect\",'\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"'],capture_output=True,text=True,check=True,timeout=15).stdout)[0]; assert '\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"' in d[\"RepoDigests\"]; assert d[\"Architecture\"]==\"amd64\"; assert d[\"Os\"]==\"linux\"'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:02.703567+00:00",
+      "completed_at": "2026-11-24T16:31:04.040670+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "lock_references": [
+        "cascade/workspace/c4_render.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_4d22c14b75cf967ed0fd438361f56f7a1c5fe0544772f2eb269fa0d7e31593b8",
+      "dependency_id": "dep_chromium",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:6297526840f670d51a77d5d2b5565efee9a14740c5e031aeaa81569b0683d429",
+      "recipe_revision": "sha256:55135f9fa42355711e4feaa30deef8b29e33f739cb954147325d9bd4b9d506c8",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib; from playwright.sync_api import sync_playwright; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025'\"'\"'\nwith sync_playwright() as pw:\n b=pw.chromium.launch(headless=True); assert b.version==\"156.0.8078.4\"; b.close()'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:06.666372+00:00",
+      "selected_version": "156.0.8078.4",
+      "integrity_reference": "sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+      "lock_references": [
+        "tests/war_room/test_architecture_browsing_browser_journey.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_4d22c14b75cf967ed0fd438361f56f7a1c5fe0544772f2eb269fa0d7e31593b8",
+      "dependency_id": "dep_chromium",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:6297526840f670d51a77d5d2b5565efee9a14740c5e031aeaa81569b0683d429",
+      "recipe_revision": "sha256:55135f9fa42355711e4feaa30deef8b29e33f739cb954147325d9bd4b9d506c8",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib; from playwright.sync_api import sync_playwright; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025'\"'\"'\nwith sync_playwright() as pw:\n b=pw.chromium.launch(headless=True); assert b.version==\"156.0.8078.4\"; b.close()'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:06.666372+00:00",
+      "completed_at": "2026-11-24T16:31:13.815315+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "156.0.8078.4",
+      "integrity_reference": "sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+      "lock_references": [
+        "tests/war_room/test_architecture_browsing_browser_journey.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_b48602f39d7144c65eac7c29f5f9338e0f860663981433142987ea4364feb172",
+      "dependency_id": "dep_python",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:87d0266faa8a104131f7c4f0ee252da5e5a9fa4af5f64793d9853b800c8302f3",
+      "recipe_revision": "sha256:ebb6a90cc38bb2cf0306d9b4318d113abf86da0d2ff88bc28ef2b506464836b8",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import sys,hashlib,pathlib; assert sys.version_info[:3]==(3,12,8); assert \"sha256:\"+hashlib.sha256(pathlib.Path(sys.executable).resolve().read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'; import sqlite3,venv'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:49.804342+00:00",
+      "selected_version": "3.12.8",
+      "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_b48602f39d7144c65eac7c29f5f9338e0f860663981433142987ea4364feb172",
+      "dependency_id": "dep_python",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:87d0266faa8a104131f7c4f0ee252da5e5a9fa4af5f64793d9853b800c8302f3",
+      "recipe_revision": "sha256:ebb6a90cc38bb2cf0306d9b4318d113abf86da0d2ff88bc28ef2b506464836b8",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import sys,hashlib,pathlib; assert sys.version_info[:3]==(3,12,8); assert \"sha256:\"+hashlib.sha256(pathlib.Path(sys.executable).resolve().read_bytes()).hexdigest()=='\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'; import sqlite3,venv'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:49.804342+00:00",
+      "completed_at": "2026-11-24T16:31:51.833856+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "3.12.8",
+      "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_c5d5169f43aeef214e3f5b826c95f55340353a84863507f60503213230161e88",
+      "dependency_id": "dep_pyyaml",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:90ca9df26a1405adf966671f27119b614ec8448d52fd45e32db5a8f1eb033a29",
+      "recipe_revision": "sha256:6fe40863b4f1cff8891523c8c7cf8d4cb1c240221c2bc114ea90c3a4189b778a",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:53.764979+00:00",
+      "selected_version": "6.0.3",
+      "integrity_reference": "sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_c5d5169f43aeef214e3f5b826c95f55340353a84863507f60503213230161e88",
+      "dependency_id": "dep_pyyaml",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:90ca9df26a1405adf966671f27119b614ec8448d52fd45e32db5a8f1eb033a29",
+      "recipe_revision": "sha256:6fe40863b4f1cff8891523c8c7cf8d4cb1c240221c2bc114ea90c3a4189b778a",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:53.764979+00:00",
+      "completed_at": "2026-11-24T16:31:55.763511+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "6.0.3",
+      "integrity_reference": "sha256:05fc51f58555b5e19e3e6a7d32627cd54fb3384fa9fd8c98f3402e178235b6df",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_7d45fead643d1af4d3f01e95b0d6fc4e2e6fdd1be52d71c0f3167b2eed82017e",
+      "dependency_id": "dep_cursor_sdk",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:a395a794ff2c51141fd3f9922c023a7cd395fdf950f27d86d1fcb316a4aab211",
+      "recipe_revision": "sha256:65ad6a8a5ef0c739a3e11aab7e232efbc65a29d4f767eebb0d193ba3a8b1ee65",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'cursor-sdk'\"'\"'); assert d.version=='\"'\"'1.0.37'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638'\"'\"'; importlib.import_module('\"'\"'cursor_sdk'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:57.659455+00:00",
+      "selected_version": "1.0.37",
+      "integrity_reference": "sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_7d45fead643d1af4d3f01e95b0d6fc4e2e6fdd1be52d71c0f3167b2eed82017e",
+      "dependency_id": "dep_cursor_sdk",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:a395a794ff2c51141fd3f9922c023a7cd395fdf950f27d86d1fcb316a4aab211",
+      "recipe_revision": "sha256:65ad6a8a5ef0c739a3e11aab7e232efbc65a29d4f767eebb0d193ba3a8b1ee65",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'cursor-sdk'\"'\"'); assert d.version=='\"'\"'1.0.37'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638'\"'\"'; importlib.import_module('\"'\"'cursor_sdk'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:31:57.659455+00:00",
+      "completed_at": "2026-11-24T16:32:00.583036+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "1.0.37",
+      "integrity_reference": "sha256:c36152aec37a5f13849c2736d9e64bd284959701ad57b6f2f4b787646f4ff638",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_70d0b340546ad6cfeeca2a30552253b65611d527e65d4aa6de97811cab5a94e4",
+      "dependency_id": "dep_langgraph",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:615b72c4a1c248a0002b375a13349e3cde7e507f22de5715d4961eb013ac3bab",
+      "recipe_revision": "sha256:29c44453bcd59b40128117f0ccee939e71bbdae69a4d3ea3021bac317390f9a3",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph'\"'\"'); assert d.version=='\"'\"'1.2.14'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:02.892059+00:00",
+      "selected_version": "1.2.14",
+      "integrity_reference": "sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_70d0b340546ad6cfeeca2a30552253b65611d527e65d4aa6de97811cab5a94e4",
+      "dependency_id": "dep_langgraph",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:615b72c4a1c248a0002b375a13349e3cde7e507f22de5715d4961eb013ac3bab",
+      "recipe_revision": "sha256:29c44453bcd59b40128117f0ccee939e71bbdae69a4d3ea3021bac317390f9a3",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph'\"'\"'); assert d.version=='\"'\"'1.2.14'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:02.892059+00:00",
+      "completed_at": "2026-11-24T16:32:04.693602+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "1.2.14",
+      "integrity_reference": "sha256:31ef6968b565d5e5698fd30c5f8a118c1674a6054bce35fc460d7d5e5ef43b0d",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_47b2a10c32c79a21848ca81a5ff5cfc07a1bc0560dba89fda84158934e391564",
+      "dependency_id": "dep_langgraph_checkpoint_sqlite",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:9049aee02f7f574efadf8ba62f064fc6f31d996b59c66ec2bfe343843e06f817",
+      "recipe_revision": "sha256:9a6df4267142617363e5d33413b58e3ed163b7e7c213cc39c54fc243c1837945",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph-checkpoint-sqlite'\"'\"'); assert d.version=='\"'\"'3.1.1'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:06.451874+00:00",
+      "selected_version": "3.1.1",
+      "integrity_reference": "sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_47b2a10c32c79a21848ca81a5ff5cfc07a1bc0560dba89fda84158934e391564",
+      "dependency_id": "dep_langgraph_checkpoint_sqlite",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:9049aee02f7f574efadf8ba62f064fc6f31d996b59c66ec2bfe343843e06f817",
+      "recipe_revision": "sha256:9a6df4267142617363e5d33413b58e3ed163b7e7c213cc39c54fc243c1837945",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'langgraph-checkpoint-sqlite'\"'\"'); assert d.version=='\"'\"'3.1.1'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:06.451874+00:00",
+      "completed_at": "2026-11-24T16:32:09.531491+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "3.1.1",
+      "integrity_reference": "sha256:88a8374363fe78f3752927f8127dc3e2c7d5a43ea1e9d75577941a35a895e6e9",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_f8d31f13d942c46d3d039f1690ff773daa47504c4c9770dd9775a40201bf0f5a",
+      "dependency_id": "dep_pytest",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:7c19b51a357f6719d1061a5f153ca5c58524313c71b1f945c31a23bfb1d6a1cb",
+      "recipe_revision": "sha256:4b10cd51881dd4ff2639073f5a58c5ae3a5f68ccd19a12ce6615ebc4a3a1fb81",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:11.425131+00:00",
+      "selected_version": "9.0.3",
+      "integrity_reference": "sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_f8d31f13d942c46d3d039f1690ff773daa47504c4c9770dd9775a40201bf0f5a",
+      "dependency_id": "dep_pytest",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:7c19b51a357f6719d1061a5f153ca5c58524313c71b1f945c31a23bfb1d6a1cb",
+      "recipe_revision": "sha256:4b10cd51881dd4ff2639073f5a58c5ae3a5f68ccd19a12ce6615ebc4a3a1fb81",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:11.425131+00:00",
+      "completed_at": "2026-11-24T16:32:13.386546+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "9.0.3",
+      "integrity_reference": "sha256:3b2b7387af81730d2e8fbd192ca14649674553f245c4eec91e0f6a08553f17b2",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_0b93224a499e1cae9edd063a2b3913f2d84c0074fa07e49fe3d95c31bfff1cd1",
+      "dependency_id": "dep_setuptools",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:fbc28a7f42c120952e6d6771de160c1e0266ea04a858878e921d88d5f36b19d3",
+      "recipe_revision": "sha256:7b0c195945cf8bf3c2b81b420b8925e0bcfe882c9ee76bdbb82c175135c46762",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'setuptools'\"'\"'); assert d.version=='\"'\"'80.9.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de'\"'\"'; importlib.import_module('\"'\"'setuptools'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:17.198987+00:00",
+      "selected_version": "80.9.0",
+      "integrity_reference": "sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_0b93224a499e1cae9edd063a2b3913f2d84c0074fa07e49fe3d95c31bfff1cd1",
+      "dependency_id": "dep_setuptools",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:fbc28a7f42c120952e6d6771de160c1e0266ea04a858878e921d88d5f36b19d3",
+      "recipe_revision": "sha256:7b0c195945cf8bf3c2b81b420b8925e0bcfe882c9ee76bdbb82c175135c46762",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'setuptools'\"'\"'); assert d.version=='\"'\"'80.9.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de'\"'\"'; importlib.import_module('\"'\"'setuptools'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:17.198987+00:00",
+      "completed_at": "2026-11-24T16:32:19.242351+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "80.9.0",
+      "integrity_reference": "sha256:5fd679751e707eb42d322f0eb7eeb7cfd322549f1863442f97290507e0e888de",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_fba9043f1a37efe3066e63bf32821eeee90623d0024aaa4afde92559b861de00",
+      "dependency_id": "dep_playwright",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:825b241fdda48d522fe3ceaf3484ae1f001209a020c7d82a88bdeaa97a5ac108",
+      "recipe_revision": "sha256:d735f19b277214f8aee433e6b0105280ca8d5521db56369129669dbd977a83f6",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'playwright'\"'\"'); assert d.version=='\"'\"'1.64.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:20.897566+00:00",
+      "selected_version": "1.64.0",
+      "integrity_reference": "sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8",
+      "lock_references": [
+        "tests/war_room/test_architecture_browsing_browser_journey.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_fba9043f1a37efe3066e63bf32821eeee90623d0024aaa4afde92559b861de00",
+      "dependency_id": "dep_playwright",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:825b241fdda48d522fe3ceaf3484ae1f001209a020c7d82a88bdeaa97a5ac108",
+      "recipe_revision": "sha256:d735f19b277214f8aee433e6b0105280ca8d5521db56369129669dbd977a83f6",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib; d=m.distribution('\"'\"'playwright'\"'\"'); assert d.version=='\"'\"'1.64.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(d.read_text(\"RECORD\").encode()).hexdigest()=='\"'\"'sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"')'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:20.897566+00:00",
+      "completed_at": "2026-11-24T16:32:22.147756+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "1.64.0",
+      "integrity_reference": "sha256:2a99c25f8d6c50274925506e57cd01dad0f0eb36847923c6870427021e1cf3c8",
+      "lock_references": [
+        "tests/war_room/test_architecture_browsing_browser_journey.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_28941df3ef943a122fc8adeaf60bf7083e5577b354b7e0f681faca7a8af44a33",
+      "dependency_id": "dep_git",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:72c25692ecb8e994e4a12348f9e59a75a0eb5aa3710e8ce75f273bdf5aa505d0",
+      "recipe_revision": "sha256:cae3e81d148d9e47d2d3941a337db5ab6f57b6025579fb96eea480957d7df369",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/git'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.34.1'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:23.361698+00:00",
+      "selected_version": "2.34.1",
+      "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_28941df3ef943a122fc8adeaf60bf7083e5577b354b7e0f681faca7a8af44a33",
+      "dependency_id": "dep_git",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:72c25692ecb8e994e4a12348f9e59a75a0eb5aa3710e8ce75f273bdf5aa505d0",
+      "recipe_revision": "sha256:cae3e81d148d9e47d2d3941a337db5ab6f57b6025579fb96eea480957d7df369",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/git'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.34.1'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:23.361698+00:00",
+      "completed_at": "2026-11-24T16:32:24.619679+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "2.34.1",
+      "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_df5e6c476665c7ffcbb05df08c6bf705d8fc668a350101d63af147a558aacc9b",
+      "dependency_id": "dep_node",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:3e4caec83aeb65eeb2804e11a28074a420be39c4c93ef18f7246dcd3b683ff3f",
+      "recipe_revision": "sha256:ce90fec0d74a381fdfca6b0957727ba72826e90047c65f002e36326d42afc347",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/node'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'20.20.2'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:26.687933+00:00",
+      "selected_version": "20.20.2",
+      "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_df5e6c476665c7ffcbb05df08c6bf705d8fc668a350101d63af147a558aacc9b",
+      "dependency_id": "dep_node",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:3e4caec83aeb65eeb2804e11a28074a420be39c4c93ef18f7246dcd3b683ff3f",
+      "recipe_revision": "sha256:ce90fec0d74a381fdfca6b0957727ba72826e90047c65f002e36326d42afc347",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/node'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'20.20.2'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:26.687933+00:00",
+      "completed_at": "2026-11-24T16:32:29.899030+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "20.20.2",
+      "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_57494e17a861d0c72a4503761efe953b84f00bd6841f66a44e5aaa8eb981cb09",
+      "dependency_id": "dep_docker",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:4a9fe88af30fb4376dd8c8a8720cb2aeccdb863822b84fdfd1fb2ad67c34a51f",
+      "recipe_revision": "sha256:aa6a1a69501193732b8a5940bb7e0d290fa15ea5b7235557efa12bac8cc1d2fa",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/docker'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'28.0.0'\"'\"' in r.stdout; subprocess.run([p,\"info\",\"--format\",\"{{.ServerVersion}}\"],check=True,timeout=15)'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:32.156423+00:00",
+      "selected_version": "28.0.0",
+      "integrity_reference": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_57494e17a861d0c72a4503761efe953b84f00bd6841f66a44e5aaa8eb981cb09",
+      "dependency_id": "dep_docker",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:4a9fe88af30fb4376dd8c8a8720cb2aeccdb863822b84fdfd1fb2ad67c34a51f",
+      "recipe_revision": "sha256:aa6a1a69501193732b8a5940bb7e0d290fa15ea5b7235557efa12bac8cc1d2fa",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/docker'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'28.0.0'\"'\"' in r.stdout; subprocess.run([p,\"info\",\"--format\",\"{{.ServerVersion}}\"],check=True,timeout=15)'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:32.156423+00:00",
+      "completed_at": "2026-11-24T16:32:34.612342+00:00",
+      "result": "succeeded",
+      "redacted_output": "28.0.0\n",
+      "selected_version": "28.0.0",
+      "integrity_reference": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_c8ce29cdbfbd5b9e1530a5520f22b50a2163f65d6a6660a0d4eeb8cf26f5e011",
+      "dependency_id": "dep_codex",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:d410a4d8a381b6fb95c84380b72bfa274cf418b60e1fb969514cc6c689eaeaa1",
+      "recipe_revision": "sha256:447659572004354adb1f8ff0fb2a05e4960b2beb2914f97aa11d5ef3e9c44151",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/home/ubuntu/.codex/packages/standalone/releases/0.172.0-x86_64-unknown-linux-musl/bin/codex'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'0.172.0'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:36.077631+00:00",
+      "selected_version": "0.172.0",
+      "integrity_reference": "sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_c8ce29cdbfbd5b9e1530a5520f22b50a2163f65d6a6660a0d4eeb8cf26f5e011",
+      "dependency_id": "dep_codex",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:d410a4d8a381b6fb95c84380b72bfa274cf418b60e1fb969514cc6c689eaeaa1",
+      "recipe_revision": "sha256:447659572004354adb1f8ff0fb2a05e4960b2beb2914f97aa11d5ef3e9c44151",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/home/ubuntu/.codex/packages/standalone/releases/0.172.0-x86_64-unknown-linux-musl/bin/codex'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'0.172.0'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:36.077631+00:00",
+      "completed_at": "2026-11-24T16:32:40.017978+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "0.172.0",
+      "integrity_reference": "sha256:ad83b94c093f0cdd8176a6bc8005a461bdf23a759863e157d40f562b8a9d664d",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_eeed94f79e958c42c8a2c8952228331a5ca105d8a85798acd4aebbaf93fe5715",
+      "dependency_id": "dep_gh",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:0d9fcaa0db501eada699fb2e5071c38b4b22496dc4aa32331857e0e3f68d98ea",
+      "recipe_revision": "sha256:46ad65923c33b124cd1f79554636ed291fa57cf447339b469b35e64182410d5c",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/gh'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.4.0+dfsg1'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:41.525072+00:00",
+      "selected_version": "2.4.0+dfsg1",
+      "integrity_reference": "sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_eeed94f79e958c42c8a2c8952228331a5ca105d8a85798acd4aebbaf93fe5715",
+      "dependency_id": "dep_gh",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:0d9fcaa0db501eada699fb2e5071c38b4b22496dc4aa32331857e0e3f68d98ea",
+      "recipe_revision": "sha256:46ad65923c33b124cd1f79554636ed291fa57cf447339b469b35e64182410d5c",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; p='\"'\"'/usr/bin/gh'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()=='\"'\"'sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524'\"'\"'; r=subprocess.run([p,\"--version\"],capture_output=True,text=True,timeout=10,check=True); assert '\"'\"'2.4.0+dfsg1'\"'\"' in r.stdout'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:41.525072+00:00",
+      "completed_at": "2026-11-24T16:32:43.034836+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "2.4.0+dfsg1",
+      "integrity_reference": "sha256:2b61ea0d3a5654bbefaf6f75def59d13d37a791a95196764db19414ac50d0524",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_149d93b434359c27dee9ebfbfc0e1ff9b1409263c3dcc4124c53054594bc85f0",
+      "dependency_id": "dep_structurizr",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:6d4f6c18d7d18c9eeecf56c065ac5fc9ef186f06c0a240ee3d4ed7c99bb0be8a",
+      "recipe_revision": "sha256:3fea0655363c3805fa7a3892ff74f69d2aef47716fdc47aba623dd6c622f81b2",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import subprocess,json; d=json.loads(subprocess.run([\"/usr/bin/docker\",\"image\",\"inspect\",'\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"'],capture_output=True,text=True,check=True,timeout=15).stdout)[0]; assert '\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"' in d[\"RepoDigests\"]; assert d[\"Architecture\"]==\"amd64\"; assert d[\"Os\"]==\"linux\"'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:44.221808+00:00",
+      "selected_version": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "lock_references": [
+        "cascade/workspace/c4_render.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_149d93b434359c27dee9ebfbfc0e1ff9b1409263c3dcc4124c53054594bc85f0",
+      "dependency_id": "dep_structurizr",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:6d4f6c18d7d18c9eeecf56c065ac5fc9ef186f06c0a240ee3d4ed7c99bb0be8a",
+      "recipe_revision": "sha256:3fea0655363c3805fa7a3892ff74f69d2aef47716fdc47aba623dd6c622f81b2",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import subprocess,json; d=json.loads(subprocess.run([\"/usr/bin/docker\",\"image\",\"inspect\",'\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"'],capture_output=True,text=True,check=True,timeout=15).stdout)[0]; assert '\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"' in d[\"RepoDigests\"]; assert d[\"Architecture\"]==\"amd64\"; assert d[\"Os\"]==\"linux\"'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:44.221808+00:00",
+      "completed_at": "2026-11-24T16:32:45.209384+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "lock_references": [
+        "cascade/workspace/c4_render.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_77844e38998464e92042a2b8e355d21a7d42a5cf0bd25b812cc9a7df7b6d9732",
+      "dependency_id": "dep_chromium",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:15b3f21a1d0c4c73267a34f66f19082ecb068464cbee952ae605637f2e6fb543",
+      "recipe_revision": "sha256:55135f9fa42355711e4feaa30deef8b29e33f739cb954147325d9bd4b9d506c8",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib; from playwright.sync_api import sync_playwright; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025'\"'\"'\nwith sync_playwright() as pw:\n b=pw.chromium.launch(headless=True); assert b.version==\"156.0.8078.4\"; b.close()'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:46.596770+00:00",
+      "selected_version": "156.0.8078.4",
+      "integrity_reference": "sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+      "lock_references": [
+        "tests/war_room/test_architecture_browsing_browser_journey.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_77844e38998464e92042a2b8e355d21a7d42a5cf0bd25b812cc9a7df7b6d9732",
+      "dependency_id": "dep_chromium",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:15b3f21a1d0c4c73267a34f66f19082ecb068464cbee952ae605637f2e6fb543",
+      "recipe_revision": "sha256:55135f9fa42355711e4feaa30deef8b29e33f739cb954147325d9bd4b9d506c8",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib; from playwright.sync_api import sync_playwright; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"').read_bytes()).hexdigest()=='\"'\"'sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025'\"'\"'\nwith sync_playwright() as pw:\n b=pw.chromium.launch(headless=True); assert b.version==\"156.0.8078.4\"; b.close()'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-24T16:32:46.596770+00:00",
+      "completed_at": "2026-11-24T16:32:51.697308+00:00",
+      "result": "succeeded",
+      "redacted_output": "",
+      "selected_version": "156.0.8078.4",
+      "integrity_reference": "sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+      "lock_references": [
+        "tests/war_room/test_architecture_browsing_browser_journey.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
+    }
+  ],
+  "snapshots": [
+    {
+      "snapshot_id": "evidence_0d67e83709eb4684bc35be2410012295",
+      "manifest_revision": 2,
+      "created_at": "2026-11-24T16:53:38.849326+00:00",
+      "accepted": [
+        {
+          "dependency_id": "dep_python",
+          "attempt_id": "attempt_resume_b48602f39d7144c65eac7c29f5f9338e0f860663981433142987ea4364feb172",
+          "entry_revision": "sha256:87d0266faa8a104131f7c4f0ee252da5e5a9fa4af5f64793d9853b800c8302f3",
+          "recipe_revision": "sha256:ebb6a90cc38bb2cf0306d9b4318d113abf86da0d2ff88bc28ef2b506464836b8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pyyaml",
+          "attempt_id": "attempt_resume_c5d5169f43aeef214e3f5b826c95f55340353a84863507f60503213230161e88",
+          "entry_revision": "sha256:90ca9df26a1405adf966671f27119b614ec8448d52fd45e32db5a8f1eb033a29",
+          "recipe_revision": "sha256:6fe40863b4f1cff8891523c8c7cf8d4cb1c240221c2bc114ea90c3a4189b778a",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_cursor_sdk",
+          "attempt_id": "attempt_resume_7d45fead643d1af4d3f01e95b0d6fc4e2e6fdd1be52d71c0f3167b2eed82017e",
+          "entry_revision": "sha256:a395a794ff2c51141fd3f9922c023a7cd395fdf950f27d86d1fcb316a4aab211",
+          "recipe_revision": "sha256:65ad6a8a5ef0c739a3e11aab7e232efbc65a29d4f767eebb0d193ba3a8b1ee65",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph",
+          "attempt_id": "attempt_resume_70d0b340546ad6cfeeca2a30552253b65611d527e65d4aa6de97811cab5a94e4",
+          "entry_revision": "sha256:615b72c4a1c248a0002b375a13349e3cde7e507f22de5715d4961eb013ac3bab",
+          "recipe_revision": "sha256:29c44453bcd59b40128117f0ccee939e71bbdae69a4d3ea3021bac317390f9a3",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph_checkpoint_sqlite",
+          "attempt_id": "attempt_resume_47b2a10c32c79a21848ca81a5ff5cfc07a1bc0560dba89fda84158934e391564",
+          "entry_revision": "sha256:9049aee02f7f574efadf8ba62f064fc6f31d996b59c66ec2bfe343843e06f817",
+          "recipe_revision": "sha256:9a6df4267142617363e5d33413b58e3ed163b7e7c213cc39c54fc243c1837945",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pytest",
+          "attempt_id": "attempt_resume_f8d31f13d942c46d3d039f1690ff773daa47504c4c9770dd9775a40201bf0f5a",
+          "entry_revision": "sha256:7c19b51a357f6719d1061a5f153ca5c58524313c71b1f945c31a23bfb1d6a1cb",
+          "recipe_revision": "sha256:4b10cd51881dd4ff2639073f5a58c5ae3a5f68ccd19a12ce6615ebc4a3a1fb81",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_setuptools",
+          "attempt_id": "attempt_resume_0b93224a499e1cae9edd063a2b3913f2d84c0074fa07e49fe3d95c31bfff1cd1",
+          "entry_revision": "sha256:fbc28a7f42c120952e6d6771de160c1e0266ea04a858878e921d88d5f36b19d3",
+          "recipe_revision": "sha256:7b0c195945cf8bf3c2b81b420b8925e0bcfe882c9ee76bdbb82c175135c46762",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_playwright",
+          "attempt_id": "attempt_resume_fba9043f1a37efe3066e63bf32821eeee90623d0024aaa4afde92559b861de00",
+          "entry_revision": "sha256:825b241fdda48d522fe3ceaf3484ae1f001209a020c7d82a88bdeaa97a5ac108",
+          "recipe_revision": "sha256:d735f19b277214f8aee433e6b0105280ca8d5521db56369129669dbd977a83f6",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_git",
+          "attempt_id": "attempt_resume_28941df3ef943a122fc8adeaf60bf7083e5577b354b7e0f681faca7a8af44a33",
+          "entry_revision": "sha256:72c25692ecb8e994e4a12348f9e59a75a0eb5aa3710e8ce75f273bdf5aa505d0",
+          "recipe_revision": "sha256:cae3e81d148d9e47d2d3941a337db5ab6f57b6025579fb96eea480957d7df369",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_node",
+          "attempt_id": "attempt_resume_df5e6c476665c7ffcbb05df08c6bf705d8fc668a350101d63af147a558aacc9b",
+          "entry_revision": "sha256:3e4caec83aeb65eeb2804e11a28074a420be39c4c93ef18f7246dcd3b683ff3f",
+          "recipe_revision": "sha256:ce90fec0d74a381fdfca6b0957727ba72826e90047c65f002e36326d42afc347",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_docker",
+          "attempt_id": "attempt_resume_57494e17a861d0c72a4503761efe953b84f00bd6841f66a44e5aaa8eb981cb09",
+          "entry_revision": "sha256:4a9fe88af30fb4376dd8c8a8720cb2aeccdb863822b84fdfd1fb2ad67c34a51f",
+          "recipe_revision": "sha256:aa6a1a69501193732b8a5940bb7e0d290fa15ea5b7235557efa12bac8cc1d2fa",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_codex",
+          "attempt_id": "attempt_resume_c8ce29cdbfbd5b9e1530a5520f22b50a2163f65d6a6660a0d4eeb8cf26f5e011",
+          "entry_revision": "sha256:d410a4d8a381b6fb95c84380b72bfa274cf418b60e1fb969514cc6c689eaeaa1",
+          "recipe_revision": "sha256:447659572004354adb1f8ff0fb2a05e4960b2beb2914f97aa11d5ef3e9c44151",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_gh",
+          "attempt_id": "attempt_resume_eeed94f79e958c42c8a2c8952228331a5ca105d8a85798acd4aebbaf93fe5715",
+          "entry_revision": "sha256:0d9fcaa0db501eada699fb2e5071c38b4b22496dc4aa32331857e0e3f68d98ea",
+          "recipe_revision": "sha256:46ad65923c33b124cd1f79554636ed291fa57cf447339b469b35e64182410d5c",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_structurizr",
+          "attempt_id": "attempt_resume_149d93b434359c27dee9ebfbfc0e1ff9b1409263c3dcc4124c53054594bc85f0",
+          "entry_revision": "sha256:6d4f6c18d7d18c9eeecf56c065ac5fc9ef186f06c0a240ee3d4ed7c99bb0be8a",
+          "recipe_revision": "sha256:3fea0655363c3805fa7a3892ff74f69d2aef47716fdc47aba623dd6c622f81b2",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_chromium",
+          "attempt_id": "attempt_resume_77844e38998464e92042a2b8e355d21a7d42a5cf0bd25b812cc9a7df7b6d9732",
+          "entry_revision": "sha256:15b3f21a1d0c4c73267a34f66f19082ecb068464cbee952ae605637f2e6fb543",
+          "recipe_revision": "sha256:55135f9fa42355711e4feaa30deef8b29e33f739cb954147325d9bd4b9d506c8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        }
+      ]
+    },
+    {
+      "snapshot_id": "evidence_0e91bb09aaf747ce9727a860f1fba95b",
+      "manifest_revision": 2,
+      "created_at": "2026-11-24T16:57:39.847780+00:00",
+      "accepted": [
+        {
+          "dependency_id": "dep_python",
+          "attempt_id": "attempt_resume_b48602f39d7144c65eac7c29f5f9338e0f860663981433142987ea4364feb172",
+          "entry_revision": "sha256:87d0266faa8a104131f7c4f0ee252da5e5a9fa4af5f64793d9853b800c8302f3",
+          "recipe_revision": "sha256:ebb6a90cc38bb2cf0306d9b4318d113abf86da0d2ff88bc28ef2b506464836b8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pyyaml",
+          "attempt_id": "attempt_resume_c5d5169f43aeef214e3f5b826c95f55340353a84863507f60503213230161e88",
+          "entry_revision": "sha256:90ca9df26a1405adf966671f27119b614ec8448d52fd45e32db5a8f1eb033a29",
+          "recipe_revision": "sha256:6fe40863b4f1cff8891523c8c7cf8d4cb1c240221c2bc114ea90c3a4189b778a",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_cursor_sdk",
+          "attempt_id": "attempt_resume_7d45fead643d1af4d3f01e95b0d6fc4e2e6fdd1be52d71c0f3167b2eed82017e",
+          "entry_revision": "sha256:a395a794ff2c51141fd3f9922c023a7cd395fdf950f27d86d1fcb316a4aab211",
+          "recipe_revision": "sha256:65ad6a8a5ef0c739a3e11aab7e232efbc65a29d4f767eebb0d193ba3a8b1ee65",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph",
+          "attempt_id": "attempt_resume_70d0b340546ad6cfeeca2a30552253b65611d527e65d4aa6de97811cab5a94e4",
+          "entry_revision": "sha256:615b72c4a1c248a0002b375a13349e3cde7e507f22de5715d4961eb013ac3bab",
+          "recipe_revision": "sha256:29c44453bcd59b40128117f0ccee939e71bbdae69a4d3ea3021bac317390f9a3",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph_checkpoint_sqlite",
+          "attempt_id": "attempt_resume_47b2a10c32c79a21848ca81a5ff5cfc07a1bc0560dba89fda84158934e391564",
+          "entry_revision": "sha256:9049aee02f7f574efadf8ba62f064fc6f31d996b59c66ec2bfe343843e06f817",
+          "recipe_revision": "sha256:9a6df4267142617363e5d33413b58e3ed163b7e7c213cc39c54fc243c1837945",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pytest",
+          "attempt_id": "attempt_resume_f8d31f13d942c46d3d039f1690ff773daa47504c4c9770dd9775a40201bf0f5a",
+          "entry_revision": "sha256:7c19b51a357f6719d1061a5f153ca5c58524313c71b1f945c31a23bfb1d6a1cb",
+          "recipe_revision": "sha256:4b10cd51881dd4ff2639073f5a58c5ae3a5f68ccd19a12ce6615ebc4a3a1fb81",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_setuptools",
+          "attempt_id": "attempt_resume_0b93224a499e1cae9edd063a2b3913f2d84c0074fa07e49fe3d95c31bfff1cd1",
+          "entry_revision": "sha256:fbc28a7f42c120952e6d6771de160c1e0266ea04a858878e921d88d5f36b19d3",
+          "recipe_revision": "sha256:7b0c195945cf8bf3c2b81b420b8925e0bcfe882c9ee76bdbb82c175135c46762",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_playwright",
+          "attempt_id": "attempt_resume_fba9043f1a37efe3066e63bf32821eeee90623d0024aaa4afde92559b861de00",
+          "entry_revision": "sha256:825b241fdda48d522fe3ceaf3484ae1f001209a020c7d82a88bdeaa97a5ac108",
+          "recipe_revision": "sha256:d735f19b277214f8aee433e6b0105280ca8d5521db56369129669dbd977a83f6",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_git",
+          "attempt_id": "attempt_resume_28941df3ef943a122fc8adeaf60bf7083e5577b354b7e0f681faca7a8af44a33",
+          "entry_revision": "sha256:72c25692ecb8e994e4a12348f9e59a75a0eb5aa3710e8ce75f273bdf5aa505d0",
+          "recipe_revision": "sha256:cae3e81d148d9e47d2d3941a337db5ab6f57b6025579fb96eea480957d7df369",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_node",
+          "attempt_id": "attempt_resume_df5e6c476665c7ffcbb05df08c6bf705d8fc668a350101d63af147a558aacc9b",
+          "entry_revision": "sha256:3e4caec83aeb65eeb2804e11a28074a420be39c4c93ef18f7246dcd3b683ff3f",
+          "recipe_revision": "sha256:ce90fec0d74a381fdfca6b0957727ba72826e90047c65f002e36326d42afc347",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_docker",
+          "attempt_id": "attempt_resume_57494e17a861d0c72a4503761efe953b84f00bd6841f66a44e5aaa8eb981cb09",
+          "entry_revision": "sha256:4a9fe88af30fb4376dd8c8a8720cb2aeccdb863822b84fdfd1fb2ad67c34a51f",
+          "recipe_revision": "sha256:aa6a1a69501193732b8a5940bb7e0d290fa15ea5b7235557efa12bac8cc1d2fa",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_codex",
+          "attempt_id": "attempt_resume_c8ce29cdbfbd5b9e1530a5520f22b50a2163f65d6a6660a0d4eeb8cf26f5e011",
+          "entry_revision": "sha256:d410a4d8a381b6fb95c84380b72bfa274cf418b60e1fb969514cc6c689eaeaa1",
+          "recipe_revision": "sha256:447659572004354adb1f8ff0fb2a05e4960b2beb2914f97aa11d5ef3e9c44151",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_gh",
+          "attempt_id": "attempt_resume_eeed94f79e958c42c8a2c8952228331a5ca105d8a85798acd4aebbaf93fe5715",
+          "entry_revision": "sha256:0d9fcaa0db501eada699fb2e5071c38b4b22496dc4aa32331857e0e3f68d98ea",
+          "recipe_revision": "sha256:46ad65923c33b124cd1f79554636ed291fa57cf447339b469b35e64182410d5c",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_structurizr",
+          "attempt_id": "attempt_resume_149d93b434359c27dee9ebfbfc0e1ff9b1409263c3dcc4124c53054594bc85f0",
+          "entry_revision": "sha256:6d4f6c18d7d18c9eeecf56c065ac5fc9ef186f06c0a240ee3d4ed7c99bb0be8a",
+          "recipe_revision": "sha256:3fea0655363c3805fa7a3892ff74f69d2aef47716fdc47aba623dd6c622f81b2",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_chromium",
+          "attempt_id": "attempt_resume_77844e38998464e92042a2b8e355d21a7d42a5cf0bd25b812cc9a7df7b6d9732",
+          "entry_revision": "sha256:15b3f21a1d0c4c73267a34f66f19082ecb068464cbee952ae605637f2e6fb543",
+          "recipe_revision": "sha256:55135f9fa42355711e4feaa30deef8b29e33f739cb954147325d9bd4b9d506c8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        }
+      ]
+    },
+    {
+      "snapshot_id": "evidence_c3e38c8852cd49f59cc5053cf50b6741",
+      "manifest_revision": 2,
+      "created_at": "2026-11-24T16:59:43.603922+00:00",
+      "accepted": [
+        {
+          "dependency_id": "dep_python",
+          "attempt_id": "attempt_resume_b48602f39d7144c65eac7c29f5f9338e0f860663981433142987ea4364feb172",
+          "entry_revision": "sha256:87d0266faa8a104131f7c4f0ee252da5e5a9fa4af5f64793d9853b800c8302f3",
+          "recipe_revision": "sha256:ebb6a90cc38bb2cf0306d9b4318d113abf86da0d2ff88bc28ef2b506464836b8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pyyaml",
+          "attempt_id": "attempt_resume_c5d5169f43aeef214e3f5b826c95f55340353a84863507f60503213230161e88",
+          "entry_revision": "sha256:90ca9df26a1405adf966671f27119b614ec8448d52fd45e32db5a8f1eb033a29",
+          "recipe_revision": "sha256:6fe40863b4f1cff8891523c8c7cf8d4cb1c240221c2bc114ea90c3a4189b778a",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_cursor_sdk",
+          "attempt_id": "attempt_resume_7d45fead643d1af4d3f01e95b0d6fc4e2e6fdd1be52d71c0f3167b2eed82017e",
+          "entry_revision": "sha256:a395a794ff2c51141fd3f9922c023a7cd395fdf950f27d86d1fcb316a4aab211",
+          "recipe_revision": "sha256:65ad6a8a5ef0c739a3e11aab7e232efbc65a29d4f767eebb0d193ba3a8b1ee65",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph",
+          "attempt_id": "attempt_resume_70d0b340546ad6cfeeca2a30552253b65611d527e65d4aa6de97811cab5a94e4",
+          "entry_revision": "sha256:615b72c4a1c248a0002b375a13349e3cde7e507f22de5715d4961eb013ac3bab",
+          "recipe_revision": "sha256:29c44453bcd59b40128117f0ccee939e71bbdae69a4d3ea3021bac317390f9a3",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph_checkpoint_sqlite",
+          "attempt_id": "attempt_resume_47b2a10c32c79a21848ca81a5ff5cfc07a1bc0560dba89fda84158934e391564",
+          "entry_revision": "sha256:9049aee02f7f574efadf8ba62f064fc6f31d996b59c66ec2bfe343843e06f817",
+          "recipe_revision": "sha256:9a6df4267142617363e5d33413b58e3ed163b7e7c213cc39c54fc243c1837945",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pytest",
+          "attempt_id": "attempt_resume_f8d31f13d942c46d3d039f1690ff773daa47504c4c9770dd9775a40201bf0f5a",
+          "entry_revision": "sha256:7c19b51a357f6719d1061a5f153ca5c58524313c71b1f945c31a23bfb1d6a1cb",
+          "recipe_revision": "sha256:4b10cd51881dd4ff2639073f5a58c5ae3a5f68ccd19a12ce6615ebc4a3a1fb81",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_setuptools",
+          "attempt_id": "attempt_resume_0b93224a499e1cae9edd063a2b3913f2d84c0074fa07e49fe3d95c31bfff1cd1",
+          "entry_revision": "sha256:fbc28a7f42c120952e6d6771de160c1e0266ea04a858878e921d88d5f36b19d3",
+          "recipe_revision": "sha256:7b0c195945cf8bf3c2b81b420b8925e0bcfe882c9ee76bdbb82c175135c46762",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_playwright",
+          "attempt_id": "attempt_resume_fba9043f1a37efe3066e63bf32821eeee90623d0024aaa4afde92559b861de00",
+          "entry_revision": "sha256:825b241fdda48d522fe3ceaf3484ae1f001209a020c7d82a88bdeaa97a5ac108",
+          "recipe_revision": "sha256:d735f19b277214f8aee433e6b0105280ca8d5521db56369129669dbd977a83f6",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_git",
+          "attempt_id": "attempt_resume_28941df3ef943a122fc8adeaf60bf7083e5577b354b7e0f681faca7a8af44a33",
+          "entry_revision": "sha256:72c25692ecb8e994e4a12348f9e59a75a0eb5aa3710e8ce75f273bdf5aa505d0",
+          "recipe_revision": "sha256:cae3e81d148d9e47d2d3941a337db5ab6f57b6025579fb96eea480957d7df369",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_node",
+          "attempt_id": "attempt_resume_df5e6c476665c7ffcbb05df08c6bf705d8fc668a350101d63af147a558aacc9b",
+          "entry_revision": "sha256:3e4caec83aeb65eeb2804e11a28074a420be39c4c93ef18f7246dcd3b683ff3f",
+          "recipe_revision": "sha256:ce90fec0d74a381fdfca6b0957727ba72826e90047c65f002e36326d42afc347",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_docker",
+          "attempt_id": "attempt_resume_57494e17a861d0c72a4503761efe953b84f00bd6841f66a44e5aaa8eb981cb09",
+          "entry_revision": "sha256:4a9fe88af30fb4376dd8c8a8720cb2aeccdb863822b84fdfd1fb2ad67c34a51f",
+          "recipe_revision": "sha256:aa6a1a69501193732b8a5940bb7e0d290fa15ea5b7235557efa12bac8cc1d2fa",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_codex",
+          "attempt_id": "attempt_resume_c8ce29cdbfbd5b9e1530a5520f22b50a2163f65d6a6660a0d4eeb8cf26f5e011",
+          "entry_revision": "sha256:d410a4d8a381b6fb95c84380b72bfa274cf418b60e1fb969514cc6c689eaeaa1",
+          "recipe_revision": "sha256:447659572004354adb1f8ff0fb2a05e4960b2beb2914f97aa11d5ef3e9c44151",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_gh",
+          "attempt_id": "attempt_resume_eeed94f79e958c42c8a2c8952228331a5ca105d8a85798acd4aebbaf93fe5715",
+          "entry_revision": "sha256:0d9fcaa0db501eada699fb2e5071c38b4b22496dc4aa32331857e0e3f68d98ea",
+          "recipe_revision": "sha256:46ad65923c33b124cd1f79554636ed291fa57cf447339b469b35e64182410d5c",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_structurizr",
+          "attempt_id": "attempt_resume_149d93b434359c27dee9ebfbfc0e1ff9b1409263c3dcc4124c53054594bc85f0",
+          "entry_revision": "sha256:6d4f6c18d7d18c9eeecf56c065ac5fc9ef186f06c0a240ee3d4ed7c99bb0be8a",
+          "recipe_revision": "sha256:3fea0655363c3805fa7a3892ff74f69d2aef47716fdc47aba623dd6c622f81b2",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_chromium",
+          "attempt_id": "attempt_resume_77844e38998464e92042a2b8e355d21a7d42a5cf0bd25b812cc9a7df7b6d9732",
+          "entry_revision": "sha256:15b3f21a1d0c4c73267a34f66f19082ecb068464cbee952ae605637f2e6fb543",
+          "recipe_revision": "sha256:55135f9fa42355711e4feaa30deef8b29e33f739cb954147325d9bd4b9d506c8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        }
+      ]
+    }
+  ]
+}

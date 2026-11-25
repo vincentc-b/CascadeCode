@@ -51,11 +51,13 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
         }
         agent_component = component "Agent runtime" "Normalizes provider turns and capability checks." "cascade.agent" {
             properties {
+                "cascade.designPath" "cascade/agent/DESIGN.md"
                 "cascade.semanticId" "element.component.agent"
             }
         }
         team_component = component "Tier teams" "Runs persistent Epic/Feature and bounded Task graphs." "cascade.epic/feature/task" {
             properties {
+                "cascade.designPath" "cascade/DESIGN.md"
                 "cascade.semanticId" "element.component.teams"
             }
         }
@@ -103,6 +105,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
 
             workspace_commands = component "Workspace commands" "Dispatches operator commands for initialization, supervised startup and cancellation." "cascade.cli / cascade.workspace" {
                 properties {
+                    "cascade.designPath" "cascade/workspace/DESIGN.md"
                     "cascade.semanticId" "element.component.workspace-commands"
                 }
             }
@@ -195,6 +198,18 @@ watchdog_dispatches_teams = watchdog_component -> team_component "Dispatches eli
         "cascade.semanticId" "relationship.watchdog-dispatches-teams"
     }
 }
+
+watchdog_uses_task_budget = watchdog_component -> task_team "Consumes the Task-owned incident operation gate after a distinct observation claim" {
+    properties {
+        "cascade.semanticId" "relationship.watchdog-uses-task-budget"
+    }
+}
+
+teams_use_task_budget = team_component -> task_team "Reserves and settles cumulative allowance for each review validator operation" {
+    properties {
+        "cascade.semanticId" "relationship.teams-use-task-budget"
+    }
+}
 teams_use_agent = team_component -> agent_component "Run role turns through" {
     properties {
         "cascade.semanticId" "relationship.teams-use-agent"
@@ -261,6 +276,12 @@ teams_route_task = team_component -> task_team "Routes scoped work to" {
 task_runs_agent = task_team -> agent_component "Executes role turns through" {
     properties {
         "cascade.semanticId" "relationship.task-runs-agent"
+    }
+}
+
+agent_uses_task_budget = agent_component -> task_team "Reserves and settles incident-related provider operations through" {
+    properties {
+        "cascade.semanticId" "relationship.agent-uses-task-budget"
     }
 }
 
@@ -360,7 +381,7 @@ code_epic_guard = element "epic: tool_guard" "Function" "Checks Cascade tool pat
     }
 }
 
-code_epic_runtime = element "epic: run_planning_role_turn" "Function" "Builds bounded provider turns and MCP tools. Provider permissions govern native tools." {
+code_epic_runtime = element "epic: run_planning_role_turn" "Function" "Builds scoped provider turns; incident recovery requires Task-budget admission before launch." {
     properties {
         "cascade.semanticId" "element.code.epic.runtime"
         "cascade.parent" "element.component.epic-team"
@@ -474,7 +495,7 @@ code_feature_guard = element "feature: tool_guard" "Function" "Checks Cascade to
     }
 }
 
-code_feature_runtime = element "feature: run_planning_role_turn" "Function" "Builds bounded provider turns and MCP tools. Provider permissions govern native tools." {
+code_feature_runtime = element "feature: run_planning_role_turn" "Function" "Builds scoped provider turns; incident recovery requires Task-budget admission before launch." {
     properties {
         "cascade.semanticId" "element.code.feature.runtime"
         "cascade.parent" "element.component.feature-team"
@@ -588,7 +609,7 @@ code_task_guard = element "task: task_tool_guard" "Function" "Checks Cascade too
     }
 }
 
-code_task_runtime = element "task: run_swe_turn" "Function" "Builds bounded provider turns and MCP tools. Provider permissions govern native tools." {
+code_task_runtime = element "task: run_swe_turn" "Function" "Builds scoped provider turns; incident recovery requires Task-budget admission before launch." {
     properties {
         "cascade.semanticId" "element.code.task.runtime"
         "cascade.parent" "element.component.task-team"
@@ -1950,6 +1971,24 @@ code_watchdog_reservation = element "reserve_after_recheck" "Function" "Reserve 
     }
 }
 
+code_watchdog_budget_reserve = element "reserve_budgeted_operation" "Function" "Use the accepted Watchdog claim to request a distinct Task-owned bounded operation permit." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.budget-reserve"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "reserve_budgeted_operation"
+    }
+}
+
+code_watchdog_budget_settle = element "settle_budgeted_operation" "Function" "Settle the distinct Task-owned operation receipt without creating a Watchdog budget." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.budget-settle"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "settle_budgeted_operation"
+    }
+}
+
 code_watchdog_claim = element "accept_claim" "Function" "Accept exact durable execution claim." {
     properties {
         "cascade.semanticId" "element.code.watchdog.claim"
@@ -1977,6 +2016,33 @@ code_watchdog_contract = element "_incident_contract" "Function" "Bind an observ
     }
 }
 
+code_watchdog_budget_bind = element "_bind_original_incident" "Function" "Anchor parent-lifecycle owner work to the queued action's original Task-owned incident allowance." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.budget-bind"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/audit_recovery.py"
+        "cascade.sourceSymbol" "_bind_original_incident"
+    }
+}
+
+code_watchdog_incident_record = element "incident_record" "Function" "Keep original incident identity separate from changing material generation evidence." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.incident-record"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incidents.py"
+        "cascade.sourceSymbol" "incident_record"
+    }
+}
+
+code_watchdog_stage_receipt = element "recovery_stage_receipt" "Function" "Create immutable actor, capability, permitted-input, authority and result evidence for one recovery stage." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.stage-receipt"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incidents.py"
+        "cascade.sourceSymbol" "recovery_stage_receipt"
+    }
+}
+
 code_watchdog_executor = element "_execute_reservation" "Function" "Invoke the owner adapter only after exact claim acceptance and persist its structured result." {
     properties {
         "cascade.semanticId" "element.code.watchdog.reservation-executor"
@@ -1986,7 +2052,7 @@ code_watchdog_executor = element "_execute_reservation" "Function" "Invoke the o
     }
 }
 
-code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Function" "Re-read canonical Task, Feature, repair, review, owner, delivery, lease and retirement facts for one exact generation." {
+code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Function" "Re-read canonical Task, Feature, repair, review, owner, delivery, lease, retirement and live reviewed-runtime facts for one exact generation." {
     properties {
         "cascade.semanticId" "element.code.watchdog.postcheck"
         "cascade.parent" "element.component.watchdog"
@@ -2091,6 +2157,69 @@ code_task_actions = element "resume_action" "Function" "Claim and resume durable
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task/action_recovery.py"
         "cascade.sourceSymbol" "resume_action"
+    }
+}
+
+code_task_delivery_queue = element "queue_task_merge" "Function" "Persist the validated delivery action, bind its original incident budget, then advertise scheduling." {
+    properties {
+        "cascade.semanticId" "element.code.task.delivery-queue"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "queue_task_merge"
+    }
+}
+
+code_task_budget_bind = element "bind_incident_budget" "Function" "Anchor canonical actions and material generations to one original incident policy." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-bind"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "bind_incident_budget"
+    }
+}
+
+code_task_budget_read = element "read_incident_budget" "Function" "Project one restart-safe cumulative budget without spending allowance." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-read"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "read_incident_budget"
+    }
+}
+
+code_task_budget_extend = element "extend_incident_budget" "Function" "Append an independently authenticated finite extension within trusted maxima." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-extend"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "extend_incident_budget"
+    }
+}
+
+code_task_budget_exhaust = element "record_incident_budget_exhaustion" "Function" "Persist one stable escalation for exhausted cumulative allowance." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-exhaust"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "record_incident_budget_exhaustion"
+    }
+}
+
+code_task_budget_reserve = element "reserve_incident_operation" "Function" "Atomically verify lineage, policy, material generation, backoff, elapsed deadline, live claim and cumulative remaining allowance." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-reserve"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "reserve_incident_operation"
+    }
+}
+
+code_task_budget_settle = element "settle_incident_operation" "Function" "Idempotently charge observed use or retain an uncertain reservation conservatively." {
+    properties {
+        "cascade.semanticId" "element.code.task.incident-budget-settle"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/incident_budget.py"
+        "cascade.sourceSymbol" "settle_incident_operation"
     }
 }
 
@@ -2406,6 +2535,72 @@ code_task_validation_to_actions = code_task_validation -> code_task_actions "Pub
     }
 }
 
+code_task_budget_bind_to_actions = code_task_budget_bind -> code_task_actions "Verifies and annotates the canonical durable action" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-bind-to-actions"
+    }
+}
+
+code_task_delivery_queue_to_actions = code_task_delivery_queue -> code_task_actions "Persists the canonical queued delivery before scheduling" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-delivery-queue-to-actions"
+    }
+}
+
+code_task_delivery_queue_to_budget_bind = code_task_delivery_queue -> code_task_budget_bind "Binds original allowance before the first merge attempt" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-delivery-queue-to-budget-bind"
+    }
+}
+
+code_task_budget_read_to_bind = code_task_budget_read -> code_task_budget_bind "Projects the bound original incident record" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-read-to-bind"
+    }
+}
+
+code_task_budget_extend_to_bind = code_task_budget_extend -> code_task_budget_bind "Extends the bound trusted policy" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-extend-to-bind"
+    }
+}
+
+code_task_budget_exhaust_to_bind = code_task_budget_exhaust -> code_task_budget_bind "Retains one escalation on the bound policy" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-exhaust-to-bind"
+    }
+}
+
+code_task_budget_bind_to_watchdog_incident = code_task_budget_bind -> code_watchdog_incident_record "Verifies material generation and persists original identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-bind-to-watchdog-incident-record"
+    }
+}
+
+code_watchdog_budget_reserve_to_task_budget_reserve = code_watchdog_budget_reserve -> code_task_budget_reserve "Consumes the Task-owned cumulative gate after a distinct capability claim" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-budget-reserve-to-task-budget-reserve"
+    }
+}
+
+code_watchdog_budget_settle_to_task_budget_settle = code_watchdog_budget_settle -> code_task_budget_settle "Settles the exact charged receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-budget-settle-to-task-budget-settle"
+    }
+}
+
+code_task_budget_reserve_to_bind = code_task_budget_reserve -> code_task_budget_bind "Verifies the canonical bound material generation and policy" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-reserve-to-bind"
+    }
+}
+
+code_task_budget_settle_to_reserve = code_task_budget_settle -> code_task_budget_reserve "Settles the unique durable reservation identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-incident-budget-settle-to-reserve"
+    }
+}
+
 code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event to the live action and committed active-document introduction." {
     properties {
         "cascade.semanticId" "element.code.watchdog.repair-authority"
@@ -2430,5 +2625,470 @@ boss_uses_workspace = boss_component -> workspace_component "Checks merge target
 watchdog_uses_boss = watchdog_component -> boss_component "Retries delivery and reconciles closeout" {
     properties {
         "cascade.semanticId" "relationship.watchdog-uses-boss"
+    }
+}
+
+code_agent_result = element "RoleResult" "Dataclass" "Text, status, tool effects, recovery report and optional normalized invocation receipt." {
+    properties {
+        "cascade.semanticId" "element.code.agent.result"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/types.py"
+        "cascade.sourceSymbol" "RoleResult"
+    }
+}
+
+code_agent_receipt = element "ProviderInvocationReceipt" "Dataclass" "Records provider, model, invocation identity, non-invented token evidence, outcome and enforceable bounds." {
+    properties {
+        "cascade.semanticId" "element.code.agent.invocation-receipt"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/types.py"
+        "cascade.sourceSymbol" "ProviderInvocationReceipt"
+    }
+}
+
+code_agent_provider_admit = element "admit_provider_turn" "Function" "Atomically reserves one paid turn and finite worst-case model runtime before provider dispatch." {
+    properties {
+        "cascade.semanticId" "element.code.agent.provider-admit"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/provider_metering.py"
+        "cascade.sourceSymbol" "admit_provider_turn"
+    }
+}
+
+code_agent_provider_settle = element "settle_provider_turn" "Function" "Normalizes physical invocation evidence and settles known or conservative use exactly once." {
+    properties {
+        "cascade.semanticId" "element.code.agent.provider-settle"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/provider_metering.py"
+        "cascade.sourceSymbol" "settle_provider_turn"
+    }
+}
+
+code_agent_scoped = element "_run_sandbox_turn" "Function" "Build scoped tools, collect effects and clean up temporary runtime files." {
+    properties {
+        "cascade.semanticId" "element.code.agent.scoped"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/planning_turn.py"
+        "cascade.sourceSymbol" "_run_sandbox_turn"
+    }
+}
+
+code_agent_dispatch = element "dispatch_planning_tool" "Function" "Apply role catalog and owning tool guards before dispatch." {
+    properties {
+        "cascade.semanticId" "element.code.agent.dispatch"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/mcp_wrappers.py"
+        "cascade.sourceSymbol" "dispatch_planning_tool"
+    }
+}
+
+code_agent_codex = element "run_codex_role" "Function" "Check Codex tool-host support and supply per-turn MCP configuration." {
+    properties {
+        "cascade.semanticId" "element.code.agent.codex"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/codex_cli.py"
+        "cascade.sourceSymbol" "run_codex_role"
+    }
+}
+
+code_agent_process = element "run_subprocess_turn" "Function" "Run the CLI with a timeout and direct-process cleanup." {
+    properties {
+        "cascade.semanticId" "element.code.agent.process"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/cli_common.py"
+        "cascade.sourceSymbol" "run_subprocess_turn"
+    }
+}
+
+code_agent_report = element "report_provider_recovery" "Function" "Report provider-turn outcome while preserving action and checkpoint identity." {
+    properties {
+        "cascade.semanticId" "element.code.agent.report"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/recovery_contract.py"
+        "cascade.sourceSymbol" "report_provider_recovery"
+    }
+}
+
+code_agent_cancel = element "cancel_live_turns" "Function" "Cancel registered local asyncio tasks and signal recorded provider PIDs." {
+    properties {
+        "cascade.semanticId" "element.code.agent.cancel"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/turn_registry.py"
+        "cascade.sourceSymbol" "cancel_live_turns"
+    }
+}
+
+code_teams_publication = element "publish_team_review_resolution" "Function" "Carry canonical incident, claim and operation identities through cumulative admission and exact-SHA publication." {
+    properties {
+        "cascade.semanticId" "element.code.teams.publication"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/team_review_recovery.py"
+        "cascade.sourceSymbol" "publish_team_review_resolution"
+    }
+}
+
+code_teams_budget_reserve = element "reserve_review_validation" "Function" "Atomically reserve the validator's approved worst-case runtime before any process spawn, linked to a live provider parent when invoked from that turn." {
+    properties {
+        "cascade.semanticId" "element.code.teams.budget-reserve"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "reserve_review_validation"
+    }
+}
+
+code_teams_validation_operation = element "ReviewValidationOperation" "Dataclass" "Carry the canonical incident, top-level claim, operation identity and durable permit to the validator." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validation-operation"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ReviewValidationOperation"
+    }
+}
+
+code_teams_validation_profile = element "ReviewValidationProfile" "Dataclass" "Bind an exact command and coverage class to its policy owner, approval revision and finite timeout/attempt budget." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validation-profile"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ReviewValidationProfile"
+    }
+}
+
+code_teams_validate_publish = element "check_and_publish_review_rebase" "Function" "Validate immutable source then recheck policy, remote heads and authority before leased push." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validate_publish"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_rebase.py"
+        "cascade.sourceSymbol" "check_and_publish_review_rebase"
+    }
+}
+
+code_teams_validator = element "run_review_validation" "Function" "Verify a live permit, run one bounded process group, and settle success, failure, timeout or interruption." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validator"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "run_review_validation"
+    }
+}
+
+code_task_generation = element "admit_review_publication_generation" "Function" "Record material publication evidence without granting allowance or growing the attempt bound." {
+    properties {
+        "cascade.semanticId" "element.code.task.generation"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "admit_review_publication_generation"
+    }
+}
+
+code_cli_launcher = element "run_launcher_loop" "Function" "Supervise safe-path worker startup, handshake, bounded retries and restart." {
+    properties {
+        "cascade.semanticId" "element.code.cli.launcher"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/launcher.py"
+        "cascade.sourceSymbol" "run_launcher_loop"
+    }
+}
+
+code_cli_drain = element "drain_and_shutdown" "Function" "Drain HTTP and agent turns before worker shutdown." {
+    properties {
+        "cascade.semanticId" "element.code.cli.drain"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/worker.py"
+        "cascade.sourceSymbol" "drain_and_shutdown"
+    }
+}
+
+code_cli_status = element "_worker_supervisor_status" "Function" "Publish lifecycle state and loaded-worker runtime evidence." {
+    properties {
+        "cascade.semanticId" "element.code.cli.status"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/worker.py"
+        "cascade.sourceSymbol" "_worker_supervisor_status"
+    }
+}
+
+code_cli_runtime_authority = element "create_runtime_authority" "Function" "Authenticate a deployment receipt and bind clean accepted/integrated checkouts to installed bytes." {
+    properties {
+        "cascade.semanticId" "element.code.cli.runtime-authority"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
+        "cascade.sourceSymbol" "create_runtime_authority"
+    }
+}
+
+code_cli_loaded_runtime = element "loaded_runtime_identity" "Function" "Report imported repair/delivery module origins and worker process/capability evidence without self-verification." {
+    properties {
+        "cascade.semanticId" "element.code.cli.loaded-runtime"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
+        "cascade.sourceSymbol" "loaded_runtime_identity"
+    }
+}
+
+code_cli_validate_runtime = element "validate_runtime_authority" "Function" "Authenticate authority and reject moved, dirty, stale, unintegrated or byte-mismatched evidence." {
+    properties {
+        "cascade.semanticId" "element.code.cli.validate-runtime"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
+        "cascade.sourceSymbol" "validate_runtime_authority"
+    }
+}
+
+code_cli_host_verify_runtime = element "verify_loaded_runtime_identity" "Function" "Return a typed current/pending/refused verdict after inspecting the live child, import root, module bytes and capability generation." {
+    properties {
+        "cascade.semanticId" "element.code.cli.host-verify-runtime"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
+        "cascade.sourceSymbol" "verify_loaded_runtime_identity"
+    }
+}
+
+code_cli_current_runtime = element "verify_current_loaded_runtime_identity" "Function" "Reinspect a launcher-verified receipt, live process, reviewed/integrated lineage, module bytes and capability generation before closeout." {
+    properties {
+        "cascade.semanticId" "element.code.cli.current-runtime"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
+        "cascade.sourceSymbol" "verify_current_loaded_runtime_identity"
+    }
+}
+
+code_agent_scoped_to_code_agent_runner = code_agent_scoped -> code_agent_runner "Invokes with scoped tools" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-scoped-to-code-agent-runner"
+    }
+}
+
+code_agent_scoped_to_code_agent_dispatch = code_agent_scoped -> code_agent_dispatch "Provides guarded tool transport" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-scoped-to-code-agent-dispatch"
+    }
+}
+
+code_agent_runner_to_code_agent_codex = code_agent_runner -> code_agent_codex "Dispatches Codex turns" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-runner-to-code-agent-codex"
+    }
+}
+
+code_agent_codex_to_code_agent_process = code_agent_codex -> code_agent_process "Launches CLI" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-codex-to-code-agent-process"
+    }
+}
+
+code_agent_runner_to_code_agent_report = code_agent_runner -> code_agent_report "Normalizes recovery outcome" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-runner-to-code-agent-report"
+    }
+}
+
+code_agent_runner_to_code_agent_result = code_agent_runner -> code_agent_result "Returns" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-runner-to-code-agent-result"
+    }
+}
+
+code_agent_runner_to_code_agent_provider_admit = code_agent_runner -> code_agent_provider_admit "Requires admission immediately before dispatch" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-runner-to-provider-admit"
+    }
+}
+
+code_agent_runner_to_code_agent_provider_settle = code_agent_runner -> code_agent_provider_settle "Settles success, error, timeout and interruption" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-runner-to-provider-settle"
+    }
+}
+
+code_agent_provider_admit_to_code_task_budget_reserve = code_agent_provider_admit -> code_task_budget_reserve "Consumes the Task-owned incident allowance" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-provider-admit-to-task-budget-reserve"
+    }
+}
+
+code_agent_provider_settle_to_code_task_budget_settle = code_agent_provider_settle -> code_task_budget_settle "Settles the canonical operation receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-provider-settle-to-task-budget-settle"
+    }
+}
+
+code_agent_result_to_code_agent_receipt = code_agent_result -> code_agent_receipt "Carries normalized invocation evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-result-to-invocation-receipt"
+    }
+}
+
+code_agent_report_to_code_agent_result = code_agent_report -> code_agent_result "Populates recovery report" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-report-to-code-agent-result"
+    }
+}
+
+code_agent_cancel_to_code_agent_process = code_agent_cancel -> code_agent_process "Signals the registered provider PID" {
+    properties {
+        "cascade.semanticId" "relationship.code-agent-cancel-to-code-agent-process"
+    }
+}
+
+code_teams_publication_to_code_teams_validate_publish = code_teams_publication -> code_teams_validate_publish "Executes admitted publication" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-code-teams-validate-publish"
+    }
+}
+
+code_teams_publication_to_code_teams_budget_reserve = code_teams_publication -> code_teams_budget_reserve "Reserves before action execution or validator spawn" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-code-teams-budget-reserve"
+    }
+}
+
+code_teams_budget_reserve_to_code_task_budget_reserve = code_teams_budget_reserve -> code_task_budget_reserve "Consumes the Task-owned cumulative gate" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-budget-reserve-to-code-task-budget-reserve"
+    }
+}
+
+code_teams_budget_reserve_to_code_teams_validation_operation = code_teams_budget_reserve -> code_teams_validation_operation "Issues canonical validator permit" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-budget-reserve-to-code-teams-validation-operation"
+    }
+}
+
+code_teams_validation_operation_to_code_teams_validation_profile = code_teams_validation_operation -> code_teams_validation_profile "Carries the approved finite profile" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-validation-operation-to-code-teams-validation-profile"
+    }
+}
+
+code_teams_validate_publish_to_code_teams_validator = code_teams_validate_publish -> code_teams_validator "Runs repository checks" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-validate-publish-to-code-teams-validator"
+    }
+}
+
+code_teams_validator_to_code_teams_validation_operation = code_teams_validator -> code_teams_validation_operation "Verifies the live receipt before spawn" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-validator-to-code-teams-validation-operation"
+    }
+}
+
+code_watchdog_incident_record_to_code_watchdog_stage_receipt = code_watchdog_incident_record -> code_watchdog_stage_receipt "Embeds immutable stage evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-incident-record-to-stage-receipt"
+    }
+}
+
+code_watchdog_contract_to_code_watchdog_budget_bind = code_watchdog_contract -> code_watchdog_budget_bind "Anchors the original obligation before owner admission" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-incident-contract-to-budget-bind"
+    }
+}
+
+code_watchdog_budget_bind_to_code_task_budget_bind = code_watchdog_budget_bind -> code_task_budget_bind "Uses the sole Task-owned F1 ledger" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-budget-bind-to-task-budget-bind"
+    }
+}
+
+code_teams_validator_to_code_task_budget_settle = code_teams_validator -> code_task_budget_settle "Settles observed or conservative process usage" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-validator-to-code-task-budget-settle"
+    }
+}
+
+code_teams_publication_to_code_task_generation = code_teams_publication -> code_task_generation "Checks material generation" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-code-task-generation"
+    }
+}
+
+code_task_generation_to_code_task_actions = code_task_generation -> code_task_actions "Admits eligible action resumption" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-generation-to-code-task-actions"
+    }
+}
+
+code_cli_up_to_code_cli_launcher = code_cli_up -> code_cli_launcher "Starts supervision" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-up-to-code-cli-launcher"
+    }
+}
+
+code_cli_launcher_to_code_cli_worker = code_cli_launcher -> code_cli_worker "Spawns and restarts worker" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-launcher-to-code-cli-worker"
+    }
+}
+
+code_cli_worker_to_code_cli_drain = code_cli_worker -> code_cli_drain "Drains on exit" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-worker-to-code-cli-drain"
+    }
+}
+
+code_cli_worker_to_code_cli_status = code_cli_worker -> code_cli_status "Publishes lifecycle status" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-worker-to-code-cli-status"
+    }
+}
+
+code_cli_main_to_code_cli_runtime_authority = code_cli_main -> code_cli_runtime_authority "Dispatches reviewed runtime bootstrap" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-main-to-runtime-authority"
+    }
+}
+
+code_cli_launcher_to_code_cli_validate_runtime = code_cli_launcher -> code_cli_validate_runtime "Revalidates authority before spawn" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-launcher-to-validate-runtime"
+    }
+}
+
+code_cli_worker_to_code_cli_loaded_runtime = code_cli_worker -> code_cli_loaded_runtime "Measures imported runtime identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-worker-to-loaded-runtime"
+    }
+}
+
+code_cli_loaded_runtime_to_code_cli_status = code_cli_loaded_runtime -> code_cli_status "Supplies process-local readiness evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-loaded-runtime-to-status"
+    }
+}
+
+code_cli_launcher_to_code_cli_host_verify_runtime = code_cli_launcher -> code_cli_host_verify_runtime "Independently verifies the spawned child" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-launcher-to-host-verify-runtime"
+    }
+}
+
+code_cli_loaded_runtime_to_code_cli_host_verify_runtime = code_cli_loaded_runtime -> code_cli_host_verify_runtime "Reports loaded origins and process evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-loaded-runtime-to-host-verify-runtime"
+    }
+}
+
+code_cli_host_verify_runtime_to_code_cli_status = code_cli_host_verify_runtime -> code_cli_status "Publishes host-verified identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-host-verify-runtime-to-status"
+    }
+}
+
+code_cli_status_to_code_cli_current_runtime = code_cli_status -> code_cli_current_runtime "Supplies the launcher-verified receipt for fresh inspection" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-status-to-current-runtime"
+    }
+}
+
+code_watchdog_postcheck_to_code_cli_current_runtime = code_watchdog_postcheck -> code_cli_current_runtime "Requires current loaded-runtime evidence before incident closeout" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-postcheck-to-current-runtime"
+    }
+}
+
+code_cli_drain_to_code_agent_cancel = code_cli_drain -> code_agent_cancel "Cancels live provider turns" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-drain-to-code-agent-cancel"
     }
 }

@@ -10,6 +10,7 @@ from cascade.board.errors import BoardError
 from cascade.cancellation import cancel_work_item
 from cascade.probe.cli import register_probe_parser, run_probe_command
 from cascade.workspace import WorkspaceError, init_workspace, up
+from cascade.workspace.runtime_identity import create_runtime_authority
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -33,6 +34,28 @@ def main(argv: list[str] | None = None) -> None:
     )
     up_parser.add_argument("--host", default="127.0.0.1", help="Loopback bind address")
     up_parser.add_argument("--port", type=int, default=8765, help="HTTP port")
+    up_parser.add_argument(
+        "--runtime-authority",
+        type=Path,
+        default=None,
+        help="Reviewed runtime authority manifest created by runtime-bootstrap",
+    )
+    up_parser.add_argument(
+        "--runtime-authority-key",
+        type=Path,
+        default=None,
+        help="Trust key provisioned by the authorized installation actor",
+    )
+
+    runtime_parser = subparsers.add_parser(
+        "runtime-bootstrap",
+        help="Bind a clean reviewed checkout to the installed Cascade runtime",
+    )
+    runtime_parser.add_argument("--reviewed-source", type=Path, required=True)
+    runtime_parser.add_argument("--integrated-source", type=Path, required=True)
+    runtime_parser.add_argument("--deployment-receipt", type=Path, required=True)
+    runtime_parser.add_argument("--authority-key", type=Path, required=True)
+    runtime_parser.add_argument("--output", type=Path, required=True)
 
     cancel_parser = subparsers.add_parser(
         "cancel", help="Cancel an epic, feature, or task"
@@ -70,10 +93,27 @@ def main(argv: list[str] | None = None) -> None:
                 args.root if args.root is not None else Path.cwd(),
                 host=args.host,
                 port=args.port,
+                runtime_authority=args.runtime_authority,
+                runtime_authority_key=args.runtime_authority_key,
             )
         except (WorkspaceError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             raise SystemExit(1) from exc
+        return
+
+    if args.command == "runtime-bootstrap":
+        try:
+            authority = create_runtime_authority(
+                args.reviewed_source,
+                integrated_source=args.integrated_source,
+                deployment_receipt=args.deployment_receipt,
+                authority_key=args.authority_key,
+                output=args.output,
+            )
+        except WorkspaceError as exc:
+            print(str(exc), file=sys.stderr)
+            raise SystemExit(1) from exc
+        print(authority["manifest_id"])
         return
 
     if args.command == "probe":

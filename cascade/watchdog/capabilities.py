@@ -198,6 +198,26 @@ class CapabilityRegistry:
         return hashlib.sha256(encoded.encode()).hexdigest()
 
 
+def capability_authority_revision(descriptor: CapabilityDescriptor) -> str:
+    """Fingerprint the exact owner authority used for one admitted operation."""
+
+    payload = {
+        "name": descriptor.name,
+        "operation": descriptor.operation,
+        "tiers": sorted(descriptor.tiers),
+        "failures": sorted(descriptor.failure_classes),
+        "owners": sorted(descriptor.owner_kinds),
+        "evidence": list(descriptor.required_evidence),
+        "store": descriptor.durable_store,
+        "attempt_bound": descriptor.attempt_bound,
+        "lock_protocol": descriptor.lock_protocol,
+        "recheck_protocol": descriptor.recheck_protocol,
+        "resume_action": descriptor.resume_action,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(encoded.encode()).hexdigest()
+
+
 def default_capability_registry() -> CapabilityRegistry:
     """Bind the allowlist to production lifecycle callables.
 
@@ -766,9 +786,7 @@ def _finish_probe(
 ) -> CapabilityProbe:
     if not persist:
         return probe
-    work_id, tier, _failure, operation, evidence, generation = _incident_fields(
-        incident
-    )
+    work_id, tier, failure, operation, evidence, generation = _incident_fields(incident)
     identity = json.dumps(
         {
             "work_id": work_id,
@@ -811,6 +829,18 @@ def _finish_probe(
         "registry_fingerprint": registry_fingerprint,
         "incident_evidence": dict(evidence),
     }
+    if probe.state != "available":
+        from cascade.watchdog.incidents import recovery_stage_receipt
+
+        details["stage_receipt"] = recovery_stage_receipt(
+            "waiting",
+            actor=f"{owner_kind}:{owner_id}",
+            capability=probe.capability,
+            permitted_inputs=tuple(sorted(str(key) for key in evidence)),
+            authority_revision=f"sha256:{registry_fingerprint}",
+            obligation=f"{work_id}:{failure}:{generation}",
+            result=f"capability_{probe.state}:{probe.reason}",
+        )
     if probe.state == "denied":
         state, classification = "awaiting_human_gate", "human_gate"
         blocker = {

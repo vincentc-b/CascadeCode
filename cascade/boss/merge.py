@@ -91,6 +91,23 @@ def _merge_task_branch(task_id: str, *, root: Path) -> MergeResult:
     feature_id = task.meta.parent
     if not feature_id:
         return MergeResult(ok=False, reason="missing_parent", branch=branch)
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    if (
+        project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+    ):
+        from cascade.workspace.integration_worktree import merged_board
+
+        feature = merged_board(trunk).by_id.get(feature_id)
+        if (
+            feature is None
+            or feature.tier != "feature"
+            or feature.status != "active"
+            or feature.path.parent.name != "2_active"
+        ):
+            return MergeResult(ok=False, reason="not_active", branch=branch)
     from cascade.comments.gate import refusal_if_blocked
 
     if blocked := refusal_if_blocked(task_id, root=trunk):
@@ -149,6 +166,8 @@ def _merge_task_branch(task_id: str, *, root: Path) -> MergeResult:
     try:
         move_doc(task_id, "completed", root=merge_root)
         _sync_task_completed_on_trunk(trunk, task_id, merge_root)
+        if _remove_superseded_feature_copy(merge_root, feature_id, trunk):
+            merge_sha = head_sha(merge_root)
     except Exception:
         if worktree_clean and created_merge_commit:
             _run(["reset", "--hard", "ORIG_HEAD"], merge_root, check=False)
@@ -213,6 +232,62 @@ def _merge_task_branch(task_id: str, *, root: Path) -> MergeResult:
         branch=branch,
         target_branch=target_branch,
     )
+
+
+def _remove_superseded_feature_copy(
+    merge_root: Path | None, feature_id: str, trunk: Path
+) -> bool:
+    """Drop the completed parent copy carried by a late Task snapshot.
+
+    A repair reactivates the Feature by moving its document.  A Task cut from
+    the completed generation can otherwise reintroduce the old path when its
+    validated branch is finally merged, leaving two documents with one ID.
+    The durable repair receipt names both exact paths, so no unrelated parent
+    document is eligible for this cleanup.
+    """
+
+    if merge_root is None:
+        return False
+    from cascade.feature.repair import current_feature_repair_record
+
+    repair = current_feature_repair_record(feature_id, root=trunk)
+    if repair is None:
+        return False
+    prior = repair.get("prior_document_path")
+    active = repair.get("intended_active_path")
+    if not isinstance(prior, str) or not isinstance(active, str):
+        return False
+    prior_path = merge_root / prior
+    active_path = merge_root / active
+    if not prior_path.is_file():
+        return False
+    if not active_path.is_file():
+        introduction_commit = repair.get("introduction_commit")
+        if not isinstance(introduction_commit, str) or not introduction_commit:
+            return False
+        restored = _run(
+            ["checkout", introduction_commit, "--", active], merge_root, check=False
+        )
+        if restored.returncode != 0 or not active_path.is_file():
+            return False
+    removed = _run(["rm", "--", prior], merge_root, check=False)
+    if removed.returncode != 0:
+        return False
+    committed = _run(
+        [
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            f"docs: retain active repair for {feature_id}",
+            "--",
+            prior,
+            active,
+        ],
+        merge_root,
+        check=False,
+    )
+    return committed.returncode == 0
 
 
 def merge_feature_branch(feature_id: str, *, root: Path | None = None) -> MergeResult:

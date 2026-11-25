@@ -34,6 +34,56 @@ dead claims indefinitely running. Unknown process identity is not proof of death
 See `cascade/task/DESIGN.md` and `cascade/DESIGN.md` for the durable transition and
 publication validation contract.
 
+Review-validator admission does not add a second Watchdog budget or capability.
+The Teams publication path consumes the same Task-owned cumulative gate directly;
+Watchdog continues to own observation, proven-dead owner reconciliation and the
+independent postcheck. Landscape, context, container and `cascade-watchdog-code`
+remain unchanged because no Watchdog source symbol, persistent store or runtime
+boundary changes at this interface.
+
+## Original recovery incident identity
+
+Watchdog incident envelopes preserve `original_incident_id` independently from
+`authoritative_generation`. The generation continues to fingerprint current
+material evidence and capability authority; changing it does not create or own
+another cumulative allowance. Task owns the durable lineage, trusted policy,
+extensions, and escalation under
+[`REQ-RECOVERY-BUDGET-001`](../task/DESIGN.md#durable-incident-lineage-and-policy).
+Watchdog remains an observation and capability consumer and does not maintain a
+second budget store. Existing envelopes without an original identity remain
+readable; expensive admission must not infer fresh allowance from that absence.
+
+[`incident_budget_identity`](incidents.py) reads the original identity without
+substituting the work ID or material generation. After the ordinary capability
+reservation is accepted, [`reserve_budgeted_operation`](reservations.py) passes
+that identity, the exact Watchdog claim token, operation identity and worst-case
+charge to Task's cumulative gate. Its returned permit is distinct from the audit
+observation and capability claim. [`settle_budgeted_operation`](reservations.py)
+settles the corresponding Task receipt on success, refusal, timeout or
+interruption. The wrappers do not keep allowance, reclaim a claim by lease age,
+or launch work when Task returns pending, exhausted or owner-decision.
+
+[`record_result`](reservations.py) distinguishes completion of the bounded
+adapter invocation from completion of the wider lifecycle incident. A known
+deferred, refused or no-op owner result charges the attempted invocation and
+releases its budget claim; it does not manufacture lifecycle success or turn a
+completed invocation into an unclassified execution failure. Adapter errors and
+unsafe results retain failure settlement semantics. This permits a later owner
+or restart to use the remaining original allowance while the independent
+postcheck continues to decide whether the incident itself is resolved.
+
+The `cascade-watchdog-code` view includes
+[`incident_record`](incidents.py) as the envelope boundary and the reserve/settle
+consumer functions above. Focused lineage and
+restart coverage is in
+[`tests/task/test_incident_budget.py`](../../tests/task/test_incident_budget.py),
+while [`tests/watchdog/test_incidents.py`](../../tests/watchdog/test_incidents.py)
+retains generation/history compatibility coverage. Watchdog settlement mapping
+is covered by
+[`tests/watchdog/test_reservations.py`](../../tests/watchdog/test_reservations.py),
+and the real-repository post-push/restart path is covered by
+[`tests/test_late_repair_convergence.py`](../../tests/test_late_repair_convergence.py).
+
 ## Health-audit projection contract
 
 `REQ-WATCHDOG-002`: Projection source decoding preserves durable references,
@@ -230,6 +280,11 @@ An attempt result cannot replace authoritative health verification.
 `DEC-WATCHDOG-REPAIR-001`: Recheck local fingerprints under the lifecycle lock
 and run bounded external observation outside that critical section. Reuse
 reservations to reject stale generations and duplicate claims.
+`DEC-WATCHDOG-REPAIR-002`: Persist attributable stage receipts in the selected
+owner ledger and reserve terminal resolution for a fresh Watchdog postcheck.
+Receipt identity is content-derived, so restart appends no duplicate stage;
+missing capability retains one deduplicated executable handoff or the probe's
+precise operator prerequisite.
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
@@ -245,23 +300,25 @@ delivery consumer. War Room consumes the bounded projection described above.
 | [dispatch_audit_recovery](audit_recovery.py) | Bounded observation/admission → exact capability resolution → claim acceptance → executor. |
 | [CapabilityRegistry](capabilities.py) | Owner/tier/failure-specific capability metadata and finite retry policy. |
 | [reserve_after_recheck / accept_claim / record_result](reservations.py) | Canonical fingerprint, generation and claim-token comparison; persist attempts in the selected durable store. |
+| [recovery_stage_receipt](incidents.py) | Bind actor, capability, permitted evidence keys, authority revision and result to an immutable stage identity. |
 | [_incident_contract](audit_recovery.py) | Bind a completed-parent Task mismatch to its exact Feature owner and mismatch generation before reservation. |
+| [_bind_original_incident](audit_recovery.py) | Bind the queued delivery action and its canonical generation to the sole Task-owned incident allowance before owner work. |
 | [_execute_reservation](audit_recovery.py) | Invoke the selected owning-team adapter after exact claim acceptance and record its structured result. |
-| [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation, accepted heads, lease, descendant and retirement facts. |
+| [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation from the adapter acknowledgement, accepted heads, lease, descendant and retirement facts, then require a fresh host inspection of the reviewed worker receipt and capability generation. |
 | [verify_incident_postcheck](reservations.py) | Atomically close only the matching generation and retain its deferred attempt in history. |
 | [_incident_projection](audit_projection.py) | Serialize bounded typed lifecycle evidence into immutable pages. |
 
 ```mermaid
 flowchart TD
-    Observe[Bounded authoritative observation] --> Capability[Resolve capability and owner]
-    Capability --> Recheck[Lock and recheck local fingerprint]
+    Observe[detected: bounded authoritative observation] --> Capability[assigned: resolve capability and owner]
+    Capability --> Recheck[admitted: lock and recheck local fingerprint]
     Recheck -->|fresh| Reserve[Persist reservation and accept exact claim]
-    Recheck -->|changed / unavailable| Refuse[Typed refusal; retain evidence]
-    Reserve --> Execute[Execute supported scoped operation]
-    Execute --> Result[Persist attempt result]
-    Result --> Verify[Later authoritative postcheck]
-    Verify -->|obligation satisfied| Resolved[Resolved evidence]
-    Verify -->|still blocked| Pending[Retained incident / bounded handoff]
+    Recheck -->|changed / unavailable| Refuse[waiting: typed refusal or one handoff]
+    Reserve --> Execute[executing: owner operation]
+    Execute --> Result[validating / publishing: persist owner evidence]
+    Result --> Verify[verifying: fresh authoritative postcheck]
+    Verify -->|obligation satisfied| Resolved[resolved: original generation closed]
+    Verify -->|still blocked| Pending[waiting: retained incident]
 ```
 
 Reservations and action attempts survive restart. Interrupted claims are
@@ -273,6 +330,13 @@ for Epics, checking introduction timestamps. For a generation-bound repair,
 [repair_event_authorizes](../feature/repair.py) joins `FeatureRepairAuthorized`
 to the live action, exact owner/path/ref bindings, and the committed introduction
 blob. An arbitrary active-path move therefore lacks recovery authority.
+
+The parent-lifecycle postcheck treats missing, unverified, dead, stale, dirty,
+mixed-root, unintegrated or capability-mismatched runtime evidence as pending.
+Review validation and accepted Git heads cannot substitute for that process-local
+proof. It records only bounded receipt identities in the incident result and uses
+the existing exact-generation verification transition; it does not create a
+runtime success setter or a second lifecycle ledger.
 
 The `feature.feature_repair` capability is limited to Task-tier
 `parent_lifecycle_mismatch` incidents owned by the exact direct Feature. Its
@@ -292,6 +356,13 @@ leases and registered worktrees. Deferred mismatch generations remain postcheck
 candidates after the board becomes healthy, so restart and repeated sweeps use
 the same check without replaying merge, worker, message, repair or publication.
 Unknown legacy acceptance and changed facts remain pending.
+
+The stage record is not a sandbox or a second queue. Its permitted-input list
+records the evidence keys authorized by the selected descriptor; the owner tool
+still rechecks actual values and all approval, comment, credential, installation,
+scope, dependency and mutation gates. The Task-owned operation receipt is charged
+before an executable owner adapter. Exhaustion therefore refuses repeated paid
+recovery while unrelated incident claims remain independently eligible.
 
 If the capability is missing or broken, its probe records the exact resume
 prerequisite and the existing investigation outbox creates one generation-keyed

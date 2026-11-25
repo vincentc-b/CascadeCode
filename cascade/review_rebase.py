@@ -14,7 +14,13 @@ from pathlib import Path
 from typing import Mapping
 
 from cascade.review_validation import review_validation_command as validation_command
-from cascade.review_validation import review_validation_timeout, run_review_validation, validate_publication_board
+from cascade.review_validation import (
+    ReviewValidationAdmissionError,
+    ReviewValidationOperation,
+    review_validation_timeout,
+    run_review_validation,
+    validate_publication_board,
+)
 from cascade.resolution_actions import resolution_action
 from cascade.task.action_recovery import (
     ActionFailure,
@@ -202,7 +208,10 @@ def execute_review_rebase(
 
 
 def check_and_publish_review_rebase(
-    turn: ReviewRebaseTurn, execution: ReviewRebaseExecution
+    turn: ReviewRebaseTurn,
+    execution: ReviewRebaseExecution,
+    *,
+    validation_operation: ReviewValidationOperation | None = None,
 ) -> ReviewRebasePublication:
     """Run the bounded regression check and lease-protect source publication.
 
@@ -246,14 +255,19 @@ def check_and_publish_review_rebase(
             configured_command=validation_command(trunk),
         )
         timeout = review_validation_timeout(trunk)
-        check_result = run_review_validation(command, cwd=worktree, timeout=timeout)
+        check_result = run_review_validation(
+            command,
+            cwd=worktree,
+            timeout=timeout,
+            operation=validation_operation,
+        )
     except subprocess.TimeoutExpired as exc:
         return _publication_blocked(
             "checks", "repository_checks_timed_out",
             f"Repository checks exceeded {timeout:g} seconds; validation processes were stopped and the checkout preserved.", worktree,
             checks=(ReviewRebaseCheck(command, 124, str(exc.output or ""), str(exc.stderr or "")),),
         )
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, ReviewValidationAdmissionError) as exc:
         return _publication_blocked(
             "checks", "repository_checks_unavailable",
             f"Repository checks could not run ({type(exc).__name__}); no publication attempted.", worktree,

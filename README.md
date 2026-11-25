@@ -37,6 +37,38 @@ cascade --help
 Keep that environment active when running Cascade. For development on Cascade
 itself, use `python -m pip install -e '.[dev]'` from this checkout instead.
 
+### Run the recovery contract locally
+
+The `Recovery contract` check exercises the real-repository owner journey,
+cumulative incident budgets, provider admission, review publication and
+independent postchecks. From a fresh checkout, reproduce the CI selection with
+only the declared development dependencies:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+timeout --kill-after=10s 8m \
+  python -m pytest -q \
+    tests/test_late_repair_convergence.py \
+    tests/task/test_incident_budget.py \
+    tests/agent/test_provider_recovery_contract.py \
+    tests/test_review_publication_safeguards.py \
+    tests/test_review_recovery_journey.py \
+    tests/test_review_health.py \
+    tests/test_review_rebase.py \
+    tests/test_resolution_actions.py \
+    tests/watchdog/test_reservations.py \
+    tests/watchdog/test_audit_investigation.py \
+    tests/watchdog/test_parent_lifecycle_postcheck.py \
+    tests/feature/test_publication.py::test_review_recovers_remote_creation_before_local_registry_write \
+    --tb=short
+```
+
+Exit status `124` means the local eight-minute command bound expired and is a
+failure. CI keeps the job-level ten-minute limit and retains only a redacted,
+bounded diagnostic tail when the selection fails.
+
 ## Initialize a product repository
 
 For a new product:
@@ -188,21 +220,53 @@ authorize installation, change a product checkout, or deploy from a Task branch.
    environment from the reviewed checkout using the installation procedure in
    [Install Cascade](#install-cascade). Do not edit site-packages, import private
    repair functions, hotpatch the old process, or change lifecycle/event files.
-4. With the same environment active, record the source actually selected by the
-   `cascade` command and confirm its Git revision equals the expected revision:
+4. With the same environment active, create a runtime-authority manifest. This
+   command refuses a dirty or stale reviewed checkout, an unknown integration
+   commit, or installed Python bytes that differ from the reviewed source. It
+   records evidence only; it does not install software or grant installation
+   authority:
+
+   The installation actor supplies a version-1 JSON receipt containing
+   `accepted_review_url`, `authorized_actor`, `environment`, both absolute
+   repository paths and exact revisions, and `installed_source_sha256`. Its
+   `receipt_id` is SHA-256 of the canonical JSON body (sorted keys, compact
+   separators); `signature` is HMAC-SHA256 of that same body plus `receipt_id`
+   using the separately provisioned key (at least 32 bytes). Receipt issuance
+   is deliberately outside Cascade and must follow the environment's approval
+   and credential policy.
 
    ```bash
-   python -c 'import pathlib,cascade; print(pathlib.Path(cascade.__file__).resolve().parents[1])'
-   git -C /absolute/path/printed/above rev-parse HEAD^{commit}
+   cascade runtime-bootstrap \
+     --reviewed-source /absolute/path/to/reviewed/CascadeCode \
+     --integrated-source /absolute/path/to/guarded/integration-checkout \
+     --deployment-receipt /protected/signed-deployment-receipt.json \
+     --authority-key /protected/installation-authority.key \
+     --output /protected/runtime-authority.json
    ```
 
    A non-editable installation may not live inside a Git checkout. In that case,
-   use the environment's reviewed installation receipt or artifact digest to bind
-   the installed files to the expected commit; if no such binding exists, stop
-   and reinstall from the reviewed checkout rather than guessing a revision.
-5. Start `cascade up --root /absolute/path/to/product` from the product trunk.
-   Verify `curl -fsS http://127.0.0.1:8765/api/health` reports `serving` and record
-   the observed executing revision or artifact digest, worker PID, and timestamp.
+   the command binds its installed package bytes to the reviewed checkout rather
+   than guessing a revision from the package path.
+5. Start from the product trunk with that exact manifest:
+
+   ```bash
+   cascade up --root /absolute/path/to/product \
+     --runtime-authority /protected/runtime-authority.json \
+     --runtime-authority-key /protected/installation-authority.key
+   ```
+
+   Verify `curl -fsS http://127.0.0.1:8765/api/health` reports `serving` and that
+   `runtime_identity.verified` is `true`. Record its reviewed and integrated
+   revisions, signed deployment receipt, installed-source digest, loaded-module
+   origins/digests, worker PID, host boot/process-start identity, capability
+   generation and timestamp. Cascade revalidates the signed receipt, both clean
+   exact checkouts, review ancestry and installed bytes before each spawn. The
+   launcher independently reads `/proc`, the selected import root, module bytes
+   and its own capability generation before setting `verified`; stale, mixed,
+   wrong-root or changed evidence fails closed. Linux `/proc` is therefore a
+   prerequisite for deployment proof.
+   Starting without `--runtime-authority` remains supported for ordinary local
+   operation but reports `runtime_authority_missing` and is not deployment proof.
    With automation enabled, wait for the normal review poll and record the War
    Room review-health outcome for the queued repair. If automation is disabled or
    the forge is unavailable, keep the delivery queued and record the postcheck as
@@ -210,8 +274,10 @@ authorize installation, change a product checkout, or deploy from a Task branch.
 
 If the old running code cannot admit the repair, the exact prerequisite is:
 gracefully stop that old supervisor, obtain separate authority to install the
-reviewed revision, and restart it before retrying the canonical queued operation.
-A local Task merge alone does not satisfy that prerequisite.
+reviewed revision, obtain the installation actor's signed deployment receipt and
+provisioned trust key, and restart it before retrying the canonical queued
+operation. A local Task merge, caller-supplied SHA, unsigned receipt, or healthy
+endpoint alone does not satisfy that prerequisite.
 
 ## Keep documentation useful
 
