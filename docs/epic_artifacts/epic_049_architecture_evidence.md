@@ -767,3 +767,48 @@ Verification: canonical spec/amendment reads, sign-off inspection, producer
 tree inspection, affected design review and `git diff --check`. No executable,
 render or browser checks were repeated for this evidence-only change. Return
 control to child execution and supervisor integration.
+
+## Manager current-plan publication receipt
+
+Received Feature 2's revision correction and current-plan architecture review
+handoffs. Canonical Feature 2 remains at
+`ac9ddcf32cd67965da38682847f59e183f78b1d7`; Feature 3 revision
+`12650b202a022681c9663f12cd509558d267ce93` already cites that corrected revision.
+The correction changes decision author labels, not acknowledgement or detail
+contracts. No spec write, new decision or scope amendment is needed.
+
+Reviewed Feature-owned evidence commit `0711aca6` and its saved request, which
+pins the same current plan and records `no_diagram_change`. The owner reports
+publication operation
+`architecture-publication-af47d78d2bb5cc4b2220cf040485c982a5c6a3b53cb5ddc3a0d00765fe09b4f4`
+and review unit
+`architecture-review-a5daa55cf2f6366eb91d015f184c98fcf337129c34dc00072747c6a11176144d`.
+This is Feature planning-publication evidence, not implemented behavior or
+recovery of the separately failed Epic architecture publication. No direct
+publication-status query or render was performed in this Manager turn.
+
+Acknowledged both handoffs through `message_team` with request
+`epic_049:manager_current_plan_publication_received_20261125`; Cascade returned
+`enqueued`. No repeat planning confirmation was requested. Final implemented
+source and serialized route/error/detail fixtures remain due for Feature 3.
+The owner-reported Task 1 acceptance/test-plan correction, producer child-design
+ownership gap and Epic publication recovery remain unresolved; this turn does
+not independently review scoped Task content or change child lifecycle state.
+
+Design closeout: reviewed the transcript structure and interruption sequence in
+`cascade/war_room/DESIGN.md`, invocation/checkpoint handoff in
+`cascade/workspace/DESIGN.md`, and component/Code ownership links in
+`cascade/DESIGN.md`. This receipt-only diff changes no actors (`cascade-context`),
+runtime/data boundaries (`cascade-containers`), component relationships
+(`cascade-war-room-components`, `cascade-supervisor-components`,
+`cascade-team-components`), or implementation symbols (`cascade-dashboard-code`,
+`cascade-watchdog-code`, `cascade-task-code`, `cascade-workspace-code`,
+`cascade-teams-code`). Normal and restart flows are unchanged. Feature 2 retains
+implementation reconciliation and Feature 3 retains integrated UI/navigation
+acceptance; no current-design edit or repeated executable/browser test is
+warranted by this diff.
+
+Verification: canonical Epic/Feature reads, empty architecture amendments,
+matching saved Epic sign-offs for `03280933`, exact Feature request inspection,
+handoff enqueue and `git diff --check`. Return control to child execution and
+supervisor integration.
