@@ -1354,3 +1354,41 @@ run for this evidence-only update. Epic plan and sign-offs remain unchanged.
 Repair acceptance, canonical Task corrections, producer design coverage, final
 consumer fixtures and failed Epic publication recovery remain open. Return
 control to child execution and supervisor integration.
+
+## Architect receipt retry acceptance review
+
+Reviewed canonical Feature revision `436f94968af7f7b43240ae4031333ec88535e83f`
+and its integrated publisher/receipt-consumer source. The mapping compares
+entry, graph, message, incarnation and append sequence as one immutable tuple;
+the same receipt/message with changed room metadata raises a conflict. This
+confirms the reported failure mechanism by source trace, not a new execution of
+the reproduction. Task 4 owns mapping repair and retry/conflict evidence;
+Task 5 owns source-key/message preservation through rewrite and movement.
+The Manager's preceding handoff already covers delayed acknowledgements and
+genuine identity conflicts, so no duplicate notification is needed. Acceptance
+remains open under the existing Epic contract; no plan amendment is warranted.
+
+Design closeout: reviewed Feature Watchdog publication, War Room transcript
+requirements/interfaces/sequence, Workspace room handoff, and the owned package
+boundary against source. The Watchdog fast-path wording must name the private
+mapping operation within the publisher transaction and distinguish the public
+entry point. Task 4 already owns that correction. The preceding diagram-impact
+inventory applies: context actors and container boundaries are unchanged;
+store/consumer/publisher component ownership is unchanged; native
+`cascade-watchdog-code` and `cascade-dashboard-code`, source contracts and
+Watchdog/War Room recovery sequences require reconciliation with the delivered
+repair. Workspace movement remains a consumer verification boundary. Final
+Feature review must verify Code navigation, Level up, deep-link restoration,
+pinned source and failure/restart behavior against the integrated revision.
+This Epic diff changes only work evidence, so no current-design/model edit or
+render is warranted here.
+
+Validation: canonical Epic/Feature reads, empty architecture amendment list,
+source/design trace, all six saved publication references matching committed
+digests and checkout, and both role sign-offs matching Epic `03280933`.
+`git diff --check` passed. No executable or browser tests were rerun for this
+evidence-only change; the Feature's reported 35 tests and source validation do
+not close the retry gap. Epic plan, sign-offs and saved publication request are
+unchanged. Repair acceptance, canonical Task corrections, producer design
+coverage, final fixtures and terminal Epic publication recovery remain open.
+Return control to child execution and supervisor integration.
