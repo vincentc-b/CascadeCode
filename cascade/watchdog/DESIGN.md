@@ -63,13 +63,26 @@ settles the corresponding Task receipt on success, refusal, timeout or
 interruption. The wrappers do not keep allowance, reclaim a claim by lease age,
 or launch work when Task returns pending, exhausted or owner-decision.
 
+[`record_result`](reservations.py) distinguishes completion of the bounded
+adapter invocation from completion of the wider lifecycle incident. A known
+deferred, refused or no-op owner result charges the attempted invocation and
+releases its budget claim; it does not manufacture lifecycle success or turn a
+completed invocation into an unclassified execution failure. Adapter errors and
+unsafe results retain failure settlement semantics. This permits a later owner
+or restart to use the remaining original allowance while the independent
+postcheck continues to decide whether the incident itself is resolved.
+
 The `cascade-watchdog-code` view includes
 [`incident_record`](incidents.py) as the envelope boundary and the reserve/settle
 consumer functions above. Focused lineage and
 restart coverage is in
 [`tests/task/test_incident_budget.py`](../../tests/task/test_incident_budget.py),
 while [`tests/watchdog/test_incidents.py`](../../tests/watchdog/test_incidents.py)
-retains generation/history compatibility coverage.
+retains generation/history compatibility coverage. Watchdog settlement mapping
+is covered by
+[`tests/watchdog/test_reservations.py`](../../tests/watchdog/test_reservations.py),
+and the real-repository post-push/restart path is covered by
+[`tests/test_late_repair_convergence.py`](../../tests/test_late_repair_convergence.py).
 
 ## Health-audit projection contract
 

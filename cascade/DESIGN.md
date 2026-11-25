@@ -387,6 +387,11 @@ Feature branch to its owning Epic branch. Unknown or conflicting state fails
 closed. Reconciliation binds callbacks to their immutable generation and exact
 accepted source/target heads, while independent target integration remains a
 separate closeout obligation.
+If a process stops after pushing and opening a review but before storing its
+generation, recovery may reuse the discovered review only after a fresh forge
+snapshot reports the exact source and target refs and heads for the prepared
+publication and an open state. Missing or changed authoritative evidence keeps
+the generation unpublished; a route-shaped review alone is not a receipt.
 `DEC-CASCADE-RECOVERY-001`: Preserve a single local lifecycle authority across
 team adapters, watchdog claims and Boss delivery, with repository-specific state
 resolved through Workspace.
@@ -458,4 +463,7 @@ are not separately deployed services. Guarded tools constrain agent operations;
 repository locks serialize mutations, without claiming OS filesystem isolation.
 Verification: [supervision tests](../tests/test_planning_manifest_and_team_controls.py),
 [review health](../tests/test_review_health.py), and
-[tracking adapter](../tests/test_tracking_find.py).
+[tracking adapter](../tests/test_tracking_find.py). The real-repository
+[late-repair convergence test](../tests/test_late_repair_convergence.py) injects
+the post-push/pre-receipt stop and checks unavailable, changed and exact replay
+evidence across colocated and split roots.

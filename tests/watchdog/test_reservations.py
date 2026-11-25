@@ -219,7 +219,10 @@ def _fresh(incident: dict[str, object], **changes: object):
     return lambda _work_id, _root: row
 
 
-def test_watchdog_claim_uses_and_settles_task_owned_budget(tmp_path: Path) -> None:
+@pytest.mark.parametrize("outcome", ["success", "deferred"])
+def test_watchdog_claim_uses_and_settles_task_owned_budget(
+    tmp_path: Path, outcome: str
+) -> None:
     root = _root(tmp_path)
     action = create_or_load_action(
         "task_001:budget",
@@ -270,13 +273,18 @@ def test_watchdog_claim_uses_and_settles_task_owned_budget(tmp_path: Path) -> No
     recorded = record_result(
         decision.reservation,
         {"accepted": True},
-        {"outcome": "success"},
+        {"outcome": outcome},
         root=root,
     )
     assert recorded["stage_receipts"][-1]["stage"] == "waiting"
-    assert recorded["stage_receipts"][-1]["result"] == "independent_postcheck_required"
+    assert recorded["stage_receipts"][-1]["result"] == (
+        "independent_postcheck_required"
+        if outcome == "success"
+        else "owner_result_deferred"
+    )
     settled = read_incident_budget("task_001:budget", root=root)
     assert settled is not None
+    assert settled["status"] == "active"
     assert settled["reserved"]["tool_attempts"] == 0
     assert settled["charged"]["tool_attempts"] == 1
     assert settled["live_claim"] is None

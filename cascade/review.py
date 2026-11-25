@@ -1058,19 +1058,24 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         push_branch(entry.path, source, force_with_lease=remote_lease_sha)
     else:
         push_branch(entry.path, source)
-    mr = reuse or find_merge_request(
-        entry.path, source_branch=source, target_branch=target
-    ) or create_merge_request(
-        entry.path,
-        title=f"{feature_id}: {doc.meta.title}",
-        body=(
-            f"Implements `{feature_id}` for `{doc.meta.parent}`. This review is managed by "
-            "Cascade; review comments are delivered to the Feature Team."
-        ),
-        source_branch=source,
-        target_branch=target,
-        draft=False,
+    found = (
+        find_merge_request(entry.path, source_branch=source, target_branch=target)
+        if reuse is None
+        else None
     )
+    mr = reuse or found
+    if mr is None:
+        mr = create_merge_request(
+            entry.path,
+            title=f"{feature_id}: {doc.meta.title}",
+            body=(
+                f"Implements `{feature_id}` for `{doc.meta.parent}`. This review is managed by "
+                "Cascade; review comments are delivered to the Feature Team."
+            ),
+            source_branch=source,
+            target_branch=target,
+            draft=False,
+        )
     projection = {
         "url": mr.url,
         "number": mr.number,
@@ -1088,6 +1093,18 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
         "previous_generation": existing_generation if existing is not None else None,
         "previous_review_url": prior.get("url") if prior is not None else None,
     }
+    if found is not None:
+        # A prior process may have published the exact ref and opened the
+        # review before it could persist this generation. Re-read both forge
+        # heads before converting that remote effect into a local receipt;
+        # finding a route-shaped review is not authoritative evidence that its
+        # source and target still match this publication attempt.
+        snapshot = merge_request_snapshot(trunk, found)
+        _require_repair_review_route(projection, snapshot, found)
+        if snapshot.get("state") not in {"open", "opened"}:
+            raise GitError("recovered review is not open")
+        if snapshot.get("target_revision") != projection["target_head"]:
+            raise GitError("recovered review target changed before receipt persistence")
     record = _store_review_generation(
         trunk,
         feature_id,
