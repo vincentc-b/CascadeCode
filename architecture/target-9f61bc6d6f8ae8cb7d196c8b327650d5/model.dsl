@@ -72,13 +72,13 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.feature-team"
             }
         }
-        task_team = component "Task team" "Bounded SWE turns with scoped tools and supervised delivery." "cascade.task.graph" {
+        task_team = component "Task team" "Bounded SWE turns with scoped tools, supervised delivery and retained action-transition receipts." "cascade.task.graph" {
             properties {
                 "cascade.semanticId" "element.component.task-team"
                 "cascade.designPath" "cascade/task/DESIGN.md"
             }
         }
-        watchdog_component = component "Watchdog" "Admits ready work and coordinates bounded recovery." "cascade.watchdog" {
+        watchdog_component = component "Watchdog" "Admits ready work and retains generation-bound recovery stage receipts for bounded recovery." "cascade.watchdog" {
             properties {
                 "cascade.semanticId" "element.component.watchdog"
                 "cascade.designPath" "cascade/watchdog/DESIGN.md"
@@ -289,7 +289,7 @@ agent_uses_task_budget = agent_component -> task_team "Reserves and settles inci
     }
 }
 
-task_persists = task_team -> repository "Persists checkpoints and work evidence in" {
+task_persists = task_team -> repository "Persists checkpoints, action transitions and work evidence in" {
     properties {
         "cascade.semanticId" "relationship.task-persists"
     }
@@ -1017,7 +1017,7 @@ board_component_to_repository = board_component -> repository "Reads and validat
     }
 }
 
-watchdog_component_to_repository = watchdog_component -> repository "Records lifecycle events, recovery evidence and audit epochs" {
+watchdog_component_to_repository = watchdog_component -> repository "Records lifecycle events, retained transition evidence and audit epochs" {
     properties {
         "cascade.semanticId" "relationship.watchdog-component-to-repository"
     }
@@ -2044,6 +2044,24 @@ code_watchdog_stage_receipt = element "recovery_stage_receipt" "Function" "Creat
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/watchdog/incidents.py"
         "cascade.sourceSymbol" "recovery_stage_receipt"
+    }
+}
+
+code_watchdog_transition_receipt = element "transition_receipt_v1" "Function" "Bind source, generation, work, attempt, claim and monotonic transition sequence into a deterministic safe receipt." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.transition-receipt"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incidents.py"
+        "cascade.sourceSymbol" "transition_receipt_v1"
+    }
+}
+
+code_watchdog_transition_notify = element "_notify_incident_transition" "Function" "Notify the progress publisher with an already committed incident receipt while preserving repair outcome on failure." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.transition-notify"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "_notify_incident_transition"
     }
 }
 
@@ -3196,6 +3214,33 @@ code_task_action_checkpoint = element "record_action_checkpoint" "Function" "Per
     }
 }
 
+code_task_transition_receipt = element "_append_action_transition" "Function" "Append a generation and attempt-bound v1 transition receipt inside the authoritative action commit." {
+    properties {
+        "cascade.semanticId" "element.code.task.transition-receipt"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "_append_action_transition"
+    }
+}
+
+code_task_execution_start = element "_record_execution_start" "Function" "Commit execution-start evidence after preflight and before entering the long executor." {
+    properties {
+        "cascade.semanticId" "element.code.task.execution-start"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "_record_execution_start"
+    }
+}
+
+code_task_transition_notify = element "_notify_transition" "Function" "Best-effort after-lock handoff of a committed action receipt and snapshot." {
+    properties {
+        "cascade.semanticId" "element.code.task.transition-notify"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "_notify_transition"
+    }
+}
+
 code_workspace_invoke = element "_invoke_role_turn" "Function" "Invokes the graph and mirrors new planning messages after return." {
     properties {
         "cascade.semanticId" "element.code.workspace.invoke"
@@ -3265,5 +3310,35 @@ task_actions_to_task_claim = code_task_actions -> code_task_claim "Claims before
 task_actions_to_task_finalize = code_task_actions -> code_task_finalize "Records executor outcome" {
     properties {
         "cascade.semanticId" "relationship.code-task-actions-to-task-finalize"
+    }
+}
+
+task_actions_to_execution_start = code_task_actions -> code_task_execution_start "Commits start after successful preflight" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-actions-to-execution-start"
+    }
+}
+
+task_execution_start_to_transition_receipt = code_task_execution_start -> code_task_transition_receipt "Appends the pre-executor receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-execution-start-to-transition-receipt"
+    }
+}
+
+task_transition_receipt_to_notify = code_task_transition_receipt -> code_task_transition_notify "Hands off committed receipt after lock release" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-transition-receipt-to-notify"
+    }
+}
+
+watchdog_incident_record_to_transition_receipt = code_watchdog_incident_record -> code_watchdog_transition_receipt "Enriches ordered stages with v1 source identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-incident-record-to-transition-receipt"
+    }
+}
+
+watchdog_result_to_transition_notify = code_watchdog_result -> code_watchdog_transition_notify "Notifies only after the incident replacement commits" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-result-to-transition-notify"
     }
 }

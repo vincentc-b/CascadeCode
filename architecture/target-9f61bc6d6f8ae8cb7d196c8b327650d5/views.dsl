@@ -54,7 +54,7 @@ custom "cascade-task-code" {
     include code_task_actions code_task_delivery_queue code_task_mismatch code_task_leases code_task_validation code_task_revalidation
     include code_task_generation
     include code_task_budget_bind code_task_budget_read code_task_budget_extend code_task_budget_exhaust code_task_budget_reserve code_task_budget_settle
-    include code_task_ack code_task_claim code_task_finalize code_task_action_checkpoint
+    include code_task_ack code_task_claim code_task_finalize code_task_action_checkpoint code_task_transition_receipt code_task_execution_start code_task_transition_notify
     autoLayout lr
 }
 
@@ -122,7 +122,7 @@ custom "cascade-watchdog-code" {
         "cascade.codeComponent" "element.component.watchdog"
     }
     include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish
-    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
+    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
     autoLayout lr
 }
 
