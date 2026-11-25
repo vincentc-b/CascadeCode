@@ -384,5 +384,51 @@
       "read_architecture_amendments returned []"
     ],
     "limitations": "No runtime/render/browser checks rerun. Dossier is active and unmerged; not final architecture or operational acceptance. F1 owning acceptance receipt, final Epic integration/validation, controlled-supervisor authority/evidence, completed-record limitations and terminal architecture publication recovery remain open. Existing failed exact publication requires its recorded supported runtime-owner recovery; no substitute references or retry capability observed."
+  },
+  "manager_task004_delivery_reconciliation": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_plan_revision": "e41b5be5d6581d4ed29347cafa47213d2052f743",
+    "reviewed_task_revision": "3dc7f74e9692690e78a080b27b182f6aa6e79cce",
+    "lifecycle": "F4 reports Task 004 awaiting_merge with delivery_wait parent_turn_boundary. Epic supervise_child independently confirms F4 active with no incidents. No Task merge or Feature completion is claimed.",
+    "reported_validation": {
+      "source": "F4 TeamMessage task004-queued-3dc7f74e",
+      "operation": "supervised final_validation",
+      "exit_code": 0,
+      "passed": 181,
+      "existing_warnings": 2,
+      "seconds": 194.6,
+      "independently_rerun": false
+    },
+    "resolved_evidence_corrections": [
+      "Dossier separates accepted Task 003 c2e8b608/163 passes/165.69s from earlier cf3ea559/231.25s and retains all four pre-correction red runs.",
+      "Dossier distinguishes pinned Structurizr RepoDigest c89b54231 from local image ID 97681b225 and identifies inherited renderer/browser observations at f26f5af7."
+    ],
+    "verification": [
+      "Canonical Epic and Feature read_doc inspected; existing acceptance gates and dec_010 remain sufficient.",
+      "e41b5be5 is an ancestor of 3dc7f74e.",
+      "git diff --stat e41b5be5 3dc7f74e shows only the 247-line Task 004 dossier; git diff --check passes.",
+      "Read the complete exact-commit dossier, including admission refusal and final design inventory."
+    ],
+    "design_closeout": {
+      "reviewed_path": "3dc7f74e:docs/task_artifacts/task_048_004_004_controlled_supervisor_evidence_dossier.md",
+      "context_containers": "Dossier-only delta changes no actors, responsibility boundaries, runtime, communication or stores; cascade-landscape, cascade-context and cascade-containers need no edits.",
+      "components_code": "No production, DESIGN.md, model.dsl, views.dsl or source-contract changes. Existing component/Code source declarations and owners remain unchanged. Dossier reports integrated source/navigation and pinned renderer/Chromium evidence; no independent rerun in this turn.",
+      "behavior": "Dossier preserves original-incident admission through publication and independent postcheck, plus failure/restart retention of budgets and receipts. Missing target/install/fault/incident/rollback authority remains a refusal, not successful operational recovery.",
+      "limitations": "Final Feature post-merge reconciliation and matching revision review remain with F4. Existing plan review 518cf87b covers e41b5be5, not an unobserved future revision. No replacement Epic architecture publication or final acceptance."
+    },
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:epic_048:task004-3dc7f74e-dossier-ack",
+      "status": "enqueued",
+      "next": "Allow queued supported merge at parent boundary; return exact merge/delivery receipt and final Feature plan/review pins."
+    },
+    "decision": "Evidence reconciliation under existing dec_010; no requirement, scope, plan or decision-log change. No duplicate tests, recovery or operational dispatch.",
+    "remaining": [
+      "Queued Task 004 merge and final Feature reconciliation/review",
+      "F1 owning acceptance/design reconciliation receipt and completed-record limitations",
+      "Final Epic integration and validation",
+      "Controlled-supervisor authority and operational evidence",
+      "Original terminal architecture publication recovery"
+    ]
   }
 }
