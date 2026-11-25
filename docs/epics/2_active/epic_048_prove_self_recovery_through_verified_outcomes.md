@@ -430,6 +430,11 @@ Canonical children are F1–F4 completed and F5 cancelled with cleanup complete.
   Chose Preserve completed publication of 31a9e967 and local clarification 9353de4e as separate evidence. Require an operator/platform-owned supported fresh admission before F4 publication; retain F5 cancellation and reduced parent scope. No duplicate dispatch or completed-action replay..
   Rationale: Forge confirms PR #256 OPEN/CLEAN and Recovery contract SUCCESS at 31a9e967. Durable action completed after 117 publication checks in 42.52s. The completed generation cannot admit the newer local clarification, clean-review health creates no new admission, and no fresh admission tool is exposed to the Epic. Internal normalization/admission functions do not establish a supported operator command.
   Honors: Original immutable-head, owner, lease, incident-budget and acceptance gates; F1/F4 evidence and cancelled F5 history; no direct push, private lifecycle mutation, manufactured conflict, duplicate work or unchanged test rerun. No comment ID supplied..
+
+- `dec_014` · 2026-11-25 · Epic Manager · **F4 merge receipt and retained clarification prerequisite**
+  Chose Recognize PR #256 merge 8613f810 at published source 31a9e967 as F4 source integration. Preserve unpublished clarification 9353de4e and require the operator/platform owner to identify a supported guarded follow-up publication route after the review closed. Keep final Epic acceptance open..
+  Rationale: Forge head and ancestry prove the merge but exclude 9353de4e, despite the canonical linked-review source naming that clarification. Hosted Recovery contract success applies to 31a9e967; Epic integration has identical production/test/workflow/architecture trees. Completed child state and merge do not establish the missing owning receipt, operational evidence or accepted architecture lineage.
+  Honors: Existing F1/F4 acceptance and immutable validation/publication boundaries; dec_013 and all incident history; cancelled F5 analysis/approval/linkage and canonical continue_reduced_scope. No duplicate work, completed-action replay, direct push, lifecycle override or unchanged full gate..
 ## Amendment log
 
 _(none)_
