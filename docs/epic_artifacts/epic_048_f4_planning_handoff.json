@@ -181,5 +181,65 @@
     "checks": "JSON parsed; all design paths, named native C4 view keys and 14 local source declarations resolve. Child-source absence confirmed. git diff --check passed.",
     "tests": "No runtime tests, renderer or browser run is warranted for this handoff-only change. No fresh implementation acceptance, live deployment or completed architecture publication claimed.",
     "limitations": "Approved epic plan remains ffcb9a10. No spec edit, new decision, sign-off, dependency installation or lifecycle change. F3 evidence reconciliation, F4 integrated verification and operational authority, and architecture publication recovery remain explicit gates."
+  },
+  "architect_review": {
+    "role": "epic_architect",
+    "trigger": "FeaturePlanningStarted:feat_048_004",
+    "epic_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21",
+    "owned_checkout_revision": "eb0e7f83c03d30c632975cf8856e5f298654aaf7",
+    "assessment": "The current four-Task plan fits approved F4 scope and now contains data, API, flow and all-level diagram sections. This supersedes the Manager observation that those sections are TBD. The APIs remain categories rather than revision-pinned callable contracts; the source/evidence and link corrections below remain Feature planning/delivery gates. No Epic amendment or new Epic decision is required; read_architecture_amendments returned [].",
+    "access_boundary": "Canonical list_children reports F1-F3 completed and F4 active. All four F4 Task read_doc requests returned content_access_denied. Their acceptance completeness and execution state were not inspected or inferred. This authorization result does not contradict the satisfied prerequisite projection. No filesystem or Git workaround was used to read those records.",
+    "required_owner_actions": [
+      {
+        "owner": "F4 Feature Lead/Architect",
+        "action": "Correct the Feature diagram inventory links through read_doc/write_doc: from docs/features/2_active, ../../DESIGN.md resolves to docs/DESIGN.md; use ../../../DESIGN.md. Likewise use ../../../cascade/... and ../../../architecture/... for root-owned destinations. Verify every final plan link from its canonical path and republish the architecture review against the corrected plan revision using the supported workflow."
+      },
+      {
+        "owner": "F4 Feature Lead/Architect and Task 001",
+        "action": "Pin delivered F1-F3 source revisions and exact production callable paths/signatures, typed results/refusals, original-incident identity fields and evidence schema in the Feature/Task contract. Map the owner journey through budget admission, provider-to-MCP-to-validator nesting, immutable publication, loaded identity and independent postcheck. Specify which external transport is scripted, where independent counters observe effects, and each injected interruption boundary; fixture setup must not directly complete an admitted transition."
+      },
+      {
+        "owner": "F4 Feature Lead/Architect",
+        "action": "Inspect all four canonical Task records with your authorized tools. Reconcile applicable acceptance/test plans and exact view keys before dispatch where lifecycle permits. If any record is guarded, retain its exact refusal, canonical contract mapping, owner and next supported action; do not edit board files directly or infer completion from Feature-level prose."
+      },
+      {
+        "owner": "F3 Feature Lead/Architect supplying evidence; F4 consumers",
+        "action": "Consume the already-requested final Task 003/004 closeout reconciliation. Require an actual interruption after remote push before local receipt, independently unchanged effect counts on replay, and original budget observations before/after bootstrap and worker restart, in colocated and split-root journeys. Preserve Task 001 completed-record TBD limitation. Completed lifecycle or staged architecture units alone do not prove these results; retain exact revisions, commands and artifacts."
+      },
+      {
+        "owner": "F4 Tasks 002-003",
+        "action": "Retain mandatory bounded Recovery contract CI, five isolated reversible fault mutations that fail their intended assertions, pristine rerun, independently counted denial/exhaustion effects and sanitized bounded diagnostics. Measure budget and CI feasibility without dropping acceptance, resetting allowance or claiming unavailable token usage. CI prerequisites must fail visibly; local manifest readiness does not establish CI runner identity or installation authority."
+      },
+      {
+        "owner": "F4 Task 004 and Feature Architect",
+        "action": "Keep exact operational target, actor/credentials, approved fault, reviewed/integrated/installed/loaded identities, rollback and finite original budget as separately established prerequisites. Review any changes after Task 003 against final integrated source and all retained diagram rows. An unavailable authorized supervisor exercise remains a named acceptance gap, not deterministic CI success or permission to deploy."
+      }
+    ],
+    "diagram_impact_reconciliation": {
+      "inventory": "Retain diagram_impact_inventory above; Feature Tasks 001-002 reconcile implementation changes, Task 003 validates integrated architecture, Task 004 reconciles later changes and operational traces. Feature owners must carry these obligations into accessible canonical Task acceptance.",
+      "context_containers": "No actor, external dependency, process boundary or persistence owner changes in this handoff-only diff. Retain cascade-landscape, cascade-context and cascade-containers; final review checks independent operator authority, launcher/worker boundaries and tracking-trunk persistence against delivered source.",
+      "components": "No producer/consumer interface changes here. Retain CLI, supervisor, team and War Room component views. Final review joins budget/provider/tool/validator/postcheck collaborators and registered component ownership on both sides of each changed interface.",
+      "code": "No implementation declaration changes here. Retain all ten Code views in the inventory, including Workspace Commands, Teams publication, dashboard and HTTP. Final source-contract review must use actual integrated budget/runtime declarations with correct native element kinds and cascade.codeComponent/parent/sourcePath/sourceSymbol metadata; stale Epic source cannot establish child completeness.",
+      "behavior": "No state transition changes here. Existing package publication, Task tracking-root ledger, Feature repair and Watchdog postcheck flows and Workspace restart ownership remain applicable to this checkout. Delivered source must supply charged nesting, post-push/pre-receipt recovery, original-budget restart continuity and fresh independent loaded-runtime verification.",
+      "verification_gate": "Final architecture evidence includes supported bounded render, actual context-to-container-to-component-to-Code navigation, Level up/deep-link restoration and pinned source, stale/deleted-symbol and changed-owner rejection, normal/failure/isolation traces, warm artifact reuse and measured timings. No accepted snapshot rewrite or document-only substitute."
+    },
+    "publication": "Last retained Epic operation architecture-publication-f17d12c797b510fe6679b23bbf54b3c2d6b6abc55443e11ff1c8cac84192b78e is terminal failed. The current tool catalog exposes no architecture-publication/render retry operation. Retain docs/epic_artifacts/epic_048_publication_resume.json and its exact request for supported runtime-owner recovery; no repeated terminal replay or substituted review references.",
+    "verification": {
+      "reviewed_designs": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/workspace/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "cascade/agent/DESIGN.md",
+        "cascade/war_room/DESIGN.md"
+      ],
+      "scope": "Reviewed affected local ownership, publication/provider, tracking ledger, repair/postcheck, worker lifecycle and C4 navigation sections against the handoff diff. No DESIGN/model edit is warranted: this change only records planning constraints and review findings, and source/design/model are unchanged from c717bb36. Child implementation is absent from this owned checkout; no final integrated design acceptance or full-tree completeness is claimed.",
+      "checks": "Canonical Epic and F4 reads; list_children; empty amendments; four scoped Task read refusals; all retained design paths, named view keys and 14 local source declarations resolve; three representative broken Feature links and corrected destinations checked; child-source absence confirmed; JSON parse and git diff --check.",
+      "tests": "No runtime tests, native renderer or browser checks rerun for this artifact-only change. Retained earlier checks are not fresh F4 evidence.",
+      "remaining_gaps": "Feature plan links and concrete source/API bindings; Task contract verification by scoped owner; F3 evidence reconciliation; final integrated runtime/architecture acceptance; exact operational authority and supervisor evidence; supported Epic publication recovery."
+    }
   }
 }
