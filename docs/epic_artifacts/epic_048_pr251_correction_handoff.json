@@ -257,5 +257,50 @@
       "Supported terminal architecture publication recovery",
       "Separate authorized operational supervisor evidence"
     ]
+  },
+  "f4_acknowledgement_review": {
+    "role": "epic_manager",
+    "trigger": "feat_048_004:feat_048_004:pr251-correction-integration-handoff-796aeee2",
+    "epic_plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "reported_f4_plan_revision": "796aeee2",
+    "read_f4_plan_revision": "a71c608fb72bddffee615b62840a006e34d8dcf9",
+    "read_f5_plan_revision": "c2ade1e50726c81148dc4fa9d3142ac73f7e9079",
+    "assessment": "Current canonical F4 plan independently confirms the retained original regression in mandatory PR/main Recovery contract, no duplicate production correction, exact integrated F5 revision and full bounded selection rerun, final dossier and architecture/diff refresh after integration even if Task 3 completes first. F5 remains backlog with no Tasks; concrete schema/API/flow and Task acceptance are still its planning obligations. This acknowledges dec_007 ownership; no new scope, decision or epic spec edit is needed.",
+    "evidence_boundary": "F4 reports Task 3 active, owner notified, clean branch and no overlapping production changes. This turn verified canonical plan commitments, not child execution state, branch cleanliness, runtime behavior or hosted CI. No correction delivery or passing result is claimed.",
+    "resolution_path": [
+      "F5 completes its canonical implementation contract and Task acceptance, then delivers production correction and real-validator/Git proof through normal review.",
+      "Epic Manager routes exact reviewed delivery to F4 through supported integration; no other-team branch mutation or dependency cycle with F4 operational proof.",
+      "F4 pins the integrated correction, retains the original regression, reruns the complete bounded mandatory selection and refreshes final evidence/design review against subsequent changes.",
+      "Epic Manager records supported PR #251 correction or explicit linked reviewed successor/supersession and fresh passing hosted checks at corrected-review and final-Epic SHAs. Historical failure remains evidence."
+    ],
+    "handoffs": [
+      {
+        "recipient": "feat_048_005",
+        "request_id": "epic_048:pr251-f4-ack-integration-a71c608f",
+        "status": "enqueued"
+      },
+      {
+        "recipient": "feat_048_004",
+        "request_id": "epic_048:pr251-f4-ack-manager-a71c608f",
+        "status": "enqueued"
+      }
+    ],
+    "design_closeout": {
+      "reviewed": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "existing architect_review.diagram_impact_inventory in this artifact"
+      ],
+      "no_change_reason": "Acknowledgement-only work-record diff changes no implementation, state schema, interface, source contract or diagram. Existing parent publication/Task ledger boundaries remain applicable. Prior context/container/component/native Code/behavior inventory and F5 implementation plus F4 integrated verification ownership are retained without claiming the proposed correction exists.",
+      "verification": "Canonical Epic/F4/F5 reads; acknowledgement matched to current F4 contract; JSON validation and git diff --check passed. Runtime tests, rendering, browser navigation and hosted CI not rerun for this artifact-only change.",
+      "gaps": [
+        "F5 dispatch-ready contract and implementation proof",
+        "F4 final integrated CI/dossier and design reconciliation",
+        "PR #251 reviewed disposition and final hosted CI",
+        "Existing terminal architecture publication supported recovery",
+        "Separate authorized operational supervisor evidence"
+      ]
+    }
   }
 }
