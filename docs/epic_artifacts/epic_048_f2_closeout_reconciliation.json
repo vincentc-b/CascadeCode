@@ -233,5 +233,65 @@
     ],
     "publication": "Preserve exact terminal request/result in epic_048_publication_resume.json. Failure internal_error: render worker was interrupted after its automatic recovery attempt. No new accepted lineage, replacement snapshot or successful publication inferred. Existing approved-plan sign-off refusal is not retried.",
     "boundary": "Artifact-only owned change. No board lifecycle edits, merge, override, duplicate production fix, unchanged validation/recovery redispatch or dependency installation. End planning turn for pending child delivery."
+  },
+  "manager_final_architecture_reconciliation": {
+    "role": "epic_manager",
+    "owned_base": "18ef95e8a99823444c39a76ac3fef09f63a3a866",
+    "epic_plan_revision": "8bad293119bc985b12a5767192d99d0d82228b7f",
+    "assessment": "F2 final architecture report and F4 consumer acknowledgement add evidence to the existing acceptance contract and dec_009. No scope change, new decision or canonical plan rewrite is needed.",
+    "f2_report": {
+      "head": "b9c2129558beaffd235a6c28ab25693a5cd71813",
+      "source_contract_and_render_tests": 21,
+      "tests_rerun_by_epic": false,
+      "browser_navigation": "Unverified after timeout; render checks do not establish browser navigation or a joined timeout-to-owner-to-postcheck trace.",
+      "completed_task_record": "Task 001 placeholder acceptance/test/scope and broken parent link remain open pending supported board/runtime amendment authority."
+    },
+    "f4_report": {
+      "head": "107d3a267da1153e77d5818188e7abd19f35389d",
+      "f2_is_ancestor": false,
+      "task_003": "Blocked/unmerged; no recovery or unchanged CI run.",
+      "receipt_contract": "Retain launch_attributes/parent_operation_id and material_fingerprint; failed-material fence applies to original review_rebase, with original gates retained for other linked validators."
+    },
+    "f1_observed": {
+      "head": "51cffe146b8b423027266f8469678c482e321c79",
+      "pr": 251,
+      "state": "open",
+      "merged": false,
+      "mergeable_state": "clean",
+      "reviews": [],
+      "review_recovery": "completed/success",
+      "supervise_child": {
+        "action": "inspect",
+        "status": "completed",
+        "incidents": []
+      }
+    },
+    "route_assessment": {
+      "source": "cascade/epic/recovery.py:recover_feature; cascade/team_supervision.py:supervise_child,_recover_feature_lifecycle_mismatch",
+      "finding": "With no owned incident, the inspected recovery adapter has no exact completed-parent Task mismatch to admit. Generic recover queues a generation-keyed owner message/wakeup; its pending_feature_result is not acceptance, reactivation or integration.",
+      "limitation": "No new runtime refusal was produced this turn; no unchanged recover was invoked. Existing F1 owning-review/disposition request remains pending. No exposed Epic tool supplies F1 review acceptance or a completed-Task body amendment.",
+      "prerequisite": "Owning F1 reviewed SHA and supported disposition/integration receipt, or exact Feature/runtime refusal and authorized recovery route; then F4 integrates, proves Task 003 corrected base, resumes through supported recovery and runs the full bounded Recovery contract."
+    },
+    "design_closeout": {
+      "reviewed": [
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "cascade/epic/recovery.py",
+        "cascade/team_supervision.py",
+        "F2 final architecture handoff and existing artifact diagram inventory"
+      ],
+      "context_containers": "Evidence-only artifact changes no actor, external dependency, runtime, store or communication boundary. Existing cascade-landscape/context/containers remain applicable.",
+      "components_code": "No implementation or ownership change in this owned diff; existing team/supervisor component and Epic/Feature Code routes still describe inspected recovery. Prior Task/Agent/Teams/Watchdog integrated-source inventory remains with F4.",
+      "behavior": "Source confirms coordination versus exact generation-bound repair distinction. Retain final Task receipt schema/flow, original-budget failure/resume and integrated navigation checks; no diagram change justified by this evidence-only diff.",
+      "verification": "Canonical Epic read; F1 child inspect; exact forge PR, reviews and check reads via gh api; recovery-source and owning-design inspection; JSON and git diff checks. Runtime/render/browser tests not rerun.",
+      "gaps": "F1 owning review/design closeout and supported integration; F4 corrected-base recovery/full CI/final architecture; F2 completed-record correction; final Epic CI; separately authorized operational evidence; original terminal architecture-publication recovery."
+    },
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:f2-final-architecture-consumer-ack-b9c21295",
+      "status": "enqueued",
+      "response_policy": "No acknowledgement-only reply or plan churn requested; report material progress or precise supported-route refusal."
+    },
+    "boundary": "No board lifecycle/spec mutation, merge override, duplicate correction, installation or unchanged test/recovery redispatch. End planning turn for queued child work."
   }
 }
