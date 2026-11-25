@@ -389,5 +389,60 @@
       "Original terminal architecture publication recovery"
     ],
     "limitations": "No lifecycle override, duplicate recovery or implementation, dependency installation, operational exercise, new architecture publication or completion claim."
+  },
+  "architect_f2_f3_integration_review": {
+    "role": "epic_architect",
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "owned_revision": "b83f2e7df76c4dbe2b39252cc9df197242ad4ba9",
+    "integration": {
+      "verified_ancestors": [
+        "51cffe14",
+        "b9c21295",
+        "cc882ec1"
+      ],
+      "f3_merge": "0f8d1e0470214e9a043a6f28b88b8c100ba0c4e1",
+      "f4_aaca5e02_is_ancestor": false,
+      "content_check": "No cascade/architecture/tests/root DESIGN difference between F3 merge 0f8d1e04 and inspected Epic HEAD. Git incorporation does not supply missing owning reconciliation receipts or accepted architecture promotion."
+    },
+    "reviewed_designs": [
+      "DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/agent/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/watchdog/DESIGN.md",
+      "cascade/workspace/DESIGN.md",
+      "cascade/epic/DESIGN.md",
+      "cascade/feature/DESIGN.md"
+    ],
+    "diagram_impact": {
+      "context_containers": "cascade-landscape, cascade-context and cascade-containers retain actors, runtime/store boundaries and communication. Provider accounting and runtime attestation remain inside existing supervisor/worker responsibilities; no new OS isolation claim.",
+      "components": "cascade-supervisor-components and cascade-team-components retain Task accounting, Agent metering, Teams publication and Watchdog independent postcheck. Workspace owns runtime identity and host verification consumed by Watchdog.",
+      "code": "Merged F2/F3 model, views and contract include provider admission/settlement, invocation receipts, validation profiles, stage receipts and five runtime-identity functions in cascade-workspace-commands-code. Task/Agent/Teams/Watchdog Code declarations and source ownership pass source-contract validation. No additional model edit for this evidence-only reconciliation.",
+      "behavior": "Agent reserves original incident allowance before physical dispatch and settles normalized invocation evidence. Watchdog postcheck calls verify_current_loaded_runtime_identity; missing authority is pending, stale/dead/changed process or source is refused, and only current evidence can satisfy loaded_runtime_current. Runtime designs describe signed installation authority, independent host inspection, restart receipt replacement and retained queues. No live deployment or operational recovery inferred."
+    },
+    "verification": [
+      "Canonical read_doc(epic_048) inspected; read_architecture_amendments returned [].",
+      "python -m pytest -q tests/workspace/test_c4_source.py: 14 passed in 0.98s at b83f2e7d.",
+      "291 local file links in eight reviewed designs resolve; fragment semantics were not checked by this file-existence scan.",
+      "git diff --check 19fcceeb..HEAD passed.",
+      "Scoped design attribution scan found no epic_048/feat_048/task_048/introduced in/previously matches.",
+      "Compared aaca5e02 package/Task designs against Epic and traced provider admission/settlement plus normal and refused runtime postchecks against source."
+    ],
+    "known_gap": "Epic still lacks F4 final package/Task material-fence and receipt-field documentation. F4 already owns and has delivered the correction; preserve it through normal integration rather than duplicate edits. F2 browser timeouts remain historical failures; F4 pinned browser evidence is not a new Epic navigation run.",
+    "decision": "Existing plan, dec_010 and acceptance inventory remain sufficient. No spec edit, new decision, renewed sign-off or replacement architecture publication. Final integrated acceptance remains pending.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:architect:f2-f3-integrated-b83f2e7d",
+      "status": "enqueued",
+      "instruction": "Extend existing normal integration reconciliation to merged F3 interfaces; preserve F4 final design and dossier. No acknowledgement-only response or unchanged-source rerun requested."
+    },
+    "remaining": [
+      "F4 normal integration and authoritative reconciliation receipt",
+      "F1 owning acceptance/design receipt and completed-record correction limitations",
+      "Final Epic CI and source/render/navigation reconciliation",
+      "Controlled-supervisor target/install/trust/fault/incident/rollback authority and operational evidence",
+      "Original terminal architecture publication recovery"
+    ],
+    "limitations": "No full Recovery gate, renderer/browser rerun, installation, runtime restart, operational exercise, lifecycle override or accepted-lineage mutation. End parent turn to permit queued delivery."
   }
 }
