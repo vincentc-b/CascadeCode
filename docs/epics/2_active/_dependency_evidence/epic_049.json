@@ -477,6 +477,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_51353d72970abb62545d37e6c021ba538e9b9828e0275bf7d019009065b9decc",
+      "dependency_id": "dep_pytest",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:344cb709016dd90018d27b15a6c270ea5b7bb7de8947327df9404e5d61cfc8fa",
+      "recipe_revision": "sha256:b4e6c4a879bb0b0a54484e4c71596fe26bd249b7f25a671a2866223ce75b7b6d",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib,pathlib; d=m.distribution(\"pytest\"); assert d.version==\"9.0.3\"; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()==\"b27302b307f7be9f789280d5a12892e035278b364767ffc5616aa816d092f8c7\"; importlib.import_module(\"pytest\"); print(\"pytest 9.0.3 verified (installed RECORD digest)\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-25T16:45:36.882263+00:00",
+      "completed_at": "2026-11-25T16:45:38.096857+00:00",
+      "result": "succeeded",
+      "redacted_output": "pytest 9.0.3 verified (installed RECORD digest)\n",
+      "selected_version": "9.0.3",
+      "integrity_reference": "sha256:b27302b307f7be9f789280d5a12892e035278b364767ffc5616aa816d092f8c7",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
