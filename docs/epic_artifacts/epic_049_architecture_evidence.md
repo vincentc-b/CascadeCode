@@ -342,3 +342,31 @@ Verification: pinned source inspection, canonical consumer readback, successful
 message enqueue responses and `git diff --check`. No executable code changed;
 no new tests or browser journey were run. Return control for child execution
 and the final fixtures/consumer response.
+
+## Architect merged-producer handoff review
+
+Reviewed canonical producer spec `9c97b16f8c3d6853c7a1903cbaddd71c1fcd83e0`
+and consumer spec `431d9d6e0f86dbc0e65644694334f810f354294f` against pinned
+producer source `900c6201`. `transition_receipt_v1`, `_entry_id` and
+`_derive_entry` agree with the routed serialization, null handling, source
+reference, retained affected-work order and pending milestone-reference contract.
+This checks the handoff's accuracy; it is not final producer acceptance or
+consumer agreement. Task 4's final API/error/cursor fixtures and Feature 2's
+explicit response remain outstanding. The Manager has already routed both
+requests; no duplicate message or spec amendment is needed.
+
+Reviewed `cascade/war_room/DESIGN.md`, `cascade/task/DESIGN.md`,
+`cascade/workspace/DESIGN.md`, and their package/Watchdog interface sections.
+The owned diff since the prior architect review contains only handoff evidence:
+context actors, container boundaries, component owners, integrated Code symbols
+and execution/restart flows are unchanged. No design/model update or repeated
+render/browser run is warranted for this diff. Feature 1 still owns reconciliation
+with its implemented producer; Feature 2 owns append/replay and transcript API
+acceptance. The existing diagram-impact inventory remains applicable.
+
+Canonical architecture amendment lookup returned none. Epic plan `03280933`
+and both role sign-offs remain unchanged. The recorded terminal publication
+failure still requires supported runtime recovery; the available tools expose
+no failed-publication retry. No replacement pins or successful publication are
+claimed. Verification: pinned source inspection, canonical spec comparison and
+`git diff --check`; no new executable tests. Return control to child execution.
