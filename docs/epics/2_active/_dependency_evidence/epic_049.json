@@ -799,6 +799,27 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_755e6549e8ccc027e185d81cbc12572f19b28a7b9090fd5d010b2cfd9d429a20",
+      "dependency_id": "dep_node",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:3edd17d88d9233563902e4b3c45d98e8a8a5e87a77a8dedfcc236a604ee291e1",
+      "recipe_revision": "sha256:9dbb46ed781b597b467b5171f70f79723d1f0290accc9cb057c54a25d975f47b",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert hashlib.sha256(pathlib.Path(\"/usr/bin/node\").read_bytes()).hexdigest()==\"6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd\"; import subprocess; assert subprocess.check_output(['\\''/usr/bin/node'\\'','\\''--version'\\''],text=True).strip() == '\\''v20.20.2'\\''; print(\"node 20.20.2 verified\")'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-25T16:46:10.827955+00:00",
+      "selected_version": "20.20.2",
+      "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+      "lock_references": [
+        "pyproject.toml",
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
