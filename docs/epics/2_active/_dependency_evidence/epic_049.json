@@ -22,6 +22,43 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_8bef20287824a839f8cb000da533c03290c1f319ed31c0ea329897813b9fd474",
+      "dependency_id": "dep_python",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:8dcdada00c6288d5ce46e40f62521f9c2695a0535cba294040e6b7c9d2897166",
+      "recipe_revision": "sha256:df93297330c18d91b2c3dfdff07bb779e87fc0318393b0e756dac5245894153d",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert hashlib.sha256(pathlib.Path(\"/opt/conda/bin/python3.12\").read_bytes()).hexdigest()==\"0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612\"; import sys; assert sys.version_info[:3] == (3,12,8); print(\"python 3.12.8 verified\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-25T16:45:14.177450+00:00",
+      "completed_at": "2026-11-25T16:45:14.777635+00:00",
+      "result": "succeeded",
+      "redacted_output": "python 3.12.8 verified\n",
+      "selected_version": "3.12.8",
+      "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+      "lock_references": [
+        "pyproject.toml",
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
