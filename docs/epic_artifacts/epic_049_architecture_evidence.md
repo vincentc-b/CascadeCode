@@ -205,3 +205,38 @@ replacement publication or accepted-artifact change was attempted here.
 
 Verification for this handoff is canonical spec/dependency-order review and
 `git diff --check`; no executable code changed and no test run is claimed.
+
+## Architect feature-planning handoff review
+
+Read the canonical Epic and Feature 1 revision
+`5afb0c3577efec331dcac74de9b9b1c2ae4c3564` through Cascade. Feature 1 now lists
+four Task records and assigns receipt durability, exact invocation/executor
+evidence, materialization and bounded public reads to them. Its diagram inventory
+assigns all affected levels, native Code nodes, normal/dead-owner/restart flows,
+pinned source opening and warm navigation verification. This review verifies
+the Feature contract and assignments, not individual Task content or execution.
+The approved Epic revision and both existing sign-offs remain unchanged;
+Cascade returned no architecture amendments.
+
+Reviewed the War Room transcript, Task action-evidence, Workspace invocation,
+package recovery and Watchdog postcheck interfaces against the existing design
+inventory. No model or design edit is warranted: the only intervening owned
+diff is the Manager's handoff evidence, with no changed runtime behavior or
+boundary at context, container, component, Code or behavioral levels. Proposed
+implementation and its verification remain assigned to Feature 1; transcript
+deduplication/history and the held-final-reply UI journey remain downstream.
+Preserve the frozen receipt/entry identities and explicit pending milestone
+references at that handoff.
+
+Verified all five saved design/model/contract references against committed
+digests and checkout bytes; `validate_c4_workspace` returned
+`C4WorkspaceContract`. `git diff --check` passed. No new executable tests or
+browser journey were run for this documentation-only review.
+
+The available Cascade tools still expose no retry for terminal architecture
+publication failure. Source inspection confirms that discovery returns a failed
+row without scheduling; the special retry branch applies only to
+`superseded/artifact_changed`, not this `failed/internal_error` outcome. Do not
+change reviewed pins to manufacture a new operation. The exact request and
+operation IDs above remain the runtime recovery handoff. Publication is still
+incomplete; this turn does not claim a retry or a new publication result.
