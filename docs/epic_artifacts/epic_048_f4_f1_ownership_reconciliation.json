@@ -49,5 +49,45 @@
     "behavior": "Existing diagrams cover generation-bound admission, guarded mint and restart. No new execution behavior is asserted. F1 must reconcile material-fence/remaining-allowance flows with its actual correction.",
     "verification": "Canonical Epic/F1/F4 reads, list_children, empty amendment list, scoped Task refusal, local recovery source and design review; JSON parse, referenced file existence and git diff --check. No runtime, render/browser or hosted CI rerun for this artifact-only change.",
     "limitations": "No production fix, completed repair admission, matching current F4 architecture publication, green PR check or operational acceptance established. Do not repeat unchanged recovery calls while the already-queued owner work is pending."
+  },
+  "architect_review": {
+    "role": "epic_architect",
+    "owned_checkout_revision": "e221155d",
+    "epic_plan_revision": "ed2fe1b08d6bb7e4589fa694b981abd4de5466da",
+    "feature_plan_revision": "a4776fbe9193a62303a6a2bcae40eb7dbdaef917",
+    "assessment": "Canonical F4 dec_003 and the revised integration gate agree with Epic dec_008. F1 owns the admitted correction on feat/feat_048_001 and PR #251; F4 retains mandatory Recovery contract and final integrated evidence. No new Epic scope, decision or spec edit is required.",
+    "review_revision_boundary": "Reported architecture-review-ef80edb0 covers 3748929904b7040dad064eacb155c0e9a88e5006 only. It does not review a4776fbe. The Manager has already queued epic_048:epic_048:f4-f1-ownership-review-a4776fbe through the supported parent/Feature lifecycle. Feature Architect must review and publish the exact current plan; this Epic artifact does not substitute for that publication. No duplicate request sent.",
+    "f1_boundary": "Canonical read still returns completed at ff3cd399d1523ba6c4e123825c811f8c0b700e7c. The retained pending_feature_result/durable_result=false response is coordination only. Source supports guarded feature_repair admission, but does not establish loaded capability or execution. Existing F1 dispatch remains pending; no repeat recovery call or lifecycle mutation made.",
+    "repair_acceptance": "F1 must return the admitted action/generation for pr251-material-evidence-retry-correction or the exact refusal, prerequisite and supported runtime/lifecycle route. Its concrete correction Task must retain original incident identity, allowance, consumption/history, authoritative failed-material and A-B-A/restart fences, numerical/action/transient bounds and independent human gates. Retain the existing regression plus real governed-validator/Git proof. Require normal review and fresh green review-recovery on the exact corrected PR #251 head before merge.",
+    "integration_acceptance": "F4 integrates the exact reviewed F1 correction after its green PR gate, reconciles F2/F3 consumer changes, reruns the complete bounded mandatory selection at the integrated SHA and refreshes final designs/C4/navigation and dossier. Preserve the two reported red Task 3 runs separately until logs map their exact heads; neither the reported browser journey nor the old plan review closes corrected-source acceptance. Task 4 own acceptance remains owner-reported and not independently inspected because of the recorded scoped access refusal.",
+    "design_closeout": {
+      "reviewed": [
+        "cascade/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl"
+      ],
+      "source_checks": [
+        "cascade/epic/recovery.py:recover_feature",
+        "cascade/feature/repair.py:_admission_gates"
+      ],
+      "context": "cascade-landscape and cascade-context: this work-record diff changes no actors or external systems. Retain F1 final boundary review and F4 integrated checks.",
+      "containers": "cascade-containers: no process, runtime, persistence or isolation change in this diff. Original tracking-root ledger and restart obligations remain with F1.",
+      "components": "cascade-supervisor-components and cascade-team-components: unchanged implementation responsibilities. Existing Epic/Feature designs distinguish coordination from guarded repair admission; F1 retains budget/publication and affected-consumer reconciliation.",
+      "code": "cascade-task-code and cascade-teams-code remain the correction implementation owners; cascade-epic-code and cascade-feature-code explain the existing recovery route. No declaration or interface changed here. F1 must reconcile actual symbols, source kinds, ownership and model/contract links; F4 verifies final integrated navigation and affected Agent/Watchdog/projection consumers.",
+      "behavior": "Existing generation-bound admission, refusal and restart flows remain accurate for the owned source. No implemented changed-material retry is asserted. F1 owns the corrected deterministic-fence versus cumulative-exhaustion flow and normal/refusal/restart proof.",
+      "verification": "Read canonical Epic/F1/F4 documents and empty architecture amendments. Reviewed the single-artifact diff, current design boundaries, recovery/admission source and retained view keys. JSON parse, design/source/view reference existence and git diff --check passed. No runtime, renderer, browser or hosted CI rerun for this artifact-only review.",
+      "gaps": [
+        "F1 durable repair admission or exact runtime refusal",
+        "Concrete correction Task and production/test delivery",
+        "Green PR #251 review-recovery before merge",
+        "Matching current F4 Feature Architect review",
+        "Final integrated CI/design/navigation and final Epic CI",
+        "Separately authorized operational evidence",
+        "Supported recovery of terminal Epic architecture publication"
+      ]
+    },
+    "approval_publication": "Existing approval and original terminal publication request are preserved. The known already-approved sign-off refusal is not retried. No replacement publication or accepted snapshot is created; the terminal operation still requires supported runtime-owner recovery. No renewed sign-off or successful architecture publication claimed."
   }
 }
