@@ -633,3 +633,48 @@ lifecycle repair was made. Verification: canonical Epic/Feature reads, scoped
 access results, existing sign-off inspection, successful message enqueue and
 `git diff --check`. No executable change warrants repeated tests or rendering.
 Return control to Feature 2 execution and supervisor integration.
+
+## Architect consumer-agreement receipt
+
+Reviewed canonical Feature 2 revision `ba53aa47ac3fb433d4110228fc09baa5a3c05746`
+against unchanged Epic plan `03280933`. Its persisted producer agreement closes
+the identity/public-field/cursor compatibility question. Its transcript v1 route,
+legacy Link/completeness headers and typed errors implement the approved parent
+contract; they remain proposed interfaces pending implementation evidence.
+No Epic scope amendment or new decision is required. Both existing sign-offs
+remain pinned to the current Epic revision; architecture amendments are empty.
+
+The plan assigns four Tasks and per-level diagram ownership. Canonical reads of
+Tasks 002 and 004 returned `content_access_denied`; no alternative content path
+was used and no direct Task acceptance review is claimed. Enqueued
+`epic_049:architect_consumer_agreement_review_20261125` to request owner
+confirmation and persistence of the exact receipt-to-message acknowledgement
+and publisher-update interface, its post-commit/pre-ack retry owner, and the
+oversized legacy-row detail route/continuation schema. Requested final source
+and API fixtures for the dependent UI handoff with the next substantive update.
+This turn did not edit the active Feature spec or dispatch work.
+
+Reviewed `cascade/war_room/DESIGN.md` transcript implementation/sequence,
+`cascade/workspace/DESIGN.md` invocation/checkpoint handoff, and
+`cascade/DESIGN.md` parent ownership and recovery boundaries. These describe the
+owned checkout's implementation; the new consumer is still child-owned work.
+Read-only inspection of producer revision `dc47068c` confirms the missing
+`cascade/recovery_progress/DESIGN.md` remains unresolved despite directory
+mappings. The existing producer reconciliation request remains its owner route.
+No speculative design changes or completion acceptance were made.
+
+Diagram-impact reconciliation for this evidence-only diff: `cascade-context`
+actors and `cascade-containers` runtime/data boundaries are unchanged;
+`cascade-war-room-components`, `cascade-supervisor-components` and
+`cascade-team-components` gain no responsibilities or relationships;
+`cascade-dashboard-code`, `cascade-workspace-code`, `cascade-task-code`,
+`cascade-watchdog-code` and `cascade-teams-code` gain no implementation symbols;
+normal and failure/restart sequences are unchanged. The Feature inventory owns
+final source-contract, design, native Code navigation and crash/replay checks.
+The saved architecture publication remains terminally failed; available tools
+expose no terminal retry. No substitute pins or accepted artifacts were written.
+
+Verification: canonical Epic/Feature/amendment reads, sign-off inspection,
+producer tree/mapping inspection, successful handoff enqueue and
+`git diff --check`. No executable, render or browser checks were repeated for
+this evidence-only change. Return control to child execution and integration.
