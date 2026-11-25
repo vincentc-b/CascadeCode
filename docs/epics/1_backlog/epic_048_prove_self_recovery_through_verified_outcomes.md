@@ -38,8 +38,8 @@ cancellation_feedback:
   - continue_reduced_scope
   - replace_replan
   - cancel_parent
-  disposition: null
-  resolved_at: null
+  disposition: continue_reduced_scope
+  resolved_at: '2026-11-25T05:06:34.744773+00:00'
 ---
 # Prove self recovery through verified outcomes
 
@@ -146,6 +146,10 @@ The Epic Team will create and sequence feature plans here.
 
 - 2026-11-11 · Human · Requested a durable self-recovery contract and regression after the Epic 046 failure; approval is pending PR review and merge.
 
+- `dec_001` · 2026-11-25 · Human · **Disposition for cancelled child feat_048_005**
+  Chose continue with reduced scope.
+  Rationale: User disposition recorded after reviewing the child's cancellation feedback.
+  Honors: Parent dispatch remains gated until a user choice permits continuation.
 ## Amendment log
 
 _(none)_
