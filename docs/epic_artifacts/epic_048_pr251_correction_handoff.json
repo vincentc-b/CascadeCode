@@ -340,5 +340,60 @@
         "status": "enqueued"
       }
     ]
+  },
+  "f4_final_revision_manager_review": {
+    "role": "epic_manager",
+    "triggers": [
+      "feat_048_004:feat_048_004:f5-ownership-recorded-20261125",
+      "feat_048_004:feat_048_004:f5-final-plan-revision-20261125"
+    ],
+    "epic_plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "verified_f4_plan_revision": "3748929904b7040dad064eacb155c0e9a88e5006",
+    "superseded_intermediate_f4_revision": "a71c608fb72bddffee615b62840a006e34d8dcf9",
+    "reported_task4_acceptance_revision": "a2953bbedfd6745791927d35f7c48bb324264e2e",
+    "assessment": "Canonical F4 read confirms dec_002 and the external F5 correction dependency, original mandatory regression, full bounded PR/main rerun and final dossier/architecture refresh at the integrated correction. This implements existing Epic dec_007; no new scope, decision, spec edit or sign-off is required. Task 4 revision and Task 3 execution/notification are reported by F4, not independently inspected here.",
+    "architecture_review_route": {
+      "owner": "F4 Feature Architect through supported Feature team lifecycle",
+      "requested_plan_revision": "3748929904b7040dad064eacb155c0e9a88e5006",
+      "previous_review_plan_revision": "796aeee2",
+      "status": "refresh requested; no matching completed review independently established"
+    },
+    "sequencing": {
+      "verified": "list_children reports F1-F3 completed, F4 active, F5 backlog with no Tasks; supervise_child inspect reports F5 backlog and incidents=[]",
+      "authority": "Normal watchdog/Boss lifecycle owns dispatch; no child status, branch or execution change attempted. F5 depends on F1-F3, not F4 final CI or operational acceptance.",
+      "path": "F5 reviewed production fix and real-validator/Git proof -> supported correction integration -> F4 exact-SHA full bounded CI and dossier/design refresh -> Epic PR #251 reviewed resolution and final hosted checks."
+    },
+    "handoffs": [
+      {
+        "recipient": "feat_048_004",
+        "request_id": "epic_048:epic_048:f4-final-plan-review-routing-37489299",
+        "status": "enqueued"
+      },
+      {
+        "recipient": "feat_048_005",
+        "request_id": "epic_048:epic_048:f5-f4-final-plan-37489299",
+        "status": "enqueued"
+      }
+    ],
+    "design_closeout": {
+      "reviewed": [
+        "DESIGN.md authority and automation boundaries",
+        "cascade/DESIGN.md publication and recovery ownership",
+        "cascade/task/DESIGN.md implementation/navigation and durable delivery collaborators",
+        "existing architect_review.diagram_impact_inventory in this artifact"
+      ],
+      "context_containers": "No actors, external systems, runtime or persistence boundaries change in this work-record-only diff; existing landscape/context/container inventory remains assigned to F5 implementation and F4 final integration review.",
+      "components_code": "No producer/consumer interfaces, implementation symbols, declaration kinds or component ownership change here. Retain native Task/Teams and affected consumer Code obligations; do not invent a model delta or claim child code acceptance from the Epic baseline.",
+      "behavior": "No execution or state-transition change here; material-failure fencing and original-budget continuity remain F5 implementation obligations and F4 integrated verification gates.",
+      "verification": "Canonical Epic/F4/F5 reads, child lifecycle and single F5 supervision inspection, empty architecture amendments, reviewed local design sections, JSON validation and git diff --check. No runtime tests, renderer, browser or hosted CI rerun for this artifact-only update.",
+      "remaining_gaps": [
+        "Matching F4 architecture review on final plan revision",
+        "F5 concrete planning, implementation and real-validator/Git evidence",
+        "F4 integrated CI/dossier and final source/design/view acceptance",
+        "PR #251 reviewed disposition and final Epic hosted CI",
+        "Separate authorized supervisor exercise",
+        "Supported recovery of terminal Epic architecture publication"
+      ]
+    }
   }
 }
