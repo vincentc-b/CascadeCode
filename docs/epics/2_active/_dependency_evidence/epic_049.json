@@ -762,6 +762,43 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_5218e21725e6e2b3be7fdd4e590f52560d0a972f4ff1cc566157deeef0bfc319",
+      "dependency_id": "dep_git",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:8acfaca7a9f2a800e1ac1bcc8a832b072df005c482b37efc27639996d89f7a03",
+      "recipe_revision": "sha256:f0011e6cb4c64e5019a79d2d6da04ade13a11f4de7189447b65b51ab6596df42",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert hashlib.sha256(pathlib.Path(\"/usr/bin/git\").read_bytes()).hexdigest()==\"07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9\"; import subprocess; assert subprocess.check_output(['\\''/usr/bin/git'\\'','\\''--version'\\''],text=True).strip() == '\\''git version 2.34.1'\\''; print(\"git 2.34.1 verified\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-25T16:46:09.551936+00:00",
+      "completed_at": "2026-11-25T16:46:10.234455+00:00",
+      "result": "succeeded",
+      "redacted_output": "git 2.34.1 verified\n",
+      "selected_version": "2.34.1",
+      "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+      "lock_references": [
+        "pyproject.toml",
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
