@@ -140,6 +140,45 @@ validation, and Epic product acceptance remains a later lifecycle obligation.
 
 
 
+## Action evidence and transcript boundary
+
+`REQ-TASK-RECOVERY-EVIDENCE-001`: An attempt's claim, number and outcome belong
+to the action ledger under `task_lifecycle_lock`. A recovery display cannot grant
+repair authority or treat an attempt result as independent incident verification.
+
+`DEC-TASK-RECOVERY-EVIDENCE-001`: Reuse the tracking-root
+`.cascade/executions.json` action records and atomic replacement boundary.
+The [action implementation](action_recovery.py) exposes
+`acknowledge_team_recovery` (timestamp the matching routed owner),
+`_claim_resume_attempt` (append an open attempt and claim),
+`record_action_checkpoint` (idempotent per-attempt checkpoint), and
+`finalize_attempt` (outcome, classification, completion time and claim release).
+`resume_action` runs the executor after claim/preflight releases the lifecycle
+critical section. Review-publication claims also bind process identity; other
+claims do not universally contain that proof.
+
+```mermaid
+flowchart LR
+    Request[Durable routing marker] --> Ack[Owner acknowledgement]
+    Ack --> Claim[Locked eligible attempt and claim write]
+    Claim --> Preflight{Preflight}
+    Preflight -->|allowed| Execute[Executor outside claim critical section]
+    Preflight -->|refused| Finalize[Persist failed outcome]
+    Execute --> Checkpoint[Persist attempt checkpoints]
+    Checkpoint --> Finalize
+    Execute -->|process interruption| Open[Retained open attempt and claim]
+    Open --> Reconcile[Owner-specific restart reconciliation]
+    Finalize --> Verify[Separate authoritative incident postcheck]
+```
+
+The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and `cascade-task-code` in the [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+expose these functions beneath `cascade-team-components`. They do not append
+live recovery transcript events. The [War Room design](../war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
+owns current presentation limits; [Watchdog](../watchdog/DESIGN.md#recovery-admission-and-active-path-authority)
+owns independent verification. [Action recovery tests](../../tests/task/test_action_recovery.py)
+exercise claim races, persisted attempts, checkpoints and restart behavior.
+
 ## Interrupted review publication attempts
 
 Review-rebase attempts claimed through `resume_action` additionally persist the

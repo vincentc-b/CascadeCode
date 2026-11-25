@@ -115,6 +115,31 @@ environment; the evidence does not claim container or credential isolation.
 Verification references: [startup recovery](../../tests/workspace/test_worker_startup_recovery.py)
 and [runtime identity integration](../../tests/workspace/test_runtime_identity.py).
 
+## Graph invocation and transcript handoff
+
+`REQ-WORKSPACE-TURN-EVIDENCE-001`: Process-local graph ownership and persisted
+graph state have different lifetimes. Neither a saved next node nor pending
+queue work proves that an action executor is running.
+
+`DEC-WORKSPACE-TURN-EVIDENCE-001`: [kickoff.py](kickoff.py) serializes graph
+turns with process-local locks and queues. `graph_turn_owner_is_live` observes
+unfinished queue work or a held graph lock; it is conservative owner protection,
+not attempt-specific liveness. `_invoke_role_turn` reads the message count,
+invokes the graph, then forwards the new message slice to
+[append_planning_turn_to_chat](../war_room/planning_transcript.py).
+Checkpoint state survives restart while the local lock and queue evidence do not.
+An interruption after checkpoint commit but before chat append leaves history
+to the explicit [transcript sync](../war_room/DESIGN.md#recovery-summaries-and-planning-transcripts).
+
+The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+place both functions in `cascade-workspace-code`, below
+`cascade-supervisor-components`. The handoff sequence is owned by the linked
+War Room design; the broader graph lifecycle is owned by
+[the package design](../DESIGN.md#team-execution).
+Verification: [kickoff tests](../../tests/workspace/test_kickoff.py) and
+[transcript tests](../../tests/war_room/test_planning_transcript.py).
+
 ## Repository initialization and guidance
 
 `REQ-WORKSPACE-INIT-001`: Initialization in a Git repository creates board columns,

@@ -54,6 +54,7 @@ custom "cascade-task-code" {
     include code_task_actions code_task_delivery_queue code_task_mismatch code_task_leases code_task_validation code_task_revalidation
     include code_task_generation
     include code_task_budget_bind code_task_budget_read code_task_budget_extend code_task_budget_exhaust code_task_budget_reserve code_task_budget_settle
+    include code_task_ack code_task_claim code_task_finalize code_task_action_checkpoint
     autoLayout lr
 }
 
@@ -168,6 +169,7 @@ custom "cascade-dashboard-code" {
         "cascade.codeComponent" "element.component.dashboard"
     }
     include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader
+    include code_dashboard_recovery code_dashboard_incidents code_dashboard_chat_get code_dashboard_chat_read code_dashboard_chat_append code_dashboard_transcript code_dashboard_backfill
     autoLayout lr
 }
 
@@ -198,5 +200,6 @@ custom "cascade-workspace-code" {
     }
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
     include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
+    include code_workspace_invoke code_workspace_owner_live
     autoLayout lr
 }

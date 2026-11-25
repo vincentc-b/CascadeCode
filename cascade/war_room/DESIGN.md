@@ -2,10 +2,67 @@
 
 Purpose: expose the loopback operator UI/API for status, approvals, chat attachment, review, recovery, and diagnostics. Interfaces are `serve`, route modules, serializers/views, authenticated human actions, and static/template assets covered by this owner. Owns `REQ-WARROOM-001` (operator actions are explicit) and `DEC-WARROOM-001` (the UI projects canonical services rather than owning state).
 
-Evidence: `cascade/war_room/` and `tests/war_room/` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
 Known gaps: unavailable forge descriptions limit historical attribution. Local
 audit fixtures do not establish post-deployment live acceptance.
+
+## Recovery summaries and planning transcripts
+
+`REQ-WARROOM-TRANSCRIPT-001`: Historical chat preserves the owning Epic or
+Feature's human and presentable role messages. Reading chat does not invoke a
+graph or backfill a checkpoint. Task teams do not accept persistent-room chat.
+
+`DEC-WARROOM-TRANSCRIPT-001`: Keep authored history in the owning room's
+`docs/_war_room/chat/<graph-id>.jsonl`. The room follows registered document
+ownership, including a backlog Feature's parent and a completed Epic's surviving
+tracking checkout. History and a current recovery summary have different
+evidence sources; an authored conclusion does not change an action's state.
+
+The authoritative [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+connect `cascade-context` → `cascade-containers` →
+`cascade-war-room-components` → `cascade-dashboard-code`. The Dashboard
+component owns these implementation nodes, even when a supervisor caller uses
+the transcript library within the same Python runtime.
+
+| Entry point | Input, output and boundary |
+|---|---|
+| [recovery_incidents_by_work_id / recovery_incident_from_action](recovery_incident.py) | Consume the shared action snapshot, omit completed actions and select one summary per affected work item by update time. Explicit blockers produce blocked; an enqueued routing marker produces investigating; otherwise the summary is failed. This coarse label does not prove an executing attempt. |
+| [handle_get_chat](sidecar_routes.py) | Validates the graph ID and returns the existing JSONL rows through `read_messages`; no sync occurs on GET. |
+| [read_messages / _chat_read_path](chat_store.py) | Resolve the registered room without building the merged board, read the whole file and ignore malformed JSON lines. Missing history returns an empty list. This interface has no pagination or source-byte bound. |
+| [append_transcript_message / remove_message](chat_store.py) | Append a UUID, author, body and append-time `ts`; remove a failed human-ingest row by rewriting the file. Both use `process_lock`, which fences threads only. |
+| [append_planning_turn_to_chat](planning_transcript.py) | Sanitize and append new role messages supplied by [graph invocation](../workspace/kickoff.py). Provider failure details become a bounded system message. |
+| [sync_planning_transcript_to_chat](planning_transcript.py) | Explicitly load the owning graph checkpoint and append absent author/body pairs. This can coalesce separate identical replies; it is not durable event-identity deduplication. |
+
+```mermaid
+sequenceDiagram
+    participant K as Workspace kickoff
+    participant G as Owning graph and checkpoint
+    participant T as Planning transcript library
+    participant C as Room JSONL
+    participant UI as Historical GET
+    K->>G: Invoke admitted role turn
+    G->>G: Persist role messages
+    G-->>K: Return
+    K->>T: New message slice
+    T->>C: Append sanitized messages with UUID and append time
+    UI->>C: Read existing rows through chat route
+    alt Return-to-append interruption
+        K->>T: Explicit checkpoint sync
+        T->>G: Read saved messages
+        T->>C: Append absent author/body pairs
+    end
+```
+
+Action attempts and acknowledgements persist independently in the
+[Task-owned ledger](../task/DESIGN.md#action-evidence-and-transcript-boundary).
+Chat has no cross-process uniqueness fence, source-occurrence timestamp or
+live attempt milestone protocol. A queued summary, checkpoint or historical
+message therefore cannot establish live execution or verified resolution.
+Verification: [projection scenarios](../../tests/war_room/test_recovery_incident_projection.py),
+[transcript scenarios](../../tests/war_room/test_planning_transcript.py) and
+[read routing](../../tests/war_room/test_chat_poll_routing.py) exercise these
+current boundaries, including GET without graph construction.
 
 ## Bounded health-audit projection reads
 
