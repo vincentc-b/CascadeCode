@@ -208,6 +208,10 @@ These are architecture decisions, not requests for installation or generic human
 
 - 2026-11-14 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-25 · Epic Manager · **Core dependencies**
+  Chose Validate this epic on the existing local Linux x86_64 host with manifest revision 2; no software installation or upgrade..
+  Rationale: Brief and repository require Python runtime packages, pytest, Node, Chromium/Playwright and the pinned Docker/Structurizr renderer. All 12 declared existing installations have accepted verification evidence. The declaration identifies local validation only and does not attest deployment or upstream package provenance.
+  Honors: Dependency declaration before planning; exact target identity; separate installation authority..
 ## Amendment log
 
 _(none)_
