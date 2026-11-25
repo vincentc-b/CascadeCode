@@ -141,5 +141,48 @@
     },
     "decision": "Existing dec_010 and plan remain sufficient; no scope or plan revision.",
     "remaining": "Full bounded gate, final integrated architecture/dossier, F1 acceptance receipt, separate controlled-supervisor evidence and architecture publication recovery remain open."
+  },
+  "architect_corrected_base_review": {
+    "plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "reviewed_task_revision": "cf3ea5594d6d8381ce80441067bfc04427000723",
+    "verified_ancestors": [
+      "51cffe146b8b423027266f8469678c482e321c79",
+      "b9c2129558beaffd235a6c28ab25693a5cd71813",
+      "f258bca3a0beaee66d3eedd1483218245e838ea7"
+    ],
+    "reviewed_paths": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/task/incident_budget.py",
+      "docs/task_artifacts/task_048_004_003_recovery_contract_ci_closeout.md"
+    ],
+    "finding": "Corrected-base prerequisite is satisfied. Package design matches f258bca3 and resolves the earlier package scope omission. Task design adds material/restart/remaining-allowance prose but still needs explicit review_rebase-only scope, conservative non-rebase behavior and attributes/parent_operation_id/material_fingerprint receipt coexistence.",
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers unchanged: cf3ea559 adds workflow/readme/closeout/Task prose, with no actor, runtime, communication or persistence boundary change.",
+      "components": "cascade-supervisor-components/cascade-team-components unchanged: production interfaces, collaborators and Task/Teams/Agent ownership are byte-unchanged from f258bca3.",
+      "code": "cascade-task-code/cascade-teams-code and consumer views retain source paths, symbols, declaration kinds and ownership; no model/contract delta from f258bca3. Final semantic descriptions and integrated navigation review remain F4-owned.",
+      "behavior": "Normal changed review_rebase material may reserve only remaining original allowance. Settled failed fingerprints block unchanged/A-B-A/restart replay; non-rebase deterministic settlement retains incident exhaustion. Task-owned prose/flow must make the distinction explicit."
+    },
+    "verification": [
+      "Git ancestry checks passed for all three prerequisite revisions",
+      "git diff --check f258bca3 cf3ea559 passed",
+      "Exact integrated diff and reserve/settle source trace inspected",
+      "read_architecture_amendments returned []"
+    ],
+    "reported_evidence": "Task closeout reports four focused checks, 18 source/navigation behavior checks and three real renderer/Chromium tests. These were not independently rerun. Full bounded supervised Recovery contract result requires the authoritative delivery receipt at its exact tested SHA.",
+    "decision": "Existing plan, dec_010 and Task acceptance inventory remain sufficient; no plan/design/model edit in this worktree, duplicate recovery or new architecture publication.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:architect-cf3ea559-corrected-base-review",
+      "status": "enqueued"
+    },
+    "remaining": [
+      "Full bounded Recovery contract result",
+      "Task receipt/flow reconciliation and final integrated design/Code/navigation dossier",
+      "F1 acceptance closeout",
+      "Separately authorized controlled-supervisor evidence",
+      "Original terminal architecture publication recovery via its recorded runtime-owner prerequisite"
+    ],
+    "limitations": "Not final Feature/Epic acceptance. No runtime tests or repeated terminal publication retry; no lifecycle, accepted-lineage or dependency changes."
   }
 }
