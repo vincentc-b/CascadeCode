@@ -178,6 +178,7 @@ custom "cascade-workspace-commands-code" {
     }
     include code_cli_main code_cli_up code_cli_worker
     include code_cli_launcher code_cli_drain code_cli_status
+    include code_cli_runtime_authority code_cli_loaded_runtime code_cli_validate_runtime code_cli_host_verify_runtime code_cli_current_runtime
     autoLayout lr
 }
 

@@ -44,7 +44,17 @@ def prepare_feature_publication(feature_id: str, *, root: Path) -> PublicationHi
     if entry is None or not entry.path.is_dir():
         raise GitError(f"feature worktree missing: {feature_id}")
     source = integration_branch("feature", feature_id)
-    target_doc = read_doc(feature_id, root=entry.path)
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    planning_root = (
+        project.tracking.root
+        if project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+        and trunk.resolve() == project.target.root.resolve()
+        else entry.path
+    )
+    target_doc = read_doc(feature_id, root=planning_root)
     publication_ready = (
         target_doc.meta.status == "completed"
         and target_doc.meta.path.parent.name == "3_completed"
@@ -55,7 +65,7 @@ def prepare_feature_publication(feature_id: str, *, root: Path) -> PublicationHi
     if not publication_ready:
         raise GitError(f"{feature_id} must be ready for review publication")
 
-    task_ids = _completed_task_ids(feature_id, entry.path)
+    task_ids = _completed_task_ids(feature_id, planning_root)
     if not task_ids:
         raise GitError(f"{feature_id} has no completed task commits to publish")
     _require_clean(entry.path)

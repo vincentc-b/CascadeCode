@@ -6,6 +6,7 @@ handshake env vars below; does not take ``.cascade/supervisor.lock``.
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import socket
@@ -29,6 +30,11 @@ from cascade.workspace.supervisor_status import (
     write_supervisor_status,
 )
 from cascade.workspace.update_preflight import run_update_preflight
+from cascade.workspace.runtime_identity import (
+    LoadedRuntimeIdentity,
+    authority_from_environment,
+    loaded_runtime_identity,
+)
 from cascade.workspace.up import (
     _SOURCE_CHECK_INTERVAL_SECONDS,
     _source_fingerprint,
@@ -37,7 +43,7 @@ from cascade.workspace.up import (
     submit_recovered_turns,
 )
 
-# Launcher passes these when spawning ``python -m cascade.workspace.worker``.
+# Launcher passes these when spawning ``python -P -m cascade.workspace.worker``.
 ENV_LISTEN_FD = "CASCADE_SUPERVISOR_LISTEN_FD"
 ENV_READINESS_FD = "CASCADE_SUPERVISOR_READINESS_FD"
 ENV_LOCK_TOKEN = "CASCADE_SUPERVISOR_LOCK_TOKEN"
@@ -119,9 +125,14 @@ def _attach_launcher_log_stderr() -> None:
         return
 
 
-def _write_readiness(readiness_fd: int) -> None:
+def _write_readiness(
+    readiness_fd: int, runtime_identity: LoadedRuntimeIdentity
+) -> None:
     try:
-        os.write(readiness_fd, READINESS_MESSAGE)
+        body = json.dumps(
+            runtime_identity, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        os.write(readiness_fd, READINESS_MESSAGE.rstrip(b"\n") + b" " + body + b"\n")
     except OSError as exc:
         _fail(f"failed to write readiness to launcher pipe: {exc}")
 
@@ -132,12 +143,13 @@ def _worker_supervisor_status(
     state: SupervisorState,
     last_error: LastError | None = None,
     next_action: str | None = None,
+    runtime_identity: LoadedRuntimeIdentity | None = None,
 ) -> SupervisorStatus:
     existing = read_supervisor_status(workspace_root)
     now = utc_now_iso()
     previous_state = existing.get("state") if existing else None
     since = existing["since"] if existing and previous_state == state else now
-    return {
+    status: SupervisorStatus = {
         "state": state,
         "worker_pid": os.getpid(),
         "restart_count": int(existing.get("restart_count", 0)) if existing else 0,
@@ -147,6 +159,10 @@ def _worker_supervisor_status(
         "since": since,
         "updated_at": now,
     }
+    retained_identity = runtime_identity or (existing or {}).get("runtime_identity")
+    if retained_identity is not None:
+        status["runtime_identity"] = retained_identity
+    return status
 
 
 def _publish_worker_supervisor_state(
@@ -155,6 +171,7 @@ def _publish_worker_supervisor_state(
     state: SupervisorState,
     last_error: LastError | None = None,
     next_action: str | None = None,
+    runtime_identity: LoadedRuntimeIdentity | None = None,
 ) -> None:
     write_supervisor_status(
         workspace_root,
@@ -163,6 +180,7 @@ def _publish_worker_supervisor_state(
             state=state,
             last_error=last_error,
             next_action=next_action,
+            runtime_identity=runtime_identity,
         ),
     )
 
@@ -289,6 +307,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     from cascade.watchdog.loop import run_watchdog
 
     ws = prepare_up()
+    runtime_authority = authority_from_environment()
     drain_seconds = worker_drain_seconds(ws.path)
     source_at_start = _source_fingerprint()
     source_changed = False
@@ -349,9 +368,22 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
         return True
 
     try:
-        listen_socket = socket.socket(fileno=handshake.listen_fd)
+        # Duplicate the inherited descriptor so retained exception frames cannot
+        # later close a descriptor number that the embedding process has reused.
+        # In the normal worker process both copies close together at process exit.
+        listen_socket = socket.socket(fileno=os.dup(handshake.listen_fd))
     except OSError as exc:
         _fail(f"invalid inherited listen fd {handshake.listen_fd}: {exc}")
+
+    # Resolve and measure lazy recovery entry points only after inherited process
+    # descriptors are adopted, but before HTTP or watchdog work is admitted.
+    from cascade.watchdog.capabilities import default_capability_registry
+    runtime_identity = loaded_runtime_identity(
+        runtime_authority,
+        workspace_root=ws.path,
+        capability_generation=default_capability_registry().fingerprint(),
+        started_at=utc_now_iso(),
+    )
 
     human_verifier = load_or_create_local_human_verifier(ws.path)
     server = serve(
@@ -374,7 +406,7 @@ def run_worker(*, stop_event: threading.Event | None = None) -> tuple[int, bool]
     )
 
     observe_http_live(live=True)
-    _write_readiness(handshake.readiness_fd)
+    _write_readiness(handshake.readiness_fd, runtime_identity)
     observe_startup_phase("recovery")
 
     # This supervisor-owned lane must be live before any startup maintenance
