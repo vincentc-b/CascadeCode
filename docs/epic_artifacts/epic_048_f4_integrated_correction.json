@@ -523,5 +523,40 @@
       "Controlled-supervisor authority and operational evidence",
       "Original terminal architecture publication recovery"
     ]
+  },
+  "architect_final_feature_review_reconciliation": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "feature_plan_revision": "aaca5e02633c350c280a7d0e8b9a584cc404c151",
+    "review_id": "architecture-review-a990d84add182a9bdb06482c766f6c94f11072797e35143157fcd7c19aa0d1b2",
+    "design_revision": "a273e921f145e905383a37a37fc7b36c39a67e0a",
+    "canonical_evidence": "read_historical_evidence corroborates the exact plan/design tuple, status staged, review null, accepted null and promotion null; git evidence reports reconciliation_receipt_missing. Matching submission is established, accepted promotion and authoritative integration receipt are not.",
+    "reviewed_paths": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/task/incident_budget.py",
+      "docs/task_artifacts/task_048_004_004_controlled_supervisor_evidence_dossier.md",
+      "docs/features/3_completed/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md"
+    ],
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers unchanged: submitted Task 004 tree to final Feature changes only lifecycle and closeout records; no actor, runtime, communication or persistent-store delta.",
+      "components": "Supervisor, team, CLI and War Room responsibilities and interfaces unchanged; no production/design delta.",
+      "code": "Task/Agent/Watchdog/Teams and other integrated Code views retain source paths, symbols, declaration kinds and owners. Architecture/model/contract and production trees are identical across the reviewed final delta; no new model edit warranted.",
+      "behavior": "Package and Task designs agree with reserve_incident_operation and settle_incident_operation: review_rebase-only material fencing across restart/A-B-A; changed material consumes original remaining allowance; receipt attributes.parent_operation_id coexist with material_fingerprint; other deterministic validators and legacy unknown material remain conservative. Dossier distinguishes normal independent postcheck from refused operational admission."
+    },
+    "verification": [
+      "Canonical Epic and Feature read_doc inspected; read_architecture_amendments returned [].",
+      "git diff --name-status 3dc7f74e aaca5e02 changes only Feature/Task lifecycle and closeout records; git diff --check passed.",
+      "git diff --quiet a273e921 aaca5e02 -- cascade architecture DESIGN.md tests passed.",
+      "Reviewed dossier final inventory, inherited renderer/browser pins, operational manifest and remaining acceptance obligations against package/Task design and source."
+    ],
+    "reported_checks": "F4 reports 14 source-contract passes and 342 resolved links. Retain Task 003 c2e8b608: 163 passes/165.69s and Task 004 3dc7f74e: 181 passes/194.60s separately from four red runs and inherited f26f5af7 renderer/browser evidence. None independently rerun this turn.",
+    "decision": "No Epic spec, requirement, diagram or decision-log change. Manager acknowledgement already queued; no duplicate handoff. Matching Feature submission does not replace or repair original terminal Epic architecture publication.",
+    "remaining": [
+      "Normal F4 review/integration receipt and final Epic validation",
+      "F1 owning acceptance/design reconciliation receipt and completed-record limitations",
+      "Controlled-supervisor authorized manifest and operational evidence",
+      "Original terminal architecture publication recovery"
+    ],
+    "limitations": "No renewed sign-off, accepted-lineage mutation, replacement publication, runtime tests, dependency installation or operational action. Existing scoped runtime-owner publication handoff and exact failed references remain authoritative."
   }
 }
