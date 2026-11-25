@@ -370,3 +370,54 @@ failure still requires supported runtime recovery; the available tools expose
 no failed-publication retry. No replacement pins or successful publication are
 claimed. Verification: pinned source inspection, canonical spec comparison and
 `git diff --check`; no new executable tests. Return control to child execution.
+
+## Manager design-gap and lifecycle handoff
+
+Reviewed the Feature 1 messages ending in
+`recovery_progress_design_coverage_20261125` and
+`task4_running_final_contract_pending_20261125`, canonical Epic/producer/consumer
+specs, and direct-child supervision. Feature 1 remains active with four child
+IDs; `supervise_child(inspect)` returns no incidents. Canonical metadata confirms
+`plan_approved_at=None`. This discrepancy is unresolved: inspection does not
+repair approval state, and the available parent recovery adapter delegates to
+the active Feature rather than reconstructing that approval. Supervisor
+reconciliation must use actual approval evidence and supported lifecycle
+transitions. No manual metadata change, inferred approval or duplicate dispatch
+was made. Task 4's running state is the Feature's report, not a new parent
+inspection of the grandchild.
+
+Read-only Git inspection at producer revision
+`900c62011be2b414911a980e36387c1978dfd93e` confirms that
+`cascade/recovery_progress` contains implemented modules but no `DESIGN.md`, and
+`architecture/design-mappings.json` omits both that directory and
+`tests/recovery_progress`. Inspected the exact ownership assertion in
+`tests/architecture/test_reconstructed_design.py`; the reported runtime failures
+were not rerun here. Its fixed historical owner and required historical prose
+also need reconciliation against the current design contract, without restoring
+delivery narration to current designs or weakening source/ownership safeguards.
+
+Cascade enqueued
+`epic_049:epic_049:task4_design_and_lifecycle_handoff_20261125` to Feature 1.
+The handoff routes the concrete gap to existing Task 4 final reconciliation or
+supervisor merge review: source-linked subsystem design and parent links, exact
+directory coverage, synchronized native component/Code ownership and source
+contract, execution/restart/failure behavior, focused checks and actual
+navigation/pinned-source evidence. Any scope refusal must be routed explicitly.
+No new acceptance requirement or Epic amendment is needed; these obligations
+are already in the approved Feature plan. Feature 2's canonical spec retains
+the producer references, but its backlog state is not consumer agreement. Final
+Task 4 fixtures, final source revision/differences and explicit consumer response
+remain pending; relay them when available.
+
+Reviewed `cascade/DESIGN.md` supervision and integrated-view ownership,
+`cascade/war_room/DESIGN.md` recovery/transcript interfaces, directory mappings,
+and the existing Feature diagram-impact inventory. This owned change is a work
+handoff only: context actors and container boundaries are unchanged; no component
+or Code implementation changes here; no execution or recovery flow changes here.
+The producer's implementation does require the routed design/Code reconciliation
+before delivery. No design completeness, new render, browser run or executable
+test result is claimed. Architecture amendments are empty; Epic plan `03280933`
+and sign-offs remain unchanged. The terminal architecture-publication failure
+still requires supported runtime recovery. Verification: canonical reads,
+parent supervision, pinned Git inspection, message enqueue and `git diff --check`.
+Return control for existing child execution and supervisor integration.
