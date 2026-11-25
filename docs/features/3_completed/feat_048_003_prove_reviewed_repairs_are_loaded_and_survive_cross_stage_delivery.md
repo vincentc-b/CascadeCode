@@ -2,7 +2,7 @@
 id: feat_048_003
 title: Prove reviewed repairs are loaded and survive cross-stage delivery
 tier: feature
-status: active
+status: completed
 parent: epic_048
 children:
 - task_048_003_001
