@@ -302,5 +302,43 @@
         "Separate authorized operational supervisor evidence"
       ]
     }
+  },
+  "f4_acknowledgement_architect_review": {
+    "role": "epic_architect",
+    "trigger": "feat_048_004:feat_048_004:pr251-correction-integration-handoff-796aeee2",
+    "epic_plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "reviewed_f4_plan_revision": "3748929904b7040dad064eacb155c0e9a88e5006",
+    "reviewed_f5_plan_revision": "c2ade1e50726c81148dc4fa9d3142ac73f7e9079",
+    "owned_checkout_revision": "2ba84618",
+    "assessment": "Current F4 canonical contract preserves the original regression in mandatory PR/main Recovery contract, assigns production correction to F5, and requires the complete bounded selection and final dossier/design review after exact F5 integration even if Task 3 finishes first. This matches dec_007 and the prior architect inventory. No new Epic scope, decision or spec edit is needed. F5 remains backlog with no Tasks and TBD schema/API/flow; allocation review is not dispatch readiness or implementation acceptance.",
+    "evidence_boundary": "Canonical plan commitments independently read. F4 reported clean branch, active Task 3 and owner notification are not independently reverified here. No corrected runtime, hosted CI, operational or browser acceptance is claimed.",
+    "retained_delivery_gates": [
+      "F5 Lead/Architect completes authoritative failed-material schema, original-lineage binding, guarded legacy reconciliation, API/refusal and normal/failure/restart contracts and each Task acceptance before dispatch.",
+      "F5 delivers reviewed production correction and real-validator/Git proof retaining unchanged/cycled-material fences, numerical/time and retry limits, human gates and original consumption/history.",
+      "F4 pins the integrated reviewed F5 revision, retains the existing regression, reruns the full bounded mandatory selection and refreshes final evidence and architecture against all later changes. Review both refusal producers and consumers; do not reuse pre-correction acceptance.",
+      "Epic Manager records explicit PR #251 reviewed correction or linked reviewed successor and fresh passing hosted checks on corrected review and final Epic heads.",
+      "Separate supported terminal architecture publication recovery and authorized operational supervisor evidence remain open."
+    ],
+    "design_closeout": {
+      "reviewed": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "architect_review.diagram_impact_inventory in this artifact",
+        "F4 and F5 canonical Designs and diagrams acceptance"
+      ],
+      "impact_inventory": "Retain prior landscape/context, container, component, native Task/Teams Code, affected consumer Code and supplementary behavior rows with their F5 implementation and F4 final integration owners. No view or source ownership moves in this acknowledgement.",
+      "no_change_reason": "Diff since prior architect review 755ca820 contains only Manager acknowledgement in this work record. No runtime, persistence, interface, source contract or model change exists to diagram; current parent/Task boundaries remain applicable. Proposed failed-material behavior belongs in F5 implemented designs, not speculative Epic baseline prose.",
+      "verification": "Canonical Epic/F4/F5 reads; no open architecture amendments; inspected parent/Task designs and artifact-only diff; JSON, retained design/view references and git diff --check validated. Runtime/render/browser tests not rerun for this artifact-only change.",
+      "gaps": "F5 concrete planning and implementation, F4 final integrated design/source/render/navigation and CI evidence, PR #251 resolution, terminal architecture publication recovery and operational proof remain unverified."
+    },
+    "approval_and_publication": "Existing approval preserved; no repeated already-approved sign-off request or new sign-off claimed. Original exact terminal failed publication request remains in epic_048_publication_resume.json. No supported terminal recovery tool is exposed; acknowledgement does not replace pinned references or constitute architecture publication.",
+    "handoffs": [
+      {
+        "recipient": "feat_048_004",
+        "request_id": "epic_048:epic_048:pr251-f4-ack-architect-37489299",
+        "status": "enqueued"
+      }
+    ]
   }
 }
