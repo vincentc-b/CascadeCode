@@ -1256,3 +1256,52 @@ checks were run this turn. Epic plan and sign-offs are unchanged. Repair
 acceptance, canonical Task corrections, producer design ownership, final consumer
 fixtures and failed Epic publication recovery remain open. Return control to
 child execution and supervisor integration.
+
+## Architect rewrite-crash acceptance review
+
+Reviewed canonical Feature revision `f17df9e7c9503eeb2411111fb3461775eb1b62c6`
+and the integrated source at `4b367dee`. In `chat_store.py::_rewrite_messages`,
+the normal path fences the graph, reconciles pending append/import, transforms
+rows, fsyncs the replacement and parent directory (or removes the empty history),
+then resets SQLite events, indexed end and incarnation. Process death after the
+file operation and before the index transaction leaves stale offsets against
+changed bytes. The fence serializes writers but cannot recover that interval by
+itself. This confirms the reported source-traced gap; no fault injection was run
+by the Epic Architect. The Feature's reported 35 tests and source validation do
+not establish repair acceptance.
+
+Task 5 owns this repair under the existing durability contract; Tasks 2–4 remain
+gated on the repaired shared store. The Manager's preceding handoff already
+requires replacement/removal interruption, fresh-process recovery, subsequent
+append/import, surviving source-key preservation, cursor invalidation and pending
+behavior on ambiguity or durability failure. No duplicate notification or Epic
+spec amendment is needed. The inspected Feature range after `4b367dee` contains
+no product, architecture or test changes; repair delivery is not yet evidenced.
+
+Diagram-impact reconciliation for this review:
+
+| Level / view | Owning design and source | Required disposition |
+|---|---|---|
+| Context / `cascade-context` | Root `DESIGN.md` | No new actor or external dependency: this is a writer crash interval within the existing transcript boundary. |
+| Containers / `cascade-containers` | `cascade/DESIGN.md` | JSONL and writer SQLite remain in the existing repository/runtime boundary; no new process or deployed service is required. |
+| Components / `cascade-war-room-components`, `cascade-supervisor-components`, `cascade-team-components` | War Room, Workspace and package designs | Ownership stays with the transcript store and its existing callers. Feature acceptance must verify any implemented relationship changes. |
+| Code / `cascade-dashboard-code` | `cascade/war_room/DESIGN.md`; `_rewrite_messages`, `remove_message`, `mark_message_legacy_unknown` in `chat_store.py` | Task 5 must reconcile the durable rewrite/restart implementation, source contract, real declaration kinds and owning Code nodes; the lock alone must not imply crash atomicity. |
+| Code consumers / `cascade-workspace-code`, `cascade-teams-code` | `cascade/workspace/DESIGN.md`, `cascade/DESIGN.md`; kickoff and checkpoint reply handoff | Verify source links and caller contracts against the repaired implementation, with concrete no-change reasons where callers remain unchanged. |
+| Behavior | War Room transcript sequence and Workspace room-handoff section | Task 5 / Feature acceptance must show recovery after replacement and empty-history removal, the index/incarnation transition and failure gates alongside the existing append/move recovery. |
+
+Design closeout: reviewed the Feature's War Room transcript and Workspace
+invocation/handoff sections, the owned package navigation table, and the rewrite
+source. Current-design reconciliation belongs with the repair; this Epic change
+adds review evidence only. Final Feature validation retains source-contract and
+local rendering checks, context-to-Code navigation, Level up, deep-link restore,
+pinned-source opening, stale-symbol checks and warm artifact reuse. No new
+render or current-design edit is warranted for this work-record-only diff.
+
+Validation: canonical Epic/Feature reads, empty amendment list, source trace and
+Feature diff inspection, all six saved publication references matching committed
+digests and checkout, and both sign-offs matching Epic `03280933`.
+`git diff --check` passed. Epic plan and sign-offs remain unchanged. Repair
+acceptance, canonical Task corrections, producer design coverage, final consumer
+fixtures and terminal Epic publication recovery remain open. The available
+publication tool exposes no terminal-retry operation; the saved request is
+unchanged. Return control to child execution and supervisor integration.
