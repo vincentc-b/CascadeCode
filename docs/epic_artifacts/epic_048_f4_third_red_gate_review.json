@@ -156,5 +156,53 @@
       ]
     },
     "approval_publication": "Epic plan and existing approval unchanged. No repeat of known already-approved sign-off refusal; original terminal publication request remains pinned and unresolved."
+  },
+  "architect_matching_review_reconciliation": {
+    "role": "epic_architect",
+    "owned_base": "ffe00fb8",
+    "epic_revision": "ed2fe1b08d6bb7e4589fa694b981abd4de5466da",
+    "canonical_feature_revision": "107d3a267da1153e77d5818188e7abd19f35389d",
+    "reported_review": {
+      "id": "architecture-review-a7c0b5434cd97473d126324a9f45733a7b6268c054a0275ff4602011c565c3f4",
+      "plan_revision": "89c1bbd4cc52f5600dd99f3bc2abd91a43d6d7f3",
+      "outcome": "no_diagram_change"
+    },
+    "assessment": "Reported review matches its named revision, but the current canonical Feature is newer. Scoped Feature-body diff adds a fourth red observation and reported forge check, without changing F1 ownership or integration acceptance. No Epic spec or decision amendment required.",
+    "evidence_boundary": "Review publication, 14 source-contract passes and 20 links remain owner-reported. Current Feature adds ab5de09224d8fa849fe2e163c7e9d88ef7d23f3d: 161 passed, 1 failed in 212.73 seconds and PR #251 failure at ff3cd399. Preserve all four runs separately. No independent hosted CI, validator or browser rerun; no scoped Task-content workaround.",
+    "f1": "Canonical F1 remains completed at ff3cd399d1523ba6c4e123825c811f8c0b700e7c. Existing dispatch in epic_048_pr251_f1_repair_dispatch.json remains pending; source inspection does not prove loaded capability. No admitted generation, exact runtime refusal, corrected head or green CI returned. Do not repeat unchanged recovery.",
+    "retained_gates": "F1 supported repair on feat/feat_048_001 and PR #251, original incident identity/allowance/consumption/history, unchanged/cosmetic/A-B-A fences across restart, authoritative changed material within remaining numerical/retry limits and independent human gates, conservative legacy handling, retained regression and real-validator/Git proof. Green review-recovery at corrected PR head before merge. F4 integrates reviewed green correction and reconciles F2/F3 consumers, full bounded CI and final architecture/dossier. Epic Manager owns PR disposition and final Epic CI; operational authority remains separate.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:epic_048:architect:f4-review-107d3a26",
+      "status": "enqueued",
+      "instruction": "Route current finalized plan to Feature Architect; use closeout artifacts for acknowledgement-only evidence to avoid plan churn. No unchanged test or acceptance-only redispatch requested."
+    },
+    "design_closeout": {
+      "reviewed": [
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl"
+      ],
+      "source_checks": [
+        "cascade/epic/recovery.py:recover_feature",
+        "cascade/feature/repair.py:_admission_gates",
+        "cascade/feature/repair.py:_recheck_action"
+      ],
+      "context": "cascade-landscape/cascade-context: evidence-only records add no actor or external system.",
+      "containers": "cascade-containers: no runtime, storage or isolation changes.",
+      "components": "cascade-supervisor-components/cascade-team-components: queued supervision and guarded Feature repair responsibilities/interfaces unchanged.",
+      "code": "cascade-epic-code/cascade-feature-code retain the inspected recovery/admission entry points. No declaration or ownership changes. F1 retains cascade-task-code/cascade-teams-code correction obligations; F4 retains integrated source, navigation, Level up, deep-link and pinned-source verification.",
+      "behavior": "Normal Epic recovery delegates to direct-child supervision; Feature repair persists generation/authority and checks eligible Epic, approval, clean checkout and dependencies. Resume rechecks bound owner, approval, target head and document; live Task leases refuse admission. Existing lifecycle diagrams remain accurate for this artifact-only diff.",
+      "verification": "Canonical Epic/F1/F4 reads; empty amendment list; scoped Feature diff and changed-path inventory; design/source/view existence; JSON/reference validation and git diff --check. No runtime/render/browser/hosted CI rerun.",
+      "gaps": [
+        "F1 admission or exact runtime refusal",
+        "F1 correction and green PR #251",
+        "Matching current F4 plan review",
+        "Final integrated CI/design/navigation and Epic CI",
+        "Separately authorized operational evidence",
+        "Supported terminal architecture publication recovery"
+      ]
+    },
+    "approval_publication": "Epic spec and existing approval unchanged. Known already-approved sign-off refusal not repeated. Original failed publication stays pinned in epic_048_publication_resume.json; no replacement request, snapshot or successful publication claimed."
   }
 }
