@@ -1,0 +1,53 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_manager",
+  "trigger": [
+    "feat_048_004:feat_048_004:matching-plan-review-37489299",
+    "feat_048_004:feat_048_004:f1-pr251-plan-reconciliation-20261125"
+  ],
+  "epic_revision": "ed2fe1b08d6bb7e4589fa694b981abd4de5466da",
+  "assessment": "F4 canonical plan and dec_003 now match Epic dec_008. Existing F1 branch and PR #251 own the correction. No new scope, Epic spec edit, decision or sign-off is needed.",
+  "observations": {
+    "f4": {
+      "revision": "a4776fbe9193a62303a6a2bcae40eb7dbdaef917",
+      "status": "active",
+      "verified": "Canonical Feature body requires exact reviewed F1 correction SHA and green PR #251 review-recovery before integration, then full bounded CI and final dossier/architecture refresh.",
+      "reported_architecture_review": "architecture-review-ef80edb0 at 3748929904b7040dad064eacb155c0e9a88e5006",
+      "review_gap": "The reported review covers the older plan; matching review for a4776fbe remains pending.",
+      "task4": "Owner reports revised acceptance. Epic read_doc returned content_access_denied; own Task text/revision not independently verified and no filesystem workaround used.",
+      "task3": "Owner reports active/unmerged. Mandatory regression remains red. TeamMessage reports 373cbb17: 161 passed, 1 failed in 210.19s; canonical plan reports e9ea4848: 161 passed, 1 failed in 210.23s. Preserve as separate reported runs pending log mapping. Browser journeys are reported prior evidence only."
+    },
+    "f1": {
+      "revision": "ff3cd399d1523ba6c4e123825c811f8c0b700e7c",
+      "status": "completed",
+      "repair": "Existing dispatch and recover_feature result retained in epic_048_pr251_f1_repair_dispatch.json. No new admitted action, generation, runtime refusal or corrected CI supplied. Do not reinterpret pending_feature_result as reactivation.",
+      "next_owner_action": "F1 inspects/admit/resumes stable pr251-material-evidence-retry-correction via scoped supported repair, then mints concrete correction acceptance. Return durable admission/generation or exact refusal, prerequisite, owner and supported route."
+    },
+    "f5": "Canonical list_children still reports backlog; independent production allocation superseded. No cancellation or lifecycle mutation claimed.",
+    "amendments": "read_architecture_amendments returned []"
+  },
+  "handoff": {
+    "recipient": "feat_048_004",
+    "request_id": "epic_048:epic_048:f4-f1-ownership-review-a4776fbe",
+    "status": "enqueued"
+  },
+  "retained_gates": [
+    "F1 correction preserves original identity, cumulative consumption/history, unchanged/A-B-A fences, numerical and retry bounds and independent human gates; real-validator/Git proof and existing regression remain mandatory.",
+    "Normal review and fresh green review-recovery on exact corrected PR #251 head before merge. No override, test weakening, budget reset or F4/F5-exclusive fix.",
+    "F4 supported integration and full bounded CI at exact integrated SHA; final Epic CI and implemented-diff architecture acceptance.",
+    "Separately authorized controlled supervisor evidence and supported terminal Epic architecture publication recovery."
+  ],
+  "design_closeout": {
+    "reviewed": [
+      "cascade/feature/DESIGN.md",
+      "cascade/epic/DESIGN.md",
+      "docs/epics/2_active/epic_048_prove_self_recovery_through_verified_outcomes.md",
+      "docs/epic_artifacts/epic_048_pr251_f1_repair_dispatch.json"
+    ],
+    "context_containers": "Handoff-only diff changes no actors, external dependencies, runtime or persistence boundary. Retained Epic inventory continues to apply.",
+    "components_code": "No source, interface or model declaration changes. Existing Epic/Feature designs distinguish generic queued coordination from guarded repair admission; F1 retains Task/Teams and affected consumer Code obligations, F4 final integration verification.",
+    "behavior": "Existing diagrams cover generation-bound admission, guarded mint and restart. No new execution behavior is asserted. F1 must reconcile material-fence/remaining-allowance flows with its actual correction.",
+    "verification": "Canonical Epic/F1/F4 reads, list_children, empty amendment list, scoped Task refusal, local recovery source and design review; JSON parse, referenced file existence and git diff --check. No runtime, render/browser or hosted CI rerun for this artifact-only change.",
+    "limitations": "No production fix, completed repair admission, matching current F4 architecture publication, green PR check or operational acceptance established. Do not repeat unchanged recovery calls while the already-queued owner work is pending."
+  }
+}
