@@ -1107,3 +1107,35 @@ No executable tests, rendering or browser checks were rerun for this evidence-on
 change. Epic publication recovery and canonical Task correction remain
 unresolved; neither is represented as repaired. Return control to child
 execution and supervisor integration between parent turns.
+
+## Architect Task-record escalation review
+
+Reviewed the latest Task 1/5 correction handoff against canonical Epic
+`03280933`, Feature `386005f1`, and the Feature-owned acceptance artifact at
+`64f99761`. Task 5 owns the two storage crash repairs; Task 4 acceptance depends
+on their verified result. The integrated Feature range `bd152f61..64f99761`
+contains no changes under `cascade`, `architecture` or `tests`; repair completion
+cannot be inferred from the planning records. The Manager's operator handoff
+above remains the concrete unresolved correction route. No additional board
+mutation or duplicate team notification is needed, and no restricted Task
+record was read or edited.
+
+Design closeout: reviewed the Feature's War Room recovery/transcript section,
+Workspace invocation/room-movement section, and the owned package Code navigation
+table. The full-tail durability and interrupted owner/index transition gaps remain
+explicit in the Feature acceptance artifact. Context actors (`cascade-context`),
+runtime/data boundaries (`cascade-containers`) and component ownership
+(`cascade-war-room-components`, `cascade-supervisor-components`) have no new
+implementation change. Task 5 retains reconciliation of `cascade-dashboard-code`,
+`cascade-workspace-code`, source contracts and normal/failure sequences against
+the repair, with source-link, declaration-kind and navigation verification. This
+work-record-only diff warrants no current-design/model edit or new render.
+
+Validation: canonical Epic/Feature reads, empty architecture amendments,
+committed Feature diff and acceptance-artifact review, all six publication
+references matching committed bytes and checkout, both saved sign-offs matching
+the Epic plan, and `git diff --check`. No executable or browser checks were rerun
+for unchanged implementation. Canonical Task corrections, storage repair
+acceptance, producer design ownership, final consumer fixtures and terminal Epic
+publication recovery remain open. Epic plan and sign-offs are unchanged; return
+control to child execution and supervisor integration.
