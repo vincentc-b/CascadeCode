@@ -241,5 +241,52 @@
       "Supported recovery of original terminal architecture publication"
     ],
     "publication": "No new architecture decision or plan revision. Existing human-approved baseline retained; no repeated already-approved sign-off, substitute publication or accepted-snapshot rewrite. Original pinned failed publication and runtime-owner recovery remain recorded in epic_048_publication_resume.json."
+  },
+  "architect_merged_correction_review": {
+    "role": "epic_architect",
+    "reviewed_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "decision": "dec_010 correctly recognizes the verified PR merge as downstream integration disposition. No new plan decision or rewrite is needed. Missing F1 acceptance/design evidence remains a final-closeout gap, not a reason to wait for the already-merged PR again.",
+    "forge": {
+      "pr": 251,
+      "state": "MERGED",
+      "merge_commit": "abfe2b2089343f6167e2e46e24c3c5e35991f4ca",
+      "merged_at": "2026-11-25T03:38:37Z",
+      "correction": "51cffe146b8b423027266f8469678c482e321c79",
+      "review_recovery": "COMPLETED/SUCCESS",
+      "github_reviews": []
+    },
+    "reviewed_designs": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/watchdog/DESIGN.md"
+    ],
+    "diagram_impact": {
+      "context_containers": "cascade-landscape, cascade-context, cascade-containers: merged budget implementation stays in the existing supervisor and tracking-root store; no new actor, service or OS isolation boundary.",
+      "components": "cascade-supervisor-components/cascade-team-components: Task owns cumulative allowance, Teams publication and Watchdog consume it; merged model preserves this ownership.",
+      "code": "Full merged F1 delta adds bind/read/extend/exhaust/reserve/settle incident budget declarations in cascade-task-code, reserve_review_validation and ReviewValidationOperation in cascade-teams-code, and incident_record/reserve_budgeted_operation/settle_budgeted_operation in cascade-watchdog-code. The narrow 51cffe14 correction changes behavior within these real entry points and needs no additional node. Do not confuse a no-new-diagram routing decision with no model changes in the full F1 merge.",
+      "behavior": "Inspected normal changed-material admission within charged/reserved allowance and settled deterministic fingerprint refusal across history/restart. Unknown material, exhausted records and human gates remain conservative. F2 consumer restriction must survive integration: reserve only applies the review material gate to original review_rebase actions.",
+      "verification_owner": "F4 verifies final integrated source contract, render and actual Context-to-Code/Level-up/deep-link/pinned-source browser journeys, warm reuse and normal/failure/restart consumer traces at the tested SHA."
+    },
+    "routed_design_gap": {
+      "owner": "feat_048_001",
+      "paths": [
+        "cascade/task/DESIGN.md"
+      ],
+      "required": "Complete durable material_fingerprint receipt schema and failed-material flow, and replace F2 delivery attribution with current interface responsibilities. Existing routed closeout remains required; F4 checks final integrated result. No completeness claim or duplicate implementation dispatch."
+    },
+    "verification": [
+      "git merge-base --is-ancestor 51cffe14 HEAD succeeded",
+      "PR 251 forge read confirms merge and successful review-recovery",
+      "python -m pytest -q tests/workspace/test_c4_source.py: 14 passed in 1.85s",
+      "git diff --check 20df8b48..HEAD passed",
+      "read_architecture_amendments returned []"
+    ],
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:architect:merged-f1-abfe2b20-integration",
+      "sequence": "Supported source integration; retain receipt fields/regressions and F2 fence restriction; conflict checks/publication safeguards; prove corrected Task 003 execution base; supported recovery; full bounded gate; final architecture/dossier reconciliation.",
+      "status": "enqueued"
+    },
+    "limitations": "No Recovery contract, renderer or browser rerun this turn. F1 acceptance receipt, integrated F4 CI and separately authorized operational evidence remain open. Original terminal architecture publication recovery is unchanged; no substitute publication, accepted-snapshot rewrite or lifecycle override."
   }
 }
