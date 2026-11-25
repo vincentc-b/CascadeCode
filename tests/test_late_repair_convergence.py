@@ -1,8 +1,9 @@
 """Cross-boundary acceptance for late Feature repair convergence.
 
 These scenarios intentionally use real Git worktrees, Task delivery, Feature
-repair receipts, review generations, and parent integration.  Only the forge
-transport is deterministic; no lifecycle or review result is manufactured.
+repair receipts, review generations, and parent integration. Provider discovery/compatibility and
+scripted model/forge transport are deterministic; no lifecycle or review result
+is manufactured.
 """
 
 from __future__ import annotations
@@ -260,7 +261,7 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
     from cascade.watchdog.audit_recovery import dispatch_audit_recovery
     from cascade.watchdog.incident_postcheck import reconcile_parent_lifecycle_incident
 
-    root = make_repo(tmp_path / "product")
+    root = make_repo(tmp_path / "product", role_skills=True)
     tracking = make_repo(tmp_path / "tracking") if split_roots else root
     if split_roots:
         set_project_context(ProjectContext.split(root, tracking))
@@ -274,7 +275,7 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
     if split_roots:
         config = f'tracking_repository = {json.dumps(str(tracking))}\n' + config
     (root / "cascade.toml").write_text(config, encoding="utf-8")
-    _git(root, "add", "cascade", "cascade.toml")
+    _git(root, "add", "cascade", "cascade.toml", "skills")
     _git(root, "commit", "-m", "seed production recovery source")
     remote = tmp_path / "remote.git"
     subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
@@ -376,14 +377,23 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
         wait_for_background_kickoffs,
     )
 
+    # Production dispatch creates a booting worktree and only the wired boot
+    # hooks may transition it to coding. Install the same hooks as the worker;
+    # a scripted provider does not authorize bypassing boot or skill loading.
+    from cascade.task import boot, wiring, worktree
+    from cascade.watchdog import hooks
+
+    monkeypatch.setitem(hooks._boot, "task", [])
+    monkeypatch.setitem(hooks._teardown, "task", [])
+    monkeypatch.setattr(boot, "_boot_root", None)
+    monkeypatch.setattr(wiring, "_wiring_root", None)
+    monkeypatch.setattr(worktree, "_root", None)
+    wiring.install_task_wiring(root)
     set_task_run_role_fn(scripted_provider)
     with deferred_kickoffs():
         assert dispatch_task(task_id, "human", root=root).ok
-        move_doc("feat_001", "completed", root=feature_entry.path)
-        from cascade.boss.rollup import _emit_feature_completed
-
-        if not split_roots:
-            _emit_feature_completed("feat_001", "epic_001", root)
+        run = get_task_run(task_id)
+        assert run is not None and run.state != "booting"
     assert wait_for_background_kickoffs(10)
     assert physical_turns == [task_id]
     assert [result["exit_code"] for result in task_validations] == [1, 0]
@@ -404,8 +414,15 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
         assert restored_epic is not None
         epic_entry = restored_epic
 
-    # Reproduce the admitted obligation: delivery is green, but its Feature
-    # parent was prematurely completed before the supervisor consumed the queue.
+    # Reproduce the admitted obligation after the Task has queued green
+    # delivery, but before the supervisor consumes it. Move the parent only
+    # after the asynchronous boot/turn has finished; do not race board reads.
+    move_doc("feat_001", "completed", root=feature_entry.path)
+    from cascade.boss.rollup import _emit_feature_completed
+
+    if not split_roots:
+        _emit_feature_completed("feat_001", "epic_001", root)
+
     from cascade.task.action_recovery import resume_action
     from cascade.task_rollup import _resume_queued_merge
 
@@ -638,9 +655,10 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
     from cascade.task.worktree import remove_task_worktree
 
     completed_run = get_task_run(task_id)
-    assert completed_run is not None
-    if completed_run.worktree.is_dir():
+    if completed_run is not None and completed_run.worktree.is_dir():
         remove_task_worktree(completed_run, root=root)
+    assert not completed_task_run.worktree.exists()
+    assert get_integration_worktree(root, "task", task_id) is None
     accepted = review.review_record_for_feature("feat_001", root=root)
     assert accepted is not None
     assert accepted["closed"] is True

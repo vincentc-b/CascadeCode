@@ -362,6 +362,10 @@ Design closeout: reviewed the integrated `cascade/DESIGN.md` and `cascade/task/D
 
 Canonical children are F1–F4 completed and F5 cancelled with cleanup complete. Preserve F5's analysis, approval history, parent linkage and the active Epic's human continue_reduced_scope. This merge does not resolve the missing F1 owning acceptance receipt, completed-record correction, controlled-supervisor target/installation/fault/incident/rollback authority and operational evidence, final Epic acceptance validation, or original architecture-publication recovery. The recorded rollup refusal remains historical; no changed admission was supplied, so no repeated rollup or premature completion is attempted.
 
+## Post-merge deterministic CI reconciliation
+
+After implementation PR [#259](https://github.com/vincentc-b/CascadeCode/pull/259) merged, the Recovery contract failed two late-repair convergence cases on the integrated product trunk. The accepted Feature 004 fixture required production Task boot wiring to accommodate the already-integrated dispatched-parent/booting safeguard (`3321179b`). The [Feature 004 closeout](../../features/3_completed/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md#post-merge-recovery-contract-correction-2026-11-25) records the corrective change and local full-gate result: 163 passed in 206.22 seconds without the host provider CLI. The cancelled Feature 005 record and reduced-scope disposition remain unchanged. No new implementation Feature or adjustment to production authority is required for this isolated test integration correction; the outstanding operational evidence limitations remain explicitly separate. Hosted publication verification is tracked by the corrective commit and required CI.
+
 ## Decision log
 
 - 2026-11-11 · Human · Requested a durable self-recovery contract and regression after the Epic 046 failure; approval is pending PR review and merge.
