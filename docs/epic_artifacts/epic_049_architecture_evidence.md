@@ -1005,3 +1005,48 @@ Git revision/diff inventory, saved sign-off comparison, design review and
 repair acceptance, canonical Task correction, final consumer fixtures, producer
 design ownership and failed Epic architecture publication recovery remain open.
 Return control to Feature execution and supervisor integration between turns.
+
+## Architect repair ownership review
+
+Canonical reads return Epic `03280933` and Feature 2 `386005f1`. The Feature
+now explicitly assigns both storage crash corrections to `task_049_002_005`
+and makes its result part of Task 4's final acceptance. Reviewed the Feature's
+acceptance artifact at `64f99761` and the Git diff from `bd152f61`: only work
+records changed; no repair source, design or model has landed. Static retracing
+of `_repair_pending` and `move_transcript_room` confirms the full-tail fsync
+and interrupted owner-switch/index-reset gaps remain. Repair ownership is
+established; executable repair acceptance is not.
+
+Reviewed the child War Room transcript requirements, implementation table and
+sequence, Workspace room dispatch/retirement interface, and owned package
+navigation table. Diagram impact remains localized: `cascade-context` has no
+changed actors; `cascade-containers` has no new runtime or persistence boundary;
+`cascade-war-room-components` and `cascade-supervisor-components` retain their
+responsibility split. Repair implementation must reconcile
+`cascade-dashboard-code`, `cascade-workspace-code`, their source contract, and
+the War Room/Workspace normal and failure/resume descriptions. There is no new
+source change to justify editing current designs or rendering in this Epic
+checkout. These documents remain subject to final repair review, including
+source links, declaration kinds, Code/Level-up/deep-link navigation and pinned
+source opening; the existing render is not proof of repaired crash behavior.
+
+Sent `epic_049:architect_task5_repair_ownership_review_20261125` to Feature 2;
+Cascade returned `enqueued`. The handoff confirms the repair fits the approved
+Epic contract and retains durability-before-index-commit, fsync failure pending,
+and process-death recovery across owner switching, checkout retirement and
+index reset as acceptance conditions. It requests final source/test/navigation
+evidence or explicit gaps. The canonical Task 1 correction remains separate;
+the Feature-owned acceptance artifact does not replace that record. No denied
+Task content was accessed through Git or the filesystem.
+
+Verification: one child inspection reports active with no incidents;
+architecture amendments are empty; both Epic sign-offs still match the current
+plan. All six saved publication references (plan, root design, contract and
+three DSL sources) match their committed digests and the owned checkout. The
+available tools expose no terminal architecture-publication retry; the recorded
+failed operation remains unresolved without changing its reviewed pins.
+`git diff --check` passes for this evidence-only change. No executable,
+fault-injection, render or browser check was rerun for unchanged implementation.
+Final consumer fixtures, producer design ownership, canonical Task correction,
+storage repair acceptance and Epic publication recovery remain open. Return
+control to Feature execution and supervisor integration.
