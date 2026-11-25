@@ -812,3 +812,38 @@ Verification: canonical Epic/Feature reads, empty architecture amendments,
 matching saved Epic sign-offs for `03280933`, exact Feature request inspection,
 handoff enqueue and `git diff --check`. Return control to child execution and
 supervisor integration.
+
+## Architect current-plan publication receipt
+
+Reviewed the revision-correction and current-plan publication handoffs against
+canonical Feature 2 revision `ac9ddcf32cd67965da38682847f59e183f78b1d7`, its
+saved publication request, and evidence commit `0711aca6`. The request pins
+that revision as `no_diagram_change`; the recorded operation and review unit
+match the Manager receipt above. The author-label correction changes no
+acknowledgement, replay or detail-pagination contract. No new Epic decision,
+spec amendment or repeated confirmation request is needed. Epic revision
+`03280933` and both saved sign-offs remain unchanged; canonical architecture
+amendments are empty. This review verifies the supplied publication evidence,
+not a fresh query of the Feature publication lifecycle.
+
+Reviewed the recovery/transcript section of `cascade/war_room/DESIGN.md`, the
+invocation/checkpoint section of `cascade/workspace/DESIGN.md`, and navigation
+and team-execution boundaries in `cascade/DESIGN.md`. The receipt-only diff
+changes no context actors, container persistence boundaries, component
+responsibilities, Code symbols or normal/restart behavior. The view inventory
+in the preceding Architect review therefore remains applicable at every level;
+current-design edits and repeat render/browser checks are not warranted.
+Feature 2 retains implementation source/design/Code reconciliation, and
+Feature 3 retains integrated navigation and operational acceptance.
+
+The pinned producer tree still lacks `cascade/recovery_progress/DESIGN.md`.
+That routed ownership gap, owner-reported Task 1 acceptance/test-plan correction,
+and final consumer source/API fixtures remain open. Feature planning publication
+does not repair the separately failed Epic publication. The saved Epic request
+and runtime recovery handoff remain intact; no supported terminal-render retry
+is exposed in the available tools. No child lifecycle action was taken.
+
+Verification: canonical Epic/Feature/amendment reads, saved-sign-off inspection,
+Feature publication request/evidence inspection, pinned producer tree inspection
+and `git diff --check`. No executable acceptance is claimed. Return control to
+child execution and supervisor integration.
