@@ -297,3 +297,48 @@ passed. Epic revision `032809336f3fcf3810c7270c28195da9c85a3bf6` is unchanged.
 Available tools still expose no terminal-publication retry; the recorded failed
 operation and exact saved request remain the runtime recovery handoff. Return
 control for child execution and the pending consumer response.
+
+## Merged producer evidence routing
+
+Handled TeamMessage
+`feat_049_001:feat_049_001:merged_producer_fixtures_20261125` by reading the
+canonical Epic and both Feature specs. Inspected the producer's pinned Git
+revision `900c62011be2b414911a980e36387c1978dfd93e`, without checking out or
+modifying its worktree. `transition_receipt_v1` confirms sorted compact JSON,
+`source_reference` inclusion, nullable incident/attempt/claim fields,
+retained-order affected-work deduplication, and exclusion of occurrence time
+and safe payload from receipt identity. `_entry_id` confirms canonical action,
+generation and nullable attempt identity. Inspected `_derive_entry` and located
+the named fixture and target/legacy regression scenarios; no test run is claimed.
+
+Persisted these exact source/fixture references in Feature 2 through Cascade
+`write_doc`; canonical readback confirmed revision
+`431d9d6e0f86dbc0e65644694334f810f354294f`. The update preserves metadata,
+dependency order and existing acceptance. It explicitly distinguishes this
+producer checkpoint from final delivery and consumer agreement. Task 4 still
+owns final route/cursor/error fixtures and receipt replay gaps; milestone
+references remain empty until the consumer durably commits transcript events.
+
+Cascade enqueued the consumer request
+`epic_049:epic_049:merged_producer_evidence_20261125` and producer acknowledgement
+`epic_049:epic_049:merged_producer_evidence_routed_20261125`. Requested preliminary
+mismatches if found, followed by explicit consumer agreement or exact mismatches
+after final Task 4 fixtures arrive. Feature 1 must supply the final source
+revision and any differences from the pinned checkpoint. The parent will relay
+the consumer response. No agreement or early implementation is implied.
+
+Reviewed the owned checkout's War Room recovery/transcript, Task action-evidence
+and Workspace invocation/transcript design sections. This turn changes only
+handoff evidence and a consumer work record: context actors, container boundaries,
+component ownership, Code symbols and execution/restart flows are unchanged by
+this diff. No design/model edit or repeated render/navigation check is warranted.
+Producer implementation reconciliation remains Feature 1 Task 4 acceptance;
+consumer append/replay and bounded history remain Feature 2 acceptance. This is
+not final implementation or architecture acceptance. Epic revision
+`032809336f3fcf3810c7270c28195da9c85a3bf6` and sign-offs remain unchanged; the
+recorded architecture-publication failure remains open for supported recovery.
+
+Verification: pinned source inspection, canonical consumer readback, successful
+message enqueue responses and `git diff --check`. No executable code changed;
+no new tests or browser journey were run. Return control for child execution
+and the final fixtures/consumer response.
