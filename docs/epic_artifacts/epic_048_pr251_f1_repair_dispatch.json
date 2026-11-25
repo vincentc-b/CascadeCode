@@ -1,0 +1,54 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_manager",
+  "trigger": "Operator clarification: repair existing F1 branch and PR #251",
+  "plan_revision": "ed2fe1b0",
+  "decision": "dec_008",
+  "supersedes": "dec_007 production allocation to F5 and corrective-successor option; historical evidence retained",
+  "owner": "feat_048_001 Feature Lead and Architect",
+  "branch": "feat/feat_048_001",
+  "review": "https://github.com/vincentc-b/CascadeCode/pull/251",
+  "dispatch": {
+    "recipient": "feat_048_001",
+    "request_id": "epic_048:epic_048:pr251-f1-owned-repair-operator-20261125",
+    "message_status": "enqueued",
+    "recover_feature_result": {
+      "child_id": "feat_048_001",
+      "status": "completed",
+      "incidents": [],
+      "action": "recover",
+      "epic_id": "epic_048",
+      "feature_id": "feat_048_001",
+      "outcome": "pending_feature_result",
+      "durable_result": false
+    },
+    "interpretation": "Coordination queued; no admitted repair, lifecycle transition, execution or verified outcome reported.",
+    "route_detail_request": "epic_048:epic_048:pr251-f1-admitted-route-details-20261125"
+  },
+  "repair_plan": [
+    "F1 verifies its actual loaded scoped feature_repair capability; inspect then admit or resume stable reserved-mint request pr251-material-evidence-retry-correction.",
+    "Preserve exact mutation owner, approval/comment/dependency gates, clean source, active Epic target, current heads and live execution ownership. After authorized active introduction, mint correction Task with the same repair_request_id and concrete acceptance/test/design obligations.",
+    "Separate deterministic failed-material fencing from numerical exhaustion. Preserve original identity, allowance, charged/reserved consumption, admission time, full history and action/transient retry bounds. Changed authoritative material is eligible only with remaining original allowance and independent human gates satisfied. Reconcile legacy records conservatively; retain A-B-A/restart fences.",
+    "Retain existing review-health regression and add real-validator/governed-policy/Git bare-remote proof, unchanged no-spawn/no-push and exhausted/human-gate negative controls.",
+    "Normal Task/Feature review, tested immutable SHA and leased publication to existing PR #251. Require fresh green review-recovery on corrected PR head BEFORE merge; capture exact SHA/check links.",
+    "F4 integrates reviewed F1 correction, reconciles downstream consumer changes and reruns full bounded CI and final dossier/architecture review; final Epic CI remains required."
+  ],
+  "capability_boundary": {
+    "observed_refusal": null,
+    "pending": "F1 owner must return actual admitted action/generation or exact scoped-tool refusal.",
+    "source_supported_route": "cascade/feature/repair.py feature_repair inspect/admit/resume and cascade/feature/mint.py mint_task(repair_request_id)",
+    "parent_limitation": "recover_feature automatically routes only exact queued Task parent-lifecycle mismatch; otherwise queues owner wakeup. Epic tool catalog lacks feature_repair.",
+    "if_refused": "Name exact refusal, missing capability/authority and runtime/lifecycle owner. Restore reviewed capability through supported authorized runtime/bootstrap route, then resume same F1 request/PR. Do not fabricate incident evidence, directly edit lifecycle, bypass review or deliver exclusively in F4/F5."
+  },
+  "downstream_handoffs": [
+    {"recipient": "feat_048_004", "request_id": "epic_048:epic_048:pr251-f1-ownership-supersedes-f5-20261125", "status": "enqueued"},
+    {"recipient": "feat_048_005", "request_id": "epic_048:epic_048:pr251-f5-superseded-by-f1-20261125", "status": "enqueued"}
+  ],
+  "f5_state": "Backlog at list_children observation; independent production scope superseded, no cancellation claimed or lifecycle edited.",
+  "design_closeout": {
+    "reviewed": ["cascade/DESIGN.md", "cascade/epic/DESIGN.md", "cascade/feature/DESIGN.md", "cascade/epic/recovery.py", "cascade/team_supervision.py", "cascade/feature/repair.py", "cascade/feature/mint.py"],
+    "no_change_reason": "Ownership/routing-only diff. Existing designs accurately distinguish generic wakeup from generation-bound repair. No runtime, persistence, interface or C4 source changes. Existing all-level corrective diagram inventory transfers from F5 to F1; F4 retains final integrated verification.",
+    "verification": "Source traced generic no-incident wakeup and guarded repair admission/resume including clean checkout, target drift and approval failures. JSON parsing and git diff --check passed. Runtime tests/render/browser/hosted CI were not rerun.",
+    "gaps": "F1 admission and concrete Task contract, implementation and PR #251 green CI pending. Existing architecture publication recovery and authorized operational evidence remain separate."
+  }
+}
