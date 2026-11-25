@@ -1,0 +1,562 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_manager",
+  "plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+  "decision": "Existing dec_010 governs; no scope change or new plan revision.",
+  "integration": {
+    "f4_revision": "f258bca3a0beaee66d3eedd1483218245e838ea7",
+    "verified_ancestors": [
+      "51cffe146b8b423027266f8469678c482e321c79",
+      "b9c2129558beaffd235a6c28ab25693a5cd71813"
+    ],
+    "source_inspection": "Receipt retains launch attributes, parent_operation_id and material_fingerprint; review material gate applies to original review_rebase actions. Merge diff check passed.",
+    "reported_checks": [
+      "F4 reports 15 conflict tests passed in 10.83s",
+      "F4 reports 19 publication/provider checks passed in 4.72s"
+    ],
+    "independently_rerun_tests": false
+  },
+  "task_003": {
+    "reported_state": "running",
+    "observed_local_ref": "62cb7a2fa56d229927df3e8c458bac2da3625b56",
+    "f4_integration_ancestor_of_observed_ref": false,
+    "limitation": "Local ref observation does not establish the live execution base or eventual tested revision.",
+    "next_gate": "Already-running owner incorporates and proves f258bca3 ancestry before full 10-minute Recovery contract; return exact tested SHA, command and results.",
+    "history": "Keep four pre-correction red runs distinct; no extra recovery or unchanged-source validation dispatched."
+  },
+  "design_closeout": {
+    "reviewed": [
+      "f258bca3:cascade/DESIGN.md",
+      "f258bca3:cascade/task/DESIGN.md",
+      "f258bca3:cascade/task/incident_budget.py"
+    ],
+    "context_containers": "No added actor, runtime or store in this integration delta; existing landscape/context/container inventory remains applicable.",
+    "components_code": "Existing Task receipt/admission and Teams publication boundaries retain reserve/settle entry points. Consumer fence semantics were inspected. Final integrated source-contract, render and actual navigation verification remain F4-owned.",
+    "behavior": "Package design preserves deterministic review-material fencing across restart/A-B-A and conservative legacy accounting; Task design still lacks explicit failed-material receipt schema/flow detail. Existing routed F1 closeout remains required, with F4 checking integrated documentation.",
+    "owned_change": "Evidence artifact only; no design/model/source changes or new architecture publication requested."
+  },
+  "handoffs": [
+    {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:epic_048:f4-integration-f258bca3-ack",
+      "status": "enqueued"
+    },
+    {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:epic_048:f4-task-base-observation-f258bca3",
+      "status": "enqueued"
+    }
+  ],
+  "remaining": [
+    "Task 003 corrected execution-base proof and full bounded Recovery contract",
+    "F1 acceptance/design reconciliation receipt",
+    "Final integrated architecture/navigation/consumer dossier and Epic CI",
+    "Separately authorized controlled-supervisor evidence",
+    "Original architecture publication recovery"
+  ],
+  "architect_review": {
+    "role": "epic_architect",
+    "plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "integrated_revision": "f258bca3a0beaee66d3eedd1483218245e838ea7",
+    "decision": "Existing dec_010 and Task acceptance inventory remain sufficient; no plan revision, new production correction or duplicate recovery dispatch.",
+    "reviewed_designs": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md"
+    ],
+    "source_trace": [
+      "cascade/task/incident_budget.py:_review_validator_material",
+      "cascade/task/incident_budget.py:reserve_incident_operation",
+      "cascade/task/incident_budget.py:settle_incident_operation",
+      "tests/test_review_publication_safeguards.py"
+    ],
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers: integration adds no actor, runtime, communication or persistence boundary; existing root/package ownership remains applicable.",
+      "components": "cascade-supervisor-components/cascade-team-components: Task remains budget/receipt owner; Teams and Agent remain consumers. Integration preserves both interfaces.",
+      "code": "cascade-task-code/cascade-teams-code and Agent/Watchdog consumer views: architecture tree has no diff from 107d3a26 to f258bca3. Existing reserve/settle declarations retain paths, symbols and ownership; material semantics are internal to those entries, so no extra helper node is required.",
+      "behavior": "Package prose correctly scopes deterministic material fencing to original review_rebase validators. Normal changed-material reservation still passes original allowance/claim gates; restart scans all settled failed-material receipts, blocking A-B-A. Unknown material, owner waits, exhausted status and numerical settlement bounds remain conservative. Task receipt schema and supplementary flow still need explicit fingerprint/failure-fence coverage.",
+      "owner": "F1 acceptance/design reconciliation remains outstanding; F4 verifies final integrated Task/package interfaces, source contracts, render and actual navigation/pinned-source/warm-reuse evidence against final tested SHA."
+    },
+    "resolved_documentation_observation": "The inspected integrated Task design no longer contains the previously reported F2 delivery attribution. Do not carry that specific violation forward as an observed defect at f258bca3; material receipt/flow depth remains incomplete.",
+    "verification": [
+      "111 local package/Task design file links resolve at integrated SHA; anchor validity not asserted",
+      "Both F1 correction and F2 consumer revisions are ancestors",
+      "git diff --check 107d3a26 f258bca3 passed",
+      "Source trace confirms attributes/parent_operation_id and material_fingerprint coexist; review-rebase-only fence; original allowance refusal followed by independent extension remains in publication regression"
+    ],
+    "tests": "No runtime, source-contract, render or browser rerun; F4 reports 15 conflict and 19 publication/provider passes. Final bounded gate belongs to running Task 003.",
+    "execution_base": "Observed local Task ref remains 62cb7a2f, so exact live/tested corrected base is not established by this read. Existing queued ancestry gate remains necessary; no extra recovery sent.",
+    "publication": "Original terminal failed publication and supported runtime-owner prerequisite remain in epic_048_publication_resume.json. No new architecture decision or substitute publication; accepted lineage and known already-approved sign-off refusal preserved.",
+    "limitations": "Not final F4/Epic acceptance. F1 acceptance receipt, final integrated CI/design/navigation and separate controlled-supervisor authority/evidence remain open.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:architect-f258bca3-integrated-design-review",
+      "status": "enqueued"
+    }
+  },
+  "architect_task_followup": {
+    "observed_task_revision": "67ab026adb15861fe59dff7420aa429aebaacad1",
+    "plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "ancestry": {
+      "51cffe146b8b423027266f8469678c482e321c79": true,
+      "b9c2129558beaffd235a6c28ab25693a5cd71813": false,
+      "f258bca3a0beaee66d3eedd1483218245e838ea7": false
+    },
+    "source_comparison": "Task incident_budget.py and team_review_recovery.py are byte-identical to f258bca3. Missing merge ancestry is not evidence of missing production correction. Publication safeguard delta is only a test name.",
+    "reviewed_paths": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "docs/task_artifacts/task_048_004_003_recovery_contract_ci_closeout.md"
+    ],
+    "documentation_gap": "Task package design omits the integrated review_rebase-only material-fence scope and non-rebase conservative failure gate. Task design adds fingerprint/restart/A-B-A/remaining-allowance prose but still needs that scope and explicit attributes/parent_operation_id/material_fingerprint receipt coexistence. F4 owns reconciliation before final acceptance.",
+    "diagram_impact": "No new actor/container/component or implementation declaration changes in this Task delta. Existing Task/Teams integrated Code inventory and required final source-contract/render/navigation review remain applicable; behavioral documentation must agree with the review_rebase-only source gate.",
+    "verification": [
+      "Git ancestry at exact observed Task SHA",
+      "Exact diff against f258bca3 for package/Task design and publication safeguard",
+      "read_architecture_amendments returned []",
+      "git diff --check passed"
+    ],
+    "limitations": "Task closeout reports checks, but full supervised gate result is deferred to delivery receipt and not independently verified here. No runtime tests, browser runs, recovery or publication retries. Existing terminal architecture publication refusal remains unchanged.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:architect-task67ab026a-base-design-gap",
+      "status": "enqueued"
+    },
+    "decision": "Existing plan and acceptance inventory sufficient; no plan revision or new sign-off/publication."
+  },
+  "manager_corrected_base_followup": {
+    "observed_task_revision": "cf3ea5594d6d8381ce80441067bfc04427000723",
+    "verified_ancestors": [
+      "51cffe146b8b423027266f8469678c482e321c79",
+      "b9c2129558beaffd235a6c28ab25693a5cd71813",
+      "f258bca3a0beaee66d3eedd1483218245e838ea7"
+    ],
+    "finding": "Corrected integrated base is present at the observed Task ref. This supersedes the earlier local-ref ancestry limitation, not the historical red results.",
+    "validation": "git merge-base --is-ancestor succeeds for all three revisions; git diff --check f258bca3 cf3ea559 passes. No runtime tests rerun by Epic Manager.",
+    "next_gate": "Existing active Task execution runs the full bounded Recovery contract and returns actual tested HEAD, command and result. No duplicate recovery dispatch.",
+    "design_review_scope": "This change records ancestry evidence only. Task design differs from f258bca3; final source/design/Code/navigation review remains assigned to F4 under existing acceptance inventory. No final architecture sign-off or publication claimed.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:task003-cf3ea559-integrated-base-confirmed",
+      "status": "enqueued"
+    },
+    "decision": "Existing dec_010 and plan remain sufficient; no scope or plan revision.",
+    "remaining": "Full bounded gate, final integrated architecture/dossier, F1 acceptance receipt, separate controlled-supervisor evidence and architecture publication recovery remain open."
+  },
+  "architect_corrected_base_review": {
+    "plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "reviewed_task_revision": "cf3ea5594d6d8381ce80441067bfc04427000723",
+    "verified_ancestors": [
+      "51cffe146b8b423027266f8469678c482e321c79",
+      "b9c2129558beaffd235a6c28ab25693a5cd71813",
+      "f258bca3a0beaee66d3eedd1483218245e838ea7"
+    ],
+    "reviewed_paths": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/task/incident_budget.py",
+      "docs/task_artifacts/task_048_004_003_recovery_contract_ci_closeout.md"
+    ],
+    "finding": "Corrected-base prerequisite is satisfied. Package design matches f258bca3 and resolves the earlier package scope omission. Task design adds material/restart/remaining-allowance prose but still needs explicit review_rebase-only scope, conservative non-rebase behavior and attributes/parent_operation_id/material_fingerprint receipt coexistence.",
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers unchanged: cf3ea559 adds workflow/readme/closeout/Task prose, with no actor, runtime, communication or persistence boundary change.",
+      "components": "cascade-supervisor-components/cascade-team-components unchanged: production interfaces, collaborators and Task/Teams/Agent ownership are byte-unchanged from f258bca3.",
+      "code": "cascade-task-code/cascade-teams-code and consumer views retain source paths, symbols, declaration kinds and ownership; no model/contract delta from f258bca3. Final semantic descriptions and integrated navigation review remain F4-owned.",
+      "behavior": "Normal changed review_rebase material may reserve only remaining original allowance. Settled failed fingerprints block unchanged/A-B-A/restart replay; non-rebase deterministic settlement retains incident exhaustion. Task-owned prose/flow must make the distinction explicit."
+    },
+    "verification": [
+      "Git ancestry checks passed for all three prerequisite revisions",
+      "git diff --check f258bca3 cf3ea559 passed",
+      "Exact integrated diff and reserve/settle source trace inspected",
+      "read_architecture_amendments returned []"
+    ],
+    "reported_evidence": "Task closeout reports four focused checks, 18 source/navigation behavior checks and three real renderer/Chromium tests. These were not independently rerun. Full bounded supervised Recovery contract result requires the authoritative delivery receipt at its exact tested SHA.",
+    "decision": "Existing plan, dec_010 and Task acceptance inventory remain sufficient; no plan/design/model edit in this worktree, duplicate recovery or new architecture publication.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:architect-cf3ea559-corrected-base-review",
+      "status": "enqueued"
+    },
+    "remaining": [
+      "Full bounded Recovery contract result",
+      "Task receipt/flow reconciliation and final integrated design/Code/navigation dossier",
+      "F1 acceptance closeout",
+      "Separately authorized controlled-supervisor evidence",
+      "Original terminal architecture publication recovery via its recorded runtime-owner prerequisite"
+    ],
+    "limitations": "Not final Feature/Epic acceptance. No runtime tests or repeated terminal publication retry; no lifecycle, accepted-lineage or dependency changes."
+  },
+  "manager_final_gate_reconciliation": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_revision": "e41b5be5d6581d4ed29347cafa47213d2052f743",
+    "delivered_task_revision": "c2e8b60895beb0d304c51c382be13fe00c0b4d5c",
+    "verified_ancestors": [
+      "51cffe146b8b423027266f8469678c482e321c79",
+      "b9c2129558beaffd235a6c28ab25693a5cd71813",
+      "f258bca3a0beaee66d3eedd1483218245e838ea7"
+    ],
+    "task_is_feature_ancestor": true,
+    "reported_validation": {
+      "source": "F4 TeamMessage task3-merged-final-ci-e41b5be5 and canonical Feature final integrated gate section",
+      "phase": "final_validation",
+      "exit_code": 0,
+      "passed": 163,
+      "warnings": 2,
+      "seconds": 165.69,
+      "tested_revision": "c2e8b60895beb0d304c51c382be13fe00c0b4d5c",
+      "independently_rerun": false,
+      "limitation": "Task delivery receipt remains authoritative; Epic Manager verified source ancestry and Feature report, not a fresh execution."
+    },
+    "history": "Four pre-correction red observations remain separate. Earlier base/documentation gaps are resolved at this Task revision, without overwriting historical observations.",
+    "design_closeout": {
+      "reviewed": [
+        "c2e8b608:cascade/task/DESIGN.md",
+        "c2e8b608:cascade/DESIGN.md",
+        "c2e8b608:docs/task_artifacts/task_048_004_003_recovery_contract_ci_closeout.md",
+        "e41b5be5:Feature diagram-impact inventory and final integrated gate"
+      ],
+      "resolved": "Task prose explicitly scopes fingerprint fencing to review_validator under original review_rebase, preserves attributes.parent_operation_id alongside material_fingerprint, distinguishes non-rebase conservative exhaustion, and explains restart/A-B-A/remaining-allowance/independent-extension behavior.",
+      "diagram_impact": {
+        "landscape_context": "cascade-landscape/cascade-context unchanged: f258bca3..c2e8b608 adds workflow, runbook, Task design and work-record content only; no actor or responsibility boundary changes.",
+        "containers": "cascade-containers unchanged: no runtime, communication or durable store boundary changed in the delivered Task diff.",
+        "components": "cascade-supervisor-components/cascade-team-components unchanged: production interfaces and Task/Teams/Agent collaborators are unchanged from integrated base.",
+        "code": "cascade-task-code/cascade-teams-code and consumer Code views: no source/model/contract declarations changed in the Task diff. F4 Architect must reconcile descriptions, real symbols and navigation evidence at final integrated revision.",
+        "behavior": "Task-owned prose resolves the previously routed material/receipt failure-resume gap. Final normal/refusal/restart and consumer evidence belongs in active Task 004 dossier."
+      },
+      "verification": "Read exact integrated design diff and closeout; verified all three prerequisite ancestors and delivered Task ancestry in F4; git diff --check passed; mandatory review-health selection and ten-minute workflow bound retained.",
+      "limits": "No runtime/render/browser rerun; no final architecture acceptance or publication claimed. Reported source/navigation and renderer evidence remains subject to final F4 review."
+    },
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:f4-e41b5be5-final-gate-architecture-review",
+      "status": "enqueued",
+      "request": "Matching Feature Architect review for exact e41b5be5; continue active Task 004 final dossier without duplicate recovery or unchanged-source full gate."
+    },
+    "decision": "Existing dec_010 and approved acceptance inventory suffice; no scope/plan revision or new decision-log entry.",
+    "remaining": [
+      "Matching F4 architecture review at e41b5be5 and final integrated dossier",
+      "F1 owning acceptance/design reconciliation receipt",
+      "Final Epic integration and CI",
+      "Separately authorized controlled-supervisor evidence",
+      "Completed-record evidence limitations and original architecture publication recovery"
+    ]
+  },
+  "architect_delivered_gate_review": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_plan_revision": "e41b5be5d6581d4ed29347cafa47213d2052f743",
+    "delivered_task_revision": "c2e8b60895beb0d304c51c382be13fe00c0b4d5c",
+    "reviewed_paths": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/task/incident_budget.py",
+      "docs/task_artifacts/task_048_004_003_recovery_contract_ci_closeout.md",
+      ".github/workflows/recovery-contract.yml",
+      "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md"
+    ],
+    "resolved_gaps": "Task design now scopes fingerprint fencing to review_validator under original review_rebase, preserves attributes.parent_operation_id alongside material_fingerprint and explicitly retains conservative non-rebase exhaustion. Prose agrees with reservation/settlement source. Earlier documentation findings remain historical only.",
+    "diagram_impact": {
+      "context": "cascade-landscape/cascade-context: no actor or responsibility boundary change in f258bca3..c2e8b608; four-file delta is workflow, README, Task design and closeout.",
+      "containers": "cascade-containers: no runtime, communication or durable store change; CI diagnostics are bounded verification artifacts.",
+      "components": "cascade-supervisor-components/cascade-team-components: production collaborators and interfaces unchanged; Task retains receipt ownership and Teams/Agent consume it.",
+      "code": "cascade-task-code/cascade-teams-code and Agent/Watchdog consumer views: source/model/contract delta is empty since integrated base; no new or renamed symbol or ownership change requiring a new node. Final integrated semantics/navigation review remains with F4 Architect and Task 004.",
+      "behavior": "Normal changed review_rebase material reserves only original remaining allowance. Settled deterministic fingerprints fence unchanged/A-B-A/restart reuse. Missing legacy material refuses; non-rebase deterministic failure exhausts incident. Task prose now covers these paths and parent receipt linkage."
+    },
+    "verification": [
+      "All three prerequisite revisions 51cffe14, b9c21295 and f258bca3 are ancestors of c2e8b608; c2e8b608 is an ancestor of e41b5be5",
+      "111 package/Task local file and directory links resolve at c2e8b608; anchors not checked",
+      "git diff --check f258bca3 c2e8b608 passed",
+      "Task architecture tree delta empty; full test_review_health.py selection and ten-minute job/eight-minute pytest bounds retained",
+      "read_architecture_amendments returned []"
+    ],
+    "reported_evidence": "Canonical F4 plan and TeamMessage report supervised final_validation at c2e8b608: exit 0, 163 passed, two fork warnings, 165.69s. Task closeout separately reports 18 source/navigation checks and three renderer/Chromium checks. No independent runtime/render/browser rerun in this turn; final dossier must retain exact execution SHA and renderer identity provenance.",
+    "decision": "Existing Epic dec_010 and architecture acceptance inventory remain sufficient. No Epic plan, design or model edit needed; no duplicate test or recovery dispatch. Matching Feature architecture review is already requested for e41b5be5.",
+    "publication": "Original terminal architecture publication remains failed with internal_error/render worker interrupted after automatic recovery. Runtime owner must provide supported recovery of both exact publication and render operation; no exposed retry route or new authority observed. Do not substitute newer references or repeat terminal discovery as repair. See epic_048_publication_resume.json.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:architect-c2e8b608-delivery-review",
+      "status": "enqueued"
+    },
+    "remaining": [
+      "Matching F4 architecture review and final integrated dossier/navigation review",
+      "F1 owning acceptance reconciliation receipt and completed-record evidence limitations",
+      "Final Epic integration and validation",
+      "Separately authorized controlled-supervisor evidence",
+      "Original architecture publication recovery"
+    ],
+    "limitations": "This is Epic architect reconciliation of delivered evidence, not final Feature/Epic acceptance, an owning F1 receipt or a replacement architecture publication."
+  },
+  "manager_matching_architecture_review": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_revision": "e41b5be5d6581d4ed29347cafa47213d2052f743",
+    "reported_review_id": "architecture-review-518cf87bc5d2f1016e09008db3d6c3581ce91670e23d7d69778c48aaf1587a7b",
+    "reported_design_pin": "f258bca3",
+    "reported_outcome": "no_diagram_change",
+    "evidence_source": "F4 TeamMessage architecture-review-e41b5be5-task3-merged; canonical Feature revision independently confirmed with read_doc. Architecture publication receipt not independently retrieved by this role.",
+    "reported_checks": [
+      "28 plan links resolve",
+      "14 C4 source-contract tests pass",
+      "git diff --check passes"
+    ],
+    "retained_gate": "Task 003 final_validation at c2e8b60895beb0d304c51c382be13fe00c0b4d5c: reported 163 passed, two existing fork warnings, 165.69s. Earlier cf3ea559 green run and four pre-correction red runs remain distinct. No independent rerun.",
+    "design_closeout": {
+      "reviewed": [
+        "c2e8b608:cascade/task/DESIGN.md",
+        "e41b5be5:docs/task_artifacts/task_048_004_003_recovery_contract_ci_closeout.md",
+        "Existing Epic diagram-impact inventory and delivered-gate reconciliation"
+      ],
+      "context_containers": "No new actor, runtime, store or communication boundary in f258bca3..c2e8b608; cascade-landscape/cascade-context/cascade-containers unchanged.",
+      "components_code": "Delivered four-file delta contains no production source or model/contract change; cascade-supervisor-components/cascade-team-components and cascade-task-code/cascade-teams-code keep their existing declarations and owners. Matching Feature Architect review reports coverage of F1/F2 source symbols.",
+      "behavior": "Task design scopes the fence to review_validator under original review_rebase; attributes.parent_operation_id coexists with material_fingerprint, restart/A-B-A fences remain, changed inputs consume original allowance, and non-rebase deterministic failure retains conservative exhaustion.",
+      "verification": "Inspected exact Task design diff and closeout, canonical F4 revision, four-file diff scope and owned diff check. No design/model edits needed for this evidence-only reconciliation.",
+      "limitations": "Renderer/Chromium and 14 source checks are reported evidence, not new Epic executions. Final Task 004 dossier retains exact tested/source revisions and renderer identity provenance. This matching Feature review does not repair the original Epic architecture publication."
+    },
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:f4-e41b5be5-review-518cf87b-ack",
+      "status": "enqueued"
+    },
+    "decision": "Existing dec_010 and acceptance inventory remain sufficient. No Epic or Feature spec revision, new decision, duplicate review request or unchanged-source full gate needed.",
+    "remaining": [
+      "Task 004 final integrated dossier/navigation reconciliation",
+      "F1 owning acceptance/design reconciliation receipt and completed-record evidence limitations",
+      "Final Epic integration and validation",
+      "Separately authorized controlled-supervisor evidence",
+      "Original architecture publication recovery"
+    ]
+  },
+  "architect_matching_review_reconciliation": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_plan_revision": "e41b5be5d6581d4ed29347cafa47213d2052f743",
+    "reported_review_id": "architecture-review-518cf87bc5d2f1016e09008db3d6c3581ce91670e23d7d69778c48aaf1587a7b",
+    "review_scope": "F4 reports no_diagram_change with package DESIGN pinned to f258bca3. Canonical Feature revision independently confirmed using read_doc; published receipt itself not independently retrieved.",
+    "reviewed_paths": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/task/incident_budget.py",
+      "docs/task_artifacts/task_048_004_003_recovery_contract_ci_closeout.md"
+    ],
+    "pin_reconciliation": "Package DESIGN and architecture tree are byte-unchanged from f258bca3 through e41b5be5. Task DESIGN amendments are present at delivered c2e8b608 and agree with reserve_incident_operation/settle_incident_operation. The package pin does not substitute for final child-design/dossier evidence.",
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers unchanged: four-file Task delta changes CI, runbook, Task prose and work evidence without adding actor, runtime, store or communication boundaries.",
+      "components": "cascade-supervisor-components/cascade-team-components unchanged: Task receipt ownership and Teams/Agent collaborators retain production interfaces.",
+      "code": "cascade-task-code/cascade-teams-code and consumer views retain declarations and ownership; no production/model/contract delta since integrated base. F4 reports source-contract checks; final navigation and source-pin provenance remain Task 004 dossier obligations.",
+      "behavior": "Reviewed changed-material admission against remaining original allowance, persisted unchanged/A-B-A/legacy refusal, receipt attributes.parent_operation_id alongside material_fingerprint, and conservative non-review_rebase deterministic exhaustion against source. Existing Task prose agrees; no further design edit warranted."
+    },
+    "verification": [
+      "F1 51cffe14, F2 b9c21295, F4 f258bca3 and Task c2e8b608 ancestry in e41b5be5 verified",
+      "git diff --check f258bca3 e41b5be5 passed",
+      "Canonical Feature read and empty architecture-amendments result",
+      "Exact Task design diff, package pin equivalence, source failure/admission branches and closeout reviewed"
+    ],
+    "reported_evidence": "163 passes/165.69s at c2e8b608 remain reported supervised final_validation evidence. Earlier cf3ea559 green and four pre-correction red observations remain distinct. F4 reports 14 source checks and 28 links; Task closeout reports renderer/Chromium evidence. No runtime tests rerun.",
+    "decision": "Matching Feature plan review is accounted for. Existing Epic acceptance inventory and queued Manager acknowledgement suffice; no plan revision, duplicate handoff, recovery or unchanged-source test run.",
+    "remaining": [
+      "Task 004 final integrated dossier/navigation and renderer identity provenance",
+      "F1 owning acceptance/design reconciliation receipt and completed-record limitations",
+      "Final Epic integration and validation",
+      "Separately authorized controlled-supervisor evidence",
+      "Original terminal architecture publication recovery through its recorded runtime-owner prerequisite"
+    ],
+    "publication": "The matching Feature review does not repair the Epic publication. Preserve the failed exact operation and references in epic_048_publication_resume.json; no new retry capability or authorization observed.",
+    "limitations": "Evidence reconciliation only; not final acceptance, renewed plan sign-off, accepted-lineage mutation or replacement publication."
+  },
+  "architect_task004_dossier_preflight": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "feature_plan_revision": "e41b5be5d6581d4ed29347cafa47213d2052f743",
+    "observed_task_revision": "f26f5af7f918d0c5bcf56237784d0a9d765632ff",
+    "reviewed_paths": [
+      "docs/task_artifacts/task_048_004_004_controlled_supervisor_evidence_dossier.md"
+    ],
+    "decision": "Existing Epic acceptance inventory and matching F4 architecture review 518cf87b remain sufficient. Active Task evidence review only; no plan/design/model revision or replacement publication.",
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers: dossier-only delta changes no actors, runtime, communication or persistence boundaries.",
+      "components_code": "Existing supervisor/team/CLI/War Room components and integrated Code views retain source declarations, kinds, ownership and wiring; no source/design/model/contract delta from reviewed e41b5be5.",
+      "behavior": "Dossier retains normal admission/publication/independent-postcheck and failure/restart narratives. Operational refusal preserves missing target, signed installation/trust binding, permitted fault, selected incident and rollback as prerequisites; dependency readiness does not supply authority."
+    },
+    "open_evidence_corrections": [
+      "Retain cf3ea559 163 passes/231.25s as earlier evidence and identify accepted c2e8b608 supervised final_validation 163 passes/165.69s separately.",
+      "Label sha256:97681b22557abb2044ff2b67ae374956824c01da46b76be60858281adf678864 as local image ID, separately from pinned Structurizr RepoDigest sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c."
+    ],
+    "routing": "F4 Architect already sent both corrections to active Task 004; no duplicate message, recovery or validation request.",
+    "verification": [
+      "Read canonical Epic plan and current Task dossier delta",
+      "Verified e41b5be5 ancestry in f26f5af7 and dossier-only changed-path inventory",
+      "git diff --check e41b5be5 f26f5af7 passed",
+      "read_architecture_amendments returned []"
+    ],
+    "limitations": "No runtime/render/browser checks rerun. Dossier is active and unmerged; not final architecture or operational acceptance. F1 owning acceptance receipt, final Epic integration/validation, controlled-supervisor authority/evidence, completed-record limitations and terminal architecture publication recovery remain open. Existing failed exact publication requires its recorded supported runtime-owner recovery; no substitute references or retry capability observed."
+  },
+  "manager_task004_delivery_reconciliation": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_plan_revision": "e41b5be5d6581d4ed29347cafa47213d2052f743",
+    "reviewed_task_revision": "3dc7f74e9692690e78a080b27b182f6aa6e79cce",
+    "lifecycle": "F4 reports Task 004 awaiting_merge with delivery_wait parent_turn_boundary. Epic supervise_child independently confirms F4 active with no incidents. No Task merge or Feature completion is claimed.",
+    "reported_validation": {
+      "source": "F4 TeamMessage task004-queued-3dc7f74e",
+      "operation": "supervised final_validation",
+      "exit_code": 0,
+      "passed": 181,
+      "existing_warnings": 2,
+      "seconds": 194.6,
+      "independently_rerun": false
+    },
+    "resolved_evidence_corrections": [
+      "Dossier separates accepted Task 003 c2e8b608/163 passes/165.69s from earlier cf3ea559/231.25s and retains all four pre-correction red runs.",
+      "Dossier distinguishes pinned Structurizr RepoDigest c89b54231 from local image ID 97681b225 and identifies inherited renderer/browser observations at f26f5af7."
+    ],
+    "verification": [
+      "Canonical Epic and Feature read_doc inspected; existing acceptance gates and dec_010 remain sufficient.",
+      "e41b5be5 is an ancestor of 3dc7f74e.",
+      "git diff --stat e41b5be5 3dc7f74e shows only the 247-line Task 004 dossier; git diff --check passes.",
+      "Read the complete exact-commit dossier, including admission refusal and final design inventory."
+    ],
+    "design_closeout": {
+      "reviewed_path": "3dc7f74e:docs/task_artifacts/task_048_004_004_controlled_supervisor_evidence_dossier.md",
+      "context_containers": "Dossier-only delta changes no actors, responsibility boundaries, runtime, communication or stores; cascade-landscape, cascade-context and cascade-containers need no edits.",
+      "components_code": "No production, DESIGN.md, model.dsl, views.dsl or source-contract changes. Existing component/Code source declarations and owners remain unchanged. Dossier reports integrated source/navigation and pinned renderer/Chromium evidence; no independent rerun in this turn.",
+      "behavior": "Dossier preserves original-incident admission through publication and independent postcheck, plus failure/restart retention of budgets and receipts. Missing target/install/fault/incident/rollback authority remains a refusal, not successful operational recovery.",
+      "limitations": "Final Feature post-merge reconciliation and matching revision review remain with F4. Existing plan review 518cf87b covers e41b5be5, not an unobserved future revision. No replacement Epic architecture publication or final acceptance."
+    },
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:epic_048:task004-3dc7f74e-dossier-ack",
+      "status": "enqueued",
+      "next": "Allow queued supported merge at parent boundary; return exact merge/delivery receipt and final Feature plan/review pins."
+    },
+    "decision": "Evidence reconciliation under existing dec_010; no requirement, scope, plan or decision-log change. No duplicate tests, recovery or operational dispatch.",
+    "remaining": [
+      "Queued Task 004 merge and final Feature reconciliation/review",
+      "F1 owning acceptance/design reconciliation receipt and completed-record limitations",
+      "Final Epic integration and validation",
+      "Controlled-supervisor authority and operational evidence",
+      "Original terminal architecture publication recovery"
+    ]
+  },
+  "architect_task004_delivery_review": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_revision": "c0df9d332bfade4ade5255de639bdbfb19f70f5a",
+    "canonical_feature_status": "completed",
+    "task_delivery_revision": "3dc7f74e9692690e78a080b27b182f6aa6e79cce",
+    "observed_task_integration_commit": "a273e921f145e905383a37a37fc7b36c39a67e0a",
+    "reviewed_paths": [
+      "docs/task_artifacts/task_048_004_004_controlled_supervisor_evidence_dossier.md",
+      "docs/features/3_completed/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md"
+    ],
+    "resolved_corrections": [
+      "Accepted c2e8b608 163 passes/165.69s is distinct from earlier cf3ea559 163 passes/231.25s; all four prior red runs remain.",
+      "Pinned Structurizr RepoDigest c89b54231 is distinct from local Image ID 97681b225; inherited renderer/browser observations are pinned to f26f5af7."
+    ],
+    "reported_validation": "F4 reports supervised final_validation at 3dc7f74e: exit 0, 181 passed, two existing warnings, 194.60s. Not independently rerun; not exact-head evidence for c0df9d33.",
+    "lineage_limits": "3dc7f74e, c2e8b608 and f258bca3 are not ancestors of canonical c0df9d33 (exit 1 each). Dossier is byte-identical to 3dc7f74e. e41b5be5..c0df9d33 changes only Feature/Task lifecycle and closeout records plus dossier. No source/design/model change observed. Supported rewrite/integration receipt and final review requested from F4; no ancestry or new validation inferred.",
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers unchanged: evidence-only delta introduces no actor, external dependency, runtime, store or communication boundary.",
+      "components": "Supervisor/team/CLI/War Room component responsibilities and interfaces unchanged: no production or design delta.",
+      "code": "Task/Agent/Watchdog/Teams and other integrated Code views retain paths, symbols, declaration kinds and ownership; no model, contract or source delta. Existing review 518cf87b covers e41b5be5 only; final canonical revision needs owning review.",
+      "behavior": "Dossier describes admission, immutable validation, publication and independent postcheck; failure/restart retains original incident allowance and receipts. Missing operational target, signed installation/loaded identity, fault, incident and rollback binding remains refusal, not operational acceptance."
+    },
+    "verification": [
+      "Canonical Epic and Feature read_doc inspected; architecture amendments empty.",
+      "Full corrected dossier and f26f5af7..3dc7f74e prose diff inspected.",
+      "e41b5be5 is ancestor of 3dc7f74e; diff checks pass for that range and e41b5be5..c0df9d33.",
+      "Production, designs, model and tests are unchanged between e41b5be5 and c0df9d33; dossier byte equality verified."
+    ],
+    "handoffs": [
+      "epic_048:epic_048:architect-task004-c0df9d33-final-review",
+      "epic_048:epic_048:architect-c0df9d33-lineage-limits"
+    ],
+    "decision": "No Epic requirement, plan or diagram edit. Preserve existing publication failure and exact references; no replacement publication, renewed sign-off or final acceptance claimed.",
+    "remaining": [
+      "F4 final canonical revision architecture review and supported integration/rewrite receipt",
+      "F1 owning acceptance/design receipt and completed-record limitations",
+      "Final Epic integration and validation",
+      "Controlled-supervisor authority and operational evidence",
+      "Original terminal architecture publication recovery"
+    ],
+    "limitations": "Artifact review only; no runtime/render/browser rerun, lifecycle mutation, dependency installation, recovery dispatch or operational exercise."
+  },
+  "manager_final_feature_review_reconciliation": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_revision": "aaca5e02633c350c280a7d0e8b9a584cc404c151",
+    "canonical_feature_status": "completed",
+    "matching_architecture_review": {
+      "id": "architecture-review-a990d84add182a9bdb06482c766f6c94f11072797e35143157fcd7c19aa0d1b2",
+      "design_revision": "a273e921f145e905383a37a37fc7b36c39a67e0a",
+      "owner_report": "published; no_diagram_change; 14 source-contract passes and 342 local links resolved",
+      "canonical_historical_projection": "staged; review null; accepted null; promotion null",
+      "limitation": "Exact tuple is independently corroborated; accepted architecture publication is not established."
+    },
+    "integration_mapping": {
+      "submitted_task_revision": "3dc7f74e9692690e78a080b27b182f6aa6e79cce",
+      "feature_integration_revision": "a273e921f145e905383a37a37fc7b36c39a67e0a",
+      "source": "Canonical F4 closeout reports supervisor incorporation; Git commit carries Cascade-Task trailer.",
+      "verified": "Submitted Task to final Feature diff changes only Feature and Task lifecycle/closeout records. Production, tests, designs, C4 source and dossier are byte-identical.",
+      "limit": "Historical evidence still returns reconciliation_receipt_missing; content equality is not an authoritative delivery receipt or ancestry assertion.",
+      "linked_review": "https://github.com/vincentc-b/CascadeCode/pull/256"
+    },
+    "validation_evidence": "Retain reported supervised Task 003 result c2e8b608: 163 passed/165.69s and Task 004 result 3dc7f74e: 181 passed/194.60s, both exit 0 with two existing warnings. No independent rerun or final Epic CI claimed; four earlier red runs remain distinct.",
+    "design_closeout": {
+      "reviewed": [
+        "aaca5e02:canonical Feature closeout and diagram inventory",
+        "aaca5e02:cascade/task/DESIGN.md receipt and failure/restart contract",
+        "3dc7f74e..aaca5e02 full changed-path inventory"
+      ],
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers unchanged: lifecycle/closeout prose adds no actor, runtime, store or communication boundary.",
+      "components_code": "cascade-supervisor-components/cascade-team-components and Task/Teams/Agent/Watchdog Code views unchanged: no production/design/model/contract delta; existing source paths, symbols, declaration kinds and ownership retained.",
+      "behavior": "Task design retains parent_operation_id and material_fingerprint, review_rebase-only retry within original allowance, A-B-A/restart fencing and conservative non-rebase/legacy refusal. Dossier operational refusal still requires target, installation/trust identity, incident, permitted fault and rollback authority.",
+      "checks": [
+        "Canonical read_doc and supervise_child confirm completed Feature at aaca5e02",
+        "Historical evidence corroborates exact architecture tuple and linked PR #256 with stated limitations",
+        "git diff --check 3dc7f74e aaca5e02 passed",
+        "Exact tree comparison confirms only lifecycle/closeout records differ"
+      ],
+      "limits": "No runtime, renderer or browser rerun; reported F4 checks are attributed evidence. No final Epic acceptance or accepted-lineage mutation."
+    },
+    "decision": "Existing dec_010 and acceptance inventory suffice; no scope, spec or decision-log change. No duplicate validation, recovery, installation or operational action.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:f4-final-review-aaca5e02-reconciled",
+      "status": "enqueued"
+    },
+    "remaining": [
+      "Normal F4 review/integration and final Epic validation",
+      "F1 owning acceptance/design receipt and completed-record limitations",
+      "Authoritative integration reconciliation receipt",
+      "Controlled-supervisor authority and operational evidence",
+      "Original terminal architecture publication recovery"
+    ]
+  },
+  "architect_final_feature_review_reconciliation": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "feature_plan_revision": "aaca5e02633c350c280a7d0e8b9a584cc404c151",
+    "review_id": "architecture-review-a990d84add182a9bdb06482c766f6c94f11072797e35143157fcd7c19aa0d1b2",
+    "design_revision": "a273e921f145e905383a37a37fc7b36c39a67e0a",
+    "canonical_evidence": "read_historical_evidence corroborates the exact plan/design tuple, status staged, review null, accepted null and promotion null; git evidence reports reconciliation_receipt_missing. Matching submission is established, accepted promotion and authoritative integration receipt are not.",
+    "reviewed_paths": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/task/incident_budget.py",
+      "docs/task_artifacts/task_048_004_004_controlled_supervisor_evidence_dossier.md",
+      "docs/features/3_completed/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md"
+    ],
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers unchanged: submitted Task 004 tree to final Feature changes only lifecycle and closeout records; no actor, runtime, communication or persistent-store delta.",
+      "components": "Supervisor, team, CLI and War Room responsibilities and interfaces unchanged; no production/design delta.",
+      "code": "Task/Agent/Watchdog/Teams and other integrated Code views retain source paths, symbols, declaration kinds and owners. Architecture/model/contract and production trees are identical across the reviewed final delta; no new model edit warranted.",
+      "behavior": "Package and Task designs agree with reserve_incident_operation and settle_incident_operation: review_rebase-only material fencing across restart/A-B-A; changed material consumes original remaining allowance; receipt attributes.parent_operation_id coexist with material_fingerprint; other deterministic validators and legacy unknown material remain conservative. Dossier distinguishes normal independent postcheck from refused operational admission."
+    },
+    "verification": [
+      "Canonical Epic and Feature read_doc inspected; read_architecture_amendments returned [].",
+      "git diff --name-status 3dc7f74e aaca5e02 changes only Feature/Task lifecycle and closeout records; git diff --check passed.",
+      "git diff --quiet a273e921 aaca5e02 -- cascade architecture DESIGN.md tests passed.",
+      "Reviewed dossier final inventory, inherited renderer/browser pins, operational manifest and remaining acceptance obligations against package/Task design and source."
+    ],
+    "reported_checks": "F4 reports 14 source-contract passes and 342 resolved links. Retain Task 003 c2e8b608: 163 passes/165.69s and Task 004 3dc7f74e: 181 passes/194.60s separately from four red runs and inherited f26f5af7 renderer/browser evidence. None independently rerun this turn.",
+    "decision": "No Epic spec, requirement, diagram or decision-log change. Manager acknowledgement already queued; no duplicate handoff. Matching Feature submission does not replace or repair original terminal Epic architecture publication.",
+    "remaining": [
+      "Normal F4 review/integration receipt and final Epic validation",
+      "F1 owning acceptance/design reconciliation receipt and completed-record limitations",
+      "Controlled-supervisor authorized manifest and operational evidence",
+      "Original terminal architecture publication recovery"
+    ],
+    "limitations": "No renewed sign-off, accepted-lineage mutation, replacement publication, runtime tests, dependency installation or operational action. Existing scoped runtime-owner publication handoff and exact failed references remain authoritative."
+  }
+}

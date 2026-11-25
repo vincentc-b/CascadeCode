@@ -1,0 +1,435 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_manager",
+  "trigger": "Human CI investigation and correction request for PR #251",
+  "assessed_revision": "ff3cd399d1523ba6c4e123825c811f8c0b700e7c",
+  "plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+  "corrective_feature": "feat_048_005",
+  "feature_initial_revision": "c2ade1e50726c81148dc4fa9d3142ac73f7e9079",
+  "decision": "dec_007",
+  "independent_evidence": {
+    "github": {
+      "pr": 251,
+      "state": "open",
+      "source": "feat/feat_048_001",
+      "target": "epic/epic_048",
+      "job": "review-recovery",
+      "conclusion": "failure",
+      "url": "https://github.com/vincentc-b/CascadeCode/actions/runs/45503157539/job/138831403366",
+      "head_sha": "ff3cd399d1523ba6c4e123825c811f8c0b700e7c"
+    },
+    "reproduction": {
+      "method": "git archive of exact assessed revision into isolated temporary directory; existing installed Python/pytest; no installation",
+      "command": "/opt/conda/bin/python3.12 -m pytest -q tests/test_review_health.py::test_validation_and_publication_failures_remain_owned_and_retryable",
+      "result": "1 failed in 2.67s",
+      "assertion": "Expected completed; actual awaiting_owner_decision",
+      "source_trace": [
+        "review_validation.run_review_validation: nonzero exit classified deterministic",
+        "incident_budget.settle_incident_operation: deterministic failure calls _exhaust",
+        "incident_budget.reserve_incident_operation: exhausted status refused unconditionally",
+        "bind_incident_budget appends bindings without restoring eligibility"
+      ]
+    },
+    "checks": "git diff --check a6f6cbe3..46b045c2 passed; 10 assessed-revision Python source declarations, 11 local C4 view keys and 6 owning design paths resolve."
+  },
+  "operator_reported_evidence": "53 passed, 1 failed; two publication generations, one attempt, one process-second charged; deterministic failure exhausted / bounded_extension_required. Aggregate counts and durable charge snapshot are operator-reported, not independently remeasured in this turn.",
+  "ownership": {
+    "feat_048_005": "Production semantics, conservative persisted-record reconciliation, preserved regression plus real governed-policy/validator/Git proof, Task acceptance and affected design/Code reconciliation, normal corrective review.",
+    "feat_048_004": "Shared harness/workflow, mandatory regression selection and final integrated CI/dossier including F5 revision; separate operational proof.",
+    "epic_manager": "Coordinate overlap, supported PR #251 update or explicit reviewed corrective successor/supersession, exact corrected-review and final-Epic hosted CI evidence.",
+    "epic_architect": "Review corrective scope and diagram inventory on current plan through supported already-approved-plan lifecycle; existing terminal architecture-publication recovery remains separate."
+  },
+  "handoffs": [
+    {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:pr251-material-retry-correction-ownership",
+      "status": "enqueued"
+    },
+    {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:feat048005-ci-integration-gate",
+      "status": "enqueued"
+    },
+    {
+      "recipient": "feat_048_005",
+      "request_id": "epic_048:epic_048:feat048005-correction-contract-handoff",
+      "status": "enqueued"
+    }
+  ],
+  "design_closeout": {
+    "reviewed": [
+      "DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+      "F1 archived budget/publication implementation and Task design at assessed_revision"
+    ],
+    "no_change_reason": "Owned Epic source does not yet contain delivered budget implementation. This turn changes canonical work ownership and acceptance only, with no runtime/data/interface/model change. Existing current baseline boundaries remain truthful. F5 owns implementation/design reconciliation, affected consumer contracts and final source/render/navigation proof.",
+    "inventory": "Canonical F5 and Epic records contain context, containers, components, native Task/Teams Code, affected consumer Code and behavior rows with owners, source symbols and verification obligations.",
+    "gaps": "Feature Team must finish concrete schema/API/flow and own Task acceptance before Task dispatch. No corrected implementation, runtime green result, render/browser acceptance, hosted CI success or operational closure is claimed."
+  },
+  "signoff_attempt": {
+    "requested_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "result": "refused",
+    "exact_reason": "epic plan for epic_048 is already approved",
+    "action": "Preserve existing approval and use supported follow-up Feature planning/review. No lifecycle rollback or claim of renewed Manager/Architect sign-off."
+  },
+  "remaining_gates": [
+    "F5 implementation and focused red-to-green proof",
+    "F4 coordination and final integrated CI including correction",
+    "PR #251 explicit reviewed resolution and hosted checks",
+    "Final Epic hosted CI",
+    "Existing terminal architecture publication supported recovery",
+    "Separate authorized operational supervisor evidence"
+  ],
+  "scope_limits": "No other team worktree or product trunk mutation; no dependency installation, live deployment, CI rerun, test alteration or budget reset.",
+  "architect_review": {
+    "role": "epic_architect",
+    "plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "feature_revision": "c2ade1e50726c81148dc4fa9d3142ac73f7e9079",
+    "owned_checkout_revision": "c93654b4",
+    "assessment": "Corrective scope and ownership fit existing approved acceptance. F5 owns the production correction and focused proof; F4 retains shared harness/workflow and final integrated acceptance; Epic Manager owns PR #251 disposition and corrected-review/final-Epic hosted evidence. No further Epic scope or decision change is needed. Canonical F5 is backlog with no Tasks and TBD data/API/flow sections: this review accepts the allocation, not a dispatch-ready implementation plan or completed fix. read_architecture_amendments returned [].",
+    "source_review": {
+      "revision": "ff3cd399d1523ba6c4e123825c811f8c0b700e7c",
+      "confirmed": "run_review_validation classifies nonzero exit deterministic; settle_incident_operation calls _exhaust; reserve_incident_operation refuses exhausted status before material eligibility. Receipt records operation/claim/policy and charges but no explicit failed-material binding. bind_incident_budget appends bindings without restoring eligibility.",
+      "identity_constraint": "Publication material contains source head, admitted heads, command/timeout/policy and environment. The action incident authoritative_generation also includes lifecycle/checkpoint/evidence state; it is not interchangeable with a semantic failed-material identity. A new operation ID or incidental generation change cannot establish a repair.",
+      "normal_trace": "Owner recomputes publication material, admits generation and binds original incident, then reserves validator allowance before recording owner resolution and resuming the action. Execution checks immutable source; check_and_publish_review_rebase rechecks policy/remote authority and lease-publishes the tested SHA. Correction must preserve this order and both authority gates.",
+      "failure_trace": "Nonzero validator settles its receipt and charges use while globally exhausting the record. A changed-command call appends publication material but receives bounded_extension_required from reserve_incident_operation, so it never reaches the next validator. Repeated calls/restart retain this state; clearing status alone supplies no durable A-to-B-to-A failure fence.",
+      "evidence_limit": "Source independently inspected this turn. Manager archived-revision red reproduction and operator aggregate/CI evidence are retained above, not newly rerun or remeasured. Owned Epic source does not yet contain incident_budget.py."
+    },
+    "required_owner_actions": [
+      {
+        "owner": "F5 Feature Lead/Architect before Task dispatch",
+        "action": "Replace TBD data/API/flow sections through canonical tools and populate each Task own acceptance/test plan. Pin integrated F1-F3 source and inspect later F4 deltas. Define versioned persisted failed-material evidence, trusted derivation/normalization, operation-to-material/lineage binding, typed refusals and locked reconciliation. Explicitly distinguish exact publication SHA from retry-relevant content so metadata-only commits cannot replenish eligibility while publication remains pinned to tested SHA."
+      },
+      {
+        "owner": "F5 implementation Task",
+        "action": "Preserve one original budget/store, admission time, complete history and all charged/reserved dimensions. Admission must jointly satisfy material eligibility, numerical/time allowance, transient/action retry bounds, live claims and independent human gates. Retain every failed material identity across A-to-B-to-A and restart. Neither authorized additional allowance nor a changed identifier may silently erase the unchanged-material fence."
+      },
+      {
+        "owner": "F5 implementation Task",
+        "action": "Reconcile persisted deterministic-exhaustion only from reconstructable authoritative material and accounting under the existing lock, retaining historical exhaustion/escalation facts. An old reason string alone is insufficient: _exhaust retains the first reason, so subsequent numerical exhaustion may share it. Recompute charged/reserved/deadline and all independent gates. Ambiguous, unknown-use, in-flight, unrelated terminal and human-gated records remain refused with named owner/next action; no blanket reopening."
+      },
+      {
+        "owner": "F5 implementation Task and Feature Architect",
+        "action": "Keep the existing regression and add real governed-policy or repair plus real-validator/bare-remote proof: one red check, unchanged no-spawn/no-push, authorized meaningful change, bounded retry, exact tested-SHA publication, preserved charges/history and restart/no duplicate effects. Reuse meaningful negative coverage for material drift, metadata churn, policy cycling, finite action/transient limits, numerical/elapsed exhaustion, human gate, concurrency and legacy ambiguity. Do not merely monkeypatch a successful command."
+      },
+      {
+        "owner": "F5 Feature Architect",
+        "action": "Reconcile Task budget and package publication designs with final implementation and consumer interfaces. At assessed F1 revision Task design has delivery attribution: reserve_incident_operation is called the versioned F2 consumer boundary and prose describes the F2 boundary for later paid provider enforcement. Replace surviving attribution/speculation in the actual integrated design with current source facts. Clarify that independent extension is required for numerical exhaustion while material fencing has its separately guarded transition; do not append delivery history."
+      },
+      {
+        "owner": "F4 Feature Lead/Architect with Epic Manager",
+        "action": "Consume exact reviewed F5 revision in mandatory Recovery contract selection and final integrated acceptance, including any changes after F4 initial CI work. Coordinate overlap through parent lifecycle; F4 does not duplicate the production fix. Keep PR #251 explicit reviewed resolution/supersession and fresh corrected-review/final-Epic hosted checks open until evidence exists."
+      }
+    ],
+    "diagram_impact_inventory": [
+      {
+        "level": "landscape/context",
+        "views": [
+          "cascade-landscape",
+          "cascade-context"
+        ],
+        "designs": [
+          "DESIGN.md"
+        ],
+        "owner": "F5 Architect",
+        "required": "Review authority boundary; no new person/system/dependency proposed. This handoff changes no boundary; confirm concrete unchanged reason against final source."
+      },
+      {
+        "level": "containers",
+        "views": [
+          "cascade-containers"
+        ],
+        "designs": [
+          "DESIGN.md",
+          "cascade/DESIGN.md"
+        ],
+        "owner": "F5 Architect/implementation Task",
+        "required": "Retain supervisor runtime and single tracking-trunk ledger; no new process/store proposed. Verify split-root/restart persistence and no sandbox claim from C4 containers."
+      },
+      {
+        "level": "components",
+        "views": [
+          "cascade-supervisor-components",
+          "cascade-team-components"
+        ],
+        "designs": [
+          "cascade/DESIGN.md",
+          "cascade/task/DESIGN.md"
+        ],
+        "owner": "F5 implementation Task",
+        "required": "Reconcile publication admission, budget reservation, validator settlement and failed-material history; check Agent/Watchdog callers against changed result semantics."
+      },
+      {
+        "level": "native Code",
+        "views": [
+          "cascade-task-code",
+          "cascade-teams-code"
+        ],
+        "designs": [
+          "cascade/task/DESIGN.md",
+          "cascade/DESIGN.md"
+        ],
+        "owner": "F5 implementation Task/Architect",
+        "sources": [
+          "cascade/task/incident_budget.py:bind_incident_budget",
+          "cascade/task/incident_budget.py:reserve_incident_operation",
+          "cascade/task/incident_budget.py:settle_incident_operation",
+          "cascade/task/incident_budget.py:extend_incident_budget",
+          "cascade/task/action_recovery.py:admit_review_publication_generation",
+          "cascade/task/action_recovery.py:resume_action",
+          "cascade/team_review_recovery.py:publish_team_review_resolution",
+          "cascade/review_validation.py:reserve_review_validation",
+          "cascade/review_validation.py:run_review_validation",
+          "cascade/review_rebase.py:check_and_publish_review_rebase"
+        ],
+        "required": "Reconcile actual state/types/functions/relationships, declaration kinds and component metadata in model.dsl/views.dsl/workspace.contract.json with implementation. Task owns REQ-RECOVERY-BUDGET-001/DEC-RECOVERY-BUDGET-001; package owns REQ-REVIEW-PUBLISH-001. No duplicated ownership."
+      },
+      {
+        "level": "consumer Code",
+        "views": [
+          "cascade-agent-code",
+          "cascade-watchdog-code",
+          "cascade-dashboard-code",
+          "cascade-war-room-http-code"
+        ],
+        "designs": [
+          "cascade/agent/DESIGN.md",
+          "cascade/watchdog/DESIGN.md",
+          "cascade/war_room/DESIGN.md"
+        ],
+        "owner": "F5 implementation Task/Architect; F4 integrated verification",
+        "required": "Review both sides of changed refusal/read contracts; no paid launch from deterministic wait and no read grants authority. Projection edits only if actual contract changes. Record diff-specific unchanged reasons otherwise."
+      },
+      {
+        "level": "behavior",
+        "views": [
+          "Task budget Mermaid",
+          "package publication Mermaid"
+        ],
+        "designs": [
+          "cascade/task/DESIGN.md",
+          "cascade/DESIGN.md"
+        ],
+        "owner": "F5 implementation Task/Architect",
+        "required": "Show durable failed-material fence separately from numerical exhaustion, guarded material change, historical fencing, original-budget consumption, extension/human gates and restart. Trace normal corrected retry and unchanged/exhausted refusal against final source."
+      }
+    ],
+    "verification": {
+      "reviewed_designs": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "cascade/agent/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/war_room/DESIGN.md"
+      ],
+      "no_local_design_change": "Only the work-record assessment changes here; no runtime/interface/state/model change. Current Epic baseline lacks child budget implementation, so modifying its designs to describe the proposed correction would be speculative. Reviewed baseline publication/ledger boundaries remain applicable. F5 must fix integrated design facts and delivery attribution with its source; no full-tree documentation completeness claimed.",
+      "checks": "Canonical Epic/F5 reads and empty amendment list; 11 native C4 view keys, six design paths and 10 assessed-revision Python function declarations resolve. Owned child-budget source absence and unchanged runtime/design/model diff since a6f6cbe3 confirmed. JSON round-trip and git diff --check passed.",
+      "runtime_tests": "Not rerun: source/planning review and artifact-only change. No new runtime, rendering, browser, hosted CI or operational acceptance claimed.",
+      "implementation_verification_required": "Final source-contract validation and checkout links; supported bounded rendering; actual context/container/component/Code traversal, Level up, deep-link restoration and pinned source; stale/deleted-symbol and changed-owner handling; warm artifact reuse with measured timings. Assign to Task acceptance before dispatch and rerun affected checks after later integrated changes."
+    },
+    "signoff_attempt": {
+      "requested_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+      "result": "refused",
+      "exact_reason": "epic plan for epic_048 is already approved",
+      "action": "Existing approval preserved. No renewed sign-off claimed; follow-up Feature uses supported planning/review lifecycle. No separate corrective-plan approval decision exists to use sign_off_corrective_plan."
+    },
+    "publication": "Retain exact request in docs/epic_artifacts/epic_048_publication_resume.json. Prior operation is terminal failed, not pending; catalog exposes publication but no supported terminal reset/retry. Do not replay as a recovery or replace old reviewed references with this newer plan. Runtime owner recovery remains separate; this artifact is not architecture publication.",
+    "handoffs": [
+      {
+        "recipient": "feat_048_005",
+        "request_id": "epic_048:epic_048:epic_048:pr251-f5-architect-contract-review-46b045c2",
+        "status": "enqueued"
+      },
+      {
+        "recipient": "feat_048_004",
+        "request_id": "epic_048:epic_048:epic_048:pr251-f4-architect-integration-gate-46b045c2",
+        "status": "enqueued"
+      }
+    ],
+    "remaining_gates": [
+      "F5 concrete contract and Task acceptance before dispatch",
+      "Production correction and real-process/Git regression",
+      "F4 final integrated acceptance including F5",
+      "PR #251 explicit reviewed disposition and corrected/final hosted CI",
+      "Supported terminal architecture publication recovery",
+      "Separate authorized operational supervisor evidence"
+    ]
+  },
+  "f4_acknowledgement_review": {
+    "role": "epic_manager",
+    "trigger": "feat_048_004:feat_048_004:pr251-correction-integration-handoff-796aeee2",
+    "epic_plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "reported_f4_plan_revision": "796aeee2",
+    "read_f4_plan_revision": "a71c608fb72bddffee615b62840a006e34d8dcf9",
+    "read_f5_plan_revision": "c2ade1e50726c81148dc4fa9d3142ac73f7e9079",
+    "assessment": "Current canonical F4 plan independently confirms the retained original regression in mandatory PR/main Recovery contract, no duplicate production correction, exact integrated F5 revision and full bounded selection rerun, final dossier and architecture/diff refresh after integration even if Task 3 completes first. F5 remains backlog with no Tasks; concrete schema/API/flow and Task acceptance are still its planning obligations. This acknowledges dec_007 ownership; no new scope, decision or epic spec edit is needed.",
+    "evidence_boundary": "F4 reports Task 3 active, owner notified, clean branch and no overlapping production changes. This turn verified canonical plan commitments, not child execution state, branch cleanliness, runtime behavior or hosted CI. No correction delivery or passing result is claimed.",
+    "resolution_path": [
+      "F5 completes its canonical implementation contract and Task acceptance, then delivers production correction and real-validator/Git proof through normal review.",
+      "Epic Manager routes exact reviewed delivery to F4 through supported integration; no other-team branch mutation or dependency cycle with F4 operational proof.",
+      "F4 pins the integrated correction, retains the original regression, reruns the complete bounded mandatory selection and refreshes final evidence/design review against subsequent changes.",
+      "Epic Manager records supported PR #251 correction or explicit linked reviewed successor/supersession and fresh passing hosted checks at corrected-review and final-Epic SHAs. Historical failure remains evidence."
+    ],
+    "handoffs": [
+      {
+        "recipient": "feat_048_005",
+        "request_id": "epic_048:pr251-f4-ack-integration-a71c608f",
+        "status": "enqueued"
+      },
+      {
+        "recipient": "feat_048_004",
+        "request_id": "epic_048:pr251-f4-ack-manager-a71c608f",
+        "status": "enqueued"
+      }
+    ],
+    "design_closeout": {
+      "reviewed": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "existing architect_review.diagram_impact_inventory in this artifact"
+      ],
+      "no_change_reason": "Acknowledgement-only work-record diff changes no implementation, state schema, interface, source contract or diagram. Existing parent publication/Task ledger boundaries remain applicable. Prior context/container/component/native Code/behavior inventory and F5 implementation plus F4 integrated verification ownership are retained without claiming the proposed correction exists.",
+      "verification": "Canonical Epic/F4/F5 reads; acknowledgement matched to current F4 contract; JSON validation and git diff --check passed. Runtime tests, rendering, browser navigation and hosted CI not rerun for this artifact-only change.",
+      "gaps": [
+        "F5 dispatch-ready contract and implementation proof",
+        "F4 final integrated CI/dossier and design reconciliation",
+        "PR #251 reviewed disposition and final hosted CI",
+        "Existing terminal architecture publication supported recovery",
+        "Separate authorized operational supervisor evidence"
+      ]
+    }
+  },
+  "f4_acknowledgement_architect_review": {
+    "role": "epic_architect",
+    "trigger": "feat_048_004:feat_048_004:pr251-correction-integration-handoff-796aeee2",
+    "epic_plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "reviewed_f4_plan_revision": "3748929904b7040dad064eacb155c0e9a88e5006",
+    "reviewed_f5_plan_revision": "c2ade1e50726c81148dc4fa9d3142ac73f7e9079",
+    "owned_checkout_revision": "2ba84618",
+    "assessment": "Current F4 canonical contract preserves the original regression in mandatory PR/main Recovery contract, assigns production correction to F5, and requires the complete bounded selection and final dossier/design review after exact F5 integration even if Task 3 finishes first. This matches dec_007 and the prior architect inventory. No new Epic scope, decision or spec edit is needed. F5 remains backlog with no Tasks and TBD schema/API/flow; allocation review is not dispatch readiness or implementation acceptance.",
+    "evidence_boundary": "Canonical plan commitments independently read. F4 reported clean branch, active Task 3 and owner notification are not independently reverified here. No corrected runtime, hosted CI, operational or browser acceptance is claimed.",
+    "retained_delivery_gates": [
+      "F5 Lead/Architect completes authoritative failed-material schema, original-lineage binding, guarded legacy reconciliation, API/refusal and normal/failure/restart contracts and each Task acceptance before dispatch.",
+      "F5 delivers reviewed production correction and real-validator/Git proof retaining unchanged/cycled-material fences, numerical/time and retry limits, human gates and original consumption/history.",
+      "F4 pins the integrated reviewed F5 revision, retains the existing regression, reruns the full bounded mandatory selection and refreshes final evidence and architecture against all later changes. Review both refusal producers and consumers; do not reuse pre-correction acceptance.",
+      "Epic Manager records explicit PR #251 reviewed correction or linked reviewed successor and fresh passing hosted checks on corrected review and final Epic heads.",
+      "Separate supported terminal architecture publication recovery and authorized operational supervisor evidence remain open."
+    ],
+    "design_closeout": {
+      "reviewed": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "architect_review.diagram_impact_inventory in this artifact",
+        "F4 and F5 canonical Designs and diagrams acceptance"
+      ],
+      "impact_inventory": "Retain prior landscape/context, container, component, native Task/Teams Code, affected consumer Code and supplementary behavior rows with their F5 implementation and F4 final integration owners. No view or source ownership moves in this acknowledgement.",
+      "no_change_reason": "Diff since prior architect review 755ca820 contains only Manager acknowledgement in this work record. No runtime, persistence, interface, source contract or model change exists to diagram; current parent/Task boundaries remain applicable. Proposed failed-material behavior belongs in F5 implemented designs, not speculative Epic baseline prose.",
+      "verification": "Canonical Epic/F4/F5 reads; no open architecture amendments; inspected parent/Task designs and artifact-only diff; JSON, retained design/view references and git diff --check validated. Runtime/render/browser tests not rerun for this artifact-only change.",
+      "gaps": "F5 concrete planning and implementation, F4 final integrated design/source/render/navigation and CI evidence, PR #251 resolution, terminal architecture publication recovery and operational proof remain unverified."
+    },
+    "approval_and_publication": "Existing approval preserved; no repeated already-approved sign-off request or new sign-off claimed. Original exact terminal failed publication request remains in epic_048_publication_resume.json. No supported terminal recovery tool is exposed; acknowledgement does not replace pinned references or constitute architecture publication.",
+    "handoffs": [
+      {
+        "recipient": "feat_048_004",
+        "request_id": "epic_048:epic_048:pr251-f4-ack-architect-37489299",
+        "status": "enqueued"
+      }
+    ]
+  },
+  "f4_final_revision_manager_review": {
+    "role": "epic_manager",
+    "triggers": [
+      "feat_048_004:feat_048_004:f5-ownership-recorded-20261125",
+      "feat_048_004:feat_048_004:f5-final-plan-revision-20261125"
+    ],
+    "epic_plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "verified_f4_plan_revision": "3748929904b7040dad064eacb155c0e9a88e5006",
+    "superseded_intermediate_f4_revision": "a71c608fb72bddffee615b62840a006e34d8dcf9",
+    "reported_task4_acceptance_revision": "a2953bbedfd6745791927d35f7c48bb324264e2e",
+    "assessment": "Canonical F4 read confirms dec_002 and the external F5 correction dependency, original mandatory regression, full bounded PR/main rerun and final dossier/architecture refresh at the integrated correction. This implements existing Epic dec_007; no new scope, decision, spec edit or sign-off is required. Task 4 revision and Task 3 execution/notification are reported by F4, not independently inspected here.",
+    "architecture_review_route": {
+      "owner": "F4 Feature Architect through supported Feature team lifecycle",
+      "requested_plan_revision": "3748929904b7040dad064eacb155c0e9a88e5006",
+      "previous_review_plan_revision": "796aeee2",
+      "status": "refresh requested; no matching completed review independently established"
+    },
+    "sequencing": {
+      "verified": "list_children reports F1-F3 completed, F4 active, F5 backlog with no Tasks; supervise_child inspect reports F5 backlog and incidents=[]",
+      "authority": "Normal watchdog/Boss lifecycle owns dispatch; no child status, branch or execution change attempted. F5 depends on F1-F3, not F4 final CI or operational acceptance.",
+      "path": "F5 reviewed production fix and real-validator/Git proof -> supported correction integration -> F4 exact-SHA full bounded CI and dossier/design refresh -> Epic PR #251 reviewed resolution and final hosted checks."
+    },
+    "handoffs": [
+      {
+        "recipient": "feat_048_004",
+        "request_id": "epic_048:epic_048:f4-final-plan-review-routing-37489299",
+        "status": "enqueued"
+      },
+      {
+        "recipient": "feat_048_005",
+        "request_id": "epic_048:epic_048:f5-f4-final-plan-37489299",
+        "status": "enqueued"
+      }
+    ],
+    "design_closeout": {
+      "reviewed": [
+        "DESIGN.md authority and automation boundaries",
+        "cascade/DESIGN.md publication and recovery ownership",
+        "cascade/task/DESIGN.md implementation/navigation and durable delivery collaborators",
+        "existing architect_review.diagram_impact_inventory in this artifact"
+      ],
+      "context_containers": "No actors, external systems, runtime or persistence boundaries change in this work-record-only diff; existing landscape/context/container inventory remains assigned to F5 implementation and F4 final integration review.",
+      "components_code": "No producer/consumer interfaces, implementation symbols, declaration kinds or component ownership change here. Retain native Task/Teams and affected consumer Code obligations; do not invent a model delta or claim child code acceptance from the Epic baseline.",
+      "behavior": "No execution or state-transition change here; material-failure fencing and original-budget continuity remain F5 implementation obligations and F4 integrated verification gates.",
+      "verification": "Canonical Epic/F4/F5 reads, child lifecycle and single F5 supervision inspection, empty architecture amendments, reviewed local design sections, JSON validation and git diff --check. No runtime tests, renderer, browser or hosted CI rerun for this artifact-only update.",
+      "remaining_gaps": [
+        "Matching F4 architecture review on final plan revision",
+        "F5 concrete planning, implementation and real-validator/Git evidence",
+        "F4 integrated CI/dossier and final source/design/view acceptance",
+        "PR #251 reviewed disposition and final Epic hosted CI",
+        "Separate authorized supervisor exercise",
+        "Supported recovery of terminal Epic architecture publication"
+      ]
+    }
+  },
+  "f4_final_revision_architect_review": {
+    "role": "epic_architect",
+    "triggers": [
+      "feat_048_004:feat_048_004:f5-ownership-recorded-20261125",
+      "feat_048_004:feat_048_004:f5-final-plan-revision-20261125"
+    ],
+    "epic_plan_revision": "46b045c21ff7b588a3ff8f252afeeaf50efc5472",
+    "verified_f4_plan_revision": "3748929904b7040dad064eacb155c0e9a88e5006",
+    "owned_checkout_revision": "281e74d272619e9f72126180d5e081844b80e349",
+    "assessment": "The canonical F4 read confirms the final revision already assessed in f4_acknowledgement_architect_review, including dec_002, mandatory original regression, full bounded CI after F5 integration and final dossier/design refresh. The intermediate a71c608f revision is not the review target. No new parent scope, decision or spec edit is required.",
+    "review_boundary": "Epic allocation review is current for 37489299; it does not substitute for a matching Feature-owned architecture publication. F4 reports its prior publication is pinned to 796aeee2. Refresh remains pending with the Feature Architect through the supported Feature lifecycle. Task 4 acceptance revision a2953bbedfd6745791927d35f7c48bb324264e2e and Task 3 execution state are reported evidence, not independently inspected Task records.",
+    "handoff": "Retain the Manager queued request epic_048:epic_048:f4-final-plan-review-routing-37489299 and F5 coordination request epic_048:epic_048:f5-f4-final-plan-37489299. Their requested ownership and exact review revision are correct; no duplicate queue message or cross-team publication attempted.",
+    "resolution_path": "F5 owns reviewed production correction and real-validator/Git proof preserving original identity, consumption, failed-material history, numerical bounds and human gates. F4 pins supported integration and reruns the full mandatory gate plus final architecture/dossier checks. Epic Manager owns reviewed PR #251 correction or explicit reviewed successor and fresh corrected-review/final-Epic CI. No implementation or CI success is established by these planning records.",
+    "design_closeout": {
+      "reviewed": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "architect_review.diagram_impact_inventory in this artifact",
+        "F4 canonical diagram-impact inventory and external correction dependency"
+      ],
+      "context_containers": "Only review-routing evidence changed since 36e223db; no actor, external system, runtime or persistence boundary changed. Retain the existing inventory and F5/F4 ownership.",
+      "components_code": "No interface, declaration, component ownership or source-contract change in this diff. Native Task/Teams and affected consumer Code verification remains assigned to F5 implementation and F4 final integration; the Epic baseline does not establish delivered child behavior.",
+      "behavior": "No state-transition change in this artifact. Original-budget material-change admission and unchanged/exhausted refusal still require F5 source-backed flows and real-validator/Git evidence, then F4 integrated verification.",
+      "verification": "Read canonical Epic/F4 records and empty architecture amendments; reviewed local parent/Task design sections, retained view inventory and Manager-only artifact diff. JSON, design/view references and git diff --check passed. No runtime tests, render, browser or hosted CI rerun for this work-record-only update.",
+      "remaining_gates": [
+        "F4 matching architecture publication on 37489299",
+        "F5 concrete contract, production correction and real-validator/Git evidence",
+        "F4 corrected integrated CI and final design/source/navigation/dossier evidence",
+        "PR #251 reviewed disposition and final Epic hosted CI",
+        "Separately authorized supervisor evidence",
+        "Supported terminal Epic architecture publication recovery"
+      ]
+    },
+    "approval_and_publication": "No renewed already-approved Epic sign-off or replacement publication claimed. Preserve the exact terminal failed request in epic_048_publication_resume.json. Current Cascade tools expose publication but no terminal publication/render recovery operation; unrelated integration retry is not a recovery route for that operation."
+  }
+}
