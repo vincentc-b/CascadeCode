@@ -32,6 +32,18 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+cancellation_feedback:
+- child_id: feat_048_005
+  child_tier: feature
+  parent_id: epic_048
+  reason: 'Superseded by accepted Feature 001 correction (PR #251, 51cffe14); no independent implementation remains required'
+  cancelled_at: '2026-11-25T05:06:14.533072+00:00'
+  available_dispositions:
+  - continue_reduced_scope
+  - replace_replan
+  - cancel_parent
+  disposition: null
+  resolved_at: null
 ---
 # Prove self recovery through verified outcomes
 
