@@ -11,7 +11,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from cascade.agent.adapter import run_role
-from cascade.agent.errors import ProviderBudgetRefusedError, ProviderToolHostError
+from cascade.agent.errors import (
+    ProviderBudgetRefusedError,
+    ProviderNotAuthenticatedError,
+    ProviderNotInstalledError,
+    ProviderToolHostError,
+)
 from cascade.agent.providers import ProviderStatus
 from cascade.agent.recovery_contract import (
     ProviderRecoveryLaunch,
@@ -149,6 +154,54 @@ def test_active_recovery_without_incident_budget_refuses_before_dispatch(
             )
         )
     dispatch.assert_not_awaited()
+
+
+@pytest.mark.parametrize("refusal", ["missing_capability", "missing_credential"])
+def test_provider_preflight_refusal_preserves_incident_without_transport_or_charge(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, refusal: str
+) -> None:
+    bounded = _incident_turn(tmp_path)
+    dispatch = AsyncMock()
+    monkeypatch.setattr("cascade.agent.adapter._dispatch_role", dispatch)
+    if refusal == "missing_capability":
+        monkeypatch.setattr(
+            "cascade.agent.adapter.probe_provider",
+            lambda provider: ProviderStatus(provider, False, False, "not installed"),
+        )
+        expected = ProviderNotInstalledError
+    else:
+        monkeypatch.setattr(
+            "cascade.agent.adapter.probe_provider",
+            lambda provider: ProviderStatus(provider, True, True, "env"),
+        )
+        monkeypatch.setattr(
+            "cascade.agent.adapter.resolve_credential", lambda _provider: None
+        )
+        expected = ProviderNotAuthenticatedError
+
+    with pytest.raises(expected):
+        asyncio.run(
+            run_role(
+                RoleTurn(
+                    role="feature_lead",
+                    provider="codex",
+                    model_id="model",
+                    prompt="recover",
+                    cwd=Path.cwd(),
+                    recovery=_launch(),
+                    incident_turn=bounded,
+                )
+            )
+        )
+
+    dispatch.assert_not_awaited()
+    budget = read_incident_budget(bounded.incident_id, root=bounded.root)
+    assert budget is not None
+    assert budget["incident_id"] == bounded.incident_id
+    assert budget["policy"]["version"] == bounded.policy_version
+    assert budget["operations"] == {}
+    assert budget["charged"]["paid_turns"] == 0
+    assert budget["charged"]["model_seconds"] == 0
 
 
 def test_fake_transport_settles_once_and_provider_switch_cannot_replay(

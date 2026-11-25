@@ -619,3 +619,203 @@ def test_transient_backoff_is_persisted_and_exhaustion_coalesces(
         "task_001:transient", "replayed exhaustion", root=root
     )
     assert replay["escalation_id"] == first_escalation
+
+
+def test_deterministic_failure_generation_and_policy_cycles_preserve_history(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    action = _action(root, "task_001:deterministic")
+    original_generation = action["incident"]["authoritative_generation"]
+    bound = bind_incident_budget(
+        "task_001:deterministic",
+        "task_001:deterministic",
+        original_generation,
+        {},
+        root=root,
+    )
+    admitted = reserve_incident_operation(
+        "task_001:deterministic",
+        "validator:unchanged-failure",
+        "validator",
+        {"tool_attempts": 1, "process_seconds": 300},
+        "claim:deterministic",
+        1,
+        root=root,
+    )
+    assert (admitted.state, admitted.reason) == (
+        "admitted",
+        "bounded_permit_reserved",
+    )
+    assert admitted.permit is not None
+    assert admitted.permit.incident_id == bound["incident_id"]
+    assert admitted.permit.operation_id == "validator:unchanged-failure"
+    assert admitted.permit.claim_id == "claim:deterministic"
+    assert admitted.permit.policy_version == bound["policy"]["version"]
+    failed = settle_incident_operation(
+        "task_001:deterministic",
+        "validator:unchanged-failure",
+        {
+            "outcome": "error",
+            "failure_class": "deterministic",
+            "quality": "known",
+            "usage": {"tool_attempts": 1, "process_seconds": 7},
+            "claim_complete": True,
+        },
+        root=root,
+    )
+    assert failed.state == "exhausted"
+    assert failed.receipt is not None
+    assert failed.receipt["claim_id"] == admitted.permit.claim_id
+    assert failed.receipt["policy_version"] == admitted.permit.policy_version
+
+    refreshed = update_recovery_record(
+        "task_001:deterministic",
+        root=root,
+        evidence={"affected_work_id": "task_001", "revision": "cosmetic-only"},
+    )
+    rebound = bind_incident_budget(
+        "task_001:deterministic",
+        "task_001:deterministic",
+        refreshed["incident"]["authoritative_generation"],
+        {},
+        root=root,
+    )
+    assert rebound["bindings"][0]["generations"] == [
+        original_generation,
+        refreshed["incident"]["authoritative_generation"],
+    ]
+    assert rebound["charged"]["tool_attempts"] == 1
+    assert rebound["charged"]["process_seconds"] == 7
+    assert set(rebound["operations"]) == {"validator:unchanged-failure"}
+
+    stale_policy = reserve_incident_operation(
+        "task_001:deterministic",
+        "validator:wrong-policy",
+        "validator",
+        {"tool_attempts": 1},
+        "claim:deterministic",
+        2,
+        root=root,
+    )
+    assert (stale_policy.state, stale_policy.reason) == (
+        "owner_decision",
+        "policy_version_mismatch",
+    )
+    exhausted = reserve_incident_operation(
+        "task_001:deterministic",
+        "validator:still-exhausted",
+        "validator",
+        {"tool_attempts": 1},
+        "claim:deterministic",
+        1,
+        root=root,
+    )
+    assert (exhausted.state, exhausted.reason) == (
+        "exhausted",
+        "bounded_extension_required",
+    )
+    after_refusals = read_incident_budget("task_001:deterministic", root=root)
+    assert after_refusals is not None
+    assert after_refusals["charged"] == rebound["charged"]
+    assert after_refusals["operations"] == rebound["operations"]
+
+    extended = extend_incident_budget(
+        "task_001:deterministic",
+        AuthenticatedHuman("human:operator"),
+        "independently reviewed deterministic correction",
+        {"ticket": "operator-002"},
+        {"tool_attempts": 1, "process_seconds": 30},
+        root=root,
+    )
+    assert extended["status"] == "active"
+    assert extended["charged"] == rebound["charged"]
+    assert extended["operations"] == rebound["operations"]
+    assert len(extended["extensions"]) == 1
+
+
+def test_corrupt_policy_and_in_flight_overrun_fail_closed_without_minting(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    action = _action(root, "task_001:corrupt-policy")
+    bind_incident_budget(
+        "task_001:corrupt-policy",
+        "task_001:corrupt-policy",
+        action["incident"]["authoritative_generation"],
+        {},
+        root=root,
+    )
+    ledger = root / ".cascade" / "executions.json"
+    payload = json.loads(ledger.read_text(encoding="utf-8"))
+    payload["incident_budgets"]["task_001:corrupt-policy"]["policy"]["retry"][
+        "deterministic_attempts"
+    ] = 2
+    ledger.write_text(json.dumps(payload), encoding="utf-8")
+    corrupt = reserve_incident_operation(
+        "task_001:corrupt-policy",
+        "validator:must-not-exist",
+        "validator",
+        {"tool_attempts": 1},
+        "claim:corrupt",
+        1,
+        root=root,
+    )
+    assert (corrupt.state, corrupt.reason) == (
+        "owner_decision",
+        "incident_accounting_corrupt",
+    )
+    corrupt_payload = json.loads(ledger.read_text(encoding="utf-8"))
+    corrupt_budget = corrupt_payload["incident_budgets"]["task_001:corrupt-policy"]
+    assert corrupt_budget["operations"] == {}
+    assert corrupt_budget["charged"]["tool_attempts"] == 0
+
+    overrun_action = _action(root, "task_001:overrun")
+    bind_incident_budget(
+        "task_001:overrun",
+        "task_001:overrun",
+        overrun_action["incident"]["authoritative_generation"],
+        {},
+        root=root,
+    )
+    assert reserve_incident_operation(
+        "task_001:overrun",
+        "validator:overrun",
+        "validator",
+        {"tool_attempts": 1, "process_seconds": 10},
+        "claim:overrun",
+        1,
+        root=root,
+    ).admitted
+    overrun = settle_incident_operation(
+        "task_001:overrun",
+        "validator:overrun",
+        {
+            "outcome": "timeout",
+            "failure_class": "transient",
+            "quality": "estimated",
+            "usage": {"tool_attempts": 1, "process_seconds": 1_801},
+        },
+        root=root,
+    )
+    assert overrun.state == "exhausted"
+    overrun_budget = read_incident_budget("task_001:overrun", root=root)
+    assert overrun_budget is not None
+    assert overrun_budget["charged"]["process_seconds"] == 1_801
+    assert overrun_budget["consumption_quality"] == "estimated"
+    refused = reserve_incident_operation(
+        "task_001:overrun",
+        "validator:after-overrun",
+        "validator",
+        {"tool_attempts": 1},
+        "claim:overrun",
+        1,
+        root=root,
+    )
+    assert (refused.state, refused.reason) == (
+        "exhausted",
+        "bounded_extension_required",
+    )
+    after_refusal = read_incident_budget("task_001:overrun", root=root)
+    assert after_refusal is not None
+    assert set(after_refusal["operations"]) == {"validator:overrun"}
