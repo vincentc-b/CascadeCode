@@ -1,0 +1,45 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_manager",
+  "plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+  "decision": "Existing dec_010 governs; no scope change or new plan revision.",
+  "integration": {
+    "f4_revision": "f258bca3a0beaee66d3eedd1483218245e838ea7",
+    "verified_ancestors": [
+      "51cffe146b8b423027266f8469678c482e321c79",
+      "b9c2129558beaffd235a6c28ab25693a5cd71813"
+    ],
+    "source_inspection": "Receipt retains launch attributes, parent_operation_id and material_fingerprint; review material gate applies to original review_rebase actions. Merge diff check passed.",
+    "reported_checks": [
+      "F4 reports 15 conflict tests passed in 10.83s",
+      "F4 reports 19 publication/provider checks passed in 4.72s"
+    ],
+    "independently_rerun_tests": false
+  },
+  "task_003": {
+    "reported_state": "running",
+    "observed_local_ref": "62cb7a2fa56d229927df3e8c458bac2da3625b56",
+    "f4_integration_ancestor_of_observed_ref": false,
+    "limitation": "Local ref observation does not establish the live execution base or eventual tested revision.",
+    "next_gate": "Already-running owner incorporates and proves f258bca3 ancestry before full 10-minute Recovery contract; return exact tested SHA, command and results.",
+    "history": "Keep four pre-correction red runs distinct; no extra recovery or unchanged-source validation dispatched."
+  },
+  "design_closeout": {
+    "reviewed": ["f258bca3:cascade/DESIGN.md", "f258bca3:cascade/task/DESIGN.md", "f258bca3:cascade/task/incident_budget.py"],
+    "context_containers": "No added actor, runtime or store in this integration delta; existing landscape/context/container inventory remains applicable.",
+    "components_code": "Existing Task receipt/admission and Teams publication boundaries retain reserve/settle entry points. Consumer fence semantics were inspected. Final integrated source-contract, render and actual navigation verification remain F4-owned.",
+    "behavior": "Package design preserves deterministic review-material fencing across restart/A-B-A and conservative legacy accounting; Task design still lacks explicit failed-material receipt schema/flow detail. Existing routed F1 closeout remains required, with F4 checking integrated documentation.",
+    "owned_change": "Evidence artifact only; no design/model/source changes or new architecture publication requested."
+  },
+  "handoffs": [
+    {"recipient": "feat_048_004", "request_id": "epic_048:epic_048:epic_048:f4-integration-f258bca3-ack", "status": "enqueued"},
+    {"recipient": "feat_048_004", "request_id": "epic_048:epic_048:epic_048:f4-task-base-observation-f258bca3", "status": "enqueued"}
+  ],
+  "remaining": [
+    "Task 003 corrected execution-base proof and full bounded Recovery contract",
+    "F1 acceptance/design reconciliation receipt",
+    "Final integrated architecture/navigation/consumer dossier and Epic CI",
+    "Separately authorized controlled-supervisor evidence",
+    "Original architecture publication recovery"
+  ]
+}
