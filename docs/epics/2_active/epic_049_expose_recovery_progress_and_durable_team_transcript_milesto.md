@@ -247,6 +247,11 @@ Architecture verification results and pinned publication references are recorded
   Chose Hand the saved plan and three backlog feature contracts to the Epic Architect before final role sign-offs.
   Rationale: Projection storage/notification hooks, cross-process transcript replay/cursor protocol and integrated recovery/transcript Code coverage need concrete architecture review. Baseline checks passed (15 tests and current C4 source contract); historical evidence for the two related epics was denied by owner scope and was not accessed through a fallback.
   Honors: Design skill implementation-depth and review contract; no premature sign-off, dispatch or bypass of scoped content access.
+
+- `dec_004` · 2026-11-25 · Epic Architect · **Macro-architecture**
+  Chose Use work-addressed immutable progress pages, a writer-only derived SQLite index, and source-committed transition receipts drained by the existing supervisor plus an attempt-start fast path..
+  Rationale: Bounded GETs cannot scan action history; polling and post-turn summaries cannot expose a live attempt. Retained source identities close the source-commit/notification crash gap. Explicit invocation/executor tokens avoid treating unfinished queued work or a live PID as executing repair. Existing recovery stores and postcheck retain authority.
+  Honors: Success criteria 1–6; no new scheduler, repair policy, paid turn or dependency; explicit source-ledger loading and stale-evidence limits..
 ## Amendment log
 
 _(none)_
