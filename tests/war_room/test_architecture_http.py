@@ -360,6 +360,15 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
                 assert next_cursor is None or next_cursor > cursor
                 cursor = next_cursor
             assert collected == payload["views"]
+            # Documentation resolves a selected view beyond the first bounded
+            # page as well. Its independent final response cap still applies.
+            status, raw, _ = _get(
+                base + f"/api/architecture/snapshots/{snapshot_id}/context"
+                "?view=cascade-context&level=systemContextViews"
+            )
+            assert status in {200, 413}
+            if status == 413:
+                assert json.loads(raw)["error"] == "architecture context exceeds 256 KiB"
             bounded.setattr(architecture_routes, "MAX_METADATA_BYTES", 1)
             status, raw, _ = _get(base + f"/api/architecture/snapshots/{snapshot_id}")
             assert status == 413

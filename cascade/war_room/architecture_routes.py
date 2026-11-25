@@ -723,6 +723,16 @@ def snapshot_documentation_projection(
             view = next(
                 (row for row in projected["views"] if row["key"] == view_key), None
             )
+            while view is None and projected["pagination"]["next_cursor"] is not None:
+                projected = _snapshot_projection(
+                    store, snapshot,
+                    cursor=projected["pagination"]["next_cursor"],
+                    limit=MAX_BROWSING_VIEWS,
+                    view_key=view_key, level=level, semantic_target=semantic_target,
+                )
+                view = next(
+                    (row for row in projected["views"] if row["key"] == view_key), None
+                )
             if view is None:
                 raise ArchitectureHTTPError(400, "invalid documentation snapshot view")
             if selection_kind != "view":
