@@ -11,7 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from cascade.task.action_recovery import create_or_load_action, load_action
+from cascade.task.action_recovery import (
+    create_or_load_action,
+    load_action,
+    recovery_actions,
+)
 from cascade.task.incident_budget import bind_incident_budget, read_incident_budget
 from cascade.watchdog.capabilities import CapabilityDescriptor
 from cascade.watchdog.incidents import authoritative_generation, incident_record
@@ -243,17 +247,34 @@ def test_watchdog_claim_uses_and_settles_task_owned_budget(tmp_path: Path) -> No
     )
     assert decision.reserved
     assert decision.reservation is not None
+    stored = next(
+        row["incident"]
+        for row in recovery_actions(root=root)
+        if row.get("action_id") == decision.reservation.reservation_id
+    )
+    assert [receipt["stage"] for receipt in stored["stage_receipts"]] == [
+        "detected",
+        "admitted",
+        "assigned",
+    ]
+    assert all(receipt["actor"] for receipt in stored["stage_receipts"])
+    assert all(
+        receipt["authority_revision"].startswith("sha256:")
+        for receipt in stored["stage_receipts"]
+    )
     reserved = read_incident_budget("task_001:budget", root=root)
     assert reserved is not None
     assert reserved["reserved"]["tool_attempts"] == 1
     assert reserved["charged"]["tool_attempts"] == 0
 
-    record_result(
+    recorded = record_result(
         decision.reservation,
         {"accepted": True},
         {"outcome": "success"},
         root=root,
     )
+    assert recorded["stage_receipts"][-1]["stage"] == "waiting"
+    assert recorded["stage_receipts"][-1]["result"] == "independent_postcheck_required"
     settled = read_incident_budget("task_001:budget", root=root)
     assert settled is not None
     assert settled["reserved"]["tool_attempts"] == 0

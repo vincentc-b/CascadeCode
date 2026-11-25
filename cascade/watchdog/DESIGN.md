@@ -267,6 +267,11 @@ An attempt result cannot replace authoritative health verification.
 `DEC-WATCHDOG-REPAIR-001`: Recheck local fingerprints under the lifecycle lock
 and run bounded external observation outside that critical section. Reuse
 reservations to reject stale generations and duplicate claims.
+`DEC-WATCHDOG-REPAIR-002`: Persist attributable stage receipts in the selected
+owner ledger and reserve terminal resolution for a fresh Watchdog postcheck.
+Receipt identity is content-derived, so restart appends no duplicate stage;
+missing capability retains one deduplicated executable handoff or the probe's
+precise operator prerequisite.
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
@@ -282,23 +287,25 @@ delivery consumer. War Room consumes the bounded projection described above.
 | [dispatch_audit_recovery](audit_recovery.py) | Bounded observation/admission → exact capability resolution → claim acceptance → executor. |
 | [CapabilityRegistry](capabilities.py) | Owner/tier/failure-specific capability metadata and finite retry policy. |
 | [reserve_after_recheck / accept_claim / record_result](reservations.py) | Canonical fingerprint, generation and claim-token comparison; persist attempts in the selected durable store. |
+| [recovery_stage_receipt](incidents.py) | Bind actor, capability, permitted evidence keys, authority revision and result to an immutable stage identity. |
 | [_incident_contract](audit_recovery.py) | Bind a completed-parent Task mismatch to its exact Feature owner and mismatch generation before reservation. |
+| [_bind_original_incident](audit_recovery.py) | Bind the queued delivery action and its canonical generation to the sole Task-owned incident allowance before owner work. |
 | [_execute_reservation](audit_recovery.py) | Invoke the selected owning-team adapter after exact claim acceptance and record its structured result. |
-| [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation, accepted heads, lease, descendant and retirement facts. |
+| [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation from the adapter acknowledgement, accepted heads, lease, descendant and retirement facts. |
 | [verify_incident_postcheck](reservations.py) | Atomically close only the matching generation and retain its deferred attempt in history. |
 | [_incident_projection](audit_projection.py) | Serialize bounded typed lifecycle evidence into immutable pages. |
 
 ```mermaid
 flowchart TD
-    Observe[Bounded authoritative observation] --> Capability[Resolve capability and owner]
-    Capability --> Recheck[Lock and recheck local fingerprint]
+    Observe[detected: bounded authoritative observation] --> Capability[assigned: resolve capability and owner]
+    Capability --> Recheck[admitted: lock and recheck local fingerprint]
     Recheck -->|fresh| Reserve[Persist reservation and accept exact claim]
-    Recheck -->|changed / unavailable| Refuse[Typed refusal; retain evidence]
-    Reserve --> Execute[Execute supported scoped operation]
-    Execute --> Result[Persist attempt result]
-    Result --> Verify[Later authoritative postcheck]
-    Verify -->|obligation satisfied| Resolved[Resolved evidence]
-    Verify -->|still blocked| Pending[Retained incident / bounded handoff]
+    Recheck -->|changed / unavailable| Refuse[waiting: typed refusal or one handoff]
+    Reserve --> Execute[executing: owner operation]
+    Execute --> Result[validating / publishing: persist owner evidence]
+    Result --> Verify[verifying: fresh authoritative postcheck]
+    Verify -->|obligation satisfied| Resolved[resolved: original generation closed]
+    Verify -->|still blocked| Pending[waiting: retained incident]
 ```
 
 Reservations and action attempts survive restart. Interrupted claims are
@@ -329,6 +336,13 @@ leases and registered worktrees. Deferred mismatch generations remain postcheck
 candidates after the board becomes healthy, so restart and repeated sweeps use
 the same check without replaying merge, worker, message, repair or publication.
 Unknown legacy acceptance and changed facts remain pending.
+
+The stage record is not a sandbox or a second queue. Its permitted-input list
+records the evidence keys authorized by the selected descriptor; the owner tool
+still rechecks actual values and all approval, comment, credential, installation,
+scope, dependency and mutation gates. The Task-owned operation receipt is charged
+before an executable owner adapter. Exhaustion therefore refuses repeated paid
+recovery while unrelated incident claims remain independently eligible.
 
 If the capability is missing or broken, its probe records the exact resume
 prerequisite and the existing investigation outbox creates one generation-keyed

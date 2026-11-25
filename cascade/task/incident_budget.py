@@ -564,6 +564,7 @@ def reserve_incident_operation(
     *,
     root: Path,
     now: datetime | None = None,
+    attributes: Mapping[str, Any] | None = None,
 ) -> IncidentOperationDecision:
     """Atomically reserve cumulative allowance before an expensive launch."""
 
@@ -572,10 +573,20 @@ def reserve_incident_operation(
     kind = _identity(kind, field="operation kind")
     claim_id = _identity(claim_id, field="claim identity")
     requested = _usage(worst_case, allow_zero=True, field="worst case")
+    launch_attributes = (
+        _json_mapping(attributes, field="operation attributes")
+        if attributes is not None
+        else None
+    )
     if not any(requested[dimension] for dimension in _DIMENSIONS if dimension != "elapsed_seconds"):
         raise IncidentBudgetError("an operation must reserve finite allowance")
     if requested["elapsed_seconds"]:
         raise IncidentBudgetError("elapsed_seconds is a deadline, not a reservation")
+    if (
+        kind.startswith("provider_turn:")
+        and requested["model_seconds"] > RETRY_POLICY["model_turn_seconds"]["maximum"]
+    ):
+        return _decision("owner_decision", "model_runtime_bound_exceeds_policy")
     stamped = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     repo = resolve_root(root)
     with task_lifecycle_lock(root=repo):
@@ -616,7 +627,8 @@ def reserve_incident_operation(
         if not material_bound:
             return _decision("owner_decision", "material_generation_unbound")
         material = None
-        if kind == "review_validator":
+        action = _actions(payload).get(record.get("original_action_id"), {})
+        if kind == "review_validator" and action.get("action_kind") == "review_rebase":
             material = _review_validator_material(record, _actions(payload), operation_id)
             if material is None:
                 return _decision("owner_decision", "review_material_unbound")
@@ -662,15 +674,37 @@ def reserve_incident_operation(
             for receipt in operations.values()
             if isinstance(receipt, Mapping) and receipt.get("state") == "reserved"
         ]
-        # A Watchdog owner operation is the claim's outer envelope. One nested
-        # provider/MCP/tool charge may run beneath it; further nested work waits.
+        # Watchdog and provider operations can be outer envelopes.  A provider
+        # may synchronously invoke one explicitly linked MCP/tool operation;
+        # unrelated callers and further nesting still wait.  The durable
+        # parent identity prevents a shared claim string from authorizing the
+        # child by itself.
         nested_active = [
             receipt
             for receipt in active_receipts
             if not str(receipt.get("kind", "")).startswith("watchdog_owner:")
         ]
-        if nested_active or (
-            active_receipts and kind.startswith("watchdog_owner:")
+        requested_parent = (
+            launch_attributes.get("parent_operation_id")
+            if launch_attributes is not None
+            else None
+        )
+        provider_parent = (
+            nested_active[0]
+            if len(nested_active) == 1
+            and str(nested_active[0].get("kind", "")).startswith("provider_turn:")
+            else None
+        )
+        linked_provider_child = (
+            provider_parent is not None
+            and requested_parent == provider_parent.get("operation_id")
+            and provider_parent.get("claim_id") == claim_id
+            and not kind.startswith(("provider_turn:", "watchdog_owner:"))
+        )
+        if (
+            (nested_active and not linked_provider_child)
+            or len(nested_active) > 1
+            or (active_receipts and kind.startswith("watchdog_owner:"))
         ):
             return _decision("pending", "serialized_operation_in_flight")
         unavailable = [
@@ -702,6 +736,8 @@ def reserve_incident_operation(
         }
         if material is not None:
             receipt["material_fingerprint"] = material
+        if launch_attributes is not None:
+            receipt["attributes"] = launch_attributes
         operations = dict(operations)
         operations[operation_id] = receipt
         record["operations"] = operations
@@ -784,7 +820,12 @@ def settle_incident_operation(
             limits, _ = _trusted_policy(record.get("policy"))
         except IncidentBudgetError:
             return _decision("owner_decision", "incident_accounting_corrupt")
-        conservative = outcome in {"interrupted", "unknown"}
+        # Unavailable observations cannot release a worst-case reservation as
+        # though zero use had been measured.  This is especially important for
+        # providers whose transports expose no token or remote-runtime usage.
+        conservative = outcome in {"interrupted", "unknown"} or (
+            quality == "unavailable" and facts.get("provider_started") is not False
+        )
         applied = (
             dict(reserved_for_operation)
             if conservative

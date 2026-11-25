@@ -48,6 +48,20 @@ container cascade "cascade-containers" {
     include *
     autoLayout lr
 }
+
+component supervisor "cascade-supervisor-components" {
+    include *
+    autoLayout lr
+}
+
+custom "cascade-agent-code" {
+    title "Agent runtime — Code"
+    properties {
+        "cascade.codeComponent" "element.component.agent"
+    }
+    include code_agent_runner
+    autoLayout lr
+}
 """
 JOURNEY_MODEL = """operator = person "Operator" "Reviews branch architecture." {
     properties {
@@ -69,6 +83,21 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
         properties {
             "cascade.semanticId" "element.container.supervisor"
         }
+
+        agent_component = component "Agent runtime" "Normalizes provider turns." "cascade.agent" {
+            properties {
+                "cascade.semanticId" "element.component.agent"
+            }
+        }
+    }
+}
+
+code_agent_runner = element "run_role" "Function" "Dispatches a role turn through its selected provider." {
+    properties {
+        "cascade.semanticId" "element.code.agent.runner"
+        "cascade.parent" "element.component.agent"
+        "cascade.sourcePath" "cascade/agent/adapter.py"
+        "cascade.sourceSymbol" "run_role"
     }
 }
 
@@ -137,6 +166,12 @@ def _install_model(root: Path, *, system_name: str | None = None) -> ProjectCont
     resolve_design_ownership(project, ".")
     shutil.copytree(VERSIONED_MODEL, project.editable_architecture_root)
     _limit_model_views(project.editable_architecture_root)
+    source = root / "cascade" / "agent" / "adapter.py"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text(
+        "def run_role():\n    \"\"\"Dispatch a provider role turn.\"\"\"\n",
+        encoding="utf-8",
+    )
     if system_name is not None:
         model = project.editable_architecture_root / "model.dsl"
         model.write_text(
@@ -161,6 +196,8 @@ def _limit_model_views(architecture: Path) -> None:
         "element.system.cascade",
         "element.container.war-room",
         "element.container.supervisor",
+        "element.component.agent",
+        "element.code.agent.runner",
     }
     relationship_ids = {
         "relationship.operator-uses-war-room",
@@ -179,7 +216,13 @@ def _limit_model_views(architecture: Path) -> None:
     contract["views"] = [
         view
         for view in contract["views"]
-        if view["key"] in {"cascade-context", "cascade-containers"}
+        if view["key"]
+        in {
+            "cascade-context",
+            "cascade-containers",
+            "cascade-supervisor-components",
+            "cascade-agent-code",
+        }
     ]
     contract_path.write_text(
         json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -491,12 +534,37 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         view.select_option(index=context_index)
         cascade = page.locator('[aria-label="element element.system.cascade"]')
         cascade.click()
-        assert "Cascade" in page.locator("#architecture-target-detail").inner_text()
+        assert "cascade-containers" in view.input_value()
+        supervisor = page.locator('[aria-label="element element.container.supervisor"]')
+        supervisor.click()
+        assert "cascade-supervisor-components" in view.input_value()
+        agent = page.locator('[aria-label="element element.component.agent"]')
+        agent.click()
+        assert "cascade-agent-code" in view.input_value()
 
-        # Drill/back plus the real shared viewer's fit, zoom, and pan controls.
-        cascade = page.locator('[aria-label="element element.system.cascade"]')
-        cascade.dispatch_event("dblclick")
-        page.locator("#architecture-drill-choices button", has_text="cascade-containers").click()
+        # The Code target restores from a deep link and opens source from the
+        # exact pinned revision rather than the mutable checkout.
+        runner = page.locator('[aria-label="element element.code.agent.runner"]')
+        runner.click()
+        assert "run_role" in page.locator("#architecture-target-detail").inner_text()
+        deep_link = page.url
+        assert "snapshot=architecture-snapshot-" in deep_link
+        assert "view=cascade-agent-code" in deep_link
+        assert "target=element.code.agent.runner" in deep_link
+        page.reload(wait_until="domcontentloaded")
+        _wait_for_snapshot(page, timeout=30_000)
+        assert page.locator(
+            '[aria-label="element element.code.agent.runner"]'
+        ).get_attribute("aria-pressed") == "true"
+        page.locator("#architecture-target-detail button", has_text="Open pinned source").click()
+        source_preview = page.locator("#architecture-document-preview-body")
+        source_preview.filter(has_text="Dispatch a provider role turn").wait_for()
+        assert "def run_role" in source_preview.inner_text()
+
+        # Level up traverses Code → Components → Containers → Context.
+        page.locator("#architecture-back").click()
+        assert "cascade-supervisor-components" in view.input_value()
+        page.locator("#architecture-back").click()
         assert "cascade-containers" in view.input_value()
         relationship = page.locator(
             '[aria-label="relationship relationship.operator-uses-war-room"]'
@@ -505,9 +573,9 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         details = page.locator("#architecture-target-detail").inner_text()
         assert "Relationship" in details and "→" in details
         page.locator("#architecture-back").click()
-        assert "cascade-containers" in view.input_value()
-        page.locator("#architecture-back").click()
         assert "cascade-context" in view.input_value()
+
+        # The real shared viewer retains fit, zoom, and pan controls.
         svg = page.locator("#architecture-viewer .semantic-c4-svg")
         fitted = svg.get_attribute("viewBox")
         page.locator("#architecture-viewer button", has_text="Zoom in").click()
@@ -527,18 +595,6 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         )
         assert svg.get_attribute("viewBox") != fitted
         page.locator("#architecture-viewer button", has_text="Fit").click()
-
-        # Selection is encoded in the deep link and restored from the same pin.
-        cascade = page.locator('[aria-label="element element.system.cascade"]')
-        cascade.click()
-        deep_link = page.url
-        assert "snapshot=architecture-snapshot-" in deep_link
-        assert "target=element.system.cascade" in deep_link
-        page.reload(wait_until="domcontentloaded")
-        _wait_for_snapshot(page, timeout=30_000)
-        assert page.locator(
-            '[aria-label="element element.system.cascade"]'
-        ).get_attribute("aria-pressed") == "true"
 
         # A distinct known branch stays responsive while its real render runs.
         _select_context(page, "feat_branch")
@@ -604,9 +660,14 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         assert page.locator(
             ".architecture-context-row", has_text="DEC-BRANCH-PIN"
         ).count() == 1
-        view.select_option(index=context_index)
-        cascade = page.locator('[aria-label="element element.system.cascade"]')
-        cascade.click()
+        code_index = next(
+            index
+            for index, label in enumerate(view.locator("option").all_text_contents())
+            if "cascade-agent-code" in label
+        )
+        view.select_option(index=code_index)
+        runner = page.locator('[aria-label="element element.code.agent.runner"]')
+        runner.click()
         page.locator(
             "#architecture-documentation-content",
             has_text="Unmapped target",
@@ -619,8 +680,7 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
             has=page.locator("h4", has_text="Explicit target links")
         )
         assert "REQ-BRANCH-CONTEXT" not in explicit_group.inner_text()
-        assert "REQ-BRANCH-CONTEXT" in documentation_text
-        assert "Links for the enclosing view" in documentation_text
+        assert "REQ-BRANCH-CONTEXT" not in documentation_text
 
         pinned_snapshot = re.search(r"snapshot=([^&]+)", page.url)
         assert pinned_snapshot

@@ -40,7 +40,7 @@ state is not extension authority. [record_incident_budget_exhaustion](incident_b
 derives one stable escalation identity and retains its first reason across
 replay and later extension.
 
-[reserve_incident_operation](incident_budget.py) is the versioned F2 consumer
+[reserve_incident_operation](incident_budget.py) is the versioned operation-consumer
 boundary. Under `task_lifecycle_lock` it verifies the bound current generation,
 trusted policy version, accounting integrity, persisted transient backoff,
 original elapsed deadline, a single live claim, operation serialization, and
@@ -56,7 +56,9 @@ process/model seconds, and known tokens exactly once. Interrupted or unknown
 work charges its full reservation and retains the claim for reconciliation.
 Elapsed time is measured from the original incident start rather than summed as
 runtime. Nested provider, MCP, tool, and validator work reuse the top-level claim
-but receive separate serialized receipts. `claim_complete` releases that claim
+but receive separate serialized receipts. A provider child must cite the live
+parent operation identity; sharing the claim string alone grants no nesting
+authority, and unrelated competitors wait. `claim_complete` releases that claim
 only after its owner has settled the final operation.
 
 ```mermaid
@@ -80,10 +82,13 @@ flowchart TD
     E -->|no| X
 ```
 
-The record meters process work now and provides the F2 boundary for later paid
-provider enforcement; this component does not itself launch a provider turn.
-Known tokens are charged only from provider evidence, while unavailable token
-usage remains honest and falls back to paid-turn/runtime bounds. The lifecycle
+The record meters both process work and paid provider work; this component does
+not itself launch a provider turn. The Agent boundary's
+[admit_provider_turn / settle_provider_turn](../agent/provider_metering.py)
+uses the same operation API immediately around physical provider dispatch.
+Known tokens are charged only from provider evidence, while unavailable usage
+remains honest and retains the reserved paid-turn/runtime/token bounds without
+publishing those bounds as observed token totals. The lifecycle
 flock serializes ledger mutation across local processes; permits bound allowance
 but do not claim operating-system, network, or remote-provider isolation.
 Unknown legacy use is marked unavailable rather than inferred, and caller-
@@ -92,8 +97,9 @@ Focused temporary-repository verification is in
 [`tests/task/test_incident_budget.py`](../../tests/task/test_incident_budget.py).
 
 Review publication is a concrete consumer of this API. Its material generation
-contains exact source and target heads, the approved validation command and
-timeout, budget policy ID/version, and interpreter environment revision. Material
+contains exact source and target heads, the approved validation profile and
+command, coverage class, policy owner and approval revision, finite timeout and
+attempt budget, budget policy ID/version, and interpreter environment revision. Material
 admission cannot increase `attempt_bound`. Before a real validator process starts,
 the Teams component reserves one tool attempt and the configured worst-case
 process runtime under the original incident and stable top-level publication
@@ -104,9 +110,20 @@ no unchanged expensive check; transient failure uses the ledger's persisted
 classification waits for owner reconciliation. Independent finite extension keeps
 all prior attempts, decisions, charges and the first escalation.
 
-The Task gate exposes paid-turn and model/token dimensions for the provider-owned
-consumer, but does not claim that provider spending is enforced by review
-publication. The full Task validation gate remains separate from repository review
+Profile resolution and feasibility do not grant allowance: the executable and
+working directory must exist, then `reserve_incident_operation` must issue the
+matching live receipt. Command or timeout drift after reservation refuses before
+spawn. Task validation, review publication validation and Epic product acceptance
+remain distinct coverage classes.
+
+The Task gate exposes paid-turn and model/token dimensions to the Agent-owned
+consumer. Provider receipts retain provider/model/invocation identity and explicit
+validated launch-route attribution for direct, manual, periodic, audit, briefing,
+provider-switch, parent and replacement-action entry points, plus explicit
+known, estimated or unavailable token evidence in each operation observation;
+cached input is not added to known input plus output. Interrupted provider work
+retains its complete reservation. Review publication does not itself meter those
+turns. The full Task validation gate remains separate from repository review
 validation, and Epic product acceptance remains a later lifecycle obligation.
 
 
@@ -173,6 +190,9 @@ authorize advancing lifecycle state. Recovery inspects durable state and the
 preserved worktree before resuming the owning team. See
 [shared supervision](../team_supervision.py) and
 [branch recovery](../team_branch_recovery.py).
+An incident-related SWE turn carries the original incident, claim and unique
+provider-operation identity through the shared Agent runner; missing or refused
+budget admission launches no provider.
 
 Verification: [graph and lifecycle tests](../../tests/task/).
 
@@ -187,6 +207,7 @@ The integrated Structurizr code view is `cascade-task-code`. From the supervisor
 `cascade-task-code` exposes [resume_action](action_recovery.py), the incident
 budget lineage/reserve/settle/read/extension/escalation entry points in
 [incident_budget.py](incident_budget.py),
+[queue_task_merge](../task_rollup.py),
 [execution_lease_is_live](execution.py), and [swe_run_tests](git_tools.py)
 alongside the graph and tool registry.
 The action ledger in tracking-root `.cascade/executions.json` preserves attempts,
@@ -198,8 +219,12 @@ validation workflow, not a manually edited queue record.
 When a current repair action owns the Task, the queued delivery metadata also
 stores that action ID, generation, and Feature ID. This joins the exact green
 pair to its repair obligation without changing the stable queued-action ID.
-The same queue operation advances the matching repair receipt to
-`delivery_pending`; replay retains the original Task and repair identities.
+The queue persists and binds the original incident budget before advertising the
+scheduling index, so a first merge refusal cannot become ambiguous legacy use.
+It advances a matching repair receipt to `delivery_pending`; when repair is
+admitted after the queue entry already exists, successful merge reapplies the
+same immutable validation pair to advance that receipt. Replay retains the
+original Task and repair identities.
 
 `ParentLifecycleMismatch` is stored additively on that same queued action when
 the Boss merge gate returns `not_active` for a completed Feature. Its
