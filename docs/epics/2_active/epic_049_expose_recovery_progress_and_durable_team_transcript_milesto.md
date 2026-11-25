@@ -223,6 +223,11 @@ These are architecture decisions, not requests for installation or generic human
   Chose Use one evidence-based public progress contract and deterministic transcript milestones from existing durable recovery sources; split delivery into projection, persistence/history and UI acceptance features..
   Rationale: Current projection collapses queueing into investigating; transcript append happens after role return and lacks cross-process event identity. Producer-owned projection and committed-source notifications address those gaps without changing recovery authority or adding paid turns. Architect must resolve exact storage, notification and crash protocols before final sign-off.
   Honors: Success criteria 1–8; preserve generations, transcript history and existing repair/verification gates; bounded read-only GET..
+
+- `dec_003` · 2026-11-25 · Epic Manager · **Open questions**
+  Chose Hand the saved plan and three backlog feature contracts to the Epic Architect before final role sign-offs.
+  Rationale: Projection storage/notification hooks, cross-process transcript replay/cursor protocol and integrated recovery/transcript Code coverage need concrete architecture review. Baseline checks passed (15 tests and current C4 source contract); historical evidence for the two related epics was denied by owner scope and was not accessed through a fallback.
+  Honors: Design skill implementation-depth and review contract; no premature sign-off, dispatch or bypass of scoped content access.
 ## Amendment log
 
 _(none)_
