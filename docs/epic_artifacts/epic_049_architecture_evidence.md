@@ -727,3 +727,43 @@ architecture amendments are empty. Verification: canonical reads and write
 receipt, saved sign-offs, enqueue acknowledgement, spec readback and
 `git diff --check`. No executable test or implementation completion is claimed.
 Return control to Feature 2 execution and supervisor integration.
+
+## Architect acknowledgement and detail-contract review
+
+Reviewed Feature 2 confirmation
+`feat_049_002:feat_049_002:ack_detail_contract_confirmed_20261125` against
+canonical Feature 2 revision `ac9ddcf32cd67965da38682847f59e183f78b1d7` and
+Feature 3 revision `12650b202a022681c9663f12cd509558d267ce93`. The persisted
+acknowledgement fields, graph-fence release before publisher mapping, stable
+receipt replay and cursor advancement after durable mapping answer the open
+cross-store recovery question. The immutable detail route binds graph,
+incarnation, message, digest and offset within existing read budgets. Feature 3
+carries both contracts and requires final serialized fixtures before acceptance.
+The planning questions are closed; no further confirmation request is needed.
+Task acceptance contents are owner-confirmed, not independently reviewed here.
+
+Reviewed `cascade/war_room/DESIGN.md` implementation and interruption flow,
+`cascade/workspace/DESIGN.md` invocation/checkpoint handoff, and
+`cascade/DESIGN.md` component/Code ownership links. No current design update is
+justified by this evidence-only diff: proposed consumer and detail behavior
+remains child-owned implementation work. Context actors (`cascade-context`),
+runtime/data boundaries (`cascade-containers`), component responsibilities
+(`cascade-war-room-components`, `cascade-supervisor-components`,
+`cascade-team-components`), implementation symbols (`cascade-dashboard-code`,
+`cascade-watchdog-code`, `cascade-task-code`, `cascade-workspace-code`,
+`cascade-teams-code`) and normal/restart flows are unchanged in this checkout.
+Feature 2 retains per-Task source/design/Code reconciliation and crash/replay
+verification; Feature 3 retains integrated navigation and operator acceptance.
+
+Read-only tree inspection of producer revision `dc47068c` confirms the
+previously routed missing `cascade/recovery_progress/DESIGN.md` remains open.
+Final consumer source and route/detail/error fixtures are still due. The saved
+architecture publication remains terminally failed, with no supported terminal
+render retry exposed by the available tools. No replacement pins or accepted
+artifacts were written. Epic plan `03280933`, both sign-offs and feature
+sequencing are unchanged; canonical architecture amendments are empty.
+
+Verification: canonical spec/amendment reads, sign-off inspection, producer
+tree inspection, affected design review and `git diff --check`. No executable,
+render or browser checks were repeated for this evidence-only change. Return
+control to child execution and supervisor integration.
