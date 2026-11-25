@@ -103,7 +103,7 @@ def approve_feature(
             current = evidence.board.by_id.get(feature_id)
             if current is None or current.tier != "feature":
                 raise ValueError("feature approval requires a feature on the board")
-            if current.approved_at is None:
+            if _feature_needs_approval(current, root=repo):
                 from cascade.epic.change_dispositions import (
                     require_corrective_feature_ready_for_approval,
                 )
@@ -169,13 +169,12 @@ def approve_epic_plan(
                 require_epic_plan_ready_for_approval(epic_id, root=repo, board=board)
                 approval_children = tuple(board.by_id[item] for item in children)
             else:
-                # A repeated approval may authorize a child added after the
-                # original plan approval. Existing accepted children remain
-                # accepted even if current capability evidence has drifted.
+                # Repeated approval covers new children and changed open plans,
+                # but does not reopen already dispatched features.
                 approval_children = tuple(
                     board.by_id[item]
                     for item in children
-                    if board.by_id[item].approved_at is None
+                    if _feature_needs_approval(board.by_id[item], root=repo)
                 )
             approval_scope = tuple(
                 item
@@ -194,7 +193,7 @@ def approve_epic_plan(
             from cascade.lifecycle_review_gate import require_lifecycle_review_gate
 
             for feature_id in children:
-                if board.by_id[feature_id].approved_at is None:
+                if _feature_needs_approval(board.by_id[feature_id], root=repo):
                     from cascade.epic.change_dispositions import (
                         require_corrective_feature_ready_for_approval,
                     )
@@ -327,11 +326,22 @@ def _evaluate_approval_meta(
     )
 
 
-def _set_feature_approved(feature_id: str, *, root: Path) -> bool:
-    if feature_approved(feature_id, root=root):
+def _feature_needs_approval(meta: WorkMeta, *, root: Path) -> bool:
+    if meta.approved_at is None:
+        return True
+    if (
+        meta.status not in {"backlog", "ready_to_plan"}
+        or meta.path.parent.name != "1_backlog"
+    ):
         return False
+    from cascade.feature.readiness_evidence import approval_evidence
+
+    return approval_evidence(meta, root=root)[0] != "current"
+
+
+def _set_feature_approved(feature_id: str, *, root: Path) -> bool:
     doc = read_doc(feature_id, root=root)
-    if doc.meta.approved_at is not None:
+    if not _feature_needs_approval(doc.meta, root=root):
         return False
     doc.meta.approved_at = datetime.now(timezone.utc)
     write_doc(doc, root=root)

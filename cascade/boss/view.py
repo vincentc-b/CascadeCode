@@ -36,11 +36,15 @@ def compute_boss_view(*, root: Path | None = None) -> BossView:
     dispatchable_tasks: list[WorkId] = []
     failed_tasks: list[WorkId] = []
     from cascade.feature.readiness import compute_feature_readiness, feature_boss_dispatchable
+    from cascade.feature.readiness_evidence import approval_evidence
 
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
         if meta.tier == "feature" and _backlog_open(meta) and meta.parent:
-            readiness = compute_feature_readiness(work_id, root=repo, board=board)
+            approval_state, _ = approval_evidence(meta, root=repo)
+            readiness = compute_feature_readiness(
+                work_id, root=repo, board=board, approval_state=approval_state
+            )
             if readiness is not None and feature_boss_dispatchable(readiness):
                 dispatchable_features.append(work_id)
         elif meta.tier == "task":

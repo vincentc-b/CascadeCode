@@ -202,6 +202,11 @@ def test_approve_feature_enables_dispatch_when_automation_off(tmp_path: Path) ->
     assert refused.reason == "not_approved"
 
     approve_feature("feat_001", root=root)
+    doc = read_doc("feat_001", root=root)
+    doc.body += "\nChanged plan after approval.\n"
+    write_doc(doc, root=root)
+    assert dispatch_feature("feat_001", "human", root=root).reason == "not_approved"
+    assert approve_feature("feat_001", root=root)["newly_approved"] is True
     started = dispatch_feature("feat_001", "human", root=root)
     assert started.ok is True
 
@@ -339,3 +344,34 @@ def test_approval_apis_can_finish_after_generic_request_deadline(
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+@pytest.mark.parametrize("bulk", [False, True])
+def test_reapprove_changed_open_feature_refreshes_dispatch_evidence(
+    tmp_path: Path, bulk: bool
+) -> None:
+    from cascade.boss.view import compute_boss_view
+    from cascade.feature.readiness_evidence import approval_evidence
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
+    approve_epic_plan_when_ready("epic_001", root=root)
+    doc = read_doc("feat_001", root=root)
+    old_timestamp = doc.meta.approved_at
+    doc.body += "\nUpdated producer contract.\n"
+    write_doc(doc, root=root)
+    assert approval_evidence(doc.meta, root=root)[0] == "stale"
+    assert "feat_001" not in compute_boss_view(root=root).dispatchable_features
+
+    if bulk:
+        approve_epic_plan("epic_001", root=root)
+    else:
+        assert approve_feature("feat_001", root=root)["newly_approved"] is True
+    doc = read_doc("feat_001", root=root)
+    assert doc.meta.approved_at > old_timestamp
+    assert approval_evidence(doc.meta, root=root)[0] == "current"
+    assert "feat_001" in compute_boss_view(root=root).dispatchable_features
+    assert approve_feature("feat_001", root=root)["newly_approved"] is False
+    assert read_doc("feat_001", root=root).meta.approved_at == doc.meta.approved_at

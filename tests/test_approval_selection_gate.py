@@ -208,12 +208,11 @@ def test_accepted_approval_survives_drift_and_reports_reconciliation_preflight(
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
-    _select_feature(root, "feat_001")
+    _select_feature(root, "feat_001", swe="future-model")
     available = _inventory("offered")
-    approve_feature("feat_001", root=root, inventory=available)
+    approve_feature("feat_001", root=root, inventory=_inventory("offered", "future-model"))
     approved_at = read_doc("feat_001", root=root).meta.approved_at
 
-    _select_feature(root, "feat_001", swe="future-model")
     drift = evaluate_work_selection(
         read_doc("feat_001", root=root),
         root=root,
@@ -247,12 +246,11 @@ def test_approval_reports_dispatch_refusal_returned_by_reconciliation(
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
-    _select_feature(root, "feat_001")
+    _select_feature(root, "feat_001", swe="future-model")
     available = _inventory("offered")
-    approve_feature("feat_001", root=root, inventory=available)
+    approve_feature("feat_001", root=root, inventory=_inventory("offered", "future-model"))
     approved_at = read_doc("feat_001", root=root).meta.approved_at
 
-    _select_feature(root, "feat_001", swe="future-model")
     root.joinpath("cascade.toml").write_text("[automation]\nenabled = true\n")
     monkeypatch.setattr(
         "cascade.watchdog.dispatch.get_provider_inventory", lambda: available
@@ -280,6 +278,26 @@ def test_approval_reports_dispatch_refusal_returned_by_reconciliation(
     assert refusals[0]["preflight"] == result["preflight"]  # type: ignore[index]
     assert refusals[0]["selections"] == result["selections"]  # type: ignore[index]
     assert read_doc("feat_001", root=root).meta.approved_at == approved_at
+
+
+def test_changed_selection_requires_fresh_valid_approval(tmp_path: Path) -> None:
+    from cascade.feature.readiness_evidence import approval_evidence
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_feature(root, "feat_001")
+    available = _inventory("offered")
+    approve_feature("feat_001", root=root, inventory=available)
+    approved_at = read_doc("feat_001", root=root).meta.approved_at
+    _select_feature(root, "feat_001", swe="future-model")
+
+    with pytest.raises(ApprovalSelectionError):
+        approve_feature("feat_001", root=root, inventory=available)
+
+    doc = read_doc("feat_001", root=root)
+    assert doc.meta.approved_at == approved_at
+    assert approval_evidence(doc.meta, root=root)[0] == "stale"
 
 
 class _Handler:
