@@ -95,3 +95,47 @@ publication therefore uses generation `null`. Publication status and architect
 sign-off are authoritative in Cascade. If publication returns pending, replay
 that identical request on a later turn; do not substitute newer unreviewed pins.
 The Epic Manager must review and sign off on the final plan revision separately.
+
+## Epic Manager final planning review
+
+Reviewed plan `032809336f3fcf3810c7270c28195da9c85a3bf6` and read all three
+backlog Feature specs through Cascade. The three sequential slices cover the
+eight success criteria without adding repair authority, a scheduler or paid
+commentary turns. Feature scope carries the selected receipt, liveness, replay,
+read-budget and diagram obligations into required Task acceptance. Concrete
+Feature APIs and Tasks remain normal child planning work, not completed work.
+
+Reviewed the four changed designs listed above against the final diff, the root
+context/audit contract and the Watchdog verification boundary. Current-code
+claims agree with `resume_action`, `graph_turn_owner_is_live` and
+`_invoke_role_turn`: claim/preflight is locked, execution occurs outside that
+critical section, queued owner evidence is not execution proof, and current
+authored transcript mirroring follows graph return. An interrupted attempt and
+the checkpoint-to-chat gap remain distinct recovery cases. No further design
+edit is needed: proposed progress and append protocols stay in work records.
+The level-by-level inventory above and the Epic inventory assign implementation
+updates and verification to the three Feature teams, including integrated Code
+views and normal/failure/restart scenarios.
+
+Independent checks on the reviewed checkout:
+
+- `python -m pytest -q tests/workspace/test_c4_source.py tests/war_room/test_architecture_http.py`:
+  **27 passed in 9.94s**.
+- `validate_c4_workspace` returned `C4WorkspaceContract`.
+- All five saved design/model/contract references match their committed SHA-256
+  digests and current checkout bytes; no reviewed pin was replaced.
+- Inspected the saved Chromium journey and results: three context-to-Code,
+  pinned-source, deep-link and Level-up paths passed, with render-operation
+  count unchanged. This review did not repeat the browser run or claim new
+  product acceptance.
+- Read-only epic comment enumeration returned no threads; Cascade returned no
+  architecture amendments. All three Features remain in backlog with the
+  declared dependency order.
+
+Manager review is complete; role sign-off is recorded separately by Cascade.
+Architecture publication remains pending and must be resumed by the Epic
+Architect with the identical saved request. `cascade/agent/mcp_wrappers.py`
+explicitly withholds `publish_architecture_review` from Epic Manager sessions;
+this review did not bypass that role boundary. The runtime implementation,
+crash matrix, operational recovery fixture and scoped historical-provenance
+limits above remain open delivery obligations, not plan-review failures.
