@@ -462,3 +462,67 @@ replacement request or pins were submitted. Verification: canonical reads,
 pinned source/mapping inspection, comparison with Task 4 acceptance and
 `git diff --check`. No new test or render success is claimed. Return control
 for child execution and supervisor integration.
+
+## Manager Feature 2 planning handoff
+
+Canonical reads now show Feature 1 completed at document/source revision
+`dc47068cebf5643c319d37785edf35882fb96941`, Feature 2 active with no children,
+and Feature 3 in backlog depending on both. The owned Epic checkout remains
+at `4f3d0d64` before this evidence change; completion is not proof of integration
+into this checkout. Feature 1's `plan_approved_at` remains unset. No manual
+lifecycle repair or inferred approval was performed. Architecture amendments
+remain empty; the Epic plan and its existing sign-offs are unchanged.
+
+Read-only comparison of the completed producer branch with `900c6201` confirms
+the receipt serializer and publisher identity/sanitization implementation are
+unchanged. Task 4 implementation `bce25424` adds the public reader and final
+fixture at `tests/war_room/fixtures/recovery_progress_v1_epic_044.json`, with
+scenarios in `tests/war_room/test_recovery_progress_api.py` and
+`tests/war_room/test_http_read.py`. Success includes `entry_count`; entries add
+`schema_version` and `entry_revision`. Pending envelopes omit `entry_count`.
+The HTTP handler returns invalid input as 400 `invalid_request`, changed
+revision as 409 `revision_changed` with restart and both revision fields, and
+unavailable evidence as a retryable pending envelope at HTTP 200. The fixture
+is a waiting blocker with empty milestone references, not a complete timeline
+replay or durable transcript acknowledgement. These are inspected source facts,
+not new execution results or consumer agreement.
+
+Prepared a full consumer-spec update after canonical `read_doc`, but Cascade
+`write_doc` denied the active Feature's path after ownership transferred to its
+team. The canonical spec was not updated by this turn. Did not bypass that
+boundary through filesystem edits. Enqueued
+`epic_049:feature2_planning_final_producer_handoff_20261125` with the exact final
+references, optional/error shapes, required explicit agreement, and a request
+that the Feature save them and supersede its stale running/fixture-pending text.
+The handoff preserves the approved fence/intent/fsync/index/acknowledgement,
+crash-replay, role identity and bounded read contracts. It asks planning to
+sequence durable append/replay before transcript API verification, define the
+receipt-to-milestone link boundary, and freeze chat compatibility/continuation
+for Feature 3. No new Epic decision or scope amendment was made.
+
+Reviewed producer changes to `cascade/DESIGN.md`,
+`cascade/war_room/DESIGN.md`, and `architecture/design-mappings.json`, plus
+Watchdog's current-publication design, Workspace's transcript handoff and the
+native publisher/reader Code nodes. Directory mappings now contain both
+recovery-progress directories, but the significant `cascade/recovery_progress`
+package still lacks a child design and maps to `cascade`, whose design does not
+name or link that coverage. Detailed publication behavior and Code ownership
+are in Watchdog. This ownership/depth gap remains material despite the added
+mapping. Enqueued `epic_049:completed_producer_acceptance_gaps_20261125` to the
+producer for supported reconciliation and precise final replay/navigation/source
+evidence. Feature 2 was informed; no speculative design or edit to the completed
+team's branch was made. Final consumer agreement remains open.
+
+Diagram-impact review for this owned handoff: context actors and container/data
+boundaries do not change; no component or Code implementation changes; no
+execution/restart flow changes. Existing Feature task inventories still own
+implementation reconciliation, including the producer-to-chat boundary. Thus
+no model/design edit or repeated render is justified by this evidence-only
+diff. The routed producer gap and terminal architecture-publication failure
+remain unresolved; no final architecture acceptance is claimed.
+
+Verification: canonical reads, pinned Git/source/fixture comparison, successful
+message enqueue responses and `git diff --check`. No executable code changed;
+no tests or browser journey were rerun. Return control to Feature 2 planning
+and supervisor integration; relay its explicit agreement or mismatches when
+received.
