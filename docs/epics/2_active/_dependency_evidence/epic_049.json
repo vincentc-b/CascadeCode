@@ -513,6 +513,27 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_a5ba58d16ec8fc689140b440b6d418ac4b27680d84194ab145c835b0f63bae74",
+      "dependency_id": "dep_playwright",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:d4652f1815889182f5b9cea1e7e6182cc853e90ff3582bafd5542102e7ca144f",
+      "recipe_revision": "sha256:586cbc794dffd594e7fe3b3d024794066f260c967be632ff35cd73a4f9e2d90b",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib,pathlib; d=m.distribution(\"playwright\"); assert d.version==\"1.64.0\"; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()==\"aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8\"; importlib.import_module(\"playwright.sync_api\"); print(\"playwright 1.64.0 verified (installed RECORD digest)\")'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-25T16:45:39.830349+00:00",
+      "selected_version": "1.64.0",
+      "integrity_reference": "sha256:aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8",
+      "lock_references": [
+        "pyproject.toml",
+        "tests/war_room/test_feature_attention_api.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
