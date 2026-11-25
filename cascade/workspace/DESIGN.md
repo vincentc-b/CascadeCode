@@ -6,6 +6,22 @@ Purpose: resolve repository roles, manage integration worktrees, and enforce rev
 
 ## Worker lifecycle and runtime identity
 
+`REQ-WORKSPACE-RUNTIME-001`: A reviewed runtime repair is current only when an
+accepted source revision, its guarded integrated target, an authenticated
+installation receipt and installed-source digest, and the executing worker's
+independently inspected process and import closure all agree. The process proof
+includes PID, host boot and process-start identities, module origins and
+digests, and the capability generation. Missing, dirty, stale, mixed-root or
+conflicting evidence remains unverified and cannot close a recovery incident.
+
+`DEC-WORKSPACE-RUNTIME-001`: Keep installation authority, worker self-report and
+host verification as separate fail-closed boundaries, using the existing
+supervision/health receipt and recovery stores. A broken recovery adapter is
+bootstrapped only through the separately authorized drain, install and restart
+path. This prevents the adapter under repair, a healthy endpoint, or a
+caller-supplied revision from attesting its own deployment, while avoiding a
+second runtime or recovery ledger.
+
 The [package index](../DESIGN.md#architecture-navigation) and authoritative
 [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 connect `cascade-cli-components` → `cascade-workspace-commands-code`.
