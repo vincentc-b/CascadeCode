@@ -9,6 +9,7 @@ children:
 - feat_048_002
 - feat_048_003
 - feat_048_004
+- feat_048_005
 depends_on: []
 owners:
 - epic_manager
@@ -16,7 +17,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-11'
-updated: '2026-11-24'
+updated: '2026-11-25'
 provider: codex
 flex_mode: false
 models:
@@ -218,6 +219,7 @@ No installation was performed or authorized. Credentials, live forge access and 
 Existing late-parent recovery, ownership, postcheck and audit-projection code is an integration dependency, not duplicate feature scope. Preserve its current contracts and route unrelated acceptance defects to their existing owner. Inspect later integrated changes before descendant implementation; do not assume a historical PR or completed status alone proves conformance.
 
 ## Feature breakdown
+- feat_048_005
 - feat_048_004
 - feat_048_003
 - feat_048_002
