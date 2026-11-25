@@ -430,5 +430,47 @@
       "Controlled-supervisor authority and operational evidence",
       "Original terminal architecture publication recovery"
     ]
+  },
+  "architect_task004_delivery_review": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_revision": "c0df9d332bfade4ade5255de639bdbfb19f70f5a",
+    "canonical_feature_status": "completed",
+    "task_delivery_revision": "3dc7f74e9692690e78a080b27b182f6aa6e79cce",
+    "observed_task_integration_commit": "a273e921f145e905383a37a37fc7b36c39a67e0a",
+    "reviewed_paths": [
+      "docs/task_artifacts/task_048_004_004_controlled_supervisor_evidence_dossier.md",
+      "docs/features/3_completed/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md"
+    ],
+    "resolved_corrections": [
+      "Accepted c2e8b608 163 passes/165.69s is distinct from earlier cf3ea559 163 passes/231.25s; all four prior red runs remain.",
+      "Pinned Structurizr RepoDigest c89b54231 is distinct from local Image ID 97681b225; inherited renderer/browser observations are pinned to f26f5af7."
+    ],
+    "reported_validation": "F4 reports supervised final_validation at 3dc7f74e: exit 0, 181 passed, two existing warnings, 194.60s. Not independently rerun; not exact-head evidence for c0df9d33.",
+    "lineage_limits": "3dc7f74e, c2e8b608 and f258bca3 are not ancestors of canonical c0df9d33 (exit 1 each). Dossier is byte-identical to 3dc7f74e. e41b5be5..c0df9d33 changes only Feature/Task lifecycle and closeout records plus dossier. No source/design/model change observed. Supported rewrite/integration receipt and final review requested from F4; no ancestry or new validation inferred.",
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers unchanged: evidence-only delta introduces no actor, external dependency, runtime, store or communication boundary.",
+      "components": "Supervisor/team/CLI/War Room component responsibilities and interfaces unchanged: no production or design delta.",
+      "code": "Task/Agent/Watchdog/Teams and other integrated Code views retain paths, symbols, declaration kinds and ownership; no model, contract or source delta. Existing review 518cf87b covers e41b5be5 only; final canonical revision needs owning review.",
+      "behavior": "Dossier describes admission, immutable validation, publication and independent postcheck; failure/restart retains original incident allowance and receipts. Missing operational target, signed installation/loaded identity, fault, incident and rollback binding remains refusal, not operational acceptance."
+    },
+    "verification": [
+      "Canonical Epic and Feature read_doc inspected; architecture amendments empty.",
+      "Full corrected dossier and f26f5af7..3dc7f74e prose diff inspected.",
+      "e41b5be5 is ancestor of 3dc7f74e; diff checks pass for that range and e41b5be5..c0df9d33.",
+      "Production, designs, model and tests are unchanged between e41b5be5 and c0df9d33; dossier byte equality verified."
+    ],
+    "handoffs": [
+      "epic_048:epic_048:architect-task004-c0df9d33-final-review",
+      "epic_048:epic_048:architect-c0df9d33-lineage-limits"
+    ],
+    "decision": "No Epic requirement, plan or diagram edit. Preserve existing publication failure and exact references; no replacement publication, renewed sign-off or final acceptance claimed.",
+    "remaining": [
+      "F4 final canonical revision architecture review and supported integration/rewrite receipt",
+      "F1 owning acceptance/design receipt and completed-record limitations",
+      "Final Epic integration and validation",
+      "Controlled-supervisor authority and operational evidence",
+      "Original terminal architecture publication recovery"
+    ],
+    "limitations": "Artifact review only; no runtime/render/browser rerun, lifecycle mutation, dependency installation, recovery dispatch or operational exercise."
   }
 }
