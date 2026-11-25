@@ -253,6 +253,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_b8030867b235712addc24e75befd513a515039c69b4946addedea98c96dcda2e",
+      "dependency_id": "dep_pyyaml",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:d15fe5cc5973e5c1cb100d882fe15f4491e3a24b9afd43538a5de2d41efb39aa",
+      "recipe_revision": "sha256:6d22252f6a8440dfe52f7b844c5927f9a366d92aedc2e5bab82854f9876fdab5",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib,pathlib; d=m.distribution(\"PyYAML\"); assert d.version==\"6.0.3\"; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()==\"a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3\"; importlib.import_module(\"yaml\"); print(\"PyYAML 6.0.3 verified (installed RECORD digest)\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-25T16:45:22.546566+00:00",
+      "completed_at": "2026-11-25T16:45:23.736866+00:00",
+      "result": "succeeded",
+      "redacted_output": "PyYAML 6.0.3 verified (installed RECORD digest)\n",
+      "selected_version": "6.0.3",
+      "integrity_reference": "sha256:a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
