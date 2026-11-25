@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_049_001
 - feat_049_002
+- feat_049_003
 depends_on: []
 owners:
 - epic_manager
@@ -169,6 +170,7 @@ The first declaration used prose expected-output descriptions; all commands succ
 No new application dependency is planned. Browser fixtures use installed tools and deterministic local inputs; no external forge account is needed. If implementation requires additional software, revise the manifest and obtain separate exact installation authority before installing it.
 
 ## Feature breakdown
+- feat_049_003
 - feat_049_002
 - feat_049_001
 
