@@ -1176,3 +1176,41 @@ for unchanged implementation. Canonical Task corrections, storage repair
 acceptance, producer design ownership, final consumer fixtures and terminal Epic
 publication recovery remain open. Epic plan and sign-offs are unchanged; return
 control to child execution and supervisor integration.
+
+## Architect shared-store acceptance gate review
+
+Canonical Feature readback `9215a0ee162689b6c550d6676bb164b034d03998`
+confirms the repair-gate handoff reported at `4764c8dc`: Tasks 2 and 3 retain
+independent implementation scope, but acceptance depends on Task 5's repaired
+shared store; Task 4 requires integrated crash evidence. The criteria explicitly
+cover full-tail fsync before index commit, fsync failure retaining pending intent,
+and process death across copy, source removal, owner switch, terminal checkout
+retirement and index/incarnation reset. No Epic contract amendment is needed.
+The Feature branch remains at `9215a0ee`; `64f99761..9215a0ee` contains no changes
+under `cascade`, `architecture` or `tests`. This confirms planning coverage only,
+not repair completion. The Manager has already acknowledged the same contract;
+no duplicate team notification or canonical spec edit is necessary.
+
+Design closeout: reviewed the Feature's
+`cascade/war_room/DESIGN.md#recovery-summaries-and-planning-transcripts`,
+`cascade/workspace/DESIGN.md#graph-invocation-and-transcript-handoff`, and the
+owned `cascade/DESIGN.md` Code navigation table. Current transcript guarantees
+remain subject to the two documented implementation gaps and Task 5's final
+source/design reconciliation. This evidence-only change alters no actors
+(`cascade-context`), runtime/data boundaries (`cascade-containers`), or component
+ownership (`cascade-war-room-components`, `cascade-supervisor-components`).
+The repair still owns `cascade-dashboard-code` and `cascade-workspace-code`,
+their source contracts and normal/crash sequences; acceptance requires source,
+declaration-kind, navigation and pinned-source checks against the delivered
+revision. No implementation or flow changed in the reviewed range, so no
+current-design/model edit or new render is warranted this turn.
+
+Validation: canonical Epic/Feature reads, empty architecture amendments,
+Feature source-diff inspection, all six saved publication references matching
+committed digests and checkout, and both saved sign-offs matching Epic
+`03280933`. `git diff --check` passed. No executable, fault-injection or browser
+checks were rerun for unchanged implementation. Repair acceptance, canonical
+Task corrections, producer design ownership, final consumer fixtures and the
+terminal failed Epic publication remain unresolved. Available publication tools
+offer no terminal retry; the saved reviewed request remains unchanged. Return
+control to child execution and supervisor integration.
