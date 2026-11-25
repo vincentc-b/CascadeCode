@@ -1050,3 +1050,60 @@ fault-injection, render or browser check was rerun for unchanged implementation.
 Final consumer fixtures, producer design ownership, canonical Task correction,
 storage repair acceptance and Epic publication recovery remain open. Return
 control to Feature execution and supervisor integration.
+
+## Manager Task-record escalation boundary
+
+Reviewed `feat_049_002:feat_049_002:task1_integrated_review_and_task5_20261125`
+against canonical Epic `03280933` and Feature `386005f1`. The Feature spec
+assigns both crash repairs to Task 5 and makes repaired storage part of Task 4
+acceptance. The completed Task 1 record defects and active Task 5 template
+defects remain owner-reported; this Epic role has not read restricted Task
+records. No Epic scope or sequencing amendment is needed. Both saved Epic
+sign-offs match the current plan; architecture amendments are empty. One
+direct-child inspection reports Feature 2 active with no recovery incidents.
+
+The requested operator escalation cannot be delivered through the tools
+available to this role. Tool discovery exposes no Task correction or operator
+message command. `cascade/epic/scoped_docs.py` explicitly denies Task reads and
+writes. `cascade/feature/recovery.py::revise_task` accepts only backlog,
+ready-to-plan or blocked Tasks without a live execution lease; it cannot repair
+the reported completed/active records. `cascade/team_supervision.py::message_team`
+allows only direct parent/child recipients; the Epic has no parent. Generic
+supervision is not a record-editing capability. No filesystem workaround,
+lifecycle transition to unlock editing, or invented operator recipient was used.
+
+Operator handoff: provide an authorized board correction path for
+`task_049_002_001` and `task_049_002_005`. Feature 2 retains the exact replacement
+bodies and refusal evidence. Correct acceptance, files, test plan, out-of-scope
+fields and the Parent Feature link, preserving lifecycle and execution evidence;
+then return canonical revisions for owner readback. The Task 1 replacement and
+source/design review are referenced by the Feature plan's
+`docs/feature_artifacts/feat_049_002_task1_acceptance_review.md` at `64f99761`.
+This handoff is visible evidence, not an operator dispatch or a canonical fix.
+
+Sent `epic_049:manager_task_record_escalation_20261125` to Feature 2; Cascade
+returned `enqueued`. It explains the routing limit, retains both corrections as
+open, and confirms continued focused repair with Feature acceptance pending
+durability-before-acknowledgement, fsync failure remaining pending, recoverable
+owner/index transitions and integrated Task 4 checks. No status-only response
+was requested. Final consumer fixtures and source/test/design evidence remain
+due from the owner.
+
+Design closeout: reviewed owned `cascade/war_room/DESIGN.md` transcript source
+table and sequence, `cascade/workspace/DESIGN.md` invocation/restart boundary,
+and `cascade/DESIGN.md` Code navigation table. This work-record-only change
+alters no actors (`cascade-context`), runtime or persistence boundaries
+(`cascade-containers`), component responsibilities
+(`cascade-war-room-components`, `cascade-supervisor-components`), implementation
+symbols (`cascade-dashboard-code`, `cascade-workspace-code`) or execution flow.
+No design/model edit is justified by this diff. The established Feature 2 repair
+acceptance still owns reconciliation of these Code views, source contract and
+War Room/Workspace normal/crash sequences against the final implementation,
+including navigation/source checks. Producer design ownership remains open.
+
+Validation: canonical Epic/Feature reads, child inspection, amendment read,
+saved sign-off comparison, tool/guard source inspection and `git diff --check`.
+No executable tests, rendering or browser checks were rerun for this evidence-only
+change. Epic publication recovery and canonical Task correction remain
+unresolved; neither is represented as repaired. Return control to child
+execution and supervisor integration between parent turns.
