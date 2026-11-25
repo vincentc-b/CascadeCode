@@ -2,7 +2,7 @@
 id: feat_049_001
 title: Project evidence-based recovery progress
 tier: feature
-status: active
+status: completed
 parent: epic_049
 children:
 - task_049_001_001
