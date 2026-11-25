@@ -421,3 +421,44 @@ and sign-offs remain unchanged. The terminal architecture-publication failure
 still requires supported runtime recovery. Verification: canonical reads,
 parent supervision, pinned Git inspection, message enqueue and `git diff --check`.
 Return control for existing child execution and supervisor integration.
+
+## Architect design-gap handoff review
+
+Reviewed the canonical Epic and Feature 1 plan, the Manager's routed handoff,
+and producer revision `900c62011be2b414911a980e36387c1978dfd93e` through read-only
+Git inspection. The producer branch still has the same revision. Its
+`publisher.py` owns the SQLite writer index, immutable pages, pointer replacement
+and supervised drain, but `cascade/recovery_progress/DESIGN.md` is absent and
+both recovery-progress directories are absent from the design mappings.
+This is a material implementation-documentation gap, not a missing external
+dependency. The current ownership test detects it; its separate fixed historical
+owner/prose expectations must not be repaired by restoring delivery narration
+to current designs or weakening directory/source checks.
+
+Feature 1's existing Task 4 acceptance explicitly owns final design/source-contract
+reconciliation and real Code navigation verification. The Manager has already
+routed the concrete gap to that execution or supervisor merge review. No duplicate
+dispatch, speculative design in the Epic checkout, or new plan amendment is
+needed. The final review must reconcile the publisher's actual component/Code
+ownership, source-linked design and parent links, normal publication and
+failure/restart flows, and exact directory coverage. Final API fixtures and
+consumer agreement remain outstanding; the lifecycle approval discrepancy is
+separate and still requires supported supervisor reconciliation.
+
+Reviewed `cascade/DESIGN.md` integrated-view ownership,
+`cascade/task/DESIGN.md` action-evidence boundary,
+`cascade/workspace/DESIGN.md` invocation/transcript handoff and
+`cascade/war_room/DESIGN.md` recovery/transcript interfaces against the owned
+diff. Only handoff evidence changed since the last architect review: context
+actors, container/data boundaries, component owners, Code symbols and behavioral
+flows are unchanged here. No model/design edit or repeated runtime/browser test
+is warranted for this evidence-only diff. This does not accept the unfinished
+producer's architecture coverage.
+
+Canonical architecture amendments are empty. Epic plan `03280933` and both
+recorded sign-offs remain unchanged. Publication remains terminally failed;
+available tools still provide no supported terminal-publication retry, so no
+replacement request or pins were submitted. Verification: canonical reads,
+pinned source/mapping inspection, comparison with Task 4 acceptance and
+`git diff --check`. No new test or render success is claimed. Return control
+for child execution and supervisor integration.
