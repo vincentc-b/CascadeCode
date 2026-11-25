@@ -64,6 +64,16 @@ Feature feat_049_001 owns the shared progress contract. The parent routed reques
 - Safe entry fields: `action_id`, `original_incident_id?`, `generation`, `graph_id`, `affected_work_id`, `owner`, `attempt_number?`, `claim_id?`, `state`, `stage?`, `occurred_at?`, `observed_at`, `valid_until?`, `freshness`, `provenance`, `safe_reason`, `prerequisite?`, `next_step`, allowlisted `target?` and `verification_ref?`, ordered `receipt_refs` and `milestone_refs`. Missing occurrence time stays null. Milestone references remain pending until this consumer durably commits the matching transcript event.
 - Feature 1 Task 4 supplies API/identity fixtures. Confirm canonical identity encoding, absent-value treatment, nested field shapes, target/provenance sanitization and receipt-to-milestone linkage against those fixtures; the field list alone does not freeze byte-level encoding.
 
+### Merged producer evidence — final API fixtures pending
+
+Producer message `feat_049_001:feat_049_001:merged_producer_fixtures_20261125` identifies the reviewed source revision `900c6201` on `feat/feat_049_001`. This is a pinned producer checkpoint, not Feature 1 delivery or consumer agreement.
+
+- Receipt serializer: `cascade/watchdog/incidents.py::transition_receipt_v1` (lines 241–289 at that revision). It hashes sorted compact JSON with keys `source_kind`, `source_key`, `action`, `action_id`, `original_incident_id`, `generation`, `graph_id`, `affected_work_ids`, `attempt_number`, `claim_id`, `transition_sequence`, `transition_kind`, and `source_reference`. The digest is prefixed `sha256:`. Nullable incident/attempt/claim values remain JSON null; affected-work IDs are deduplicated in retained order. `occurred_at` and `safe_payload` are excluded from receipt identity.
+- Receipt fixtures: `tests/task/test_transition_receipts.py` and `tests/recovery_progress/test_publisher.py::_receipt`.
+- Entry serializer: `cascade/recovery_progress/publisher.py::_entry_id` (lines 191–203), hashing sorted compact JSON of canonical `action_id`, `generation`, and nullable `attempt_number`, with the same digest prefix. Consume the returned identity unchanged.
+- Safe entry and references: `cascade/recovery_progress/publisher.py::_derive_entry` (lines 287–466). `tests/recovery_progress/test_publisher.py::test_blocker_order_and_safe_public_text` and `::test_legacy_receipt_preserves_unknown_provenance` cover target rejection and legacy null occurrence/provenance. `milestone_refs` are currently empty pending durable transcript delivery.
+- Task 4 remains responsible for final route/cursor/error fixtures and outstanding receipt replay gaps. These references do not freeze an unfinished API. After Task 4 delivers, compare its final revision and fixtures with this checkpoint and return explicit agreement or exact mismatches through the parent on identity, field names, route/error/cursor shape, sanitized target/provenance and receipt-to-milestone mapping.
+
 Transcript event, append intent, index and role-summary structures remain for Feature 2 planning under the parent protocol.
 
 ## API contracts
