@@ -1,0 +1,49 @@
+{
+  "work_id": "epic_048",
+  "role": "epic_architect",
+  "reviewed_plan_revision": "b8500fa3eb73f80b5280ec4a8ce796300cd73257",
+  "assessment": "dec_014 accurately recognizes F4 source integration while retaining the unpublished clarification and final acceptance prerequisites. No further plan or design change is required for this completion event. Child completion is not Epic product acceptance.",
+  "integration_evidence": {
+    "forge": "gh api confirms PR #256 closed and merged as 8613f810ca1fa0cfb7bc1726f9b681ef90d32473 from 31a9e9674044e2cce6135c27f4b245380229bfb3.",
+    "hosted_check": "Recovery contract COMPLETED/SUCCESS on published 31a9e967; https://github.com/vincentc-b/CascadeCode/actions/runs/45551448760/job/138993324248",
+    "ancestry": "51cffe14, b9c21295, 31a9e967 and 8613f810 are ancestors of reviewed Epic HEAD. 9353de4e is not (merge-base exit 1).",
+    "tree_comparison": "No differences from published 31a9e967 in production, tests, workflows, root DESIGN or architecture trees. Compared with prior Epic architect review 9a7af7e7, F4 integrates receipt-field coexistence, reconciled package/Task designs, recovery tests/workflow and evidence dossiers.",
+    "clarification": "9353de4e changes only the convergence-test docstring and Task 004 dossier prose. Its explicit synthetic provider inventory/compatibility qualification is not merged. Hosted success cannot be attributed to that clarification or treated as installed CLI compatibility evidence."
+  },
+  "lifecycle": {
+    "canonical_read": "Cascade read_doc(epic_048) retains active state and dec_014; list_children reports F1-F4 completed, F5 cancelled with cancellation_step complete and original approval retained. Parent feedback remains continue_reduced_scope. read_architecture_amendments returned [].",
+    "scope": "Preserve F5 analysis, approval history, linkage and supersession; no replacement or duplicate implementation. F1 acceptance receipt and F4 operational acceptance remain required.",
+    "rollup": "No rollup action replayed. The earlier recorded refusal, Epic recovery action is no longer admitted, remains evidence of the supported-admission prerequisite, not a fresh refusal from this review."
+  },
+  "design_closeout": {
+    "changed_designs_reviewed": ["cascade/DESIGN.md", "cascade/task/DESIGN.md"],
+    "parent_and_consumer_link_checks": ["DESIGN.md", "cascade/agent/DESIGN.md", "cascade/watchdog/DESIGN.md", "cascade/epic/DESIGN.md", "cascade/feature/DESIGN.md", "cascade/workspace/DESIGN.md", "cascade/war_room/DESIGN.md"],
+    "source_trace": "cascade/task/incident_budget.py:reserve_incident_operation retains launch attributes, including parent_operation_id, alongside material_fingerprint only for review_validator operations whose original action_kind is review_rebase. settle_incident_operation charges the same receipt and preserves original incident allowance.",
+    "normal_trace": "A bound generation and live claim reserve remaining allowance, persist both applicable receipt fields, then settle successful consumption once. No new ledger or deployment boundary is added.",
+    "failure_resume_trace": "Settled deterministic material is checked across all retained receipts before another reservation; unchanged and A-B-A material are refused. Missing legacy fingerprints require reconciliation. Changed material still passes cumulative allowance gates. Non-rebase deterministic validators conservatively exhaust the incident. Restart reuses the persisted history.",
+    "diagram_impact": {
+      "cascade-landscape / cascade-context": "No new actors, external systems or responsibility boundaries in the integrated delta.",
+      "cascade-containers": "No changed runtime/data boundary, communication path or persistent store; ledger and process groups do not imply OS isolation.",
+      "cascade-supervisor-components / cascade-team-components": "Existing Task budget authority, Agent receipt consumer, Teams publication and Watchdog verification responsibilities remain accurate.",
+      "cascade-task-code / cascade-agent-code / cascade-teams-code / cascade-watchdog-code": "Existing entry-point symbols, declaration kinds, source paths and component owners remain valid. Receipt construction order and local variable naming do not change Code-view relationships. Source contract passes at the integrated Epic head.",
+      "supplementary_behavior": "Package/Task prose now distinguishes review_rebase material fencing from non-rebase exhaustion and explains both receipt fields. Existing admission/settlement/restart flows remain accurate; no additional transition or diagram is needed."
+    },
+    "verification": {
+      "source_contract": "python -m pytest -q tests/workspace/test_c4_source.py: 14 passed in 1.35s.",
+      "links": "332 local Markdown path targets across the nine listed designs exist; this is a path check, not a claim of fresh browser navigation.",
+      "diff": "git diff --check 9a7af7e7..HEAD passed.",
+      "inherited_browser_evidence": "Task 004 dossier retains the renderer/browser checks at f26f5af7, distinguishes local image ID from pinned RepoDigest and records navigation, Level up, deep links, source opening and warm reuse. Not rerun or represented as a fresh Epic browser result.",
+      "test_boundary": "No duplicate full Recovery contract, operational exercise, dependency setup or recovery dispatch. Hosted F4 green and earlier Task gates retain their original exact revisions."
+    },
+    "result": "No DESIGN/model/source-contract edit required. Changed design prose describes current behavior; delivery history remains in work records."
+  },
+  "remaining_gates": [
+    "Operator/platform-owned supported guarded follow-up publication route for unmerged clarification 9353de4e after PR #256 closed",
+    "F1 owning acceptance reconciliation receipt",
+    "Authorized controlled supervisor target, signed installation/loaded identity, permitted fault, selected incident and rollback binding, followed by independently verified operational recovery",
+    "Supported completed-Task record correction",
+    "Final Epic acceptance and validation disposition through a currently admitted lifecycle action",
+    "Original terminal architecture-publication recovery and accepted lineage"
+  ],
+  "publication_boundary": "Retain the exact terminal failed request in epic_048_publication_resume.json and staged F4 review a990d84a for plan aaca5e02. This integration review does not repair that failed publication, promote an accepted snapshot, issue a replacement review or declare final acceptance. Existing requirements and owner handoffs remain sufficient."
+}
