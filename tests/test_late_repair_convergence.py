@@ -23,6 +23,7 @@ from typing import Callable
 import pytest
 
 import cascade.review as review
+from cascade.agent.discovery.types import ProviderCompatibilityEvidence
 from cascade.board.errors import GitError
 from cascade.board.context import set_project_context
 from cascade.board.store import move_doc, read_doc, write_doc
@@ -66,6 +67,10 @@ def _provider_and_task_isolation(monkeypatch: pytest.MonkeyPatch):
         "cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory
     )
     monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr(
+        "cascade.agent.selection_preflight.probe_provider_compatibility",
+        lambda _provider: ProviderCompatibilityEvidence(True, True, True),
+    )
     clear_task_runs()
     set_project_context(None)
     yield
