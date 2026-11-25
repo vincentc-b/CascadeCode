@@ -678,3 +678,52 @@ Verification: canonical Epic/Feature/amendment reads, sign-off inspection,
 producer tree/mapping inspection, successful handoff enqueue and
 `git diff --check`. No executable, render or browser checks were repeated for
 this evidence-only change. Return control to child execution and integration.
+
+## Manager acknowledgement and detail-contract handoff
+
+Received `feat_049_002:feat_049_002:ack_detail_contract_confirmed_20261125` and
+reviewed canonical Feature 2 revision `ac9ddcf32cd67965da38682847f59e183f78b1d7`.
+Its dec_007 and dec_008 persist the receipt-to-message acknowledgement,
+post-fence publisher mapping, replay-before-cursor-advance sequence, and bounded
+oversized-detail route. The two planning questions are closed. This confirms
+contracts, not delivered implementation or direct review of scoped Task specs.
+
+Updated backlog Feature 3 through Cascade `read_doc`/`write_doc`, revision
+`12650b202a022681c9663f12cd509558d267ce93`. Its data/API sections now link the
+upstream contract owner and producer fixture revision, distinguish planned
+transcript interfaces from completed progress interfaces, and require committed
+anchor resolution after replay, distinct projection-revision/incarnation
+handling, honest incomplete/pending history and bounded detail continuation.
+Replaced the placeholder flow with the planned UI read/continuation flow.
+The producer fixture is explicitly insufficient for the full operational
+timeline. Final transcript source and serialized route/error/detail fixtures
+remain due from Feature 2; the exact chunk payload field must be checked there.
+No new parent decision or scope amendment was made. Existing feature sequencing
+and Task ownership remain intact; no child was dispatched.
+
+Acknowledged the confirmation to Feature 2 with request
+`epic_049:manager_ack_detail_confirmation_received_20261125`; Cascade returned
+`enqueued`. The next requested handoff is implementation evidence, not another
+planning confirmation. The previously routed producer child-design ownership
+gap and terminal architecture-publication failure remain open. No retry,
+replacement publication pins, accepted artifacts or lifecycle state were changed.
+
+Design closeout: reviewed `cascade/war_room/DESIGN.md` transcript boundary and
+normal/interruption sequence, `cascade/workspace/DESIGN.md` invocation/checkpoint
+handoff, and `cascade/DESIGN.md` parent component/Code ownership links. This diff
+changes backlog planning and evidence only, so current implementation designs
+remain unchanged. `cascade-context` actors and `cascade-containers` runtime/data
+boundaries are unchanged; `cascade-war-room-components`,
+`cascade-supervisor-components` and `cascade-team-components` gain no implemented
+relationships. `cascade-dashboard-code`, `cascade-watchdog-code`,
+`cascade-task-code`, `cascade-workspace-code` and `cascade-teams-code` gain no
+source symbols. Runtime normal/restart flows are unchanged; the new Feature 3
+diagram is explicitly a proposal. Feature 2's Task inventory owns storage,
+publisher and API reconciliation; Feature 3 retains integrated UI/navigation
+acceptance. No repeat source render/browser test is warranted by this diff.
+
+Epic revision `03280933` and both role sign-offs remain unchanged; canonical
+architecture amendments are empty. Verification: canonical reads and write
+receipt, saved sign-offs, enqueue acknowledgement, spec readback and
+`git diff --check`. No executable test or implementation completion is claimed.
+Return control to Feature 2 execution and supervisor integration.
