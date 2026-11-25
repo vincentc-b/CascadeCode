@@ -156,7 +156,18 @@ def _run_kickoff(reason: KickoffReason, repo: Path) -> None:
                 return
             token = _model_turn_authorized.set(True)
             try:
-                turn_handed_off = _kickoff_turn(reason, repo)
+                from cascade.recovery_progress.live import live_observation
+
+                observation_identity = {
+                    "graph_id": reason.work_id,
+                    "action_id": reason.action_id,
+                    "action_generation": reason.action_generation,
+                    "attempt_number": reason.attempt_number,
+                    "claim_id": reason.claim_id,
+                    "claim_expires_at": reason.claim_expires_at,
+                }
+                with live_observation("invocation", **observation_identity):
+                    turn_handed_off = _kickoff_turn(reason, repo)
                 if (
                     turn_handed_off
                     and reason.continuation_receipt_id is not None

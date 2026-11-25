@@ -1961,6 +1961,37 @@ def _result_parts(
     )
 
 
+def _executor_live_identity(
+    action: Mapping[str, Any],
+    receipt: Mapping[str, Any],
+    context: ActionContext,
+) -> dict[str, Any]:
+    """Project the exact admitted attempt identity for observational liveness."""
+
+    generation = receipt.get("generation")
+    claim = action.get("execution_claim")
+    graph_id, _affected = _action_work_ids(action)
+    if not isinstance(generation, str) or not isinstance(claim, Mapping):
+        raise ActionRecoveryError("executor claim omitted exact live identity")
+    claim_id = claim.get("claim_id")
+    if not isinstance(claim_id, str) or not claim_id:
+        raise ActionRecoveryError("executor claim omitted exact claim identity")
+    incident = action.get("incident")
+    return {
+        "graph_id": graph_id or context.action_id.split(":", 1)[0],
+        "action_id": context.action_id,
+        "action_generation": generation,
+        "attempt_number": context.attempt_number,
+        "claim_id": claim_id,
+        "claim_expires_at": (
+            incident.get("claim_expires_at")
+            if isinstance(incident, Mapping)
+            and isinstance(incident.get("claim_expires_at"), str)
+            else None
+        ),
+    }
+
+
 def resume_action(
     action_id: str,
     *,
@@ -2040,7 +2071,12 @@ def resume_action(
     if preflight_result is not None:
         return preflight_result
     try:
-        outcome, classification, metadata = _result_parts(execute(context))
+        from cascade.recovery_progress.live import live_observation
+
+        with live_observation(
+            "executor", **_executor_live_identity(committed, committed_receipt, context)
+        ):
+            outcome, classification, metadata = _result_parts(execute(context))
         if outcome == "succeeded":
             classification, state = None, "completed"
         else:

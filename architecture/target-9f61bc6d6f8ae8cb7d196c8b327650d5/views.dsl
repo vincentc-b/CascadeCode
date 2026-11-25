@@ -54,7 +54,7 @@ custom "cascade-task-code" {
     include code_task_actions code_task_delivery_queue code_task_mismatch code_task_leases code_task_validation code_task_revalidation
     include code_task_generation
     include code_task_budget_bind code_task_budget_read code_task_budget_extend code_task_budget_exhaust code_task_budget_reserve code_task_budget_settle
-    include code_task_ack code_task_claim code_task_finalize code_task_action_checkpoint code_task_transition_receipt code_task_execution_start code_task_transition_notify
+    include code_task_ack code_task_claim code_task_finalize code_task_action_checkpoint code_task_transition_receipt code_task_execution_start code_task_transition_notify code_task_executor_live_identity
     autoLayout lr
 }
 
@@ -200,6 +200,6 @@ custom "cascade-workspace-code" {
     }
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
     include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
-    include code_workspace_invoke code_workspace_owner_live
+    include code_workspace_invoke code_workspace_owner_live code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
     autoLayout lr
 }

@@ -318,7 +318,11 @@ and [review recovery](team_review_recovery.py) own the shared recovery boundarie
 Per-tier designs link the graph, state, checkpoint, registry and wiring modules.
 The [Workspace invocation boundary](workspace/DESIGN.md#graph-invocation-and-transcript-handoff)
 owns process-local turn evidence; the [Task action ledger](task/DESIGN.md#action-evidence-and-transcript-boundary)
-owns durable claims and attempts. The [War Room transcript](war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
+owns durable claims and attempts plus the exact executor-entry projection.
+Invocation and executor tokens are short-lived observations bound to the current
+worker process generation; queue ownership, PID existence, a legacy owner, or an
+inaccessible process cannot establish execution and the observations never grant
+repair authority. The [War Room transcript](war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
 records presentable replies after invocation return. These separate facts do not
 establish independently verified recovery completion.
 

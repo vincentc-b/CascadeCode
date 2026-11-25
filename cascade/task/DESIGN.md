@@ -157,7 +157,15 @@ Each material write appends a schema-v1 receipt with the action generation,
 affected work, attempt/claim identity and a monotonic action-local sequence in
 the same atomic replacement. `resume_action` commits `execution_started` only
 after preflight succeeds and before it releases the lifecycle critical section
-for the executor. A refusal instead commits `preflight_refused` and never
+for the executor. `resume_action` then brackets only the actual executor call
+with an ephemeral live token projected by `_executor_live_identity`. The token
+matches the worker runtime/process generation and the receipt's exact graph,
+action generation, attempt and claim. It expires within 30 seconds unless a
+matching registered worker refreshes it, ends earlier with claim expiry, and is
+invalid immediately after executor exit or observed worker death/restart.
+Unknown, legacy, inaccessible, expired or mismatched identity never establishes
+execution. These observations cannot reclaim a claim, change retry policy, or
+replace the durable start/outcome receipts. A refusal instead commits `preflight_refused` and never
 constitutes execution evidence. Review-publication claims also bind process
 identity; other claims do not universally contain that proof.
 The ledger remains monolithic: every transition loads and atomically replaces
@@ -171,7 +179,9 @@ flowchart LR
     Claim --> Preflight{Preflight}
     Preflight -->|allowed| Start[Commit execution-start receipt]
     Start --> Notify[After-lock best-effort notification]
-    Notify --> Execute[Executor outside claim critical section]
+    Notify --> Token[Register exact executor live token]
+    Token --> Execute[Executor outside claim critical section]
+    Execute --> EndToken[Remove token on executor exit]
     Preflight -->|refused| Finalize[Persist failed outcome]
     Execute --> Checkpoint[Persist attempt checkpoints]
     Checkpoint --> Finalize
@@ -194,6 +204,9 @@ exercise claim races, persisted attempts, checkpoints and restart behavior.
 [Transition receipt tests](../../tests/task/test_transition_receipts.py) cover
 missed notification, concurrent action writes, generation/attempt identity,
 preflight refusal and a held executor whose start is visible before completion.
+[Live observation tests](../../tests/workspace/test_live_observations.py)
+cover held execution, exact matching, expiry, inaccessible/dead processes and
+worker generation changes.
 
 ## Interrupted review publication attempts
 

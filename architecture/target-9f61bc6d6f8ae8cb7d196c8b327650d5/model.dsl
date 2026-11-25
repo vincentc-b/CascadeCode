@@ -72,7 +72,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.feature-team"
             }
         }
-        task_team = component "Task team" "Bounded SWE turns with scoped tools, supervised delivery and retained action-transition receipts." "cascade.task.graph" {
+        task_team = component "Task team" "Bounded SWE turns with scoped tools, retained action-transition receipts, and exact executor live identity." "cascade.task.graph" {
             properties {
                 "cascade.semanticId" "element.component.task-team"
                 "cascade.designPath" "cascade/task/DESIGN.md"
@@ -89,7 +89,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.boss"
             }
         }
-        workspace_component = component "Workspace" "Resolves exact lifecycle owners, repository roles, and revision-pinned architecture." "cascade.workspace" {
+        workspace_component = component "Workspace" "Resolves lifecycle owners and repository roles, records process-bound invocation evidence, and owns revision-pinned architecture." "cascade.workspace" {
             properties {
                 "cascade.semanticId" "element.component.workspace"
                 "cascade.designPath" "cascade/workspace/DESIGN.md"
@@ -3259,6 +3259,42 @@ code_workspace_owner_live = element "graph_turn_owner_is_live" "Function" "Obser
     }
 }
 
+code_workspace_kickoff_live = element "_run_kickoff" "Function" "Brackets only the admitted graph invocation with an ephemeral process-bound token." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.kickoff-live"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "_run_kickoff"
+    }
+}
+
+code_workspace_live_begin = element "begin_live_observation" "Function" "Registers exact invocation or executor identity with a maximum 30-second validity." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.live-begin"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/recovery_progress/live.py"
+        "cascade.sourceSymbol" "begin_live_observation"
+    }
+}
+
+code_workspace_live_refresh = element "refresh_live_observation" "Function" "Refreshes only a matching registered token while process identity and claim validity remain current." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.live-refresh"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/recovery_progress/live.py"
+        "cascade.sourceSymbol" "refresh_live_observation"
+    }
+}
+
+code_task_executor_live_identity = element "_executor_live_identity" "Function" "Projects the durable action generation and exact attempt/claim for executor observation." {
+    properties {
+        "cascade.semanticId" "element.code.task.executor-live-identity"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "_executor_live_identity"
+    }
+}
+
 dashboard_incidents_to_dashboard_recovery = code_dashboard_incidents -> code_dashboard_recovery "Projects each retained action" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-incidents-to-dashboard-recovery"
@@ -3301,6 +3337,18 @@ workspace_invoke_to_dashboard_transcript = code_workspace_invoke -> code_dashboa
     }
 }
 
+workspace_kickoff_live_to_live_begin = code_workspace_kickoff_live -> code_workspace_live_begin "Registers begin/end around the admitted graph call" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-kickoff-live-to-live-begin"
+    }
+}
+
+workspace_live_refresh_to_live_begin = code_workspace_live_refresh -> code_workspace_live_begin "Matches the registered token and process generation" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-live-refresh-to-live-begin"
+    }
+}
+
 task_actions_to_task_claim = code_task_actions -> code_task_claim "Claims before executor entry" {
     properties {
         "cascade.semanticId" "relationship.code-task-actions-to-task-claim"
@@ -3316,6 +3364,18 @@ task_actions_to_task_finalize = code_task_actions -> code_task_finalize "Records
 task_actions_to_execution_start = code_task_actions -> code_task_execution_start "Commits start after successful preflight" {
     properties {
         "cascade.semanticId" "relationship.code-task-actions-to-execution-start"
+    }
+}
+
+task_actions_to_executor_live_identity = code_task_actions -> code_task_executor_live_identity "Projects the exact admitted attempt before executor entry" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-actions-to-executor-live-identity"
+    }
+}
+
+task_executor_live_identity_to_live_begin = code_task_executor_live_identity -> code_workspace_live_begin "Registers the process-bound executor token" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-executor-live-identity-to-workspace-live-begin"
     }
 }
 
