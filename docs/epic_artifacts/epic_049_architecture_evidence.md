@@ -526,3 +526,64 @@ message enqueue responses and `git diff --check`. No executable code changed;
 no tests or browser journey were rerun. Return control to Feature 2 planning
 and supervisor integration; relay its explicit agreement or mismatches when
 received.
+
+## Architect Feature 2 planning review
+
+Canonical Feature 2 plan `e0706300706affca8368218d4e15f349d8c0fe16` now
+records explicit consumer agreement with the completed producer and Task 4
+fixtures, with no mismatch found. Relayed that statement to Feature 1 through
+`epic_049:architect_consumer_agreement_20261125`; Cascade returned `enqueued`.
+This resolves the pending consumer-agreement handoff, not implementation or
+architecture acceptance. Feature 2 is active with no children at this read;
+Feature 1 is completed, and Feature 3 remains dependent backlog work.
+
+Read-only inspection of producer `dc47068cebf5643c319d37785edf35882fb96941`
+confirms `_derive_entry` still emits empty `milestone_refs`, while `_upsert`
+retains receipt references. Durable transcript linkage therefore needs a named
+acknowledgement interface and producer update, not only a consumer append.
+Sent `epic_049:architect_transcript_planning_constraints_20261125` to Feature 2
+and received `enqueued`. The handoff asks its team to persist the exact producer
+revision and final fixture/test paths, preserve success/pending field differences
+and revision-error fields, name the receipt-to-message acknowledgement and
+post-append/pre-ack crash recovery, and freeze the oversized legacy-row detail
+continuation route before the UI handoff. It assigns publisher changes to the
+milestone slice and its native `cascade-watchdog-code` reconciliation. These
+refinements implement the existing Epic contract; they do not amend scope or
+change recovery authority. No Feature spec write is claimed by this turn.
+
+The four proposed slices preserve the graph OS fence, durable exact-line intent,
+JSONL fsync before index commit, acknowledgement after fence release, bounded
+replay/import, checkpoint-lineage reply identity, immutable read pages and typed
+cursor failure contracts. The Feature inventory assigns Dashboard Code nodes
+and War Room design to storage, consumer, reply and API slices; Task, Watchdog,
+Workspace and Teams callers retain their local ownership. Added handoff detail
+requires the publisher-to-transcript interface on both sides and coordination
+with the already-routed recovery-progress design gap. The completed producer
+still has no `cascade/recovery_progress/DESIGN.md`; its directory mapping points
+to `cascade`, while detailed publisher behavior is documented under Watchdog.
+That ownership/depth gap and final replay/navigation evidence remain open.
+
+Reviewed `cascade/war_room/DESIGN.md` transcript implementation and normal/restart
+flow, `cascade/workspace/DESIGN.md` role-return/checkpoint boundary,
+`cascade/DESIGN.md` parent component ownership, producer Watchdog design,
+directory mappings, producer publisher/reader source and the final public
+fixture against the Feature plan. The current Epic checkout does not yet
+contain the producer package; inspecting its committed branch does not imply
+integration. No speculative current-design changes were made here.
+
+Diagram impact for this owned handoff: context actors and container/data
+boundaries remain unchanged; no component or Code source changes; no execution
+or recovery flow changes. The existing Feature inventory plus the routed
+publisher acknowledgement coverage owns implementation reconciliation at those
+levels. No repeated render or browser run is justified by this evidence-only
+diff. Required implementation navigation, source-contract, two-process crash
+and read-budget verification remains with the assigned Tasks.
+
+Epic plan `03280933` and both role sign-offs are unchanged; canonical architecture
+amendments are empty. The saved architecture publication is terminally failed,
+and the exposed tools provide no supported restart for that terminal render.
+No replacement request, new pins or accepted snapshot edits were made.
+Verification this turn: canonical reads, pinned Git/source/fixture inspection,
+successful message enqueue responses and `git diff --check`. No executable
+tests or new render/navigation results are claimed. Return control to Feature 2
+planning and supervisor integration.
