@@ -365,6 +365,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_4e550bb772445919465a315efc526198e1b0267b9b0b000805dd221105c8e011",
+      "dependency_id": "dep_langgraph",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:4b0811830525a3d3758e18b2fae4aa61adf2f555cb8b9c312e6ead84827e0551",
+      "recipe_revision": "sha256:88c8490628952dc9b5eb4de0b793bf0563ea3edcaf7202da095fbfd730fb4aa8",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib,pathlib; d=m.distribution(\"langgraph\"); assert d.version==\"1.2.14\"; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()==\"dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad\"; importlib.import_module(\"langgraph.graph\"); print(\"langgraph 1.2.14 verified (installed RECORD digest)\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-25T16:45:28.804612+00:00",
+      "completed_at": "2026-11-25T16:45:31.484892+00:00",
+      "result": "succeeded",
+      "redacted_output": "langgraph 1.2.14 verified (installed RECORD digest)\n",
+      "selected_version": "1.2.14",
+      "integrity_reference": "sha256:dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
