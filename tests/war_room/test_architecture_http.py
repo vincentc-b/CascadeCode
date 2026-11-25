@@ -338,7 +338,9 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
         page_sizes = []
         for cursor in range(2):
             sample = {**payload, "views": payload["views"][cursor:cursor + 1],
-                      "pagination": {"cursor": cursor, "limit": 25, "total": 2,
+                      "selected": {"view_key": "cascade-context",
+                                   "level": "systemContextViews", "semantic_target": None},
+                      "pagination": {"cursor": cursor, "limit": 100, "total": 2,
                                      "next_cursor": 1 if cursor == 0 else None}}
             page_sizes.append(len(json.dumps(sample, separators=(",", ":")).encode()))
         page_budget = max(page_sizes) + 8
