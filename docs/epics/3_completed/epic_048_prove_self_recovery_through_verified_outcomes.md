@@ -2,7 +2,7 @@
 id: epic_048
 title: Prove self recovery through verified outcomes
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_048_001
