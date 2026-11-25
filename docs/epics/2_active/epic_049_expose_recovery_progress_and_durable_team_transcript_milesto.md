@@ -59,6 +59,7 @@ Current code mirrors role responses into chat after graph invocation returns; it
 This is a visibility change inside the current supervisor and War Room. It adds no scheduler, repair authority, recovery ledger, provider invocation, or tool-output streaming. It does not make a queued request, admission, publication, successful attempt, or stale claim equivalent to independently verified resolution.
 
 Repository assessment:
+
 - `cascade/war_room/recovery_incident.py::recovery_incident_from_action` exposes failed/investigating/blocked from routing and blocker evidence; `recovery_incidents_by_work_id` retains one non-completed action per affected row. It does not distinguish acknowledgement, valid live execution, concurrent actions or verified outcomes.
 - `cascade/task/action_recovery.py` owns persisted actions/attempts, `acknowledge_team_recovery`, `_claim_resume_attempt`, `finalize_attempt`, `record_action_checkpoint`, and generation envelopes. Review-publication claims additionally retain process identity. `cascade/watchdog/incidents.py` supplies generation identities, claim expiry and durable stage receipts; these are evidence to consume, not new execution policy to invent.
 - `cascade/workspace/kickoff.py::graph_turn_owner_is_live` is process-local owner evidence. A graph checkpoint or pending queue alone cannot identify an executing repair. A producer must bind any live observation to its worker/process generation and observation time.
@@ -170,13 +171,10 @@ The first declaration used prose expected-output descriptions; all commands succ
 No new application dependency is planned. Browser fixtures use installed tools and deterministic local inputs; no external forge account is needed. If implementation requires additional software, revise the manifest and obtain separate exact installation authority before installing it.
 
 ## Feature breakdown
-- feat_049_003
-- feat_049_002
-- feat_049_001
 
-1. **Evidence-based recovery progress** — own the shared versioned progress contract, concurrent incident ordering, owner/claim freshness, generation-bound verification and bounded published current reads. Cover success criteria 1, 2, 4 and the producer half of 6. Freeze contract before transcript integration.
-2. **Durable recovery milestones and bounded transcript history** — depend on Feature 1. Add deterministic system-event identity, committed-source notifications, cross-process deduplication, bounded restart reconciliation, stable role-summary identity and paginated history. Cover success criteria 3, 5 and transcript half of 6.
-3. **Coherent board and Historical recovery experience** — depend on Features 1 and 2. Present the common current summary, concurrent incidents and milestones; deliver deterministic API/browser operational acceptance and reconcile affected diagrams against implementation. Cover success criteria 4, 7 and 8.
+1. **feat_049_001 — Evidence-based recovery progress** — own the shared versioned progress contract, concurrent incident ordering, owner/claim freshness, generation-bound verification and bounded published current reads. Cover success criteria 1, 2, 4 and the producer half of 6. Freeze contract before transcript integration.
+2. **feat_049_002 — Durable recovery milestones and bounded transcript history** — depends on feat_049_001. Add deterministic system-event identity, committed-source notifications, cross-process deduplication, bounded restart reconciliation, stable role-summary identity and paginated history. Cover success criteria 3, 5 and transcript half of 6.
+3. **feat_049_003 — Coherent board and Historical recovery experience** — depends on feat_049_001 and feat_049_002. Present the common current summary, concurrent incidents and milestones; deliver deterministic API/browser operational acceptance and reconcile affected diagrams against implementation. Cover success criteria 4, 7 and 8.
 
 Keep these three deliverable slices. Do not create a standalone speculative framework, streaming subsystem, generic event bus, recovery scheduler or unrelated UI redesign. Feature teams translate their scope and diagram rows into Task acceptance criteria before task dispatch.
 
@@ -192,11 +190,19 @@ Use focused API/storage integration tests plus one real-browser fixture journey;
 - Exercise safe rendering and links, keyboard navigation, scroll preservation, current-summary visibility and direct transcript anchors in Chromium. Follow actual supported routes; fixture writes cannot substitute for the notification path under test.
 - Reconcile designs/model/contracts with the final diff. Verify native Code navigation and pinned source links as specified in the inventory. Measure bounded reads and warm reuse; record actual commands/results and any unresolved limitations in work records.
 
+### Planning checks and limitations
+
+- `python -m pytest -q tests/war_room/test_recovery_incident_projection.py tests/war_room/test_planning_transcript.py tests/war_room/test_chat_poll_routing.py tests/war_room/test_projection_batching.py`: **15 passed in 2.14s**. These verify the existing baseline only; several encode the coarse investigating semantics that implementation will deliberately replace.
+- `validate_c4_workspace(Path("architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5"))`: **C4WorkspaceContract validated** for current authored sources.
+- Existing Chromium launched and closed successfully; the pinned Structurizr image was inspected locally. No new browser product acceptance, rendered architecture change, or Code-navigation check was run. Those remain explicit owner obligations; a valid existing contract does not close the recovery/transcript Code coverage gap.
+- All three feature records were read back through Cascade: backlog status, dependency order and requested Codex/model/reasoning selections are preserved. No Tasks were minted or dispatched, and no runtime implementation was changed.
+
 ## Open questions
 
 Manager assessment reviewed `DESIGN.md`, `cascade/DESIGN.md`, `cascade/war_room/DESIGN.md`, relevant Task/Watchdog/Workspace sections, the C4 view inventory and source boundaries listed above. No runtime or DESIGN.md edits are made by this planning pass; current files must not falsely describe proposed functionality as implemented. The plan routes implementation ownership to the three features.
 
 Before final plan sign-off, the Epic Architect must settle and record:
+
 1. The exact materialized progress storage/index and supervisor notification/reconciliation hook. It must meet bounded reads and attempt-start visibility while a long role turn is still active, without rebuilding all audit history per transition.
 2. The cross-process transcript append/deduplication and cursor crash protocol, including role-summary identity and the legacy bounded GET compatibility shape.
 3. The baseline Code coverage gap for recovery/transcript paths: complete source-linked current coverage or explicitly scope and justify the proposed architecture review, with model/contract edits and navigation evidence required from owning Tasks. Review new requirement ownership and all affected design interfaces.
