@@ -1214,3 +1214,45 @@ Task corrections, producer design ownership, final consumer fixtures and the
 terminal failed Epic publication remain unresolved. Available publication tools
 offer no terminal retry; the saved reviewed request remains unchanged. Return
 control to child execution and supervisor integration.
+
+## Manager rewrite-crash acceptance handoff
+
+Canonical Feature 2 revision `f17df9e7c9503eeb2411111fb3461775eb1b62c6`
+records Task 3 integration at `4b367dee` and assigns the newly identified
+`chat_store.py::_rewrite_messages` crash interval to Task 5. Source inspection
+confirms replacement (or removal) and parent-directory fsync precede the SQLite
+events/indexed-end/incarnation reset. A graph fence does not make those stores
+atomic across process death. The reported 35 passing tests and source-contract
+validation are Feature evidence; they do not demonstrate recovery at this gap,
+and were not rerun by the Manager.
+
+The existing shared-store durability contract covers this repair. No Epic
+amendment, new Feature, or change to sequencing is required. Tasks 2–4 acceptance
+remains gated on the repaired store. Sent
+`manager_rewrite_crash_gate_20261125` to Feature 2 through Cascade; result was
+`enqueued`. The handoff requires focused interruption evidence after replacement
+or removal before index reset, fresh-process recovery and subsequent append/import,
+surviving message/source-key preservation, no duplicate or unrelated truncation,
+incarnation cursor invalidation, and pending behavior for ambiguous bytes or
+failed durability. Task-path restrictions and canonical record correction remain
+separate owner-routing obligations. No status-only reply was requested.
+
+Design review: inspected Feature revision `4b367dee` War Room transcript structure
+and Workspace invocation/handoff, plus the owned package Code navigation table.
+The repair must reconcile `cascade/war_room/DESIGN.md`, its normal/restart sequence
+and `cascade-dashboard-code` with actual rewrite recovery; affected Workspace and
+Teams callers retain their source-contract and navigation checks. Context actors
+(`cascade-context`), runtime/data boundaries (`cascade-containers`) and component
+ownership (`cascade-war-room-components`, `cascade-supervisor-components`,
+`cascade-team-components`) need no new boundary for this gap. Task 5 and the
+Feature acceptance review own implementation/behavior updates and concrete
+no-change explanations for unaffected views. This Epic diff changes only the
+work record, so no current-design/model edit or render is warranted here.
+
+Validation: canonical Epic/Feature readback, source trace at the reported
+integration revision, empty amendment list, both saved role sign-offs matching
+Epic `03280933`, and `git diff --check`. No executable, crash-injection or browser
+checks were run this turn. Epic plan and sign-offs are unchanged. Repair
+acceptance, canonical Task corrections, producer design ownership, final consumer
+fixtures and failed Epic publication recovery remain open. Return control to
+child execution and supervisor integration.
