@@ -37,6 +37,38 @@ cascade --help
 Keep that environment active when running Cascade. For development on Cascade
 itself, use `python -m pip install -e '.[dev]'` from this checkout instead.
 
+### Run the recovery contract locally
+
+The `Recovery contract` check exercises the real-repository owner journey,
+cumulative incident budgets, provider admission, review publication and
+independent postchecks. From a fresh checkout, reproduce the CI selection with
+only the declared development dependencies:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+timeout --kill-after=10s 8m \
+  python -m pytest -q \
+    tests/test_late_repair_convergence.py \
+    tests/task/test_incident_budget.py \
+    tests/agent/test_provider_recovery_contract.py \
+    tests/test_review_publication_safeguards.py \
+    tests/test_review_recovery_journey.py \
+    tests/test_review_health.py \
+    tests/test_review_rebase.py \
+    tests/test_resolution_actions.py \
+    tests/watchdog/test_reservations.py \
+    tests/watchdog/test_audit_investigation.py \
+    tests/watchdog/test_parent_lifecycle_postcheck.py \
+    tests/feature/test_publication.py::test_review_recovers_remote_creation_before_local_registry_write \
+    --tb=short
+```
+
+Exit status `124` means the local eight-minute command bound expired and is a
+failure. CI keeps the job-level ten-minute limit and retains only a redacted,
+bounded diagnostic tail when the selection fails.
+
 ## Initialize a product repository
 
 For a new product:

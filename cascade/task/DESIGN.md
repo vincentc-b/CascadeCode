@@ -104,11 +104,23 @@ admission cannot increase `attempt_bound`. Before a real validator process start
 the Teams component reserves one tool attempt and the configured worst-case
 process runtime under the original incident and stable top-level publication
 claim. The validator carries a distinct operation receipt and settles on success,
-red result, launch error, timeout, or interruption. Deterministic failure permits
-no unchanged expensive check; transient failure uses the ledger's persisted
+red result, launch error, timeout, or interruption. Each receipt retains the
+JSON-safe launch `attributes`; a validator nested under a provider operation uses
+`attributes.parent_operation_id` to bind that exact parent and claim. For a
+`review_validator` whose original action is `review_rebase`, the same receipt also
+stores `material_fingerprint` for the admitted source tree, command, timeout,
+policy and runtime identity. A deterministic failure fences that material across
+restart, cosmetic commits and A–B–A policy cycles. Genuinely changed material can
+reserve only the original incident's remaining allowance; numerical exhaustion
+still requires an independent finite extension. A legacy deterministic
+`review_rebase` validator receipt without a verified fingerprint fails closed
+after restart. Validators linked to non-`review_rebase` owner actions retain their
+parent/claim attributes but receive no material exception, so deterministic
+failure conservatively exhausts the whole incident. A normal success settles the
+same receipt without a retry fence. Transient failure uses the ledger's persisted
 5-second then 10-second jittered backoff and three-operation ceiling. Unknown
-classification waits for owner reconciliation. Independent finite extension keeps
-all prior attempts, decisions, charges and the first escalation.
+classification waits for owner reconciliation. Extensions keep all prior
+attempts, decisions, charges and the first escalation.
 
 Profile resolution and feasibility do not grant allowance: the executable and
 working directory must exist, then `reserve_incident_operation` must issue the
