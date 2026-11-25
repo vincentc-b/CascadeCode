@@ -56,7 +56,7 @@
       "recipient": "feat_048_004",
       "request_id": "epic_048:f2-closeout-consumer-handoff-b9c21295",
       "status": "enqueued",
-      "body": "New F2 closeout: canonical 3a135f958b914550fc7484ea6866f477abe8c69a reports resolved/published b9c21295, 88 recovery/publication and 37 journey/Watchdog/C4 passes. Source inspection confirms reserve_incident_operation retains attributes alongside material_fingerprint and applies _review_validator_material only for original action_kind review_rebase; linked provider validators under non-rebase owner actions remain admissible. Include this F2 consumer compatibility delta in normal reviewed integration/conflict checks, preserving material fencing for review-rebase and original allowance/human gates for all actions. F2 browser runs timed out (SVG selector; separate 120s before assertions); final integrated Context→Containers→Components→Code, Level up/deep link/pinned-source evidence must cover F2 views too. Do not substitute your earlier F4 browser pass or rerun unchanged source. PR #251 still open/green at 51cffe14 with reviews=[]; existing owning F1 review/disposition prerequisite stands, then corrected-base proof, supported Task 003 recovery and full bounded gate. No new scope or plan churn required."
+      "body": "New F2 closeout: canonical 3a135f958b914550fc7484ea6866f477abe8c69a reports resolved/published b9c21295, 88 recovery/publication and 37 journey/Watchdog/C4 passes. Source inspection confirms reserve_incident_operation retains attributes alongside material_fingerprint and applies _review_validator_material only for original action_kind review_rebase; linked provider validators under non-rebase owner actions remain admissible. Include this F2 consumer compatibility delta in normal reviewed integration/conflict checks, preserving material fencing for review-rebase and original allowance/human gates for all actions. F2 browser runs timed out (SVG selector; separate 120s before assertions); final integrated Context\u2192Containers\u2192Components\u2192Code, Level up/deep link/pinned-source evidence must cover F2 views too. Do not substitute your earlier F4 browser pass or rerun unchanged source. PR #251 still open/green at 51cffe14 with reviews=[]; existing owning F1 review/disposition prerequisite stands, then corrected-base proof, supported Task 003 recovery and full bounded gate. No new scope or plan churn required."
     },
     {
       "recipient": "feat_048_001",
@@ -129,5 +129,109 @@
       "Terminal architecture-publication runtime-owner recovery"
     ]
   },
-  "boundary": "No scope/board edits, override, merge, duplicate production correction, installation, unchanged validation or recovery redispatch. End parent turn for queued child delivery."
+  "boundary": "No scope/board edits, override, merge, duplicate production correction, installation, unchanged validation or recovery redispatch. End parent turn for queued child delivery.",
+  "architect_review": {
+    "role": "epic_architect",
+    "owned_base": "ff54367c",
+    "epic_plan_revision": "8bad293119bc985b12a5767192d99d0d82228b7f",
+    "source_revisions": {
+      "F1": "51cffe146b8b423027266f8469678c482e321c79",
+      "F2": "b9c2129558beaffd235a6c28ab25693a5cd71813"
+    },
+    "assessment": "Existing dec_009 and diagram inventory govern the consumer review. No scope, canonical plan revision or new architecture decision is required. This review is not F1 acceptance, PR disposition or integrated product verification.",
+    "reviewed_designs": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/agent/DESIGN.md",
+      "cascade/watchdog/DESIGN.md",
+      "cascade/epic/DESIGN.md",
+      "cascade/feature/DESIGN.md"
+    ],
+    "source_findings": [
+      "F2 reserve_incident_operation preserves launch attributes and material_fingerprint independently. Material extraction applies only when original_action_id resolves to action_kind review_rebase.",
+      "Normal non-rebase linked validator reservation still checks the original policy, accounting, allowance and generation. A nested provider child needs matching parent_operation_id and claim; unrelated callers wait.",
+      "Review-rebase settled deterministic material is fenced across restart/A-B-A; changed material may use remaining original allowance. Legacy missing fingerprint waits. Exhausted or ambiguous accounting refuses before launch.",
+      "For non-rebase validators without material_fingerprint, deterministic settlement still exhausts the incident. The changed-material exception is not a universal validator guarantee.",
+      "Unavailable provider use retains the worst-case reservation unless provider_started is explicitly false; charges are not reported as measured token totals."
+    ],
+    "diagram_impact_inventory": [
+      {
+        "level": "context",
+        "views": [
+          "cascade-landscape",
+          "cascade-context"
+        ],
+        "result": "Evidence-only owned diff adds no actor or external-system boundary; no model edit."
+      },
+      {
+        "level": "containers",
+        "views": [
+          "cascade-containers"
+        ],
+        "result": "Original tracking-root ledger and supervisor runtime remain the persistence/runtime boundaries; no new store or isolation claim."
+      },
+      {
+        "level": "components",
+        "views": [
+          "cascade-supervisor-components",
+          "cascade-team-components"
+        ],
+        "result": "Task owns accounting, Agent supplies provider attribution and linked children, Teams supplies review material, Watchdog verifies outcomes. F4 must verify both sides of these interfaces on integrated source."
+      },
+      {
+        "level": "code",
+        "views": [
+          "cascade-task-code",
+          "cascade-agent-code",
+          "cascade-teams-code",
+          "cascade-watchdog-code"
+        ],
+        "symbols": [
+          "reserve_incident_operation",
+          "settle_incident_operation",
+          "admit_provider_turn",
+          "publish_team_review_resolution",
+          "reconcile_parent_lifecycle_incident"
+        ],
+        "result": "Verified these declarations in F2 model. F2 implementation/model changes remain subject to final integrated source-contract/render/navigation verification; this Epic artifact adds no implementation node. Do not equate F2 versus F1 whole-branch differences with a no-model-change implementation claim."
+      },
+      {
+        "level": "behavior",
+        "designs": [
+          "cascade/task/DESIGN.md",
+          "cascade/agent/DESIGN.md",
+          "cascade/DESIGN.md"
+        ],
+        "result": "Traced linked-provider normal admission and deterministic failed-material/legacy/exhausted refusal against source. Task prose covers nesting but needs material_fingerprint receipt and review-rebase/non-rebase settlement distinction in final owning closeout. Package summarizes; Task remains the schema/flow owner. Routed to F2/F4 alongside existing F1 documentation handoff."
+      }
+    ],
+    "verification": {
+      "performed": "Canonical Epic read; Manager artifact diff; exact F1-to-F2 incident-budget and validation/publication diffs; F2 Task/Agent designs and integrated model declarations; owned parent/consumer design references; JSON, source/design path and view-key checks; git diff --check.",
+      "not_run": "Runtime, validator, renderer and browser tests were not rerun. Counts 88/37 and publication completion remain F2 reports. Forge status remains retained Manager evidence.",
+      "browser_limit": "Both F2 browser attempts timed out before required navigation assertions; separate timeout/legacy tests and earlier F4 browser success do not prove final integrated or joined timeout-to-owner-to-postcheck navigation."
+    },
+    "handoffs": [
+      {
+        "recipient": "feat_048_004",
+        "request_id": "epic_048:epic_048:architect-f2-consumer-closeout-b9c21295",
+        "status": "enqueued"
+      },
+      {
+        "recipient": "feat_048_002",
+        "request_id": "epic_048:epic_048:architect-f2-design-limits-b9c21295",
+        "status": "enqueued"
+      }
+    ],
+    "remaining_gates": [
+      "F1 corrected-head owning acceptance/review and supported PR #251 disposition/integration",
+      "F4 conflict reconciliation preserving both receipt fields and regressions, focused checks and publication safeguards",
+      "Task 003 corrected-base proof, supported recovery and full bounded Recovery contract",
+      "Task receipt/behavior documentation and final integrated source-contract, render, navigation, pinned-source and consumer evidence",
+      "F2 completed Task 001 record correction through supported board/runtime authority",
+      "Final Epic CI and separately authorized controlled-supervisor evidence",
+      "Supported runtime-owner recovery of terminal architecture publication"
+    ],
+    "publication": "Preserve exact terminal request/result in epic_048_publication_resume.json. Failure internal_error: render worker was interrupted after its automatic recovery attempt. No new accepted lineage, replacement snapshot or successful publication inferred. Existing approved-plan sign-off refusal is not retried.",
+    "boundary": "Artifact-only owned change. No board lifecycle edits, merge, override, duplicate production fix, unchanged validation/recovery redispatch or dependency installation. End planning turn for pending child delivery."
+  }
 }
