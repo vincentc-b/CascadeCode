@@ -769,5 +769,66 @@
     },
     "publication": "Separate pinned Epic publication remains terminal failed as recorded in epic_048_publication_resume.json. Current tool catalog exposes no terminal architecture publication/render recovery operation; no changed prerequisite was supplied. Preserve exact request and lineage for supported runtime-owner recovery.",
     "handoff": "Existing parent-to-Feature request awaits the normal Feature Architect stage. End this planning turn to permit child processing; return on substantive review/delivery or changed recovery prerequisites."
+  },
+  "manager_f3_completion_reconciliation": {
+    "role": "epic_manager",
+    "trigger": "FeatureCompleted:feat_048_003",
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "owned_revision": "69cc7b57",
+    "integration": {
+      "feature_revision": "cc882ec1d98b8d80322e4fdf59b0bae13f9f1db3",
+      "pr": "https://github.com/vincentc-b/CascadeCode/pull/253",
+      "merge": "0f8d1e0470214e9a043a6f28b88b8c100ba0c4e1",
+      "verified": "Forge MERGED; review-recovery SUCCESS; Feature and merge revisions are Epic HEAD ancestors.",
+      "limitations": "Canonical historical evidence returns reconciliation_receipt_missing; architecture reviews remain staged with null accepted/promotion fields. Merge is not accepted architecture promotion or operational proof."
+    },
+    "f4": {
+      "pr": "https://github.com/vincentc-b/CascadeCode/pull/256",
+      "observed_state": "OPEN/DIRTY; review base epic/epic_048",
+      "supported_action": "resolution:v1:1b7842ebec9a2c7f8c9a612628baf69f3b50ea98926f175af43b1c511c8aaab9",
+      "action_state": "review_rebase awaiting_owner_decision; original review-health action reconciled into this successor",
+      "hosted_gate": {
+        "run": "https://github.com/vincentc-b/CascadeCode/actions/runs/45547903762",
+        "head": "a273e921f145e905383a37a37fc7b36c39a67e0a",
+        "result": "12 failed, 151 passed in 33.61s; exit 1",
+        "failure": "provider_preflight_unavailable during activate_epic in convergence/publication fixtures"
+      },
+      "observed_owner_change": "498170bbb286a0423aab0d25b668c82fff3cf865 modifies only tests/feature/test_publication.py and tests/test_late_repair_convergence.py to remove host provider CLI dependency; not independently validated here.",
+      "required": "Continue original admitted resolution, preserve mandatory regression and process/adapter coverage, focused conflict tests/publication safeguards and green full Recovery contract on exact corrected published head before normal integration. Prior local Task gates remain distinct evidence."
+    },
+    "design_closeout": {
+      "reviewed": [
+        "cascade/workspace/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md",
+        "docs/epic_artifacts/epic_048_f2_closeout_reconciliation.json"
+      ],
+      "context_containers": "This evidence-only reconciliation changes no actors, external authority, runtime, storage or communication boundaries. Existing all-level inventory remains assigned.",
+      "components_code": "Workspace loaded-runtime producer and Watchdog independent consumer remain source linked; no implementation/interface/declaration change in this turn. Retain F4 integrated Code/navigation verification after conflict resolution.",
+      "behavior": "Workspace documents signed installation binding, independent live-process/import inspection and fresh restart receipts. Watchdog postcheck requires current loaded identity; missing/stale evidence remains pending. No deployment authority inferred.",
+      "verification": [
+        "Canonical Epic read, list_children, F3 historical evidence and F4 supervise_child inspect",
+        "Forge PR/check/log reads and Git merge ancestry",
+        "Read owning lifecycle/runtime designs and Watchdog source consumer references",
+        "JSON parse and git diff --check"
+      ],
+      "prior_architect_evidence": "69cc7b57 already records integrated F2/F3 source-contract 14 passes and 291 resolving local links; not rerun for unchanged source.",
+      "gaps": "F4 final package/Task receipt-flow design and dossier are pending normal integration; final Epic validation/navigation, authoritative reconciliation and architecture promotion remain open."
+    },
+    "decision": "Existing dec_010 and acceptance inventory suffice. No plan/decision-log change, renewed sign-off, duplicate recovery, test run, installation or operational action.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:f3-merged-0f8d1e04-pr256-admitted-resolution",
+      "status": "enqueued"
+    },
+    "remaining": [
+      "F4 review resolution, green corrected hosted gate and normal integration",
+      "F1 owning acceptance/design receipt and completed-record limitations",
+      "Final Epic CI and architecture reconciliation",
+      "Controlled-supervisor target/install/trust/fault/incident/rollback authority and operational evidence",
+      "Original terminal architecture publication recovery"
+    ],
+    "turn_boundary": "End parent planning turn for queued child processing; do not poll or redispatch unchanged recovery."
   }
 }
