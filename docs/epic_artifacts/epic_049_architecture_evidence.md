@@ -1305,3 +1305,52 @@ acceptance, canonical Task corrections, producer design coverage, final consumer
 fixtures and terminal Epic publication recovery remain open. The available
 publication tool exposes no terminal-retry operation; the saved request is
 unchanged. Return control to child execution and supervisor integration.
+
+## Manager receipt retry acceptance handoff
+
+Canonical Feature 2 revision `436f94968af7f7b43240ae4031333ec88535e83f`
+records integrated Task 2 and the reproduced duplicate-receipt failure after a
+fenced rewrite. Source review at that revision confirms
+`publisher._record_transcript_milestone` compares entry, graph, message,
+incarnation and append sequence as one immutable tuple. A changed incarnation
+or sequence therefore raises even when the receipt and message remain the same.
+The Feature's 35 passing focused tests and 228-element/268-relationship/24-view
+validation are reported evidence, not proof that this retry path is repaired.
+The Manager traced source but did not rerun the reproduction or those checks.
+
+Task 4 owns mapping repair and duplicate-retry acceptance across rewrite and
+room movement; Task 5 owns retained source keys and message IDs through shared
+store recovery. This implements the existing Epic deduplication/restart contract.
+No Epic amendment, new Feature or sequencing change is needed. Canonical Feature
+acceptance already records the gap, so no duplicate spec edit is necessary.
+Cascade enqueued `epic_049:manager_task2_retry_gap_gate_20261125` to Feature 2:
+verify one durable line and stable message ID, ordered committed milestone refs,
+replay after incarnation/sequence changes, genuine identity-conflict rejection,
+and safe handling of delayed acknowledgements. Preserve source-lock release,
+graph-fence release and read-only GET boundaries. Tasks 2–4 and Feature acceptance
+remain open until the integrated repairs and focused evidence are reviewed.
+
+Design closeout: reviewed Feature Watchdog progress publication, War Room
+transcript interfaces/sequence, Workspace transcript handoff, and the owned
+package Code navigation table against the mapping source. Watchdog currently
+names the public `record_transcript_milestone` on a fast path that invokes private
+`_record_transcript_milestone` in its writer transaction. Task 4 already owns this
+wording correction and final source/design reconciliation; the notification
+reinforces it without editing the active child's files.
+
+| Level / view | Owner and disposition |
+|---|---|
+| Context / `cascade-context` | Root design: retrying an existing receipt adds no actor or external dependency. |
+| Containers / `cascade-containers` | Package design: the transcript JSONL/index and publisher index remain in their existing runtime/data boundaries. |
+| Components / `cascade-war-room-components`, `cascade-supervisor-components` | War Room and Watchdog designs: store/consumer/publisher ownership is unchanged; verify actual relationship changes in the repair diff. |
+| Code / `cascade-watchdog-code`, `cascade-dashboard-code` | Task 4 reconciles publisher mapping, receipt append and retry symbols, source contract and declaration kinds; Task 5 supplies repaired store evidence. Final Feature review verifies navigation, Level up, deep-link restoration and pinned-source opening. |
+| Behavior | Watchdog and War Room designs must distinguish stable receipt/message identity from mutable room incarnation/sequence, and explain normal, delayed and restart acknowledgement handling against delivered code. Workspace handoff retains its room-movement contract. |
+
+This Epic diff changes only review evidence; no current-design/model edit or new
+render is warranted here. Validation: canonical Epic/Feature reads, empty
+architecture amendment list, source trace, and both saved role sign-offs matching
+Epic `03280933`. `git diff --check` passed. No executable or browser checks were
+run for this evidence-only update. Epic plan and sign-offs remain unchanged.
+Repair acceptance, canonical Task corrections, producer design coverage, final
+consumer fixtures and failed Epic publication recovery remain open. Return
+control to child execution and supervisor integration.
