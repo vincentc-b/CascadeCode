@@ -24,7 +24,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
-approved_at: '2026-11-25T17:48:04.123302+00:00'
+approved_at: '2026-11-25T22:35:29.872481+00:00'
 ---
 # Persist recovery milestones and bounded transcript history
 
