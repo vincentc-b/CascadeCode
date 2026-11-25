@@ -86,5 +86,67 @@
     ]
   },
   "lifecycle_boundary": "No lifecycle rewrite, duplicate Task, cross-role internal call, force merge or check override. Previous recovery result remains coordination only. Separate epic_051/PR #254 is operator-reported normal-approval lifecycle work, not authority to bypass current guard.",
-  "approval": "Human-approved baseline ffcb9a10 unchanged; no repeat of known already-approved sign-off refusal; Epic Architect reviews revised work record on normal next role turn."
+  "approval": "Human-approved baseline ffcb9a10 unchanged; no repeat of known already-approved sign-off refusal; Epic Architect reviews revised work record on normal next role turn.",
+  "architect_review": {
+    "role": "epic_architect",
+    "owned_base": "1cffdde3",
+    "epic_plan_revision": "8bad293119bc985b12a5767192d99d0d82228b7f",
+    "correction_revision": "51cffe146b8b423027266f8469678c482e321c79",
+    "assessment": "dec_009 fits approved scope and supersedes new implementation dispatch with review of the operator correction. F1 retains acceptance/review on its existing branch and PR #251; F4 consumes reviewed integration. This parent architecture assessment does not substitute for owning Feature review.",
+    "canonical_records": {
+      "F1": "completed; ff3cd399d1523ba6c4e123825c811f8c0b700e7c",
+      "F4": "active; 107d3a267da1153e77d5818188e7abd19f35389d",
+      "amendments": []
+    },
+    "independent_check": {
+      "name": "review-recovery",
+      "head_sha": "51cffe146b8b423027266f8469678c482e321c79",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/vincentc-b/CascadeCode/actions/runs/45537440729/job/138947405016"
+    },
+    "source_trace": {
+      "normal": "publish_team_review_resolution adds source_tree to authoritative generation; latest-generation admission preserves bounded action history. reserve_incident_operation verifies the operation prefix against that generation and fingerprints source_tree, validation_command, validation_timeout_seconds, budget_policy and environment_revision. Changed material still traverses original allowance, elapsed, claim and accounting gates before launch.",
+      "failure_resume": "A settled deterministic review receipt retains material_fingerprint and consumption. Reservation scans all prior deterministic settled receipts, fencing unchanged/cosmetic/A-B-A material after restart. Missing material evidence and existing exhausted/owner-decision status remain conservative; settlement still exhausts actual numerical limits. No existing budget is reopened by this diff.",
+      "coverage": "Added real-validator/bare-Git test checks failed commands, unchanged and cosmetic refusal, restarted observer, A-B-A refusal, changed-command publication and preserved incident identity/admission/policy/attempts. Operator reports 65 tests; not independently rerun."
+    },
+    "design_closeout": {
+      "reviewed": [
+        "51cffe14:cascade/DESIGN.md",
+        "51cffe14:cascade/task/DESIGN.md",
+        "51cffe14:architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+        "cascade/epic/DESIGN.md",
+        "cascade/feature/DESIGN.md"
+      ],
+      "context": "cascade-landscape/cascade-context: no actors or external systems change in the correction.",
+      "containers": "cascade-containers: existing supervisor and tracking-root ledger remain; no runtime, store or isolation boundary added.",
+      "components": "cascade-supervisor-components/cascade-team-components: Task retains receipt/admission ownership and Teams supplies authoritative validation inputs; reconcile both sides in F1 review.",
+      "code": "cascade-task-code reserve/settle/generation and cascade-teams-code publication nodes retain real declarations and component ownership. Internal _review_validator_material is covered by reservation responsibility; no separate exhaustive helper node required. F1 verifies final contracts/links and any changed consumer implications; F4 verifies integrated navigation and pinned source.",
+      "behavior": "F1 must reconcile Task-owned flow with persistent failed-material fencing, genuinely changed eligibility, numerical exhaustion and legacy refusal; package prose already summarizes the distinction.",
+      "routed_gap": "At 51cffe14 Task design lacks material_fingerprint schema/failed-material flow detail and contains delivery attribution F2 consumer boundary and F2 boundary for later paid provider enforcement. Routed to F1 to describe current API responsibilities and retain one Task owner for receipt schema. No cross-worktree edit.",
+      "owned_diff": "Artifact only; no parent production/design/model edits needed. No architecture completeness claimed while F1 closeout and integrated evidence remain pending."
+    },
+    "handoffs": [
+      {
+        "recipient": "feat_048_001",
+        "request_id": "epic_048:epic_048:architect:operator-correction-51cffe14",
+        "status": "enqueued"
+      },
+      {
+        "recipient": "feat_048_004",
+        "request_id": "epic_048:epic_048:architect:f4-operator-correction-51cffe14",
+        "status": "enqueued"
+      }
+    ],
+    "verification": "Canonical Epic/F1/F4 reads, empty amendments, exact forge check, five-file correction diff and normal/failure source trace, design/model reference inspection, artifact JSON parse and git diff checks. No runtime/render/browser rerun.",
+    "gaps": [
+      "F1 exact owning review/acceptance and routed design closeout",
+      "Supported PR disposition and reviewed integration",
+      "Full bounded F4 Task 003 Recovery contract and final design/model/navigation/dossier",
+      "Final Epic CI",
+      "Separately authorized controlled-supervisor evidence",
+      "Supported terminal architecture-publication recovery"
+    ],
+    "approval_publication": "Existing human-approved baseline ffcb9a10 retained. No renewed sign-off call after known already-approved refusal. Original terminal publication remains pinned in epic_048_publication_resume.json; internal_error requires supported runtime-owner recovery. No replacement publication, accepted-snapshot rewrite, or check override."
+  }
 }
