@@ -10,7 +10,7 @@ import pytest
 import cascade.boss.epic_complete as epic_complete_module
 
 from cascade.board.errors import GitError
-from cascade.board.store import move_doc, read_doc, read_doc_in_worktree
+from cascade.board.store import move_doc, read_doc, read_doc_in_worktree, write_doc
 from cascade.boss.epic_complete import (
     confirm_epic_complete,
     confirm_epic_complete_result,
@@ -19,6 +19,8 @@ from cascade.boss.epic_complete import (
     reset_epic_close_prompt_surfaces,
     surface_epic_close_prompt,
 )
+from cascade.cancellation import cancel_work_item
+from cascade.cancellation_feedback import choose_cancellation_disposition
 from cascade.comments.store import comment
 from cascade.review import (
     EpicReviewSnapshot,
@@ -82,6 +84,54 @@ def test_epic_ready_when_all_features_completed(tmp_path: Path) -> None:
 def test_epic_not_ready_when_child_feature_still_active(tmp_path: Path) -> None:
     root = _epic_board(tmp_path, feat_two_completed=False)
     assert epic_ready_to_close("epic_001", root=root) is False
+    result = confirm_epic_complete_result("epic_001", "human", root=root)
+    assert result.reason == "child_features_incomplete"
+    assert result.blocker_ids == ("feat_002",)
+
+
+@pytest.mark.parametrize("disposition", [None, "replace_replan", "continue_reduced_scope"])
+def test_epic_close_requires_explicit_reduced_scope_for_cancelled_feature(tmp_path, disposition):
+    root = _epic_board(tmp_path, feat_two_completed=False)
+    cancel_work_item("feat_002", "superseded by Feature one", root=root)
+    if disposition is not None:
+        choose_cancellation_disposition("epic_001", "feat_002", disposition, root=root)
+
+    assert epic_ready_to_close("epic_001", root=root) is (disposition == "continue_reduced_scope")
+    result = confirm_epic_complete_result("epic_001", "human", root=root)
+    if disposition == "continue_reduced_scope":
+        assert result.ok
+        assert read_doc("epic_001", root=root).meta.status == "completed"
+    else:
+        assert not result.ok
+        assert result.reason == "child_features_incomplete"
+        assert result.blocker_ids == ("feat_002",)
+    cancelled = read_doc("feat_002", root=root).meta
+    assert cancelled.status == "cancelled"
+    assert cancelled.cancellation_step == "complete"
+
+
+@pytest.mark.parametrize("mismatch", ["cleanup", "reason", "time", "parent"])
+def test_epic_close_refuses_unverified_cancellation(tmp_path, mismatch):
+    from datetime import timedelta
+
+    root = _epic_board(tmp_path, feat_two_completed=False)
+    cancel_work_item("feat_002", "superseded", root=root)
+    choose_cancellation_disposition("epic_001", "feat_002", "continue_reduced_scope", root=root)
+    if mismatch == "cleanup":
+        child = read_doc("feat_002", root=root)
+        child.meta.cancellation_step = "owned_artifact_teardown"
+        child.meta.cancellation_error = "cleanup incomplete"
+        write_doc(child, root=root)
+    else:
+        parent = read_doc("epic_001", root=root)
+        feedback = parent.meta.cancellation_feedback[0]
+        if mismatch == "reason":
+            feedback.reason = "different cancellation"
+        elif mismatch == "time":
+            feedback.cancelled_at += timedelta(seconds=1)
+        else:
+            feedback.parent_id = "epic_002"
+        write_doc(parent, root=root)
     result = confirm_epic_complete_result("epic_001", "human", root=root)
     assert result.reason == "child_features_incomplete"
     assert result.blocker_ids == ("feat_002",)
