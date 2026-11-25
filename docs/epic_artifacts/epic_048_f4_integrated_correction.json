@@ -25,15 +25,27 @@
     "history": "Keep four pre-correction red runs distinct; no extra recovery or unchanged-source validation dispatched."
   },
   "design_closeout": {
-    "reviewed": ["f258bca3:cascade/DESIGN.md", "f258bca3:cascade/task/DESIGN.md", "f258bca3:cascade/task/incident_budget.py"],
+    "reviewed": [
+      "f258bca3:cascade/DESIGN.md",
+      "f258bca3:cascade/task/DESIGN.md",
+      "f258bca3:cascade/task/incident_budget.py"
+    ],
     "context_containers": "No added actor, runtime or store in this integration delta; existing landscape/context/container inventory remains applicable.",
     "components_code": "Existing Task receipt/admission and Teams publication boundaries retain reserve/settle entry points. Consumer fence semantics were inspected. Final integrated source-contract, render and actual navigation verification remain F4-owned.",
     "behavior": "Package design preserves deterministic review-material fencing across restart/A-B-A and conservative legacy accounting; Task design still lacks explicit failed-material receipt schema/flow detail. Existing routed F1 closeout remains required, with F4 checking integrated documentation.",
     "owned_change": "Evidence artifact only; no design/model/source changes or new architecture publication requested."
   },
   "handoffs": [
-    {"recipient": "feat_048_004", "request_id": "epic_048:epic_048:epic_048:f4-integration-f258bca3-ack", "status": "enqueued"},
-    {"recipient": "feat_048_004", "request_id": "epic_048:epic_048:epic_048:f4-task-base-observation-f258bca3", "status": "enqueued"}
+    {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:epic_048:f4-integration-f258bca3-ack",
+      "status": "enqueued"
+    },
+    {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:epic_048:epic_048:f4-task-base-observation-f258bca3",
+      "status": "enqueued"
+    }
   ],
   "remaining": [
     "Task 003 corrected execution-base proof and full bounded Recovery contract",
@@ -41,5 +53,44 @@
     "Final integrated architecture/navigation/consumer dossier and Epic CI",
     "Separately authorized controlled-supervisor evidence",
     "Original architecture publication recovery"
-  ]
+  ],
+  "architect_review": {
+    "role": "epic_architect",
+    "plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "integrated_revision": "f258bca3a0beaee66d3eedd1483218245e838ea7",
+    "decision": "Existing dec_010 and Task acceptance inventory remain sufficient; no plan revision, new production correction or duplicate recovery dispatch.",
+    "reviewed_designs": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md"
+    ],
+    "source_trace": [
+      "cascade/task/incident_budget.py:_review_validator_material",
+      "cascade/task/incident_budget.py:reserve_incident_operation",
+      "cascade/task/incident_budget.py:settle_incident_operation",
+      "tests/test_review_publication_safeguards.py"
+    ],
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers: integration adds no actor, runtime, communication or persistence boundary; existing root/package ownership remains applicable.",
+      "components": "cascade-supervisor-components/cascade-team-components: Task remains budget/receipt owner; Teams and Agent remain consumers. Integration preserves both interfaces.",
+      "code": "cascade-task-code/cascade-teams-code and Agent/Watchdog consumer views: architecture tree has no diff from 107d3a26 to f258bca3. Existing reserve/settle declarations retain paths, symbols and ownership; material semantics are internal to those entries, so no extra helper node is required.",
+      "behavior": "Package prose correctly scopes deterministic material fencing to original review_rebase validators. Normal changed-material reservation still passes original allowance/claim gates; restart scans all settled failed-material receipts, blocking A-B-A. Unknown material, owner waits, exhausted status and numerical settlement bounds remain conservative. Task receipt schema and supplementary flow still need explicit fingerprint/failure-fence coverage.",
+      "owner": "F1 acceptance/design reconciliation remains outstanding; F4 verifies final integrated Task/package interfaces, source contracts, render and actual navigation/pinned-source/warm-reuse evidence against final tested SHA."
+    },
+    "resolved_documentation_observation": "The inspected integrated Task design no longer contains the previously reported F2 delivery attribution. Do not carry that specific violation forward as an observed defect at f258bca3; material receipt/flow depth remains incomplete.",
+    "verification": [
+      "111 local package/Task design file links resolve at integrated SHA; anchor validity not asserted",
+      "Both F1 correction and F2 consumer revisions are ancestors",
+      "git diff --check 107d3a26 f258bca3 passed",
+      "Source trace confirms attributes/parent_operation_id and material_fingerprint coexist; review-rebase-only fence; original allowance refusal followed by independent extension remains in publication regression"
+    ],
+    "tests": "No runtime, source-contract, render or browser rerun; F4 reports 15 conflict and 19 publication/provider passes. Final bounded gate belongs to running Task 003.",
+    "execution_base": "Observed local Task ref remains 62cb7a2f, so exact live/tested corrected base is not established by this read. Existing queued ancestry gate remains necessary; no extra recovery sent.",
+    "publication": "Original terminal failed publication and supported runtime-owner prerequisite remain in epic_048_publication_resume.json. No new architecture decision or substitute publication; accepted lineage and known already-approved sign-off refusal preserved.",
+    "limitations": "Not final F4/Epic acceptance. F1 acceptance receipt, final integrated CI/design/navigation and separate controlled-supervisor authority/evidence remain open.",
+    "handoff": {
+      "recipient": "feat_048_004",
+      "request_id": "epic_048:architect-f258bca3-integrated-design-review",
+      "status": "enqueued"
+    }
+  }
 }
