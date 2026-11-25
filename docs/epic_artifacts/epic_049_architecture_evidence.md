@@ -962,3 +962,46 @@ passes `git diff --check`. Epic plan, sign-offs and saved publication pins are
 unchanged; terminal publication recovery, producer design ownership, final
 consumer fixtures and canonical Task correction remain open. Return control to
 Feature review and supervisor integration between turns.
+
+## Manager crash-repair acceptance handoff
+
+Reviewed Feature 2's `task1_crash_gap_epic_049_20261125` message against the
+existing Epic durability/restart contract and the preceding source-traced
+Architect findings. Canonical reads return Epic revision `03280933` and Feature
+revision `7cb0fd62`. The Feature task breakdown now includes
+`task_049_002_005`; read-only Git inspection finds its branch at `c5fce8da`, with
+repair planning records after `bd152f61` and no intervening product-code change.
+This establishes repair ownership, not repair completion. One direct-child
+inspection reports active with no incidents; no runtime recovery was requested.
+Architecture amendments are empty and both saved Epic sign-offs still match.
+
+Sent `epic_049:manager_crash_repair_acceptance_20261125` to Feature 2; Cascade
+returned `enqueued`. The handoff confirms these are corrections within the
+approved contract. It requires complete-tail replay durability before index
+commit/acknowledgement, pending state on fsync failure, and deterministic room
+movement recovery across copy, source removal, owner switch and index reset.
+Tasks 2/3 retain their separate scope but must not establish acceptance on the
+unrepaired storage foundation. Feature 2 owns canonical repair acceptance,
+fault-injection evidence, final source revision and downstream fixtures.
+The Task 1 canonical-record correction remains separately unresolved; this
+turn neither claims a correction nor bypasses the reported authorization guards.
+
+Design closeout: read the owned `cascade/war_room/DESIGN.md` transcript boundary
+and sequence, `cascade/workspace/DESIGN.md` invocation/restart handoff and
+`cascade/DESIGN.md` architecture navigation table. This evidence-only diff does
+not change `cascade-context` actors, `cascade-containers` persistence/runtime
+boundaries, `cascade-war-room-components` or `cascade-supervisor-components`
+ownership, or implementation symbols in `cascade-dashboard-code` and
+`cascade-workspace-code`. Therefore no current-design/model edit is warranted
+in this turn. The repair owner must reconcile those Code views, source contract,
+War Room/Workspace designs and supplementary crash/resume flows with the final
+implementation, and report navigation verification or concrete remaining gaps.
+The Epic checkout still lacks the child implementation, so executable,
+fault-injection, render and browser checks were not rerun here.
+
+Validation: canonical document and amendment reads, direct-child inspection,
+Git revision/diff inventory, saved sign-off comparison, design review and
+`git diff --check`. Epic scope, sequencing and sign-offs are unchanged. Storage
+repair acceptance, canonical Task correction, final consumer fixtures, producer
+design ownership and failed Epic architecture publication recovery remain open.
+Return control to Feature execution and supervisor integration between turns.
