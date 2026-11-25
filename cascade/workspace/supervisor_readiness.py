@@ -82,6 +82,7 @@ class SupervisorHealthProjection(TypedDict, total=False):
     automation: AutomationReadiness
     loops: LoopBundle
     recovery: RecoveryProgress
+    runtime_identity: dict[str, object]
 
 
 @dataclass

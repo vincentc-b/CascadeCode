@@ -7,6 +7,7 @@ and relaunch. It must not import changing Cascade packages.
 
 from __future__ import annotations
 
+import json
 import os
 import selectors
 import signal
@@ -20,8 +21,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from cascade.workspace.degraded_responder import serve_one_degraded_request
+from cascade.workspace.errors import WorkspaceError
 from cascade.workspace.git_lock_sweep import GitLockSweepResult, sweep_stale_git_locks
 from cascade.workspace.source_fingerprint import source_fingerprint
+from cascade.workspace.runtime_identity import (
+    ENV_RUNTIME_AUTHORITY,
+    LoadedRuntimeIdentity,
+    RuntimeAuthority,
+    encode_runtime_authority,
+    validate_runtime_authority,
+    verify_loaded_runtime_identity,
+)
 from cascade.workspace.supervisor_status import (
     LastError,
     SupervisorState,
@@ -75,6 +85,7 @@ class _LauncherStatusContext:
     last_error: LastError | None = None
     next_action: str | None = None
     trunk_lock_warning: str | None = None
+    runtime_identity: LoadedRuntimeIdentity | None = None
     _state: SupervisorState = "restarting"
     _since: str = field(default_factory=utc_now_iso)
 
@@ -83,7 +94,7 @@ class _LauncherStatusContext:
             self.trunk_lock_warning = sweep.trunk_index_lock_path
 
     def snapshot_status(self) -> SupervisorStatus:
-        return {
+        status: SupervisorStatus = {
             "state": self._state,
             "worker_pid": self.worker_pid,
             "restart_count": self.restart_count,
@@ -93,6 +104,9 @@ class _LauncherStatusContext:
             "since": self._since,
             "updated_at": utc_now_iso(),
         }
+        if self.runtime_identity is not None:
+            status["runtime_identity"] = self.runtime_identity
+        return status
 
 
 class _StderrForwarder:
@@ -173,6 +187,8 @@ def _launcher_transition(
         "since": ctx._since,
         "updated_at": utc_now_iso(),
     }
+    if ctx.runtime_identity is not None:
+        status["runtime_identity"] = ctx.runtime_identity
     write_supervisor_status(ctx.workspace_root, status)
 
 
@@ -207,7 +223,7 @@ def _wait_readiness(
     *,
     proc: subprocess.Popen[bytes],
     stop_requested: Callable[[], bool],
-) -> None:
+) -> object | None:
     buf = b""
     deadline = time.monotonic() + READINESS_TIMEOUT_S
     while b"\n" not in buf:
@@ -226,8 +242,16 @@ def _wait_readiness(
         if not chunk:
             raise RuntimeError("readiness pipe closed before worker signaled ready")
         buf += chunk
-    if not buf.startswith(READINESS_MESSAGE):
+    line = buf.split(b"\n", 1)[0]
+    if line == READINESS_MESSAGE.rstrip(b"\n"):
+        return None
+    prefix = READINESS_MESSAGE.rstrip(b"\n") + b" "
+    if not line.startswith(prefix):
         raise RuntimeError(f"unexpected readiness message: {buf!r}")
+    try:
+        return json.loads(line[len(prefix) :].decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("worker readiness identity is invalid") from exc
 
 
 def _kill_worker_group(
@@ -309,6 +333,8 @@ def _run_degraded_responder(
             return False
         if source_fingerprint() != fingerprint_at_entry:
             status_ctx.restart_count = 0
+            # A stopped worker's receipt must never survive into a new spawn.
+            status_ctx.runtime_identity = None
             _launcher_transition(
                 status_ctx,
                 state="restarting",
@@ -339,6 +365,7 @@ def _spawn_worker(
     listen_fd: int,
     lock_fd: int,
     lock_token: str,
+    runtime_authority: RuntimeAuthority | None,
 ) -> tuple[subprocess.Popen[bytes], int, int]:
     readiness_r, readiness_w = os.pipe()
     env = os.environ.copy()
@@ -346,6 +373,10 @@ def _spawn_worker(
     env[ENV_READINESS_FD] = str(readiness_w)
     env[ENV_LOCK_FD] = str(lock_fd)
     env[ENV_LOCK_TOKEN] = lock_token
+    if runtime_authority is not None:
+        env[ENV_RUNTIME_AUTHORITY] = encode_runtime_authority(runtime_authority)
+    else:
+        env.pop(ENV_RUNTIME_AUTHORITY, None)
     log_stderr_fd = os.dup(2)
     env[ENV_LOG_STDERR_FD] = str(log_stderr_fd)
     current_pythonpath = env.get("PYTHONPATH")
@@ -384,10 +415,17 @@ def run_launcher_loop(
     lock_token: str,
     lock_fd: int,
     stop_when: Callable[[], bool] | None = None,
+    runtime_authority: RuntimeAuthority | None = None,
+    runtime_authority_key: Path | None = None,
+    expected_capability_generation: str = "",
 ) -> None:
     """Spawn workers on ``listen_sock`` until operator stop or ``stop_when``."""
 
     source_fingerprint()
+    if runtime_authority is not None:
+        if runtime_authority_key is None:
+            raise WorkspaceError("runtime authority key is required")
+        validate_runtime_authority(runtime_authority, authority_key=runtime_authority_key)
 
     listen_fd = listen_sock.fileno()
     stop_state = _OperatorStopState()
@@ -427,6 +465,8 @@ def run_launcher_loop(
             if stop_requested():
                 return
 
+            # A stopped worker's receipt must never survive into a new spawn.
+            status_ctx.runtime_identity = None
             _launcher_transition(
                 status_ctx,
                 state="restarting",
@@ -435,11 +475,19 @@ def run_launcher_loop(
                 last_error=None,
             )
 
+            if runtime_authority is not None:
+                if runtime_authority_key is None:
+                    raise WorkspaceError("runtime authority key is required")
+                validate_runtime_authority(
+                    runtime_authority, authority_key=runtime_authority_key
+                )
+
             proc, readiness_fd, pgid = _spawn_worker(
                 workspace_root=workspace_root,
                 listen_fd=listen_fd,
                 lock_fd=lock_fd,
                 lock_token=lock_token,
+                runtime_authority=runtime_authority,
             )
             stderr_forwarder = _StderrForwarder()
             if proc.stderr is not None:
@@ -491,11 +539,24 @@ def run_launcher_loop(
                 return _wait_for_delay(delay, stop_requested)
 
             try:
-                _wait_readiness(
+                readiness_identity = _wait_readiness(
                     readiness_fd,
                     proc=proc,
                     stop_requested=stop_requested,
                 )
+                verification = verify_loaded_runtime_identity(
+                    readiness_identity,
+                    authority=runtime_authority,
+                    worker_pid=proc.pid,
+                    expected_workspace_root=workspace_root,
+                    expected_capability_generation=expected_capability_generation,
+                    observed_at=utc_now_iso(),
+                )
+                if verification["state"] == "refused":
+                    raise WorkspaceError(
+                        verification["reason"] or "loaded runtime evidence refused"
+                    )
+                status_ctx.runtime_identity = verification["identity"]
             except _EscalatedStop:
                 _finalize_worker()
                 return
@@ -508,7 +569,7 @@ def run_launcher_loop(
                 )
                 _finalize_worker()
                 return
-            except (OSError, RuntimeError, TimeoutError) as exc:
+            except (OSError, RuntimeError, TimeoutError, WorkspaceError) as exc:
                 if not _handle_pre_ready_failure(exc):
                     return
                 continue

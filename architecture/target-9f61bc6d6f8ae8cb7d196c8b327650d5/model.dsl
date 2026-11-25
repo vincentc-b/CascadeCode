@@ -2799,12 +2799,48 @@ code_cli_drain = element "drain_and_shutdown" "Function" "Drain HTTP and agent t
     }
 }
 
-code_cli_status = element "_worker_supervisor_status" "Function" "Build worker PID and lifecycle status without loaded-source attestation." {
+code_cli_status = element "_worker_supervisor_status" "Function" "Publish lifecycle state and loaded-worker runtime evidence." {
     properties {
         "cascade.semanticId" "element.code.cli.status"
         "cascade.parent" "element.component.workspace-commands"
         "cascade.sourcePath" "cascade/workspace/worker.py"
         "cascade.sourceSymbol" "_worker_supervisor_status"
+    }
+}
+
+code_cli_runtime_authority = element "create_runtime_authority" "Function" "Authenticate a deployment receipt and bind clean accepted/integrated checkouts to installed bytes." {
+    properties {
+        "cascade.semanticId" "element.code.cli.runtime-authority"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
+        "cascade.sourceSymbol" "create_runtime_authority"
+    }
+}
+
+code_cli_loaded_runtime = element "loaded_runtime_identity" "Function" "Report imported repair/delivery module origins and worker process/capability evidence without self-verification." {
+    properties {
+        "cascade.semanticId" "element.code.cli.loaded-runtime"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
+        "cascade.sourceSymbol" "loaded_runtime_identity"
+    }
+}
+
+code_cli_validate_runtime = element "validate_runtime_authority" "Function" "Authenticate authority and reject moved, dirty, stale, unintegrated or byte-mismatched evidence." {
+    properties {
+        "cascade.semanticId" "element.code.cli.validate-runtime"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
+        "cascade.sourceSymbol" "validate_runtime_authority"
+    }
+}
+
+code_cli_host_verify_runtime = element "verify_loaded_runtime_identity" "Function" "Return a typed current/pending/refused verdict after inspecting the live child, import root, module bytes and capability generation." {
+    properties {
+        "cascade.semanticId" "element.code.cli.host-verify-runtime"
+        "cascade.parent" "element.component.workspace-commands"
+        "cascade.sourcePath" "cascade/workspace/runtime_identity.py"
+        "cascade.sourceSymbol" "verify_loaded_runtime_identity"
     }
 }
 
@@ -2985,6 +3021,54 @@ code_cli_worker_to_code_cli_drain = code_cli_worker -> code_cli_drain "Drains on
 code_cli_worker_to_code_cli_status = code_cli_worker -> code_cli_status "Publishes lifecycle status" {
     properties {
         "cascade.semanticId" "relationship.code-cli-worker-to-code-cli-status"
+    }
+}
+
+code_cli_main_to_code_cli_runtime_authority = code_cli_main -> code_cli_runtime_authority "Dispatches reviewed runtime bootstrap" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-main-to-runtime-authority"
+    }
+}
+
+code_cli_launcher_to_code_cli_validate_runtime = code_cli_launcher -> code_cli_validate_runtime "Revalidates authority before spawn" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-launcher-to-validate-runtime"
+    }
+}
+
+code_cli_worker_to_code_cli_loaded_runtime = code_cli_worker -> code_cli_loaded_runtime "Measures imported runtime identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-worker-to-loaded-runtime"
+    }
+}
+
+code_cli_loaded_runtime_to_code_cli_status = code_cli_loaded_runtime -> code_cli_status "Supplies process-local readiness evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-loaded-runtime-to-status"
+    }
+}
+
+code_cli_loaded_runtime_to_code_cli_validate_runtime = code_cli_loaded_runtime -> code_cli_validate_runtime "Reads the immutable authority snapshot" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-loaded-runtime-to-validate-runtime"
+    }
+}
+
+code_cli_launcher_to_code_cli_host_verify_runtime = code_cli_launcher -> code_cli_host_verify_runtime "Independently verifies the spawned child" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-launcher-to-host-verify-runtime"
+    }
+}
+
+code_cli_loaded_runtime_to_code_cli_host_verify_runtime = code_cli_loaded_runtime -> code_cli_host_verify_runtime "Reports loaded origins and process evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-loaded-runtime-to-host-verify-runtime"
+    }
+}
+
+code_cli_host_verify_runtime_to_code_cli_status = code_cli_host_verify_runtime -> code_cli_status "Publishes host-verified identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-cli-host-verify-runtime-to-status"
     }
 }
 

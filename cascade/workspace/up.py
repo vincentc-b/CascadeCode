@@ -207,6 +207,8 @@ def up(
     host: str = "127.0.0.1",
     port: int = 8765,
     stop_when: Callable[[], bool] | None = None,
+    runtime_authority: Path | None = None,
+    runtime_authority_key: Path | None = None,
 ) -> None:
     """Long-lived launcher: lock, listen socket, and replaceable workers.
 
@@ -218,9 +220,19 @@ def up(
 
     from cascade.war_room.server import assert_loopback_host
     from cascade.workspace.launcher import bind_listen_socket, run_launcher_loop
+    from cascade.workspace.runtime_identity import load_runtime_authority
 
     assert_loopback_host(host)
     ws = prepare_up(root)
+    if (runtime_authority is None) != (runtime_authority_key is None):
+        raise WorkspaceError(
+            "runtime authority and its installation-authority key must be supplied together"
+        )
+    authority = load_runtime_authority(
+        runtime_authority, authority_key=runtime_authority_key
+    ) if runtime_authority is not None and runtime_authority_key is not None else None
+    from cascade.watchdog.capabilities import default_capability_registry
+    capability_generation = default_capability_registry().fingerprint()
 
     lock = SupervisorLock(ws.path)
     lock.acquire(blocking=False)
@@ -233,6 +245,9 @@ def up(
                 lock_token=str(lock.path.resolve()),
                 lock_fd=lock.fileno(),
                 stop_when=stop_when,
+                runtime_authority=authority,
+                runtime_authority_key=runtime_authority_key,
+                expected_capability_generation=capability_generation,
             )
         finally:
             listen_sock.close()
