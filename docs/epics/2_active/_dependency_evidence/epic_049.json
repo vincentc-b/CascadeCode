@@ -1367,5 +1367,97 @@
       "authority_current": true
     }
   ],
-  "snapshots": []
+  "snapshots": [
+    {
+      "snapshot_id": "evidence_28e7c7edbdbf41679663ff123ca0d821",
+      "manifest_revision": 2,
+      "created_at": "2026-11-25T17:14:29.355903+00:00",
+      "accepted": [
+        {
+          "dependency_id": "dep_python",
+          "attempt_id": "attempt_resume_57b06281fe85364e2ec029d036c67f85f928e316a0f1e1915a09842955e309f6",
+          "entry_revision": "sha256:567e5dced5a7f6a9fcf3f0fb123b84f7943aaaf2b6f1fef4d5216f362ce1e014",
+          "recipe_revision": "sha256:df93297330c18d91b2c3dfdff07bb779e87fc0318393b0e756dac5245894153d",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_git",
+          "attempt_id": "attempt_resume_5218e21725e6e2b3be7fdd4e590f52560d0a972f4ff1cc566157deeef0bfc319",
+          "entry_revision": "sha256:8acfaca7a9f2a800e1ac1bcc8a832b072df005c482b37efc27639996d89f7a03",
+          "recipe_revision": "sha256:f0011e6cb4c64e5019a79d2d6da04ade13a11f4de7189447b65b51ab6596df42",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_node",
+          "attempt_id": "attempt_resume_755e6549e8ccc027e185d81cbc12572f19b28a7b9090fd5d010b2cfd9d429a20",
+          "entry_revision": "sha256:3edd17d88d9233563902e4b3c45d98e8a8a5e87a77a8dedfcc236a604ee291e1",
+          "recipe_revision": "sha256:9dbb46ed781b597b467b5171f70f79723d1f0290accc9cb057c54a25d975f47b",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_docker",
+          "attempt_id": "attempt_resume_411adce13651f53c396a6c3b3033d6590298bdefe6af8c4a878d8b2349de2980",
+          "entry_revision": "sha256:06e35fede1aef865a9039321f313e5f0a13816f701f519222bb6b596ae6c58bc",
+          "recipe_revision": "sha256:ea1ac24858ad3e66cfd37c3aac2337d635c5ece73d9a3e9ce343608cb09df95c",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pyyaml",
+          "attempt_id": "attempt_resume_dde51a4427eb790d90cbfb7ff8cd76a2fb1b90886828ef2ebfbb0dbd808eb4ad",
+          "entry_revision": "sha256:ba849ada57a22050fe3f068fcebfca87bf0f30565ab68980a2df2c8e63aac1bd",
+          "recipe_revision": "sha256:6d22252f6a8440dfe52f7b844c5927f9a366d92aedc2e5bab82854f9876fdab5",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_cursor_sdk",
+          "attempt_id": "attempt_resume_050e5707c12de21cac7030e8e91518cd53f3c85b2d5c1338439a740d4275632e",
+          "entry_revision": "sha256:c2b148bff62f76fc69ed6435165a948d201639eb88a9a6f61ccae6f00e075956",
+          "recipe_revision": "sha256:c7b7fdfeee07e0ae19f3f2f8f36e1e46e0ddd75d50e0f726b2cba5d0e622d55c",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph",
+          "attempt_id": "attempt_resume_7470ff4903eeaf986ba09c356f19ec90fdfa473ac8dc302db67696fefee03b9c",
+          "entry_revision": "sha256:d41dadb56e3d332381db60d6a7b59e298a00661fa92e08fc51b758ba93f826ec",
+          "recipe_revision": "sha256:88c8490628952dc9b5eb4de0b793bf0563ea3edcaf7202da095fbfd730fb4aa8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph_sqlite",
+          "attempt_id": "attempt_resume_593306b75abdb21390edc364ea091dbc0d9fd524b1b15092d487d2826bf7e98e",
+          "entry_revision": "sha256:dead0685d891ea5e5edbc906f14b87f2ec46a79916c4f23df62945e552bfadf9",
+          "recipe_revision": "sha256:97d948fa9f9178dd3dd2f0c3730ba27af8b029fc63bce14f6bc352e38809bf4e",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pytest",
+          "attempt_id": "attempt_resume_a24d596d9c225d8a60c85eadc4d49513290c5e06159f7908c390a08100d813b9",
+          "entry_revision": "sha256:bd50fa18073e6480130a1a95bfcf9976a3207dab6a1d2c660f097baad3589399",
+          "recipe_revision": "sha256:b4e6c4a879bb0b0a54484e4c71596fe26bd249b7f25a671a2866223ce75b7b6d",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_playwright",
+          "attempt_id": "attempt_resume_caa596e44f964e1133de8047c8e90dd31752aac50064ac4949df4350ab1bdbc7",
+          "entry_revision": "sha256:caa0b4373550db23e335a1351a9548478bfecadd489e7152bb602b8a9ec18c6e",
+          "recipe_revision": "sha256:586cbc794dffd594e7fe3b3d024794066f260c967be632ff35cd73a4f9e2d90b",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_chromium",
+          "attempt_id": "attempt_resume_7577a087fa1d20d156338d204b2ba3cf332402c12a4d570f523ca795791632bc",
+          "entry_revision": "sha256:ae13b69f39ca9e8cf04a9009f4fdb59f190828eccc97e43b623a018242588e6f",
+          "recipe_revision": "sha256:35fa7b05f582a2ed6ba40aae56f88a3b9826cd9b691d3a1cc0b53256836db266",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_structurizr",
+          "attempt_id": "attempt_resume_045fd109ea0b9350246337aa93c2be9bd26378bcd63304f3983341b2636ef26a",
+          "entry_revision": "sha256:e246d11763837d24d13b9876e9ad2cbc214f3908f3700b5510adb6da2821a580",
+          "recipe_revision": "sha256:50c1453c945e89bee340c65b46ad77b2d2eea72fa05a160d7e32c5c476574e5f",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        }
+      ]
+    }
+  ]
 }
