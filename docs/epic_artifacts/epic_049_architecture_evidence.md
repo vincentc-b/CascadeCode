@@ -139,3 +139,32 @@ explicitly withholds `publish_architecture_review` from Epic Manager sessions;
 this review did not bypass that role boundary. The runtime implementation,
 crash matrix, operational recovery fixture and scoped historical-provenance
 limits above remain open delivery obligations, not plan-review failures.
+
+## Architect publication replay outcome
+
+Replayed the identical saved request after canonical `read_doc` confirmed plan
+revision `032809336f3fcf3810c7270c28195da9c85a3bf6`. Cascade returned **failed**,
+reason `internal_error`: "render worker was interrupted after its automatic
+recovery attempt". No review unit or amendment was created by this operation.
+
+- Publication operation: `architecture-publication-9b870c091d516f233c9a27d0b7d088f4770c7fe0c753343719515962f238776e`.
+- Render operation: `c4-render-e33148f7d2456ca7b316d71b615a7588cfb5e2fd884a335fcdff3bb5e44c5a5e`.
+- Reviewed tuple: `708549cdf023f9f691aa4b2632671c3bb09b8e29a83f0b30ceef64ba4778c51f`.
+
+This result supersedes the pending status recorded above. The saved request,
+generation, plan, design and model pins remain unchanged. Verified all five
+design/model/contract references against both committed SHA-256 digests and
+checkout bytes; reviewed the four changed designs and their affected interfaces
+against the planning diff and the existing level-by-level inventory. No further
+design change is needed for an interrupted render worker. `git diff --check`
+passed. Existing test/browser evidence above remains applicable; no new test or
+browser run is claimed for this replay.
+
+Runtime recovery handoff: inspect the publication and render operations above
+and provide a supported retry that preserves their failure history and exact
+reviewed tuple. `discover_architecture_publication` returns terminal publication
+rows without scheduling work, so repeating this failed request cannot restart
+the renderer. The Architect's available Cascade tools expose publication but no
+failed-publication retry. No direct ledger edit, accepted-snapshot rewrite,
+replacement proposal or runtime restart was attempted. Both plan sign-offs remain
+on the same revision; architecture publication is still incomplete.
