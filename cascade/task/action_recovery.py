@@ -1932,8 +1932,7 @@ def admit_review_publication_generation(
         if (action.get("recovery") or {}).get("human_blocker"):
             return _copy(action), False
         generations = action.get("review_publication_generations", [])
-        existing_generation = any(row.get("identity") == identity for row in generations)
-        if existing_generation:
+        if generations and generations[-1].get("identity") == identity:
             # Material evidence is still eligible for a bounded transient retry;
             # the cumulative gate owns backoff, classification and remaining use.
             return _copy(action), True

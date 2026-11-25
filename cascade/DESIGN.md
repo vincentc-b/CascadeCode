@@ -121,9 +121,15 @@ target, validation profile, policy version, or interpreter environment can make 
 generation materially eligible, but only remaining incident-wide allowance grants
 a permit. The profile binds exact argv, coverage class, policy owner, approval
 revision and finite timeout/attempt budget; executable and working-directory
-feasibility is checked before spawn. Clocks and diagnostic reports are absent from the generation. Unknown
-classification fails closed; deterministic failure exhausts that evidence, while
-transient failure retains persisted bounded backoff and at most three operations.
+feasibility is checked before spawn. Clocks and diagnostic reports are absent
+from the generation. Unknown classification fails closed. A deterministic
+`review_rebase` validator failure fences the settled receipt's validation
+material (source tree, command, timeout, policy and runtime identity), not the
+remaining incident allowance. Previously failed material stays fenced across
+restart and A–B–A changes. Legacy receipts without verified material remain
+conservative. Validators linked to a different original action retain the
+incident-wide deterministic failure gate. Transient failure retains persisted
+bounded backoff and at most three operations.
 The legacy action attempt bound is never enlarged by generation admission.
 
 `run_review_validation` verifies the live receipt before `Popen`, starts a local

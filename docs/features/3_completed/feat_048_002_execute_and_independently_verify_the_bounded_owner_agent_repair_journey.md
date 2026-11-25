@@ -17,7 +17,7 @@ owners:
 skills: []
 parent_rev: ffcb9a105c823708d76cd7ba9734bcecbb570eec
 created: '2026-11-24'
-updated: '2026-11-24'
+updated: '2026-11-25'
 provider: codex
 flex_mode: false
 models:
@@ -154,13 +154,14 @@ Restart reads original lineage, checkpoint, claim and receipts before resuming. 
 - **task_048_002_003 — first real owner journey.** Drive production queue/checkpoint/tool adapters, Task test/commit/delivery, owner immutable-SHA publication and independent remote/postcondition inspection in temporary repositories. Replay timeout and legacy exhausted decision through restart, approved correction/extension and unavailable-owner wait. Reconcile sequence and integrated code views against the implemented path.
 - **task_048_002_004 — adversarial matrix.** Count model/process/remote effects independently across manual/periodic/audit/parent/provider-switch/replacement paths, concurrency, restarts, red checks, drift, denied gates and extension decisions. Verify one escalation, retained consumption and unrelated progress. Reconcile all changed designs, C4 levels and integrated Code views against the final diff.
 
-Dependencies: 001 → 002 → 003 → 004. Tasks 001, 002 and 003 are completed and merged as `ce8c6fe726c422a853c8065bec48474a06a40aa7`, `5291b0bb702eb2f48fefdbbc5940723ee416af55` and `3ce39c19645dad2791692456f6a81af80658752e`. Task 004 is active. Task 001's acceptance contract remains in this Feature record and its implementation notes because its completed Task record still contains placeholder fields. Tasks 002–004 have explicit Task acceptance criteria. Each implementer must retain the applicable diagram row above in Task closeout and update source-linked design only when implementation is real.
+Dependencies: 001 → 002 → 003 → 004. All four Tasks are completed and merged. Task 001's acceptance contract remains in this Feature record and its implementation notes because its completed Task record still contains placeholder fields. Tasks 002–004 have explicit Task acceptance criteria.
 
 ## Risks & upward questions
 
-- Provider transports differ in usage and enforceable output/cancellation controls. The Task 001 capability matrix reports those limits; Task 004 must verify paid-turn/time bounds and unavailable-usage accounting across the remaining launch paths.
-- A scripted transport must still enter the production adapter and receive actual scoped refusals; Task 003's merged journey exercises the production Task tool path; Task 004 must close the remaining timeout, postcheck closure and launch-route matrix evidence.
-- Task 001 was delivered with a `TBD` acceptance, test plan and scope section and a broken Parent Feature link in its completed canonical record. The Feature `revise_task` tool accepts only backlog, ready or blocked Tasks, so it cannot repair that completed record. The board lifecycle owner must supply a supported completed-record correction path; do not edit lifecycle files or change status to force a revision.
+- Provider route tests cover direct, manual, periodic, audit, briefing, provider switch, parent and replacement action. The adapters still report provider-specific limits on remote cancellation, descendant processes and usage availability; unsupported recovery routes refuse before launch.
+- The real owner journey uses production Task tools, a red and green validator, immutable review publication and the Watchdog original-obligation postcheck. Timeout and legacy exhaustion are covered by separate recovery tests; a single joined timeout-to-owner-to-postcheck browser trace remains unproved.
+- Full browser Context → Containers → Components → Code, Level up, deep-link restoration and pinned-source interaction remains unverified. Task 004's Chromium paired-review run timed out waiting for `.paired-c4-side-current .paired-c4-svg`; successful source-contract and local-render checks do not establish browser navigation.
+- Task 001 was delivered with `TBD` acceptance, test plan and scope sections and a broken Parent Feature link in its completed canonical record. Feature `revise_task` accepts only backlog, ready or blocked Tasks, and Feature `write_doc` can change only this Feature. A board lifecycle owner must supply a supported completed-record correction operation. No lifecycle status or file edit is authorized as a workaround.
 
 ## Planning design review
 
@@ -186,4 +187,10 @@ After Task 003 merged, I reviewed `cascade/DESIGN.md`, `cascade/task/DESIGN.md`,
 
 ## Closeout
 
-Completed child work: `task_048_002_001` (Meter and settle every incident-related provider turn), `task_048_002_002` (Route bounded incidents through accountable owner tools and independent postcheck), `task_048_002_003` (Prove one real owner-agent repair and legacy timeout recovery journey), `task_048_002_004` (Exercise budget, refusal and concurrency matrix across all launch paths).
+All four Tasks are merged. Source evidence: `cascade/agent/provider_metering.py` reserves and settles an attributable provider invocation against the Task incident ledger; `cascade/review_validation.py` admits bounded validator work; `cascade/watchdog/incident_postcheck.py` calls `verify_incident_postcheck` for the original obligation. `tests/test_late_repair_convergence.py::test_watchdog_owner_repair_delivers_and_independently_verifies_once` exercises the production Task write, commit and test tools, a real failing then passing validator, queued delivery, immutable review publication and the independent postcheck. `tests/agent/test_provider_recovery_contract.py` covers the launch-route matrix, one linked production validator under a live provider claim, a pending competitor, unavailable usage and prelaunch refusal. `tests/test_review_recovery_journey.py` covers deterministic material fencing, timeout/restart and legacy exhaustion separately.
+
+After rebasing onto F1's deterministic review retry correction, the receipt preserves both F1's material fingerprint and F2's provider attributes. A linked validator under a non-rebase owner action remains admissible; review-rebase validators retain material fencing. Focused recovery/publication checks passed (88 tests), including the updated changed-material publication test. The owner-journey, Watchdog postcheck and C4 source/render checks passed (37 tests). The direct pinned browser test timed out after 120 seconds before navigation assertions; Task 004's earlier paired-review Chromium run likewise timed out waiting for its SVG selector.
+
+Design review: inspected `cascade/DESIGN.md`, `cascade/agent/DESIGN.md`, `cascade/task/DESIGN.md`, `cascade/watchdog/DESIGN.md`, `cascade/epic/DESIGN.md`, `cascade/feature/DESIGN.md`, `cascade/war_room/DESIGN.md`, and the pinned `architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/{model.dsl,views.dsl,workspace.contract.json}` against the merged code and conflict resolution. Context and container views remain accurate because the integration adds no actor, external system, runtime, data store or communication boundary. Agent, Task, Watchdog and Teams component/Code views retain source-linked declarations; the shared design now describes both F1's material fence and F2's finite validation profile. Browser navigation is the unresolved architecture verification gap; the direct attempt timed out before reaching its navigation assertions.
+
+Remaining gaps: Task 001's completed board record needs a lifecycle-owner correction path; full browser navigation and pinned-source interaction have not been proved. The existing feature record is completed, but this closeout does not convert those gaps into passed acceptance evidence.

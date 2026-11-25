@@ -278,13 +278,13 @@ def test_malformed_board_document_is_not_silently_omitted(tmp_path):
         validate_publication_board(tmp_path)
 
 
-def test_unchanged_failed_publication_waits_until_policy_changes(tmp_path, monkeypatch):
+def test_changed_validation_material_uses_remaining_original_budget(tmp_path, monkeypatch):
     from cascade.epic.dependency_approvals import AuthenticatedHuman
     from cascade.feature.review_recovery import publish_review_resolution
-    from cascade.task.incident_budget import extend_incident_budget
+    from cascade.task.incident_budget import DEFAULT_LIMITS, extend_incident_budget, read_incident_budget
 
     root, turn = _execution_ready_turn(tmp_path)
-    (root / ".git/info/exclude").write_text(".cascade/\ndocs/_queue/\n")
+    (root / ".git/info/exclude").write_text(".cascade/\ndocs/_queue/\ncascade.toml\n")
     _git(root, "merge", "epic/epic_035", "--no-edit")
     monkeypatch.setattr(
         review_rebase,
@@ -297,20 +297,29 @@ def test_unchanged_failed_publication_waits_until_policy_changes(tmp_path, monke
         )
         assert result["recovery_state"] == "awaiting_owner_decision"
         assert actions.load_action(turn.action_id, root=root)["attempt_count"] == 1
+    budget = read_incident_budget(turn.action_id, root=root)
+    spent = budget["charged"]["process_seconds"]
+    assert spent > 0
+    # Changed material is eligible, but a worst-case reservation that exceeds
+    # the original remaining process allowance still requires independent authority.
+    (root / "cascade.toml").write_text(
+        f"[validation]\nreview_timeout_seconds = {DEFAULT_LIMITS['process_seconds']}\n"
+    )
     monkeypatch.setattr(
         review_rebase, "validation_command", lambda r: (sys.executable, "-c", "")
     )
-    unchanged = publish_review_resolution(
+    refused = publish_review_resolution(
         turn.action_id, feature_id="feat_035_001", root=root
     )
-    assert unchanged["recovery_state"] == "awaiting_owner_decision"
+    assert refused["recovery_state"] == "awaiting_owner_decision"
+    assert refused["reason"] == "validation_budget_cumulative_allowance_exhausted"
     assert actions.load_action(turn.action_id, root=root)["attempt_count"] == 1
     extend_incident_budget(
         turn.action_id,
         AuthenticatedHuman("human:review-operator"),
         "approved corrected validation policy",
         {"source": "review-policy-approval"},
-        {"tool_attempts": 1},
+        {"process_seconds": spent},
         root=root,
     )
     result = publish_review_resolution(
