@@ -1309,6 +1309,26 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_045fd109ea0b9350246337aa93c2be9bd26378bcd63304f3983341b2636ef26a",
+      "dependency_id": "dep_structurizr",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:e246d11763837d24d13b9876e9ad2cbc214f3908f3700b5510adb6da2821a580",
+      "recipe_revision": "sha256:50c1453c945e89bee340c65b46ad77b2d2eea72fa05a160d7e32c5c476574e5f",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import subprocess,json; im=\"structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c\"; rows=json.loads(subprocess.check_output([\"/usr/bin/docker\",\"image\",\"inspect\",im],text=True)); assert im in rows[0][\"RepoDigests\"]; print(im+\" available locally\")'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-25T16:46:33.894745+00:00",
+      "selected_version": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "lock_references": [
+        "cascade/workspace/c4_render.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
