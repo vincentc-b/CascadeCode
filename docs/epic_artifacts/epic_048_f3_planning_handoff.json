@@ -748,5 +748,26 @@
     },
     "publication": "Separate Epic publication terminal failure remains recorded in epic_048_publication_resume.json; no changed recovery prerequisite supplied. Supported runtime-owner recovery remains unresolved.",
     "handoff": "Parent-to-Feature review request is queued. Epic Architect can inspect this routing record in the next normal role turn. End the planning turn to permit child processing; no polling or acknowledgement-only exchange."
+  },
+  "architect_architecture_review_routing": {
+    "role": "epic_architect",
+    "trigger": "TeamMessage feat_048_003:feat_048_003:architecture-review-reroute-06fdb44b",
+    "reviewed_manager_commit": "251f055120aea5f96c966475acdd10115af092a7",
+    "plan_revision": "ffcb9a105c823708d76cd7ba9734bcecbb570eec",
+    "feature_revision": "06fdb44b53fa9fbe26c717d0e47672ce975bdc63",
+    "assessment": "Concur with manager_architecture_review_routing. Canonical F3 still assigns the existing post-push and original-budget proof gaps to Task 004 after Task 003. The earlier a4a20bd3 review does not certify this revision. No Epic contract change, new decision or renewed Epic sign-off is required; architecture amendments are empty.",
+    "routing": "Retain the already-enqueued parent-to-Feature request epic_048:f3-plan-architecture-review-reroute-06fdb44b. Source confirms direct-parent/child messaging and the normal Feature Lead-to-Architect graph edge. Do not enqueue a duplicate acknowledgement request. Queue acceptance establishes neither execution nor architecture approval.",
+    "required_result": "Feature Architect must reread the canonical Feature and return a supported review ID pinned to 06fdb44b53fa9fbe26c717d0e47672ce975bdc63 or the newer reviewed revision, or the exact refusal, owner and next supported action. Epic publication tooling is bound to the Epic and cannot substitute for the Feature review.",
+    "retained_gates": "Retain architect_task002_gap_review required_proof and diagram_impact_reconciliation: Task 003 verifies its pinned implementation, Task 004 closes interruption/budget gaps and reconciles its later diff, final Feature review covers current source/design/model/navigation evidence and Task 001 completed-record limitation. F4 retains operational proof. No installation or live deployment authority is added.",
+    "design_closeout": {
+      "reviewed": "Reviewed retained all-level inventory and Manager routing record; reread Workspace worker lifecycle/runtime evidence and Watchdog reservation/postcheck recovery. Inspected message_team and ensure_feature_graph routing source; all seven retained owning design paths resolve.",
+      "context_containers": "This routing-only artifact changes no actor, authority, external dependency, runtime or persistence boundary. Retain existing landscape/context/container assignments.",
+      "components_code": "No producer/consumer interface, implementation symbol, declaration kind or component ownership changes. Retain component and native Code inventory, including shared publication and War Room views.",
+      "behavior": "No execution or recovery transition changes. Existing Lead-to-Architect routing carries the pending review request; no DESIGN/model edit is warranted.",
+      "verification": "Canonical Epic/Feature reads; empty amendments; routing source inspection; empty source/design/model diff from c717bb36; design-path checks; JSON parse and git diff --check.",
+      "limits": "No runtime tests, render or browser journey rerun; no child implementation acceptance or full-tree documentation completeness claimed."
+    },
+    "publication": "Separate pinned Epic publication remains terminal failed as recorded in epic_048_publication_resume.json. Current tool catalog exposes no terminal architecture publication/render recovery operation; no changed prerequisite was supplied. Preserve exact request and lineage for supported runtime-owner recovery.",
+    "handoff": "Existing parent-to-Feature request awaits the normal Feature Architect stage. End this planning turn to permit child processing; return on substantive review/delivery or changed recovery prerequisites."
   }
 }
