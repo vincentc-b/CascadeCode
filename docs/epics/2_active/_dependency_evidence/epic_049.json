@@ -309,6 +309,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_a08347403ff678874993a889a149bd82c1132d412c46f0e3621b5cd5d21fb0ad",
+      "dependency_id": "dep_cursor_sdk",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:bdb5638640a5242dd0d9604114e440ffa69089b303a973fe89dda9340b9a1b4f",
+      "recipe_revision": "sha256:c7b7fdfeee07e0ae19f3f2f8f36e1e46e0ddd75d50e0f726b2cba5d0e622d55c",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib,importlib.metadata as m,hashlib,pathlib; d=m.distribution(\"cursor-sdk\"); assert d.version==\"1.0.37\"; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()==\"53f3708c1b93b19aec199decdfae8e1cccc39490400aa37c7e41077199ee3e58\"; importlib.import_module(\"cursor_sdk\"); print(\"cursor-sdk 1.0.37 verified (installed RECORD digest)\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-25T16:45:25.389376+00:00",
+      "completed_at": "2026-11-25T16:45:27.093453+00:00",
+      "result": "succeeded",
+      "redacted_output": "cursor-sdk 1.0.37 verified (installed RECORD digest)\n",
+      "selected_version": "1.0.37",
+      "integrity_reference": "sha256:53f3708c1b93b19aec199decdfae8e1cccc39490400aa37c7e41077199ee3e58",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
