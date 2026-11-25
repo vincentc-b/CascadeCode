@@ -276,3 +276,24 @@ Verification: canonical Feature 2 readback confirmed the saved handoff and
 preserved metadata; both message calls returned `enqueued`; `git diff --check`
 passed. No executable code changed, and no new test or browser run is claimed.
 Return control for child work; relay the consumer response on its next event.
+
+## Architect consumer-handoff review
+
+Compared the canonical producer revision `9c97b16f8c3d6853c7a1903cbaddd71c1fcd83e0`
+with consumer revision `f93d076a2ae29233bff668aa4f76ad320315c1c2`.
+The routed receipt/entry identities, safe fields, progress route, revision-bound
+cursor and pending milestone linkage agree. Exact serialization, nested payloads
+and error discriminators still require Task 4 fixtures and explicit consumer
+confirmation; this review does not supply that confirmation. The consumer's
+separate transcript interface remains its own planning obligation.
+
+Reviewed War Room recovery/transcript, Task action-evidence and Workspace
+invocation sections with package/Watchdog interface references against the
+routing-only diff. The existing level-by-level inventory remains applicable:
+no context actor, container boundary, component owner, implementation symbol or
+execution/restart flow changed. No design/model update or repeated runtime test
+is warranted. Canonical amendment lookup returned none; `git diff --check`
+passed. Epic revision `032809336f3fcf3810c7270c28195da9c85a3bf6` is unchanged.
+Available tools still expose no terminal-publication retry; the recorded failed
+operation and exact saved request remain the runtime recovery handoff. Return
+control for child execution and the pending consumer response.
