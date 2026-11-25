@@ -252,6 +252,11 @@ Architecture verification results and pinned publication references are recorded
   Chose Use work-addressed immutable progress pages, a writer-only derived SQLite index, and source-committed transition receipts drained by the existing supervisor plus an attempt-start fast path..
   Rationale: Bounded GETs cannot scan action history; polling and post-turn summaries cannot expose a live attempt. Retained source identities close the source-commit/notification crash gap. Explicit invocation/executor tokens avoid treating unfinished queued work or a live PID as executing repair. Existing recovery stores and postcheck retain authority.
   Honors: Success criteria 1–6; no new scheduler, repair policy, paid turn or dependency; explicit source-ledger loading and stale-evidence limits..
+
+- `dec_005` · 2026-11-25 · Epic Architect · **Macro-architecture**
+  Chose Preserve room JSONL with a stable graph OS fence, durable append intent, derived unique-key/offset index, and immutable read pages; bind role replies to checkpoint lineage/message identity..
+  Rationale: A process-local lock and author/body matching cannot provide cross-process uniqueness or restart correctness. Intent, fsync and index commit ordering make partial append and post-append crashes replayable without duplicating events. Stable tracking-root fencing covers room moves and split roots.
+  Honors: Success criteria 3, 5–7; occurrence time remains separate from append time; legacy history retained; bounded paginated GET; source failures never authorize repair..
 ## Amendment log
 
 _(none)_
