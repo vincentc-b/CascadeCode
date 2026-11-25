@@ -322,5 +322,41 @@
       "Separately authorized controlled-supervisor evidence",
       "Original architecture publication recovery"
     ]
+  },
+  "architect_matching_review_reconciliation": {
+    "epic_plan_revision": "3ea45a4a38d7d2833e5e7cc3a950ae71ec81a0a7",
+    "canonical_feature_plan_revision": "e41b5be5d6581d4ed29347cafa47213d2052f743",
+    "reported_review_id": "architecture-review-518cf87bc5d2f1016e09008db3d6c3581ce91670e23d7d69778c48aaf1587a7b",
+    "review_scope": "F4 reports no_diagram_change with package DESIGN pinned to f258bca3. Canonical Feature revision independently confirmed using read_doc; published receipt itself not independently retrieved.",
+    "reviewed_paths": [
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/task/incident_budget.py",
+      "docs/task_artifacts/task_048_004_003_recovery_contract_ci_closeout.md"
+    ],
+    "pin_reconciliation": "Package DESIGN and architecture tree are byte-unchanged from f258bca3 through e41b5be5. Task DESIGN amendments are present at delivered c2e8b608 and agree with reserve_incident_operation/settle_incident_operation. The package pin does not substitute for final child-design/dossier evidence.",
+    "diagram_impact": {
+      "context_containers": "cascade-landscape/cascade-context/cascade-containers unchanged: four-file Task delta changes CI, runbook, Task prose and work evidence without adding actor, runtime, store or communication boundaries.",
+      "components": "cascade-supervisor-components/cascade-team-components unchanged: Task receipt ownership and Teams/Agent collaborators retain production interfaces.",
+      "code": "cascade-task-code/cascade-teams-code and consumer views retain declarations and ownership; no production/model/contract delta since integrated base. F4 reports source-contract checks; final navigation and source-pin provenance remain Task 004 dossier obligations.",
+      "behavior": "Reviewed changed-material admission against remaining original allowance, persisted unchanged/A-B-A/legacy refusal, receipt attributes.parent_operation_id alongside material_fingerprint, and conservative non-review_rebase deterministic exhaustion against source. Existing Task prose agrees; no further design edit warranted."
+    },
+    "verification": [
+      "F1 51cffe14, F2 b9c21295, F4 f258bca3 and Task c2e8b608 ancestry in e41b5be5 verified",
+      "git diff --check f258bca3 e41b5be5 passed",
+      "Canonical Feature read and empty architecture-amendments result",
+      "Exact Task design diff, package pin equivalence, source failure/admission branches and closeout reviewed"
+    ],
+    "reported_evidence": "163 passes/165.69s at c2e8b608 remain reported supervised final_validation evidence. Earlier cf3ea559 green and four pre-correction red observations remain distinct. F4 reports 14 source checks and 28 links; Task closeout reports renderer/Chromium evidence. No runtime tests rerun.",
+    "decision": "Matching Feature plan review is accounted for. Existing Epic acceptance inventory and queued Manager acknowledgement suffice; no plan revision, duplicate handoff, recovery or unchanged-source test run.",
+    "remaining": [
+      "Task 004 final integrated dossier/navigation and renderer identity provenance",
+      "F1 owning acceptance/design reconciliation receipt and completed-record limitations",
+      "Final Epic integration and validation",
+      "Separately authorized controlled-supervisor evidence",
+      "Original terminal architecture publication recovery through its recorded runtime-owner prerequisite"
+    ],
+    "publication": "The matching Feature review does not repair the Epic publication. Preserve the failed exact operation and references in epic_048_publication_resume.json; no new retry capability or authorization observed.",
+    "limitations": "Evidence reconciliation only; not final acceptance, renewed plan sign-off, accepted-lineage mutation or replacement publication."
   }
 }
