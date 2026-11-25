@@ -42,8 +42,8 @@ cancellation_feedback:
   - continue_reduced_scope
   - replace_replan
   - cancel_parent
-  disposition: null
-  resolved_at: null
+  disposition: continue_reduced_scope
+  resolved_at: '2026-11-25T05:07:03.653261+00:00'
 ---
 # Prove self recovery through verified outcomes
 
@@ -367,6 +367,11 @@ The human-approved contract baseline remains ffcb9a10; this follow-up adds corre
   Chose Recognize verified PR #251 merge abfe2b2089343f6167e2e46e24c3c5e35991f4ca of corrected 51cffe146b8b423027266f8469678c482e321c79 as the downstream source-integration disposition. F4 proceeds through supported conflict reconciliation, verifies the Task 003 execution base contains the correction, then uses supported recovery and the full bounded Recovery contract. Keep missing F1 owning acceptance/design evidence explicit and required for final closeout..
   Rationale: FeatureCompleted is corroborated by the forge merge and owned Git ancestry, with exact-head review-recovery success before merge. GitHub reviews remain empty and historical evidence reports reconciliation_receipt_missing; neither completion nor merge fabricates an owning review receipt. Waiting for an already-merged PR would stall authorized integration/testing without closing that separate evidence gap.
   Honors: Operator request to integrate corrected F1 and resume task_048_004_003 after its base incorporates it; original budget/history, material fencing, F2 consumer compatibility, conflict tests and publication safeguards, normal review and no check override; all four red pre-correction runs retained; final acceptance, architecture publication and operational gates remain open..
+
+- `dec_011` · 2026-11-25 · Human · **Disposition for cancelled child feat_048_005**
+  Chose continue with reduced scope.
+  Rationale: User disposition recorded after reviewing the child's cancellation feedback.
+  Honors: Parent dispatch remains gated until a user choice permits continuation.
 ## Amendment log
 
 _(none)_
