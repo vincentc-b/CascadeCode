@@ -257,6 +257,11 @@ Architecture verification results and pinned publication references are recorded
   Chose Preserve room JSONL with a stable graph OS fence, durable append intent, derived unique-key/offset index, and immutable read pages; bind role replies to checkpoint lineage/message identity..
   Rationale: A process-local lock and author/body matching cannot provide cross-process uniqueness or restart correctness. Intent, fsync and index commit ordering make partial append and post-append crashes replayable without duplicating events. Stable tracking-root fencing covers room moves and split roots.
   Honors: Success criteria 3, 5–7; occurrence time remains separate from append time; legacy history retained; bounded paginated GET; source failures never authorize repair..
+
+- `dec_006` · 2026-11-25 · Epic Architect · **Open questions**
+  Chose Publish a diagram-change planning baseline with real recovery/transcript Code nodes and current-design limits; assign future producer/replay/UI reconciliation and acceptance to the three sequenced Features..
+  Rationale: The generic Dashboard view omitted current recovery and transcript implementation paths. Current functions can be modeled truthfully now, while proposed storage and live evidence stay in work records until implemented. Context/container topology and existing Watchdog verification remain accurate. Historical accepted-lineage evidence for related epics is not available within this team's scope.
+  Honors: Design skill implementation-depth, single ownership and current-fact contract; revision-pinned architecture publication; Task-level navigation, crash, freshness and operational acceptance..
 ## Amendment log
 
 _(none)_
