@@ -587,3 +587,49 @@ Verification this turn: canonical reads, pinned Git/source/fixture inspection,
 successful message enqueue responses and `git diff --check`. No executable
 tests or new render/navigation results are claimed. Return control to Feature 2
 planning and supervisor integration.
+
+## Manager consumer-agreement receipt
+
+Received `feat_049_002:feat_049_002:producer_contract_agreement_20261125`.
+Canonical Feature 2 revision `1de33f553c76c21ded734453d8855d6a4f6bbc02`
+persists agreement on receipt and entry identity, public progress fields,
+sanitization/provenance, route and cursor/error behavior. No contract mismatch
+was reported. The consumer-agreement item is closed; the Architect's recorded
+relay to Feature 1 already covers producer notification. Agreement is not
+evidence that transcript implementation or milestone-reference publication has
+completed.
+
+The readable Feature plan now lists four Tasks and defines the transcript v1
+route, legacy continuation headers and typed failures. These remain planned
+interfaces until implementation fixtures and the final source revision arrive.
+Parent reads of `task_049_002_002` and `task_049_002_004` returned
+`content_access_denied`; no alternate content path was used and no Task-level
+acceptance review is claimed. Sent
+`epic_049:manager_accepts_producer_agreement_20261125` to Feature 2 and received
+`enqueued`. The acknowledgement asks the Feature owner to confirm and persist
+the concrete receipt-to-message acknowledgement/publisher update interface,
+post-append/pre-ack recovery, and oversized legacy-row detail continuation
+route, carrying forward the Architect's existing handoff. Final transcript
+fixtures and source revision should return through the parent for Feature 3.
+Feature 3 remains backlog work with both producer and transcript prerequisites;
+no dependent dispatch or speculative API delivery claim was made.
+
+Design closeout for this evidence-only change: reviewed the transcript
+implementation/sequence in `cascade/war_room/DESIGN.md`, invocation/checkpoint
+handoff in `cascade/workspace/DESIGN.md`, and parent component/Code ownership
+links in `cascade/DESIGN.md`. No implementation or design files changed.
+`cascade-context` actors and `cascade-containers` runtime/data boundaries remain
+unchanged; `cascade-war-room-components`, `cascade-supervisor-components`,
+`cascade-dashboard-code` and `cascade-workspace-code` gain no implementation
+symbols or relationships in this diff; normal and restart flows are unchanged.
+The Feature task inventory retains responsibility for implemented source,
+design and Code-view reconciliation. The previously routed producer ownership
+gap, final implementation evidence and terminal architecture-publication failure
+remain unresolved; this handoff does not accept their completion.
+
+The Epic plan remains `03280933` with both existing role sign-offs; canonical
+architecture amendments are empty. No new contract choice, spec amendment or
+lifecycle repair was made. Verification: canonical Epic/Feature reads, scoped
+access results, existing sign-off inspection, successful message enqueue and
+`git diff --check`. No executable change warrants repeated tests or rendering.
+Return control to Feature 2 execution and supervisor integration.
