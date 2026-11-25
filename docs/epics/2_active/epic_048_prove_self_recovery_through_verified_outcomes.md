@@ -382,6 +382,11 @@ Design closeout for this scope-only reconciliation: reviewed cascade/epic/DESIGN
   Chose continue with reduced scope.
   Rationale: User disposition recorded after reviewing the child's cancellation feedback.
   Honors: Parent dispatch remains gated until a user choice permits continuation.
+
+- `dec_012` · 2026-11-25 · Epic Manager · **Superseded F5 lifecycle and reduced parent scope**
+  Chose Recognize canonical feat_048_005 cancellation with cleanup complete and retain human dec_011 continue_reduced_scope. Keep F5 analysis, approval history and parent linkage; no independent implementation or replacement Feature. F1 owns correction acceptance and F4 final integrated verification..
+  Rationale: Canonical read_doc/list_children show cancelled at 2026-11-25 05:06:14 UTC with the PR #251/51cffe14 supersession reason, original approval retained, no Tasks, and resolved parent feedback at 05:07:03 UTC. Epic tools expose no cancellation operation, but operator lifecycle has already completed. One supported reconcile_completion_rollup call returned 'Epic recovery action is no longer admitted'; record the refusal and retain active Epic status.
+  Honors: Operator request; dec_008/dec_009 supersession and dec_011 human disposition; preserve technical/approval history and original acceptance gates; no duplicate dispatch, topology bypass, synthetic completion, review override or test rerun. No comment ID was supplied..
 ## Amendment log
 
 _(none)_
