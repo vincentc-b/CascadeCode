@@ -212,6 +212,11 @@ These are architecture decisions, not requests for installation or generic human
   Chose Validate this epic on the existing local Linux x86_64 host with manifest revision 2; no software installation or upgrade..
   Rationale: Brief and repository require Python runtime packages, pytest, Node, Chromium/Playwright and the pinned Docker/Structurizr renderer. All 12 declared existing installations have accepted verification evidence. The declaration identifies local validation only and does not attest deployment or upstream package provenance.
   Honors: Dependency declaration before planning; exact target identity; separate installation authority..
+
+- `dec_002` · 2026-11-25 · Epic Manager · **Macro-architecture**
+  Chose Use one evidence-based public progress contract and deterministic transcript milestones from existing durable recovery sources; split delivery into projection, persistence/history and UI acceptance features..
+  Rationale: Current projection collapses queueing into investigating; transcript append happens after role return and lacks cross-process event identity. Producer-owned projection and committed-source notifications address those gaps without changing recovery authority or adding paid turns. Architect must resolve exact storage, notification and crash protocols before final sign-off.
+  Honors: Success criteria 1–8; preserve generations, transcript history and existing repair/verification gates; bounded read-only GET..
 ## Amendment log
 
 _(none)_
