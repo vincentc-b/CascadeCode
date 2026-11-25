@@ -627,8 +627,8 @@ def reserve_incident_operation(
         if not material_bound:
             return _decision("owner_decision", "material_generation_unbound")
         material = None
-        action = _actions(payload).get(record.get("original_action_id"), {})
-        if kind == "review_validator" and action.get("action_kind") == "review_rebase":
+        original_action = _actions(payload).get(record.get("original_action_id"), {})
+        if kind == "review_validator" and original_action.get("action_kind") == "review_rebase":
             material = _review_validator_material(record, _actions(payload), operation_id)
             if material is None:
                 return _decision("owner_decision", "review_material_unbound")
@@ -734,10 +734,10 @@ def reserve_incident_operation(
             "started_at": stamped.isoformat(),
             "owner_process": current_review_owner(),
         }
-        if material is not None:
-            receipt["material_fingerprint"] = material
         if launch_attributes is not None:
             receipt["attributes"] = launch_attributes
+        if material is not None:
+            receipt["material_fingerprint"] = material
         operations = dict(operations)
         operations[operation_id] = receipt
         record["operations"] = operations

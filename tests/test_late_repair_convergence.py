@@ -23,6 +23,7 @@ from typing import Callable
 import pytest
 
 import cascade.review as review
+from cascade.agent.discovery.types import ProviderCompatibilityEvidence
 from cascade.board.errors import GitError
 from cascade.board.context import set_project_context
 from cascade.board.store import move_doc, read_doc, write_doc
@@ -66,6 +67,10 @@ def _provider_and_task_isolation(monkeypatch: pytest.MonkeyPatch):
         "cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory
     )
     monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr(
+        "cascade.agent.selection_preflight.probe_provider_compatibility",
+        lambda _provider: ProviderCompatibilityEvidence(True, True, True),
+    )
     clear_task_runs()
     set_project_context(None)
     yield
@@ -322,6 +327,7 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
     from cascade.task import invoke_tool
 
     physical_turns: list[str] = []
+    task_validations: list[dict[str, object]] = []
     repaired_adapter = (
         source / "cascade" / "feature" / "recovery.py"
     ).read_text(encoding="utf-8") + "\n# reviewed late-repair adapter revision\n"
@@ -346,6 +352,7 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
             task_id, "swe_run_tests", {"cmd": ["pytest", "test_product.py", "-q"]},
             root=root, feature_id="feat_001",
         )
+        task_validations.append(red)
         assert red["exit_code"] != 0
         invoke_tool(
             task_id, "swe_write", {"path": "product.py", "content": "VALUE = 1\n"},
@@ -359,6 +366,7 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
             task_id, "swe_run_tests", {"cmd": ["pytest", "test_product.py", "-q"]},
             root=root, feature_id="feat_001",
         )
+        task_validations.append(green)
         assert green["exit_code"] == 0 and green["final_validation"]["task_id"] == task_id
         return RoleResult(text="repair tested and queued", status="finished")
 
@@ -378,6 +386,17 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
             _emit_feature_completed("feat_001", "epic_001", root)
     assert wait_for_background_kickoffs(10)
     assert physical_turns == [task_id]
+    assert [result["exit_code"] for result in task_validations] == [1, 0]
+    red_target = task_validations[0]["final_validation"]
+    green_target = task_validations[1]["final_validation"]
+    assert isinstance(red_target, dict) and isinstance(green_target, dict)
+    assert red_target["deliverable_sha"] != green_target["deliverable_sha"]
+    completed_task_run = get_task_run(task_id)
+    assert completed_task_run is not None
+    assert green_target["deliverable_sha"] == _git(
+        completed_task_run.worktree, "rev-parse", "HEAD"
+    )
+    assert green_target["feature_base_sha"] == red_target["feature_base_sha"]
     if split_roots and get_integration_worktree(root, "epic", "epic_001") is None:
         from cascade.workspace.integration_worktree import repair_missing_worktree
 
