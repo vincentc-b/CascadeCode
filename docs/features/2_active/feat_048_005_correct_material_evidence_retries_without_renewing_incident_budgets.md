@@ -2,7 +2,7 @@
 id: feat_048_005
 title: Correct material-evidence retries without renewing incident budgets
 tier: feature
-status: backlog
+status: cancelling
 parent: epic_048
 children: []
 depends_on:
@@ -27,6 +27,9 @@ reasoning:
   feature_architect: high
   swe: medium
 approved_at: '2026-11-25T04:56:14.346929+00:00'
+cancellation_reason: 'Superseded by accepted Feature 001 correction (PR #251, 51cffe14); no independent implementation remains required'
+cancelled_at: '2026-11-25T05:06:14.533072+00:00'
+cancellation_step: owned_artifact_teardown
 ---
 # Correct material-evidence retries without renewing incident budgets
 
