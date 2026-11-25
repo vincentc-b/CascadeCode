@@ -18,6 +18,7 @@ from cascade.agent.errors import (
     ProviderNotAuthenticatedError,
     ProviderNotImplementedError,
     ProviderNotInstalledError,
+    ProviderBudgetRefusedError,
 )
 from cascade.agent.providers import (
     ALL_PROVIDER_IDS,
@@ -28,7 +29,16 @@ from cascade.agent.providers import (
     probe_provider,
     probe_providers,
 )
-from cascade.agent.types import RoleId, RoleResult, RoleTurn, ToolEffect
+from cascade.agent.types import (
+    IncidentProviderTurn,
+    ProviderInvocationReceipt,
+    ProviderTokenUsage,
+    ProviderUsageValue,
+    RoleId,
+    RoleResult,
+    RoleTurn,
+    ToolEffect,
+)
 
 _PLANNING_EXPORTS = frozenset(
     {
@@ -53,6 +63,7 @@ __all__ = [
     "Credential",
     "CursorAgentError",
     "ProviderConfigError",
+    "ProviderBudgetRefusedError",
     "ProviderId",
     "ProviderNotAuthenticatedError",
     "ProviderNotImplementedError",
@@ -62,6 +73,10 @@ __all__ = [
     "resolve_credential",
     "write_user_store_token",
     "RoleId",
+    "IncidentProviderTurn",
+    "ProviderInvocationReceipt",
+    "ProviderTokenUsage",
+    "ProviderUsageValue",
     "RoleResult",
     "RoleTurn",
     "ToolEffect",

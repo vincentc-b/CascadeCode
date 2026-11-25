@@ -21,6 +21,17 @@ IncidentOutcome = Literal[
     "claimed", "success", "error", "refused", "deferred", "unsafe", "no_op"
 ]
 EligibilityState = Literal["eligible", "cooldown", "suppressed"]
+RecoveryStage = Literal[
+    "detected",
+    "admitted",
+    "assigned",
+    "executing",
+    "validating",
+    "publishing",
+    "verifying",
+    "resolved",
+    "waiting",
+]
 
 _OUTCOMES = frozenset(IncidentOutcome.__args__)
 DEFAULT_REASSESSMENT_SECONDS = 60
@@ -95,6 +106,7 @@ def incident_record(
     claim_seconds: int = DEFAULT_CLAIM_SECONDS,
     attempt_bound: int = 3,
     original_incident_id: str | None = None,
+    stage_receipts: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """Build the common JSON record embedded by each existing ledger."""
 
@@ -139,6 +151,7 @@ def incident_record(
         "acknowledgement": _json_copy(acknowledgement or {}),
         "result": _json_copy(result or {}),
         "attempts": [_json_copy(item) for item in attempts],
+        "stage_receipts": [_json_copy(item) for item in stage_receipts],
         "retry_policy": {
             "reassessment_seconds": reassessment_seconds,
             "claim_seconds": claim_seconds,
@@ -149,6 +162,67 @@ def incident_record(
         "outcome": outcome,
         "recorded_at": stamped.isoformat(),
     }
+
+
+def recovery_stage_receipt(
+    stage: RecoveryStage,
+    *,
+    actor: str,
+    capability: str,
+    permitted_inputs: Sequence[str],
+    authority_revision: str,
+    obligation: str,
+    result: str,
+    now: datetime | None = None,
+    verification_reference: str | None = None,
+) -> dict[str, Any]:
+    """Build one attributable, immutable cross-stage recovery receipt."""
+
+    if stage not in RecoveryStage.__args__:
+        raise ValueError("unknown recovery stage")
+    values = (actor, capability, authority_revision, obligation, result)
+    if not all(isinstance(value, str) and value.strip() for value in values):
+        raise ValueError("stage actor, capability, authority and result are required")
+    inputs = tuple(dict.fromkeys(permitted_inputs))
+    if not inputs or not all(
+        isinstance(value, str) and value.strip() for value in inputs
+    ):
+        raise ValueError("stage permitted inputs must be explicit")
+    identity = {
+        "stage": stage,
+        "actor": actor,
+        "capability": capability,
+        "permitted_inputs": list(inputs),
+        "authority_revision": authority_revision,
+        "obligation": obligation,
+        "result": result,
+        "verification_reference": verification_reference,
+    }
+    encoded = json.dumps(identity, sort_keys=True, separators=(",", ":"))
+    stamped = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    return {
+        "receipt_id": "sha256:" + hashlib.sha256(encoded.encode()).hexdigest(),
+        **identity,
+        "recorded_at": stamped.isoformat(),
+    }
+
+
+def append_stage_receipts(
+    existing: Sequence[Mapping[str, Any]],
+    *receipts: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Append stage evidence idempotently without rewriting earlier receipts."""
+
+    result = [_json_copy(item) for item in existing]
+    known = {item.get("receipt_id") for item in result}
+    for receipt in receipts:
+        receipt_id = receipt.get("receipt_id")
+        if not isinstance(receipt_id, str) or not receipt_id:
+            raise ValueError("stage receipt identity is required")
+        if receipt_id not in known:
+            result.append(_json_copy(receipt))
+            known.add(receipt_id)
+    return result
 
 
 def incident_budget_identity(incident: Mapping[str, Any]) -> str | None:
@@ -200,8 +274,12 @@ def project_incident(
         return IncidentEligibility("eligible", "new_or_changed_generation", generation)
     successes = [row for row in matching if row.get("outcome") == "success"]
     if successes:
-        prior_success = max(successes, key=lambda item: str(item.get("recorded_at") or ""))
-        return IncidentEligibility("suppressed", "terminal_success", generation, prior_success)
+        prior_success = max(
+            successes, key=lambda item: str(item.get("recorded_at") or "")
+        )
+        return IncidentEligibility(
+            "suppressed", "terminal_success", generation, prior_success
+        )
     prior = max(matching, key=lambda item: str(item.get("recorded_at") or ""))
     outcome = prior.get("outcome")
     deadline_name = (
@@ -280,9 +358,11 @@ __all__ = [
     "IncidentEligibility",
     "IncidentOutcome",
     "append_generation_history",
+    "append_stage_receipts",
     "authoritative_generation",
     "capability_authority_fingerprint",
     "incident_record",
     "incident_budget_identity",
     "project_incident",
+    "recovery_stage_receipt",
 ]

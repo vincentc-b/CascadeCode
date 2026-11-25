@@ -10,6 +10,7 @@ from pathlib import Path
 
 from cascade.agent.errors import (
     CursorAgentError,
+    ProviderBudgetRefusedError,
     ProviderNotAuthenticatedError,
     ProviderNotImplementedError,
     ProviderNotInstalledError,
@@ -372,6 +373,8 @@ async def run_planning_role_turn(
         )
     except TurnCancelledForDrain:
         raise
+    except ProviderBudgetRefusedError as exc:
+        return f"{role}: provider blocked — {exc.reason} ({exc.state})"
     except CursorAgentError as exc:
         return startup_error_message(role, exc)
     except (

@@ -26,9 +26,11 @@ from cascade.feature.repair import (
     admit_feature_repair,
     inspect_feature_repair,
 )
+from cascade.agent.types import RoleResult
 from cascade.task.action_recovery import recovery_actions
 from cascade.task.execution import mark_running
 from cascade.task.git_tools import swe_commit, swe_run_tests
+from cascade.task_rollup import retry_pending_task_merges
 from cascade.task.worktree import clear_task_runs, get_task_run
 from cascade.tracking import MergeRequest
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
@@ -130,21 +132,22 @@ class DeterministicForge:
         self.state = state
         self.created: list[MergeRequest] = []
         self.current_source_head: str | None = None
+        self.current_merge_sha: str | None = None
+        self.current_state = "open"
 
     def snapshot(self, _root: Path, mr: MergeRequest) -> dict[str, object]:
         current = bool(self.created and mr == self.created[0])
         assert current or mr == self.historical
         return {
-            "state": "open" if current else self.state,
+            "state": self.current_state if current else self.state,
             "url": mr.url,
             "source_branch": mr.source_branch,
             "target_branch": mr.target_branch,
             "source_revision": self.current_source_head or "historical-source",
             "target_revision": "historical-target",
             "merge_sha": (
-                "historical-merge"
-                if not current and self.state == "merged"
-                else None
+                self.current_merge_sha if current and self.current_state == "merged" else
+                "historical-merge" if not current and self.state == "merged" else None
             ),
             "comments": [],
         }
@@ -163,6 +166,213 @@ class DeterministicForge:
         )
         self.created.append(created)
         return created
+
+
+def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Join the production queue, owner tools, publication, and postcheck."""
+
+    from cascade.feature.recovery import recover_task
+    from cascade.review import reconcile_feature_review_completions
+    from cascade.task.action_recovery import load_action
+    from cascade.watchdog.audit_recovery import dispatch_audit_recovery
+    from cascade.watchdog.incident_postcheck import reconcile_parent_lifecycle_incident
+
+    root = make_repo(tmp_path)
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    _git(root, "remote", "add", "origin", str(remote))
+    (root / ".git/info/exclude").write_text(
+        ".cascade/\ndocs/_queue/\ndocs/_war_room/\n", encoding="utf-8"
+    )
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    feature_doc = read_doc("feat_001", root=root)
+    feature_doc.body += (
+        "\n## Closeout\n\nThe repaired product is covered by its real validator.\n"
+    )
+    write_doc(feature_doc, root=root)
+    _select_roles(
+        root, "epic_001", "epic_manager", "epic_architect", "feature_lead",
+        "feature_architect", "swe",
+    )
+    _select_roles(root, "feat_001", "feature_lead", "feature_architect", "swe")
+    _git(root, "push", "-u", "origin", "HEAD:main")
+    assert activate_epic("epic_001", "human", root=root).ok
+    approve_board_feature(root, "feat_001")
+    assert dispatch_feature("feat_001", "human", root=root).ok
+    feature_entry = get_integration_worktree(root, "feature", "feat_001")
+    epic_entry = get_integration_worktree(root, "epic", "epic_001")
+    assert feature_entry is not None and epic_entry is not None
+
+    task_id = mint_task(
+        "Repair the product", body_stub="Repair and validate product.py.",
+        feature_id="feat_001", root=root,
+    )
+    from cascade.task import invoke_tool
+
+    physical_turns: list[str] = []
+
+    async def scripted_provider(_turn: object) -> RoleResult:
+        physical_turns.append(task_id)
+        for path, content in (
+            ("product.py", "VALUE = 0\n"),
+            ("test_product.py", "from product import VALUE\n\ndef test_value():\n    assert VALUE == 1\n"),
+            (".gitignore", "__pycache__/\n.pytest_cache/\n"),
+        ):
+            invoke_tool(
+                task_id, "swe_write", {"path": path, "content": content},
+                root=root, feature_id="feat_001",
+            )
+        invoke_tool(
+            task_id, "swe_commit", {"message": "retain the real failing repair"},
+            root=root, feature_id="feat_001",
+        )
+        red = invoke_tool(
+            task_id, "swe_run_tests", {"cmd": ["pytest", "test_product.py", "-q"]},
+            root=root, feature_id="feat_001",
+        )
+        assert red["exit_code"] != 0
+        invoke_tool(
+            task_id, "swe_write", {"path": "product.py", "content": "VALUE = 1\n"},
+            root=root, feature_id="feat_001",
+        )
+        invoke_tool(
+            task_id, "swe_commit", {"message": "repair the product"},
+            root=root, feature_id="feat_001",
+        )
+        green = invoke_tool(
+            task_id, "swe_run_tests", {"cmd": ["pytest", "test_product.py", "-q"]},
+            root=root, feature_id="feat_001",
+        )
+        assert green["exit_code"] == 0 and green["final_validation"]["task_id"] == task_id
+        return RoleResult(text="repair tested and queued", status="finished")
+
+    from cascade.task.graph import set_task_run_role_fn
+    from cascade.workspace.kickoff import (
+        deferred_kickoffs,
+        wait_for_background_kickoffs,
+    )
+
+    set_task_run_role_fn(scripted_provider)
+    with deferred_kickoffs():
+        assert dispatch_task(task_id, "human", root=root).ok
+        move_doc("feat_001", "completed", root=feature_entry.path)
+        from cascade.boss.rollup import _emit_feature_completed
+
+        _emit_feature_completed("feat_001", "epic_001", root)
+    assert wait_for_background_kickoffs(10)
+    assert physical_turns == [task_id]
+
+    # Reproduce the admitted obligation: delivery is green, but its Feature
+    # parent was prematurely completed before the supervisor consumed the queue.
+    from cascade.task.action_recovery import resume_action
+    from cascade.task_rollup import _resume_queued_merge
+
+    refused = resume_action(
+        f"{task_id}:queued_merge", root=root,
+        execute=lambda _context: _resume_queued_merge(task_id, root),
+        now=datetime(2020, 1, 1, tzinfo=timezone.utc),
+    )
+    assert refused["failure_classification"] == "parent_lifecycle_mismatch"
+    queued = load_action(f"{task_id}:queued_merge", root=root)
+    mismatch = queued["metadata"]["parent_lifecycle_mismatch"]
+    mismatch_generation = mismatch["authoritative_generation"]
+
+    from cascade.watchdog.audit import project_audit_observation
+
+    first_observation = project_audit_observation(
+        task_id, root=root, monotonic=lambda: 0.0
+    )
+    assert first_observation.classification == "proven_incident"
+    assert dispatch_audit_recovery(root, task_id, timeout_seconds=10)
+    repair_incident = next(
+        row["incident"]
+        for row in recovery_actions(root=root)
+        if row.get("incident", {}).get("work_id") == task_id
+        and row.get("incident", {}).get("failure_class")
+        == "parent_lifecycle_mismatch"
+    )
+    incident_generation = repair_incident["authoritative_generation"]
+    owner_result = recover_task(
+        task_id,
+        feature_id="feat_001",
+        root=root,
+        expected_generation=mismatch_generation,
+    )
+    assert owner_result["executed"] is False
+    assert owner_result["refusal"]["code"] in {
+        "incident_no_longer_matches", "authoritative_generation_changed"
+    }
+    delivered = resume_action(
+        f"{task_id}:queued_merge", root=root,
+        execute=lambda _context: _resume_queued_merge(task_id, root),
+    )
+    assert delivered["recovery_state"] == "completed"
+    forge = DeterministicForge(
+        MergeRequest("https://forge.example/pulls/old", "0", "github",
+                     "feat/feat_001", "epic/epic_001", False),
+        "open",
+    )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+    monkeypatch.setattr(review, "merge_request_snapshot", forge.snapshot)
+    monkeypatch.setattr(review, "find_merge_request", forge.find)
+    monkeypatch.setattr(review, "create_merge_request", forge.create)
+    from cascade.boss.rollup import try_complete_feature
+
+    assert try_complete_feature("feat_001", root=root) is False
+    assert len(forge.created) == 1
+    record = review.review_record_for_feature("feat_001", root=root)
+    assert record is not None
+    forge.current_source_head = str(record["source_head"])
+    forge.current_state = "merged"
+    _git(
+        epic_entry.path,
+        "merge",
+        "--no-ff",
+        str(record["source_head"]),
+        "-m",
+        "integrate repair",
+    )
+    forge.current_merge_sha = _git(epic_entry.path, "rev-parse", "HEAD")
+    _git(epic_entry.path, "push", "origin", "epic/epic_001")
+    reconcile_feature_review_completions(root)
+    # A pre-existing premature completion event cannot substitute for closing
+    # the accepted target copy; the next idempotent sweep repairs that target.
+    reconcile_feature_review_completions(root)
+    reconcile_feature_review_completions(root)
+    from cascade.workspace.integration_worktree import (
+        retire_terminal_registered_worktrees,
+    )
+
+    retire_terminal_registered_worktrees(root)
+    retire_terminal_registered_worktrees(root)
+    from cascade.task.worktree import remove_task_worktree
+
+    completed_run = get_task_run(task_id)
+    assert completed_run is not None
+    remove_task_worktree(completed_run, root=root)
+    accepted = review.review_record_for_feature("feat_001", root=root)
+    assert accepted is not None
+    assert accepted["closed"] is True
+    assert accepted["accepted_source_head"] == record["source_head"]
+    assert accepted["accepted_merge_sha"] == forge.current_merge_sha
+
+    postcheck = reconcile_parent_lifecycle_incident(
+        task_id, incident_generation, root=root
+    )
+    assert postcheck["verified"] is True
+    assert (
+        dispatch_audit_recovery(
+            root, task_id, expected_generation=incident_generation
+        )
+        is False
+    )
+    assert retry_pending_task_merges(root) == [task_id]
+    assert retry_pending_task_merges(root) == []
+    assert len(forge.created) == 1
+    assert physical_turns == [task_id]
 
 
 @pytest.mark.parametrize(
