@@ -847,3 +847,56 @@ Verification: canonical Epic/Feature/amendment reads, saved-sign-off inspection,
 Feature publication request/evidence inspection, pinned producer tree inspection
 and `git diff --check`. No executable acceptance is claimed. Return control to
 child execution and supervisor integration.
+
+## Manager Task record correction handoff
+
+Feature 2 reports that Task 1 delivered at `bd152f61` (implementation
+`0e5ed899`), while its canonical acceptance, files, test plan and out-of-scope
+sections still contain TBD and its Parent Feature link is broken. Both the
+SWE write and the Feature's active-Task revision were reportedly refused.
+The Epic Task read returned `content_access_denied`; those content findings
+remain owner-reported and were not inspected through an alternate path.
+
+One `supervise_child` inspection of `feat_049_002` returned active with no
+incidents. Git reference inspection confirms the Feature branch remains at
+`0711aca6459f094b907081f3c4aeaff24c3ead23` and the Task branch points to
+`bd152f61d39912f920830250c62efc57050d689c`. This is evidence of branch positions,
+not successful integration or Task acceptance. Feature spec revision remains
+`ac9ddcf32cd67965da38682847f59e183f78b1d7`.
+
+Reviewed `cascade/feature/recovery.py::revise_task`: it accepts only backlog,
+ready-to-plan or blocked Tasks and rejects a live execution lease. Reviewed
+`cascade/team_supervision.py`: communication and supervision are restricted to
+direct children or parents. Available Epic tools expose no authorized active
+grandchild record correction. No lifecycle state was altered to evade those
+guards, and no recovery was requested without a reported recoverable condition.
+
+Sent `epic_049:manager_task1_record_correction_route_20261125` to Feature 2;
+Cascade returned `enqueued`. The handoff asks the owner to retain its exact
+corrected body in a Feature-owned artifact, link the unresolved correction from
+its canonical spec, and inspect its direct Task once on the next delivery or
+recovery event. A prepared artifact does not replace the canonical Task record.
+If authorized correction remains unavailable after delivery, the owner should
+return the typed refusal and current lifecycle for operator escalation. Task
+acceptance review remains open. No canonical Task correction is claimed here.
+
+Design closeout: reviewed `cascade/war_room/DESIGN.md` transcript structure and
+interruption flow, `cascade/workspace/DESIGN.md` invocation/checkpoint boundary,
+and `cascade/DESIGN.md` component/Code navigation ownership. This evidence-only
+diff changes no actors (`cascade-context`), runtime or persistence boundaries
+(`cascade-containers`), component responsibilities
+(`cascade-war-room-components`, `cascade-supervisor-components`,
+`cascade-team-components`), or source symbols (`cascade-dashboard-code`,
+`cascade-workspace-code`, `cascade-watchdog-code`, `cascade-task-code`,
+`cascade-teams-code`). Normal and restart sequences are unchanged. Feature 2
+retains implemented source/design/Code reconciliation; Feature 3 retains
+integrated navigation and operational acceptance. Current-design edits and
+repeat executable/render/browser tests are not warranted by this diff.
+
+Epic revision `03280933`, both saved sign-offs and sequencing are unchanged;
+architecture amendments are empty. Task record correction and integration,
+final consumer fixtures, producer design ownership and the separately failed
+Epic architecture publication remain unresolved. Verification: canonical
+Epic/Feature reads, explicit Task access refusal, one child-supervision read,
+Git reference and revision-guard inspection, handoff enqueue, design review and
+`git diff --check`. Return control for supervisor integration between turns.
