@@ -2,6 +2,113 @@
 
 Purpose: run one bounded implementation team in an isolated worktree with supervised file, test, commit, and lifecycle tools. Interfaces are Task graph/boot/wiring, SWE MCP, path guards, action recovery, lifecycle locks, and execution views. Owns `REQ-TASK-001` (implementation stays in assigned scope) and `DEC-TASK-001` (green post-commit supervised validation gates delivery).
 
+## Durable incident lineage and policy
+
+`REQ-RECOVERY-BUDGET-001`: Every recovery action and material generation that
+belongs to one original incident shares one durable, finite policy record. A
+replacement or child action must cite an already-bound parent action; its own
+identity cannot create another allowance. Ambiguous legacy consumption waits
+for an owner decision. Exhaustion retains one escalation identity, and only an
+independently authenticated, finite extension within trusted maxima can make
+the record active again.
+
+`DEC-RECOVERY-BUDGET-001`: Store versioned `incident_budgets` beside `actions`
+in tracking-root `.cascade/executions.json`, using the existing lifecycle lock
+and atomic replacement. The record keeps original admission time, action and
+generation bindings, policy ID/version/defaults/maxima, consumption quality,
+charged and in-flight totals, unique operation receipts, the live top-level
+claim, append-only extension receipts, and the first exhaustion escalation.
+The original admission time is the earliest valid durable action/attempt time;
+missing or malformed legacy time requires an owner decision instead of renewing
+the elapsed allowance. This avoids a generation-local counter and introduces no
+scheduler or database.
+
+[bind_incident_budget](incident_budget.py) verifies the current action incident
+contract before anchoring an original identity. A new original identity must
+equal its existing action identity; subsequent actions need both the original
+identity and a parent already present in the binding list. The action incident
+envelope carries `original_incident_id` separately from
+`authoritative_generation`, so material evidence can change without resetting
+the policy. [read_incident_budget](incident_budget.py) projects one record and
+remaining allowance without creating state.
+
+[extend_incident_budget](incident_budget.py) accepts the request-scoped
+`AuthenticatedHuman` produced by the human-facing boundary, rejects the
+recovering team's identity, hashes the complete extension facts into an
+idempotent receipt, and enforces the trusted maxima. Actor text or action-owner
+state is not extension authority. [record_incident_budget_exhaustion](incident_budget.py)
+derives one stable escalation identity and retains its first reason across
+replay and later extension.
+
+[reserve_incident_operation](incident_budget.py) is the versioned F2 consumer
+boundary. Under `task_lifecycle_lock` it verifies the bound current generation,
+trusted policy version, accounting integrity, persisted transient backoff,
+original elapsed deadline, a single live claim, operation serialization, and
+charged plus reserved allowance in every dimension. Its admitted result carries
+a bounded permit and durable receipt. Pending, exhausted, and owner-decision
+results carry the policy version and any existing receipt; replay never returns
+a new permit. Claim age is not proof of abandonment. A different live caller
+waits, while proven-dead or uncertain work requires authoritative reconciliation.
+
+[settle_incident_operation](incident_budget.py) removes the exact in-flight
+reservation and adds actual known or estimated process attempts, paid turns,
+process/model seconds, and known tokens exactly once. Interrupted or unknown
+work charges its full reservation and retains the claim for reconciliation.
+Elapsed time is measured from the original incident start rather than summed as
+runtime. Nested provider, MCP, tool, and validator work reuse the top-level claim
+but receive separate serialized receipts. `claim_complete` releases that claim
+only after its owner has settled the final operation.
+
+```mermaid
+flowchart TD
+    A[Canonical action incident generation] --> B{Original or linked action?}
+    B -->|original action identity| C[Create versioned incident budget]
+    B -->|bound parent and original identity| D[Append action/generation binding]
+    B -->|ambiguous lineage| W[Wait for owner decision]
+    C --> L{Origin and legacy usage known?}
+    L -->|yes or no attempts| Active[Active finite policy]
+    L -->|missing or malformed| W
+    Active --> R{Atomic operation reservation}
+    R -->|bounded permit| S[Serialized launch and exact settlement]
+    R -->|live owner or backoff| P[Pending with existing receipt]
+    R -->|ambiguous or corrupt| W
+    S -->|interrupted or unknown| W
+    S -->|allowance remains| Active
+    S -->|deadline or cumulative limit| X[One durable exhaustion escalation]
+    X --> E{Authenticated independent extension within maxima?}
+    E -->|yes| Active
+    E -->|no| X
+```
+
+The record meters process work now and provides the F2 boundary for later paid
+provider enforcement; this component does not itself launch a provider turn.
+Known tokens are charged only from provider evidence, while unavailable token
+usage remains honest and falls back to paid-turn/runtime bounds. The lifecycle
+flock serializes ledger mutation across local processes; permits bound allowance
+but do not claim operating-system, network, or remote-provider isolation.
+Unknown legacy use is marked unavailable rather than inferred, and caller-
+supplied legacy totals alone cannot establish trusted historical accounting.
+Focused temporary-repository verification is in
+[`tests/task/test_incident_budget.py`](../../tests/task/test_incident_budget.py).
+
+Review publication is a concrete consumer of this API. Its material generation
+contains exact source and target heads, the approved validation command and
+timeout, budget policy ID/version, and interpreter environment revision. Material
+admission cannot increase `attempt_bound`. Before a real validator process starts,
+the Teams component reserves one tool attempt and the configured worst-case
+process runtime under the original incident and stable top-level publication
+claim. The validator carries a distinct operation receipt and settles on success,
+red result, launch error, timeout, or interruption. Deterministic failure permits
+no unchanged expensive check; transient failure uses the ledger's persisted
+5-second then 10-second jittered backoff and three-operation ceiling. Unknown
+classification waits for owner reconciliation. Independent finite extension keeps
+all prior attempts, decisions, charges and the first escalation.
+
+The Task gate exposes paid-turn and model/token dimensions for the provider-owned
+consumer, but does not claim that provider spending is enforced by review
+publication. The full Task validation gate remains separate from repository review
+validation, and Epic product acceptance remains a later lifecycle obligation.
+
 
 
 ## Interrupted review publication attempts
@@ -77,7 +184,9 @@ The integrated Structurizr code view is `cascade-task-code`. From the supervisor
 
 ## Durable delivery collaborators
 
-`cascade-task-code` exposes [resume_action](action_recovery.py),
+`cascade-task-code` exposes [resume_action](action_recovery.py), the incident
+budget lineage/reserve/settle/read/extension/escalation entry points in
+[incident_budget.py](incident_budget.py),
 [execution_lease_is_live](execution.py), and [swe_run_tests](git_tools.py)
 alongside the graph and tool registry.
 The action ledger in tracking-root `.cascade/executions.json` preserves attempts,

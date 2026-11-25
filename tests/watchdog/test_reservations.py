@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from cascade.task.action_recovery import load_action
+from cascade.task.action_recovery import create_or_load_action, load_action
+from cascade.task.incident_budget import bind_incident_budget, read_incident_budget
 from cascade.watchdog.capabilities import CapabilityDescriptor
 from cascade.watchdog.incidents import authoritative_generation, incident_record
 from cascade.watchdog.reservations import (
@@ -212,6 +213,52 @@ def _fresh(incident: dict[str, object], **changes: object):
     }
     row.update(changes)
     return lambda _work_id, _root: row
+
+
+def test_watchdog_claim_uses_and_settles_task_owned_budget(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    action = create_or_load_action(
+        "task_001:budget",
+        "review_publication",
+        root=root,
+        attempt_bound=3,
+        owning_team={"kind": "feature_team", "work_id": "feat_001"},
+        evidence={"affected_work_id": "task_001"},
+    )
+    bind_incident_budget(
+        "task_001:budget",
+        "task_001:budget",
+        action["incident"]["authoritative_generation"],
+        {},
+        root=root,
+    )
+    incident = _incident()
+    incident["original_incident_id"] = "task_001:budget"
+    decision = reserve_after_recheck(
+        incident,
+        _descriptor(),
+        root=root,
+        fresh_recheck=_fresh(incident),
+        claim_token="watchdog-claim",
+    )
+    assert decision.reserved
+    assert decision.reservation is not None
+    reserved = read_incident_budget("task_001:budget", root=root)
+    assert reserved is not None
+    assert reserved["reserved"]["tool_attempts"] == 1
+    assert reserved["charged"]["tool_attempts"] == 0
+
+    record_result(
+        decision.reservation,
+        {"accepted": True},
+        {"outcome": "success"},
+        root=root,
+    )
+    settled = read_incident_budget("task_001:budget", root=root)
+    assert settled is not None
+    assert settled["reserved"]["tool_attempts"] == 0
+    assert settled["charged"]["tool_attempts"] == 1
+    assert settled["live_claim"] is None
 
 
 def _persist_pending_claim_then_exit(root: Path, now: datetime) -> None:
