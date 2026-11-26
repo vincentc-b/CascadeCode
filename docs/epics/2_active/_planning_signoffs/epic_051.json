@@ -12,6 +12,12 @@
       "plan_revision": "c4a9ef2534f34d5955bd5e18ed837087f649ac18",
       "signed_at": "2026-11-26T20:22:48.624713+00:00",
       "evidence_snapshot_id": "evidence_7f611fddb7664c64b17125c772ca5cd8"
+    },
+    {
+      "role": "epic_manager",
+      "plan_revision": "c4a9ef2534f34d5955bd5e18ed837087f649ac18",
+      "signed_at": "2026-11-26T20:25:58.355448+00:00",
+      "evidence_snapshot_id": "evidence_a4a482de7798438c89a72642500825bb"
     }
   ]
 }
