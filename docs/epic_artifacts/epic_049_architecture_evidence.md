@@ -1980,3 +1980,73 @@ and `git diff --check`. Renewed Epic sign-off and acceptance remain withheld
 pending integrated verification and publication recovery; completed Task 1/5
 board corrections remain separate. Return control to Feature 3 planning and
 supported child delivery.
+
+## Architect Feature 3 planning and corrective bounds review
+
+Reviewed canonical Epic `8a9883a1`, active Feature 3 `7fa37157` and completed
+Feature 4 `a3d4a42b`. Dependencies correctly include Features 1, 2 and 4.
+Updated the canonical Epic through `write_doc` to `03ce7eb0` to retain the
+source-traced writer-contention gap below. This enforces the existing selected
+writer budgets; no new product contract or decision was introduced. Both saved
+role sign-offs remain on `03280933`; renewed sign-off and acceptance are withheld.
+The amendment list is empty.
+
+Read Feature 4's `task_049_004_003_closeout.md`, producer child design,
+Watchdog/package ownership links, publisher mapping writers and transcript
+fence/index lookup. The private helper holds the graph fence through callers'
+publisher commits and uses current source-key routing, including first insertion.
+Pending intent/index/room evidence refuses mapping and preserves replay. The
+child reports 77 focused passes, 235 elements/283 relationships/24 views, pinned
+rendering and scoped Code navigation; these are reported child results, not
+checks rerun by the Epic. Its broader documentation-refresh assertion failure
+remains explicit. Feature 4's canonical revision is not in Epic ancestry.
+
+Material remaining gap: `fenced_transcript_source_acknowledgement` uses
+`graph_transcript_fence`, whose thread `RLock` and OS `flock(LOCK_EX)` block
+without a deadline. It then calls `_connect_index`, which initializes schema
+and uses a 30-second SQLite timeout. The mapping helper receives no remaining
+fast-path/drain budget. This can hold the publisher transaction and supervisor
+past the specified 250 ms/one-second bounds. This finding is based on source,
+not a newly run contention benchmark. `REQ-RECOVERY-PROGRESS-004` and its
+verification claim require reconciliation. Sent Feature 4 request suffix
+`architect:bounded_fence_gap_a3d4a42b_20261126` for authorized corrective
+delivery, deadline-aware fence/index acquisition, deterministic contention
+coverage, pending/no-cursor-loss behavior and unchanged fence-through-commit
+identity protection. Epic lifecycle ownership must arrange supported delivery;
+no completed record or other branch was mutated. Its completed Task 1 also
+retains generated TBD fields and a stale parent link alongside binding criteria;
+the handoff includes this additional operator record-correction issue.
+
+Sent Feature 3 request suffix
+`architect:consumer_design_constraints_8a9883a1_20261126`. Required planning
+work is to reconcile stale upstream prose against integrated source and final
+fixtures, persist binding criteria before dispatch, and retain the upstream
+bounds gap without a UI workaround. Producer ownership now resides in
+`cascade/recovery_progress/DESIGN.md`; parent links exist, while final integrated
+reference/ownership verification remains open. Current prose in the reviewed
+producer design describes behavior rather than delivery history; its bounds
+claim must be reconciled with implementation before acceptance.
+
+| Level / view | Feature 3 planning requirement and review result |
+|---|---|
+| `cascade-landscape`, `cascade-context` | Existing actors and external dependencies remain; record final-diff rationale for retaining these views. No planning-turn model change. |
+| `cascade-containers` | Existing runtime, immutable progress pages and transcript stores remain; verify actual reader boundaries without implying new isolation. |
+| `cascade-war-room-components`, `cascade-supervisor-components`, `cascade-team-components` | Feature 3 owns consumer/UI changes; verify producer and transcript interfaces against their owning designs. |
+| `cascade-dashboard-code` | Reconcile actual route/UI entry points, bounded paging, summary/anchor identity and stale-response guards; update native source nodes and contract where implementation changes. |
+| `cascade-watchdog-code`, `cascade-task-code`, affected Workspace/Teams Code | Verify producer call boundaries and current symbols against integrated source; upstream owns the fence-budget correction. Preserve move-resume/retirement coverage. |
+| Supplementary behavior | War Room owns selection, polling, pending/restart, detail continuation and late-response flows; producer design owns mapping persistence/replay. Trace real notification to browser before final role reply and failure/restart without duplicating requirements. |
+
+Task acceptance must include source-contract validation, real Code/Level up,
+deep-link restoration, pinned source opening and measured warm artifact reuse.
+Keep progress revision separate from transcript incarnation; retain concurrent
+incidents, safe rendering, typed errors, positive UTF-8 continuation and read
+budgets. Existing scoped navigation evidence does not verify new consumer code.
+This turn changes planning/evidence only, so no design/model edits or runtime
+suite are warranted; unresolved implementation/design claims are routed above.
+
+Validation: canonical spec reads/write, source/design and final-child evidence
+inspection, ancestry check, all six saved publication digests matched against
+exact commits, and `git diff --check`. Historical publication pins are unchanged;
+terminal publication recovery still has no supported retry in the available
+tools. No replacement publication or accepted-lineage change is claimed.
+Return control to Feature 3 planning and authorized corrective delivery.
