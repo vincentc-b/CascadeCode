@@ -2288,3 +2288,46 @@ remain withheld. Validation: canonical reads, empty amendment list, ancestry,
 patch equivalence and fixture-presence checks, pinned design/interface review
 and `git diff --check`. Completed Task-record corrections and supported
 integration remain unresolved. Return control to child execution and delivery.
+
+## Manager Feature 3 Task 1 delivery review
+
+In reply to `feat_049_003:feat_049_003:epic:task1_delivery_review_20261126`.
+Read canonical Feature `1c7fbea950c3a17a9b8e860655c7ac7dfc090df5` and Epic
+`9663684255700d5178bdd369c97cb8d5a6f4ed6a`, child metadata and the empty
+architecture amendment list. Inspected implementation `5dc6e60e` through Git
+without modifying the child worktree. The current-progress loader is called
+on focus change, not ongoing room polling. The Feature plan explicitly assigns
+that gap to Task 2 and keeps legacy chat anchors provisional. This is existing
+Epic success criteria 3, 4 and 8, not new scope; no Epic spec edit or decision
+is needed. The Feature revision is not an ancestor of this Epic checkout.
+
+Sent `manager:f3_task1_delivery_review_1c7fbea9_20261126` to Feature 3:
+prove an already-open room and board advance through committed notification
+and milestone before the held final reply without changing focus; preserve
+bounded reads, distinct revision/incarnation, stale-response guards and
+paging/scroll. Task 4 must reconcile the War Room stable-anchor prose against
+the final versioned consumer and verify actual Code navigation. The completed
+Task 1 placeholder record is a separate correction gap; requested an exact
+replacement and supported-tool refusal artifact if correction remains blocked.
+This does not claim the canonical Task record has been repaired.
+
+Design review: inspected `cascade/war_room/DESIGN.md` and the pinned model,
+views and source contract under `architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5`.
+The Dashboard Code addition identifies real Function
+`war_room.js::renderCurrentRecoveryProgress`, its Dashboard parent, route
+relationship and view inclusion. Context/container boundaries are unchanged:
+this diff presents existing immutable projections in the current Dashboard.
+Component responsibility stays consumer-only; producer persistence/replay is
+unchanged. The behavior gap is ongoing polling and committed anchor resolution,
+owned by Task 2 with final design/Code reconciliation in Task 4. No design/model
+change belongs in this evidence-only Epic diff. Render, navigation and held-reply
+proof remain unverified here; the Feature's 11 selected UI/API cases, 14 C4
+cases and Node cases are reported results, not tests rerun in this turn.
+
+Validation: canonical reads, pinned source/design/model diff inspection,
+ancestry check and `git diff --check`. Feature 3 remains active and Feature 5
+backlog; no supervision failure is inferred. Historical sign-offs and publication
+pins are unchanged. Acceptance and renewed sign-off remain withheld pending
+integrated consumer proof, Feature 5 contention repair, canonical record
+corrections, design-owner reconciliation and publication recovery. Return
+control to child execution and supervised delivery.
