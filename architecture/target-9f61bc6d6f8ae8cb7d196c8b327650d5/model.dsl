@@ -1277,7 +1277,7 @@ code_watchdog_publish = element "publish_audit_projection" "Function" "Publishes
     }
 }
 
-code_watchdog_progress_drain = element "drain_recovery_progress" "Function" "Fairly replays at most 100 retained receipts and publishes at most 100 dirty work aliases within one second." {
+code_watchdog_progress_drain = element "drain_recovery_progress" "Function" "Fairly replays at most 100 retained receipts and 100 dirty aliases through one shared one-second lock and SQLite deadline." {
     properties {
         "cascade.semanticId" "element.code.watchdog.progress-drain"
         "cascade.parent" "element.component.watchdog"
@@ -1286,7 +1286,7 @@ code_watchdog_progress_drain = element "drain_recovery_progress" "Function" "Fai
     }
 }
 
-code_watchdog_progress_publish = element "publish_committed_transition" "Function" "Joins exact receipt and live/postcheck evidence, updates the disposable index, and publishes immutable work-addressed pages." {
+code_watchdog_progress_publish = element "publish_committed_transition" "Function" "Carries one 250 ms deadline through recovery append, publisher locking, mapping and bounded immutable-page publication." {
     properties {
         "cascade.semanticId" "element.code.watchdog.progress-publish"
         "cascade.parent" "element.component.watchdog"
@@ -1295,7 +1295,7 @@ code_watchdog_progress_publish = element "publish_committed_transition" "Functio
     }
 }
 
-code_watchdog_milestone_record = element "record_transcript_milestone" "Function" "Durably maps a committed receipt to its transcript message, refreshes ordered entry references, and republishes dirty aliases." {
+code_watchdog_milestone_record = element "record_transcript_milestone" "Function" "Uses one 250 ms deadline to map a committed acknowledgement, refresh ordered entry references and publish dirty aliases." {
     properties {
         "cascade.semanticId" "element.code.watchdog.milestone-record"
         "cascade.parent" "element.component.watchdog"
@@ -1304,7 +1304,7 @@ code_watchdog_milestone_record = element "record_transcript_milestone" "Function
     }
 }
 
-code_watchdog_milestone_upsert = element "_record_transcript_milestone" "Function" "Fences authoritative source routing through publisher commit while rejecting immutable identity conflicts and refreshing current routing metadata." {
+code_watchdog_milestone_upsert = element "_record_transcript_milestone" "Function" "Fences current source routing through publisher commit within the caller's remaining deadline and rejects immutable identity conflicts." {
     properties {
         "cascade.semanticId" "element.code.watchdog.milestone-upsert"
         "cascade.parent" "element.component.watchdog"
@@ -3279,7 +3279,7 @@ code_dashboard_chat_append = element "append_transcript_message" "Function" "App
     }
 }
 
-code_dashboard_chat_fence = element "graph_transcript_fence" "Function" "Serializes graph transcript writers across processes with a tracking-root advisory lock." {
+code_dashboard_chat_fence = element "graph_transcript_fence" "Function" "Bounds graph thread and process-fence acquisition by the caller's deadline; an admitted lock-file open remains a filesystem baseline." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.fence"
         "cascade.parent" "element.component.dashboard"
@@ -3288,7 +3288,7 @@ code_dashboard_chat_fence = element "graph_transcript_fence" "Function" "Seriali
     }
 }
 
-code_dashboard_chat_source_fence = element "fenced_transcript_source_acknowledgement" "Function" "Yields complete authoritative source-key routing under the graph fence without repair, import or projection work." {
+code_dashboard_chat_source_fence = element "fenced_transcript_source_acknowledgement" "Function" "Yields complete current source-key routing under the deadline-bound graph fence without schema creation, repair, import or projection work." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.source-fence"
         "cascade.parent" "element.component.dashboard"
@@ -3297,12 +3297,21 @@ code_dashboard_chat_source_fence = element "fenced_transcript_source_acknowledge
     }
 }
 
-code_dashboard_chat_index = element "_connect_index" "Function" "Opens the writer-only SQLite append, rewrite and move intent index with uniqueness, offsets, incarnation and full synchronous commits." {
+code_dashboard_chat_index = element "_connect_index" "Function" "Opens the writer-only SQLite append, rewrite and move intent index, refreshing each schema wait from the remaining caller deadline." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.index"
         "cascade.parent" "element.component.dashboard"
         "cascade.sourcePath" "cascade/war_room/chat_store.py"
         "cascade.sourceSymbol" "_connect_index"
+    }
+}
+
+code_dashboard_chat_existing_index = element "_connect_existing_index" "Function" "Opens only an existing compatible transcript index read-only and refreshes every schema and routing query from the caller's remaining deadline." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.existing-index"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "_connect_existing_index"
     }
 }
 
@@ -3333,7 +3342,7 @@ code_dashboard_chat_resume_move = element "resume_transcript_room_move" "Functio
     }
 }
 
-code_dashboard_recovery_milestone = element "append_committed_recovery_receipt" "Function" "Routes one safe committed receipt to its owning graph and returns its durable transcript acknowledgement after fence release." {
+code_dashboard_recovery_milestone = element "append_committed_recovery_receipt" "Function" "Routes one safe committed receipt and carries the caller's remaining deadline through append and current fenced acknowledgement." {
     properties {
         "cascade.semanticId" "element.code.dashboard.recovery-milestone"
         "cascade.parent" "element.component.dashboard"
@@ -3567,6 +3576,12 @@ dashboard_recovery_milestone_to_chat_append = code_dashboard_recovery_milestone 
     }
 }
 
+dashboard_recovery_milestone_to_chat_source_fence = code_dashboard_recovery_milestone -> code_dashboard_chat_source_fence "Rereads current durable routing within the same remaining deadline" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-recovery-milestone-to-chat-source-fence"
+    }
+}
+
 dashboard_recovery_milestone_to_workspace_owner = code_dashboard_recovery_milestone -> code_workspace_doc_owner "Resolves Task receipts to their owning Feature room across registered roots" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-recovery-milestone-to-workspace-owner"
@@ -3621,9 +3636,9 @@ dashboard_chat_source_fence_to_fence = code_dashboard_chat_source_fence -> code_
     }
 }
 
-dashboard_chat_source_fence_to_index = code_dashboard_chat_source_fence -> code_dashboard_chat_index "Reads complete intent-free source-key routing" {
+dashboard_chat_source_fence_to_existing_index = code_dashboard_chat_source_fence -> code_dashboard_chat_existing_index "Reads complete intent-free source-key routing without schema initialization" {
     properties {
-        "cascade.semanticId" "relationship.code-dashboard-chat-source-fence-to-index"
+        "cascade.semanticId" "relationship.code-dashboard-chat-source-fence-to-existing-index"
     }
 }
 
