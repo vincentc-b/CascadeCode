@@ -2109,3 +2109,53 @@ change. Renewed sign-off and acceptance remain withheld; supported integration,
 contention repair, completed Task record corrections, final design ownership
 reconciliation and architecture publication recovery remain open. Return
 control to corrective planning, consumer execution and supervised delivery.
+
+## Architect final Feature 4 handoff and Feature 5 scope review
+
+Reviewed canonical Epic `2125b7c8`, corrective Feature 5 `c54c1e71` and the
+Feature 4 handoff at `a3d4a42b3df92a553206c300c42142600183eaef`. The Epic
+already pins the final fixtures and assigns the remaining contention correction
+to Feature 5; no duplicate plan edit or new decision is needed. Feature 3 may
+continue independent consumer work, while final acceptance requires integrated
+Feature 5 verification. Both saved sign-offs remain on `03280933`; renewed
+sign-off and acceptance remain withheld. The amendment list is empty.
+
+Read the pinned producer design and final Task 3 closeout, traced the publisher
+fast path/public writer/drain and private mapping helper into the transcript
+fence/index lookup, and checked parent ownership links. Current source holds
+the graph fence through mapping commit and rejects immutable identity conflicts.
+Pending transcript evidence preserves replay eligibility. However graph thread
+and OS locks still block, and source lookup uses schema-initializing SQLite with
+a 30-second timeout; preceding append and publisher acquisition also need the
+shared deadline. Feature 5's existing criteria cover these paths, existing-index
+lookup, timeout-to-pending behavior and deterministic contention/replay tests.
+Sent request `architect:f5_contention_design_constraints_2125b7c8_20261126`
+to carry those criteria into Tasks before dispatch and reconcile the producer
+design's `REQ-RECOVERY-PROGRESS-004` verification claim.
+
+Feature 4 reports 69 focused tests in 76.62 s at its exact handoff revision and
+235 elements/283 relationships/24 views. Its child reports 77 focused passes,
+pinned rendering and actual Code navigation, with three warm reads in 0.032 s
+and render operations unchanged at one. These remain child-reported evidence;
+no runtime suite or browser probe was rerun by the Epic. The closeout's broader
+refreshed-documentation assertion failure remains explicit. Verified that both
+named API/detail fixtures and the pending-source fixture exist in the pinned
+tree. That revision is not an ancestor of the owned Epic HEAD `fcb0fc50`.
+
+Design review covers `cascade/recovery_progress/DESIGN.md`, its Watchdog/package
+ownership links and the closeout's War Room, Workspace and root interface review.
+Producer relative file links resolve at the pinned revision; the producer owns
+its local requirements and decisions. Full integrated ownership reconciliation
+remains open. This turn changes evidence only: context/container boundaries,
+components, native Code symbols and behavioral diagrams are unchanged. Feature
+5's canonical all-level inventory assigns final-diff review, Watchdog/Dashboard
+Code and source-contract reconciliation, affected Workspace links, normal and
+timeout/restart flows, real navigation/source opening and measured warm reuse.
+No model mutation, accepted-snapshot rewrite or replacement publication is made.
+
+Validation: canonical reads, empty amendment list, pinned source/design/fixture
+inspection, producer file-link and ancestry checks, all six saved publication
+reference digests matched, and `git diff --check`. Supported integration,
+contention acceptance, completed Task-record corrections, final design ownership
+reconciliation and terminal-publication recovery remain open. Return control to
+Feature 5 planning, Feature 3 execution and supervised delivery.
