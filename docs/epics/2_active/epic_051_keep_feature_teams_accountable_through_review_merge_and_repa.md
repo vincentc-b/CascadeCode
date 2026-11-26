@@ -225,6 +225,11 @@ No product-scope question blocks Feature planning. The following implementation 
   Chose Sequence four Features: delivery lifecycle → durable repair admission → review-health routing → War Room and complete acceptance. Every Feature owns its design/Code updates and focused tests; the final Feature reconciles the integrated inventory and red-CI journey..
   Rationale: The serial chain limits shared-file contention and establishes safe admission before automated observations can request work. Real temporary Git and scripted external transport provide reproducible acceptance without live forge/provider credentials or deployment.
   Honors: All six success criteria; frugal-engineering scope; design implementation-depth and revision-pinned publication requirements; no installation authority..
+
+- `dec_004` · 2026-11-26 · Epic Architect · **Macro-architecture / Diagram-impact inventory**
+  Chose Publish the current implementation baseline with seven source-verified Function nodes and six relationships in the Workspace, Watchdog and Boss Code views; retain proposed delivery/repair semantics in this plan and the four sequenced Feature scopes..
+  Rationale: Existing views omitted the queue eligibility/resume and review-health entry points central to this change. Explicit baseline coverage makes the completed-team wakeup gap and mergeability-only health behavior inspectable without presenting unimplemented CI or repair behavior as current architecture. Context, containers, component ownership and existing Feature repair/reservation/verification nodes remain accurate; each Feature must reconcile its changed behavior and Task acceptance against the inventory.
+  Honors: Design implementation-depth and native Code navigation; single-owner requirements and durable ledgers; current-fact design prose; original Feature/branch/review identity; revision-pinned publication and explicit implementation acceptance..
 ## Amendment log
 
 _(none)_
