@@ -1777,3 +1777,40 @@ tuple still name `03280933`, not the current plan. Renewed sign-off/publication
 and acceptance remain withheld; completed Task-record corrections, producer
 design ownership and final integrated fixtures/navigation remain open. Return
 control to corrective planning and supported delivery.
+
+## Manager final Feature 2 architecture handoff
+
+Reviewed the final architect message and evidence commit
+`e986ceb19d69de834ef9074ce8b35d66dd81bd4b`. Its sole change is the architecture
+review in `docs/feature_artifacts/feat_049_002_postmerge_review.md`; implementation
+remains candidate `ecd390f4`. Neither is in the Epic integration ancestry at
+`134969e6`. Persisted this evidence in corrective Feature 4 via `write_doc`,
+revision `4828dfcb`, and verified canonical readback. Notified Feature 2 using
+request suffix `final_architect_e986ceb1_handoff_20261126`.
+
+The handoff reports 29 focused milestone/transcript API/C4 source tests passing,
+234 elements, 280 relationships and 24 views validated, and passing Ruff/diff
+checks. These are owner-reported checks, not rerun in this planning turn. Earlier
+Task 4 renderer/Chromium evidence covers the unchanged model; no post-repair
+browser run is claimed. The new evidence does not replace corrective acceptance
+for real private/public writer interleavings, first insertion, move/restart,
+pending/conflict behavior, lock ordering and bounded work.
+
+Design review scope is unchanged from the preceding candidate review: Watchdog
+and War Room behavior, Workspace move/retirement, parent interfaces and native
+Watchdog/Dashboard Code. This evidence-only diff changes no actor, runtime/data
+boundary, component or source symbol. No design/model edit or render is warranted
+in this turn. The private-helper-to-source-acknowledgement relationship, recovery
+progress design ownership and actual integrated navigation remain assigned to
+corrective acceptance; unchanged symbol names alone do not settle them.
+
+Canonical child inspection still shows Feature 4 in backlog and Feature 3
+depending only on Features 1 and 2. The body-level sequencing hold therefore
+still needs supported lifecycle reconciliation. Epic plan `17530d06`, existing
+decisions and sign-offs are unchanged; no new scope decision, acceptance or
+publication is claimed. Completed Task 1/5 record corrections and architecture
+publication recovery remain separate open items.
+
+Validation: canonical Epic/Feature reads and corrective spec readback, child
+metadata, candidate/evidence diff and ancestry inspection, and `git diff --check`.
+Return control to corrective planning and supervised delivery.
