@@ -124,7 +124,15 @@ queue work proves that an action executor is running.
 `DEC-WORKSPACE-TURN-EVIDENCE-001`: [kickoff.py](kickoff.py) serializes graph
 turns with process-local locks and queues. `graph_turn_owner_is_live` observes
 unfinished queue work or a held graph lock; it is conservative owner protection,
-not attempt-specific liveness. `_invoke_role_turn` reads the message count,
+not attempt-specific liveness. After lifecycle admission and graph-lock
+acquisition, `_run_kickoff` brackets the actual graph call with
+[begin/end live observations](../recovery_progress/live.py). An action-bound
+invocation token names the worker runtime generation, PID, boot and process-start
+identity, graph, action generation, attempt and claim. A queued job has no such
+token. Matching registered tokens may be refreshed for at most 30 seconds at a
+time and never beyond claim expiry; exit, observed process death, changed process
+identity, or worker restart removes live support. Inaccessible process identity
+is unknown rather than live. `_invoke_role_turn` reads the message count,
 invokes the graph, then forwards the new message slice to
 [append_planning_turn_to_chat](../war_room/planning_transcript.py).
 Checkpoint state survives restart while the local lock and queue evidence do not.
@@ -133,11 +141,12 @@ to the explicit [transcript sync](../war_room/DESIGN.md#recovery-summaries-and-p
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
-place both functions in `cascade-workspace-code`, below
+place the invocation and live-observation functions in `cascade-workspace-code`, below
 `cascade-supervisor-components`. The handoff sequence is owned by the linked
 War Room design; the broader graph lifecycle is owned by
 [the package design](../DESIGN.md#team-execution).
-Verification: [kickoff tests](../../tests/workspace/test_kickoff.py) and
+Verification: [live observation tests](../../tests/workspace/test_live_observations.py),
+[kickoff tests](../../tests/workspace/test_kickoff.py), and
 [transcript tests](../../tests/war_room/test_planning_transcript.py).
 
 ## Repository initialization and guidance

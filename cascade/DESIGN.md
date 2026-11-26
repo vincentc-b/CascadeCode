@@ -2,7 +2,8 @@
 
 Purpose: expose the Python package and CLI composition root for repository-local delivery. Interfaces are `cascade.cli` and the domain packages below. Owns `REQ-CASCADE-001` (one local composition root) and `DEC-CASCADE-001` (domain packages remain independently testable).
 
-
+Known gaps: authoritative recovery source ledgers remain monolithic, so source
+write and replay cost is measured rather than claimed to be byte-bounded.
 
 ## Parent interfaces
 
@@ -254,6 +255,12 @@ behavior and verification behind each Code view.
 | Service | Workspace | `cascade-workspace-code`, `cascade-comparison-render-code` | [Workspace](workspace/DESIGN.md#c4-code-model-and-rendering-contract) |
 | Service | Comments and amendments | `cascade-collaboration-code` | [Comments](comments/DESIGN.md), [Amendments](amendments/DESIGN.md) |
 
+Current recovery progress crosses the Task, Watchdog and Dashboard boundaries:
+Task retains authoritative transition receipts, Watchdog joins exact live and
+postcheck evidence into immutable work-addressed pages, and Dashboard owns the
+safe versioned presentation contract. The producer and restart/failure flow is
+documented in [Current recovery progress publication](watchdog/DESIGN.md#current-recovery-progress-publication).
+
 ## Team execution
 
 A team is a persisted graph plus scoped tools, role configuration, and an owned
@@ -318,7 +325,11 @@ and [review recovery](team_review_recovery.py) own the shared recovery boundarie
 Per-tier designs link the graph, state, checkpoint, registry and wiring modules.
 The [Workspace invocation boundary](workspace/DESIGN.md#graph-invocation-and-transcript-handoff)
 owns process-local turn evidence; the [Task action ledger](task/DESIGN.md#action-evidence-and-transcript-boundary)
-owns durable claims and attempts. The [War Room transcript](war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
+owns durable claims and attempts plus the exact executor-entry projection.
+Invocation and executor tokens are short-lived observations bound to the current
+worker process generation; queue ownership, PID existence, a legacy owner, or an
+inaccessible process cannot establish execution and the observations never grant
+repair authority. The [War Room transcript](war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
 records presentable replies after invocation return. These separate facts do not
 establish independently verified recovery completion.
 

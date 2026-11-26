@@ -98,6 +98,18 @@ class ReservationConflict(RuntimeError):
     """A result does not belong to the store's current reservation token."""
 
 
+def _notify_incident_transition(repo: Path, incident: Mapping[str, Any]) -> None:
+    receipts = incident.get("transition_receipts")
+    if not isinstance(receipts, list) or not receipts or not isinstance(receipts[-1], Mapping):
+        return
+    from cascade.recovery_progress.notifications import notify_committed_transition
+
+    try:
+        notify_committed_transition(repo, receipts[-1], incident)
+    except Exception:
+        pass
+
+
 def reserve_budgeted_operation(
     incident: Mapping[str, Any],
     reservation: IncidentReservation,
@@ -362,7 +374,9 @@ def reserve_after_recheck(
             claimed_at=str(contract["recorded_at"]),
             claim_expires_at=str(contract["claim_expires_at"]),
         )
-        return ReservationDecision("reserved", "fresh_generation_claimed", reservation)
+        decision = ReservationDecision("reserved", "fresh_generation_claimed", reservation)
+    _notify_incident_transition(repo, contract)
+    return decision
 
 
 def accept_claim(
@@ -433,7 +447,9 @@ def accept_claim(
         row["updated_at"] = stamped.isoformat()
         ledger.rows[reservation.reservation_id] = row
         _write_store(ledger)
-        return True
+        committed = json.loads(json.dumps(current))
+    _notify_incident_transition(repo, committed)
+    return True
 
 
 def record_interrupted_claim(
@@ -637,7 +653,9 @@ def verify_incident_postcheck(
         row["updated_at"] = stamped.isoformat()
         ledger.rows[row_key] = row
         _write_store(ledger)
-        return True
+        committed = json.loads(json.dumps(final))
+    _notify_incident_transition(repo, committed)
+    return True
 
 
 def _record_result(
@@ -793,7 +811,9 @@ def _record_result(
                 root=repo,
                 now=stamped,
             )
-        return json.loads(json.dumps(final))
+        committed = json.loads(json.dumps(final))
+    _notify_incident_transition(repo, committed)
+    return committed
 
 
 def _stage_authority(incident: Mapping[str, Any]) -> str:
