@@ -7,6 +7,7 @@
     {"dsl_identifier": "code_watchdog_review_health", "semantic_id": "element.code.watchdog.review-health", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_review_snapshot", "semantic_id": "element.code.watchdog.review-snapshot", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_review_pending", "semantic_id": "element.code.boss.review-pending", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_boss_delivery_view", "semantic_id": "element.code.boss.feature-delivery-view", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_activate_epic", "semantic_id": "element.code.watchdog.activate-epic", "fragment": "model.dsl"},
     {"dsl_identifier": "code_epic_prepare_checkout", "semantic_id": "element.code.epic.prepare-checkout", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_resume_epic", "semantic_id": "element.code.workspace.resume-epic", "fragment": "model.dsl"},

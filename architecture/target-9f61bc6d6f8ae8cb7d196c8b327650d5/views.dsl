@@ -134,7 +134,7 @@ custom "cascade-boss-code" {
     }
     include code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_feature code_boss_epic
     include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_reconcile code_boss_lock code_boss_obligation code_boss_review_generation
-    include code_boss_review_pending
+    include code_boss_review_pending code_boss_delivery_view
     autoLayout lr
 }
 

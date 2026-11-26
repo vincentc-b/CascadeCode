@@ -2145,6 +2145,15 @@ code_boss_review_generation = element "feature_review_generation" "Function" "Re
     }
 }
 
+code_boss_delivery_view = element "feature_delivery_view" "Function" "Derive read-only Feature delivery phase, retained owner, review identity and next prerequisite from canonical local evidence." {
+    properties {
+        "cascade.semanticId" "element.code.boss.feature-delivery-view"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_delivery_view"
+    }
+}
+
 code_watchdog_authority = element "_authorized" "Function" "Bind dispatch event to active path introduction." {
     properties {
         "cascade.semanticId" "element.code.watchdog.authority"

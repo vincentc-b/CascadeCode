@@ -419,6 +419,27 @@ Feature branch to its owning Epic branch. Unknown or conflicting state fails
 closed. Reconciliation binds callbacks to their immutable generation and exact
 accepted source/target heads, while independent target integration remains a
 separate closeout obligation.
+`REQ-REVIEW-DELIVERY-001`: [feature_delivery_view](review.py) and its bulk form
+derive a Feature's delivery phase from the canonical board row, current immutable
+review generation, admitted repair action, completion event, and local
+intended-target ancestry. The projection retains the accountable Feature team and
+original review URL while evidence is nonterminal. Missing, legacy, stale, or
+closed-unmerged evidence cannot create accepted heads or report verified
+integration. Review-disabled delivery uses the same completion-event and local
+ancestry proof. These reads do not poll the forge, publish a review, admit repair,
+or mutate lifecycle stores.
+
+```mermaid
+flowchart TD
+    Read[Read board, review generation, repair, event and Git evidence] --> Current{Exact current generation?}
+    Current -->|open| Pending[review_pending; retain owner and URL]
+    Current -->|accepted| Target{Accepted object on intended Epic target?}
+    Target -->|yes, completion recorded| Verified[verified_integrated]
+    Target -->|no| Verify[merge_verification_pending]
+    Current -->|missing, stale or legacy| Blocked[Nonterminal explicit blocker]
+    Read -->|admitted repair| Repair[repair_requested or repair_in_progress]
+```
+
 If a process stops after pushing and opening a review but before storing its
 generation, recovery may reuse the discovered review only after a fresh forge
 snapshot reports the exact source and target refs and heads for the prepared

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 import cascade.review as review
 import pytest
+from cascade.board.store import read_doc, write_doc
+from cascade.board.types import CancellationFeedback
 from cascade.tracking import MergeRequest
+from cascade.watchdog.events import append_event
+from cascade.watchdog.types import Event
 from tests.support import add_doc, make_repo
 
 
@@ -156,17 +162,28 @@ def test_generation_save_failure_replays_without_overwriting_acceptance(
 def _repair_publication_board(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(
-        root, id="feat_001", title="Feature", tier="feature",
-        status="completed", parent="epic_001",
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
     )
     monkeypatch.setattr(review, "locate_trunk", lambda value: Path(value))
     monkeypatch.setattr(review, "review_enabled", lambda _root: True)
     monkeypatch.setattr(
-        review, "get_integration_worktree",
+        review,
+        "get_integration_worktree",
         lambda _root, _tier, _id: SimpleNamespace(path=root),
     )
-    monkeypatch.setattr("cascade.stacked_dispatch.review_target_branch", lambda *_a, **_k: "epic/epic_001")
-    monkeypatch.setattr("cascade.feature.publication.prepare_feature_publication", lambda *_a, **_k: SimpleNamespace(remote_lease_sha=None))
+    monkeypatch.setattr(
+        "cascade.stacked_dispatch.review_target_branch",
+        lambda *_a, **_k: "epic/epic_001",
+    )
+    monkeypatch.setattr(
+        "cascade.feature.publication.prepare_feature_publication",
+        lambda *_a, **_k: SimpleNamespace(remote_lease_sha=None),
+    )
     monkeypatch.setattr(review, "push_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "cascade.feature.repair.current_feature_repair_record",
@@ -183,16 +200,20 @@ def test_open_historical_review_is_refreshed_for_repair_generation(
     review._store_review_generation(root, "feat_001", old, generation=0, action_id=None)
     mr = review._record_to_mr(old)
     monkeypatch.setattr(
-        review, "merge_request_snapshot",
+        review,
+        "merge_request_snapshot",
         lambda *_a, **_k: {
-            "state": "open", "url": mr.url,
-            "source_branch": "feat/feat_001", "target_branch": "epic/epic_001",
+            "state": "open",
+            "url": mr.url,
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
             "source_revision": "source-head",
         },
     )
     monkeypatch.setattr(review, "find_merge_request", lambda *_a, **_k: None)
     monkeypatch.setattr(
-        review, "create_merge_request",
+        review,
+        "create_merge_request",
         lambda *_a, **_k: pytest.fail("open review must be reused"),
     )
 
@@ -207,7 +228,8 @@ def test_open_historical_review_is_refreshed_for_repair_generation(
 
 
 def test_changed_review_source_head_is_refused_before_repair_publication(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = make_repo(tmp_path)
     _repair_publication_board(root, monkeypatch)
@@ -223,8 +245,10 @@ def test_changed_review_source_head_is_refused_before_repair_publication(
         review,
         "merge_request_snapshot",
         lambda *_a, **_k: {
-            "state": "open", "url": current["url"],
-            "source_branch": "feat/feat_001", "target_branch": "epic/epic_001",
+            "state": "open",
+            "url": current["url"],
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
             "source_revision": "unexpected-moving-head",
         },
     )
@@ -244,17 +268,24 @@ def test_merged_historical_review_creates_linked_follow_up_and_fences_old_callba
     )
     old_mr = review._record_to_mr(old)
     monkeypatch.setattr(
-        review, "merge_request_snapshot",
+        review,
+        "merge_request_snapshot",
         lambda *_a, **_k: {
-            "state": "merged", "url": old_mr.url,
-            "source_branch": "feat/feat_001", "target_branch": "epic/epic_001",
+            "state": "merged",
+            "url": old_mr.url,
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
             "source_revision": "source-head",
             "merge_sha": "merge-zero",
         },
     )
     follow_up = MergeRequest(
-        url="https://example.test/pulls/2", number="2", forge="github",
-        source_branch="feat/feat_001", target_branch="epic/epic_001", draft=False,
+        url="https://example.test/pulls/2",
+        number="2",
+        forge="github",
+        source_branch="feat/feat_001",
+        target_branch="epic/epic_001",
+        draft=False,
     )
     monkeypatch.setattr(review, "find_merge_request", lambda *_a, **_k: None)
     monkeypatch.setattr(review, "create_merge_request", lambda *_a, **_k: follow_up)
@@ -266,7 +297,9 @@ def test_merged_historical_review_creates_linked_follow_up_and_fences_old_callba
     assert current["route"] == "follow_up"
     assert current["previous_review_url"] == old_mr.url
     assert current["url"] == follow_up.url
-    assert review.feature_review_generation("feat_001", 0, root=root)["url"] == old_mr.url
+    assert (
+        review.feature_review_generation("feat_001", 0, root=root)["url"] == old_mr.url
+    )
     assert not review.review_callback_is_current("feat_001", old_record, root=root)
 
 
@@ -277,25 +310,44 @@ def test_follow_up_save_failure_recovers_same_remote_review(
     _repair_publication_board(root, monkeypatch)
     old = _projection("https://example.test/pulls/1")
     review._store_review_generation(root, "feat_001", old, generation=0, action_id=None)
-    monkeypatch.setattr(
-        review, "merge_request_snapshot",
-        lambda *_a, **_k: {
-            "state": "merged", "url": old["url"],
-            "source_branch": "feat/feat_001", "target_branch": "epic/epic_001",
-            "source_revision": "source-head", "merge_sha": "merge-zero",
-        },
-    )
+
+    def snapshot_for_review(_root, mr):
+        if mr.url == old["url"]:
+            return {
+                "state": "merged",
+                "url": old["url"],
+                "source_branch": "feat/feat_001",
+                "target_branch": "epic/epic_001",
+                "source_revision": "source-head",
+                "merge_sha": "merge-zero",
+            }
+        return {
+            "state": "open",
+            "url": mr.url,
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_revision": review.head_sha(root),
+            "target_revision": review.head_sha(root),
+        }
+
+    monkeypatch.setattr(review, "merge_request_snapshot", snapshot_for_review)
     follow_up = MergeRequest(
-        url="https://example.test/pulls/2", number="2", forge="github",
-        source_branch="feat/feat_001", target_branch="epic/epic_001", draft=False,
+        url="https://example.test/pulls/2",
+        number="2",
+        forge="github",
+        source_branch="feat/feat_001",
+        target_branch="epic/epic_001",
+        draft=False,
     )
     created: list[MergeRequest] = []
     monkeypatch.setattr(
-        review, "create_merge_request",
+        review,
+        "create_merge_request",
         lambda *_a, **_k: created.append(follow_up) or follow_up,
     )
     monkeypatch.setattr(
-        review, "find_merge_request",
+        review,
+        "find_merge_request",
         lambda *_a, **_k: created[0] if created else None,
     )
     real_save = review._save
@@ -315,4 +367,268 @@ def test_follow_up_save_failure_recovers_same_remote_review(
     recovered = review.ensure_feature_review("feat_001", root=root)
     assert recovered == follow_up
     assert created == [follow_up]
-    assert review.review_record_for_feature("feat_001", root=root)["current_generation"] == 1
+    assert (
+        review.review_record_for_feature("feat_001", root=root)["current_generation"]
+        == 1
+    )
+
+
+def _completed_delivery_board(root: Path) -> None:
+    add_doc(
+        root,
+        id="epic_001",
+        title="Epic",
+        tier="epic",
+        status="active",
+        children=["feat_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="completed",
+        parent="feat_001",
+    )
+
+
+def test_delivery_view_retains_completed_owner_for_original_open_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _completed_delivery_board(root)
+    review._store_review_generation(
+        root,
+        "feat_001",
+        _projection("https://example.test/pulls/1"),
+        generation=0,
+        action_id=None,
+    )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+    monkeypatch.setattr(
+        review,
+        "merge_request_snapshot",
+        lambda *_a, **_k: pytest.fail("delivery reads must not poll the forge"),
+    )
+    before = (root / ".cascade/reviews.json").read_bytes()
+
+    first = review.feature_delivery_view("feat_001", root=root)
+    second = review.feature_delivery_views(["feat_001"], root=root)["feat_001"]
+
+    assert first == second
+    assert first == {
+        "feature_id": "feat_001",
+        "accountable_owner": "feature_team:feat_001",
+        "phase": "review_pending",
+        "review_url": "https://example.test/pulls/1",
+        "generation": 0,
+        "evidence_status": "open",
+        "blocker": "review_acceptance_pending",
+        "next_prerequisite": "await_current_review_acceptance",
+        "actionable": False,
+    }
+    assert (root / ".cascade/reviews.json").read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("record", "expected_phase", "expected_status"),
+    [
+        (None, "implementation_ready", "review_evidence_missing"),
+        (
+            _projection("https://example.test/pulls/7", closed=True),
+            "merge_verification_pending",
+            "legacy_unverified",
+        ),
+        (
+            {**_projection("https://example.test/pulls/8"), "state": "closed"},
+            "merge_verification_pending",
+            "legacy_unverified",
+        ),
+    ],
+)
+def test_delivery_view_keeps_missing_and_closed_unmerged_evidence_nonterminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    record: dict[str, object] | None,
+    expected_phase: str,
+    expected_status: str,
+) -> None:
+    root = make_repo(tmp_path)
+    _completed_delivery_board(root)
+    if record is not None:
+        review._store_review_generation(
+            root, "feat_001", record, generation=0, action_id=None
+        )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    view = review.feature_delivery_view("feat_001", root=root)
+
+    assert view["phase"] == expected_phase
+    assert view["evidence_status"] == expected_status
+    assert view["blocker"] is not None
+
+
+@pytest.mark.parametrize(
+    ("repair_phase", "expected_phase"),
+    [
+        ("authority_recorded", "repair_requested"),
+        ("parent_enabled", "repair_in_progress"),
+        ("delivery_pending", "repair_in_progress"),
+    ],
+)
+def test_delivery_view_projects_current_admitted_repair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    repair_phase: str,
+    expected_phase: str,
+) -> None:
+    root = make_repo(tmp_path)
+    _completed_delivery_board(root)
+    review._store_review_generation(
+        root,
+        "feat_001",
+        _projection("https://example.test/pulls/1"),
+        generation=0,
+        action_id=None,
+    )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+    monkeypatch.setattr(
+        "cascade.feature.repair.current_feature_repair_record",
+        lambda *_a, **_k: {
+            "generation": 1,
+            "phase": repair_phase,
+            "next_action": "resume_original_task_delivery",
+        },
+    )
+
+    view = review.feature_delivery_view("feat_001", root=root)
+
+    assert view["phase"] == expected_phase
+    assert view["generation"] == 1
+    assert view["actionable"] is True
+    assert view["review_url"] == "https://example.test/pulls/1"
+
+
+def test_delivery_view_requires_current_acceptance_target_ancestry_and_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _completed_delivery_board(root)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "delivery fixture"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "feat/feat_001", head], cwd=root, check=True)
+    subprocess.run(["git", "branch", "epic/epic_001", head], cwd=root, check=True)
+    projection = {
+        **_projection("https://example.test/pulls/9", closed=True),
+        "source_head": head,
+        "target_head": head,
+    }
+    review._store_review_generation(
+        root, "feat_001", projection, generation=1, action_id="repair:one"
+    )
+    review._update_record(
+        root,
+        "feat_001",
+        {
+            "accepted_merge_sha": head,
+            "accepted_source_head": head,
+            "accepted_target_head": head,
+            "reconciliation_status": "accepted",
+        },
+    )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    pending = review.feature_delivery_view("feat_001", root=root)
+    assert pending["phase"] == "merge_verification_pending"
+    assert pending["blocker"] == "completion_event_missing"
+
+    append_event(
+        "epic_001",
+        Event(
+            type="FeatureCompleted",
+            ts=datetime.now(timezone.utc),
+            payload={"feature_id": "feat_001"},
+            dest="epic_001",
+        ),
+        root=root,
+    )
+
+    integrated = review.feature_delivery_view("feat_001", root=root)
+    assert integrated["phase"] == "verified_integrated"
+    assert integrated["evidence_status"] == "accepted_current_generation"
+    assert integrated["blocker"] is None
+
+    (root / ".cascade/reviews.json").unlink()
+    monkeypatch.setattr(review, "review_enabled", lambda _root: False)
+    local = review.feature_delivery_view("feat_001", root=root)
+    assert local["phase"] == "verified_integrated"
+    assert local["evidence_status"] == "local_integration"
+
+
+def test_delivery_view_requires_exact_supported_cancellation_disposition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(
+        root,
+        id="epic_001",
+        title="Epic",
+        tier="epic",
+        status="active",
+        children=["feat_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="cancelled",
+        parent="epic_001",
+    )
+    cancelled_at = datetime.now(timezone.utc)
+    child = read_doc("feat_001", root=root)
+    child.meta.cancellation_reason = "scope withdrawn"
+    child.meta.cancelled_at = cancelled_at
+    child.meta.cancellation_step = "complete"
+    write_doc(child, root=root)
+    parent = read_doc("epic_001", root=root)
+    parent.meta.cancellation_feedback.append(
+        CancellationFeedback(
+            child_id="feat_001",
+            child_tier="feature",
+            parent_id="epic_001",
+            reason="scope withdrawn",
+            cancelled_at=cancelled_at,
+            disposition="continue_reduced_scope",
+            resolved_at=datetime.now(timezone.utc),
+        )
+    )
+    write_doc(parent, root=root)
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    view = review.feature_delivery_view("feat_001", root=root)
+
+    assert view["phase"] == "terminal_cancelled"
+    assert view["evidence_status"] == "explicit_terminal_disposition"
+    assert view["blocker"] is None
