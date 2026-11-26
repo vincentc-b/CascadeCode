@@ -41,6 +41,10 @@ def _get(url: str) -> tuple[int, object, dict[str, str], int]:
         return response.status, json.loads(raw), dict(response.headers), len(raw)
 
 
+def _decode_cursor(cursor: str) -> dict[str, object]:
+    return json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+
+
 @pytest.fixture
 def transcript_server(tmp_path: Path):
     root = make_repo(tmp_path, git=False)
@@ -231,7 +235,7 @@ def test_typed_invalid_restart_pending_and_get_is_projection_only(
 
 
 def test_oversized_detail_reconstructs_utf8_and_rejects_foreign_or_stale_cursor(
-    transcript_server
+    transcript_server, monkeypatch
 ) -> None:
     base, root = transcript_server
     body = "prefix-" + ("🙂漢字" * 30000) + "-suffix"
@@ -246,9 +250,28 @@ def test_oversized_detail_reconstructs_utf8_and_rejects_foreign_or_stale_cursor(
     assert "Transcript preview" in item["body"]
     assert "detail_digest" not in item
 
+    projection = root / ".cascade/transcript_pages"
+    files_before = {
+        path.relative_to(projection): (path.stat().st_size, path.stat().st_mtime_ns)
+        for path in projection.rglob("*")
+        if path.is_file()
+    }
+    monkeypatch.setattr(
+        "cascade.war_room.chat_store._connect_index",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("GET opened SQLite")),
+    )
+    monkeypatch.setattr(
+        "cascade.war_room.sidecar_routes.read_messages",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("GET scanned JSONL")),
+        raising=False,
+    )
     chunks: list[str] = []
     cursor = item["detail_cursor"]
+    seen_cursors: set[str] = set()
     while cursor is not None:
+        assert cursor not in seen_cursors
+        seen_cursors.add(cursor)
+        decoded_cursor = _decode_cursor(cursor)
         url = (
             base
             + "/api/transcript/v1/epic_001/items/large-message/detail?cursor="
@@ -258,10 +281,30 @@ def test_oversized_detail_reconstructs_utf8_and_rejects_foreign_or_stale_cursor(
         assert status == HTTPStatus.OK
         assert response_size < 256 * 1024
         assert len(detail["chunk"].encode("utf-8")) <= 64 * 1024
+        assert detail["graph_id"] == decoded_cursor["graph"] == "epic_001"
+        assert detail["message_id"] == decoded_cursor["message"] == "large-message"
+        assert detail["incarnation"] == decoded_cursor["incarnation"]
         chunks.append(detail["chunk"])
-        cursor = detail["next_cursor"]
+        next_cursor = detail["next_cursor"]
+        if not detail["complete"]:
+            assert next_cursor is not None and next_cursor != cursor
+            decoded_next = _decode_cursor(next_cursor)
+            assert decoded_next == {
+                **decoded_cursor,
+                "offset": decoded_cursor["offset"]
+                + len(detail["chunk"].encode("utf-8")),
+            }
+            assert decoded_next["offset"] > decoded_cursor["offset"]
+        cursor = next_cursor
     assert "".join(chunks) == body
     assert detail["complete"] is True
+    assert detail["next_cursor"] is None
+    files_after = {
+        path.relative_to(projection): (path.stat().st_size, path.stat().st_mtime_ns)
+        for path in projection.rglob("*")
+        if path.is_file()
+    }
+    assert files_after == files_before
 
     status, foreign, _headers, _size = _get(
         base
@@ -272,9 +315,7 @@ def test_oversized_detail_reconstructs_utf8_and_rejects_foreign_or_stale_cursor(
     assert foreign["error"]["code"] == "invalid_request"
 
     stale_cursor = item["detail_cursor"]
-    mid_character = json.loads(
-        base64.urlsafe_b64decode(stale_cursor + "=" * (-len(stale_cursor) % 4))
-    )
+    mid_character = _decode_cursor(stale_cursor)
     mid_character["offset"] = len("prefix-".encode("utf-8")) + 1
     invalid_offset_cursor = base64.urlsafe_b64encode(
         json.dumps(mid_character, separators=(",", ":")).encode()
@@ -287,9 +328,7 @@ def test_oversized_detail_reconstructs_utf8_and_rejects_foreign_or_stale_cursor(
     assert status == HTTPStatus.BAD_REQUEST
     assert invalid_offset["error"]["code"] == "invalid_request"
 
-    decoded = json.loads(
-        base64.urlsafe_b64decode(stale_cursor + "=" * (-len(stale_cursor) % 4))
-    )
+    decoded = _decode_cursor(stale_cursor)
     decoded["digest"] = "0" * 64
     changed_digest_cursor = base64.urlsafe_b64encode(
         json.dumps(decoded, separators=(",", ":")).encode()
@@ -301,6 +340,7 @@ def test_oversized_detail_reconstructs_utf8_and_rejects_foreign_or_stale_cursor(
     )
     assert status == HTTPStatus.CONFLICT
     assert changed["error"]["code"] == "cursor_restart"
+    monkeypatch.undo()
     detail_file = next((root / ".cascade/transcript_pages").glob("*/details/*.txt"))
     detail_file.unlink()
     status, missing, _headers, _size = _get(
