@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 
-from cascade.agent.graph_turn import clear_turn_model_override, run_coro_sync, run_planning_role_turn
+from cascade.agent.graph_turn import run_coro_sync, run_planning_role_turn
 from cascade.feature.checkpoint import get_checkpointer, thread_config
 from cascade.feature.registry import feature_tools
 from cascade.feature.state import FeatureGraphState
@@ -211,12 +212,12 @@ def _ingest_node(state: FeatureGraphState) -> dict:
 
 def _feature_lead_node(state: FeatureGraphState) -> dict:
     content = _planning_role_content("feature_lead", state)
-    return {"messages": [{"role": "feature_lead", "content": content}]}
+    return {"messages": [{"role": "feature_lead", "content": content, "id": uuid.uuid4().hex}]}
 
 
 def _feature_architect_node(state: FeatureGraphState) -> dict:
     content = _planning_role_content("feature_architect", state)
-    return {"messages": [{"role": "feature_architect", "content": content}]}
+    return {"messages": [{"role": "feature_architect", "content": content, "id": uuid.uuid4().hex}]}
 
 
 def _planning_role_content(role: str, state: FeatureGraphState) -> str:

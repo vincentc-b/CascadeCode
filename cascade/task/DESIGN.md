@@ -193,11 +193,12 @@ flowchart LR
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and `cascade-task-code` in the [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
 expose these functions beneath `cascade-team-components`. Receipts remain in the
-authoritative action record until a future durable transcript acknowledgement;
-they are source evidence, not live transcript events. The after-lock publisher
-notification carries the committed receipt and snapshot, may be missed or fail,
-and never changes repair authority or outcome; restart consumers replay the
-retained sequence. The [War Room design](../war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
+authoritative action record after transcript acknowledgement and continue to be
+the source evidence. The after-lock publisher notification carries the committed
+receipt and snapshot to the owning Epic/Feature transcript before progress
+references are published; it may be missed or fail and never changes repair
+authority or outcome. Restart consumers replay the retained sequence and the
+receipt-keyed graph index returns the same message. The [War Room design](../war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
 owns current presentation limits; [Watchdog](../watchdog/DESIGN.md#recovery-admission-and-active-path-authority)
 owns independent verification. [Action recovery tests](../../tests/task/test_action_recovery.py)
 exercise claim races, persisted attempts, checkpoints and restart behavior.

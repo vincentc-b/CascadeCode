@@ -1425,11 +1425,18 @@ def _invoke_role_turn(
         snapshot = graph.get_state(config)
         before = len((snapshot.values or {}).get("messages") or [])
         graph.invoke({}, config)
-        after = graph.get_state(config).values or {}
+        after_snapshot = graph.get_state(config)
+        after = after_snapshot.values or {}
         new_messages = (after.get("messages") or [])[before:]
         from cascade.war_room.planning_transcript import append_planning_turn_to_chat
 
-        append_planning_turn_to_chat(work_id, new_messages, root=root)
+        append_planning_turn_to_chat(
+            work_id,
+            new_messages,
+            root=root,
+            checkpoint_config=after_snapshot.config,
+            message_offset=before,
+        )
         if model_id is not None:
             clear_turn_model_override(graph, config)
         return
@@ -1443,11 +1450,18 @@ def _invoke_role_turn(
         snapshot = graph.get_state(config)
         before = len((snapshot.values or {}).get("messages") or [])
         graph.invoke({}, config)
-        after = graph.get_state(config).values or {}
+        after_snapshot = graph.get_state(config)
+        after = after_snapshot.values or {}
         new_messages = (after.get("messages") or [])[before:]
         from cascade.war_room.planning_transcript import append_planning_turn_to_chat
 
-        append_planning_turn_to_chat(work_id, new_messages, root=root)
+        append_planning_turn_to_chat(
+            work_id,
+            new_messages,
+            root=root,
+            checkpoint_config=after_snapshot.config,
+            message_offset=before,
+        )
         if model_id is not None:
             clear_turn_model_override(graph, config)
         return

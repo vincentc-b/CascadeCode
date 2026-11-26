@@ -331,7 +331,7 @@ cascade_uses_renderer = cascade -> structurizr "Validates and renders local arch
     }
 }
 
-code_epic_graph = element "epic: ensure_epic_graph" "Function" "Compiles sequential role nodes with LangGraph StateGraph." {
+code_epic_graph = element "epic: ensure_epic_graph" "Function" "Compiles sequential role nodes whose authored replies receive durable IDs before checkpoint persistence." {
     properties {
         "cascade.semanticId" "element.code.epic.graph"
         "cascade.parent" "element.component.epic-team"
@@ -445,7 +445,7 @@ code_epic_rel_35 = code_epic_runtime -> code_epic_provider "Dispatches through s
     }
 }
 
-code_feature_graph = element "feature: ensure_feature_graph" "Function" "Compiles sequential role nodes with LangGraph StateGraph." {
+code_feature_graph = element "feature: ensure_feature_graph" "Function" "Compiles sequential role nodes whose authored replies receive durable IDs before checkpoint persistence." {
     properties {
         "cascade.semanticId" "element.code.feature.graph"
         "cascade.parent" "element.component.feature-team"
@@ -673,7 +673,7 @@ code_task_rel_49 = code_task_runtime -> code_task_provider "Dispatches through s
     }
 }
 
-code_teams_epic = element "teams: ensure_epic_graph" "Function" "Creates the epic team graph with scoped state and SQLite checkpoints." {
+code_teams_epic = element "teams: ensure_epic_graph" "Function" "Creates the Epic graph; role-reply IDs persist with its scoped SQLite checkpoint state." {
     properties {
         "cascade.semanticId" "element.code.teams.epic"
         "cascade.parent" "element.component.teams"
@@ -682,7 +682,7 @@ code_teams_epic = element "teams: ensure_epic_graph" "Function" "Creates the epi
     }
 }
 
-code_teams_feature = element "teams: ensure_feature_graph" "Function" "Creates the feature team graph with scoped state and SQLite checkpoints." {
+code_teams_feature = element "teams: ensure_feature_graph" "Function" "Creates the Feature graph; role-reply IDs persist with its scoped SQLite checkpoint state." {
     properties {
         "cascade.semanticId" "element.code.teams.feature"
         "cascade.parent" "element.component.teams"
@@ -1295,6 +1295,24 @@ code_watchdog_progress_publish = element "publish_committed_transition" "Functio
     }
 }
 
+code_watchdog_milestone_record = element "record_transcript_milestone" "Function" "Durably maps a committed receipt to its transcript message, refreshes ordered entry references, and republishes dirty aliases." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.milestone-record"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/recovery_progress/publisher.py"
+        "cascade.sourceSymbol" "record_transcript_milestone"
+    }
+}
+
+code_watchdog_milestone_upsert = element "_record_transcript_milestone" "Function" "Rejects receipt, entry, graph or message identity conflicts while refreshing current incarnation and append-sequence routing metadata." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.milestone-upsert"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/recovery_progress/publisher.py"
+        "cascade.sourceSymbol" "_record_transcript_milestone"
+    }
+}
+
 watchdog_tick_to_dispatch = code_watchdog_tick -> code_watchdog_dispatch "Advances eligible Tasks through automation" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-tick-to-dispatch"
@@ -1866,6 +1884,15 @@ code_workspace_registry = element "get_integration_worktree" "Function" "Read re
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
         "cascade.sourceSymbol" "get_integration_worktree"
+    }
+}
+
+code_workspace_create = element "create_integration_worktree" "Function" "Creates an integration checkout and switches Epic or Feature transcript ownership inside its graph fence." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.create"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "create_integration_worktree"
     }
 }
 
@@ -3171,7 +3198,7 @@ code_dashboard_incidents = element "read_recovery_progress" "Function" "Reads re
     }
 }
 
-code_dashboard_chat_get = element "handle_get_chat" "Function" "Returns existing transcript rows without checkpoint backfill." {
+code_dashboard_chat_get = element "handle_get_chat" "Function" "Returns the bounded latest-window compatibility array with continuation and completeness headers." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.get"
         "cascade.parent" "element.component.dashboard"
@@ -3180,7 +3207,7 @@ code_dashboard_chat_get = element "handle_get_chat" "Function" "Returns existing
     }
 }
 
-code_dashboard_chat_read = element "read_messages" "Function" "Routes to the owning room and reads the JSONL transcript." {
+code_dashboard_chat_read = element "read_messages" "Function" "Reads authoritative JSONL only for explicit writer-side sync and compatibility helpers, never from GET." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.read"
         "cascade.parent" "element.component.dashboard"
@@ -3189,7 +3216,43 @@ code_dashboard_chat_read = element "read_messages" "Function" "Routes to the own
     }
 }
 
-code_dashboard_chat_append = element "append_transcript_message" "Function" "Appends a UUID and append-time row under the process-local lock." {
+code_dashboard_chat_page = element "read_transcript_page" "Function" "Reads incarnation-bound immutable pages with row, aggregate source and serialized response ceilings." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.page"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/transcript_pages.py"
+        "cascade.sourceSymbol" "read_transcript_page"
+    }
+}
+
+code_dashboard_transcript_get = element "handle_get_transcript" "Function" "Validates versioned page and detail queries and returns typed invalid, restart or pending errors." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.transcript.get"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/sidecar_routes.py"
+        "cascade.sourceSymbol" "handle_get_transcript"
+    }
+}
+
+code_dashboard_chat_publish = element "publish_transcript_projection" "Function" "Publishes committed offset rows as content-addressed pages and atomically advances the graph pointer." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.publish"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/transcript_pages.py"
+        "cascade.sourceSymbol" "publish_transcript_projection"
+    }
+}
+
+code_dashboard_chat_detail = element "read_transcript_detail" "Function" "Reads one graph/incarnation/message/digest-bound UTF-8 detail chunk without scanning JSONL." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.detail"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/transcript_pages.py"
+        "cascade.sourceSymbol" "read_transcript_detail"
+    }
+}
+
+code_dashboard_chat_append = element "append_transcript_message" "Function" "Appends an exact JSONL line through a durable intent and commits its unique source/message offset after fsync." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.append"
         "cascade.parent" "element.component.dashboard"
@@ -3198,7 +3261,61 @@ code_dashboard_chat_append = element "append_transcript_message" "Function" "App
     }
 }
 
-code_dashboard_transcript = element "append_planning_turn_to_chat" "Function" "Mirrors sanitized authored messages after graph invocation returns." {
+code_dashboard_chat_fence = element "graph_transcript_fence" "Function" "Serializes graph transcript writers across processes with a tracking-root advisory lock." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.fence"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "graph_transcript_fence"
+    }
+}
+
+code_dashboard_chat_index = element "_connect_index" "Function" "Opens the writer-only SQLite append, rewrite and move intent index with uniqueness, offsets, incarnation and full synchronous commits." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.index"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "_connect_index"
+    }
+}
+
+code_dashboard_chat_rewrite = element "_rewrite_messages" "Function" "Journals exact replacement bytes and a retry-stable incarnation, fsyncs JSONL, then rebuilds message and source-key offsets." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.rewrite"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "_rewrite_messages"
+    }
+}
+
+code_dashboard_chat_move = element "move_transcript_room" "Function" "Journals and verifies a durable room copy, then switches routing and installs one retry-stable incarnation under the graph fence." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.move"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "move_transcript_room"
+    }
+}
+
+code_dashboard_chat_resume_move = element "resume_transcript_room_move" "Function" "Verifies the journaled destination after terminal owner removal, completes the retained index transition, and republishes the destination incarnation." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.resume-move"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "resume_transcript_room_move"
+    }
+}
+
+code_dashboard_recovery_milestone = element "append_committed_recovery_receipt" "Function" "Routes one safe committed receipt to its owning graph and returns its durable transcript acknowledgement after fence release." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.recovery-milestone"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/recovery_milestones.py"
+        "cascade.sourceSymbol" "append_committed_recovery_receipt"
+    }
+}
+
+code_dashboard_transcript = element "append_planning_turn_to_chat" "Function" "Mirrors sanitized authored messages with checkpoint lineage, ordinal and durable message identity after graph invocation returns." {
     properties {
         "cascade.semanticId" "element.code.dashboard.transcript"
         "cascade.parent" "element.component.dashboard"
@@ -3207,7 +3324,7 @@ code_dashboard_transcript = element "append_planning_turn_to_chat" "Function" "M
     }
 }
 
-code_dashboard_backfill = element "sync_planning_transcript_to_chat" "Function" "Reads checkpoint messages on explicit sync and deduplicates author/body pairs." {
+code_dashboard_backfill = element "sync_planning_transcript_to_chat" "Function" "Replays checkpointed role identities on explicit writer sync and labels ambiguous legacy author/body matches." {
     properties {
         "cascade.semanticId" "element.code.dashboard.backfill"
         "cascade.parent" "element.component.dashboard"
@@ -3357,9 +3474,33 @@ dashboard_router_to_dashboard_chat_get = code_dashboard_router -> code_dashboard
     }
 }
 
-dashboard_chat_get_to_dashboard_chat_read = code_dashboard_chat_get -> code_dashboard_chat_read "Reads the routed transcript" {
+dashboard_router_to_dashboard_transcript_get = code_dashboard_router -> code_dashboard_transcript_get "Dispatches versioned transcript page and detail reads" {
     properties {
-        "cascade.semanticId" "relationship.code-dashboard-chat-get-to-dashboard-chat-read"
+        "cascade.semanticId" "relationship.code-dashboard-router-to-dashboard-transcript-get"
+    }
+}
+
+dashboard_chat_get_to_dashboard_chat_page = code_dashboard_chat_get -> code_dashboard_chat_page "Reads the bounded latest transcript window" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-get-to-dashboard-chat-page"
+    }
+}
+
+dashboard_transcript_get_to_dashboard_chat_page = code_dashboard_transcript_get -> code_dashboard_chat_page "Reads bounded immutable transcript pages" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-transcript-get-to-dashboard-chat-page"
+    }
+}
+
+dashboard_transcript_get_to_dashboard_chat_detail = code_dashboard_transcript_get -> code_dashboard_chat_detail "Reads one immutable oversized-message chunk" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-transcript-get-to-dashboard-chat-detail"
+    }
+}
+
+dashboard_chat_append_to_publish = code_dashboard_chat_append -> code_dashboard_chat_publish "Publishes committed append offsets for bounded readers" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-append-to-publish"
     }
 }
 
@@ -3369,13 +3510,145 @@ dashboard_transcript_to_dashboard_chat_append = code_dashboard_transcript -> cod
     }
 }
 
-dashboard_backfill_to_dashboard_chat_read = code_dashboard_backfill -> code_dashboard_chat_read "Reads existing rows for deduplication" {
+dashboard_recovery_milestone_to_chat_append = code_dashboard_recovery_milestone -> code_dashboard_chat_append "Appends the receipt-keyed recovery line through the durable graph fence" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-recovery-milestone-to-chat-append"
+    }
+}
+
+dashboard_recovery_milestone_to_workspace_owner = code_dashboard_recovery_milestone -> code_workspace_doc_owner "Resolves Task receipts to their owning Feature room across registered roots" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-recovery-milestone-to-workspace-owner"
+    }
+}
+
+task_transition_notify_to_progress_publish = code_task_transition_notify -> code_watchdog_progress_publish "Appends and projects the committed receipt after source-lock release" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-transition-notify-to-progress-publish"
+    }
+}
+
+watchdog_transition_notify_to_progress_publish = code_watchdog_transition_notify -> code_watchdog_progress_publish "Appends and projects the committed incident receipt after source-lock release" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-transition-notify-to-progress-publish"
+    }
+}
+
+watchdog_progress_publish_to_recovery_milestone = code_watchdog_progress_publish -> code_dashboard_recovery_milestone "Commits the transcript event before publishing its reference" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-progress-publish-to-recovery-milestone"
+    }
+}
+
+watchdog_progress_publish_to_milestone_upsert = code_watchdog_progress_publish -> code_watchdog_milestone_upsert "Persists the durable acknowledgement inside the fast-path transaction" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-progress-publish-to-milestone-upsert"
+    }
+}
+
+watchdog_progress_drain_to_milestone_upsert = code_watchdog_progress_drain -> code_watchdog_milestone_upsert "Persists each replayed durable acknowledgement" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-progress-drain-to-milestone-upsert"
+    }
+}
+
+watchdog_milestone_record_to_milestone_upsert = code_watchdog_milestone_record -> code_watchdog_milestone_upsert "Validates current fenced routing before updating the durable mapping" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-milestone-record-to-milestone-upsert"
+    }
+}
+
+dashboard_chat_append_to_fence = code_dashboard_chat_append -> code_dashboard_chat_fence "Fences append and exact-tail repair across processes" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-append-to-fence"
+    }
+}
+
+dashboard_chat_append_to_index = code_dashboard_chat_append -> code_dashboard_chat_index "Commits intent, uniqueness and byte offsets around JSONL fsync" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-append-to-index"
+    }
+}
+
+dashboard_chat_rewrite_to_fence = code_dashboard_chat_rewrite -> code_dashboard_chat_fence "Fences rollback and legacy-label rewrites across processes" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-rewrite-to-fence"
+    }
+}
+
+dashboard_chat_rewrite_to_index = code_dashboard_chat_rewrite -> code_dashboard_chat_index "Persists rewrite intent, advances incarnation and rebuilds durable source-key offsets" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-rewrite-to-index"
+    }
+}
+
+dashboard_chat_rewrite_to_publish = code_dashboard_chat_rewrite -> code_dashboard_chat_publish "Invalidates the old pointer and republishes the committed replacement incarnation" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-rewrite-to-publish"
+    }
+}
+
+dashboard_chat_move_to_fence = code_dashboard_chat_move -> code_dashboard_chat_fence "Fences room copy and owner switch" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-move-to-fence"
+    }
+}
+
+dashboard_chat_move_to_index = code_dashboard_chat_move -> code_dashboard_chat_index "Changes incarnation and rebuilds committed offsets" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-move-to-index"
+    }
+}
+
+dashboard_chat_move_to_publish = code_dashboard_chat_move -> code_dashboard_chat_publish "Invalidates the moving incarnation and republishes the committed destination" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-move-to-publish"
+    }
+}
+
+dashboard_chat_resume_move_to_fence = code_dashboard_chat_resume_move -> code_dashboard_chat_fence "Fences terminal move recovery against transcript writers" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-resume-move-to-fence"
+    }
+}
+
+dashboard_chat_resume_move_to_index = code_dashboard_chat_resume_move -> code_dashboard_chat_index "Completes the retained move intent and rebuilt offsets" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-resume-move-to-index"
+    }
+}
+
+dashboard_chat_resume_move_to_publish = code_dashboard_chat_resume_move -> code_dashboard_chat_publish "Publishes the recovered destination incarnation" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-resume-move-to-publish"
+    }
+}
+
+workspace_create_to_dashboard_chat_move = code_workspace_create -> code_dashboard_chat_move "Copies committed room history and publishes its new registered owner" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-create-to-dashboard-chat-move"
+    }
+}
+
+workspace_retire_to_dashboard_chat_move = code_workspace_retire -> code_dashboard_chat_move "Moves history to the surviving owner while retiring the registered checkout" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-retire-to-dashboard-chat-move"
+    }
+}
+
+workspace_retire_to_dashboard_chat_resume_move = code_workspace_retire -> code_dashboard_chat_resume_move "Resumes the journaled room move when terminal owner removal already completed" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-retire-to-dashboard-chat-resume-move"
+    }
+}
+
+dashboard_backfill_to_dashboard_chat_read = code_dashboard_backfill -> code_dashboard_chat_read "Reads existing rows only to identify explicitly ambiguous legacy matches" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-backfill-to-dashboard-chat-read"
     }
 }
 
-dashboard_backfill_to_dashboard_chat_append = code_dashboard_backfill -> code_dashboard_chat_append "Appends absent author/body pairs" {
+dashboard_backfill_to_dashboard_chat_append = code_dashboard_backfill -> code_dashboard_chat_append "Replays each stable checkpoint message identity" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-backfill-to-dashboard-chat-append"
     }
