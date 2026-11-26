@@ -282,6 +282,10 @@ Navigate from `cascade-context` through `cascade-containers` and
 [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
 The model and [source contract](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json)
 are authoritative; renders are revision-bound derived artifacts.
+Pinned implementation-design discovery uses the target-owned
+[design mapping](../../architecture/design-mappings.json); distinct child
+subsystems, including [Recovery progress](../recovery_progress/DESIGN.md), retain
+their own design artifact and owner rather than inheriting the package document.
 
 | Entry point | Inputs, output and state |
 |---|---|

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import sqlite3
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
@@ -12,7 +14,7 @@ from cascade.recovery_progress.publisher import _entry_id, _safe_text
 from cascade.war_room.chat_store import (
     TranscriptPendingError,
     append_transcript_message,
-    transcript_source_acknowledgement,
+    fenced_transcript_source_acknowledgement,
 )
 from cascade.watchdog.incidents import transition_receipt_v1
 from cascade.workspace.doc_root import read_doc_resolved
@@ -156,6 +158,7 @@ def append_committed_recovery_receipt(
     snapshot: Mapping[str, Any],
     *,
     provenance: Literal["direct", "reconciled", "legacy_unknown"] = "direct",
+    deadline: float | None = None,
 ) -> dict[str, object]:
     """Append one safe committed receipt, returning durable ack or typed pending.
 
@@ -163,11 +166,14 @@ def append_committed_recovery_receipt(
     transcript store releases its graph fence before this function returns.
     """
 
+    effective_deadline = deadline if deadline is not None else time.monotonic() + 30.0
+    if time.monotonic() >= effective_deadline:
+        return _pending(receipt, snapshot, "transcript_pending")
     safe = _safe_receipt(receipt, snapshot)
     if safe is None:
         return _pending(receipt, snapshot, "unsafe_or_missing_evidence")
     graph_id = _resolve_graph(receipt, root=root)
-    if graph_id is None:
+    if graph_id is None or time.monotonic() >= effective_deadline:
         return _pending(receipt, snapshot, "ambiguous_or_unknown_graph")
     action, transition, target = safe
     receipt_id = str(receipt["receipt_id"])
@@ -209,11 +215,16 @@ def append_committed_recovery_receipt(
                 "target": target,
                 "source_reference": str(receipt["source_reference"]),
             },
+            deadline=effective_deadline,
         )
-        ack = transcript_source_acknowledgement(
-            graph_id, source_key=source_key, root=root
-        )
-    except (OSError, RuntimeError, ValueError, TranscriptPendingError):
+        with fenced_transcript_source_acknowledgement(
+            graph_id,
+            source_key=source_key,
+            root=root,
+            deadline=effective_deadline,
+        ) as ack:
+            ack = dict(ack)
+    except (OSError, RuntimeError, ValueError, sqlite3.Error, TranscriptPendingError):
         return _pending(receipt, snapshot, "transcript_pending")
     return {
         "status": "committed",

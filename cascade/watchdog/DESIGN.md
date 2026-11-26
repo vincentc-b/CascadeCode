@@ -15,7 +15,10 @@ durability and the bounded read surface.
 
 The `cascade-watchdog-code` view links the tick, bounded drain and immutable
 publisher, including the durable mapping writer; `cascade-dashboard-code` owns
-receipt serialization, graph append and authoritative source-key lookup.
+receipt serialization, graph append, deadline-bound graph fence and read-only
+existing-index source-key lookup. Publisher and transcript lock/SQLite waits
+consume one caller deadline; admitted filesystem/source work remains a separately
+measured baseline and can leave replayable pending work.
 
 ## Dispatch ownership transition
 

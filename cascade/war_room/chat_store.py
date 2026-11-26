@@ -9,6 +9,7 @@ import os
 import shutil
 import sqlite3
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -47,8 +48,39 @@ def _index_path(graph_id: str, *, root: Path) -> Path:
     return _runtime_root(root) / _INDEX_DIR / f"{_store_key(graph_id)}.sqlite"
 
 
+def _remaining_seconds(deadline: float | None) -> float:
+    if deadline is None:
+        return 30.0
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TranscriptPendingError("transcript deadline is exhausted")
+    return remaining
+
+
+def _set_index_deadline(
+    connection: sqlite3.Connection, deadline: float | None
+) -> None:
+    if deadline is None:
+        return
+    busy_ms = max(1, int(_remaining_seconds(deadline) * 1000))
+    connection.execute(f"PRAGMA busy_timeout = {busy_ms}")
+
+
+def _execute_index(
+    connection: sqlite3.Connection,
+    sql: str,
+    parameters: tuple[object, ...] = (),
+    *,
+    deadline: float | None = None,
+) -> sqlite3.Cursor:
+    _set_index_deadline(connection, deadline)
+    return connection.execute(sql, parameters)
+
+
 @contextmanager
-def graph_transcript_fence(graph_id: str, *, root: Path) -> Iterator[None]:
+def graph_transcript_fence(
+    graph_id: str, *, root: Path, deadline: float | None = None
+) -> Iterator[None]:
     """Take the stable tracking-root OS fence for one graph transcript."""
 
     if not graph_id_is_valid(graph_id):
@@ -56,42 +88,68 @@ def graph_transcript_fence(graph_id: str, *, root: Path) -> Iterator[None]:
     home = _runtime_root(root) / _INDEX_DIR
     home.mkdir(parents=True, exist_ok=True)
     lock_path = home / f"{_store_key(graph_id)}.lock"
-    with _thread_locks_guard:
+    guard_acquired = (
+        _thread_locks_guard.acquire()
+        if deadline is None
+        else _thread_locks_guard.acquire(timeout=_remaining_seconds(deadline))
+    )
+    if not guard_acquired:
+        raise TranscriptPendingError("transcript thread-lock registry is busy")
+    try:
         thread_lock = _thread_locks.setdefault(lock_path, threading.RLock())
-    with thread_lock:
+    finally:
+        _thread_locks_guard.release()
+    thread_acquired = (
+        thread_lock.acquire()
+        if deadline is None
+        else thread_lock.acquire(timeout=_remaining_seconds(deadline))
+    )
+    if not thread_acquired:
+        raise TranscriptPendingError("transcript graph thread lock is busy")
+    try:
+        # Opening the lock file is a filesystem operation and cannot be interrupted;
+        # only the subsequent lock wait is covered by the caller's deadline.
         with lock_path.open("a+b") as handle:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            while True:
+                _remaining_seconds(deadline)
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    time.sleep(min(0.005, _remaining_seconds(deadline)))
             try:
                 yield
             finally:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        thread_lock.release()
 
 
-def _connect_index(graph_id: str, *, root: Path) -> sqlite3.Connection:
+def _connect_index(
+    graph_id: str, *, root: Path, deadline: float | None = None
+) -> sqlite3.Connection:
     path = _index_path(graph_id, root=root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path, timeout=30)
+    connection = sqlite3.connect(path, timeout=_remaining_seconds(deadline))
     connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA journal_mode=WAL")
-    connection.execute("PRAGMA synchronous=FULL")
-    connection.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS state (
+    statements = (
+        "PRAGMA journal_mode=WAL",
+        "PRAGMA synchronous=FULL",
+        """CREATE TABLE IF NOT EXISTS state (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             incarnation TEXT NOT NULL,
             room_path TEXT,
             indexed_end INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE IF NOT EXISTS events (
+        )""",
+        """CREATE TABLE IF NOT EXISTS events (
             append_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
             message_id TEXT NOT NULL UNIQUE,
             source_key TEXT UNIQUE,
             byte_offset INTEGER NOT NULL,
             byte_length INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS events_offset
-            ON events(byte_offset);
-        CREATE TABLE IF NOT EXISTS pending_intent (
+        )""",
+        "CREATE INDEX IF NOT EXISTS events_offset ON events(byte_offset)",
+        """CREATE TABLE IF NOT EXISTS pending_intent (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             room_path TEXT NOT NULL,
             expected_offset INTEGER NOT NULL,
@@ -99,8 +157,8 @@ def _connect_index(graph_id: str, *, root: Path) -> sqlite3.Connection:
             digest TEXT NOT NULL,
             message_id TEXT NOT NULL,
             source_key TEXT
-        );
-        CREATE TABLE IF NOT EXISTS move_intent (
+        )""",
+        """CREATE TABLE IF NOT EXISTS move_intent (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             source_path TEXT NOT NULL,
             destination_path TEXT NOT NULL,
@@ -109,8 +167,8 @@ def _connect_index(graph_id: str, *, root: Path) -> sqlite3.Connection:
             digest TEXT NOT NULL,
             target_incarnation TEXT NOT NULL,
             phase TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS rewrite_intent (
+        )""",
+        """CREATE TABLE IF NOT EXISTS rewrite_intent (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             room_path TEXT NOT NULL,
             original_length INTEGER NOT NULL,
@@ -118,20 +176,72 @@ def _connect_index(graph_id: str, *, root: Path) -> sqlite3.Connection:
             replacement BLOB NOT NULL,
             replacement_digest TEXT NOT NULL,
             target_incarnation TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS legacy_import_buffer (
+        )""",
+        """CREATE TABLE IF NOT EXISTS legacy_import_buffer (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             start_offset INTEGER NOT NULL,
             data BLOB NOT NULL
-        );
-        """
+        )""",
     )
-    connection.execute(
-        "INSERT OR IGNORE INTO state(singleton, incarnation) VALUES (1, ?)",
-        (uuid.uuid4().hex,),
-    )
-    connection.commit()
-    return connection
+    try:
+        for statement in statements:
+            _execute_index(connection, statement, deadline=deadline)
+        _execute_index(
+            connection,
+            "INSERT OR IGNORE INTO state(singleton, incarnation) VALUES (1, ?)",
+            (uuid.uuid4().hex,),
+            deadline=deadline,
+        )
+        _set_index_deadline(connection, deadline)
+        connection.commit()
+        return connection
+    except BaseException:
+        connection.close()
+        raise
+
+
+def _connect_existing_index(
+    graph_id: str, *, root: Path, deadline: float
+) -> sqlite3.Connection:
+    """Open a compatible existing index without creating or repairing anything."""
+
+    path = _index_path(graph_id, root=root)
+    if not path.is_file():
+        raise TranscriptPendingError("transcript index is unavailable")
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = sqlite3.connect(
+            f"file:{path}?mode=ro", uri=True, timeout=_remaining_seconds(deadline)
+        )
+        connection.row_factory = sqlite3.Row
+        expected = {
+            "state": {"singleton", "incarnation", "room_path", "indexed_end"},
+            "events": {"append_sequence", "message_id", "source_key"},
+            "pending_intent": {"singleton"},
+            "move_intent": {"singleton"},
+            "rewrite_intent": {"singleton"},
+            "legacy_import_buffer": {"singleton"},
+        }
+        for table, columns in expected.items():
+            present = {
+                str(row["name"])
+                for row in _execute_index(
+                    connection,
+                    f"PRAGMA table_info({table})",
+                    deadline=deadline,
+                )
+            }
+            if not columns.issubset(present):
+                raise TranscriptPendingError("transcript index schema is incompatible")
+        return connection
+    except TranscriptPendingError:
+        if connection is not None:
+            connection.close()
+        raise
+    except (OSError, sqlite3.Error):
+        if connection is not None:
+            connection.close()
+        raise TranscriptPendingError("transcript index is unavailable") from None
 
 
 def _fsync_parent(path: Path) -> None:
@@ -213,12 +323,18 @@ def _same_file_bytes(left: Path, right: Path) -> bool:
 
 
 def _publish_transcript_pages(
-    graph_id: str, path: Path, connection: sqlite3.Connection, *, root: Path
+    graph_id: str,
+    path: Path,
+    connection: sqlite3.Connection,
+    *,
+    root: Path,
+    deadline: float | None = None,
 ) -> None:
     # Keep the projection dependency one-way: GET never imports this writer
     # module or opens the SQLite intent/index database.
     from cascade.war_room.transcript_pages import publish_transcript_projection
 
+    _set_index_deadline(connection, deadline)
     publish_transcript_projection(
         graph_id, source_path=path, connection=connection, root=root
     )
@@ -267,7 +383,11 @@ def _replace_and_fsync(path: Path, payload: bytes) -> None:
 
 
 def _finish_rewrite(
-    connection: sqlite3.Connection, intent: sqlite3.Row, path: Path
+    connection: sqlite3.Connection,
+    intent: sqlite3.Row,
+    path: Path,
+    *,
+    deadline: float | None = None,
 ) -> None:
     expected_path = str(path.resolve())
     if intent["room_path"] != expected_path:
@@ -299,6 +419,7 @@ def _finish_rewrite(
             "transcript bytes do not match the pending rewrite"
         )
     _rewrite_fault("after_replace")
+    _set_index_deadline(connection, deadline)
     connection.execute("DELETE FROM events")
     connection.execute("DELETE FROM pending_intent")
     connection.execute("DELETE FROM legacy_import_buffer")
@@ -309,15 +430,18 @@ def _finish_rewrite(
     )
     connection.execute("DELETE FROM rewrite_intent WHERE singleton = 1")
     connection.commit()
-    _import_legacy(connection, path)
+    _import_legacy(connection, path, deadline=deadline)
 
 
-def _repair_rewrite(connection: sqlite3.Connection, path: Path) -> None:
+def _repair_rewrite(
+    connection: sqlite3.Connection, path: Path, *, deadline: float | None = None
+) -> None:
+    _set_index_deadline(connection, deadline)
     intent = connection.execute(
         "SELECT * FROM rewrite_intent WHERE singleton = 1"
     ).fetchone()
     if intent is not None:
-        _finish_rewrite(connection, intent, path)
+        _finish_rewrite(connection, intent, path, deadline=deadline)
 
 
 def _move_destination_matches(intent: sqlite3.Row, destination: Path) -> bool:
@@ -557,7 +681,10 @@ def _read_indexed_message(path: Path, event: sqlite3.Row) -> dict:
     return value
 
 
-def _repair_pending(connection: sqlite3.Connection, path: Path) -> None:
+def _repair_pending(
+    connection: sqlite3.Connection, path: Path, *, deadline: float | None = None
+) -> None:
+    _set_index_deadline(connection, deadline)
     intent = connection.execute(
         "SELECT * FROM pending_intent WHERE singleton = 1"
     ).fetchone()
@@ -583,16 +710,24 @@ def _repair_pending(connection: sqlite3.Connection, path: Path) -> None:
         _append_and_fsync(path, line[len(present) :])
     else:
         _fsync_file_and_parent(path)
+    _set_index_deadline(connection, deadline)
     _commit_intent(connection, intent)
 
 
 def _import_legacy(
-    connection: sqlite3.Connection, path: Path, *, byte_limit: int = _IMPORT_BYTES,
+    connection: sqlite3.Connection,
+    path: Path,
+    *,
+    byte_limit: int = _IMPORT_BYTES,
     row_limit: int = _IMPORT_ROWS,
+    deadline: float | None = None,
 ) -> bool:
     """Index a bounded complete-line prefix without changing authoritative JSONL."""
 
-    state = connection.execute("SELECT indexed_end FROM state WHERE singleton = 1").fetchone()
+    _set_index_deadline(connection, deadline)
+    state = connection.execute(
+        "SELECT indexed_end FROM state WHERE singleton = 1"
+    ).fetchone()
     offset = int(state["indexed_end"])
     size = path.stat().st_size if path.is_file() else 0
     if offset > size:
@@ -609,6 +744,7 @@ def _import_legacy(
     line_prefix = bytes(buffered["data"]) if buffered is not None else b""
     with path.open("rb") as handle:
         while source_read < byte_limit and rows < row_limit:
+            _set_index_deadline(connection, deadline)
             start = offset
             position = start + len(line_prefix)
             if position > size:
@@ -706,6 +842,7 @@ def append_transcript_message(
     occurred_at: str | None = None,
     provenance: str = "direct",
     metadata: Mapping[str, object] | None = None,
+    deadline: float | None = None,
 ) -> dict:
     """Durably append one deduplicated line to the authoritative JSONL.
 
@@ -747,14 +884,16 @@ def append_transcript_message(
     line = (json.dumps(message, ensure_ascii=False, separators=(",", ":")) + "\n").encode(
         "utf-8"
     )
-    with graph_transcript_fence(graph_id, root=root):
+    with graph_transcript_fence(graph_id, root=root, deadline=deadline):
         repo = _chat_repo(graph_id, root=root)
         path = _sidecar_path(repo, graph_id)
-        connection = _connect_index(graph_id, root=root)
+        connection: sqlite3.Connection | None = None
         try:
+            connection = _connect_index(graph_id, root=root, deadline=deadline)
+            _set_index_deadline(connection, deadline)
             _ensure_no_move_intent(connection)
-            _repair_rewrite(connection, path)
-            _repair_pending(connection, path)
+            _repair_rewrite(connection, path, deadline=deadline)
+            _repair_pending(connection, path, deadline=deadline)
             state = connection.execute(
                 "SELECT room_path FROM state WHERE singleton = 1"
             ).fetchone()
@@ -764,11 +903,15 @@ def append_transcript_message(
             connection.execute(
                 "UPDATE state SET room_path = ? WHERE singleton = 1", (current_room,)
             )
+            _set_index_deadline(connection, deadline)
             connection.commit()
-            imported = _import_legacy(connection, path)
-            _publish_transcript_pages(graph_id, path, connection, root=root)
+            imported = _import_legacy(connection, path, deadline=deadline)
+            _publish_transcript_pages(
+                graph_id, path, connection, root=root, deadline=deadline
+            )
             if not imported:
                 raise TranscriptPendingError("legacy transcript import is incomplete; retry")
+            _set_index_deadline(connection, deadline)
             existing = connection.execute(
                 """SELECT message_id, byte_offset, byte_length FROM events
                    WHERE message_id = ? OR (? IS NOT NULL AND source_key = ?)""",
@@ -778,22 +921,34 @@ def append_transcript_message(
                 return _read_indexed_message(path, existing)
             expected = path.stat().st_size if path.is_file() else 0
             digest = hashlib.sha256(line).hexdigest()
+            _set_index_deadline(connection, deadline)
             connection.execute(
                 """INSERT INTO pending_intent
                    (singleton, room_path, expected_offset, line, digest, message_id, source_key)
                    VALUES (1, ?, ?, ?, ?, ?, ?)""",
                 (current_room, expected, line, digest, durable_id, source_key),
             )
+            _set_index_deadline(connection, deadline)
             connection.commit()
             _invalidate_transcript_pages(graph_id, root=root)
+            # Once started, the authoritative append/fsync cannot safely be
+            # interrupted. The deadline bounds admission and lock waits, while
+            # this filesystem mutation is reported separately by callers.
             _append_and_fsync(path, line)
+            _set_index_deadline(connection, deadline)
             intent = connection.execute(
                 "SELECT * FROM pending_intent WHERE singleton = 1"
             ).fetchone()
+            _set_index_deadline(connection, deadline)
             _commit_intent(connection, intent)
-            _publish_transcript_pages(graph_id, path, connection, root=root)
+            _publish_transcript_pages(
+                graph_id, path, connection, root=root, deadline=deadline
+            )
+        except sqlite3.OperationalError as exc:
+            raise TranscriptPendingError("transcript index is busy") from exc
         finally:
-            connection.close()
+            if connection is not None:
+                connection.close()
     return message
 
 
@@ -838,7 +993,7 @@ def transcript_source_acknowledgement(
 
 @contextmanager
 def fenced_transcript_source_acknowledgement(
-    graph_id: str, *, source_key: str, root: Path
+    graph_id: str, *, source_key: str, root: Path, deadline: float | None = None
 ) -> Iterator[dict[str, object]]:
     """Yield current routing while retaining the graph fence.
 
@@ -849,12 +1004,19 @@ def fenced_transcript_source_acknowledgement(
 
     if not source_key:
         raise ValueError("source key is required")
-    with graph_transcript_fence(graph_id, root=root):
-        connection = _connect_index(graph_id, root=root)
+    effective_deadline = deadline if deadline is not None else time.monotonic() + 30.0
+    with graph_transcript_fence(
+        graph_id, root=root, deadline=effective_deadline
+    ):
+        connection = _connect_existing_index(
+            graph_id, root=root, deadline=effective_deadline
+        )
         try:
             pending = any(
-                connection.execute(
-                    f"SELECT 1 FROM {table} WHERE singleton = 1"
+                _execute_index(
+                    connection,
+                    f"SELECT 1 FROM {table} WHERE singleton = 1",
+                    deadline=effective_deadline,
                 ).fetchone()
                 is not None
                 for table in (
@@ -866,14 +1028,18 @@ def fenced_transcript_source_acknowledgement(
             )
             if pending:
                 raise TranscriptPendingError("transcript routing is pending")
-            event = connection.execute(
+            event = _execute_index(
+                connection,
                 """SELECT append_sequence, message_id FROM events
                    WHERE source_key = ?""",
                 (source_key,),
+                deadline=effective_deadline,
             ).fetchone()
-            state = connection.execute(
+            state = _execute_index(
+                connection,
                 """SELECT incarnation, room_path, indexed_end FROM state
-                   WHERE singleton = 1"""
+                   WHERE singleton = 1""",
+                deadline=effective_deadline,
             ).fetchone()
             if event is None or state is None or not state["room_path"]:
                 raise TranscriptPendingError("source event is not durably indexed")

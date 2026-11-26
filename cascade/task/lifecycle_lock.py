@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -52,7 +53,9 @@ def task_lifecycle_lock(*, root: Path) -> Iterator[None]:
 
 
 @contextmanager
-def task_lifecycle_read_lock(*, root: Path) -> Iterator[None]:
+def task_lifecycle_read_lock(
+    *, root: Path, deadline: float | None = None
+) -> Iterator[None]:
     """Synchronize a projection without creating lifecycle state.
 
     Writers create the durable lock before any lifecycle sidecar.  A missing
@@ -63,16 +66,33 @@ def task_lifecycle_read_lock(*, root: Path) -> Iterator[None]:
     repo = lifecycle_root(root)
     path = repo / ".cascade" / _LOCK_NAME
     key = str(path.resolve())
-    with process_lock:
+    remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+    acquired = process_lock.acquire() if remaining is None else process_lock.acquire(timeout=remaining)
+    if not acquired:
+        raise TimeoutError("task lifecycle read lock deadline is exhausted")
+    try:
         held = getattr(_held, "paths", set())
         if key in held or not path.exists():
             yield
             return
         with path.open("r", encoding="utf-8") as handle:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_SH)
+            while True:
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise TimeoutError("task lifecycle read lock deadline is exhausted")
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    time.sleep(
+                        0.005
+                        if deadline is None
+                        else min(0.005, max(0.0, deadline - time.monotonic()))
+                    )
             _held.paths = {*held, key}
             try:
                 yield
             finally:
                 _held.paths = held
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        process_lock.release()

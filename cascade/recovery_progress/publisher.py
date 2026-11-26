@@ -70,6 +70,50 @@ _PRODUCER_RUNTIME = {
 }
 
 
+class _PublisherPending(RuntimeError):
+    """A bounded best-effort publisher operation must be replayed later."""
+
+
+def _remaining_seconds(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise _PublisherPending("recovery progress deadline is exhausted")
+    return remaining
+
+
+@contextmanager
+def _publisher_lock(deadline: float) -> Iterator[None]:
+    if not _writer_lock.acquire(timeout=_remaining_seconds(deadline)):
+        raise _PublisherPending("recovery progress publisher is busy")
+    try:
+        yield
+    finally:
+        _writer_lock.release()
+
+
+def _set_busy_deadline(connection: sqlite3.Connection, deadline: float) -> None:
+    busy_ms = max(1, int(_remaining_seconds(deadline) * 1000))
+    connection.execute(f"PRAGMA busy_timeout = {busy_ms}")
+
+
+def _execute_with_deadline(
+    connection: sqlite3.Connection, sql: str, deadline: float | None
+) -> sqlite3.Cursor:
+    if deadline is not None:
+        _set_busy_deadline(connection, deadline)
+    return connection.execute(sql)
+
+
+def _begin_immediate(connection: sqlite3.Connection, deadline: float) -> None:
+    _set_busy_deadline(connection, deadline)
+    connection.execute("BEGIN IMMEDIATE")
+
+
+def _commit(connection: sqlite3.Connection, deadline: float) -> None:
+    _set_busy_deadline(connection, deadline)
+    connection.commit()
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -132,23 +176,25 @@ def _repository_identities(root: Path) -> tuple[str, str]:
     )
 
 
-def _connect(root: Path) -> sqlite3.Connection:
+def _connect(root: Path, *, deadline: float | None = None) -> sqlite3.Connection:
     base = _base(root)
+    # Directory and SQLite file opens are filesystem operations that cannot be
+    # interrupted once admitted. Contended SQLite waits use the shared deadline.
     base.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(base / "writer-index.sqlite3", timeout=0.1)
+    timeout = 0.1 if deadline is None else _remaining_seconds(deadline)
+    connection = sqlite3.connect(base / "writer-index.sqlite3", timeout=timeout)
     connection.row_factory = sqlite3.Row
-    connection.executescript(
-        """
-        PRAGMA journal_mode=WAL;
-        PRAGMA synchronous=NORMAL;
-        CREATE TABLE IF NOT EXISTS receipts (
+    statements = (
+        "PRAGMA journal_mode=WAL",
+        "PRAGMA synchronous=NORMAL",
+        """CREATE TABLE IF NOT EXISTS receipts (
             receipt_id TEXT PRIMARY KEY,
             source_kind TEXT NOT NULL,
             source_key TEXT NOT NULL,
             sequence INTEGER NOT NULL,
             imported_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS entries (
+        )""",
+        """CREATE TABLE IF NOT EXISTS entries (
             entry_id TEXT PRIMARY KEY,
             entry_revision TEXT NOT NULL,
             action_id TEXT NOT NULL,
@@ -158,14 +204,14 @@ def _connect(root: Path) -> sqlite3.Connection:
             blocker_priority INTEGER NOT NULL,
             material_at TEXT,
             payload TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS aliases (
+        )""",
+        """CREATE TABLE IF NOT EXISTS aliases (
             work_id TEXT NOT NULL,
             entry_id TEXT NOT NULL,
             PRIMARY KEY (work_id, entry_id)
-        );
-        CREATE TABLE IF NOT EXISTS dirty (work_id TEXT PRIMARY KEY);
-        CREATE TABLE IF NOT EXISTS transcript_milestones (
+        )""",
+        "CREATE TABLE IF NOT EXISTS dirty (work_id TEXT PRIMARY KEY)",
+        """CREATE TABLE IF NOT EXISTS transcript_milestones (
             receipt_id TEXT PRIMARY KEY,
             entry_id TEXT NOT NULL,
             graph_id TEXT NOT NULL,
@@ -173,11 +219,16 @@ def _connect(root: Path) -> sqlite3.Connection:
             incarnation TEXT NOT NULL,
             append_sequence INTEGER NOT NULL,
             recorded_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-        """
+        )""",
+        "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     )
-    return connection
+    try:
+        for statement in statements:
+            _execute_with_deadline(connection, statement, deadline)
+        return connection
+    except BaseException:
+        connection.close()
+        raise
 
 
 def _canonical_action_id(
@@ -696,45 +747,60 @@ def publish_committed_transition(
 ) -> None:
     """Append and project one transition after its authoritative source commit."""
 
-    started = time.monotonic()
+    deadline = time.monotonic() + FAST_PATH_SECONDS
     repo = canonical_audit_root(root)
     from cascade.war_room.recovery_milestones import (
         append_committed_recovery_receipt,
     )
 
-    ack = append_committed_recovery_receipt(repo, receipt, snapshot)
-    with _writer_lock:
-        connection = _connect(repo)
-        try:
-            connection.execute("BEGIN IMMEDIATE")
-            if ack.get("status") == "committed":
-                from cascade.war_room.chat_store import TranscriptPendingError
+    ack = append_committed_recovery_receipt(
+        repo, receipt, snapshot, deadline=deadline
+    )
+    connection: sqlite3.Connection | None = None
+    try:
+        with _publisher_lock(deadline):
+            connection = _connect(repo, deadline=deadline)
+            try:
+                _begin_immediate(connection, deadline)
+                if ack.get("status") == "committed":
+                    from cascade.war_room.chat_store import TranscriptPendingError
 
-                try:
-                    with _record_transcript_milestone(
-                        connection, ack, root=repo, now=_now()
-                    ):
+                    try:
+                        with _record_transcript_milestone(
+                            connection,
+                            ack,
+                            root=repo,
+                            now=_now(),
+                            deadline=deadline,
+                        ):
+                            _upsert(connection, receipt, snapshot, now=_now())
+                            _commit(connection, deadline)
+                    except TranscriptPendingError:
+                        connection.rollback()
+                        _begin_immediate(connection, deadline)
                         _upsert(connection, receipt, snapshot, now=_now())
-                        connection.commit()
-                except TranscriptPendingError:
-                    connection.rollback()
-                    connection.execute("BEGIN IMMEDIATE")
+                        _commit(connection, deadline)
+                else:
                     _upsert(connection, receipt, snapshot, now=_now())
-                    connection.commit()
-            else:
-                _upsert(connection, receipt, snapshot, now=_now())
-                connection.commit()
-            _publish_dirty(
-                connection,
-                repo,
-                now=_now(),
-                deadline=started + FAST_PATH_SECONDS,
-                owner_limit=MAX_OWNERS_PER_PASS,
-                completeness="pending",
-            )
-            connection.commit()
-        finally:
+                    _commit(connection, deadline)
+                _publish_dirty(
+                    connection,
+                    repo,
+                    now=_now(),
+                    deadline=deadline,
+                    owner_limit=MAX_OWNERS_PER_PASS,
+                    completeness="pending",
+                )
+                _commit(connection, deadline)
+            finally:
+                connection.close()
+                connection = None
+    except (_PublisherPending, sqlite3.OperationalError):
+        if connection is not None:
             connection.close()
+        # The authoritative receipt and any committed transcript append remain
+        # replayable; a deadline never fabricates publisher state.
+        return
 
 
 @contextmanager
@@ -744,6 +810,7 @@ def _record_transcript_milestone(
     *,
     root: Path,
     now: datetime,
+    deadline: float | None = None,
 ) -> Iterator[Mapping[str, object]]:
     required = {
         "receipt_id": str,
@@ -768,7 +835,10 @@ def _record_transcript_milestone(
     )
 
     with fenced_transcript_source_acknowledgement(
-        values[1], source_key=f"recovery:{receipt_id}", root=root
+        values[1],
+        source_key=f"recovery:{receipt_id}",
+        root=root,
+        deadline=deadline,
     ) as current:
         if current["message_id"] != values[2]:
             raise ValueError("receipt maps to a different transcript acknowledgement")
@@ -851,26 +921,37 @@ def _refresh_entry_milestones(
 def record_transcript_milestone(root: Path, ack: Mapping[str, Any]) -> None:
     """Durably join a committed transcript message to its progress entry."""
 
+    deadline = time.monotonic() + FAST_PATH_SECONDS
     repo = canonical_audit_root(root)
-    started = time.monotonic()
-    with _writer_lock:
-        connection = _connect(repo)
-        try:
-            connection.execute("BEGIN IMMEDIATE")
-            with _record_transcript_milestone(connection, ack, root=repo, now=_now()):
-                _refresh_entry_milestones(connection, str(ack["entry_id"]))
-                connection.commit()
-            _publish_dirty(
-                connection,
-                repo,
-                now=_now(),
-                deadline=started + FAST_PATH_SECONDS,
-                owner_limit=MAX_OWNERS_PER_PASS,
-                completeness="pending",
-            )
-            connection.commit()
-        finally:
+    from cascade.war_room.chat_store import TranscriptPendingError
+
+    connection: sqlite3.Connection | None = None
+    try:
+        with _publisher_lock(deadline):
+            connection = _connect(repo, deadline=deadline)
+            try:
+                _begin_immediate(connection, deadline)
+                with _record_transcript_milestone(
+                    connection, ack, root=repo, now=_now(), deadline=deadline
+                ):
+                    _refresh_entry_milestones(connection, str(ack["entry_id"]))
+                    _commit(connection, deadline)
+                _publish_dirty(
+                    connection,
+                    repo,
+                    now=_now(),
+                    deadline=deadline,
+                    owner_limit=MAX_OWNERS_PER_PASS,
+                    completeness="pending",
+                )
+                _commit(connection, deadline)
+            finally:
+                connection.close()
+                connection = None
+    except (TranscriptPendingError, _PublisherPending, sqlite3.OperationalError):
+        if connection is not None:
             connection.close()
+        return
 
 
 def _source_rows(
@@ -949,12 +1030,13 @@ def _snapshot_receipts(snapshot: Mapping[str, Any]) -> Iterable[Mapping[str, Any
             yield from (item for item in nested if isinstance(item, Mapping))
 
 
-def drain_recovery_progress(
+def _drain_recovery_progress(
     root: Path,
     *,
     max_receipts: int = MAX_RECEIPTS_PER_PASS,
     max_owners: int = MAX_OWNERS_PER_PASS,
     max_seconds: float = MAX_PASS_SECONDS,
+    _started: float | None = None,
 ) -> dict[str, Any]:
     """Replay missed receipts and publish a bounded fair continuation pass."""
 
@@ -967,14 +1049,14 @@ def drain_recovery_progress(
         or max_seconds > MAX_PASS_SECONDS
     ):
         raise ValueError("drain bounds exceed the supervised pass limits")
-    started = time.monotonic()
+    started = time.monotonic() if _started is None else _started
     deadline = started + max_seconds
     repo = canonical_audit_root(root)
     imported = 0
     source_load_seconds = 0.0
     source_complete = True
-    with _writer_lock:
-        connection = _connect(repo)
+    with _publisher_lock(deadline):
+        connection = _connect(repo, deadline=deadline)
         try:
             cursor_row = connection.execute(
                 "SELECT value FROM meta WHERE key = 'source_cursor'"
@@ -984,7 +1066,7 @@ def drain_recovery_progress(
             new_rows: list[tuple[Mapping[str, Any], Mapping[str, Any], bool]] = []
             replay_rows: list[tuple[Mapping[str, Any], Mapping[str, Any], bool]] = []
             live_refreshes: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
-            with task_lifecycle_read_lock(root=repo):
+            with task_lifecycle_read_lock(root=repo, deadline=deadline):
                 for offset in range(len(_SOURCE_SPECS)):
                     spec_index = (start_cursor + offset) % len(_SOURCE_SPECS)
                     before = time.monotonic()
@@ -1084,6 +1166,7 @@ def drain_recovery_progress(
                         if receipt.get("schema_version") == 1
                         else "legacy_unknown"
                     ),
+                    deadline=deadline,
                 )
                 appended.append((receipt, snapshot, was_known, ack))
 
@@ -1094,31 +1177,35 @@ def drain_recovery_progress(
                     "SELECT 1 FROM receipts WHERE receipt_id = ?",
                     (receipt["receipt_id"],),
                 ).fetchone()
-                connection.execute("BEGIN IMMEDIATE")
+                _begin_immediate(connection, deadline)
                 if ack.get("status") == "committed":
                     try:
                         with _record_transcript_milestone(
-                            connection, ack, root=repo, now=_now()
+                            connection,
+                            ack,
+                            root=repo,
+                            now=_now(),
+                            deadline=deadline,
                         ):
                             _upsert(connection, receipt, snapshot, now=_now())
-                            connection.commit()
+                            _commit(connection, deadline)
                     except TranscriptPendingError:
                         connection.rollback()
-                        connection.execute("BEGIN IMMEDIATE")
+                        _begin_immediate(connection, deadline)
                         _upsert(connection, receipt, snapshot, now=_now())
-                        connection.commit()
+                        _commit(connection, deadline)
                         milestone_pending += 1
                         authoritative_pending += 1
                 else:
                     if not was_known:
                         _upsert(connection, receipt, snapshot, now=_now())
-                    connection.commit()
+                    _commit(connection, deadline)
                     milestone_pending += 1
                 if known is None:
                     imported += 1
             if milestone_pending or unprocessed:
                 cursor = start_cursor
-            connection.execute("BEGIN IMMEDIATE")
+            _begin_immediate(connection, deadline)
             for receipt, snapshot in live_refreshes:
                 _upsert(connection, receipt, snapshot, now=_now())
             if next_replay_turn is not None:
@@ -1134,7 +1221,7 @@ def drain_recovery_progress(
                 "INSERT OR REPLACE INTO meta VALUES ('legacy_import_complete', ?)",
                 ("1" if source_complete else "0",),
             )
-            connection.commit()
+            _commit(connection, deadline)
             published = _publish_dirty(
                 connection,
                 repo,
@@ -1143,7 +1230,7 @@ def drain_recovery_progress(
                 owner_limit=max_owners,
                 completeness="complete" if source_complete else "incomplete",
             )
-            connection.commit()
+            _commit(connection, deadline)
             lag = _lag(connection)
             lag["milestone_backlog_count"] = milestone_pending + unprocessed
         finally:
@@ -1158,6 +1245,35 @@ def drain_recovery_progress(
         "source_load_seconds": source_load_seconds,
         "duration_seconds": time.monotonic() - started,
     }
+
+
+def drain_recovery_progress(
+    root: Path,
+    *,
+    max_receipts: int = MAX_RECEIPTS_PER_PASS,
+    max_owners: int = MAX_OWNERS_PER_PASS,
+    max_seconds: float = MAX_PASS_SECONDS,
+) -> dict[str, Any]:
+    """Replay missed receipts without exceeding one shared wait deadline."""
+
+    started = time.monotonic()
+    try:
+        return _drain_recovery_progress(
+            root,
+            max_receipts=max_receipts,
+            max_owners=max_owners,
+            max_seconds=max_seconds,
+            _started=started,
+        )
+    except (TimeoutError, _PublisherPending, sqlite3.OperationalError):
+        return {
+            "imported_receipts": 0,
+            "published_owners": 0,
+            "complete": False,
+            "lag": {"backlog_count": 1, "milestone_backlog_count": 1},
+            "source_load_seconds": 0.0,
+            "duration_seconds": time.monotonic() - started,
+        }
 
 
 def install_recovery_progress_publisher(root: Path) -> None:
