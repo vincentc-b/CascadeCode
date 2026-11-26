@@ -4,7 +4,8 @@ title: Keep feature teams accountable through review merge and repair
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_051_001
 depends_on: []
 owners:
 - epic_manager
@@ -56,6 +57,7 @@ Build on current review_health, tracking/forge snapshots, team_supervision/recov
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_051_001
 
 The Epic Team will create and sequence feature plans here.
 
