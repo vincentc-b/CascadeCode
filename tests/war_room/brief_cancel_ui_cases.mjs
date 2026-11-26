@@ -44,6 +44,9 @@ const context = {
   backlogEpicPriorityUi: null,
   OPEN_STATUSES: { backlog: true },
   branchSyncHelpers: () => null,
+  lifecycleActionButton(_item, _path, label, _pending, _confirmed, disabledReason) {
+    return context.actionButton(label, null, disabledReason);
+  },
   actionButton(label, _handler, disabledReason) {
     const button = element("button");
     button.textContent = label;

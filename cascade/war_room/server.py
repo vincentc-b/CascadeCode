@@ -139,8 +139,11 @@ _SKILLS_INVALID = object()
 REQUEST_DEADLINE_S = 10.0
 EPIC_CLOSE_DEADLINE_S = 60.0
 APPROVAL_DEADLINE_S = 60.0
+ACTIVATION_DEADLINE_S = 60.0
 MAX_CONCURRENT_REQUESTS = 16
-HTTP_HANDLER_JOIN_TIMEOUT_S = EPIC_CLOSE_DEADLINE_S + 5.0
+HTTP_HANDLER_JOIN_TIMEOUT_S = max(
+    EPIC_CLOSE_DEADLINE_S, APPROVAL_DEADLINE_S, ACTIVATION_DEADLINE_S
+) + 5.0
 DRAIN_RETRY_AFTER_S = 5
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -492,6 +495,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             if getattr(self, "command", "") == "POST":
                 if path == "/api/confirm_epic_complete":
                     deadline = EPIC_CLOSE_DEADLINE_S
+                elif path == "/api/activate_epic":
+                    deadline = ACTIVATION_DEADLINE_S
                 elif path in _APPROVAL_POST_PATHS:
                     deadline = APPROVAL_DEADLINE_S
             if deadline > REQUEST_DEADLINE_S and finished.wait(

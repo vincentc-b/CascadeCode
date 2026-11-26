@@ -114,6 +114,27 @@ def test_activate_epic_human_success(dispatch_board):
     assert read_doc("epic_001", root=root).meta.path.parent.name == "2_active"
 
 
+def test_activation_api_can_finish_after_generic_request_deadline(dispatch_board, monkeypatch):
+    from cascade.watchdog.types import DispatchResult
+
+    base, root = dispatch_board
+
+    def slow_activation(work_id, by, *, root):
+        time.sleep(0.1)
+        move_doc(work_id, "active", root=root)
+        return DispatchResult(ok=True, reason=None, event=None)
+
+    monkeypatch.setattr("cascade.war_room.server.REQUEST_DEADLINE_S", 0.05)
+    monkeypatch.setattr("cascade.war_room.server.ACTIVATION_DEADLINE_S", 0.5)
+    with patch("cascade.war_room.server.activate_epic", side_effect=slow_activation) as activate:
+        status, body = _post(f"{base}/api/activate_epic", {"id": "epic_001"})
+
+    assert status == HTTPStatus.OK
+    assert body["ok"] is True
+    activate.assert_called_once_with("epic_001", "human", root=root)
+    assert read_doc("epic_001", root=root).meta.path.parent.name == "2_active"
+
+
 def test_activate_epic_provider_refusal_returns_complete_safe_diagnostics(
     dispatch_board, monkeypatch
 ):

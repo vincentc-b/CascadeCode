@@ -101,7 +101,7 @@ async function testActionRefreshFetchesAfterPendingPoll() {
     document: { hidden: false },
   };
   const script = `
-    ${section("  let boardRefreshInFlight = null;", "  function epicIdForFlightLens()")}
+    ${section("  let boardPointerDown = false;", "  function epicIdForFlightLens()")}
     ({ pollBoard, refreshBoard });
   `;
   const board = vm.runInNewContext(script, context);
@@ -188,7 +188,7 @@ async function testBoardAndCancellationLookupRunInParallel() {
     document: { hidden: false },
   };
   const board = vm.runInNewContext(`
-    ${section("  let boardRefreshInFlight = null;", "  function epicIdForFlightLens()")}
+    ${section("  let boardPointerDown = false;", "  function epicIdForFlightLens()")}
     ({ pollBoard });
   `, context);
   const pending = board.pollBoard();
@@ -286,3 +286,123 @@ async function testAuditRefreshIsVisibleAndSingleFlight() {
 }
 
 await testAuditRefreshIsVisibleAndSingleFlight();
+
+async function testBoardPointerGestureSurvivesPoll() {
+  const rendered = [];
+  const board = vm.runInNewContext(`
+    ${section("  let boardPointerDown = false;", "  function epicIdForFlightLens()")}
+    ({ renderLoadedBoard, releaseBoardPointer, pressBoardPointer });
+  `, { renderBoard(view) { rendered.push(view); }, setTimeout, clearTimeout });
+  board.pressBoardPointer();
+  board.renderLoadedBoard("first poll");
+  board.renderLoadedBoard("newest poll");
+  assert.deepEqual(rendered, [], "the originally pressed button survives until click");
+  board.releaseBoardPointer();
+  board.renderLoadedBoard("arrived during pointerup");
+  assert.deepEqual(rendered, [], "pointerup must not replace the button before click");
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(rendered, ["arrived during pointerup"], "only the latest deferred snapshot is applied");
+}
+
+await testBoardPointerGestureSurvivesPoll();
+
+async function testLifecycleActionSurvivesRerenders(path, label, pendingLabel, confirmedLabel, confirmedItem) {
+  const requests = [];
+  const refreshes = [];
+  const statuses = [];
+  const item = { id: "epic_001", status: path.endsWith("activate_epic") ? "backlog" : "active", plan_approved: false };
+  function button() {
+    const attributes = new Map();
+    let click;
+    return {
+      disabled: false, isConnected: true,
+      addEventListener(_event, handler) { click = handler; },
+      click() { click({stopPropagation() {}}); },
+      setAttribute(name, value) { attributes.set(name, value); },
+      getAttribute(name) { return attributes.get(name); },
+      removeAttribute(name) { attributes.delete(name); },
+    };
+  }
+  let boardItem = item;
+  const context = {
+    document: { createElement: button },
+    findBoardItem() { return boardItem; },
+    apiPost(path, payload, timeout) {
+      const request = deferred();
+      requests.push({path, payload, timeout, request});
+      return request.promise;
+    },
+    refreshBoard(options) {
+      assert.equal(options.refreshRelated, false);
+      const request = deferred();
+      refreshes.push(request);
+      return request.promise;
+    },
+    refreshRelatedPanels() { return new Promise(() => {}); },
+    renderBoard() {},
+    setStatus(message, error) { statuses.push({message, error}); },
+  };
+  const ui = vm.runInNewContext(`
+    const OPEN_STATUSES = { backlog: true, ready_to_plan: true };
+    const LIFECYCLE_ACTION_DEADLINE_MS = 120000;
+    let lastInvokedBoardAction = null, dispatchBanner = "", lastBoardView = {};
+    ${section("  const lifecycleActions = new Map();", "  function branchSyncHelpers()")}
+    ${section("  async function dispatch(path", "  /** Dispatch starts the feature")}
+    ({ lifecycleActionButton, reconcileLifecycleActions, pendingCount() { return lifecycleActions.size; } });
+  `, context);
+  const makeButton = () => ui.lifecycleActionButton(item, path, label, pendingLabel, confirmedLabel);
+  const first = makeButton();
+  first.click();
+  assert.equal(first.disabled, true);
+  assert.equal(first.textContent, pendingLabel);
+  assert.equal(first.getAttribute("aria-busy"), "true");
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].timeout, 120000, "the lifecycle write must not use the 10s read deadline");
+  assert.equal(requests[0].path, path);
+  assert.equal(requests[0].payload.id, item.id);
+  first.isConnected = false;
+  const rerendered = makeButton();
+  assert.equal(rerendered.disabled, true);
+  assert.equal(rerendered.textContent, pendingLabel);
+  rerendered.click();
+  assert.equal(requests.length, 1, "a poll must not enable a duplicate POST");
+  const dispatchPending = path.endsWith("approve_epic_plan");
+  requests[0].request.resolve({body: {ok: true, dispatch_pending: dispatchPending}});
+  await waitFor(() => refreshes.length === 1);
+  assert.equal(rerendered.textContent, confirmedLabel, "show durable acknowledgement before a slow GET completes");
+  assert.equal(rerendered.disabled, true);
+  assert.equal(!!statuses.at(-1).error, dispatchPending);
+  refreshes[0].resolve(false); // transient board GET failure
+  await new Promise(resolve => setImmediate(resolve));
+  const afterFailedRefresh = makeButton();
+  assert.equal(afterFailedRefresh.textContent, confirmedLabel);
+  assert.equal(afterFailedRefresh.disabled, true);
+  boardItem = {...item, ...confirmedItem};
+  ui.reconcileLifecycleActions();
+  assert.equal(ui.pendingCount(), 0, "canonical read retires the acknowledgement");
+
+  // An explicit refusal permits a new human attempt, but never retries itself.
+  boardItem = item;
+  const refused = makeButton();
+  refused.click();
+  requests[1].request.resolve({body: {ok: false, reason: "bad_state"}});
+  await waitFor(() => refreshes.length === 2);
+  refreshes[1].resolve(true);
+  await waitFor(() => ui.pendingCount() === 0);
+  assert.equal(makeButton().disabled, false);
+  assert.equal(statuses.at(-1).error, true);
+  assert.equal(requests.length, 2);
+
+  // A lost response is not proof of failure or permission to repeat the write.
+  makeButton().click();
+  requests[2].request.reject(new Error("network disconnected"));
+  await waitFor(() => refreshes.length === 3);
+  assert.match(statuses.at(-1).message, /outcome not confirmed/);
+  assert.equal(makeButton().disabled, true);
+  refreshes[2].resolve(true);
+  await waitFor(() => ui.pendingCount() === 0);
+  assert.equal(requests.length, 3);
+}
+
+await testLifecycleActionSurvivesRerenders("/api/activate_epic", "Activate team", "Activating…", "Activated — refreshing…", {status: "active"});
+await testLifecycleActionSurvivesRerenders("/api/approve_epic_plan", "Approve plan", "Approving…", "Approved — refreshing…", {plan_approved: true});

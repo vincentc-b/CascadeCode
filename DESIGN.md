@@ -765,6 +765,12 @@ Cursor SWE turns receive guarded in-process custom tools because the Cursor brid
 
 These do **not** directly start a model turn: the mint tool call itself; War Room open/refresh, Attach, View plan; watchdog poll with no new queue or newly eligible work; task-targeted chat (tasks have no room). A minted child may become eligible on the same or next watchdog tick.
 
+**War Room lifecycle feedback.** Activate team and Approve plan immediately show
+pending state and suppress duplicate submissions across background refreshes.
+A durable acknowledgement is shown independently of optional panels; canonical
+board reads determine the final lane and approval state without a page reload.
+See the [War Room refresh design](cascade/war_room/DESIGN.md#refresh-latency-and-coherent-read-projections).
+
 **War Room reads — `resolve_doc_worktree`**
 
 Does not create worktrees. Attach on backlog feature is refused (`dispatch the feature to open its room`). Missing epic/feature directories are repaired on attach or `up` without a new dispatch.

@@ -140,7 +140,7 @@
   }
 
   function applyReadinessToPlanBar(chrome, document, readiness, epicId) {
-    if (!chrome || !readiness) return;
+    if (!chrome || !readiness || chrome.approvalConfirmed || chrome.approvalPending) return;
     const statusSlot = chrome.bar.querySelector(".epic-plan-readiness-bar-status");
     if (statusSlot) {
       statusSlot.replaceChildren();

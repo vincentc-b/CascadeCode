@@ -291,6 +291,45 @@ legacy provenance, and `detail_truncated` without opening a recovery ledger.
 
 ## Refresh latency and coherent read projections
 
+`REQ-WARROOM-LIFECYCLE-FEEDBACK-001`: Activating an Epic team and approving
+its plan acknowledge the first operator click immediately, with a disabled
+pending control that survives board redraws. A successful write shows an
+acknowledgement before the follow-up board GET completes. The actual column,
+readiness, and approval state still come from the canonical board; the UI must
+not fabricate lifecycle state or require a full page reload. A refused write
+shows its reason; a lost response is an unconfirmed outcome, not proof of failure.
+The plan viewer likewise shows pending and confirmed approval and retains the
+exact review tuple and dispatch-pending warning.
+
+`DEC-WARROOM-LIFECYCLE-FEEDBACK-001`: The 10-second read deadline is not a
+suitable mutation deadline: recorded activation and approval requests lasted
+10.3 and 25.3 seconds respectively. The HTTP server gives activation the same 60-second connection deadline as
+approval, rather than closing after the generic 10 seconds. Board activation
+and plan approval use a 120-second client write deadline, keyed by operation and Epic ID to suppress duplicate
+clicks across renders. A durable `ok` acknowledgement remains disabled until
+canonical board state confirms the transition, including when a refresh fails.
+An action response triggers a fresh single-flight board read; flight and Boss
+panels refresh independently. Polling can also observe the durable transition
+while the POST is still running. Background board reads defer their DOM update
+across a pressed button's pointer gesture so a poll cannot remove the click
+recipient between pointerdown and click. Only the latest deferred snapshot is
+applied. The plan page protects its approval control from concurrent readiness
+updates and checks `meta.plan_approved` after a lost response. No retry POST is
+issued automatically, no authorization or dispatch gates change, and no client
+state is persisted as board truth.
+
+Regression coverage: `tests/war_room/war_room_refresh_races.mjs` exercises
+slow writes, rerenders, acknowledgement before a slow or failed GET, duplicate
+clicks, explicit refusal, ambiguous responses, and pointer gestures;
+`tests/war_room/epic_plan_readiness_integration.mjs` exercises pending approval,
+concurrent readiness updates, reviewed context, dispatch warnings and durable
+readback after a lost response. The real Chromium test in
+`tests/war_room/test_ui_render.py` drives both buttons through a held pointer
+gesture, delayed POSTs, intervening polls and canonical lane/approval updates
+without navigating away. The HTTP deadline regression in
+`tests/war_room/test_dispatch_routes.py` proves a slow activation response
+arrives past the generic request deadline.
+
 `REQ-WARROOM-REFRESH-001`: first board rendering must not wait for independent
 flight, boss, chat, audit or provider panels. The board and pending-brief
 cancellation lookup run concurrently, but both must finish before board actions

@@ -589,3 +589,81 @@ def test_open_reviews_js_queries_authoritative_api_only():
     assert "localStorage" not in pane_source
     assert "OpenReviewsPane" in war_room_source
     assert "createOpenReviewsPane" in war_room_source
+
+
+def test_epic_lifecycle_buttons_reconcile_in_real_browser(ui_server):
+    """Exercise actual board DOM with delayed writes and intervening poll responses."""
+    playwright = pytest.importorskip("playwright.sync_api")
+    base, _root = ui_server
+    with urllib.request.urlopen(base + "/api/board") as response:
+        board = json.load(response)
+
+    epic = next(row for row in board["epics"]["1_backlog"] if row["id"] == "epic_001")
+    writes = []
+    reads = []
+    with playwright.sync_playwright() as runtime:
+        try:
+            browser = runtime.chromium.launch(headless=True)
+        except playwright.Error as exc:
+            pytest.skip(f"Chromium unavailable: {exc}")
+        try:
+            page = browser.new_page()
+
+            def read_board(route):
+                reads.append(route.request.url)
+                route.fulfill(json=board)
+
+            def hold_write(route):
+                writes.append(route)
+
+            def wait_for_poll():
+                previous = len(reads)
+                for _ in range(60):
+                    page.wait_for_timeout(200)
+                    if len(reads) > previous:
+                        # Allow the delivered response to reach the render callback.
+                        page.wait_for_timeout(100)
+                        return
+                pytest.fail("no board poll completed")
+
+            page.route("**/api/board?*", read_board)
+            page.route("**/api/activate_epic", hold_write)
+            page.route("**/api/approve_epic_plan", hold_write)
+            page.goto(base)
+            row = page.locator('.board-row[data-id="epic_001"]')
+            activate = row.get_by_role("button", name="Activate team", exact=True)
+            playwright.expect(activate).to_be_enabled(timeout=15000)
+
+            # A poll completing while the pointer is held must not swallow the click.
+            activate.hover()
+            page.mouse.down()
+            wait_for_poll()
+            page.mouse.up()
+            playwright.expect(row.get_by_role("button", name="Activating…")).to_be_disabled()
+            assert len(writes) == 1
+            wait_for_poll()
+            playwright.expect(row.get_by_role("button", name="Activating…")).to_be_disabled()
+            assert len(writes) == 1
+
+            # Acknowledgement is visible before the full board has caught up.
+            writes[0].fulfill(json={"ok": True})
+            playwright.expect(row.get_by_role("button", name="Activated — refreshing…")).to_be_disabled()
+            board["epics"]["1_backlog"].remove(epic)
+            epic.update(status="active", plan_readiness={"status": "ready_for_review", "can_approve_plan": True})
+            board["epics"]["2_active"].append(epic)
+            active_row = page.locator('[data-tier="epics"] [data-column="2_active"] .board-row[data-id="epic_001"]')
+            approve = active_row.get_by_role("button", name="Approve plan", exact=True)
+            playwright.expect(approve).to_be_enabled(timeout=15000)
+            approve.click()
+            playwright.expect(active_row.get_by_role("button", name="Approving…")).to_be_disabled()
+            assert len(writes) == 2
+            wait_for_poll()
+            playwright.expect(active_row.get_by_role("button", name="Approving…")).to_be_disabled()
+            assert len(writes) == 2
+            writes[1].fulfill(json={"ok": True})
+            playwright.expect(active_row.get_by_role("button", name="Approved — refreshing…")).to_be_disabled()
+            epic["plan_approved"] = True
+            playwright.expect(active_row.get_by_role("button", name="Approved", exact=True)).to_be_disabled(timeout=15000)
+            assert len(writes) == 2
+        finally:
+            browser.close()

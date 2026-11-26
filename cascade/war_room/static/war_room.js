@@ -210,6 +210,8 @@
 
   const LOAD_DEADLINE_MS = 10000;
   const EPIC_CLOSE_DEADLINE_MS = 60000;
+  // Lifecycle writes include worktree setup, provider checks and dispatch reconciliation.
+  const LIFECYCLE_ACTION_DEADLINE_MS = 120000;
 
   function deadlineSignal(timeoutMs) {
     timeoutMs = timeoutMs || LOAD_DEADLINE_MS;
@@ -961,8 +963,11 @@
 
   function renderBoard(view) {
     const renderStartedAt = performance.now();
+    const loadError = el.board.querySelector(".load-deadline");
+    if (loadError) loadError.remove();
     reconcileFeatureAttention(view);
     lastBoardView = view;
+    reconcileLifecycleActions();
     updateAttentionStatus();
     renderCurrentDependencySummary(view);
     if ((backlogPriorityUi && backlogPriorityUi.isDragging()) ||
@@ -1811,9 +1816,9 @@
     const startable = OPEN_STATUSES[item.status] === true;
     if (tier === "epics") {
       if (startable) {
-        actions.appendChild(actionButton("Activate team", function () {
-          return dispatch("/api/activate_epic", { id: item.id });
-        }));
+        actions.appendChild(lifecycleActionButton(
+          item, "/api/activate_epic", "Activate team", "Activating…", "Activated — refreshing…"
+        ));
       }
       if (column === "2_active") {
         if (
@@ -1837,9 +1842,10 @@
             EpicPlanReadinessUi && EpicPlanReadinessUi.approvePlanDisabledReason
               ? EpicPlanReadinessUi.approvePlanDisabledReason(item.plan_readiness)
               : null;
-          var approveBtn = actionButton("Approve plan", function () {
-            return dispatch("/api/approve_epic_plan", { id: item.id });
-          }, epicApproveDisabled);
+          var approveBtn = lifecycleActionButton(
+            item, "/api/approve_epic_plan", "Approve plan", "Approving…",
+            "Approved — refreshing…", epicApproveDisabled
+          );
           if (epicApproveDisabled && EpicPlanReadinessUi.decorateSemanticallyDisabledButton) {
             EpicPlanReadinessUi.decorateSemanticallyDisabledButton(
               approveBtn,
@@ -2288,6 +2294,62 @@
     el.toastList.prepend(li);
   }
 
+  // Track a write by logical action, not by the DOM node replaced on each poll.
+  const lifecycleActions = new Map();
+
+  function reconcileLifecycleActions() {
+    lifecycleActions.forEach(function (pending, key) {
+      if (!pending.confirmed) return;
+      const item = findBoardItem(pending.id);
+      if (item && (pending.path === "/api/activate_epic"
+        ? !OPEN_STATUSES[item.status] : item.plan_approved)) {
+        lifecycleActions.delete(key);
+      }
+    });
+  }
+
+  function lifecycleActionButton(item, path, label, pendingLabel, confirmedLabel, disabledReason) {
+    const key = path + ":" + item.id;
+    const btn = actionButton(label, async function () {
+      if (lifecycleActions.has(key)) return;
+      const pending = { id: item.id, path: path, label: pendingLabel, button: btn, confirmed: false };
+      lifecycleActions.set(key, pending);
+      btn.textContent = pendingLabel;
+      btn.setAttribute("aria-busy", "true");
+      try {
+        await dispatch(path, { id: item.id }, {
+          timeoutMs: LIFECYCLE_ACTION_DEADLINE_MS,
+          onResult: function (body) {
+            if (!body.ok) return;
+            pending.confirmed = true;
+            pending.label = confirmedLabel;
+            pending.button.textContent = confirmedLabel;
+            reconcileLifecycleActions();
+          }
+        });
+      } finally {
+        if (!pending.confirmed) lifecycleActions.delete(key);
+        // The canonical refresh may have failed or returned before the write was
+        // visible. Keep a confirmed action disabled until a later board read.
+        if (lifecycleActions.get(key) === pending && pending.confirmed) {
+          pending.button.disabled = true;
+        } else if (!pending.confirmed) {
+          pending.button.textContent = label;
+          pending.button.removeAttribute("aria-busy");
+          if (lastBoardView) renderBoard(lastBoardView);
+        }
+      }
+    }, disabledReason);
+    const pending = lifecycleActions.get(key);
+    if (pending) {
+      pending.button = btn;
+      btn.textContent = pending.label;
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+    }
+    return btn;
+  }
+
   function actionButton(label, handler, disabledReason) {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -2311,7 +2373,7 @@
           setStatus(err.message || String(err), true);
         })
         .finally(function () {
-          if (btn.isConnected && !disabledReason) btn.disabled = false;
+          if (btn.isConnected && !disabledReason && btn.getAttribute("aria-busy") !== "true") btn.disabled = false;
           lastInvokedBoardAction = null;
         });
     });
@@ -2358,10 +2420,11 @@
     return link;
   }
 
-  async function dispatch(path, payload) {
+  async function dispatch(path, payload, options) {
     let failureContext = null;
     try {
-      const { body } = await apiPost(path, payload);
+      const { body } = await apiPost(path, payload, options && options.timeoutMs);
+      if (options && options.onResult) options.onResult(body);
       if (body.dispatch_pending) {
         dispatchBanner = body.message || ("Approval saved; dispatch pending: " + (body.dispatch_error || "retrying"));
         setStatus(dispatchBanner, true);
@@ -2370,7 +2433,7 @@
         setStatus(dispatchBanner, true);
       } else {
         dispatchBanner = "";
-        setStatus("");
+        setStatus(options ? (path === "/api/activate_epic" ? "Team activated." : "Plan approved.") : "");
       }
       if (body.preflight || body.dispatch_refusals) failureContext = body;
       return body;
@@ -2379,9 +2442,19 @@
         failureContext = err.body;
         setStatus(err.body.message || err.body.error || err.message, true);
       }
+      if (options && !err.status) {
+        const message = "Action outcome not confirmed; checking the board. It may still complete on the server.";
+        setStatus(message, true);
+        throw new Error(message);
+      }
       throw err;
     } finally {
-      await refreshBoard();
+      if (options) {
+        await refreshBoard({ refreshRelated: false });
+        refreshRelatedPanels().catch(function () {});
+      } else {
+        await refreshBoard();
+      }
       if (failureContext && payload && payload.id) {
         const item = findBoardItem(payload.id);
         if (item) await changeProviderRecovery(item, failureContext);
@@ -3063,6 +3136,35 @@
     });
   }
 
+  let boardPointerDown = false;
+  let boardPointerReleaseTimer = null;
+  let deferredBoardView = null;
+
+  function renderLoadedBoard(view) {
+    if (boardPointerDown) {
+      deferredBoardView = view;
+      return;
+    }
+    deferredBoardView = null;
+    renderBoard(view);
+  }
+
+  function pressBoardPointer() {
+    if (boardPointerReleaseTimer !== null) clearTimeout(boardPointerReleaseTimer);
+    boardPointerReleaseTimer = null;
+    boardPointerDown = true;
+  }
+
+  function releaseBoardPointer() {
+    if (!boardPointerDown || boardPointerReleaseTimer !== null) return;
+    // A click is dispatched after pointerup. Let it reach its original button.
+    boardPointerReleaseTimer = setTimeout(function () {
+      boardPointerReleaseTimer = null;
+      boardPointerDown = false;
+      if (deferredBoardView) renderLoadedBoard(deferredBoardView);
+    }, 0);
+  }
+
   let boardRefreshInFlight = null;
   let relatedRefreshInFlight = null;
 
@@ -3084,7 +3186,7 @@
     ])
       .then(function (results) {
         const view = results[0];
-        renderBoard(view);
+        renderLoadedBoard(view);
         return view;
       })
       .finally(function () {
@@ -3879,6 +3981,14 @@
       refresh: function () { return pollAuditStatus({ force: true }); },
     });
   }
+
+  // Do not replace the pressed board button between pointerdown and click.
+  el.board.addEventListener("pointerdown", function (event) {
+    if (event.target.closest("button")) pressBoardPointer();
+  });
+  window.addEventListener("pointerup", releaseBoardPointer);
+  window.addEventListener("pointercancel", releaseBoardPointer);
+  window.addEventListener("blur", releaseBoardPointer);
 
   async function bootstrapWarRoom() {
     wireCompletedCollapseControls();

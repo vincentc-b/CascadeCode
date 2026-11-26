@@ -32,7 +32,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
             }
         }
 
-        dashboard = component "Dashboard and audit reads" "Owns the safe recovery-progress entry contract and shows work state, routing summaries, team transcripts and published projections." "cascade.war_room" {
+        dashboard = component "Dashboard and audit reads" "Owns the safe recovery-progress entry contract and shows work state, immediate lifecycle-action feedback, routing summaries, team transcripts and published projections." "cascade.war_room" {
             properties {
                 "cascade.semanticId" "element.component.dashboard"
                 "cascade.designPath" "cascade/war_room/DESIGN.md"
@@ -1682,6 +1682,72 @@ code_dashboard_transcript_ui = element "pollChatSidecar" "Function" "Polls incar
         "cascade.parent" "element.component.dashboard"
         "cascade.sourcePath" "cascade/war_room/static/war_room.js"
         "cascade.sourceSymbol" "pollChatSidecar"
+    }
+}
+
+code_dashboard_lifecycle_ui = element "lifecycleActionButton" "Function" "Shows pending and acknowledged Epic actions across row replacements; waits for canonical board confirmation." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.lifecycle-ui"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/war_room.js"
+        "cascade.sourceSymbol" "lifecycleActionButton"
+    }
+}
+
+code_dashboard_board_refresh = element "loadBoardView" "Function" "Shares reads, fetches after writes, and defers row replacement during a button press." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.board-refresh"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/war_room.js"
+        "cascade.sourceSymbol" "loadBoardView"
+    }
+}
+
+code_dashboard_plan_approval = element "initEpicPlanReadinessChrome" "Function" "Shows approval pending or confirmed, preserves exact review context and checks durable approval after an ambiguous response." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.plan-approval"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/plan_viewer.js"
+        "cascade.sourceSymbol" "initEpicPlanReadinessChrome"
+    }
+}
+
+code_dashboard_post = element "WarRoomRequestHandler.do_POST" "Method" "Routes operator lifecycle writes to canonical services with extended connection deadlines for activation and approval." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.post"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/server.py"
+        "cascade.sourceSymbol" "WarRoomRequestHandler.do_POST"
+    }
+}
+
+dashboard_lifecycle_to_post = code_dashboard_lifecycle_ui -> code_dashboard_post "Submits one explicit action with a lifecycle-write deadline" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-lifecycle-to-post"
+    }
+}
+
+dashboard_lifecycle_to_board_refresh = code_dashboard_lifecycle_ui -> code_dashboard_board_refresh "Reconciles result with canonical board without waiting for optional panels" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-lifecycle-to-board-refresh"
+    }
+}
+
+dashboard_board_refresh_to_router = code_dashboard_board_refresh -> code_dashboard_router "Reads fresh lifecycle projections" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-board-refresh-to-router"
+    }
+}
+
+dashboard_plan_approval_to_post = code_dashboard_plan_approval -> code_dashboard_post "Submits exact reviewed plan approval" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-plan-approval-to-post"
+    }
+}
+
+dashboard_plan_approval_to_router = code_dashboard_plan_approval -> code_dashboard_router "Checks canonical approval and readiness after a refused or ambiguous write" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-plan-approval-to-router"
     }
 }
 

@@ -233,4 +233,41 @@ assert.deepEqual(approvalRequest, {
 assertDisabledApprove(liveChrome, "Epic Architect");
 assert.equal(planBody.textContent.includes("Canonical epic plan"), true);
 
+// Slow approval keeps the control disabled even if another dependency read
+// updates readiness, and acknowledges durable approval before dispatch finishes.
+let resolveApproval;
+let approvalPosts = 0;
+globalThis.fetch = (url, options) => {
+  assert.match(url, /\/api\/approve_epic_plan/);
+  assert.equal(options.method, "POST");
+  approvalPosts += 1;
+  return new Promise(resolve => { resolveApproval = resolve; });
+};
+const slow = initEpicPlanReadinessChrome(epicId, readyBoth, { EpicPlanReadinessUi });
+slow.chrome.approveButton.dispatchEvent("click");
+assert.equal(slow.chrome.approveButton.textContent, "Approving…");
+EpicPlanReadinessUi.applyReadinessToPlanBar(slow.chrome, integrationDoc, readyBoth, epicId);
+assert.equal(slow.chrome.approveButton.disabled, true);
+slow.chrome.approveButton.dispatchEvent("click");
+assert.equal(approvalPosts, 1);
+resolveApproval({ok: true, text: async () => JSON.stringify({ok: true, dispatch_pending: true, message: "Approval saved; dispatch pending."})});
+await tick();
+assert.equal(slow.chrome.approveButton.textContent, "Approved");
+assert.equal(slow.chrome.approveButton.disabled, true);
+assert.equal(slow.chrome.errorElement.textContent, "Approval saved; dispatch pending.");
+EpicPlanReadinessUi.applyReadinessToPlanBar(slow.chrome, integrationDoc, readyBoth, epicId);
+assert.equal(slow.chrome.approveButton.disabled, true);
+
+// A lost response can still mean the approval was persisted.
+globalThis.fetch = async (url, options) => {
+  if (options.method === "POST") throw new Error("Connection lost");
+  return {ok: true, json: async () => ({meta: {plan_approved: true}})};
+};
+const lost = initEpicPlanReadinessChrome(epicId, readyBoth, { EpicPlanReadinessUi });
+lost.chrome.approveButton.dispatchEvent("click");
+await tick();
+assert.equal(lost.chrome.approveButton.textContent, "Approved");
+assert.equal(lost.chrome.approveButton.disabled, true);
+assert.equal(lost.chrome.errorElement.hidden, true);
+
 console.log("epic_plan_readiness_integration: ok");

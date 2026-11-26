@@ -699,9 +699,25 @@
     var chrome = EpicPlanReadinessUi.renderPlanReadinessBar(document, readiness, workId);
     host.appendChild(chrome.bar);
 
+    function markApproved(body) {
+      chrome.approvalConfirmed = true;
+      chrome.approveButton.textContent = "Approved";
+      chrome.approveButton.classList.add("approval-confirmed");
+      chrome.approveButton.disabled = true;
+      chrome.approveButton.setAttribute("aria-disabled", "true");
+      if (chrome.disabledReasonNote) chrome.disabledReasonNote.hidden = true;
+      chrome.errorElement.hidden = true;
+      chrome.errorElement.textContent = "";
+      if (body && body.dispatch_pending) {
+        chrome.errorElement.textContent = body.message || "Approval saved; dispatch pending.";
+        chrome.errorElement.hidden = false;
+      }
+    }
+
     function refreshReadiness() {
       return fetch("/api/doc/" + encodeURIComponent(workId), {
         signal: pageLoadSignal(),
+        cache: "no-store",
       })
         .then(function (resp) {
           if (!resp.ok) {
@@ -710,7 +726,9 @@
           return resp.json();
         })
         .then(function (doc) {
-          if (doc.plan_readiness) {
+          if (doc.meta && doc.meta.plan_approved) {
+            markApproved();
+          } else if (doc.plan_readiness) {
             EpicPlanReadinessUi.applyReadinessToPlanBar(
               chrome,
               document,
@@ -722,10 +740,13 @@
     }
 
     chrome.approveButton.addEventListener("click", function () {
-      if (chrome.approveButton.disabled) return;
+      if (chrome.approveButton.disabled || chrome.approveButton.getAttribute("aria-busy") === "true") return;
       chrome.errorElement.hidden = true;
       chrome.errorElement.textContent = "";
       chrome.approveButton.disabled = true;
+      chrome.approvalPending = true;
+      chrome.approveButton.textContent = "Approving…";
+      chrome.approveButton.setAttribute("aria-busy", "true");
       var request = { id: workId };
       if (options.reviewContext) request.review_context = options.reviewContext;
       postJson("/api/approve_epic_plan", request)
@@ -733,22 +754,22 @@
           if (!body || body.ok !== true) {
             throw new Error("Unexpected approval response");
           }
-          chrome.approveButton.textContent = "Approved";
-          chrome.approveButton.classList.add("approval-confirmed");
-          chrome.approveButton.disabled = true;
-          chrome.approveButton.setAttribute("aria-disabled", "true");
-          if (chrome.disabledReasonNote) {
-            chrome.disabledReasonNote.hidden = true;
-          }
+          markApproved(body);
         })
         .catch(function (err) {
-          chrome.errorElement.textContent = EpicPlanReadinessUi.staleApprovalErrorMessage(err);
+          chrome.approvalPending = false;
+          chrome.approveButton.textContent = "Approve plan";
+          chrome.errorElement.textContent = err.status
+            ? EpicPlanReadinessUi.staleApprovalErrorMessage(err)
+            : "Approval outcome not confirmed; checking the saved plan. " + (err.message || String(err));
           chrome.errorElement.hidden = false;
           return refreshReadiness().catch(function () {
-            if (chrome.approveButton.textContent === "Approve plan") {
-              chrome.approveButton.disabled = false;
-            }
+            chrome.approveButton.disabled = false;
           });
+        })
+        .finally(function () {
+          chrome.approvalPending = false;
+          chrome.approveButton.removeAttribute("aria-busy");
         });
     });
 
