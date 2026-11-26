@@ -2159,3 +2159,45 @@ reference digests matched, and `git diff --check`. Supported integration,
 contention acceptance, completed Task-record corrections, final design ownership
 reconciliation and terminal-publication recovery remain open. Return control to
 Feature 5 planning, Feature 3 execution and supervised delivery.
+## Manager pending Feature 4 publication and design mapping handoff
+
+In reply to `feat_049_004:feat_049_004:architect_publication_pending_ada28def`.
+Canonical Epic `write_doc` succeeded at `9663684255700d5178bdd369c97cb8d5a6f4ed6a`.
+The plan preserves reported pending operation
+`architecture-publication-ada28defde68702ee43f44a9d1da09d8f89ea916b93fee142c85ab7e22fc974d`,
+completed plan `a3d4a42b3df92a553206c300c42142600183eaef`, War Room design,
+and the same revision's four architecture source/contract references, with
+expected accepted-lineage generation null. Pending is not accepted publication.
+The Manager tool set has no architecture-proposal replay operation. Sent
+`manager:f4_pending_publication_mapping_96636842_20261126` to Feature 4 for its
+authorized architecture owner to replay the exact saved proposal on a later
+turn. No replacement proposal or changed accepted lineage is claimed.
+
+Pinned-tree inspection confirms that `architecture/design-mappings.json` maps
+`cascade/recovery_progress` to the package design despite the child owning
+`REQ-RECOVERY-PROGRESS-001..004` and `DEC-RECOVERY-PROGRESS-001..002`.
+Read the child design's source-linked interfaces, normal transaction/fence flow,
+persistent state and restart/pending trace, plus Task 3's design/diagram closeout.
+The architecture contract retains three `epic_049` ownership references. The
+Epic Architect owns mapping and source/model ownership reconciliation during
+supported integration, checking package/Watchdog references and the integrated
+child. The child design is absent from this Epic checkout and Feature 4's pinned
+revision is not its ancestor; inserting a mapping here would not resolve the
+integrated ownership gap. No manual merge or child-worktree mutation was made.
+
+Diagram impact: context/container actors and storage boundaries are unchanged
+by this planning-only handoff. Component and native Watchdog/Dashboard Code
+ownership must agree with the persisted design mapping after integration; no
+source symbol, relationship or behavior changes in this turn. The existing
+all-level inventory and Feature 5 contention/replay obligations remain binding.
+No current-design prose or model was edited, so no render/runtime rerun was
+warranted. The producer bounds claim remains assigned to Feature 5.
+
+Validation: canonical Epic/Feature reads, completed child supervision without
+an incident, pinned design/mapping/contract/closeout inspection, ancestry and
+child-presence checks, all six saved Epic publication digests matched, canonical
+readback and `git diff --check`. No new product decision or scope change.
+Renewed sign-off and acceptance remain withheld. Supported integration,
+contention repair, completed Task-record corrections, design-owner reconciliation
+and both publication follow-ups remain open. Return control to child execution
+and the authorized architecture publication owner.
