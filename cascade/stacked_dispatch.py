@@ -526,6 +526,10 @@ def reconcile_stacked_native_retargeting(root: Path) -> dict[str, list[str]]:
 
         expected_base = integration_branch("epic", epic_id)
         review_record = review_record_for_feature(feature_id, root=trunk)
+        if review_record and review_record.get("closed") and review_record.get("integration_target_branch") == expected_base:
+            # A merged stacked review keeps its historical forge base. Its
+            # separately proven Epic integration is enough; do not retarget it.
+            continue
         if review_record is None or not str(review_record.get("url") or "").strip():
             blocked.append(feature_id)
             record = dict(record)

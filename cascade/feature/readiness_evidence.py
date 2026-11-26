@@ -378,7 +378,7 @@ def dispatch_source_snapshot(
         work_id
         for work_id, review in reviews.items()
         if review is not None
-        and review.get("state") in {"preparing_review", "awaiting_review"}
+        and review.get("state") in {"preparing_review", "awaiting_review", "awaiting_integration"}
     )
     thread = blocking_threads_for_many({feature_id}, root=root, board=board).get(
         feature_id

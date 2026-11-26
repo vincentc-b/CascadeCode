@@ -114,3 +114,13 @@ proof on a read. [Canonical dispatch](../watchdog/dispatch.py) rechecks all
 gates and [plans the base](../stacked_dispatch.py), including multiple
 predecessors; it never starts a branch lacking required ancestry. A previously
 selected base can be replanned only before an integration checkout exists.
+
+A review merged into a still-open stacked predecessor is accepted by the forge,
+but is not yet delivered to the Epic. The review ledger retains that merge's
+original URL/base, generation and accepted commit; the board shows **Merged ·
+awaiting upstream integration** and the child disappears from the open-review
+queue without releasing integration-dependent gates. After the predecessor is
+accepted on the Epic, close the child only if its merge is in Epic ancestry or
+the predecessor's exact accepted source contains it and its accepted integration
+commit is reachable from the Epic. Otherwise the existing stacked-review gap
+recovery remains authoritative.

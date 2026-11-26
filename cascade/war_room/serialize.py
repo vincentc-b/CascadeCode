@@ -916,7 +916,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
         feature_id
         for feature_id, review in reviews.items()
         if review is not None
-        and review.get("state") in {"preparing_review", "awaiting_review"}
+        and review.get("state") in {"preparing_review", "awaiting_review", "awaiting_integration"}
     )
     backlog_feature_ids = {meta.id for meta in metas if _backlog_open_feature(meta)}
     from cascade.comments.gate import blocking_threads_for_many, gate_refusal_reason
@@ -1026,7 +1026,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
         if (
             meta.tier == "feature"
             and isinstance(review, dict)
-            and review.get("state") in {"preparing_review", "awaiting_review"}
+            and review.get("state") in {"preparing_review", "awaiting_review", "awaiting_integration"}
         ):
             # The source plan is already in completed so the MR contains its
             # final location, but operationally the feature remains in flight.

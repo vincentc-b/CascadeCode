@@ -288,3 +288,59 @@ def test_reconciled_stacked_review_completes_and_releases_dependent_once(
             if event.type == "FeatureCompleted" and event.payload.get("feature_id") == "feat_002"
         ]
     ) == 1
+
+
+def test_accepted_on_open_stack_is_not_an_open_review_or_epic_completion(tmp_path, monkeypatch):
+    root = make_repo(tmp_path, git=False)
+    _stacked_board(root)
+    review._update_record(root, "feat_001", {"closed": False})
+    monkeypatch.setattr(review, "_git_ancestor", lambda *a: True)
+    monkeypatch.setattr(review, "merge_request_snapshot", lambda *a: {
+        "state": "merged", "comments": [], "merge_sha": "a" * 40,
+        "source_revision": "b" * 40, "target_branch": "feat/feat_001",
+    } if a[1].source_branch == "feat/feat_002" else {"state": "open", "comments": []})
+    monkeypatch.setattr(review, "get_integration_worktree", lambda *a: None)
+    review.poll_feature_reviews(root)
+    row = review.feature_review_view("feat_002", root=root)
+    assert row["state"] == "awaiting_integration"
+    assert row["integration_feature_id"] == "feat_001"
+    assert row["integration_review_url"].endswith("feat_001")
+    assert review.feature_review_pending("feat_002", root=root)
+    assert [r.id for r in review.list_open_reviews(root=root)] == ["feat_001"]
+    assert not review.review_record_for_feature("feat_002", root=root)["closed"]
+    assert load_action("feat_002:stacked_review_integration_gap", root=root) is None
+
+
+def test_stacked_merge_carried_by_accepted_parent_squash_is_finalized(tmp_path, monkeypatch):
+    import subprocess
+
+    root = make_repo(tmp_path)
+    _stacked_board(root)
+    def git(*args):
+        return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+
+    # An accepted child merge is in the parent's source, but a squash commit
+    # subsequently carries the complete parent tree onto Epic without ancestry.
+    base = git("rev-parse", "HEAD")
+    tree = git("rev-parse", "HEAD^{tree}")
+    child_merge = git("commit-tree", tree, "-p", base, "-m", "child accepted")
+    parent_source = git("commit-tree", tree, "-p", child_merge, "-m", "parent source")
+    epic_merge = git("commit-tree", tree, "-p", base, "-m", "parent squash")
+    review._update_record(root, "feat_001", {
+        "closed": True, "accepted_merge_sha": epic_merge, "accepted_source_head": parent_source,
+    })
+    record = review.review_record_for_feature("feat_002", root=root)
+    snapshot = {"state": "merged", "comments": [], "merge_sha": child_merge,
+                "source_revision": child_merge, "target_branch": "feat/feat_001"}
+    monkeypatch.setattr(review, "get_integration_worktree", lambda *a: SimpleNamespace(path=root))
+    monkeypatch.setattr(review, "head_sha", lambda *a: epic_merge)
+    targets = []
+    monkeypatch.setattr(review, "_finalize_merged_review_record",
+                        lambda fid, rec, mr, **kw: targets.append(mr.target_branch) or True)
+    assert review._reconcile_stacked_acceptance("feat_002", record, snapshot, trunk=root)
+    updated = review.review_record_for_feature("feat_002", root=root)
+    assert updated["closed"]
+    assert updated["target_branch"] == "feat/feat_001"
+    assert updated["integration_target_branch"] == "epic/epic_001"
+    assert updated["stack_integration_sha"] == epic_merge
+    assert targets == ["epic/epic_001"]

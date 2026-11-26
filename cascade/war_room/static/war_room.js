@@ -1675,12 +1675,13 @@
     if (
       tier === "features" &&
       item.review &&
-      (item.review.state === "awaiting_review" || item.review.state === "preparing_review")
+      (item.review.state === "awaiting_review" || item.review.state === "preparing_review" || item.review.state === "awaiting_integration")
     ) {
       row.classList.add("board-row-awaiting-review");
       const reviewStatus = document.createElement("span");
       reviewStatus.className = "feature-review-status";
       reviewStatus.textContent =
+        item.review.state === "awaiting_integration" ? "Merged · awaiting upstream integration" :
         item.review.state === "awaiting_review" ? "Awaiting review" : "Preparing review";
       reviewStatus.setAttribute("aria-label", "Feature review status: " + reviewStatus.textContent);
       row.appendChild(reviewStatus);
@@ -1858,7 +1859,10 @@
         }));
       }
       if (item.review && item.review.url) {
-        actions.appendChild(actionLink("Open review", item.review.url));
+        actions.appendChild(actionLink(item.review.state === "awaiting_integration" ? "View merged review" : "Open review", item.review.url));
+        if (item.review.state === "awaiting_integration" && item.review.integration_review_url) {
+          actions.appendChild(actionLink("Upstream review", item.review.integration_review_url));
+        }
       }
     }
     if (tier === "tasks") {
