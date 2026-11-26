@@ -1664,3 +1664,55 @@ renderer or browser journey were run for this documentation-only review.
 Integrated correction acceptance, completed Task-record corrections, child design
 ownership, final API/navigation evidence and supported publication recovery
 remain open. Return control to lifecycle reconciliation and corrective planning.
+
+## Manager candidate repair delivery handoff
+
+In reply to Feature 2's malformed detail-cursor and `ecd390f4` repair messages,
+reviewed candidate `ecd390f4d1819d72bc65e2ea4960000a48e50a67` against its base
+`7f7df0e8`, including publisher/source acknowledgement, detail reader, changed
+regressions, Watchdog and War Room designs, and the candidate's
+`docs/feature_artifacts/feat_049_002_postmerge_review.md`. The candidate is not
+an ancestor of the Epic integration branch. `supervise_child` reports Feature 2
+completed with no incident; this does not deliver the later branch commit.
+
+Saved the candidate reuse and supported delivery handoff in corrective Feature
+`a2bc4675`, including typed `400 invalid_request` for a detail cursor inside a
+UTF-8 character and positive progress for successful incomplete chunks. Saved
+the matching Epic scope clarification and `dec_009`; canonical Epic revision is
+`17530d06`. These are existing durability/pagination contract corrections, not a
+new route or product slice. No manual merge, completed-record rewrite or
+supervisor bookkeeping change was performed. Feature 2 was notified through
+`message_team` with request suffix
+`candidate_ecd390f4_corrective_handoff_20261126`.
+
+Source review confirms the private helper now revalidates a differing existing
+routing tuple inside the publisher transaction and preserves immutable identity
+conflict checks. The added regression calls that helper sequentially after a
+rewrite; it does not establish the required real fast-path/drain interleavings
+or public check-to-write race. Corrective acceptance retains those checks,
+first insertion, move/restart/pending/conflict evidence and safe lock ordering
+and bounded work. The source acknowledgement helper can repair, import and
+publish transcript data, so its invocation under the publisher transaction needs
+that explicit review. No additional defect is claimed from this trace alone.
+
+Design impact: same actors, runtime/data boundaries and component ownership;
+the candidate changes existing function behavior, not source symbol names.
+Watchdog and War Room prose now describes the candidate refresh and cursor
+refusal without delivery attribution. Corrective scope owns the final behavior
+and native Watchdog/Dashboard Code review, including
+`transcript_pages.read_transcript_detail`, with Workspace move/retirement
+verification where affected. Normal multibyte continuation, malformed cursor
+failure, acknowledgement delay and restart remain required traces. Existing
+producer child-design ownership and actual navigation evidence remain open;
+this read-only review neither renders nor republishes architecture.
+
+Validation: canonical Epic/Feature readbacks, child status, candidate diff and
+source/design/test inspection, Git ancestry check and `git diff --check`.
+The candidate owner's 27 focused passing tests, Ruff and source-contract checks
+are reported evidence, not rerun by this planning turn. Feature 3 still lists
+only Features 1 and 2 as canonical prerequisites; the acceptance hold is not a
+machine-enforced dependency. Renewed role sign-off and acceptance remain withheld
+pending authorized sequencing reconciliation and verified corrective delivery.
+Completed Task 1/5 record corrections and supported publication recovery remain
+separate open items. Return control for Architect/lifecycle review and corrective
+child planning.
