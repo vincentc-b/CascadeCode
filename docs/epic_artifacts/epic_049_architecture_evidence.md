@@ -3254,3 +3254,46 @@ contention and eventual dirty-projection publication on the integrated source;
 completed-record corrections, broader documentation-refresh proof and final
 design/publication reconciliation remain open. Return control to supervised
 child delivery and the publication owner.
+
+## Architect review of sequential-deadline delivery
+
+Reviewed Task candidate `3094db9d` against `4b75b6ad` and Feature baseline
+`4959f09f`. Publisher schema execution now refreshes the remaining timeout
+before each statement; transcript writer schema/commit and existing-index
+schema/routing queries do likewise. The deterministic 8/11/12 refresh checks
+support that ordering, without measuring successive real SQLite lock waits.
+The reported 92-test runs were not rerun in this review.
+
+During review, Feature HEAD advanced to `bb2baae3`, containing Task delivery
+`92835ca9`. The `cascade`, `architecture`, `tests` and `docs/task_artifacts`
+trees match candidate `3094db9d` exactly. The original candidate is not a
+Feature ancestor; the delivery commit is not an Epic ancestor. Canonical Epic
+`write_doc` at `a1ac6970` records this source-equivalence distinction without
+claiming canonical lifecycle acceptance or final integrated verification.
+
+Reviewed Recovery Progress, War Room, Watchdog and Workspace design changes,
+the model/view/source-contract diff and the Task closeout. Context/container
+boundaries and component topology remain unchanged: admission timing changes
+inside the existing runtimes and stores. Watchdog Code retains the producer
+owner; Dashboard Code adds the real Function `_connect_existing_index` and
+routes fenced lookup to it. The sequential-deadline revision updates existing
+descriptions without changing those owners or view memberships. Supplementary
+mapping/fence/replay flows still describe source ordering. Current design prose
+contains no delivery-history attribution. Final integrated navigation and
+source-contract verification remain assigned to Feature/Epic review.
+
+The room-move test and its read-only `_items` helper still do not force expiry
+or perform a later drain. Its immediate projection assertion cannot substantiate
+the closeout's eventual-publication claim. The canonical Epic already requires
+corrected evidence and expiry/pending-to-later-publication proof with exactly-once
+history, plus held-final-reply, routing and UTF-8 checks on the integrated baseline.
+Those requirements remain open; no duplicate notification or new scope decision
+is needed.
+
+All twelve saved publication blob digests match. Working-tree and candidate
+diff whitespace checks passed. No product tests, renderer or browser checks
+were rerun for this review and work-record correction. Saved proposals and
+accepted snapshots are unchanged. Acceptance and renewed sign-off remain
+withheld pending Epic integration, final verification, completed-record
+corrections, broader documentation-refresh proof and exact design/publication
+reconciliation. Return control to supervised child delivery.
