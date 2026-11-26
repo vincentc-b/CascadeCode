@@ -2242,3 +2242,49 @@ renewed sign-off and acceptance remain withheld. Integration, contention repair,
 completed Task-record corrections, final design reconciliation and the two
 distinct publication follow-ups remain open. Return control to child execution
 and supervised delivery.
+
+## Manager Feature 3 consumer-contract reconciliation
+
+In reply to `feat_049_003:feat_049_003:contract_reconciliation_b47b1b78_20261126`.
+Read canonical Feature revision `b47b1b781618a21fe46443aa1d2a262590f188cd`
+and Epic `9663684255700d5178bdd369c97cb8d5a6f4ed6a`. The consumer fixtures,
+distinct progress revision/transcript incarnation, committed-only anchors,
+held-final-reply acceptance and all-level diagram inventory agree with the
+existing Epic contract. No new scope decision, Epic amendment or canonical
+spec edit is needed. The canonical child list retains Feature 3 active with
+Features 1, 2 and 4 as dependencies; Feature 5 remains backlog and owns the
+external integrated acceptance gate for writer contention. No lifecycle
+recovery incident was supplied or inferred.
+
+Read-only Git checks confirm `a3d4a42b`, `ecd390f4` and `2e9fe23e` are
+ancestors of the Feature revision. Full patches for original `469f0fa5` and
+integrated `2e9fe23e` are equivalent: `git show --pretty=format: <commit> |
+git patch-id --stable` yields `e24afbbe865d97c4e36541295f22815edd6af942`
+for both. This differs from the plan's reported `07c8bbbe` digest; asked
+Feature 3 to correct the evidence or identify its exact scoped command.
+The equivalence conclusion is supported independently of that transcription
+or command-scope discrepancy. The named typed-error/detail and pending-source
+fixtures exist at the pinned revision. No runtime/browser tests were rerun.
+Feature revision `b47b1b78` is not an ancestor of owned Epic HEAD `6fae8448`;
+Feature-side source presence is not Epic integration acceptance.
+
+Reviewed the pinned Recovery Progress design and War Room transcript interfaces,
+source-linked fence-through-commit flow, persisted index/pages, replay and
+cursor failure behavior alongside the Feature inventory. No DESIGN or model
+edit is justified by this evidence-only diff: context/container topology,
+component responsibilities, native Code symbols and behavioral paths are
+unchanged. Consumer changes and their final source/diagram reconciliation
+belong to Feature 3 Tasks; producer deadline proof remains with Feature 5.
+The existing persisted design-mapping gap, integrated ownership review and
+publication follow-ups remain open. No current-design completeness claim is
+made from the presence of the model or the reported scoped browser pass.
+
+Sent `manager:f3_contract_review_b47b1b78_20261126` to Feature 3, including
+review of active Task 1 against the strengthened canonical Feature criteria,
+the patch-ID evidence discrepancy, the contention acceptance gate and the
+distinction between scoped navigation and broader documentation-refresh proof.
+Historical Epic sign-offs remain on `03280933`; renewed sign-off and acceptance
+remain withheld. Validation: canonical reads, empty amendment list, ancestry,
+patch equivalence and fixture-presence checks, pinned design/interface review
+and `git diff --check`. Completed Task-record corrections and supported
+integration remain unresolved. Return control to child execution and delivery.
