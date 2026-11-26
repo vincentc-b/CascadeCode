@@ -1304,6 +1304,15 @@ code_watchdog_milestone_record = element "record_transcript_milestone" "Function
     }
 }
 
+code_watchdog_milestone_upsert = element "_record_transcript_milestone" "Function" "Rejects receipt, entry, graph or message identity conflicts while refreshing current incarnation and append-sequence routing metadata." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.milestone-upsert"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/recovery_progress/publisher.py"
+        "cascade.sourceSymbol" "_record_transcript_milestone"
+    }
+}
+
 watchdog_tick_to_dispatch = code_watchdog_tick -> code_watchdog_dispatch "Advances eligible Tasks through automation" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-tick-to-dispatch"
@@ -3189,7 +3198,7 @@ code_dashboard_incidents = element "read_recovery_progress" "Function" "Reads re
     }
 }
 
-code_dashboard_chat_get = element "handle_get_chat" "Function" "Returns existing transcript rows without checkpoint backfill." {
+code_dashboard_chat_get = element "handle_get_chat" "Function" "Returns the bounded latest-window compatibility array with continuation and completeness headers." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.get"
         "cascade.parent" "element.component.dashboard"
@@ -3198,12 +3207,48 @@ code_dashboard_chat_get = element "handle_get_chat" "Function" "Returns existing
     }
 }
 
-code_dashboard_chat_read = element "read_messages" "Function" "Routes to the owning room and reads the JSONL transcript." {
+code_dashboard_chat_read = element "read_messages" "Function" "Reads authoritative JSONL only for explicit writer-side sync and compatibility helpers, never from GET." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.read"
         "cascade.parent" "element.component.dashboard"
         "cascade.sourcePath" "cascade/war_room/chat_store.py"
         "cascade.sourceSymbol" "read_messages"
+    }
+}
+
+code_dashboard_chat_page = element "read_transcript_page" "Function" "Reads incarnation-bound immutable pages with row, aggregate source and serialized response ceilings." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.page"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/transcript_pages.py"
+        "cascade.sourceSymbol" "read_transcript_page"
+    }
+}
+
+code_dashboard_transcript_get = element "handle_get_transcript" "Function" "Validates versioned page and detail queries and returns typed invalid, restart or pending errors." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.transcript.get"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/sidecar_routes.py"
+        "cascade.sourceSymbol" "handle_get_transcript"
+    }
+}
+
+code_dashboard_chat_publish = element "publish_transcript_projection" "Function" "Publishes committed offset rows as content-addressed pages and atomically advances the graph pointer." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.publish"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/transcript_pages.py"
+        "cascade.sourceSymbol" "publish_transcript_projection"
+    }
+}
+
+code_dashboard_chat_detail = element "read_transcript_detail" "Function" "Reads one graph/incarnation/message/digest-bound UTF-8 detail chunk without scanning JSONL." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.detail"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/transcript_pages.py"
+        "cascade.sourceSymbol" "read_transcript_detail"
     }
 }
 
@@ -3249,6 +3294,15 @@ code_dashboard_chat_move = element "move_transcript_room" "Function" "Journals a
         "cascade.parent" "element.component.dashboard"
         "cascade.sourcePath" "cascade/war_room/chat_store.py"
         "cascade.sourceSymbol" "move_transcript_room"
+    }
+}
+
+code_dashboard_chat_resume_move = element "resume_transcript_room_move" "Function" "Verifies the journaled destination after terminal owner removal, completes the retained index transition, and republishes the destination incarnation." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.resume-move"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "resume_transcript_room_move"
     }
 }
 
@@ -3420,9 +3474,33 @@ dashboard_router_to_dashboard_chat_get = code_dashboard_router -> code_dashboard
     }
 }
 
-dashboard_chat_get_to_dashboard_chat_read = code_dashboard_chat_get -> code_dashboard_chat_read "Reads the routed transcript" {
+dashboard_router_to_dashboard_transcript_get = code_dashboard_router -> code_dashboard_transcript_get "Dispatches versioned transcript page and detail reads" {
     properties {
-        "cascade.semanticId" "relationship.code-dashboard-chat-get-to-dashboard-chat-read"
+        "cascade.semanticId" "relationship.code-dashboard-router-to-dashboard-transcript-get"
+    }
+}
+
+dashboard_chat_get_to_dashboard_chat_page = code_dashboard_chat_get -> code_dashboard_chat_page "Reads the bounded latest transcript window" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-get-to-dashboard-chat-page"
+    }
+}
+
+dashboard_transcript_get_to_dashboard_chat_page = code_dashboard_transcript_get -> code_dashboard_chat_page "Reads bounded immutable transcript pages" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-transcript-get-to-dashboard-chat-page"
+    }
+}
+
+dashboard_transcript_get_to_dashboard_chat_detail = code_dashboard_transcript_get -> code_dashboard_chat_detail "Reads one immutable oversized-message chunk" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-transcript-get-to-dashboard-chat-detail"
+    }
+}
+
+dashboard_chat_append_to_publish = code_dashboard_chat_append -> code_dashboard_chat_publish "Publishes committed append offsets for bounded readers" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-append-to-publish"
     }
 }
 
@@ -3462,9 +3540,21 @@ watchdog_progress_publish_to_recovery_milestone = code_watchdog_progress_publish
     }
 }
 
-watchdog_progress_publish_to_milestone_record = code_watchdog_progress_publish -> code_watchdog_milestone_record "Persists the durable acknowledgement before exposing ordered milestone references" {
+watchdog_progress_publish_to_milestone_upsert = code_watchdog_progress_publish -> code_watchdog_milestone_upsert "Persists the durable acknowledgement inside the fast-path transaction" {
     properties {
-        "cascade.semanticId" "relationship.code-watchdog-progress-publish-to-milestone-record"
+        "cascade.semanticId" "relationship.code-watchdog-progress-publish-to-milestone-upsert"
+    }
+}
+
+watchdog_progress_drain_to_milestone_upsert = code_watchdog_progress_drain -> code_watchdog_milestone_upsert "Persists each replayed durable acknowledgement" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-progress-drain-to-milestone-upsert"
+    }
+}
+
+watchdog_milestone_record_to_milestone_upsert = code_watchdog_milestone_record -> code_watchdog_milestone_upsert "Validates current fenced routing before updating the durable mapping" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-milestone-record-to-milestone-upsert"
     }
 }
 
@@ -3492,6 +3582,12 @@ dashboard_chat_rewrite_to_index = code_dashboard_chat_rewrite -> code_dashboard_
     }
 }
 
+dashboard_chat_rewrite_to_publish = code_dashboard_chat_rewrite -> code_dashboard_chat_publish "Invalidates the old pointer and republishes the committed replacement incarnation" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-rewrite-to-publish"
+    }
+}
+
 dashboard_chat_move_to_fence = code_dashboard_chat_move -> code_dashboard_chat_fence "Fences room copy and owner switch" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-chat-move-to-fence"
@@ -3504,6 +3600,30 @@ dashboard_chat_move_to_index = code_dashboard_chat_move -> code_dashboard_chat_i
     }
 }
 
+dashboard_chat_move_to_publish = code_dashboard_chat_move -> code_dashboard_chat_publish "Invalidates the moving incarnation and republishes the committed destination" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-move-to-publish"
+    }
+}
+
+dashboard_chat_resume_move_to_fence = code_dashboard_chat_resume_move -> code_dashboard_chat_fence "Fences terminal move recovery against transcript writers" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-resume-move-to-fence"
+    }
+}
+
+dashboard_chat_resume_move_to_index = code_dashboard_chat_resume_move -> code_dashboard_chat_index "Completes the retained move intent and rebuilt offsets" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-resume-move-to-index"
+    }
+}
+
+dashboard_chat_resume_move_to_publish = code_dashboard_chat_resume_move -> code_dashboard_chat_publish "Publishes the recovered destination incarnation" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-resume-move-to-publish"
+    }
+}
+
 workspace_create_to_dashboard_chat_move = code_workspace_create -> code_dashboard_chat_move "Copies committed room history and publishes its new registered owner" {
     properties {
         "cascade.semanticId" "relationship.code-workspace-create-to-dashboard-chat-move"
@@ -3513,6 +3633,12 @@ workspace_create_to_dashboard_chat_move = code_workspace_create -> code_dashboar
 workspace_retire_to_dashboard_chat_move = code_workspace_retire -> code_dashboard_chat_move "Moves history to the surviving owner while retiring the registered checkout" {
     properties {
         "cascade.semanticId" "relationship.code-workspace-retire-to-dashboard-chat-move"
+    }
+}
+
+workspace_retire_to_dashboard_chat_resume_move = code_workspace_retire -> code_dashboard_chat_resume_move "Resumes the journaled room move when terminal owner removal already completed" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-retire-to-dashboard-chat-resume-move"
     }
 }
 

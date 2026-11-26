@@ -330,8 +330,11 @@ Invocation and executor tokens are short-lived observations bound to the current
 worker process generation; queue ownership, PID existence, a legacy owner, or an
 inaccessible process cannot establish execution and the observations never grant
 repair authority. The [War Room transcript](war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
-records presentable replies after invocation return. These separate facts do not
-establish independently verified recovery completion.
+records presentable replies after invocation return and receipt-keyed recovery
+milestones. Its historical HTTP surface reads only writer-published immutable
+pages and bounded oversized-message chunks; authoritative JSONL and the writer
+index are not GET surfaces. These separate facts do not establish independently
+verified recovery completion.
 
 ## Team libraries, wiring, and isolation
 

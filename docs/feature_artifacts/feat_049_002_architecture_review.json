@@ -1,0 +1,70 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "ac9ddcf32cd67965da38682847f59e183f78b1d7",
+  "proposal": {
+    "owner_work_id": "feat_049_002",
+    "authorized_owner": "feature_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": "cascade/war_room",
+    "design_owner_directory": "cascade/war_room",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_049",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/features/2_active/feat_049_002_persist_recovery_milestones_and_bounded_transcript_history.md",
+      "revision": "ac9ddcf32cd67965da38682847f59e183f78b1d7",
+      "content_digest": "7af2ed6ca10214cbb254735c42bf0ea392a197a41dac91a2dc3ef029377fd60a"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": "cascade/war_room",
+        "design_owner_directory": "cascade/war_room",
+        "owning_work": "feat_049_002",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "cascade/war_room/DESIGN.md",
+        "revision": "bce2542401fd2e3a571aaab56061f7076e74cfa1"
+      },
+      "content_digest": "491d9c565941214217baf37db73fde9af9cdeaa7dbcf4ae693efc92d7b5597b1"
+    },
+    "proposed_model": null,
+    "requirement_citations": [
+      "REQ-WARROOM-TRANSCRIPT-001",
+      "REQ-WARROOM-PROGRESS-001"
+    ],
+    "decision_citations": [
+      "DEC-WARROOM-TRANSCRIPT-001",
+      "DEC-WARROOM-PROGRESS-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-war-room-components",
+      "cascade-dashboard-code",
+      "cascade-task-code",
+      "cascade-watchdog-code",
+      "cascade-workspace-code",
+      "cascade-teams-code"
+    ],
+    "affected_work_ids": [
+      "feat_049_002"
+    ],
+    "architecture_impact": "no_diagram_change",
+    "impact_reason": "The feature plan revisions specify the producer fixture, durable receipt-to-message acknowledgement, publisher milestone mapping and oversized legacy detail route as future implementation contracts. Current source and designs are unchanged. The existing context, container, component and native Code views still describe the implemented full-JSONL/thread-only transcript; Tasks 1-4 own model and design reconciliation after real source symbols exist."
+  }
+}

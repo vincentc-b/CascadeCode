@@ -747,11 +747,18 @@ def _record_transcript_milestone(
         (receipt_id,),
     ).fetchone()
     if existing is not None:
-        current = tuple(existing[key] for key in (
-            "entry_id", "graph_id", "message_id", "incarnation", "append_sequence"
-        ))
-        if current != values:
+        identity = tuple(
+            existing[key] for key in ("entry_id", "graph_id", "message_id")
+        )
+        if identity != values[:3]:
             raise ValueError("receipt maps to a different transcript acknowledgement")
+        if tuple(existing[key] for key in ("incarnation", "append_sequence")) != values[3:]:
+            connection.execute(
+                """UPDATE transcript_milestones
+                   SET incarnation = ?, append_sequence = ?, recorded_at = ?
+                   WHERE receipt_id = ?""",
+                (values[3], values[4], _iso(now), receipt_id),
+            )
     else:
         connection.execute(
             "INSERT INTO transcript_milestones VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -801,13 +808,26 @@ def record_transcript_milestone(root: Path, ack: Mapping[str, Any]) -> None:
     """Durably join a committed transcript message to its progress entry."""
 
     repo = canonical_audit_root(root)
+    receipt_id = ack.get("receipt_id")
+    graph_id = ack.get("graph_id")
+    message_id = ack.get("message_id")
+    if not all(isinstance(value, str) for value in (receipt_id, graph_id, message_id)):
+        raise ValueError("transcript milestone acknowledgement is incomplete")
+    from cascade.war_room.chat_store import transcript_source_acknowledgement
+
+    current = transcript_source_acknowledgement(
+        graph_id, source_key=f"recovery:{receipt_id}", root=root
+    )
+    if current["message_id"] != message_id:
+        raise ValueError("receipt maps to a different transcript acknowledgement")
+    current_ack = {**ack, **current}
     started = time.monotonic()
     with _writer_lock:
         connection = _connect(repo)
         try:
             connection.execute("BEGIN IMMEDIATE")
-            _record_transcript_milestone(connection, ack, now=_now())
-            _refresh_entry_milestones(connection, str(ack["entry_id"]))
+            _record_transcript_milestone(connection, current_ack, now=_now())
+            _refresh_entry_milestones(connection, str(current_ack["entry_id"]))
             connection.commit()
             _publish_dirty(
                 connection,

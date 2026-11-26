@@ -1,16 +1,26 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from cascade.recovery_progress.notifications import register_transition_publisher
 from cascade.recovery_progress.publisher import (
+    _connect,
     drain_recovery_progress,
     install_recovery_progress_publisher,
     publish_committed_transition,
+    record_transcript_milestone,
 )
 from cascade.task.action_recovery import create_or_load_action
-from cascade.war_room.chat_store import read_messages
+from cascade.war_room.chat_store import (
+    append_transcript_message,
+    mark_message_legacy_unknown,
+    read_messages,
+    transcript_source_acknowledgement,
+)
 from cascade.watchdog.incidents import transition_receipt_v1
 from tests.support import add_doc, make_repo
 
@@ -88,6 +98,100 @@ def test_committed_receipts_append_once_and_publish_ordered_refs(tmp_path: Path)
     entry = _items(root)[0]
     assert entry["receipt_refs"] == [first["receipt_id"], _receipt(2)["receipt_id"]]
     assert entry["milestone_refs"] == [row["id"] for row in messages]
+
+
+def _milestone_ack(root: Path, receipt: dict[str, object]) -> dict[str, object]:
+    message = next(
+        row
+        for row in read_messages("feat_001", root=root)
+        if row.get("receipt_id") == receipt["receipt_id"]
+    )
+    return {
+        "receipt_id": receipt["receipt_id"],
+        "entry_id": message["entry_id"],
+        **transcript_source_acknowledgement(
+            "feat_001",
+            source_key=f"recovery:{receipt['receipt_id']}",
+            root=root,
+        ),
+    }
+
+
+def _stored_milestone(root: Path, receipt_id: str) -> dict[str, object]:
+    connection = _connect(root)
+    try:
+        row = connection.execute(
+            "SELECT * FROM transcript_milestones WHERE receipt_id = ?",
+            (receipt_id,),
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+    finally:
+        connection.close()
+
+
+def test_receipt_retry_refreshes_rewrite_incarnation_and_rejects_stale_downgrade(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _board(root)
+    receipt = _receipt(1)
+    publish_committed_transition(root, receipt, {"recovery_state": "waiting"})
+    stale_ack = _milestone_ack(root, receipt)
+
+    unrelated = append_transcript_message(
+        "feat_001", author="feature_lead", body="authored", root=root
+    )
+    mark_message_legacy_unknown("feat_001", unrelated["id"], root=root)
+    publish_committed_transition(root, receipt, {"recovery_state": "waiting"})
+    current_ack = _milestone_ack(root, receipt)
+
+    assert current_ack["message_id"] == stale_ack["message_id"]
+    assert current_ack["incarnation"] != stale_ack["incarnation"]
+    with pytest.raises(ValueError, match="different transcript acknowledgement"):
+        record_transcript_milestone(root, {**current_ack, "message_id": "different"})
+    with pytest.raises(ValueError, match="different transcript acknowledgement"):
+        record_transcript_milestone(root, {**current_ack, "entry_id": "different"})
+    record_transcript_milestone(root, stale_ack)
+    stored = _stored_milestone(root, str(receipt["receipt_id"]))
+    assert stored["incarnation"] == current_ack["incarnation"]
+    assert stored["append_sequence"] == current_ack["append_sequence"]
+    assert _items(root)[0]["milestone_refs"] == [current_ack["message_id"]]
+    assert len(
+        [row for row in read_messages("feat_001", root=root) if row.get("receipt_id")]
+    ) == 1
+
+
+def test_receipt_retry_refreshes_registered_room_move_incarnation(tmp_path: Path) -> None:
+    from cascade.workspace.integration_worktree import create_integration_worktree
+
+    root = make_repo(tmp_path)
+    _board(root)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
+    receipt = _receipt(1)
+    publish_committed_transition(root, receipt, {"recovery_state": "waiting"})
+    before = _milestone_ack(root, receipt)
+
+    create_integration_worktree(
+        "feature",
+        "feat_001",
+        branch="feat/feat_001",
+        base_ref="HEAD",
+        trunk=root,
+    )
+    publish_committed_transition(root, receipt, {"recovery_state": "waiting"})
+    after = _milestone_ack(root, receipt)
+
+    assert after["message_id"] == before["message_id"]
+    assert after["incarnation"] != before["incarnation"]
+    stored = _stored_milestone(root, str(receipt["receipt_id"]))
+    assert stored["incarnation"] == after["incarnation"]
+    assert stored["append_sequence"] == after["append_sequence"]
+    assert _items(root)[0]["milestone_refs"] == [after["message_id"]]
+    assert len(
+        [row for row in read_messages("feat_001", root=root) if row.get("receipt_id")]
+    ) == 1
 
 
 def test_missed_notification_replays_as_reconciled_after_source_commit(

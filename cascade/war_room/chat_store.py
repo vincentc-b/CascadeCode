@@ -212,6 +212,24 @@ def _same_file_bytes(left: Path, right: Path) -> bool:
                 return True
 
 
+def _publish_transcript_pages(
+    graph_id: str, path: Path, connection: sqlite3.Connection, *, root: Path
+) -> None:
+    # Keep the projection dependency one-way: GET never imports this writer
+    # module or opens the SQLite intent/index database.
+    from cascade.war_room.transcript_pages import publish_transcript_projection
+
+    publish_transcript_projection(
+        graph_id, source_path=path, connection=connection, root=root
+    )
+
+
+def _invalidate_transcript_pages(graph_id: str, *, root: Path) -> None:
+    from cascade.war_room.transcript_pages import invalidate_transcript_projection
+
+    invalidate_transcript_projection(graph_id, root=root)
+
+
 def _file_fingerprint(path: Path) -> tuple[int, str]:
     digest = hashlib.sha256()
     length = 0
@@ -343,6 +361,14 @@ def resume_transcript_room_move(graph_id: str, *, root: Path) -> bool:
                 "SELECT * FROM move_intent WHERE singleton = 1"
             ).fetchone()
             if intent is None:
+                state = connection.execute(
+                    "SELECT room_path FROM state WHERE singleton = 1"
+                ).fetchone()
+                if state is not None and state["room_path"]:
+                    current = Path(state["room_path"])
+                    _publish_transcript_pages(
+                        graph_id, current, connection, root=root
+                    )
                 return False
             destination = Path(intent["destination_path"])
             if not _move_destination_matches(intent, destination):
@@ -352,6 +378,7 @@ def resume_transcript_room_move(graph_id: str, *, root: Path) -> bool:
             if _chat_read_path(graph_id, root=root).resolve() != destination.resolve():
                 raise TranscriptPendingError("room movement owner switch is not complete")
             _finish_room_move(connection, intent, destination)
+            _publish_transcript_pages(graph_id, destination, connection, root=root)
             return True
         finally:
             connection.close()
@@ -405,6 +432,9 @@ def move_transcript_room(
                         _fsync_parent(source)
                     if switch_owner is not None:
                         switch_owner()
+                    _publish_transcript_pages(
+                        graph_id, destination, connection, root=root
+                    )
                     return
 
                 _repair_pending(connection, source)
@@ -431,6 +461,11 @@ def move_transcript_room(
                 intent = connection.execute(
                     "SELECT * FROM move_intent WHERE singleton = 1"
                 ).fetchone()
+
+            # The durable intent makes every following process-death boundary
+            # resumable. Hide the previous incarnation until completion
+            # republishes the destination history.
+            _invalidate_transcript_pages(graph_id, root=root)
 
             if not _move_destination_matches(intent, destination):
                 if destination.exists():
@@ -477,6 +512,7 @@ def move_transcript_room(
             connection.commit()
             _finish_room_move(connection, intent, destination)
             _move_fault("after_index_reset")
+            _publish_transcript_pages(graph_id, destination, connection, root=root)
         finally:
             connection.close()
 
@@ -729,7 +765,9 @@ def append_transcript_message(
                 "UPDATE state SET room_path = ? WHERE singleton = 1", (current_room,)
             )
             connection.commit()
-            if not _import_legacy(connection, path):
+            imported = _import_legacy(connection, path)
+            _publish_transcript_pages(graph_id, path, connection, root=root)
+            if not imported:
                 raise TranscriptPendingError("legacy transcript import is incomplete; retry")
             existing = connection.execute(
                 """SELECT message_id, byte_offset, byte_length FROM events
@@ -747,11 +785,13 @@ def append_transcript_message(
                 (current_room, expected, line, digest, durable_id, source_key),
             )
             connection.commit()
+            _invalidate_transcript_pages(graph_id, root=root)
             _append_and_fsync(path, line)
             intent = connection.execute(
                 "SELECT * FROM pending_intent WHERE singleton = 1"
             ).fetchone()
             _commit_intent(connection, intent)
+            _publish_transcript_pages(graph_id, path, connection, root=root)
         finally:
             connection.close()
     return message
@@ -772,7 +812,9 @@ def transcript_source_acknowledgement(
             _ensure_no_move_intent(connection)
             _repair_rewrite(connection, path)
             _repair_pending(connection, path)
-            if not _import_legacy(connection, path):
+            imported = _import_legacy(connection, path)
+            _publish_transcript_pages(graph_id, path, connection, root=root)
+            if not imported:
                 raise TranscriptPendingError("legacy transcript import is incomplete; retry")
             event = connection.execute(
                 """SELECT append_sequence, message_id FROM events
@@ -821,7 +863,9 @@ def _rewrite_messages(
             _ensure_no_move_intent(connection)
             _repair_rewrite(connection, path)
             _repair_pending(connection, path)
-            if not _import_legacy(connection, path):
+            imported = _import_legacy(connection, path)
+            _publish_transcript_pages(graph_id, path, connection, root=root)
+            if not imported:
                 raise TranscriptPendingError("legacy transcript import is incomplete; retry")
             if not path.is_file():
                 return
@@ -867,10 +911,12 @@ def _rewrite_messages(
                 ),
             )
             connection.commit()
+            _invalidate_transcript_pages(graph_id, root=root)
             intent = connection.execute(
                 "SELECT * FROM rewrite_intent WHERE singleton = 1"
             ).fetchone()
             _finish_rewrite(connection, intent, path)
+            _publish_transcript_pages(graph_id, path, connection, root=root)
         finally:
             connection.close()
 

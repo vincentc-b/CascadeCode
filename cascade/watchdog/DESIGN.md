@@ -23,8 +23,16 @@ in one batch share the entry identity, entry revision and manifest revision.
 [`publish_committed_transition`](../recovery_progress/publisher.py) is the
 best-effort after-lock path. It first asks the War Room's
 [`append_committed_recovery_receipt`](../war_room/recovery_milestones.py) for a
-durable transcript acknowledgement, then stores that receipt-to-message mapping
-with [`record_transcript_milestone`](../recovery_progress/publisher.py). `_upsert`
+durable transcript acknowledgement, then calls the private
+[`_record_transcript_milestone`](../recovery_progress/publisher.py) inside its
+writer transaction before `_upsert`. The bounded drain uses the same private
+mapping helper. The public
+[`record_transcript_milestone`](../recovery_progress/publisher.py) is a separate
+entry point for already committed acknowledgements; it revalidates the receipt's
+current routing under the graph fence before refreshing incarnation and sequence.
+Receipt, entry, graph and message identity remain immutable, while a delayed
+pre-rewrite or pre-move acknowledgement cannot replace newer routing metadata.
+`_upsert`
 joins only committed mappings for the entry's retained receipt order, so failed
 or pending chat appends leave `milestone_refs` empty without changing repair
 admission. [`drain_recovery_progress`](../recovery_progress/publisher.py)

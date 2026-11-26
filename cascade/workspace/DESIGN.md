@@ -155,7 +155,9 @@ surviving parent/trunk room with another incarnation. The transcript store
 journals the copy and fixed target incarnation before that callback. If the
 process dies after checkout removal, a repeated retirement observes the missing
 registry owner, verifies routing and the copied destination against the retained
-journal, and finishes the index transition without recreating the checkout.
+journal, and calls
+[resume_transcript_room_move](../war_room/chat_store.py) to finish the index
+transition without recreating the checkout.
 Committed recovery receipts use the same document ownership resolution: Task
 identity is lifted to its owning Feature while Feature and Epic identity retain
 their rooms. Multiple resolved owners, missing plans and unsafe work IDs remain
