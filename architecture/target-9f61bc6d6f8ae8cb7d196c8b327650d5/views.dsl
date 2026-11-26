@@ -54,6 +54,7 @@ custom "cascade-task-code" {
     include code_task_actions code_task_delivery_queue code_task_mismatch code_task_leases code_task_validation code_task_revalidation
     include code_task_generation
     include code_task_budget_bind code_task_budget_read code_task_budget_extend code_task_budget_exhaust code_task_budget_reserve code_task_budget_settle
+    include code_task_ack code_task_claim code_task_finalize code_task_action_checkpoint code_task_transition_receipt code_task_execution_start code_task_transition_notify code_task_executor_live_identity
     autoLayout lr
 }
 
@@ -120,8 +121,8 @@ custom "cascade-watchdog-code" {
     properties {
         "cascade.codeComponent" "element.component.watchdog"
     }
-    include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish
-    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
+    include code_watchdog_tick code_watchdog_dispatch code_watchdog_health code_watchdog_audit_lane code_watchdog_publish code_watchdog_progress_drain code_watchdog_progress_publish code_watchdog_milestone_record code_watchdog_milestone_upsert
+    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
     autoLayout lr
 }
 
@@ -167,7 +168,8 @@ custom "cascade-dashboard-code" {
     properties {
         "cascade.codeComponent" "element.component.dashboard"
     }
-    include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader
+    include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_progress_ui code_dashboard_transcript_ui
+    include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_transcript_get code_dashboard_chat_page code_dashboard_chat_read code_dashboard_chat_detail code_dashboard_chat_publish code_dashboard_chat_append code_dashboard_chat_fence code_dashboard_chat_source_fence code_dashboard_chat_index code_dashboard_chat_existing_index code_dashboard_chat_rewrite code_dashboard_chat_move code_dashboard_chat_resume_move code_dashboard_recovery_milestone code_dashboard_transcript code_dashboard_backfill
     autoLayout lr
 }
 
@@ -197,6 +199,7 @@ custom "cascade-workspace-code" {
         "cascade.codeComponent" "element.component.workspace"
     }
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
-    include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
+    include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_create code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
+    include code_workspace_invoke code_workspace_owner_live code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
     autoLayout lr
 }

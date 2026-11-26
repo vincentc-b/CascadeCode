@@ -336,25 +336,42 @@ def _snapshot_projection(
         raise ArchitectureHTTPError(400, "invalid snapshot view selection")
     if semantic_target is not None and semantic_target not in targets:
         raise ArchitectureHTTPError(400, "invalid semantic target")
-    public_targets = []
-    for target_id in sorted(targets):
-        target = targets[target_id]
-        public_targets.append({
-            "kind": target.kind,
-            "semantic_id": target.semantic_id,
-            "label": target.label,
-            "source": target.source,
-            "destination": target.destination,
-            "drill_choices": memberships.get(target_id, []),
-            "source_path": target.source_path,
-            "source_symbol": target.source_symbol,
-            "source_kind": target.source_kind,
-            "source_url": (
-                f"/api/architecture/resources/{snapshot.snapshot_id}/"
-                f"{_opaque_id(_code_resource_descriptor(snapshot, target.source_path))}"
-                if target.source_path else None
-            ),
-        })
+    represented_target_ids = {
+        str(target_id)
+        for view in views
+        for target_id in view["target_ids"]
+    }
+
+    def public_targets_for(
+        page: list[dict[str, object]], *, include_unrepresented: bool
+    ) -> list[dict[str, object]]:
+        page_target_ids = {
+            str(target_id)
+            for view in page
+            for target_id in view["target_ids"]
+        }
+        if include_unrepresented:
+            page_target_ids.update(targets.keys() - represented_target_ids)
+        public_targets = []
+        for target_id in sorted(page_target_ids):
+            target = targets[target_id]
+            public_targets.append({
+                "kind": target.kind,
+                "semantic_id": target.semantic_id,
+                "label": target.label,
+                "source": target.source,
+                "destination": target.destination,
+                "drill_choices": memberships.get(target_id, []),
+                "source_path": target.source_path,
+                "source_symbol": target.source_symbol,
+                "source_kind": target.source_kind,
+                "source_url": (
+                    f"/api/architecture/resources/{snapshot.snapshot_id}/"
+                    f"{_opaque_id(_code_resource_descriptor(snapshot, target.source_path))}"
+                    if target.source_path else None
+                ),
+            })
+        return public_targets
     initial = next(
         (item for item in views if item["level"] == "systemContextViews"),
         next(
@@ -365,7 +382,7 @@ def _snapshot_projection(
     page = views[cursor:cursor + limit]
     payload.update({
         "views": page,
-        "targets": public_targets,
+        "targets": public_targets_for(page, include_unrepresented=cursor == 0),
         "initial_view": (
             {"view_key": initial["key"], "level": initial["level"]}
             if initial else None
@@ -377,7 +394,22 @@ def _snapshot_projection(
             "next_cursor": cursor + len(page) if cursor + len(page) < len(views) else None,
         },
     })
-    return _bounded_snapshot_payload(payload)
+    # The requested limit is a maximum. A large, valid model can fit its shared
+    # target metadata while the requested view list pushes the page over budget.
+    # Keep continuation lossless and retain the hard error when even one view
+    # cannot fit; reducing the page must never hide targets or return no progress.
+    while True:
+        try:
+            return _bounded_snapshot_payload(payload)
+        except ArchitectureHTTPError as exc:
+            if exc.status != 413 or len(page) <= 1:
+                raise
+            page = page[:len(page) // 2]
+            payload["views"] = page
+            payload["targets"] = public_targets_for(
+                page, include_unrepresented=cursor == 0
+            )
+            payload["pagination"]["next_cursor"] = cursor + len(page)
 
 
 
@@ -711,6 +743,16 @@ def snapshot_documentation_projection(
             view = next(
                 (row for row in projected["views"] if row["key"] == view_key), None
             )
+            while view is None and projected["pagination"]["next_cursor"] is not None:
+                projected = _snapshot_projection(
+                    store, snapshot,
+                    cursor=projected["pagination"]["next_cursor"],
+                    limit=MAX_BROWSING_VIEWS,
+                    view_key=view_key, level=level, semantic_target=semantic_target,
+                )
+                view = next(
+                    (row for row in projected["views"] if row["key"] == view_key), None
+                )
             if view is None:
                 raise ArchitectureHTTPError(400, "invalid documentation snapshot view")
             if selection_kind != "view":

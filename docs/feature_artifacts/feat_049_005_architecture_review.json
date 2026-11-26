@@ -1,0 +1,75 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "a90648ca8033e8e4ce63acf099a994a702763852",
+  "proposal": {
+    "owner_work_id": "feat_049_005",
+    "authorized_owner": "feature_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": "cascade/war_room",
+    "design_owner_directory": "cascade/war_room",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_049",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/features/2_active/feat_049_005_bound_transcript_acknowledgement_work_under_contention.md",
+      "revision": "a90648ca8033e8e4ce63acf099a994a702763852",
+      "content_digest": "dabd8b050e24fdc206fe00b8fe1e2350ed59c7ea5a0c990e3482ac9b4a9a191c"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": "cascade/war_room",
+        "design_owner_directory": "cascade/war_room",
+        "owning_work": "feat_049_005",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "cascade/war_room/DESIGN.md",
+        "revision": "a90648ca8033e8e4ce63acf099a994a702763852"
+      },
+      "content_digest": "b3852a038ad711052038f8fa2e53390e7f38464911ac47cd966fe6d9b222a93a"
+    },
+    "proposed_model": null,
+    "requirement_citations": [
+      "REQ-RECOVERY-PROGRESS-002",
+      "REQ-RECOVERY-PROGRESS-003",
+      "REQ-RECOVERY-PROGRESS-004",
+      "REQ-WARROOM-TRANSCRIPT-002",
+      "REQ-WARROOM-TRANSCRIPT-003"
+    ],
+    "decision_citations": [
+      "DEC-RECOVERY-PROGRESS-001",
+      "DEC-RECOVERY-PROGRESS-002",
+      "DEC-WARROOM-TRANSCRIPT-002",
+      "DEC-WARROOM-TRANSCRIPT-003"
+    ],
+    "view_citations": [
+      "cascade-landscape",
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-war-room-components",
+      "cascade-watchdog-code",
+      "cascade-dashboard-code",
+      "cascade-workspace-code"
+    ],
+    "affected_work_ids": [
+      "feat_049_005"
+    ],
+    "architecture_impact": "no_diagram_change",
+    "impact_reason": "The committed planning branch changes work records only. Existing source-linked context, container, component and native Code views still represent current symbols and responsibility boundaries. Current graph thread/OS locks and the 30-second schema-opening index lookup do not meet the planned shared contention deadline; Task 1 owns that correction and Task 2 owns final design, model, contract and browser reconciliation. The current REQ-RECOVERY-PROGRESS-004 verification claim and recovery_progress design mapping are explicit Task 2 gaps. No current source, design or model artifact is edited by this planning review."
+  }
+}

@@ -25,6 +25,11 @@ def test_every_python_directory_has_exact_design_ownership() -> None:
     assert index["target_repository_key"] == TARGET_KEY
     assert python_directories <= mappings.keys()
     assert mappings["."]["design_owner_directory"] == "."
+    assert mappings["cascade/recovery_progress"] == {
+        "artifact_id": f"design:{TARGET_KEY}:cascade/recovery_progress",
+        "code_directory": "cascade/recovery_progress",
+        "design_owner_directory": "cascade/recovery_progress",
+    }
 
     for code_directory, row in mappings.items():
         assert row["code_directory"] == code_directory

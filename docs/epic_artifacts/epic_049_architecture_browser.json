@@ -1,0 +1,40 @@
+{
+  "paths": [
+    {
+      "component": "dashboard",
+      "view": "cascade-dashboard-code",
+      "node": "element.code.dashboard.transcript",
+      "symbol": "append_planning_turn_to_chat",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 8.924913953989744
+    },
+    {
+      "component": "task-team",
+      "view": "cascade-task-code",
+      "node": "element.code.task.claim",
+      "symbol": "_claim_resume_attempt",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 8.327098481939174
+    },
+    {
+      "component": "workspace",
+      "view": "cascade-workspace-code",
+      "node": "element.code.workspace.owner.live",
+      "symbol": "graph_turn_owner_is_live",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 12.463008729973808
+    }
+  ],
+  "http_errors": [],
+  "initial_ready_seconds": 66.16267891100142,
+  "render_operations_before": 3,
+  "render_operations_after": 3,
+  "provenance": "Context\nSession target\nCode repository\nrepository-874164fe0f964e347c1e9926\nBranch\nepic/epic_049\nCode revision\n01e1cff36a48b8abe3771708936921a93bc83643\nWorking tree\nClean\nDocumentation repository\nrepository-874164fe0f964e347c1e9926\nDocumentation revision\n01e1cff36a48b8abe3771708936921a93bc83643\nArchitecture destination\ntarget\nAssociation provenance\ncolocated\nAssociation evidence\nUnavailable",
+  "total_seconds": 96.38082300894894
+}

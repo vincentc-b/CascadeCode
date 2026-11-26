@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from cascade.board.errors import NotFound
 from cascade.workspace.doc_root import read_doc_resolved
@@ -104,7 +104,11 @@ from cascade.war_room.room_settings_routes import (
     try_handle_room_settings_get,
     try_handle_room_settings_post,
 )
-from cascade.war_room.sidecar_routes import _parse_graph_id_from_chat_path, register_sidecar_routes
+from cascade.war_room.sidecar_routes import (
+    _parse_graph_id_from_chat_path,
+    _parse_transcript_path,
+    register_sidecar_routes,
+)
 from cascade.war_room.views import render_plan_page, render_war_room_page
 from cascade.comments import section_slug
 from cascade.comments.store import comment as post_comment
@@ -524,6 +528,12 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         if path in self._exact_get_routes():
             self._exact_get_routes()[path](self)
             return
+        transcript_path = _parse_transcript_path(path)
+        if transcript_path is not None:
+            from cascade.war_room.sidecar_routes import handle_get_transcript
+
+            handle_get_transcript(self, *transcript_path)
+            return
         chat_id = _parse_graph_id_from_chat_path(path)
         if chat_id is not None:
             from cascade.war_room.sidecar_routes import handle_get_chat
@@ -635,6 +645,7 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
     def _exact_get_routes(cls) -> dict[str, GetRoute]:
         routes = {
             "/api/board": lambda h: h._handle_board(),
+            "/api/recovery/progress": lambda h: h._handle_recovery_progress(),
             "/api/brief/template": lambda h: h._handle_brief_template(),
             "/api/boss_view": lambda h: h._handle_boss_view(),
             "/api/orphans": lambda h: h._handle_orphans(),
@@ -702,6 +713,72 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             )
         except (ValueError, OSError) as exc:
             self._json_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        self._json_response(HTTPStatus.OK, payload)
+
+    def _handle_recovery_progress(self) -> None:
+        from cascade.war_room.recovery_progress import (
+            RecoveryProgressRequestError,
+            RecoveryProgressRevisionChanged,
+            read_recovery_progress,
+        )
+
+        try:
+            query = urllib.parse.parse_qs(
+                urllib.parse.urlsplit(self.path).query,
+                keep_blank_values=True,
+                strict_parsing=True,
+            )
+        except ValueError as exc:
+            self._json_response(
+                HTTPStatus.BAD_REQUEST,
+                {"error": {"code": "invalid_request", "message": str(exc)}},
+            )
+            return
+        if any(key not in {"work_id", "cursor", "limit"} for key in query):
+            self._json_response(
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "error": {
+                        "code": "invalid_request",
+                        "message": "unknown recovery progress parameter",
+                    }
+                },
+            )
+            return
+        if (
+            len(query.get("work_id", [])) != 1
+            or len(query.get("cursor", [])) > 1
+            or len(query.get("limit", [])) > 1
+        ):
+            self._json_response(
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "error": {
+                        "code": "invalid_request",
+                        "message": "work_id must occur exactly once",
+                    }
+                },
+            )
+            return
+        work_id = query["work_id"][0]
+        cursor = query.get("cursor", [None])[0]
+        try:
+            limit = int(query.get("limit", ["50"])[0])
+            payload = read_recovery_progress(
+                self.server.root,
+                work_id,
+                cursor=cursor,
+                limit=limit,
+            )
+        except (RecoveryProgressRequestError, ValueError) as exc:
+            self._json_response(
+                HTTPStatus.BAD_REQUEST,
+                {"error": {"code": "invalid_request", "message": str(exc)}},
+            )
+            return
+        except RecoveryProgressRevisionChanged as exc:
+            self._json_response(HTTPStatus.CONFLICT, exc.to_dict())
             return
         self._json_response(HTTPStatus.OK, payload)
 
@@ -1859,10 +1936,21 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _json_response(self, status: HTTPStatus, payload: Any) -> None:
+        self._json_response_with_headers(status, payload)
+
+    def _json_response_with_headers(
+        self,
+        status: HTTPStatus,
+        payload: Any,
+        *,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1872,6 +1960,8 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
 
     def _path_exists_for_get(self, path: str) -> bool:
         if path in self._exact_get_routes():
+            return True
+        if _parse_transcript_path(path) is not None:
             return True
         if _parse_graph_id_from_chat_path(path) is not None:
             return True

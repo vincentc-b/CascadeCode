@@ -383,6 +383,16 @@ def retire_integration_worktree(
     trunk = locate_trunk(trunk).resolve()
     entry = get_integration_worktree(trunk, kind, work_id)
     if entry is None:
+        if kind in {"epic", "feature"}:
+            from cascade.war_room.chat_store import (
+                TranscriptPendingError,
+                resume_transcript_room_move,
+            )
+
+            try:
+                resume_transcript_room_move(work_id, root=trunk)
+            except TranscriptPendingError:
+                return False
         return True
     expected = integration_worktree_path(kind, work_id, trunk=trunk)
     if entry.path.resolve() != expected or entry.branch != integration_branch(
@@ -403,31 +413,74 @@ def retire_integration_worktree(
         return False
 
     if entry.path.exists():
-        status = subprocess.run(
-            ["git", "status", "--porcelain", "--untracked-files=all"],
-            cwd=entry.path,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
+        cached = _git(entry.path, "diff", "--cached", "--quiet", "HEAD", check=False)
+        tracked = _git(entry.path, "diff", "--quiet", "HEAD", check=False)
+        untracked = _git(
+            entry.path, "ls-files", "--others", "--exclude-standard", check=False
         )
-        if status.returncode != 0 or status.stdout.strip():
+        untracked_source = [
+            path
+            for path in untracked.stdout.splitlines()
+            if path
+            and not path.startswith(
+                (".cascade/", "docs/_queue/", "docs/_comments/", "docs/_war_room/")
+            )
+        ]
+        if (
+            cached.returncode != 0
+            or tracked.returncode != 0
+            or untracked.returncode != 0
+            or untracked_source
+        ):
             return False
 
     proof = prove_terminal_retirement(kind, work_id, trunk=trunk)
     if not proof.ok:
         return False
 
-    if entry.path.exists():
-        removed = _git(trunk, "worktree", "remove", str(entry.path), check=False)
-        if removed.returncode != 0:
-            return False
-    elif present:
-        _git(trunk, "worktree", "prune", check=False)
-        still_present, _ = _listed_worktree_state(trunk, entry.path)
-        if still_present:
-            return False
+    def remove_checkout_and_registration() -> None:
+        if entry.path.exists():
+            removed = _git(trunk, "worktree", "remove", str(entry.path), check=False)
+            if removed.returncode != 0:
+                raise RuntimeError((removed.stderr or removed.stdout).strip())
+        elif present:
+            _git(trunk, "worktree", "prune", check=False)
+            still_present, _ = _listed_worktree_state(trunk, entry.path)
+            if still_present:
+                raise RuntimeError("stale worktree registration could not be pruned")
+        _remove_registry_entry(trunk, kind, work_id)
 
-    _remove_registry_entry(trunk, kind, work_id)
+    if kind in {"epic", "feature"}:
+        if kind == "epic":
+            destination = trunk
+        else:
+            owned = list_board(entry.path).by_id.get(work_id)
+            parent_entry = (
+                get_integration_worktree(trunk, "epic", owned.parent)
+                if owned is not None and owned.parent
+                else None
+            )
+            destination = parent_entry.path if parent_entry is not None else trunk
+        from cascade.war_room.chat_store import (
+            TranscriptPendingError,
+            move_transcript_room,
+        )
+
+        try:
+            move_transcript_room(
+                work_id,
+                source_root=entry.path,
+                destination_root=destination,
+                root=trunk,
+                switch_owner=remove_checkout_and_registration,
+            )
+        except (RuntimeError, TranscriptPendingError):
+            return False
+    else:
+        try:
+            remove_checkout_and_registration()
+        except RuntimeError:
+            return False
     return True
 
 
@@ -825,6 +878,12 @@ def create_integration_worktree(
     if head_sha(trunk) is None:
         raise GitError("cannot create integration worktree: repo has no commits")
 
+    source_room_root: Path | None = None
+    if kind in {"epic", "feature"}:
+        from cascade.war_room.chat_store import _chat_read_path
+
+        source_room_root = _chat_read_path(work_id, root=trunk).parents[3]
+
     wt_path = integration_worktree_path(kind, work_id, trunk=trunk)
     wt_path.parent.mkdir(parents=True, exist_ok=True)
     base_sha = _resolve_ref(trunk, base_ref)
@@ -843,7 +902,18 @@ def create_integration_worktree(
         path=wt_path.resolve(),
         base_sha=base_sha,
     )
-    _upsert_registry_entry(trunk, record)
+    if source_room_root is not None:
+        from cascade.war_room.chat_store import move_transcript_room
+
+        move_transcript_room(
+            work_id,
+            source_root=source_room_root,
+            destination_root=wt_path,
+            root=trunk,
+            switch_owner=lambda: _upsert_registry_entry(trunk, record),
+        )
+    else:
+        _upsert_registry_entry(trunk, record)
     return record
 
 

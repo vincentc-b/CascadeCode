@@ -65,6 +65,7 @@ def work_meta_to_dict(
     review: dict[str, object] | None = None,
     branch_sync: dict[str, Any] | None = None,
     recovery_incident: dict[str, object] | None = None,
+    recovery_progress: dict[str, object] | None = None,
     sidecars_preloaded: bool = False,
     board_snapshot: BoardIndex | None = None,
     delivery_actions: dict[str, dict] | None = None,
@@ -190,6 +191,7 @@ def work_meta_to_dict(
     if branch_sync is not None:
         value["branch_sync"] = branch_sync
     value["recovery_incident"] = recovery_incident
+    value["recovery_progress"] = recovery_progress
     return value
 
 
@@ -352,12 +354,23 @@ def _provider_readiness_view(
 
 def work_doc_to_dict(doc: WorkDoc, *, root: Path | None = None) -> dict:
     incident = None
+    progress_meta = None
     if root is not None:
-        from cascade.war_room.recovery_incident import recovery_incidents_by_work_id
+        from cascade.war_room.recovery_progress import (
+            board_recovery_projection,
+            read_recovery_progress,
+        )
 
-        incident = recovery_incidents_by_work_id(root=root).get(doc.meta.id)
+        incident, progress_meta = board_recovery_projection(
+            read_recovery_progress(root, doc.meta.id, limit=1)
+        )
     return {
-        "meta": work_meta_to_dict(doc.meta, root=root, recovery_incident=incident),
+        "meta": work_meta_to_dict(
+            doc.meta,
+            root=root,
+            recovery_incident=incident,
+            recovery_progress=progress_meta,
+        ),
         "body": doc.body,
         "sha": doc.sha,
     }
@@ -903,7 +916,10 @@ def board_view_from_index(board, *, root: Path) -> dict:
     from cascade.review import feature_review_views
     from cascade.task.execution import execution_views
     from cascade.war_room.branch_sync import branch_sync_views
-    from cascade.war_room.recovery_incident import recovery_incidents_by_work_id
+    from cascade.war_room.recovery_progress import (
+        board_recovery_projection,
+        read_recovery_progress_many,
+    )
 
     metas = sorted(board.by_id.values(), key=lambda meta: meta.id)
     executions = execution_views(
@@ -933,8 +949,12 @@ def board_view_from_index(board, *, root: Path) -> dict:
     from cascade.task_rollup import pending_task_merges
 
     actions = recovery_actions(root=root)
-    incidents = recovery_incidents_by_work_id(root=root, actions=actions)
     delivery_actions = {action["action_id"]: action for action in actions}
+    progress = read_recovery_progress_many(root, [meta.id for meta in metas])
+    projected_progress = {
+        work_id: board_recovery_projection(result)
+        for work_id, result in progress.items()
+    }
     staged_epics = epic_close_documents_staged(metas, root=root)
     pending_deliveries = pending_task_merges(root)
 
@@ -969,7 +989,8 @@ def board_view_from_index(board, *, root: Path) -> dict:
             execution=executions.get(meta.id),
             review=reviews.get(meta.id),
             branch_sync=sync_views.get(meta.id),
-            recovery_incident=incidents.get(meta.id),
+            recovery_incident=projected_progress[meta.id][0],
+            recovery_progress=projected_progress[meta.id][1],
             sidecars_preloaded=True,
             board_snapshot=board,
             delivery_actions=delivery_actions,

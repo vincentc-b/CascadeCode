@@ -26,7 +26,7 @@ flowchart LR
 | Implementation | Responsibility |
 |---|---|
 | [boot.py](boot.py) | Seeds activation context and model selections. |
-| [graph.py](graph.py) | Compiles the graph, ingests events, and executes role turns. |
+| [graph.py](graph.py) | Compiles the graph, ingests events, executes role turns, and assigns each authored lead/architect reply a durable ID before checkpoint persistence. |
 | [state.py](state.py) | Defines checkpointed role, message, and queue state. |
 | [checkpoint.py](checkpoint.py) | SQLite state under `.cascade/checkpoints/<work-id>.sqlite`; thread ID is the work ID. |
 | [registry.py](registry.py) and [wiring.py](wiring.py) | Scoped tool registration and execution wiring. |
@@ -47,7 +47,9 @@ flowchart LR
 Ending an invocation does not mean the work item is complete. Later events resume
 the work's graph state. Queue offsets prevent already consumed events from being
 treated as new input. Checkpoints retain execution context; Markdown work state,
-Git history, and durable action receipts remain the delivery evidence.
+Git history, and durable action receipts remain the delivery evidence. The reply
+ID stored with each authored message is reused by direct transcript append and
+explicit backfill, so identical text from separate role nodes remains separate.
 
 Provider failures, tool authorization failures, and blocked review gates do not
 authorize advancing lifecycle state. Recovery inspects durable state and the

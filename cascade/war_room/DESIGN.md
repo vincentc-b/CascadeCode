@@ -2,10 +2,274 @@
 
 Purpose: expose the loopback operator UI/API for status, approvals, chat attachment, review, recovery, and diagnostics. Interfaces are `serve`, route modules, serializers/views, authenticated human actions, and static/template assets covered by this owner. Owns `REQ-WARROOM-001` (operator actions are explicit) and `DEC-WARROOM-001` (the UI projects canonical services rather than owning state).
 
-Evidence: `cascade/war_room/` and `tests/war_room/` at baseline `d932f48764cc0ceb2f4810cdd4487bef0c9ef084`; inventory digest `d86a5977ca42a2fd7da1ca80dc7b3251a8522f1a427e836c0abed741a816f1b6`.
 
 Known gaps: unavailable forge descriptions limit historical attribution. Local
 audit fixtures do not establish post-deployment live acceptance.
+
+## Recovery summaries and planning transcripts
+
+`REQ-WARROOM-PROGRESS-001`: A safe current recovery entry distinguishes
+requested/queued, acknowledged, investigating, executing, waiting/blocked with
+a prerequisite and owner, retryable failure, exhausted attempts, verification
+pending, verified completion, and stale/unavailable evidence. It carries stable
+action/generation/attempt identity, nullable source occurrence time, observation
+freshness, safe next step, sanitized target/reason and bounded receipt references.
+Concurrent entries order unresolved blockers first, other unresolved work next,
+and verified completion last; material occurrence and stable entry identity break
+ties. A stale entry retains its last supported blocker priority.
+
+`DEC-WARROOM-PROGRESS-001`: The safe presentation contract is version 1 and is
+published ahead of GET under product-root work-ID hashes. Public consumers use
+only an atomic pointer, its immutable manifest and bounded pages. The producer's
+writer index and raw action/incident ledgers are not read surfaces. Missing,
+expired, corrupt, identity-mismatched or incomplete evidence must remain explicit
+pending/unavailable metadata rather than a healthy empty result.
+
+The Watchdog [materializes this contract](../watchdog/DESIGN.md#current-recovery-progress-publication).
+`GET /api/recovery/progress` and board serialization share
+[`read_recovery_progress`](recovery_progress.py). The route defaults to 50 and
+caps at 100 entries; its opaque cursor binds exact work ID, immutable revision
+and row offset. A superseded revision returns a typed restart conflict. The
+compatible `recovery_incident` board field is derived from the same selected
+entry and carries additive version, revision, entry, freshness, count and
+continuation metadata under `recovery_progress`, including a compact safe primary
+with bounded receipt and milestone references. Across board rows, reads share
+the 100-entry, 1 MiB source budget and each response remains below 256 KiB.
+
+The dashboard renders that shared primary persistently on its board row and reads
+the same immutable pages beside Historical for ordered concurrent incidents. The
+room binds asynchronous results to work ID and projection revision, restarts a
+superseded continuation, and never splices a late graph or revision into the
+current panel. Historical polling starts a single-flight current-progress read
+alongside each incremental transcript read, so committed notifications and their
+milestones can appear independently while an authored reply remains pending. A
+background read retains the displayed projection until its typed result arrives
+and does not reset transcript scroll, paging cursors or high-water. State, stage,
+owner, occurrence, freshness and delivery lag remain distinct; queued work is not
+presented as execution and publication is not presented as verified completion.
+Recovery text is assigned through DOM text nodes, while actions accept only local
+root-relative URLs and committed milestone references resolve to stable transcript
+fragments.
+
+`REQ-WARROOM-TRANSCRIPT-001`: Historical chat preserves the owning Epic or
+Feature's human and presentable role messages. Reading chat does not invoke a
+graph or backfill a checkpoint. Task teams do not accept persistent-room chat.
+
+`REQ-WARROOM-TRANSCRIPT-002`: Transcript writers serialize by graph across
+processes. A successful append means its exact JSONL line reached durable storage
+before its unique message/source key and byte range committed. Recovery completes
+only an empty, complete, or matching partial intended tail; conflicting bytes or
+an uncertain room owner stay pending without truncation. A completely visible
+pending line is fsynced with its parent directory before its index row commits.
+
+`REQ-WARROOM-TRANSCRIPT-003`: Each retained committed recovery receipt can add
+one concise `System · Recovery` line to its owning Epic or Feature room. The
+line preserves receipt and entry identity, action generation, attempt and
+transition sequence, nullable occurrence, safe target/source reference and
+direct, reconciled or legacy-unknown provenance. Neither model output nor an
+observation timestamp can mint or deduplicate a recovery line.
+The recovery fast path supplies one monotonic deadline to append admission,
+graph thread/process fences and SQLite waits. Each sequential schema or lookup
+statement recomputes its busy timeout from that same deadline. Exhaustion remains pending and
+replayable; an admitted JSONL append/fsync is an indivisible filesystem mutation
+and is not represented as a hard real-time guarantee.
+
+`REQ-WARROOM-TRANSCRIPT-004`: Room movement remains recoverable across process
+death after copy, source removal, owner publication, or incarnation reset. A
+pending move blocks other transcript writers, accepts only its fingerprinted
+destination, and never rewrites conflicting source or destination bytes.
+
+`REQ-WARROOM-TRANSCRIPT-005`: Historical GETs expose at most 100 rows from no
+more than 1 MiB of immutable projection source and serialize at most 256 KiB.
+Versioned cursors bind graph, room incarnation, direction, append sequence and
+older-page high-water. Missing or unsafe publication is pending, and a changed
+incarnation requires restart. The compatible chat route returns only the latest
+window with explicit completeness, incarnation and older-continuation headers.
+An oversized body remains available as UTF-8-aligned immutable chunks of at
+most 64 KiB after a labeled bounded preview; a cursor inside a UTF-8 character
+is refused with typed `400 invalid_request`. Every successful incomplete detail
+read advances its byte offset positively, and no row is silently deleted.
+
+`REQ-WARROOM-TRANSCRIPT-006`: The Historical browser consumes versioned latest,
+older and after pages while keeping transcript incarnation independent from the
+current recovery projection revision. It merges rows only when graph and
+incarnation match, preserves the older-page high-water and scroll position, and
+restarts instead of mixing a stale page or detail response. Durable message IDs
+provide keyboard-focusable anchors. Recovery milestones are labeled
+`System · Recovery` separately from human and authored role replies; nullable
+occurrence, append time and provenance remain visible. Incomplete import and
+pending publication are explicit. Oversized previews open through bounded detail
+continuations, and only allowlisted local references become links.
+
+`DEC-WARROOM-TRANSCRIPT-001`: Keep authored history in the owning room's
+`docs/_war_room/chat/<graph-id>.jsonl`. The room follows registered document
+ownership, including a backlog Feature's parent and a completed Epic's surviving
+tracking checkout. History and a current recovery summary have different
+evidence sources; an authored conclusion does not change an action's state.
+Epic and Feature role nodes persist a durable message ID. Direct kickoff and
+explicit writer backfill use that ID with checkpoint lineage and message ordinal
+as the role-reply source identity. Replaying one reply returns its committed row,
+while distinct replies with identical author and body remain distinct. An older
+author/body-only match is retained with null occurrence time and
+`legacy_unknown` provenance rather than being assigned a fabricated identity.
+
+`DEC-WARROOM-TRANSCRIPT-002`: JSONL remains authoritative. A writer-only SQLite
+index under the canonical tracking runtime root records message/source
+uniqueness, append sequence, offsets, room incarnation and one durable exact-line
+intent. A rewrite intent records the original fingerprint, exact replacement and
+target incarnation before replacing JSONL. Restart either repeats replacement
+from matching original bytes or finishes index reset from matching replacement
+bytes; other bytes remain pending. The adjacent graph-hashed advisory lock
+fences append, explicit sync, rollback rewrite and room movement across
+processes. Legacy rows are indexed in resumable passes of at most 100 rows and
+1 MiB without rewriting their IDs or append timestamps; their source occurrence
+remains unknown. Dispatch and terminal checkout retirement persist a move intent
+with source fingerprint and target incarnation before copying committed history.
+They durably remove the source, publish the new registered owner, and atomically
+reset offsets and clear the intent under the same fence. Retry reuses that
+incarnation. When terminal owner publication removes the checkout, routing
+evidence at the destination can finish the retained move intent without
+reopening the removed owner.
+
+`DEC-WARROOM-TRANSCRIPT-003`: Use `recovery:<receipt-id>` as the unique transcript
+source key. Route Task receipts through their current owning Feature, reject
+ambiguous or unsafe evidence as typed pending, and return the committed message,
+incarnation and append sequence only after the graph fence releases. Replaying a
+receipt therefore returns the existing message without a second JSONL line.
+Receipt-to-entry/graph/message mappings remain immutable across room rewrites and
+moves. Their incarnation and append sequence are refreshed only from the current
+fenced source acknowledgement. That private lookup opens only an existing,
+compatible index read-only; it performs no schema initialization, repair,
+legacy import or projection publication. The publisher opens its write
+transaction before the fence and commits the mapping and entry references before
+releasing it, so delayed acknowledgements cannot restore stale routing metadata.
+Its bounded fenced lookup reads only complete intent-free index state; repair,
+import and projection publication remain outside the publisher transaction, and
+pending state remains eligible for replay.
+
+`DEC-WARROOM-TRANSCRIPT-004`: After index commit, writers publish
+content-addressed transcript pages and oversized-body blobs, then atomically
+replace a graph-hashed direct pointer under the tracking runtime root. GET opens
+only that no-follow pointer, its immutable manifest and the pages or detail blob
+named by the request. It never opens writer SQLite, scans authoritative JSONL,
+loads a checkpoint, repairs history or probes Git, providers or processes.
+Rollback and legacy-label rewrites invalidate the pointer before replacement and
+republish under the new incarnation, so interrupted mutation is unavailable
+rather than stale healthy history.
+
+`DEC-WARROOM-TRANSCRIPT-005`: Browser paging state is scoped to the selected
+graph and published room incarnation. Latest reads replace that state; older and
+after reads deduplicate by durable message ID and retain their supplied cursors.
+A typed cursor restart discards the affected browser state and reloads latest.
+Late responses from an earlier graph, incarnation or detail request are ignored.
+The compatible chat array remains an API surface but is not the Historical
+browser's paging authority.
+
+The authoritative [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+connect `cascade-context` → `cascade-containers` →
+`cascade-war-room-components` → `cascade-dashboard-code`. The Dashboard
+component owns these implementation nodes, even when a supervisor caller uses
+the transcript library within the same Python runtime.
+
+| Entry point | Input, output and boundary |
+|---|---|
+| [read_recovery_progress / read_recovery_progress_many](recovery_progress.py) | Open only a work-hashed direct no-follow pointer, its immutable manifest and requested pages. Validate exact work/repository identity, freshness, revision and row shape while enforcing aggregate source, row and response budgets. Missing, stale, corrupt and wrong-root evidence is typed pending. |
+| [board_recovery_projection](recovery_progress.py) | Preserve the coarse `recovery_incident` surface while selecting its action and revision from the same safe entry returned to room consumers. Presentation never grants retry authority. |
+| [loadCurrentRecoveryProgress](static/war_room.js) | Read and present revision-bound current and concurrent entries beside Historical, restart changed continuations, reject late graph responses and allow only local action or committed milestone links. Background reads retain the prior projection until the typed replacement arrives. |
+| [handle_get_transcript / handle_get_chat](sidecar_routes.py) | Validate the versioned page/detail or compatible latest-window request and map invalid input, cursor restart and unavailable publication to typed 400, 409 or 503 responses. The compatible array adds `Link` and transcript completeness headers. |
+| [publish_transcript_projection](transcript_pages.py) | Project only committed append-sequence/offset rows into content-addressed pages, bounded previews and exact detail blobs, then atomically advance the direct graph pointer. Partial legacy import is published as incomplete coverage. |
+| [read_transcript_page / read_transcript_detail](transcript_pages.py) | Open only regular no-follow projection artifacts, enforce 50-default/100-maximum rows, 1 MiB aggregate source and 256 KiB response ceilings, and return incarnation/high-water cursors or UTF-8-aligned 64 KiB detail chunks. |
+| [pollChatSidecar](static/war_room.js) | Refresh graph/incarnation-scoped Historical state, merge after pages by durable ID, and single-flight the independent current-progress read without changing transcript scroll or page high-water. Latest, older and bounded detail helpers restart typed stale cursors without mixing history. |
+| [graph_transcript_fence / _connect_index](chat_store.py) | Lock a graph at a stable tracking-root path across threads and processes and open its writer-only full-synchronous intent/offset index. Caller deadlines bound lock and SQLite waits, with the remaining busy timeout refreshed before each schema statement; admitted lock-file and database opens remain filesystem work. The SQLite file is not a GET surface. |
+| [fenced_transcript_source_acknowledgement / _connect_existing_index](chat_store.py) | Hold the graph fence while opening only an existing compatible index read-only and yielding complete current source-key routing. Schema and routing queries each use the remaining caller deadline. Missing schema, pending intents, incomplete indexing, exhausted time or an unavailable room fail pending without initialization, repair, import or page publication. |
+| [append_transcript_message / remove_message](chat_store.py) | Reconcile only an exact pending tail, durably stage intent, append and fsync JSONL, then commit uniqueness/offset before acknowledgement. Rollback and legacy-label rewrites journal the original fingerprint, replacement and target incarnation before replacement, then reset and re-import the index. Restart accepts only matching original or replacement bytes, retains message/source identity and leaves conflicts pending. |
+| [move_transcript_room / resume_transcript_room_move](chat_store.py) | Journal the source fingerprint, destination and target incarnation before durable copy; remove the matching source and publish the lifecycle owner inside the graph fence; then rebuild offsets and clear the journal. Retry or terminal lifecycle recovery accepts only the journaled destination. Conflicting bytes remain untouched and pending. |
+| [append_committed_recovery_receipt](recovery_milestones.py) | Validate safe receipt fields, resolve the owning graph across registered roots, and carry one remaining deadline through deterministic append and current fenced acknowledgement. Unknown routing, unsafe target/reference, contention or incomplete evidence remains pending and replayable. |
+| [append_planning_turn_to_chat](planning_transcript.py) | Sanitize and append new role messages supplied by [graph invocation](../workspace/kickoff.py), carrying checkpoint ID, persisted ordinal and durable message ID. Provider failure details become a bounded system message without exposing raw output. |
+| [sync_planning_transcript_to_chat](planning_transcript.py) | Explicit writer work loads the owning graph checkpoint and replays the same stable role-reply source keys. It does not invoke a role or run from GET. |
+
+```mermaid
+sequenceDiagram
+    participant K as Workspace kickoff
+    participant G as Owning graph and checkpoint
+    participant T as Planning transcript library
+    participant F as Graph OS fence and intent index
+    participant C as Owning room JSONL
+    participant P as Immutable page projection
+    participant UI as Historical GET
+    K->>G: Invoke admitted role turn
+    G->>G: Persist role messages
+    G-->>K: Return
+    K->>T: New message slice + checkpoint lineage/ordinal
+    T->>F: Fence graph; reconcile exact pending tail
+    F->>F: Commit exact-line intent and expected offset
+    F->>C: Append line and fsync
+    F->>F: Commit unique key/offset; clear intent
+    F->>P: Publish committed pages; advance direct pointer
+    F-->>T: Release fence; acknowledge
+    UI->>P: Read pointer, manifest and requested pages only
+    alt Return-to-append interruption
+        K->>T: Explicit checkpoint sync
+        T->>G: Read saved messages and durable IDs
+        T->>F: Replay the same source keys through durable append
+    else Crash before index commit
+        T->>F: Retry
+        F->>C: Complete only matching empty/partial intended tail
+        F->>F: Commit key/offset once
+    else Unexpected tail or owner
+        F-->>T: Pending; preserve all unrelated bytes
+    end
+```
+
+```mermaid
+sequenceDiagram
+    participant L as Workspace lifecycle
+    participant F as Graph fence and move intent
+    participant S as Source room
+    participant D as Destination room
+    participant R as Owner registry
+    L->>F: Persist source fingerprint and target incarnation
+    F->>D: Copy and fsync history and parent
+    F->>S: Remove matching source and fsync parent
+    F->>R: Publish idempotent owner switch
+    F->>F: Reset offsets; install incarnation; clear intent
+    alt Restart at any boundary
+        L->>F: Resume retained intent
+        F->>D: Verify exact fingerprint
+        F->>R: Retry switch or verify destination routing
+        F->>F: Finish index transition once
+    else Conflicting source or destination
+        F-->>L: Pending; preserve both sides
+    end
+```
+
+Action attempts and acknowledgements persist independently in the
+[Task-owned ledger](../task/DESIGN.md#action-evidence-and-transcript-boundary).
+Chat stores source occurrence and append times separately. Its recovery lines
+are deterministic projections of committed receipts; they do not authorize a
+retry or establish execution/verified resolution beyond the cited receipt.
+Verification: [bounded progress scenarios](../../tests/war_room/test_recovery_progress_api.py),
+[projection scenarios](../../tests/war_room/test_recovery_incident_projection.py),
+[transcript scenarios](../../tests/war_room/test_planning_transcript.py) and
+[read routing](../../tests/war_room/test_chat_poll_routing.py), and
+[durability/recovery scenarios](../../tests/war_room/test_durable_chat_store.py)
+exercise these boundaries, including two real writer processes, exact-tail crash
+states, bounded legacy import, every durable room-move boundary, split roots,
+terminal checkout removal, replacement-before-index rewrite recovery and GET
+without graph construction.
+[Recovery milestone integration](../../tests/recovery_progress/test_transcript_milestones.py)
+checks duplicate receipt replay, distinct sequences, nullable occurrence,
+after-commit notification and restart reconciliation with ordered references.
+[Bounded transcript API scenarios](../../tests/war_room/test_transcript_pages_api.py)
+check latest, older and incremental pages, legacy continuation headers, typed
+restart/unavailable responses, projection-only GET, response ceilings and exact
+multi-chunk UTF-8 detail reconstruction. The Chromium Historical journey in the
+same file checks distinct milestone/authored rendering, keyboard anchors, older
+scroll retention, incremental appends and preview-to-detail continuation. The
+[browser refresh race harness](../../tests/war_room/war_room_refresh_races.mjs)
+checks that Historical polling refreshes progress and transcript projections
+together without duplicate reads.
 
 ## Bounded health-audit projection reads
 
@@ -31,7 +295,7 @@ legacy provenance, and `detail_truncated` without opening a recovery ledger.
 flight, boss, chat, audit or provider panels. The board and pending-brief
 cancellation lookup run concurrently, but both must finish before board actions
 are enabled; cancellation safety is not traded for responsiveness. Optional panel
-requests no longer delay startup polling. Existing forced post-action freshness and
+requests do not delay startup polling. Existing forced post-action freshness and
 single-flight board reads remain intact.
 
 `DEC-WARROOM-REFRESH-001`: serialize Epic readiness from the same request-scoped
@@ -142,6 +406,16 @@ refresh persistence and storage failure.
 ## Architecture review boundary
 
 The War Room presents revision-pinned architecture resources and review state.
+Snapshot view limits are maxima. [snapshot_projection](architecture_routes.py)
+reduces a view page when its shared target/navigation metadata and requested
+views exceed the 256 KiB response cap. Each page carries the targets represented
+by its views plus any unrepresented semantic inventory on the first page; the
+browser merges targets by semantic ID while following the strictly advancing
+view continuation. This keeps large native Code inventories navigable without
+repeating every target on every page. If one view and its targets cannot fit,
+the route returns HTTP 413; it never raises the cap or returns a nonadvancing
+empty page. [HTTP coverage](../../tests/war_room/test_architecture_http.py)
+exercises lossless view and target continuation and the minimum-page refusal.
 Publication, artifact ownership, destination, generation, ancestry and byte-digest
 validation belong to the [workspace design](../workspace/DESIGN.md), specifically
 [REQ-WORKSPACE-001](../workspace/DESIGN.md),

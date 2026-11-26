@@ -1,0 +1,141 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "032809336f3fcf3810c7270c28195da9c85a3bf6",
+  "proposal": {
+    "owner_work_id": "epic_049",
+    "authorized_owner": "epic_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": ".",
+    "design_owner_directory": ".",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_049",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/epics/2_active/epic_049_expose_recovery_progress_and_durable_team_transcript_milesto.md",
+      "revision": "032809336f3fcf3810c7270c28195da9c85a3bf6",
+      "content_digest": "ca8b776a09edd05a3676ae5ab8d3e56b57a8ee4dfd17fce0e7fff0c3c4241a57"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": ".",
+        "design_owner_directory": ".",
+        "owning_work": "epic_049",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "DESIGN.md",
+        "revision": "eeb2733f0ce77dbc90497c1b2ec57d4174e2ee5e"
+      },
+      "content_digest": "df2eda1b95136e6d9058983aa00aa7da7cfd584aaf0c2fdf21c23c138ee6f90f"
+    },
+    "proposed_model": {
+      "contract": {
+        "reference": {
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "code_directory": ".",
+          "design_owner_directory": ".",
+          "owning_work": "epic_049",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+          "revision": "01e1cff36a48b8abe3771708936921a93bc83643"
+        },
+        "content_digest": "c297d5004f1f2ae012302f2c6cd35fd9ac4bed82bc6872aff5e9366e16b0a847"
+      },
+      "sources": [
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_049",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+            "revision": "01e1cff36a48b8abe3771708936921a93bc83643"
+          },
+          "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_049",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+            "revision": "01e1cff36a48b8abe3771708936921a93bc83643"
+          },
+          "content_digest": "6d450963438bcd21a5a0f911ff0c20b82deb7dbebb68d07188b358a0ad54bbb8"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_049",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+            "revision": "01e1cff36a48b8abe3771708936921a93bc83643"
+          },
+          "content_digest": "30174a991ee8c50a669d7f20c447348fced2e8aadf1e5aa54276a4db655e5e91"
+        }
+      ],
+      "source_closure_digest": "714503a0a50779a9a5c2d60c00a5a099fffb24ef2995731aeea82137e2d950a6",
+      "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "renderer_settings": {
+        "cpus": "2",
+        "memory": "1536m",
+        "pids_limit": 256,
+        "timeout_seconds": 180.0,
+        "tmpfs_size": "512m"
+      },
+      "semantic_artifact_digest": "31dc067798759bbd7faa9f4bfa7fdb719f952a435aaa2015bed8e846729b32e0",
+      "render_identity": "c329341e8fc5829f14070816ffc6d6d36a805ee5103fbb75d9a40b86fa0d1157"
+    },
+    "requirement_citations": [
+      "REQ-ROOT-010",
+      "REQ-WARROOM-TRANSCRIPT-001",
+      "REQ-TASK-RECOVERY-EVIDENCE-001",
+      "REQ-WORKSPACE-TURN-EVIDENCE-001"
+    ],
+    "decision_citations": [
+      "DEC-ROOT-AUDIT-001",
+      "DEC-WARROOM-TRANSCRIPT-001",
+      "DEC-TASK-RECOVERY-EVIDENCE-001",
+      "DEC-WORKSPACE-TURN-EVIDENCE-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-team-components",
+      "cascade-war-room-components",
+      "cascade-dashboard-code",
+      "cascade-task-code",
+      "cascade-workspace-code",
+      "cascade-architecture-browser-code"
+    ],
+    "affected_work_ids": [
+      "epic_049"
+    ],
+    "architecture_impact": "diagram_change",
+    "impact_reason": "Current recovery and transcript implementation coverage adds 13 source-verified Function nodes, nine relationships and owning design links. Context/container topology and repair authority are unchanged. Bounded metadata paging and document-context continuation keep the expanded model browsable under the existing 256 KiB cap; real Code/deep-link/source navigation and render reuse passed. Proposed progress/replay behavior remains in the plan with explicit Feature/Task ownership."
+  }
+}

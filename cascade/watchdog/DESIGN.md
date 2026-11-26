@@ -2,6 +2,24 @@
 
 Purpose: observe canonical state, admit dependency-ready work, and coordinate bounded recovery. Interfaces are dispatch/activation, queues, poll loop, capability registry, incidents/reservations, health audit, and model resolution. Owns `REQ-WATCHDOG-001` (automation obeys lifecycle gates) and `DEC-WATCHDOG-001` (generation-bound reservations converge recovery).
 
+## Current recovery progress publication
+
+The significant producer, its SQLite projection state, fenced transcript mapping
+protocol, pending behavior and restart replay are owned by the
+[Recovery progress design](../recovery_progress/DESIGN.md). Watchdog calls
+[`drain_recovery_progress`](../recovery_progress/publisher.py) at the beginning
+of `watchdog_tick`, before `process_lock` and slow lifecycle, Git or provider
+work. It supplies authoritative receipts and postcheck observations but does not
+own the projection's requirements or decisions. War Room owns transcript
+durability and the bounded read surface.
+
+The `cascade-watchdog-code` view links the tick, bounded drain and immutable
+publisher, including the durable mapping writer; `cascade-dashboard-code` owns
+receipt serialization, graph append, deadline-bound graph fence and read-only
+existing-index source-key lookup. Publisher and transcript lock/SQLite waits
+consume one caller deadline; admitted filesystem/source work remains a separately
+measured baseline and can leave replayable pending work.
+
 ## Dispatch ownership transition
 
 Feature dispatch binds the dependency-checked board selection to its source
@@ -282,9 +300,12 @@ and run bounded external observation outside that critical section. Reuse
 reservations to reject stale generations and duplicate claims.
 `DEC-WATCHDOG-REPAIR-002`: Persist attributable stage receipts in the selected
 owner ledger and reserve terminal resolution for a fresh Watchdog postcheck.
-Receipt identity is content-derived, so restart appends no duplicate stage;
-missing capability retains one deduplicated executable handoff or the probe's
-precise operator prerequisite.
+Each persisted stage is enriched with the incident source/generation, original
+incident when known, work, attempt/claim and a monotonic source sequence. The
+sequence, rather than message text or timestamp, distinguishes repeated equal
+stages. Restart reuses the committed sequence and a missed notification is
+replayed from it; missing capability retains one executable handoff or the
+probe's precise operator prerequisite.
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
@@ -300,7 +321,7 @@ delivery consumer. War Room consumes the bounded projection described above.
 | [dispatch_audit_recovery](audit_recovery.py) | Bounded observation/admission → exact capability resolution → claim acceptance → executor. |
 | [CapabilityRegistry](capabilities.py) | Owner/tier/failure-specific capability metadata and finite retry policy. |
 | [reserve_after_recheck / accept_claim / record_result](reservations.py) | Canonical fingerprint, generation and claim-token comparison; persist attempts in the selected durable store. |
-| [recovery_stage_receipt](incidents.py) | Bind actor, capability, permitted evidence keys, authority revision and result to an immutable stage identity. |
+| [recovery_stage_receipt / transition_receipt_v1](incidents.py) | Bind actor, capability, permitted evidence keys and result, then enrich the persisted stage with source, generation, work, attempt/claim and monotonic sequence identity. |
 | [_incident_contract](audit_recovery.py) | Bind a completed-parent Task mismatch to its exact Feature owner and mismatch generation before reservation. |
 | [_bind_original_incident](audit_recovery.py) | Bind the queued delivery action and its canonical generation to the sole Task-owned incident allowance before owner work. |
 | [_execute_reservation](audit_recovery.py) | Invoke the selected owning-team adapter after exact claim acceptance and record its structured result. |
@@ -324,7 +345,11 @@ flowchart TD
 Reservations and action attempts survive restart. Interrupted claims are
 reconciled using their exact token and execution identity; a live process is not
 reclaimed just because time elapsed. Dispatch returns whether execution was
-admitted, not whether the obligation is healthy. The active-path scanner accepts
+admitted, not whether the obligation is healthy. Reservation, result and
+postcheck writers notify the deterministic publisher only after their ledger
+replacement and lock release. Notification failure is ignored because the
+retained incident receipt is replayable and the notification grants no repair
+capability. The active-path scanner accepts
 `FeatureReadyToPlan` for Features, `TaskDispatched` for Tasks and `EpicActivated`
 for Epics, checking introduction timestamps. For a generation-bound repair,
 [repair_event_authorizes](../feature/repair.py) joins `FeatureRepairAuthorized`

@@ -60,6 +60,7 @@ def test_get_home_is_server_rendered_html(ui_server):
         assert "text/html" in content_type
         assert 'id="war-room-board"' in html
         assert 'id="epic-war-room-chat"' in html
+        assert 'id="recovery-current-summary"' in html
         assert 'id="toast-stream"' in html
         assert 'id="supervisor-status-banner"' in html
         assert "Branch pattern: task/" in html
@@ -207,15 +208,12 @@ def test_war_room_js_renders_canonical_recovery_incident_once_per_transition():
         Path(__file__).resolve().parents[2] / "cascade" / "war_room" / "static" / "war_room.js"
     ).read_text(encoding="utf-8")
 
-    assert "appendRecoveryIncident(row, actions, item.recovery_incident)" in source
-    assert 'failed: "Recovery failed"' in source
-    assert 'investigating: "Recovery investigating"' in source
-    assert 'blocked: "Recovery blocked"' in source
-    assert 'appendRecoveryIncidentLine(warning, "Reason", incident.reason)' in source
-    assert 'appendRecoveryIncidentLine(warning, "Owner", ownerName)' in source
-    assert 'appendRecoveryIncidentLine(warning, "Affected", locations.join(" · "))' in source
-    assert 'appendRecoveryIncidentLine(warning, "Last attempt", label)' in source
-    assert 'appendRecoveryIncidentLine(warning, "Next step", incident.next_step)' in source
+    assert "appendRecoveryProgressSummary(" in source
+    assert 'requested_queued: "Queued · not executing"' in source
+    assert 'verification_pending: "Verification pending"' in source
+    assert 'verified_complete: "Authoritatively verified"' in source
+    assert 'appendRecoveryIncidentLine(block, "Prerequisite", entry.prerequisite)' in source
+    assert 'appendRecoveryIncidentLine(block, "Next safe step", entry.next_step)' in source
     assert 'target.kind === "review" ? "Open recovery review" : "Open recovery action"' in source
     assert "RECOVERY_TOASTS_STORAGE_KEY" in source
     assert "recoveryIncidentTransitions[key] === incident.state" in source
@@ -226,6 +224,14 @@ def test_recovery_incident_lifecycle_browser_cases():
     if shutil.which("node") is None:
         pytest.skip("node is required for browser-side UI contract tests")
     cases = Path(__file__).with_name("recovery_incident_lifecycle_cases.mjs")
+    result = subprocess.run(["node", str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_recovery_progress_current_summary_browser_cases():
+    if shutil.which("node") is None:
+        pytest.skip("node is required for browser-side UI contract tests")
+    cases = Path(__file__).with_name("recovery_progress_current_cases.mjs")
     result = subprocess.run(["node", str(cases)], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
 

@@ -174,12 +174,13 @@ def test_attach_hierarchical_feature_returns_briefing(sidecar_board):
     assert (root / ".cascade" / "checkpoints" / f"{feature_id}.sqlite").is_file()
 
 
-def test_chat_empty_when_missing_sidecar(sidecar_board):
+def test_chat_unavailable_when_history_has_not_been_published(sidecar_board):
     base, root = sidecar_board
     add_doc(root, id="epic_002", title="No chat yet", tier="epic", status="backlog")
-    status, messages = _get(f"{base}/api/chat/epic_002")
-    assert status == HTTPStatus.OK
-    assert messages == []
+    status, payload = _get_expect_error(f"{base}/api/chat/epic_002")
+    assert status == HTTPStatus.SERVICE_UNAVAILABLE
+    assert payload["error"]["code"] == "transcript_unavailable"
+    assert payload["completeness"] == "pending"
 
 
 def test_events_to_toasts_epic_orphan_and_task_retry_proposed() -> None:
