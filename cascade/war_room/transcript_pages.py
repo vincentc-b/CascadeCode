@@ -588,6 +588,8 @@ def read_transcript_detail(
         budget.used += len(raw)
     finally:
         os.close(descriptor)
+    if raw and raw[0] & 0xC0 == 0x80:
+        raise TranscriptInvalidRequest("detail cursor offset is not a UTF-8 boundary")
     while raw:
         try:
             chunk = raw.decode("utf-8")

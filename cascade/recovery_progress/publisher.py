@@ -701,7 +701,7 @@ def publish_committed_transition(
         try:
             connection.execute("BEGIN IMMEDIATE")
             if ack.get("status") == "committed":
-                _record_transcript_milestone(connection, ack, now=_now())
+                _record_transcript_milestone(connection, ack, root=repo, now=_now())
             _upsert(connection, receipt, snapshot, now=_now())
             connection.commit()
             _publish_dirty(
@@ -721,6 +721,7 @@ def _record_transcript_milestone(
     connection: sqlite3.Connection,
     ack: Mapping[str, Any],
     *,
+    root: Path,
     now: datetime,
 ) -> None:
     required = {
@@ -753,11 +754,20 @@ def _record_transcript_milestone(
         if identity != values[:3]:
             raise ValueError("receipt maps to a different transcript acknowledgement")
         if tuple(existing[key] for key in ("incarnation", "append_sequence")) != values[3:]:
+            # An earlier append may have released the graph fence before a
+            # newer rewrite or move reached this publisher transaction.
+            from cascade.war_room.chat_store import transcript_source_acknowledgement
+
+            current = transcript_source_acknowledgement(
+                values[1], source_key=f"recovery:{receipt_id}", root=root
+            )
+            if current["message_id"] != values[2]:
+                raise ValueError("receipt maps to a different transcript acknowledgement")
             connection.execute(
                 """UPDATE transcript_milestones
                    SET incarnation = ?, append_sequence = ?, recorded_at = ?
                    WHERE receipt_id = ?""",
-                (values[3], values[4], _iso(now), receipt_id),
+                (current["incarnation"], current["append_sequence"], _iso(now), receipt_id),
             )
     else:
         connection.execute(
@@ -826,7 +836,7 @@ def record_transcript_milestone(root: Path, ack: Mapping[str, Any]) -> None:
         connection = _connect(repo)
         try:
             connection.execute("BEGIN IMMEDIATE")
-            _record_transcript_milestone(connection, current_ack, now=_now())
+            _record_transcript_milestone(connection, current_ack, root=repo, now=_now())
             _refresh_entry_milestones(connection, str(current_ack["entry_id"]))
             connection.commit()
             _publish_dirty(
@@ -1054,7 +1064,7 @@ def drain_recovery_progress(
                     (receipt["receipt_id"],),
                 ).fetchone()
                 if ack.get("status") == "committed":
-                    _record_transcript_milestone(connection, ack, now=_now())
+                    _record_transcript_milestone(connection, ack, root=repo, now=_now())
                 else:
                     milestone_pending += 1
                 if not was_known or ack.get("status") == "committed":

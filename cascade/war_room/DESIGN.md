@@ -65,7 +65,8 @@ older-page high-water. Missing or unsafe publication is pending, and a changed
 incarnation requires restart. The compatible chat route returns only the latest
 window with explicit completeness, incarnation and older-continuation headers.
 An oversized body remains available as UTF-8-aligned immutable chunks of at
-most 64 KiB after a labeled bounded preview; no row is silently deleted.
+most 64 KiB after a labeled bounded preview; a cursor inside a UTF-8 character
+is invalid, and no row is silently deleted.
 
 `DEC-WARROOM-TRANSCRIPT-001`: Keep authored history in the owning room's
 `docs/_war_room/chat/<graph-id>.jsonl`. The room follows registered document

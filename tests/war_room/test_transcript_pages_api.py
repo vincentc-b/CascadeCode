@@ -272,6 +272,21 @@ def test_oversized_detail_reconstructs_utf8_and_rejects_foreign_or_stale_cursor(
     assert foreign["error"]["code"] == "invalid_request"
 
     stale_cursor = item["detail_cursor"]
+    mid_character = json.loads(
+        base64.urlsafe_b64decode(stale_cursor + "=" * (-len(stale_cursor) % 4))
+    )
+    mid_character["offset"] = len("prefix-".encode("utf-8")) + 1
+    invalid_offset_cursor = base64.urlsafe_b64encode(
+        json.dumps(mid_character, separators=(",", ":")).encode()
+    ).decode().rstrip("=")
+    status, invalid_offset, _headers, _size = _get(
+        base
+        + "/api/transcript/v1/epic_001/items/large-message/detail?cursor="
+        + urllib.parse.quote(invalid_offset_cursor)
+    )
+    assert status == HTTPStatus.BAD_REQUEST
+    assert invalid_offset["error"]["code"] == "invalid_request"
+
     decoded = json.loads(
         base64.urlsafe_b64decode(stale_cursor + "=" * (-len(stale_cursor) % 4))
     )

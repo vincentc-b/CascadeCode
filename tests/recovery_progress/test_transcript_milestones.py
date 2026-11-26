@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 from cascade.recovery_progress.notifications import register_transition_publisher
 from cascade.recovery_progress.publisher import (
     _connect,
+    _record_transcript_milestone,
     drain_recovery_progress,
     install_recovery_progress_publisher,
     publish_committed_transition,
@@ -153,6 +155,18 @@ def test_receipt_retry_refreshes_rewrite_incarnation_and_rejects_stale_downgrade
     with pytest.raises(ValueError, match="different transcript acknowledgement"):
         record_transcript_milestone(root, {**current_ack, "entry_id": "different"})
     record_transcript_milestone(root, stale_ack)
+    stored = _stored_milestone(root, str(receipt["receipt_id"]))
+    assert stored["incarnation"] == current_ack["incarnation"]
+    assert stored["append_sequence"] == current_ack["append_sequence"]
+    connection = _connect(root)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        _record_transcript_milestone(
+            connection, stale_ack, root=root, now=datetime.now(timezone.utc)
+        )
+        connection.commit()
+    finally:
+        connection.close()
     stored = _stored_milestone(root, str(receipt["receipt_id"]))
     assert stored["incarnation"] == current_ack["incarnation"]
     assert stored["append_sequence"] == current_ack["append_sequence"]

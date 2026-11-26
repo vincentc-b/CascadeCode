@@ -32,6 +32,9 @@ entry point for already committed acknowledgements; it revalidates the receipt's
 current routing under the graph fence before refreshing incarnation and sequence.
 Receipt, entry, graph and message identity remain immutable, while a delayed
 pre-rewrite or pre-move acknowledgement cannot replace newer routing metadata.
+When a stored routing tuple differs, the private mapping helper reads the
+current fenced transcript acknowledgement within its writer transaction before
+updating the tuple.
 `_upsert`
 joins only committed mappings for the entry's retained receipt order, so failed
 or pending chat appends leave `milestone_refs` empty without changing repair
