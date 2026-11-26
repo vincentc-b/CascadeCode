@@ -2525,3 +2525,43 @@ Acceptance remains withheld pending Task 3 operational proof, Task 4 integrated
 navigation/design closeout, Feature 5 contention repair, canonical record
 corrections and design/publication reconciliation. Return control to child
 execution and supervised delivery.
+
+## Manager Feature 3 Task 2 record-correction verification
+
+In reply to `feat_049_003:feat_049_003:task2_record_correction_da9ace67_20261126`.
+Read canonical Epic `9663684255700d5178bdd369c97cb8d5a6f4ed6a` and Feature
+`3dd4f1d84e48a7855d03090c706e78cb02ee607e`, child metadata and the empty
+architecture amendment list. Reviewed commit `da9ace67`, which adds only
+`docs/feature_artifacts/task_049_003_002_record_correction.md`. The artifact
+preserves the proposed replacement body and reports the Cascade refusal
+`task_049_003_002 cannot be revised while completed`. This is an owner-reported
+tool result, not an independently replayed correction or proof that the canonical
+Task changed. The canonical record-correction gap remains open.
+
+Verified that the proposed Parent Feature link resolves from `docs/tasks/3_completed`
+to the active Feature document in the pinned tree. Implementation
+`6b1087165e3132be0e944d453749c0b381feeca7`, polling follow-up
+`1727c75779dcb5ef95e609f252568029904245f0` and canonical Feature review
+`3dd4f1d84e48a7855d03090c706e78cb02ee607e` are ancestors of the artifact commit.
+The proposed body retains route/error/detail fixtures, committed-only anchors,
+distinct progress revision and transcript incarnation, and explicit limits on
+the reported validation. Task 3 operational proof, Task 4 integrated architecture
+navigation and Feature 5 contention repair remain separate gates. Canonical
+child metadata still reports Feature 3 active and Feature 5 backlog.
+
+Design review: reread the pinned War Room design's Historical requirement and
+`loadCurrentRecoveryProgress` / `pollChatSidecar` implementation mappings. This
+record-only diff changes no system actor, runtime or persistence boundary,
+component responsibility, Code symbol or normal/failure flow. Context, container,
+component, Code and supplementary diagrams therefore require no edit here;
+final cross-design ownership and publication reconciliation remain outstanding.
+Historical sign-offs still pin `032809336f3fcf3810c7270c28195da9c85a3bf6`.
+No scope amendment, new decision or duplicate notification is needed for this
+response to the already routed correction request.
+
+Validation: canonical reads, pinned artifact/diff review, parent-link resolution,
+commit ancestry, sign-off inspection and `git diff --check`. No product/browser
+tests or render were rerun for this evidence-only change. Acceptance and renewed
+sign-off remain withheld pending integrated proof, contention repair, canonical
+record corrections and design/publication reconciliation. Return control to
+child execution and supervised delivery.
