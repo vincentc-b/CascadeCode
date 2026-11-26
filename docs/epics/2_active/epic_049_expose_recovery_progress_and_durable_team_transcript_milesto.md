@@ -290,6 +290,11 @@ Architecture verification results and pinned publication references are recorded
   Chose Route candidate ecd390f4 through feat_049_004, including the malformed UTF-8 detail-cursor correction, while retaining full acknowledgement-race acceptance and the Feature 3 sequencing hold..
   Rationale: In reply to feat_049_002:feat_049_002:postmerge_repair_ecd390f4_20261126 and feat_049_002:feat_049_002:postmerge_detail_cursor_gap_20261126. The completed Feature branch contains a candidate for both existing contract defects, but the commit is not in Epic ancestry and its sequential private-helper regression does not establish the required real writer interleavings. Reusing the candidate through the existing corrective slice avoids duplicate implementation without equating lifecycle completion with delivery.
   Honors: Existing durability/truthful-routing and bounded-pagination contracts; supported child integration; no completed-record rewrite, dependency installation, new route or product scope. Renewed sign-off and acceptance remain withheld pending sequencing reconciliation and verified delivery..
+
+- `dec_010` · 2026-11-26 · Epic Manager · **Corrective sequencing**
+  Chose Assign the existing writer-contention gap to feat_049_005 after completed feat_049_004; allow independent Feature 3 consumer work while withholding final integrated acceptance pending the bounded repair..
+  Rationale: In reply to feat_049_004:feat_049_004_integrated_handoff_a3d4a42b_20261126. The pinned source and child results support atomic routing and UTF-8 continuation, but source lookup still uses blocking graph locks and a 30-second SQLite connection with schema initialization. A focused corrective child provides supported delivery without reopening completed records or hiding the existing 250 ms/one-second acceptance gap.
+  Honors: Existing writer budgets, durable replay and immutable identity, graph fence through commit, no UI workaround or product scope expansion; design/Code and contention evidence before acceptance..
 ## Amendment log
 
 _(none)_
