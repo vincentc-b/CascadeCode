@@ -3103,3 +3103,60 @@ handoff and unresolved record/access limit. No scope decision changed, so no
 new decision-log entry is required. Acceptance and renewed sign-off remain
 withheld pending integrated contention/consumer evidence, canonical record
 corrections, design ownership and exact architecture publication reconciliation.
+
+## Manager review of integrated Feature 3 and Feature 4 sources
+
+Reviewed Epic product baseline `9affeb7f` after merge `552945ad`. Feature 4
+`a3d4a42b` is an Epic ancestor; Feature 3 candidate `d05eca4f` and plan
+`99be54b1` are not. The complete `cascade`, `architecture` and `tests` trees
+nevertheless match `99be54b1` byte for byte. Canonical Epic `write_doc` at
+`3d86363e` corrected the candidate-ancestry claim without changing scope.
+Feature 5 implementation `1334c4a1` remains outside Epic ancestry.
+
+Reviewed merged changes in `cascade/DESIGN.md`,
+`cascade/recovery_progress/DESIGN.md`, `cascade/task/DESIGN.md`,
+`cascade/war_room/DESIGN.md` and `cascade/watchdog/DESIGN.md`, and their
+source/model interfaces. Task's exact executor live token is registered before
+start notification; the source and Task flow agree. The producer's normal
+mapping path holds the transcript fence through publisher commit; pending
+intent/incomplete-index paths retain replay eligibility. Its graph acquisition
+still blocks and its transcript lookup still uses schema-initializing SQLite
+with a 30-second timeout. Consequently the Recovery Progress budget evidence
+and War Room bounded-lookup wording require Feature 5 reconciliation. The
+persisted Recovery Progress design mapping still names the parent design;
+the now-present child permits the assigned Epic Architect correction.
+
+Diagram impact: landscape/context and container topology retain the same
+operator, local supervisor, War Room and repository storage. Components retain
+their runtime ownership; native Dashboard, Task, Watchdog, Workspace and Teams
+Code sources and relationships require final reconciliation with Feature 5.
+The integrated Task execution sequence and producer mapping/replay diagram
+describe the source order inspected here. The corrected Task 4 closeout
+separates its four-view Agent fixture from the reported full 24-view,
+five-component navigation run. No fresh rendering or architecture-browser
+navigation was performed in this turn. No design/model edits are made ahead
+of the assigned contention and ownership reconciliation. No delivery-history
+attribution was found in the reviewed changed design sections.
+
+Focused verification command:
+`/opt/conda/bin/python3.12 -m pytest -q tests/recovery_progress/test_publisher.py
+tests/recovery_progress/test_transcript_milestones.py
+tests/war_room/test_durable_chat_store.py
+tests/war_room/test_transcript_pages_api.py tests/workspace/test_c4_source.py`
+returned **75 passed, 1 failed in 93.65 seconds**. The room-move retry test
+reached correct stored acknowledgement assertions but failed on an absent
+`current.json`; its isolated rerun passed in **1.35 seconds**. Source inspection
+shows `_publish_dirty` may yield at the fast-path deadline. That is a plausible
+timing explanation, not an established root cause. Require eventual drain and
+publication evidence on the repaired baseline; neither suppress the failed run
+nor claim a confirmed routing defect. The Node refresh-race harness passed.
+
+Canonical Epic `write_doc` at `5d5ef61e` records both test outcomes and their
+limits. Cascade enqueued
+`epic_049:epic_049:manager:integrated_room_move_probe_9affeb7f` to Feature 5.
+Both preserved publication requests remain unchanged and all twelve pinned
+blob digests match. The reported Feature 3 terminal publication failure remains
+non-approval; its later canonical closeout is not inferred from local source
+equivalence. Canonical record corrections, the broader documentation-refresh
+proof, design ownership and fresh exact publication remain open. No new scope
+decision or renewed sign-off is warranted. Return control to child delivery.
