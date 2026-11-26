@@ -169,7 +169,7 @@ custom "cascade-dashboard-code" {
         "cascade.codeComponent" "element.component.dashboard"
     }
     include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader
-    include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_chat_read code_dashboard_chat_append code_dashboard_transcript code_dashboard_backfill
+    include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_chat_read code_dashboard_chat_append code_dashboard_chat_fence code_dashboard_chat_index code_dashboard_chat_move code_dashboard_transcript code_dashboard_backfill
     autoLayout lr
 }
 
@@ -199,7 +199,7 @@ custom "cascade-workspace-code" {
         "cascade.codeComponent" "element.component.workspace"
     }
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
-    include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
+    include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_create code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
     include code_workspace_invoke code_workspace_owner_live code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
     autoLayout lr
 }

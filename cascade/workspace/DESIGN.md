@@ -138,6 +138,16 @@ invokes the graph, then forwards the new message slice to
 Checkpoint state survives restart while the local lock and queue evidence do not.
 An interruption after checkpoint commit but before chat append leaves history
 to the explicit [transcript sync](../war_room/DESIGN.md#recovery-summaries-and-planning-transcripts).
+Creating an Epic or Feature integration worktree resolves the current room before
+registry publication, then calls
+[move_transcript_room](../war_room/chat_store.py) to copy committed history and
+publish the new registry owner within the transcript's tracking-root graph fence.
+The room incarnation changes, so readers cannot continue an earlier ownership
+generation as if it were the same immutable history.
+Terminal Epic and Feature retirement performs the inverse operation: after
+delivery proof and cleanliness checks, the fenced room move invokes checkout
+removal and registry retirement as its owner switch, then publishes the
+surviving parent/trunk room with another incarnation.
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)

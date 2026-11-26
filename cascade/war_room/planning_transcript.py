@@ -7,7 +7,6 @@ from pathlib import Path
 
 from cascade.comments.types import AGENT_AUTHORS
 from cascade.war_room.chat_store import append_transcript_message, read_messages
-from cascade.watchdog.lock import process_lock
 
 _log = logging.getLogger(__name__)
 
@@ -77,20 +76,19 @@ def sync_planning_transcript_to_chat(graph_id: str, *, root: Path) -> None:
         raise
     if not graph_messages:
         return
-    with process_lock:
-        existing = read_messages(graph_id, root=root)
-        seen = {(row.get("author"), row.get("body")) for row in existing}
-        for msg in graph_messages:
-            role = str(msg.get("role") or "")
-            body = str(msg.get("content") or "").strip()
-            presentable = _presentable_message(role, body)
-            if presentable is None:
-                continue
-            author, text = presentable
-            if (author, text) in seen:
-                continue
-            append_transcript_message(graph_id, author=author, body=text, root=root)
-            seen.add((author, text))
+    existing = read_messages(graph_id, root=root)
+    seen = {(row.get("author"), row.get("body")) for row in existing}
+    for msg in graph_messages:
+        role = str(msg.get("role") or "")
+        body = str(msg.get("content") or "").strip()
+        presentable = _presentable_message(role, body)
+        if presentable is None:
+            continue
+        author, text = presentable
+        if (author, text) in seen:
+            continue
+        append_transcript_message(graph_id, author=author, body=text, root=root)
+        seen.add((author, text))
 
 
 def _tier_for_graph_id(graph_id: str) -> str | None:

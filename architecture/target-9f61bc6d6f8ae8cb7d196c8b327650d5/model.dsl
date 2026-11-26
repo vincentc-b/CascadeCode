@@ -1869,6 +1869,15 @@ code_workspace_registry = element "get_integration_worktree" "Function" "Read re
     }
 }
 
+code_workspace_create = element "create_integration_worktree" "Function" "Creates an integration checkout and switches Epic or Feature transcript ownership inside its graph fence." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.create"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "create_integration_worktree"
+    }
+}
+
 code_workspace_persist = element "terminal_doc_persisted_outside_worktree" "Function" "Check surviving terminal parent document." {
     properties {
         "cascade.semanticId" "element.code.workspace.persist"
@@ -3189,12 +3198,39 @@ code_dashboard_chat_read = element "read_messages" "Function" "Routes to the own
     }
 }
 
-code_dashboard_chat_append = element "append_transcript_message" "Function" "Appends a UUID and append-time row under the process-local lock." {
+code_dashboard_chat_append = element "append_transcript_message" "Function" "Appends an exact JSONL line through a durable intent and commits its unique source/message offset after fsync." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.append"
         "cascade.parent" "element.component.dashboard"
         "cascade.sourcePath" "cascade/war_room/chat_store.py"
         "cascade.sourceSymbol" "append_transcript_message"
+    }
+}
+
+code_dashboard_chat_fence = element "graph_transcript_fence" "Function" "Serializes graph transcript writers across processes with a tracking-root advisory lock." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.fence"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "graph_transcript_fence"
+    }
+}
+
+code_dashboard_chat_index = element "_connect_index" "Function" "Opens the writer-only SQLite intent, uniqueness, offset and incarnation index with full synchronous commits." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.index"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "_connect_index"
+    }
+}
+
+code_dashboard_chat_move = element "move_transcript_room" "Function" "Copies committed JSONL history and switches routing with a new incarnation under the graph fence." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.move"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "move_transcript_room"
     }
 }
 
@@ -3366,6 +3402,42 @@ dashboard_chat_get_to_dashboard_chat_read = code_dashboard_chat_get -> code_dash
 dashboard_transcript_to_dashboard_chat_append = code_dashboard_transcript -> code_dashboard_chat_append "Appends each presentable message" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-transcript-to-dashboard-chat-append"
+    }
+}
+
+dashboard_chat_append_to_fence = code_dashboard_chat_append -> code_dashboard_chat_fence "Fences append and exact-tail repair across processes" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-append-to-fence"
+    }
+}
+
+dashboard_chat_append_to_index = code_dashboard_chat_append -> code_dashboard_chat_index "Commits intent, uniqueness and byte offsets around JSONL fsync" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-append-to-index"
+    }
+}
+
+dashboard_chat_move_to_fence = code_dashboard_chat_move -> code_dashboard_chat_fence "Fences room copy and owner switch" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-move-to-fence"
+    }
+}
+
+dashboard_chat_move_to_index = code_dashboard_chat_move -> code_dashboard_chat_index "Changes incarnation and rebuilds committed offsets" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-move-to-index"
+    }
+}
+
+workspace_create_to_dashboard_chat_move = code_workspace_create -> code_dashboard_chat_move "Copies committed room history and publishes its new registered owner" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-create-to-dashboard-chat-move"
+    }
+}
+
+workspace_retire_to_dashboard_chat_move = code_workspace_retire -> code_dashboard_chat_move "Moves history to the surviving owner while retiring the registered checkout" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-retire-to-dashboard-chat-move"
     }
 }
 

@@ -39,11 +39,27 @@ the 100-entry, 1 MiB source budget and each response remains below 256 KiB.
 Feature's human and presentable role messages. Reading chat does not invoke a
 graph or backfill a checkpoint. Task teams do not accept persistent-room chat.
 
+`REQ-WARROOM-TRANSCRIPT-002`: Transcript writers serialize by graph across
+processes. A successful append means its exact JSONL line reached durable storage
+before its unique message/source key and byte range committed. Recovery completes
+only an empty, complete, or matching partial intended tail; conflicting bytes or
+an uncertain room owner stay pending without truncation.
+
 `DEC-WARROOM-TRANSCRIPT-001`: Keep authored history in the owning room's
 `docs/_war_room/chat/<graph-id>.jsonl`. The room follows registered document
 ownership, including a backlog Feature's parent and a completed Epic's surviving
 tracking checkout. History and a current recovery summary have different
 evidence sources; an authored conclusion does not change an action's state.
+
+`DEC-WARROOM-TRANSCRIPT-002`: JSONL remains authoritative. A writer-only SQLite
+index under the canonical tracking runtime root records message/source
+uniqueness, append sequence, offsets, room incarnation and one durable exact-line
+intent. The adjacent graph-hashed advisory lock fences append, explicit sync,
+rollback rewrite and room movement across processes. Legacy rows are indexed in
+resumable passes of at most 100 rows and 1 MiB without rewriting their IDs or
+append timestamps; their source occurrence remains unknown. Dispatch and
+terminal checkout retirement copy committed history before publishing the new
+registered owner under the same fence and advance the incarnation.
 
 The authoritative [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
@@ -58,7 +74,9 @@ the transcript library within the same Python runtime.
 | [board_recovery_projection](recovery_progress.py) | Preserve the coarse `recovery_incident` surface while selecting its action and revision from the same safe entry returned to room consumers. Presentation never grants retry authority. |
 | [handle_get_chat](sidecar_routes.py) | Validates the graph ID and returns the existing JSONL rows through `read_messages`; no sync occurs on GET. |
 | [read_messages / _chat_read_path](chat_store.py) | Resolve the registered room without building the merged board, read the whole file and ignore malformed JSON lines. Missing history returns an empty list. This interface has no pagination or source-byte bound. |
-| [append_transcript_message / remove_message](chat_store.py) | Append a UUID, author, body and append-time `ts`; remove a failed human-ingest row by rewriting the file. Both use `process_lock`, which fences threads only. |
+| [graph_transcript_fence / _connect_index](chat_store.py) | Lock a graph at a stable tracking-root path across processes and open its writer-only full-synchronous intent/offset index. The SQLite file is not a GET surface. |
+| [append_transcript_message / remove_message](chat_store.py) | Reconcile only an exact pending tail, durably stage intent, append and fsync JSONL, then commit uniqueness/offset before acknowledgement. Rollback rewrite uses the same fence, fsyncs replacement and parent directory, and changes incarnation. |
+| [move_transcript_room](chat_store.py) | Copy only matching committed history, publish the lifecycle owner switch inside the graph fence, rebuild offsets and change incarnation. Conflicting destination bytes remain untouched and pending. |
 | [append_planning_turn_to_chat](planning_transcript.py) | Sanitize and append new role messages supplied by [graph invocation](../workspace/kickoff.py). Provider failure details become a bounded system message. |
 | [sync_planning_transcript_to_chat](planning_transcript.py) | Explicitly load the owning graph checkpoint and append absent author/body pairs. This can coalesce separate identical replies; it is not durable event-identity deduplication. |
 
@@ -67,31 +85,44 @@ sequenceDiagram
     participant K as Workspace kickoff
     participant G as Owning graph and checkpoint
     participant T as Planning transcript library
-    participant C as Room JSONL
+    participant F as Graph OS fence and intent index
+    participant C as Owning room JSONL
     participant UI as Historical GET
     K->>G: Invoke admitted role turn
     G->>G: Persist role messages
     G-->>K: Return
     K->>T: New message slice
-    T->>C: Append sanitized messages with UUID and append time
+    T->>F: Fence graph; reconcile exact pending tail
+    F->>F: Commit exact-line intent and expected offset
+    F->>C: Append line and fsync
+    F->>F: Commit unique key/offset; clear intent
+    F-->>T: Release fence; acknowledge
     UI->>C: Read existing rows through chat route
     alt Return-to-append interruption
         K->>T: Explicit checkpoint sync
         T->>G: Read saved messages
-        T->>C: Append absent author/body pairs
+        T->>F: Replay through the same durable append boundary
+    else Crash before index commit
+        T->>F: Retry
+        F->>C: Complete only matching empty/partial intended tail
+        F->>F: Commit key/offset once
+    else Unexpected tail or owner
+        F-->>T: Pending; preserve all unrelated bytes
     end
 ```
 
 Action attempts and acknowledgements persist independently in the
 [Task-owned ledger](../task/DESIGN.md#action-evidence-and-transcript-boundary).
-Chat has no cross-process uniqueness fence, source-occurrence timestamp or
-live attempt milestone protocol. A queued summary, checkpoint or historical
+Chat stores optional source-occurrence and append times separately but has no
+live attempt milestone consumer yet. A queued summary, checkpoint or historical
 message therefore cannot establish live execution or verified resolution.
 Verification: [bounded progress scenarios](../../tests/war_room/test_recovery_progress_api.py),
 [projection scenarios](../../tests/war_room/test_recovery_incident_projection.py),
 [transcript scenarios](../../tests/war_room/test_planning_transcript.py) and
-[read routing](../../tests/war_room/test_chat_poll_routing.py) exercise these
-current boundaries, including GET without graph construction.
+[read routing](../../tests/war_room/test_chat_poll_routing.py), and
+[durability/recovery scenarios](../../tests/war_room/test_durable_chat_store.py)
+exercise these boundaries, including two real writer processes, exact-tail crash
+states, bounded legacy import, room movement and GET without graph construction.
 
 ## Bounded health-audit projection reads
 
