@@ -193,13 +193,16 @@ The first declaration used prose expected-output descriptions; all commands succ
 No new application dependency is planned. Browser fixtures use installed tools and deterministic local inputs; no external forge account is needed. If implementation requires additional software, revise the manifest and obtain separate exact installation authority before installing it.
 
 ## Feature breakdown
-- feat_049_004
 
 1. **feat_049_001 — Evidence-based recovery progress** — own the shared versioned progress contract, concurrent incident ordering, owner/claim freshness, generation-bound verification and bounded published current reads. Cover success criteria 1, 2, 4 and the producer half of 6. Freeze contract before transcript integration.
 2. **feat_049_002 — Durable recovery milestones and bounded transcript history** — depends on feat_049_001. Add deterministic system-event identity, committed-source notifications, cross-process deduplication, bounded restart reconciliation, stable role-summary identity and paginated history. Cover success criteria 3, 5 and transcript half of 6.
 3. **feat_049_003 — Coherent board and Historical recovery experience** — depends on feat_049_001 and feat_049_002. Present the common current summary, concurrent incidents and milestones; deliver deterministic API/browser operational acceptance and reconcile affected diagrams against implementation. Cover success criteria 4, 7 and 8.
 
-Keep these three deliverable slices. Do not create a standalone speculative framework, streaming subsystem, generic event bus, recovery scheduler or unrelated UI redesign. Feature teams translate their scope and diagram rows into Task acceptance criteria before task dispatch.
+4. **feat_049_004 — Prevent stale transcript acknowledgements from regressing recovery routing** — depends on completed feat_049_002. Repair the existing acknowledgement freshness contract across private fast-path/drain and public mapping writers, with deterministic delayed-writer, rewrite/move, restart and genuine-conflict evidence. Own the affected synchronization, design and native Code reconciliation described in its canonical spec. This correction adds no product scope.
+
+Retain the three product deliverable slices and this focused corrective slice. Feature 3 dispatch and integrated acceptance require the verified corrective delivery. Its canonical dependency metadata currently lists only Features 1 and 2: the prose gate is not a machine-enforced dependency. An authorized lifecycle owner must reconcile sequencing before Feature 3 advances; Epic acceptance and renewed plan sign-off remain open until this discrepancy is resolved.
+
+Do not create a standalone speculative framework, streaming subsystem, generic event bus, recovery scheduler or unrelated UI redesign. Feature teams translate their scope and diagram rows into Task acceptance criteria before task dispatch.
 
 ## Verification and acceptance
 
