@@ -3932,3 +3932,104 @@ watchdog_result_to_transition_notify = code_watchdog_result -> code_watchdog_tra
         "cascade.semanticId" "relationship.code-watchdog-result-to-transition-notify"
     }
 }
+
+// Review observation and graph queue eligibility.
+
+code_workspace_delivery = element "deliver_queue_kickoffs" "Function" "Select active teams or pending durable recovery owners whose queue is ahead of its cursor." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.delivery"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "deliver_queue_kickoffs"
+    }
+}
+
+code_workspace_resume = element "resume_inflight_graphs" "Function" "Rejoin eligible interrupted graph turns, staged inputs and unread queues after restart." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.resume"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "resume_inflight_graphs"
+    }
+}
+
+code_workspace_schedule = element "_schedule_queue_delivery" "Function" "Coalesce delivery into the process-local queue worker under graph ownership." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.schedule"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "_schedule_queue_delivery"
+    }
+}
+
+code_workspace_delivery_locked = element "_run_queue_delivery_locked" "Function" "Recheck team eligibility, resume checkpoints and persist classified queue input before a role turn." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.delivery-locked"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "_run_queue_delivery_locked"
+    }
+}
+
+code_watchdog_review_health = element "reconcile_open_review_health" "Function" "Observe tracked reviews and admit conflict resolution; clean mergeability alone currently yields healthy." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.review-health"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/review_health.py"
+        "cascade.sourceSymbol" "reconcile_open_review_health"
+    }
+}
+
+code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Read forge review state, source and target heads, and mergeability through the configured CLI." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.review-snapshot"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/tracking.py"
+        "cascade.sourceSymbol" "merge_request_snapshot"
+    }
+}
+
+code_boss_review_pending = element "feature_review_pending" "Function" "Read open review state or the completed-document publication window without forging acceptance." {
+    properties {
+        "cascade.semanticId" "element.code.boss.review-pending"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_review_pending"
+    }
+}
+
+code_workspace_delivery_to_schedule = code_workspace_delivery -> code_workspace_schedule "Schedules unread queue delivery" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-delivery-to-schedule"
+    }
+}
+
+code_workspace_resume_to_schedule = code_workspace_resume -> code_workspace_schedule "Schedules interrupted or staged input replay" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-resume-to-schedule"
+    }
+}
+
+code_workspace_schedule_to_locked = code_workspace_schedule -> code_workspace_delivery_locked "Runs the coalesced worker under its graph lock" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-schedule-to-locked"
+    }
+}
+
+code_workspace_delivery_to_invoke = code_workspace_delivery_locked -> code_workspace_invoke "Stages durable input then invokes an eligible role turn" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-delivery-to-invoke"
+    }
+}
+
+code_watchdog_health_to_snapshot = code_watchdog_review_health -> code_watchdog_review_snapshot "Reads fresh forge facts before conflict admission" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-health-to-snapshot"
+    }
+}
+
+code_boss_feature_to_pending = code_boss_feature -> code_boss_review_pending "Retains pending publication and review obligations" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-feature-to-pending"
+    }
+}

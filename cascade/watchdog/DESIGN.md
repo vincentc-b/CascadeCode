@@ -311,6 +311,36 @@ audit evidence. [config.py](config.py) validates these independent settings;
 automatic investigations. This is a repository operational choice, not a
 requirement for responsive architecture rendering.
 
+## Open-review observation
+
+[reconcile_open_review_health](../review_health.py) reads registered reviews and
+uses [merge_request_snapshot](../tracking.py) for fresh forge state, heads and
+mergeability. Confirmed conflicts enter the existing resolution-action admission
+and guarded publication path; unknown mergeability, unavailable snapshots and
+missing worktrees retain an explicit recovery prerequisite. Resolution actions
+retain the source/target pair and admission identity so repeated observations
+rejoin existing work. A successful publication can precede forge mergeability
+refresh; target ancestry avoids repeating an already integrated conflict repair.
+
+```mermaid
+flowchart LR
+    Review[Tracked review] --> Snapshot[Fresh forge snapshot]
+    Snapshot -->|conflicting| Heads[Fetch and compare exact heads]
+    Heads --> Admission[Resolution action and owner gates]
+    Admission --> Publish[Guarded repair publication]
+    Snapshot -->|missing or unknown| Wait[Recovery prerequisite]
+    Snapshot -->|clean or mergeable| Healthy[Mergeability health restored]
+```
+
+This observer currently classifies clean mergeability as healthy without
+checking required CI policy or results. That result is not proof of green CI or
+intended-target delivery. The [shared review contract](../DESIGN.md#delivery-and-review-boundaries)
+and [Boss closeout](../boss/DESIGN.md#delivery-and-closeout) retain acceptance
+and integration ownership. Both observation functions are native nodes in
+`cascade-watchdog-code`, below `cascade-supervisor-components` in the
+[authoritative views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
+Verification: [review-health tests](../../tests/test_review_health.py).
+
 ## Recovery admission and active-path authority
 
 `REQ-WATCHDOG-REPAIR-001`: Audit repair requires a fresh canonical incident,

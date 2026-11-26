@@ -123,6 +123,7 @@ custom "cascade-watchdog-code" {
     }
     include code_watchdog_tick code_watchdog_dispatch code_watchdog_activate_epic code_watchdog_health code_watchdog_audit_lane code_watchdog_publish code_watchdog_progress_drain code_watchdog_progress_publish code_watchdog_milestone_record code_watchdog_milestone_upsert
     include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
+    include code_watchdog_review_health code_watchdog_review_snapshot
     autoLayout lr
 }
 
@@ -133,6 +134,7 @@ custom "cascade-boss-code" {
     }
     include code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_feature code_boss_epic
     include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_reconcile code_boss_lock code_boss_obligation code_boss_review_generation
+    include code_boss_review_pending
     autoLayout lr
 }
 
@@ -202,5 +204,6 @@ custom "cascade-workspace-code" {
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
     include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_create code_workspace_resume_epic code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
     include code_workspace_invoke code_workspace_owner_live code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
+    include code_workspace_delivery code_workspace_resume code_workspace_schedule code_workspace_delivery_locked
     autoLayout lr
 }

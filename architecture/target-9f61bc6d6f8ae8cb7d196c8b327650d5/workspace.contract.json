@@ -1,5 +1,12 @@
 {
   "elements": [
+    {"dsl_identifier": "code_workspace_delivery", "semantic_id": "element.code.workspace.delivery", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_workspace_resume", "semantic_id": "element.code.workspace.resume", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_workspace_schedule", "semantic_id": "element.code.workspace.schedule", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_workspace_delivery_locked", "semantic_id": "element.code.workspace.delivery-locked", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_watchdog_review_health", "semantic_id": "element.code.watchdog.review-health", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_watchdog_review_snapshot", "semantic_id": "element.code.watchdog.review-snapshot", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_boss_review_pending", "semantic_id": "element.code.boss.review-pending", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_activate_epic", "semantic_id": "element.code.watchdog.activate-epic", "fragment": "model.dsl"},
     {"dsl_identifier": "code_epic_prepare_checkout", "semantic_id": "element.code.epic.prepare-checkout", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_resume_epic", "semantic_id": "element.code.workspace.resume-epic", "fragment": "model.dsl"},
@@ -251,6 +258,12 @@
     {"path": "views.dsl", "owner": "epic_049"}
   ],
   "relationships": [
+    {"dsl_identifier": "code_workspace_delivery_to_schedule", "semantic_id": "relationship.code-workspace-delivery-to-schedule", "fragment": "model.dsl", "source": "code_workspace_delivery", "destination": "code_workspace_schedule"},
+    {"dsl_identifier": "code_workspace_resume_to_schedule", "semantic_id": "relationship.code-workspace-resume-to-schedule", "fragment": "model.dsl", "source": "code_workspace_resume", "destination": "code_workspace_schedule"},
+    {"dsl_identifier": "code_workspace_schedule_to_locked", "semantic_id": "relationship.code-workspace-schedule-to-locked", "fragment": "model.dsl", "source": "code_workspace_schedule", "destination": "code_workspace_delivery_locked"},
+    {"dsl_identifier": "code_workspace_delivery_to_invoke", "semantic_id": "relationship.code-workspace-delivery-to-invoke", "fragment": "model.dsl", "source": "code_workspace_delivery_locked", "destination": "code_workspace_invoke"},
+    {"dsl_identifier": "code_watchdog_health_to_snapshot", "semantic_id": "relationship.code-watchdog-health-to-snapshot", "fragment": "model.dsl", "source": "code_watchdog_review_health", "destination": "code_watchdog_review_snapshot"},
+    {"dsl_identifier": "code_boss_feature_to_pending", "semantic_id": "relationship.code-boss-feature-to-pending", "fragment": "model.dsl", "source": "code_boss_feature", "destination": "code_boss_review_pending"},
     {"dsl_identifier": "dashboard_post_to_epic_activation", "semantic_id": "relationship.code-dashboard-post-to-epic-activation", "source": "code_dashboard_post", "destination": "code_watchdog_activate_epic", "fragment": "model.dsl"},
     {"dsl_identifier": "epic_activation_to_workspace_create", "semantic_id": "relationship.code-epic-activation-to-workspace-create", "source": "code_watchdog_activate_epic", "destination": "code_workspace_create", "fragment": "model.dsl"},
     {"dsl_identifier": "epic_activation_to_workspace_resume", "semantic_id": "relationship.code-epic-activation-to-workspace-resume", "source": "code_watchdog_activate_epic", "destination": "code_workspace_resume_epic", "fragment": "model.dsl"},

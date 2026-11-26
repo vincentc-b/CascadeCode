@@ -133,6 +133,39 @@ and [runtime identity integration](../../tests/workspace/test_runtime_identity.p
 
 ## Graph invocation and transcript handoff
 
+### Queue eligibility and restart
+
+[deliver_queue_kickoffs](kickoff.py) selects active teams and teams named by
+pending durable recovery actions when their queue is ahead of its saved cursor.
+[resume_inflight_graphs](kickoff.py) applies the same eligibility boundary to
+interrupted turns, unread events and unanswered staged input. A completed-path
+Feature with an open review but no pending recovery action is outside this
+ordinary delivery boundary; a generic queued message does not admit its repair.
+
+[_schedule_queue_delivery](kickoff.py) coalesces process-local jobs.
+[_run_queue_delivery_locked](kickoff.py) rechecks eligibility under the graph
+lock before resuming checkpointed work or staging new input. Queue offsets and
+staged messages persist in the graph checkpoint; scheduling entries and locks
+are process-local. Restart reconstructs eligible jobs from durable inputs.
+
+```mermaid
+flowchart LR
+    Scan[Queue scan or startup resume] --> Eligible{Active or pending recovery?}
+    Eligible -->|no| Retain[Retain queue without a role turn]
+    Eligible -->|yes and actionable input| Schedule[Coalesced graph worker]
+    Schedule --> Recheck[Recheck eligibility under graph lock]
+    Recheck --> Resume[Resume checkpoint or persist classified queue input]
+    Resume --> Invoke[Invoke owning graph and advance durable cursor]
+```
+
+These entry points appear in `cascade-workspace-code`, reached through the
+[supervisor component view](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
+The [completed-recovery kickoff tests](../../tests/workspace/test_completed_recovery_kickoff.py)
+exercise eligible recovery and completed-team refusal. Shared authority remains
+owned by [the package recovery contract](../DESIGN.md#delivery-and-review-boundaries).
+
+### Invocation evidence
+
 `REQ-WORKSPACE-TURN-EVIDENCE-001`: Process-local graph ownership and persisted
 graph state have different lifetimes. Neither a saved next node nor pending
 queue work proves that an action executor is running.

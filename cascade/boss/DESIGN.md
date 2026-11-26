@@ -46,6 +46,7 @@ own forge state. These functions collaborate within the local supervisor.
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
 | [current_feature_obligation](rollup.py) | Fence completed closeout and retirement to the current repair and review generation. |
 | [feature_review_generation](../review.py) | Read immutable per-generation review facts; top-level fields remain the current compatibility projection. |
+| [feature_review_pending](../review.py) | Read an unclosed registry row or the completed-document preparation window; missing acceptance is not a completed delivery receipt. |
 | [_require_repair_review_route](../review.py) | Compare a repair review's URL and source/target route with fresh forge facts before reuse or acceptance. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
