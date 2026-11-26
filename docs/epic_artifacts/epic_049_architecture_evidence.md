@@ -1880,3 +1880,58 @@ design diff inspection and `git diff --check`. Integrated repair acceptance,
 final fixtures, design ownership, completed Task 1/5 record corrections and
 architecture publication recovery remain open. Renewed Epic sign-off remains
 withheld. Return control to Feature 4 planning and supported child delivery.
+
+## Architect corrective planning protocol review
+
+Reviewed canonical Epic `fc9b57f2`, active corrective Feature `bb7731d1`
+and backlog Feature 3 metadata. Feature 3 now depends on Features 1, 2 and 4;
+the sequencing discrepancy is closed. The Epic revision implements the existing
+corrective decisions without changing product scope. No duplicate spec edit or
+new decision is needed. Both saved role sign-offs still name `03280933`;
+renewed sign-off and acceptance remain withheld.
+
+Feature 4's draft specifies publisher lock/write transaction, then graph fence,
+current-source verification, and publisher commit before fence release. It
+applies this protocol to first insertion and private/public writers, defers
+pending evidence, and excludes unbounded repair/import/publication from the
+critical section. This is a proposed protocol to verify, not implemented
+behavior. Source inspection at candidate `ecd390f4` confirms that the existing
+source-acknowledgement helper acquires/releases its own fence and performs
+repair/import/page publication; its index connector initializes schema with a
+30-second SQLite timeout. The fence opens a fresh descriptor for blocking
+`flock` on each entry, so its Python `RLock` is not evidence that nested OS-fence
+acquisition is safe. Sent these concrete constraints to Feature 4 under request
+suffix `architect_planning_protocol_bb7731d1_20261126`: use a reviewed
+already-fenced lookup/API, establish bounded acquisition and lookup, and retain
+pending/replay eligibility. Persist binding criteria before Task dispatch.
+
+Reviewed candidate Watchdog/War Room design edits and source entry points
+`_record_transcript_milestone`, `record_transcript_milestone`,
+`transcript_source_acknowledgement`, `graph_transcript_fence` and
+`_connect_index`. Candidate prose contains no delivery attribution, but its
+stale-routing guarantee remains provisional. The corrective inventory assigns
+the following verification to its Tasks; this planning-only turn requires no
+design/model mutation:
+
+| Level / views | Review outcome and corrective ownership |
+|---|---|
+| Landscape/context: `cascade-landscape`, `cascade-context` | Sequencing and synchronization add no actor or external dependency; Task 3 checks the final diff. |
+| Containers: `cascade-containers` | Existing publisher SQLite and transcript JSONL/index boundaries remain; Task 3 verifies persistence and failure semantics. |
+| Components: `cascade-supervisor-components`, `cascade-war-room-components` | Publisher owns mapping and transcript library owns authoritative routing/fencing; Tasks 1/3 verify lock order and both interface sides. |
+| Code: `cascade-watchdog-code`, `cascade-dashboard-code`, conditionally `cascade-workspace-code` | Task 3 reconciles any new already-fenced lookup and caller relationships with native nodes, source symbols/kinds and contract; retains move-resume/retirement coverage. |
+| Supplementary behavior | Watchdog, War Room, Workspace and recovery-progress owner must explain fence-through-commit, delayed writers, pending/restart and invalid UTF-8 continuation. Task 3 resolves recovery-progress design ownership with atomic reference updates and no duplicated requirements. |
+
+Task acceptance retains actual Code navigation, Level up, deep-link restore,
+pinned source and measured warm artifact reuse, plus deterministic real
+fast-path/drain and public check-to-commit interleavings, first insertion/equal
+tuple, rewrite/move/restart, genuine conflicts and bounded UTF-8 continuation.
+No runtime test, render or browser result is newly claimed here.
+
+Validation: canonical Epic/Feature reads, sequencing diff, source/design review,
+all six saved publication digests matched against exact commits, candidate and
+evidence ancestry checks, and `git diff --check`. Neither `ecd390f4` nor
+`e986ceb1` is in Epic ancestry at `6970ed66`. Final integrated repair acceptance,
+fixtures/navigation, producer design ownership, completed Task 1/5 record
+corrections and supported terminal-publication recovery remain open. Historical
+publication pins are unchanged; no replacement publication is claimed. Return
+control to Feature 4 planning and supervised delivery.
