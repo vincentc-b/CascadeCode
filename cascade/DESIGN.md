@@ -503,7 +503,11 @@ Late delivery can carry a superseded completed Feature path back onto the source
 branch. Review preparation restores only the exact active path named by the
 durable repair receipt before pinning the tested publication SHA. After forge
 acceptance, target closeout mutates the Epic checkout directly; an accepted
-stacked-review projection cannot bypass that target postcondition.
+stacked-review projection cannot bypass that target postcondition. Boss consumes
+the same delivery projection before its completed-document fast path: only exact
+current-generation acceptance whose merge is reachable from the intended Epic
+target can emit normal completion or release retirement. Callback flags, green
+checks, closed-unmerged rows and stale source/target heads remain nonterminal.
 
 Implementation ownership and integrated Code views are in
 [Workspace](workspace/DESIGN.md#work-ownership-and-retirement),

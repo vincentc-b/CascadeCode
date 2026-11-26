@@ -11,9 +11,14 @@ comments and review gates under the canonical lifecycle lock. A completed-path
 Feature can still have an open review; document position alone is not forge
 acceptance. [current_feature_obligation](rollup.py) also requires the current
 repair generation's reserved or original child to be terminal without a live lease, the
-current approval and dependencies, and either exact accepted review evidence or
-explicit local integration evidence. This predicate runs before the completed
-fast path and its result gates checkout retirement.
+current approval and dependencies. For review-enabled delivery it consumes the
+shared [Feature delivery projection](../review.py) and requires exact acceptance
+of the current generation plus independent ancestry of that merge on the
+intended Epic branch. A merge callback, green checks, a closed forge row, stale
+heads, or an accepted merge that is absent from the target cannot authorize the
+completion event. Review-disabled delivery retains its supervised local merge
+proof. This predicate runs before the completed fast path and its result gates
+both `FeatureCompleted` and checkout retirement.
 Epic closeout accepts a Feature in `3_completed` with status `cancelled` only
 when cleanup completed without error and the canonical Epic contains the matching
 resolved `continue_reduced_scope` feedback (same child, parent, reason and
@@ -61,7 +66,10 @@ flowchart TD
     Merge --> Rollup[Current repair, child, comment and approval gates]
     Rollup --> Review[Publish Feature review; stage completed document]
     Review --> Accept[Observe forge acceptance]
-    Accept --> Proof[Workspace descendant persistence + canonical readback]
+    Accept --> Target{Accepted merge on intended Epic target?}
+    Target -->|no| Preserve
+    Target -->|yes| Event[Emit FeatureCompleted once]
+    Event --> Proof[Workspace descendant persistence + canonical readback]
     Proof -->|complete| Close[Attempt retirement]
     Proof -->|refused| Preserve
 ```

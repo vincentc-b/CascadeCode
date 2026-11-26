@@ -1043,6 +1043,15 @@ def _delivery_projection(
             )
             blocker = None
             next_prerequisite = None
+        elif target_integrated:
+            # The accepted repair has left the publication phase even when its
+            # repair receipt is still awaiting Boss's terminal acknowledgement.
+            # Boss owns the missing completion event, so expose that exact last
+            # prerequisite instead of projecting the older delivery phase.
+            phase = "merge_verification_pending"
+            evidence_status = "accepted_current_generation"
+            blocker = "completion_event_missing"
+            next_prerequisite = "record_feature_completion"
         elif repair and repair_phase in {"prepared", "authority_recorded"}:
             phase = "repair_requested"
             evidence_status = "repair_admitted"
@@ -1726,8 +1735,9 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
             if epic_id
             else True
         )
-        if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-            _accept_current_review_generation(feature_id, record, snapshot, root=trunk)
+        if _finalize_merged_review_record(
+            feature_id, record, mr, trunk=trunk, snapshot=snapshot
+        ):
             if (
                 epic_id
                 and not before
@@ -1889,6 +1899,15 @@ def _reconcile_stacked_acceptance(
             return False
     # Keep the original review URL/base immutable; only the local completion
     # operation targets the Epic. No second PR or unreviewed merge is created.
+    if not _accept_current_review_generation(
+        feature_id,
+        record,
+        snapshot,
+        root=trunk,
+        integration_target=epic_branch,
+        integration_sha=anchor,
+    ):
+        return False
     integrated = {**record, "target_branch": epic_branch}
     if not _finalize_merged_review_record(
         feature_id,
@@ -1897,14 +1916,6 @@ def _reconcile_stacked_acceptance(
         trunk=trunk,
     ):
         return True
-    _accept_current_review_generation(
-        feature_id,
-        record,
-        snapshot,
-        root=trunk,
-        integration_target=epic_branch,
-        integration_sha=anchor,
-    )
     return True
 
 
@@ -1914,6 +1925,7 @@ def _finalize_merged_review_record(
     mr: MergeRequest,
     *,
     trunk: Path,
+    snapshot: dict[str, object] | None = None,
 ) -> bool:
     from cascade.boss.rollup import try_complete_feature
 
@@ -1923,6 +1935,10 @@ def _finalize_merged_review_record(
         # The accepted source tree may still have an active feature document.
         # Publish its terminal lifecycle commit before acknowledging closure.
         push_branch(epic_root, mr.target_branch)
+        if snapshot is not None and not _accept_current_review_generation(
+            feature_id, record, snapshot, root=trunk
+        ):
+            return False
         complete = try_complete_feature(
             feature_id,
             root=trunk,
@@ -2052,11 +2068,9 @@ def poll_feature_reviews(root: Path) -> None:
                 feature_id, record, root=trunk, accepted=True
             ):
                 continue
-            if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-                _accept_current_review_generation(
-                    feature_id, record, snapshot, root=trunk
-                )
-            else:
+            if not _finalize_merged_review_record(
+                feature_id, record, mr, trunk=trunk, snapshot=snapshot
+            ):
                 # Do not acknowledge completion until the local epic worktree
                 # contains the exact tree accepted by the forge.
                 continue

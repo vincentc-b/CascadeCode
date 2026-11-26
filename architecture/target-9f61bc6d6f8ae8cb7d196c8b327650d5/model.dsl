@@ -2127,7 +2127,7 @@ code_boss_lock = element "task_lifecycle_lock" "Function" "Tracking-root cross-p
     }
 }
 
-code_boss_obligation = element "current_feature_obligation" "Function" "Fence closeout and retirement on the current repair, child delivery, review, and integration evidence." {
+code_boss_obligation = element "current_feature_obligation" "Function" "Fence completion events and retirement on the shared current-generation delivery and intended-target evidence." {
     properties {
         "cascade.semanticId" "element.code.boss.current-obligation"
         "cascade.parent" "element.component.boss"
@@ -2604,9 +2604,9 @@ code_boss_rollup_to_obligation = code_boss_feature -> code_boss_obligation "Chec
     }
 }
 
-code_boss_obligation_to_review_generation = code_boss_obligation -> code_boss_review_generation "Reads immutable current evidence" {
+code_boss_obligation_to_delivery_view = code_boss_obligation -> code_boss_delivery_view "Consumes current delivery and intended-target evidence" {
     properties {
-        "cascade.semanticId" "relationship.code-boss-obligation-to-review-generation"
+        "cascade.semanticId" "relationship.code-boss-obligation-to-feature-delivery-view"
     }
 }
 

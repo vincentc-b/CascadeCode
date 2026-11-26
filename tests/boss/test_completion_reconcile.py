@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
+import cascade.review as review
 
 from cascade.board.store import list_board, move_doc, read_doc, write_doc
 from cascade.board.errors import GitError
@@ -19,7 +21,7 @@ from cascade.review import (
 )
 from cascade.war_room.serialize import board_view_from_index
 from cascade.watchdog.events import read_events
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, commit_board, make_repo
 
 
 def test_completion_failure_does_not_block_other_teams(tmp_path, monkeypatch, caplog):
@@ -83,7 +85,7 @@ def test_open_merge_request_blocks_terminal_feature_completion(
     assert not any(event.type == "FeatureCompleted" for event in epic_events)
 
 
-def test_merged_review_completes_feature_via_reconcile(
+def test_legacy_closed_review_without_exact_acceptance_stays_pending(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = make_repo(tmp_path, git=False)
@@ -110,16 +112,67 @@ def test_merged_review_completes_feature_via_reconcile(
     move_doc("feat_001", "completed", root=root)
 
     first = reconcile_completion(root)
-    assert first["features"] == ["feat_001"]
+    assert first["features"] == []
 
     epic_events, _ = read_events("epic_001", 0, root=root)
     completed = [event for event in epic_events if event.type == "FeatureCompleted"]
-    assert len(completed) == 1
+    assert completed == []
 
     second = reconcile_completion(root)
     assert second["features"] == []
     epic_events, _ = read_events("epic_001", 0, root=root)
-    assert len([e for e in epic_events if e.type == "FeatureCompleted"]) == 1
+    assert not any(e.type == "FeatureCompleted" for e in epic_events)
+
+
+def test_reconcile_completes_only_after_accepted_merge_reaches_epic_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _feature_with_tasks(root)
+    move_doc("feat_001", "completed", root=root)
+    commit_board(root, "target base")
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "epic/epic_001", base], cwd=root, check=True)
+    (root / "delivery.txt").write_text("delivery\n", encoding="utf-8")
+    commit_board(root, "accepted merge")
+    accepted = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "feat/feat_001", accepted], cwd=root, check=True)
+    review._store_review_generation(
+        root,
+        "feat_001",
+        {
+            "url": "https://example.test/pulls/2",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_head": accepted,
+            "target_head": base,
+            "closed": True,
+        },
+        generation=1,
+        action_id="repair:1",
+    )
+    review._update_record(
+        root,
+        "feat_001",
+        {
+            "accepted_merge_sha": accepted,
+            "accepted_source_head": accepted,
+            "accepted_target_head": base,
+            "reconciliation_status": "accepted",
+        },
+    )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    assert reconcile_completion(root)["features"] == []
+    subprocess.run(
+        ["git", "branch", "-f", "epic/epic_001", accepted], cwd=root, check=True
+    )
+    assert reconcile_completion(root)["features"] == ["feat_001"]
+    assert reconcile_completion(root)["features"] == []
 
 
 def test_reconcile_completes_epic_when_all_persisted_children_done(tmp_path: Path) -> None:
@@ -154,7 +207,7 @@ def test_reconcile_completes_epic_when_all_persisted_children_done(tmp_path: Pat
 def test_reconcile_pulled_epic_only_after_its_review_merges(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = make_repo(tmp_path, git=False)
+    root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
     review = EpicReviewSnapshot(
         stage="implementation_review_pending",
