@@ -8,6 +8,7 @@ children: []
 depends_on:
 - feat_049_001
 - feat_049_002
+- feat_049_004
 owners:
 - feature_lead
 - feature_architect
