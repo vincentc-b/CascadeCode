@@ -153,16 +153,35 @@ The [action implementation](action_recovery.py) exposes
 `_claim_resume_attempt` (append an open attempt and claim),
 `record_action_checkpoint` (idempotent per-attempt checkpoint), and
 `finalize_attempt` (outcome, classification, completion time and claim release).
-`resume_action` runs the executor after claim/preflight releases the lifecycle
-critical section. Review-publication claims also bind process identity; other
-claims do not universally contain that proof.
+Each material write appends a schema-v1 receipt with the action generation,
+affected work, attempt/claim identity and a monotonic action-local sequence in
+the same atomic replacement. `resume_action` commits `execution_started` only
+after preflight succeeds and before it releases the lifecycle critical section
+for the executor. `resume_action` then brackets only the actual executor call
+with an ephemeral live token projected by `_executor_live_identity`. The token
+matches the worker runtime/process generation and the receipt's exact graph,
+action generation, attempt and claim. It expires within 30 seconds unless a
+matching registered worker refreshes it, ends earlier with claim expiry, and is
+invalid immediately after executor exit or observed worker death/restart.
+Unknown, legacy, inaccessible, expired or mismatched identity never establishes
+execution. These observations cannot reclaim a claim, change retry policy, or
+replace the durable start/outcome receipts. A refusal instead commits `preflight_refused` and never
+constitutes execution evidence. Review-publication claims also bind process
+identity; other claims do not universally contain that proof.
+The ledger remains monolithic: every transition loads and atomically replaces
+the complete JSON document, so write cost grows with retained actions and
+receipts. The notification fast path does not make source writes byte-bounded.
 
 ```mermaid
 flowchart LR
     Request[Durable routing marker] --> Ack[Owner acknowledgement]
     Ack --> Claim[Locked eligible attempt and claim write]
     Claim --> Preflight{Preflight}
-    Preflight -->|allowed| Execute[Executor outside claim critical section]
+    Preflight -->|allowed| Start[Commit execution-start receipt]
+    Start --> Notify[After-lock best-effort notification]
+    Notify --> Token[Register exact executor live token]
+    Token --> Execute[Executor outside claim critical section]
+    Execute --> EndToken[Remove token on executor exit]
     Preflight -->|refused| Finalize[Persist failed outcome]
     Execute --> Checkpoint[Persist attempt checkpoints]
     Checkpoint --> Finalize
@@ -173,11 +192,29 @@ flowchart LR
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and `cascade-task-code` in the [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
-expose these functions beneath `cascade-team-components`. They do not append
-live recovery transcript events. The [War Room design](../war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
+expose these functions beneath `cascade-team-components`. Receipts remain in the
+authoritative action record until a future durable transcript acknowledgement;
+they are source evidence, not live transcript events. The after-lock publisher
+notification carries the committed receipt and snapshot, may be missed or fail,
+and never changes repair authority or outcome; restart consumers replay the
+retained sequence. The [War Room design](../war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
 owns current presentation limits; [Watchdog](../watchdog/DESIGN.md#recovery-admission-and-active-path-authority)
 owns independent verification. [Action recovery tests](../../tests/task/test_action_recovery.py)
 exercise claim races, persisted attempts, checkpoints and restart behavior.
+[Transition receipt tests](../../tests/task/test_transition_receipts.py) cover
+missed notification, concurrent action writes, generation/attempt identity,
+preflight refusal and a held executor whose start is visible before completion.
+[Live observation tests](../../tests/workspace/test_live_observations.py)
+cover held execution, exact matching, expiry, inaccessible/dead processes and
+worker generation changes.
+
+The Watchdog-owned [current progress publisher](../watchdog/DESIGN.md#current-recovery-progress-publication)
+consumes these receipts after commit and by restart replay. Its SQLite index is
+derived and disposable: it does not replace `executions.json`, allocate claims,
+or authorize a retry. Consequently an enqueue, `mutation_ready`, execution-start
+receipt, successful attempt, or completed publication remains evidence of only
+that transition; none establishes verified resolution without the independent
+same-generation postcheck.
 
 ## Interrupted review publication attempts
 
@@ -264,7 +301,10 @@ The integrated Structurizr code view is `cascade-task-code`. From the supervisor
 
 ## Durable delivery collaborators
 
-`cascade-task-code` exposes [resume_action](action_recovery.py), the incident
+`cascade-task-code` exposes [resume_action](action_recovery.py),
+[_record_execution_start](action_recovery.py),
+[_append_action_transition](action_recovery.py), the after-lock notification
+boundary, and the incident
 budget lineage/reserve/settle/read/extension/escalation entry points in
 [incident_budget.py](incident_budget.py),
 [queue_task_merge](../task_rollup.py),

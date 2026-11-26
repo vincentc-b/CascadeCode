@@ -156,6 +156,44 @@ def test_get_board_shape(war_room_server):
     assert "path" in tasks_active[0]
 
 
+def test_recovery_progress_route_returns_pending_and_published_evidence(war_room_server):
+    base, root, _server = war_room_server
+    status, pending, _headers = _get(f"{base}/api/recovery/progress?work_id=task_001")
+    assert status == HTTPStatus.OK
+    assert pending["error"]["code"] == "evidence_missing"
+
+    from cascade.recovery_progress.publisher import publish_committed_transition
+    from cascade.watchdog.incidents import transition_receipt_v1
+
+    receipt = transition_receipt_v1(
+        source_kind="task_action",
+        source_key="task_001:delivery",
+        action="delivery",
+        action_id="task_001:delivery",
+        generation="sha256:generation",
+        graph_id="feat_001",
+        affected_work_ids=["task_001"],
+        attempt_number=1,
+        claim_id="claim-1",
+        sequence=1,
+        transition_kind="created",
+        occurred_at="2026-11-25T00:00:00+00:00",
+        source_reference="fixture:delivery",
+        safe_payload={},
+    )
+    publish_committed_transition(root, receipt, {})
+    status, progress, _headers = _get(f"{base}/api/recovery/progress?work_id=task_001")
+    assert status == HTTPStatus.OK
+    assert progress["work_id"] == "task_001"
+    assert progress["primary"]["action_id"] == "task_001:delivery"
+
+    status, invalid = _get_expect_error(
+        f"{base}/api/recovery/progress?work_id=task_001&cursor=not-a-cursor"
+    )
+    assert status == HTTPStatus.BAD_REQUEST
+    assert invalid["error"]["code"] == "invalid_request"
+
+
 def test_board_schema_error_returns_json_and_server_stays_available(war_room_server):
     base, root, _server = war_room_server
     from cascade.workspace.integration_worktree import invalidate_merged_board

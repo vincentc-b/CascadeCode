@@ -32,7 +32,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
             }
         }
 
-        dashboard = component "Dashboard and audit reads" "Shows work state, routing-based recovery summaries, team transcripts and published health-audit projections." "cascade.war_room" {
+        dashboard = component "Dashboard and audit reads" "Owns the safe recovery-progress entry contract and shows work state, routing summaries, team transcripts and published projections." "cascade.war_room" {
             properties {
                 "cascade.semanticId" "element.component.dashboard"
                 "cascade.designPath" "cascade/war_room/DESIGN.md"
@@ -72,13 +72,13 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.feature-team"
             }
         }
-        task_team = component "Task team" "Bounded SWE turns with scoped tools and supervised delivery." "cascade.task.graph" {
+        task_team = component "Task team" "Bounded SWE turns with scoped tools, retained action-transition receipts, and exact executor live identity." "cascade.task.graph" {
             properties {
                 "cascade.semanticId" "element.component.task-team"
                 "cascade.designPath" "cascade/task/DESIGN.md"
             }
         }
-        watchdog_component = component "Watchdog" "Admits ready work and coordinates bounded recovery." "cascade.watchdog" {
+        watchdog_component = component "Watchdog" "Admits ready work, retains generation-bound recovery stages, and materializes bounded current progress." "cascade.watchdog / cascade.recovery_progress" {
             properties {
                 "cascade.semanticId" "element.component.watchdog"
                 "cascade.designPath" "cascade/watchdog/DESIGN.md"
@@ -89,7 +89,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.boss"
             }
         }
-        workspace_component = component "Workspace" "Resolves exact lifecycle owners, repository roles, and revision-pinned architecture." "cascade.workspace" {
+        workspace_component = component "Workspace" "Resolves lifecycle owners and repository roles, records process-bound invocation evidence, and owns revision-pinned architecture." "cascade.workspace" {
             properties {
                 "cascade.semanticId" "element.component.workspace"
                 "cascade.designPath" "cascade/workspace/DESIGN.md"
@@ -289,7 +289,7 @@ agent_uses_task_budget = agent_component -> task_team "Reserves and settles inci
     }
 }
 
-task_persists = task_team -> repository "Persists checkpoints and work evidence in" {
+task_persists = task_team -> repository "Persists checkpoints, action transitions and work evidence in" {
     properties {
         "cascade.semanticId" "relationship.task-persists"
     }
@@ -1017,7 +1017,7 @@ board_component_to_repository = board_component -> repository "Reads and validat
     }
 }
 
-watchdog_component_to_repository = watchdog_component -> repository "Records lifecycle events, recovery evidence and audit epochs" {
+watchdog_component_to_repository = watchdog_component -> repository "Records lifecycle events, retained transition evidence and audit epochs" {
     properties {
         "cascade.semanticId" "relationship.watchdog-component-to-repository"
     }
@@ -1277,6 +1277,24 @@ code_watchdog_publish = element "publish_audit_projection" "Function" "Publishes
     }
 }
 
+code_watchdog_progress_drain = element "drain_recovery_progress" "Function" "Fairly replays at most 100 retained receipts and publishes at most 100 dirty work aliases within one second." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.progress-drain"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/recovery_progress/publisher.py"
+        "cascade.sourceSymbol" "drain_recovery_progress"
+    }
+}
+
+code_watchdog_progress_publish = element "publish_committed_transition" "Function" "Joins exact receipt and live/postcheck evidence, updates the disposable index, and publishes immutable work-addressed pages." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.progress-publish"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/recovery_progress/publisher.py"
+        "cascade.sourceSymbol" "publish_committed_transition"
+    }
+}
+
 watchdog_tick_to_dispatch = code_watchdog_tick -> code_watchdog_dispatch "Advances eligible Tasks through automation" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-tick-to-dispatch"
@@ -1292,6 +1310,18 @@ watchdog_tick_to_health = code_watchdog_tick -> code_watchdog_health "Runs sched
 watchdog_audit_lane_to_publish = code_watchdog_audit_lane -> code_watchdog_publish "Publishes completed observation evidence" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-audit-lane-to-publish"
+    }
+}
+
+watchdog_tick_to_progress_drain = code_watchdog_tick -> code_watchdog_progress_drain "Drains committed progress before slow watchdog work" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-tick-to-progress-drain"
+    }
+}
+
+watchdog_progress_drain_to_publish = code_watchdog_progress_drain -> code_watchdog_progress_publish "Publishes each bounded dirty owner batch" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-progress-drain-to-publish"
     }
 }
 
@@ -1610,6 +1640,15 @@ code_dashboard_reader = element "read_audit_projection" "Function" "Reads a boun
     }
 }
 
+code_dashboard_progress_contract = element "_derive_entry" "Function" "Defines the versioned safe recovery states, ordering priority, freshness and sanitized presentation fields materialized for Dashboard consumers." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.progress-contract"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/recovery_progress/publisher.py"
+        "cascade.sourceSymbol" "_derive_entry"
+    }
+}
+
 dashboard_router_to_render = code_dashboard_router -> code_dashboard_render "Serves the dashboard page" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-router-to-render"
@@ -1627,7 +1666,6 @@ dashboard_audit_to_reader = code_dashboard_audit -> code_dashboard_reader "Reads
         "cascade.semanticId" "relationship.code-dashboard-audit-to-reader"
     }
 }
-
 
 // Workspace commands — implementation.
 
@@ -2044,6 +2082,24 @@ code_watchdog_stage_receipt = element "recovery_stage_receipt" "Function" "Creat
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/watchdog/incidents.py"
         "cascade.sourceSymbol" "recovery_stage_receipt"
+    }
+}
+
+code_watchdog_transition_receipt = element "transition_receipt_v1" "Function" "Bind source, generation, work, attempt, claim and monotonic transition sequence into a deterministic safe receipt." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.transition-receipt"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incidents.py"
+        "cascade.sourceSymbol" "transition_receipt_v1"
+    }
+}
+
+code_watchdog_transition_notify = element "_notify_incident_transition" "Function" "Notify the progress publisher with an already committed incident receipt while preserving repair outcome on failure." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.transition-notify"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/reservations.py"
+        "cascade.sourceSymbol" "_notify_incident_transition"
     }
 }
 
@@ -3097,21 +3153,21 @@ code_cli_drain_to_code_agent_cancel = code_cli_drain -> code_agent_cancel "Cance
     }
 }
 
-code_dashboard_recovery = element "recovery_incident_from_action" "Function" "Projects routing and blocker evidence; does not establish live execution." {
+code_dashboard_recovery = element "board_recovery_projection" "Function" "Projects the published primary entry into the compatible board summary and additive version metadata." {
     properties {
         "cascade.semanticId" "element.code.dashboard.recovery"
         "cascade.parent" "element.component.dashboard"
-        "cascade.sourcePath" "cascade/war_room/recovery_incident.py"
-        "cascade.sourceSymbol" "recovery_incident_from_action"
+        "cascade.sourcePath" "cascade/war_room/recovery_progress.py"
+        "cascade.sourceSymbol" "board_recovery_projection"
     }
 }
 
-code_dashboard_incidents = element "recovery_incidents_by_work_id" "Function" "Selects one non-completed action per affected work item from the action snapshot." {
+code_dashboard_incidents = element "read_recovery_progress" "Function" "Reads revision-bound immutable work pages with no-follow opens and aggregate source, row and response ceilings." {
     properties {
         "cascade.semanticId" "element.code.dashboard.incidents"
         "cascade.parent" "element.component.dashboard"
-        "cascade.sourcePath" "cascade/war_room/recovery_incident.py"
-        "cascade.sourceSymbol" "recovery_incidents_by_work_id"
+        "cascade.sourcePath" "cascade/war_room/recovery_progress.py"
+        "cascade.sourceSymbol" "read_recovery_progress"
     }
 }
 
@@ -3196,6 +3252,33 @@ code_task_action_checkpoint = element "record_action_checkpoint" "Function" "Per
     }
 }
 
+code_task_transition_receipt = element "_append_action_transition" "Function" "Append a generation and attempt-bound v1 transition receipt inside the authoritative action commit." {
+    properties {
+        "cascade.semanticId" "element.code.task.transition-receipt"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "_append_action_transition"
+    }
+}
+
+code_task_execution_start = element "_record_execution_start" "Function" "Commit execution-start evidence after preflight and before entering the long executor." {
+    properties {
+        "cascade.semanticId" "element.code.task.execution-start"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "_record_execution_start"
+    }
+}
+
+code_task_transition_notify = element "_notify_transition" "Function" "Best-effort after-lock handoff of a committed action receipt and snapshot." {
+    properties {
+        "cascade.semanticId" "element.code.task.transition-notify"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "_notify_transition"
+    }
+}
+
 code_workspace_invoke = element "_invoke_role_turn" "Function" "Invokes the graph and mirrors new planning messages after return." {
     properties {
         "cascade.semanticId" "element.code.workspace.invoke"
@@ -3214,9 +3297,57 @@ code_workspace_owner_live = element "graph_turn_owner_is_live" "Function" "Obser
     }
 }
 
-dashboard_incidents_to_dashboard_recovery = code_dashboard_incidents -> code_dashboard_recovery "Projects each retained action" {
+code_workspace_kickoff_live = element "_run_kickoff" "Function" "Brackets only the admitted graph invocation with an ephemeral process-bound token." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.kickoff-live"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "_run_kickoff"
+    }
+}
+
+code_workspace_live_begin = element "begin_live_observation" "Function" "Registers exact invocation or executor identity with a maximum 30-second validity." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.live-begin"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/recovery_progress/live.py"
+        "cascade.sourceSymbol" "begin_live_observation"
+    }
+}
+
+code_workspace_live_refresh = element "refresh_live_observation" "Function" "Refreshes only a matching registered token while process identity and claim validity remain current." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.live-refresh"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/recovery_progress/live.py"
+        "cascade.sourceSymbol" "refresh_live_observation"
+    }
+}
+
+code_task_executor_live_identity = element "_executor_live_identity" "Function" "Projects the durable action generation and exact attempt/claim for executor observation." {
+    properties {
+        "cascade.semanticId" "element.code.task.executor-live-identity"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task/action_recovery.py"
+        "cascade.sourceSymbol" "_executor_live_identity"
+    }
+}
+
+dashboard_incidents_to_dashboard_recovery = code_dashboard_incidents -> code_dashboard_recovery "Projects the exact published primary into board compatibility fields" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-incidents-to-dashboard-recovery"
+    }
+}
+
+dashboard_router_to_progress_reader = code_dashboard_router -> code_dashboard_incidents "Dispatches bounded recovery progress reads" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-router-to-progress-reader"
+    }
+}
+
+dashboard_recovery_to_progress_contract = code_dashboard_recovery -> code_dashboard_progress_contract "Shares the safe current presentation vocabulary without treating coarse routing as execution proof" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-recovery-to-progress-contract"
     }
 }
 
@@ -3256,6 +3387,18 @@ workspace_invoke_to_dashboard_transcript = code_workspace_invoke -> code_dashboa
     }
 }
 
+workspace_kickoff_live_to_live_begin = code_workspace_kickoff_live -> code_workspace_live_begin "Registers begin/end around the admitted graph call" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-kickoff-live-to-live-begin"
+    }
+}
+
+workspace_live_refresh_to_live_begin = code_workspace_live_refresh -> code_workspace_live_begin "Matches the registered token and process generation" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-live-refresh-to-live-begin"
+    }
+}
+
 task_actions_to_task_claim = code_task_actions -> code_task_claim "Claims before executor entry" {
     properties {
         "cascade.semanticId" "relationship.code-task-actions-to-task-claim"
@@ -3265,5 +3408,47 @@ task_actions_to_task_claim = code_task_actions -> code_task_claim "Claims before
 task_actions_to_task_finalize = code_task_actions -> code_task_finalize "Records executor outcome" {
     properties {
         "cascade.semanticId" "relationship.code-task-actions-to-task-finalize"
+    }
+}
+
+task_actions_to_execution_start = code_task_actions -> code_task_execution_start "Commits start after successful preflight" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-actions-to-execution-start"
+    }
+}
+
+task_actions_to_executor_live_identity = code_task_actions -> code_task_executor_live_identity "Projects the exact admitted attempt before executor entry" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-actions-to-executor-live-identity"
+    }
+}
+
+task_executor_live_identity_to_live_begin = code_task_executor_live_identity -> code_workspace_live_begin "Registers the process-bound executor token" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-executor-live-identity-to-workspace-live-begin"
+    }
+}
+
+task_execution_start_to_transition_receipt = code_task_execution_start -> code_task_transition_receipt "Appends the pre-executor receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-execution-start-to-transition-receipt"
+    }
+}
+
+task_transition_receipt_to_notify = code_task_transition_receipt -> code_task_transition_notify "Hands off committed receipt after lock release" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-transition-receipt-to-notify"
+    }
+}
+
+watchdog_incident_record_to_transition_receipt = code_watchdog_incident_record -> code_watchdog_transition_receipt "Enriches ordered stages with v1 source identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-incident-record-to-transition-receipt"
+    }
+}
+
+watchdog_result_to_transition_notify = code_watchdog_result -> code_watchdog_transition_notify "Notifies only after the incident replacement commits" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-result-to-transition-notify"
     }
 }

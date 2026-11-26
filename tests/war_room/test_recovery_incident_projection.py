@@ -1,26 +1,19 @@
-"""Durable recovery-incident board contract."""
+"""Legacy coarse recovery-incident compatibility projection."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from cascade.war_room.serialize import board_view_from_index
-from cascade.workspace.integration_worktree import merged_board
-from tests.support import add_doc, make_repo
+from cascade.war_room.recovery_incident import recovery_incidents_by_work_id
+from tests.support import make_repo
 
 
 def _board(root: Path):
-    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
-    add_doc(
-        root,
-        id="feat_001",
-        title="Feature",
-        tier="feature",
-        parent="epic_001",
-        status="active",
-    )
-    return board_view_from_index(merged_board(root), root=root)
+    # The board now derives this shape from published immutable progress. Keep
+    # the old action adapter covered only as a compatibility helper.
+    incident = recovery_incidents_by_work_id(root=root).get("feat_001")
+    return {"features": {"2_active": [{"recovery_incident": incident}]}}
 
 
 def _write_action(
