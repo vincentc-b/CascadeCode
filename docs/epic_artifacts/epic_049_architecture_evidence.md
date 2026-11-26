@@ -2601,3 +2601,39 @@ Validation: canonical reads, child/amendment inspection, pinned design review,
 historical sign-off inspection and `git diff --check`. No product/browser tests
 or renderer were rerun for this evidence-only update. Return control to child
 execution and supervised delivery without polling the pending operation.
+
+## Manager Feature 3 queued Task 4 link-correction verification
+
+In reply to `feat_049_003:feat_049_003:task4_link_and_arch_pending_20261126`.
+Read canonical Epic `9663684255700d5178bdd369c97cb8d5a6f4ed6a` and Feature
+`3dd4f1d84e48a7855d03090c706e78cb02ee607e`. Inspected committed correction
+`96f36fa09c34ccc2b88198ae6ad678cb01bfbfb2`: its only change replaces Task 4's
+short Parent Feature link with the active Feature filename. The target exists
+when resolved from the queued Task path in that exact Git tree. Task acceptance,
+dependencies and architecture verification requirements are unchanged.
+
+Feature 3 reports Task 3 remains active and its owner has received the same link
+correction follow-up. That active-record correction is not established by this
+Task 4 commit. Completed Task 1/2 corrections remain unresolved. Task 2 operation
+`architecture-publication-403919e4bcce0e3e3283a864cefb0200c3ad30c1ca80002919a2b589547b620f`
+remains reported pending, without a review result or approval. No operation replay
+was performed here. Task 4 retains the fresh integrated architecture review after
+Task 3 delivery; Feature 5's integrated contention proof remains required.
+
+Canonical child metadata lists Feature 3 active and Feature 5 backlog; the
+architecture amendment list is empty. Existing Epic scope covers this handoff:
+no spec amendment, new decision or duplicate notification is necessary.
+Historical sign-offs still pin `032809336f3fcf3810c7270c28195da9c85a3bf6`;
+renewed sign-off and acceptance remain withheld.
+
+Design review: inspected the pinned Task 4 all-level inventory and War Room
+Historical polling, implementation mappings and publication/navigation contracts.
+The one-link work-record correction changes no actor, runtime/data boundary,
+component, Code declaration or execution/recovery flow. Context, container,
+component, native Code and supplementary diagrams therefore need no edit for
+this diff. Integrated design ownership and publication reconciliation remain open.
+
+Validation: canonical reads, child/amendment inspection, exact committed diff,
+pinned parent-link resolution, sign-off inspection and `git diff --check`.
+No product/browser tests or render were rerun for this record-only handoff.
+Return control to child execution and supervised delivery.
