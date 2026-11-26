@@ -1935,3 +1935,48 @@ fixtures/navigation, producer design ownership, completed Task 1/5 record
 corrections and supported terminal-publication recovery remain open. Historical
 publication pins are unchanged; no replacement publication is claimed. Return
 control to Feature 4 planning and supervised delivery.
+
+## Manager Feature 3 planning activation handoff
+
+Reviewed canonical Epic `fc9b57f2`, Feature 3 `7fa37157` and corrective Feature 4
+`a3d4a42b`. Feature 3 is active with Features 1, 2 and 4 as dependencies;
+Feature 4 and its three children are canonically completed. The owned Epic
+checkout remains the planning baseline: `a3d4a42b` is not its ancestor. No
+manual merge or lifecycle override was performed. Updated the Epic through
+`write_doc` to `8a9883a1`; canonical readback confirms the current status and
+concrete consumer handoff. Existing decisions and acceptance scope are unchanged;
+no new decision or architecture amendment is required.
+
+Read corrective `docs/feature_artifacts/task_049_004_003_closeout.md` and
+`docs/task_artifacts/task_049_004_002_utf8_detail_cursor_verification.md` from
+the Feature 4 branch. They report 77 focused passes, 235 elements, 283
+relationships, 24 views, pinned rendering and scoped Chromium navigation.
+These are child evidence, not tests rerun by the Epic. The broader browser
+journey's later documentation-refresh failure remains an explicit limitation.
+The named route/header/error/detail and receipt fixtures are now available;
+Feature 3 must pin and verify them against its integrated source before claiming
+consumer acceptance.
+
+Sent Feature 3 request suffix `planning_constraints_8a9883a1_20261126` to
+reconcile stale planning prose, persist binding Task criteria, confirm repaired
+source ancestry, and retain notification-to-browser timeline, concurrent/restart,
+bounded reads, safe rendering, stale-response and pagination acceptance. The
+message includes the amendment protocol and keeps completed-record correction
+and publication recovery with their upstream owners.
+
+Design review: read the corrective recovery-progress child design and its
+source-linked structure, fence-through-commit sequence, persistent state and
+pending/replay explanation, plus the child closeout's parent/interface inventory.
+The child ownership artifact now exists; final source/reference reconciliation
+remains an integrated review. This turn changes planning state only, so no
+actor, container, component, Code symbol or behavior diagram changes are needed.
+Feature 3 retains the Epic's all-level inventory and actual navigation/source
+verification requirements in its Task acceptance. No design/model mutation or
+architecture publication is claimed here.
+
+Validation: canonical spec and child metadata reads, empty amendment list,
+corrective evidence/design inspection, ancestry check, canonical write/readback
+and `git diff --check`. Renewed Epic sign-off and acceptance remain withheld
+pending integrated verification and publication recovery; completed Task 1/5
+board corrections remain separate. Return control to Feature 3 planning and
+supported child delivery.
