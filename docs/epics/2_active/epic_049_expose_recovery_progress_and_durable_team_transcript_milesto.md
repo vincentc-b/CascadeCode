@@ -278,6 +278,11 @@ Architecture verification results and pinned publication references are recorded
   Chose Mint feat_049_004 after completed feat_049_002 to repair stale private acknowledgements; make feat_049_003 depend on the correction and withhold integrated Feature/Epic acceptance pending verified repair..
   Rationale: In reply to feat_049_002:feat_049_002:postmerge_stale_private_ack_20261126. Source review confirms the private mapping can replace newer incarnation/sequence with a delayed saved acknowledgement. Completed lifecycle is not proof of acceptance, and an owned backlog correction is available without reopening completed records.
   Honors: Existing success criteria 4–6, durable identity/replay contract, bounded writer work, genuine conflict rejection, and design/native Code verification. No product scope expansion or completed-record edit..
+
+- `dec_009` · 2026-11-26 · Epic Manager · **Corrective sequencing**
+  Chose Route candidate ecd390f4 through feat_049_004, including the malformed UTF-8 detail-cursor correction, while retaining full acknowledgement-race acceptance and the Feature 3 sequencing hold..
+  Rationale: In reply to feat_049_002:feat_049_002:postmerge_repair_ecd390f4_20261126 and feat_049_002:feat_049_002:postmerge_detail_cursor_gap_20261126. The completed Feature branch contains a candidate for both existing contract defects, but the commit is not in Epic ancestry and its sequential private-helper regression does not establish the required real writer interleavings. Reusing the candidate through the existing corrective slice avoids duplicate implementation without equating lifecycle completion with delivery.
+  Honors: Existing durability/truthful-routing and bounded-pagination contracts; supported child integration; no completed-record rewrite, dependency installation, new route or product scope. Renewed sign-off and acceptance remain withheld pending sequencing reconciliation and verified delivery..
 ## Amendment log
 
 _(none)_
