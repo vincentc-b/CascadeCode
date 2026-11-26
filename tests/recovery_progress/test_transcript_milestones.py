@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,7 @@ from cascade.task.action_recovery import create_or_load_action
 from cascade.war_room.chat_store import (
     TranscriptPendingError,
     append_transcript_message,
+    graph_transcript_fence,
     mark_message_legacy_unknown,
     read_messages,
     transcript_source_acknowledgement,
@@ -444,6 +446,78 @@ def test_pending_authoritative_source_keeps_replay_cursor_and_mapping_retryable(
     assert _items(root)[0]["milestone_refs"] == [
         read_messages("feat_001", root=root)[0]["id"]
     ]
+
+
+def test_graph_thread_contention_is_bounded_then_drain_maps_once(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _board(root)
+    register_transition_publisher(None)
+    create_or_load_action(
+        "task_001:delivery",
+        "queued_delivery",
+        root=root,
+        attempt_bound=1,
+        metadata={"task_id": "task_001"},
+        owning_team={"kind": "feature_team", "work_id": "feat_001"},
+    )
+    locked = threading.Event()
+    release = threading.Event()
+
+    def hold() -> None:
+        with graph_transcript_fence("feat_001", root=root):
+            locked.set()
+            assert release.wait(timeout=5)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    assert locked.wait(timeout=5)
+    started = time.monotonic()
+    pending = drain_recovery_progress(root, max_seconds=0.2)
+    elapsed = time.monotonic() - started
+    assert pending["complete"] is False
+    assert 0.12 <= elapsed < 0.75
+    assert read_messages("feat_001", root=root) == []
+
+    release.set()
+    holder.join(timeout=5)
+    assert not holder.is_alive()
+    assert drain_recovery_progress(root)["complete"] is True
+    assert len(read_messages("feat_001", root=root)) == 1
+    assert drain_recovery_progress(root)["imported_receipts"] == 0
+    assert len(read_messages("feat_001", root=root)) == 1
+
+
+def test_fast_path_graph_thread_contention_uses_250ms_deadline(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    _board(root)
+    receipt = _receipt(1)
+    locked = threading.Event()
+    release = threading.Event()
+
+    def hold() -> None:
+        with graph_transcript_fence("feat_001", root=root):
+            locked.set()
+            assert release.wait(timeout=5)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    assert locked.wait(timeout=5)
+    started = time.monotonic()
+    publish_committed_transition(root, receipt, {"recovery_state": "waiting"})
+    elapsed = time.monotonic() - started
+    assert 0.15 <= elapsed < 0.8
+    assert read_messages("feat_001", root=root) == []
+
+    release.set()
+    holder.join(timeout=5)
+    assert not holder.is_alive()
+    publish_committed_transition(root, receipt, {"recovery_state": "waiting"})
+    assert len(read_messages("feat_001", root=root)) == 1
+    assert len(_items(root)[0]["milestone_refs"]) == 1
 
 
 def test_installed_notification_publishes_before_source_call_returns(

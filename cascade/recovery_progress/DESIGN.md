@@ -42,8 +42,13 @@ semantics.
 ### Non-Functional Requirements
 
 - `REQ-RECOVERY-PROGRESS-004` — One drain admits at most 100 receipts and 100
-  dirty owners or one second. The best-effort fast path has a 250 ms deadline,
-  and immutable pages retain explicit lag and completeness when work remains.
+  dirty owners or one second. The best-effort fast path has a 250 ms deadline.
+  Each entry point carries that single monotonic deadline through transcript
+  append/deduplication, publisher and graph locks, and both SQLite stores; it
+  does not start another blocking acquisition after exhaustion. Immutable pages
+  retain explicit lag and completeness when work remains. Filesystem reads,
+  appends and fsyncs already admitted under the deadline are not interruptible
+  and are measured separately from bounded lock waits.
 
 ## Decisions and Rationale
 
@@ -121,6 +126,8 @@ ledgers from its retained fair cursor, deduplicates the recovery source key and
 re-enters the same fenced mapping path. Missing or unfinished transcript state
 keeps the receipt eligible for a later bounded pass; committed SQLite mappings
 and dirty aliases resume publication without changing lifecycle admission.
+Lock or SQLite contention likewise leaves the cursor at pending work and cannot
+mint a mapping or discard the authoritative receipt.
 
 ## Architecture Links
 
@@ -139,7 +146,7 @@ and dirty aliases resume publication without changing lifecycle admission.
 | `REQ-RECOVERY-PROGRESS-001` | [publisher scenarios](../../tests/recovery_progress/test_publisher.py) | Verified for exact evidence joins, bounded publication, aliases and replay. |
 | `REQ-RECOVERY-PROGRESS-002` | [milestone integration](../../tests/recovery_progress/test_transcript_milestones.py) and [transcript store](../../tests/war_room/test_durable_chat_store.py) | Verified for first insertion, delayed fast-path/drain/public writers, conflicts, pending state, room movement and current fenced routing. |
 | `REQ-RECOVERY-PROGRESS-003` | [milestone restart/replay scenarios](../../tests/recovery_progress/test_transcript_milestones.py) | Verified for committed receipt replay and pending evidence without fabricated routing. |
-| `REQ-RECOVERY-PROGRESS-004` | [publisher scenarios](../../tests/recovery_progress/test_publisher.py) | Verified against configured receipt, owner, pass and fast-path bounds. |
+| `REQ-RECOVERY-PROGRESS-004` | [publisher scenarios](../../tests/recovery_progress/test_publisher.py), [milestone integration](../../tests/recovery_progress/test_transcript_milestones.py) and [transcript store](../../tests/war_room/test_durable_chat_store.py) | Verified against configured receipt, owner, pass and fast-path bounds, including publisher thread/SQLite contention and graph thread/process fence contention followed by replay. |
 
 ## Child Designs and Directory Coverage
 

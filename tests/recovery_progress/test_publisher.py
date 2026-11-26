@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -12,10 +15,13 @@ from cascade.recovery_progress.live import (
     set_process_probe_for_tests,
 )
 from cascade.recovery_progress.publisher import (
+    _connect,
+    _writer_lock,
     drain_recovery_progress,
     publish_committed_transition,
 )
 from cascade.task.action_recovery import create_or_load_action
+from cascade.recovery_progress.notifications import register_transition_publisher
 from cascade.watchdog.incidents import transition_receipt_v1
 from tests.support import make_repo
 
@@ -255,6 +261,74 @@ def test_missed_notification_replays_fairly_from_authoritative_source(
     assert first["source_load_seconds"] >= 0
     assert _projection(root, "task_001")[1] or _projection(root, "task_002")[1]
     assert _projection(root, "task_001")[1] and _projection(root, "task_002")[1]
+
+
+def test_drain_publisher_thread_lock_uses_one_deadline_then_replays(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    register_transition_publisher(None)
+    create_or_load_action(
+        "task_001:delivery",
+        "queued_delivery",
+        root=root,
+        attempt_bound=1,
+        metadata={"task_id": "task_001"},
+    )
+    locked = threading.Event()
+    release = threading.Event()
+
+    def hold() -> None:
+        with _writer_lock:
+            locked.set()
+            assert release.wait(timeout=5)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    assert locked.wait(timeout=5)
+    started = time.monotonic()
+    pending = drain_recovery_progress(root, max_seconds=0.2)
+    elapsed = time.monotonic() - started
+    assert pending["complete"] is False
+    assert 0.12 <= elapsed < 0.75
+
+    release.set()
+    holder.join(timeout=5)
+    assert not holder.is_alive()
+    assert drain_recovery_progress(root)["imported_receipts"] == 1
+    assert drain_recovery_progress(root)["imported_receipts"] == 0
+
+
+def test_drain_sqlite_writer_lock_uses_remaining_budget_then_replays(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    register_transition_publisher(None)
+    seed = _connect(root)
+    seed.close()
+    create_or_load_action(
+        "task_001:delivery",
+        "queued_delivery",
+        root=root,
+        attempt_bound=1,
+        metadata={"task_id": "task_001"},
+    )
+    blocker = sqlite3.connect(
+        root / ".cascade/recovery_progress/v1/writer-index.sqlite3"
+    )
+    blocker.execute("BEGIN IMMEDIATE")
+    try:
+        started = time.monotonic()
+        pending = drain_recovery_progress(root, max_seconds=0.2)
+        elapsed = time.monotonic() - started
+        assert pending["complete"] is False
+        assert 0.12 <= elapsed < 0.75
+    finally:
+        blocker.rollback()
+        blocker.close()
+
+    assert drain_recovery_progress(root)["imported_receipts"] == 1
+    assert drain_recovery_progress(root)["imported_receipts"] == 0
 
 
 def test_owner_limit_leaves_explicit_lag_for_fair_continuation(tmp_path: Path) -> None:

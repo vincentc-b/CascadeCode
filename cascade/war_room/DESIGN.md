@@ -52,6 +52,10 @@ line preserves receipt and entry identity, action generation, attempt and
 transition sequence, nullable occurrence, safe target/source reference and
 direct, reconciled or legacy-unknown provenance. Neither model output nor an
 observation timestamp can mint or deduplicate a recovery line.
+The recovery fast path supplies one monotonic deadline to append admission,
+graph thread/process fences and SQLite waits. Exhaustion remains pending and
+replayable; an admitted JSONL append/fsync is an indivisible filesystem mutation
+and is not represented as a hard real-time guarantee.
 
 `REQ-WARROOM-TRANSCRIPT-004`: Room movement remains recoverable across process
 death after copy, source removal, owner publication, or incarnation reset. A
@@ -106,12 +110,14 @@ incarnation and append sequence only after the graph fence releases. Replaying a
 receipt therefore returns the existing message without a second JSONL line.
 Receipt-to-entry/graph/message mappings remain immutable across room rewrites and
 moves. Their incarnation and append sequence are refreshed only from the current
-fenced source acknowledgement. The publisher opens its write transaction before
-the fence and commits the mapping and entry references before releasing it, so
-delayed acknowledgements cannot restore stale routing metadata. Its bounded
-fenced lookup reads only complete intent-free index state; repair, import and
-projection publication remain outside the publisher transaction, and pending
-state remains eligible for replay.
+fenced source acknowledgement. That private lookup opens only an existing,
+compatible index read-only; it performs no schema initialization, repair,
+legacy import or projection publication. The publisher opens its write
+transaction before the fence and commits the mapping and entry references before
+releasing it, so delayed acknowledgements cannot restore stale routing metadata.
+Its bounded fenced lookup reads only complete intent-free index state; repair,
+import and projection publication remain outside the publisher transaction, and
+pending state remains eligible for replay.
 
 `DEC-WARROOM-TRANSCRIPT-004`: After index commit, writers publish
 content-addressed transcript pages and oversized-body blobs, then atomically
