@@ -2565,3 +2565,39 @@ tests or render were rerun for this evidence-only change. Acceptance and renewed
 sign-off remain withheld pending integrated proof, contention repair, canonical
 record corrections and design/publication reconciliation. Return control to
 child execution and supervised delivery.
+
+## Manager Feature 3 Task 2 publication replay handoff
+
+In reply to `feat_049_003:feat_049_003:architect:task2_publication_replay_20261126`.
+Canonical reads confirm Epic `9663684255700d5178bdd369c97cb8d5a6f4ed6a`
+and Feature `3dd4f1d84e48a7855d03090c706e78cb02ee607e`. The architecture
+owner reports replaying the same saved proposal pinned to that Feature revision.
+Operation
+`architecture-publication-403919e4bcce0e3e3283a864cefb0200c3ad30c1ca80002919a2b589547b620f`
+remains reported pending on render
+`c4-render-1c55f331df80ce9cf2240647edaf500c4b44c3d8f6aea57f823cd6430fdf805c`.
+This is attributed owner evidence, not an independent operation inspection or
+replay by the Epic Manager. No published review unit or approval is established.
+The prior exact-proposal replay instruction remains applicable; no duplicate
+notification, scope amendment or new decision is needed.
+
+Canonical child metadata still lists Feature 3 active and Feature 5 backlog;
+the architecture amendment list is empty. Task 3 operational proof and Task 4's
+fresh integrated source/design/Code proposal remain separate from this pending
+Task 2 operation. Final acceptance also requires integrated Feature 5 contention
+verification, completed-record corrections, design ownership reconciliation and
+publication recovery. Historical role sign-offs remain pinned to
+`032809336f3fcf3810c7270c28195da9c85a3bf6`; renewed sign-off is withheld.
+
+Design review: reread the pinned War Room Historical polling, implementation
+mapping and publication contracts against the preceding source/design review.
+This handoff changes only work-record evidence: no actor, runtime/data boundary,
+component responsibility, Code symbol, or execution/recovery flow changes.
+Context, container, component, native Code and supplementary behavioral diagrams
+therefore need no edit. Final integrated navigation and ownership review remain
+open; a pending render cannot establish either.
+
+Validation: canonical reads, child/amendment inspection, pinned design review,
+historical sign-off inspection and `git diff --check`. No product/browser tests
+or renderer were rerun for this evidence-only update. Return control to child
+execution and supervised delivery without polling the pending operation.
