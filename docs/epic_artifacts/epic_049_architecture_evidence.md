@@ -1716,3 +1716,64 @@ pending authorized sequencing reconciliation and verified corrective delivery.
 Completed Task 1/5 record corrections and supported publication recovery remain
 separate open items. Return control for Architect/lifecycle review and corrective
 child planning.
+
+## Architect candidate repair and cursor review
+
+Reviewed canonical Epic `17530d06`, corrective Feature `a2bc4675` and candidate
+`ecd390f4d1819d72bc65e2ea4960000a48e50a67` against `7f7df0e8`. The candidate
+is not in Epic ancestry. The saved corrective acceptance already covers both
+reported defects and the remaining race, restart, pending and navigation checks;
+no additional scope decision or duplicate spec edit is required.
+
+Source review confirms `_record_transcript_milestone` preserves immutable
+entry/graph/message conflict checks and refreshes a differing stored routing
+tuple through `transcript_source_acknowledgement` inside the publisher SQLite
+transaction. Initial insertion and equal-tuple paths do not perform that refresh.
+The source helper acquires the graph fence and can repair rewrite/append intent,
+import legacy history and publish transcript pages before returning. Corrective
+review must therefore establish the complete synchronization protocol and work
+bounds, including first insertion and both private/public callers. The added
+private-helper test is sequential after rewrite; it is useful regression evidence
+but does not demonstrate the required delayed real fast-path/drain interleaving.
+No additional reproduced race defect is claimed in this read-only review.
+
+The detail reader rejects an initial UTF-8 continuation byte with
+`TranscriptInvalidRequest`. Its loopback regression changes a cursor to a byte
+inside an emoji and asserts typed `400 invalid_request`; it extends the existing
+multibyte reconstruction scenario. Final corrective validation still needs to
+establish positive progress for every successful incomplete continuation under
+the existing source and response budgets.
+
+Reviewed candidate `cascade/watchdog/DESIGN.md` and
+`cascade/war_room/DESIGN.md`, the source acknowledgement/reader implementations,
+changed milestone/API tests, and the pinned model's mapping declarations.
+The added prose is current behavior without delivery attribution. The broad
+delayed-acknowledgement guarantee remains provisional until the synchronization
+acceptance passes. The following inventory reconciles this candidate with the
+corrective plan; verification belongs to the corrective Feature's Tasks:
+
+| Level / views | Candidate impact and remaining verification |
+|---|---|
+| `cascade-landscape`, `cascade-context` | No actor or external dependency change in the seven-file diff. |
+| `cascade-containers` | Same transcript JSONL/index and publisher SQLite; no deployment or persistence boundary added. |
+| `cascade-supervisor-components`, `cascade-war-room-components` | Ownership stays fixed; inspect the publisher-to-transcript fenced refresh and lock ordering. |
+| `cascade-watchdog-code`, `cascade-dashboard-code` | Existing function names remain, but the private helper now calls the fenced source-acknowledgement helper. Review this synchronization relationship and its source/contract representation explicitly; unchanged names alone do not justify an unchanged model. Detail validation stays within `read_transcript_detail`. |
+| `cascade-workspace-code` | Candidate does not edit move/retirement code; preserve existing resume node and verify mapping across move/restart in the final integrated correction. |
+| Owning behavior diagrams | Trace normal receipt publication, delayed writer, first insert, unavailable source, restart and malformed/valid multibyte continuation. Reconcile Watchdog/War Room claims and the recovery-progress child-design ownership gap. |
+
+Actual Explore/Code/Level up/deep-link/pinned-source navigation and warm artifact
+reuse remain corrective acceptance, not inferred from unchanged DSL files.
+Existing Feature acceptance already requires this relationship/source review,
+so no duplicate notification is necessary.
+
+Validation: canonical spec reads, empty amendment list, candidate source/design/
+test diff inspection, Git ancestry check, six saved publication digests checked
+against their exact commits, and `git diff --check`. No executable tests,
+renderer or browser checks were rerun for this work-record-only review. The
+owner's 27 tests remain reported evidence. Feature 3 readback `1925b1e6` still
+lists only Features 1 and 2 as dependencies; supported lifecycle reconciliation
+is outstanding. Both saved role sign-offs and the historical failed publication
+tuple still name `03280933`, not the current plan. Renewed sign-off/publication
+and acceptance remain withheld; completed Task-record corrections, producer
+design ownership and final integrated fixtures/navigation remain open. Return
+control to corrective planning and supported delivery.
