@@ -2871,3 +2871,36 @@ remain withheld pending integration, Feature 5 contention verification, canonica
 record corrections, design/publication reconciliation and the separate broader
 documentation-refresh proof. Return control to supervised child delivery and
 architecture review.
+## Manager exact replay routing after Feature lifecycle rollup
+
+In reply to `feat_049_003:f3_architecture_exact_replay_handoff_99be54b1_20261126`.
+Canonical Epic remains `9663684255700d5178bdd369c97cb8d5a6f4ed6a`.
+Canonical read now shows Feature 3 completed at
+`822f5e7e89ece4ad782b39fcc0dbb2feee2215f1`; Feature 5 is active at
+`28e7ef9cf0e15c9bc28e8d7be153ffabb7b8c06d` with no Tasks.
+The diff from Feature 3's publication pin `99be54b1` contains only its
+Feature record relocation/closeout. Its source, designs and model are unchanged.
+Lifecycle completion does not establish architecture approval or Epic acceptance.
+
+The saved Feature request is byte-identical to the Epic replay artifact above;
+its SHA-256 remains `6425d14508268121cfd65c07ea801cb57c99f3ef6a7ee01d779cad7829941c0f`.
+All twelve pinned content digests in the Feature and older Epic requests match
+their Git blobs. The Epic Manager tool set has no architecture replay or
+role-specific dispatch operation. Routed the request through `message_team`
+as `manager:f3_exact_replay_architect_route_after_rollup_822f5e7e`; Cascade
+confirmed it enqueued. The Feature architect must replay the identical request
+with its original null generation and `99be54b1` plan pin, retaining terminal
+status/review identity or an explicit lifecycle/tool refusal. No substitute
+proposal, newer pin, terminal result or approval is claimed here.
+
+Validation: canonical Epic and Feature reads, child lifecycle listing, saved
+request byte comparison, twelve Git-blob digest checks, Feature diff inspection
+and `git diff --check`. No product tests or rendering were rerun for this routing
+handoff. No design was edited: the inspected diff changes no system context,
+container, component, Code declaration or behavior; existing design review and
+navigation limitations above remain applicable. Existing Epic scope and decisions
+already cover these gates, so no spec amendment or new decision is required.
+Acceptance and renewed sign-off remain withheld pending integrated verification,
+Feature 5 contention repair, canonical record corrections, design ownership and
+publication reconciliation, and broader documentation-refresh proof. Return
+control for the queued architecture turn and corrective child planning.
