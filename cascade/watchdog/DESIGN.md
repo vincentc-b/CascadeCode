@@ -314,8 +314,9 @@ requirement for responsive architecture rendering.
 ## Open-review observation
 
 [reconcile_open_review_health](../review_health.py) reads registered reviews and
-uses [merge_request_snapshot](../tracking.py) for fresh forge state, heads and
-mergeability. Confirmed conflicts enter the existing resolution-action admission
+uses [merge_request_snapshot](../tracking.py) for fresh forge state, source
+revision, branch refs and mergeability. Conflict handling fetches source and
+target heads separately before resolution admission. Confirmed conflicts enter the existing resolution-action admission
 and guarded publication path; unknown mergeability, unavailable snapshots and
 missing worktrees retain an explicit recovery prerequisite. Resolution actions
 retain the source/target pair and admission identity so repeated observations

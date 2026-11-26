@@ -3980,7 +3980,7 @@ code_watchdog_review_health = element "reconcile_open_review_health" "Function" 
     }
 }
 
-code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Read forge review state, source and target heads, and mergeability through the configured CLI." {
+code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Read forge review state, source revision, branch refs and mergeability through the configured CLI." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-snapshot"
         "cascade.parent" "element.component.watchdog"
