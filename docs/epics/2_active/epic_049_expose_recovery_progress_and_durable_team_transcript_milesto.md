@@ -8,6 +8,7 @@ children:
 - feat_049_001
 - feat_049_002
 - feat_049_003
+- feat_049_004
 depends_on: []
 owners:
 - epic_manager
@@ -15,7 +16,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-14'
-updated: '2026-11-25'
+updated: '2026-11-26'
 provider: codex
 flex_mode: false
 models:
@@ -192,6 +193,7 @@ The first declaration used prose expected-output descriptions; all commands succ
 No new application dependency is planned. Browser fixtures use installed tools and deterministic local inputs; no external forge account is needed. If implementation requires additional software, revise the manifest and obtain separate exact installation authority before installing it.
 
 ## Feature breakdown
+- feat_049_004
 
 1. **feat_049_001 — Evidence-based recovery progress** — own the shared versioned progress contract, concurrent incident ordering, owner/claim freshness, generation-bound verification and bounded published current reads. Cover success criteria 1, 2, 4 and the producer half of 6. Freeze contract before transcript integration.
 2. **feat_049_002 — Durable recovery milestones and bounded transcript history** — depends on feat_049_001. Add deterministic system-event identity, committed-source notifications, cross-process deduplication, bounded restart reconciliation, stable role-summary identity and paginated history. Cover success criteria 3, 5 and transcript half of 6.
