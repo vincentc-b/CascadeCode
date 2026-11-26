@@ -28,13 +28,14 @@ durable transcript acknowledgement, then calls the private
 writer transaction before `_upsert`. The bounded drain uses the same private
 mapping helper. The public
 [`record_transcript_milestone`](../recovery_progress/publisher.py) is a separate
-entry point for already committed acknowledgements; it revalidates the receipt's
-current routing under the graph fence before refreshing incarnation and sequence.
-Receipt, entry, graph and message identity remain immutable, while a delayed
-pre-rewrite or pre-move acknowledgement cannot replace newer routing metadata.
-When a stored routing tuple differs, the private mapping helper reads the
-current fenced transcript acknowledgement within its writer transaction before
-updating the tuple.
+entry point for already committed acknowledgements. Every mapping path takes the
+publisher lock and SQLite write transaction before acquiring the graph fence,
+then retains that fence from the bounded source-key lookup through mapping,
+entry-reference update and commit. Receipt, entry, graph and message identity
+remain immutable, while a delayed pre-rewrite or pre-move acknowledgement cannot
+replace newer routing metadata. Pending move, rewrite, append or import evidence
+leaves the mapping absent or unchanged and the drain cursor retryable. Transcript
+repair, import and page publication happen before the publisher transaction.
 `_upsert`
 joins only committed mappings for the entry's retained receipt order, so failed
 or pending chat appends leave `milestone_refs` empty without changing repair
@@ -59,7 +60,10 @@ sequenceDiagram
     S-->>P: Notify after outer lock
     P->>T: Append/dedupe receipt line after source-lock release
     T-->>P: Durable message acknowledgement after fence release
-    P->>I: Map receipt to message; join snapshot and live token
+    P->>I: Begin mapping transaction
+    P->>T: Fence graph; read current source-key routing
+    P->>I: Map receipt, join snapshot, commit entry references
+    T-->>P: Release fence after publisher commit
     P->>F: Publish affected aliases and atomic pointers
     alt Notification missed or process restarted
         P->>S: Bounded fair source replay

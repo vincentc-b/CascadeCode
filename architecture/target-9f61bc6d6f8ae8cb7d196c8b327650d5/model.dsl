@@ -1304,7 +1304,7 @@ code_watchdog_milestone_record = element "record_transcript_milestone" "Function
     }
 }
 
-code_watchdog_milestone_upsert = element "_record_transcript_milestone" "Function" "Rejects receipt, entry, graph or message identity conflicts while refreshing current incarnation and append-sequence routing metadata." {
+code_watchdog_milestone_upsert = element "_record_transcript_milestone" "Function" "Fences authoritative source routing through publisher commit while rejecting immutable identity conflicts and refreshing current routing metadata." {
     properties {
         "cascade.semanticId" "element.code.watchdog.milestone-upsert"
         "cascade.parent" "element.component.watchdog"
@@ -3270,6 +3270,15 @@ code_dashboard_chat_fence = element "graph_transcript_fence" "Function" "Seriali
     }
 }
 
+code_dashboard_chat_source_fence = element "fenced_transcript_source_acknowledgement" "Function" "Yields complete authoritative source-key routing under the graph fence without repair, import or projection work." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.source-fence"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "fenced_transcript_source_acknowledgement"
+    }
+}
+
 code_dashboard_chat_index = element "_connect_index" "Function" "Opens the writer-only SQLite append, rewrite and move intent index with uniqueness, offsets, incarnation and full synchronous commits." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.index"
@@ -3555,6 +3564,24 @@ watchdog_progress_drain_to_milestone_upsert = code_watchdog_progress_drain -> co
 watchdog_milestone_record_to_milestone_upsert = code_watchdog_milestone_record -> code_watchdog_milestone_upsert "Validates current fenced routing before updating the durable mapping" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-milestone-record-to-milestone-upsert"
+    }
+}
+
+watchdog_milestone_upsert_to_chat_source_fence = code_watchdog_milestone_upsert -> code_dashboard_chat_source_fence "Retains authoritative routing fence through the publisher commit" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-milestone-upsert-to-chat-source-fence"
+    }
+}
+
+dashboard_chat_source_fence_to_fence = code_dashboard_chat_source_fence -> code_dashboard_chat_fence "Serializes source routing with append, rewrite and room movement" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-source-fence-to-fence"
+    }
+}
+
+dashboard_chat_source_fence_to_index = code_dashboard_chat_source_fence -> code_dashboard_chat_index "Reads complete intent-free source-key routing" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-source-fence-to-index"
     }
 }
 

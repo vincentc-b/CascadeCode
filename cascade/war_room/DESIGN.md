@@ -105,8 +105,12 @@ incarnation and append sequence only after the graph fence releases. Replaying a
 receipt therefore returns the existing message without a second JSONL line.
 Receipt-to-entry/graph/message mappings remain immutable across room rewrites and
 moves. Their incarnation and append sequence are refreshed only from the current
-fenced source acknowledgement, so delayed acknowledgements cannot restore stale
-routing metadata.
+fenced source acknowledgement. The publisher opens its write transaction before
+the fence and commits the mapping and entry references before releasing it, so
+delayed acknowledgements cannot restore stale routing metadata. Its bounded
+fenced lookup reads only complete intent-free index state; repair, import and
+projection publication remain outside the publisher transaction, and pending
+state remains eligible for replay.
 
 `DEC-WARROOM-TRANSCRIPT-004`: After index commit, writers publish
 content-addressed transcript pages and oversized-body blobs, then atomically
@@ -133,6 +137,7 @@ the transcript library within the same Python runtime.
 | [publish_transcript_projection](transcript_pages.py) | Project only committed append-sequence/offset rows into content-addressed pages, bounded previews and exact detail blobs, then atomically advance the direct graph pointer. Partial legacy import is published as incomplete coverage. |
 | [read_transcript_page / read_transcript_detail](transcript_pages.py) | Open only regular no-follow projection artifacts, enforce 50-default/100-maximum rows, 1 MiB aggregate source and 256 KiB response ceilings, and return incarnation/high-water cursors or UTF-8-aligned 64 KiB detail chunks. |
 | [graph_transcript_fence / _connect_index](chat_store.py) | Lock a graph at a stable tracking-root path across processes and open its writer-only full-synchronous intent/offset index. The SQLite file is not a GET surface. |
+| [fenced_transcript_source_acknowledgement](chat_store.py) | Hold the graph fence while yielding complete current source-key routing from the writer index. Pending intents, incomplete indexing or an unavailable room fail pending without repair, import or page publication. |
 | [append_transcript_message / remove_message](chat_store.py) | Reconcile only an exact pending tail, durably stage intent, append and fsync JSONL, then commit uniqueness/offset before acknowledgement. Rollback and legacy-label rewrites journal the original fingerprint, replacement and target incarnation before replacement, then reset and re-import the index. Restart accepts only matching original or replacement bytes, retains message/source identity and leaves conflicts pending. |
 | [move_transcript_room / resume_transcript_room_move](chat_store.py) | Journal the source fingerprint, destination and target incarnation before durable copy; remove the matching source and publish the lifecycle owner inside the graph fence; then rebuild offsets and clear the journal. Retry or terminal lifecycle recovery accepts only the journaled destination. Conflicting bytes remain untouched and pending. |
 | [append_committed_recovery_receipt](recovery_milestones.py) | Validate safe receipt fields, resolve the owning graph across registered roots, append one deterministic recovery line, and return its durable index acknowledgement. Unknown routing, unsafe target/reference or incomplete evidence remains pending. |
