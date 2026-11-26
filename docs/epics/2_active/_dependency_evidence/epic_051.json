@@ -22,6 +22,43 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_5038dd021035be34899eea87161fa3ab77ab659648ddbdb4eea90f9d9fc78a4a",
+      "dependency_id": "dep_pyyaml",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:469a74c2511679650194a8c3b3e04fd90c129cb3a674acefe4839824d83ad8fb",
+      "recipe_revision": "sha256:94fcd8c1f477417fc413ad4c3ea81739a65ac9c917d365c78ce802ed32ce0029",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, pathlib, hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()=='\"'\"'a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"'); print('\"'\"'PyYAML'\"'\"', d.version)'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-26T20:00:41.364419+00:00",
+      "completed_at": "2026-11-26T20:00:42.129765+00:00",
+      "result": "succeeded",
+      "redacted_output": "PyYAML 6.0.3\n",
+      "selected_version": "6.0.3",
+      "integrity_reference": "sha256:a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3",
+      "lock_references": [
+        "pyproject.toml",
+        "/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/RECORD"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
