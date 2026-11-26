@@ -2367,3 +2367,31 @@ acceptance and renewed sign-off remain withheld pending integrated consumer
 proof, contention repair, canonical record corrections and design/publication
 reconciliation. Historical sign-offs and saved publication references are
 unchanged. Return control to child execution and supervised delivery.
+## Manager Feature 3 Task 1 proposed-link correction verification
+
+In reply to `feat_049_003:feat_049_003:epic_049:task1_record_link_correction_0b3fcabd`.
+Verified `0b3fcabd4e9cb2efb194d504fdb411814575b4a8`: the proposed Parent
+Feature link resolves from the completed Task directory in that revision.
+The separate attempted-body artifact preserves the prior fenced replacement
+body byte-for-byte and the reported completed-lifecycle refusal. Its link
+also resolves. The corrected proposal differs only in the Parent Feature
+target and explicitly states that it was not submitted or accepted. This
+closes the proposed-artifact link defect identified in the prior manager
+review; canonical Task-record correction remains unresolved.
+
+Canonical reads confirm Epic `9663684255700d5178bdd369c97cb8d5a6f4ed6a`
+and Feature `1c7fbea950c3a17a9b8e860655c7ac7dfc090df5` are unchanged.
+No scope, sequencing or acceptance decision changed, so no spec mutation,
+new decision or duplicate child notification is needed. Historical sign-offs
+remain at `03280933`; renewed sign-off and acceptance remain withheld.
+
+Design-impact review: the complete diff contains two handoff artifacts only.
+It changes no source or design claims beyond the proposed record link;
+the preceding War Room design/interface review remains applicable. Context,
+containers, components, native Code symbols and execution/recovery flows
+are unchanged. No DESIGN/model edit or render/browser rerun is warranted.
+Validation: canonical reads, full pinned diff inspection, exact attempted-body
+comparison, both link checks and `git diff --check`. Integrated consumer proof,
+Feature 5 contention repair, canonical record corrections and design/publication
+reconciliation remain open. Return control to child execution and supervised
+delivery.
