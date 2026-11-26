@@ -170,8 +170,10 @@ def reconcile_approval_dispatch(
         return result
 
     from cascade.feature.readiness import compute_feature_readiness
+    from cascade.feature.readiness_evidence import migrate_legacy_approvals
 
     board = merged_board(repo)
+    migrate_legacy_approvals(board, root=repo)
     view = compute_boss_view(root=repo)
     for feature_id in view.dispatchable_features:
         meta = board.by_id.get(feature_id)

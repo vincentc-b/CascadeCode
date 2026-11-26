@@ -87,3 +87,30 @@ Verification: [merge tests](../../tests/boss/test_merge.py),
 [rollup tests](../../tests/boss/test_rollup.py),
 [queue tests](../../tests/task/test_rollup_queue.py), and
 [completion integration](../../tests/test_completion_rollup_integration.py).
+
+## Feature approval and dispatch
+
+Feature approval authorizes the Epic-authored Feature scope, not an immutable
+copy of every planning detail. The standard Data structures, API contracts,
+Logic flow, Task breakdown, Risks & upward questions, Decision log and
+Candidate repair and delivery handoff sections are delegated planning/handoff
+sections. Updates there retain the existing
+human approval. Scope, acceptance requirements, other document sections,
+title, parent and model/provider/reasoning selections remain authorization
+inputs. Dependencies are independently re-evaluated at dispatch; new children
+remain unapproved, including late corrective children. Corrective dispositions
+requiring current-revision dual sign-off retain exact-plan approval.
+
+[Approval evidence](../feature/readiness_evidence.py) retains the original
+timestamp and full approved revision, and separately binds the approved scope.
+The supervisor can migrate legacy records from an exact matching current or
+bounded historical owning-document revision; missing proof never authorizes
+work. This migration is action-boundary work, not a board poll. Existing
+architecture tuple, affected-work, comment, provider and dependency gates
+remain authoritative.
+
+[BossView](view.py) identifies candidates without requiring a Git ancestry
+proof on a read. [Canonical dispatch](../watchdog/dispatch.py) rechecks all
+gates and [plans the base](../stacked_dispatch.py), including multiple
+predecessors; it never starts a branch lacking required ancestry. A previously
+selected base can be replanned only before an integration checkout exists.

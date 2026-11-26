@@ -365,11 +365,18 @@ def ensure_feature_dispatch_selection(
     feature_id: str, meta: WorkMeta, board: BoardIndex, *, root: Path
 ) -> FeatureDispatchPlan:
     existing = read_feature_dispatch_selection(feature_id, root=root)
-    if existing is not None:
-        return FeatureDispatchPlan(ok=True, selection=existing)
     plan = plan_feature_dispatch(feature_id, meta, board, root=root)
     if plan.ok and plan.selection is not None:
-        persist_feature_dispatch_selection(plan.selection, root=root)
+        if existing is not None and existing != plan.selection:
+            from cascade.workspace.integration_worktree import get_integration_worktree
+
+            # A persisted choice alone is not proof that a checkout was created.
+            # Replan before branch creation; never silently change an existing
+            # worktree's base after an interrupted activation.
+            if get_integration_worktree(root, "feature", feature_id) is not None:
+                return FeatureDispatchPlan(ok=False, reason="stale_dispatch_selection")
+        if existing != plan.selection:
+            persist_feature_dispatch_selection(plan.selection, root=root)
     return plan
 
 

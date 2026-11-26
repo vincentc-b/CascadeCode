@@ -408,7 +408,8 @@ def test_feature_room_override_disables_stacked(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize('shape', ['chain', 'divergent', 'missing'])
-def test_multiple_predecessors_require_a_git_base_containing_their_work(tmp_path, shape):
+@pytest.mark.parametrize('automatic', [False, True])
+def test_multiple_predecessors_require_a_git_base_containing_their_work(tmp_path, shape, automatic):
     import subprocess
     from cascade.workspace.integration_worktree import get_integration_worktree
 
@@ -439,7 +440,19 @@ def test_multiple_predecessors_require_a_git_base_containing_their_work(tmp_path
     git('checkout', initial_branch)
     if shape == 'missing':
         git('branch', '-D', 'feat/feat_001')
-    result = dispatch_feature('feat_003', 'human', root=root)
+    if automatic:
+        from cascade.automation import reconcile_approval_dispatch
+        from cascade.feature.readiness_evidence import read_dispatch_attempt
+
+        (root / "cascade.toml").write_text("[automation]\nenabled = true\n")
+        released = reconcile_approval_dispatch(root)
+        attempt = read_dispatch_attempt("feat_003", root=root)
+        assert attempt is not None
+        assert ("feat_003" in released["features"]) == (shape == "chain")
+        from types import SimpleNamespace
+        result = SimpleNamespace(ok=attempt["outcome"] == "started", reason=attempt["reason_code"])
+    else:
+        result = dispatch_feature('feat_003', 'human', root=root)
     if shape in ('divergent', 'missing'):
         assert not result.ok
         assert result.reason == 'unsupported_topology'

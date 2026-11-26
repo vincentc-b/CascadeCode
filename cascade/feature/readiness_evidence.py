@@ -6,57 +6,118 @@ import fcntl
 import hashlib
 import json
 import os
+import re
+import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
 from cascade.board.context import resolve_tracking_root
+from cascade.board.errors import BoardError
 from cascade.board.store import read_doc
-from cascade.board.types import BoardIndex, WorkMeta
+from cascade.board.types import BoardIndex, WorkDoc, WorkMeta
 from cascade.watchdog.types import DispatchResult
 
 SOURCES = ("board", "approval", "dependencies", "review", "provider", "dispatch_base")
 
 
+# These are the named mutable planning and handoff sections of Feature documents.
+# Everything else (including unknown sections) remains part of the approved scope.
+_PLANNING_SECTIONS = {
+    "data structures",
+    "api contracts",
+    "logic flow",
+    "task breakdown",
+    "risks & upward questions",
+    "decision log",
+    "candidate repair and delivery handoff",
+}
+
+
+def _scope_body(body: str) -> str:
+    """Exclude delegated planning details, not scope or acceptance requirements."""
+    retained: list[str] = []
+    include = True
+    fence: tuple[str, int] | None = None
+    for line in body.splitlines():
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+        if marker:
+            chars, suffix = marker.groups()
+            if fence is None:
+                fence = (chars[0], len(chars))
+            elif chars[0] == fence[0] and len(chars) >= fence[1] and not suffix.strip():
+                fence = None
+            if include:
+                retained.append(line)
+            continue
+        if fence is None:
+            heading = re.match(r"^ {0,3}##[ \t]+(.+?)\s*#*\s*$", line)
+            if heading:
+                include = heading.group(1).strip().casefold() not in _PLANNING_SECTIONS
+        if include:
+            retained.append(line)
+    return "\n".join(retained).strip()
+
+
+def _revision(doc: WorkDoc, *, scope: bool = False) -> str:
+    meta = doc.meta
+    value = {
+        "body": _scope_body(doc.body) if scope else doc.body,
+        "parent": meta.parent,
+        "provider": meta.provider,
+        "model": meta.model,
+        "models": meta.models,
+        "reasoning": meta.reasoning,
+        "flex_mode": meta.flex_mode,
+    }
+    if scope:
+        value["title"] = meta.title
+    return digest(value)
+
+
 def owning_revision(meta: WorkMeta, *, root: Path) -> str | None:
     try:
-        body = read_doc(meta.id, root=root).body
-    except (OSError, ValueError, KeyError):
+        return _revision(read_doc(meta.id, root=root))
+    except (OSError, ValueError, KeyError, BoardError):
         return None
-    return digest(
-        {
-            "body": body,
-            "parent": meta.parent,
-            "provider": meta.provider,
-            "model": meta.model,
-            "models": meta.models,
-            "reasoning": meta.reasoning,
-            "flex_mode": meta.flex_mode,
-        }
-    )
+
+
+def _approval_timestamp(meta: WorkMeta) -> str | None:
+    return meta.approved_at.astimezone(timezone.utc).isoformat() if meta.approved_at else None
 
 
 def write_approval_evidence(meta: WorkMeta, *, root: Path) -> None:
-    revision = owning_revision(meta, root=root)
-    if revision is None:
+    try:
+        doc = read_doc(meta.id, root=root)
+    except (OSError, ValueError, KeyError, BoardError):
         return
+    from cascade.epic.change_dispositions import is_corrective_feature
+
+    record = {
+        "approved_at": _approval_timestamp(doc.meta),
+        "revision": _revision(doc),
+    }
+    if is_corrective_feature(meta.id, root=root):
+        record["approval_mode"] = "exact"
+    else:
+        record["approval_mode"] = "scope"
+        record["scope_revision"] = _revision(doc, scope=True)
     path = _state_dir(root) / "feature_approvals.json"
     with _locked(path):
         payload = _read_json(path, {"version": 1, "features": {}})
-        payload.setdefault("features", {})[meta.id] = {
-            "approved_at": (meta.approved_at or datetime.now(timezone.utc))
-            .astimezone(timezone.utc)
-            .isoformat(),
-            "revision": revision,
-        }
+        payload.setdefault("features", {})[meta.id] = record
         _atomic_json(path, payload)
 
 
 def approval_evidence(
     meta: WorkMeta, *, root: Path
 ) -> tuple[Literal["current", "stale", "unknown"], str | None]:
-    current = owning_revision(meta, root=root)
+    try:
+        doc = read_doc(meta.id, root=root)
+    except (OSError, ValueError, KeyError, BoardError):
+        return "unknown", None
+    current = _revision(doc)
     if meta.approved_at is None:
         return "current", current
     record = (
@@ -65,12 +126,104 @@ def approval_evidence(
         .get(meta.id)
     )
     if (
-        current is None
-        or not isinstance(record, dict)
+        not isinstance(record, dict)
         or not isinstance(record.get("revision"), str)
+        or record.get("approved_at") != _approval_timestamp(doc.meta)
     ):
         return "unknown", current
-    return ("current" if record["revision"] == current else "stale"), current
+    if record.get("approval_mode") == "scope":
+        current = _revision(doc, scope=True)
+        accepted = record.get("scope_revision")
+        if not isinstance(accepted, str):
+            return "unknown", current
+    else:
+        accepted = record["revision"]
+    return ("current" if accepted == current else "stale"), current
+
+
+def migrate_legacy_approvals(board: BoardIndex, *, root: Path) -> None:
+    """Upgrade old exact records only from a document proven to be approved.
+
+    Run at the supervisor action boundary, never on a board/API read. Preserve
+    the original timestamp and full revision; no new authorization is minted.
+    """
+    path = _state_dir(root) / "feature_approvals.json"
+    if not path.is_file():
+        return
+    from cascade.epic.change_dispositions import is_corrective_feature
+
+    with _locked(path):
+        payload = _read_json(path, {})
+        records = payload.get("features", {})
+        if not isinstance(records, dict):
+            return
+        changed = False
+        for meta in board.by_id.values():
+            if (
+                meta.tier != "feature" or meta.approved_at is None
+                or meta.status not in {"backlog", "ready_to_plan"}
+                or meta.path.parent.name != "1_backlog"
+            ):
+                continue
+            record = records.get(meta.id)
+            if (
+                not isinstance(record, dict) or "approval_mode" in record
+                or record.get("approved_at") != _approval_timestamp(meta)
+                or not isinstance(record.get("revision"), str)
+            ):
+                continue
+            if is_corrective_feature(meta.id, root=root):
+                record["approval_mode"] = "exact"
+                changed = True
+                continue
+            try:
+                doc = read_doc(meta.id, root=root)
+            except (OSError, ValueError, KeyError, BoardError):
+                continue
+            if _approval_timestamp(doc.meta) != record["approved_at"]:
+                continue
+            current = _revision(doc)
+            if record.get("migration_checked_revision") == current:
+                continue
+            approved = doc if current == record["revision"] else _historical_approved_doc(doc, record["revision"])
+            if approved is None:
+                record["migration_checked_revision"] = current
+            else:
+                record["approval_mode"] = "scope"
+                record["scope_revision"] = _revision(approved, scope=True)
+                record.pop("migration_checked_revision", None)
+            changed = True
+        if changed:
+            _atomic_json(path, payload)
+
+
+def _historical_approved_doc(doc: WorkDoc, revision: str) -> WorkDoc | None:
+    """Bounded owning-path history search; only an exact legacy digest is proof."""
+    from cascade.board.parse import parse_text
+    from cascade.workspace.integration_worktree import git_root_for_path
+
+    try:
+        checkout = git_root_for_path(doc.meta.path)
+        rel = doc.meta.path.resolve().relative_to(checkout.resolve()).as_posix()
+        history = subprocess.run(
+            ["git", "log", "-n", "32", "--format=%H", "--", rel],
+            cwd=checkout, capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.splitlines()
+        for commit in history:
+            raw = subprocess.run(
+                ["git", "show", f"{commit}:{rel}"], cwd=checkout,
+                capture_output=True, text=True, timeout=5, check=True,
+            ).stdout
+            old = parse_text(raw, doc.meta.path)
+            if (
+                old.meta.id == doc.meta.id
+                and _approval_timestamp(old.meta) == _approval_timestamp(doc.meta)
+                and _revision(old) == revision
+            ):
+                return old
+    except (OSError, ValueError, BoardError, subprocess.SubprocessError):
+        pass
+    return None
 
 
 def board_revision(board: BoardIndex) -> str:

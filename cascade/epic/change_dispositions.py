@@ -257,6 +257,12 @@ def read_impact_disposition_outcomes(
     return tuple(rows)
 
 
+def is_corrective_feature(feature_id: str, *, root: Path) -> bool:
+    """Corrective dispositions retain their separately required exact-plan approval."""
+    repo = locate_trunk(resolve_root(root))
+    return any(row.corrective_feature_id == feature_id for row in _read_ledger(repo))
+
+
 def require_corrective_feature_ready_for_approval(feature_id: str, *, root: Path) -> None:
     """Require current-revision dual sign-off for a corrective feature only."""
 

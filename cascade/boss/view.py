@@ -23,7 +23,10 @@ class BossView:
 
 
 def compute_boss_view(*, root: Path | None = None) -> BossView:
-    """Inspect the board without dispatching. Cap and dependency rules match dispatch law."""
+    """Inspect candidates without dispatching or resolving Git ancestry.
+
+    Canonical dispatch proves and selects the current base for each candidate.
+    """
 
     repo = resolve_root(root)
     board = merged_board(repo)
@@ -43,7 +46,8 @@ def compute_boss_view(*, root: Path | None = None) -> BossView:
         if meta.tier == "feature" and _backlog_open(meta) and meta.parent:
             approval_state, _ = approval_evidence(meta, root=repo)
             readiness = compute_feature_readiness(
-                work_id, root=repo, board=board, approval_state=approval_state
+                work_id, root=repo, board=board, approval_state=approval_state,
+                bounded_dispatch_base=False,
             )
             if readiness is not None and feature_boss_dispatchable(readiness):
                 dispatchable_features.append(work_id)

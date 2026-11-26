@@ -132,6 +132,63 @@ def test_approval_evidence_is_bound_to_current_plan_body(tmp_path: Path) -> None
     assert approval_evidence(doc.meta, root=root)[0] == "current"
 
     changed = read_doc("feat_001", root=root)
-    changed.body += "\nPlan revision changed.\n"
+    changed.body = changed.body.replace("## Scope", "## Scope\n\nPlan scope changed.")
     write_doc(changed, root=root)
     assert approval_evidence(changed.meta, root=root)[0] == "stale"
+
+
+def test_approval_survives_planning_handoffs_but_not_scope_changes(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    _board(root)
+    doc = read_doc("feat_001", root=root)
+    doc.meta.approved_at = datetime.now(timezone.utc)
+    write_doc(doc, root=root)
+    write_approval_evidence(doc.meta, root=root)
+    timestamp = doc.meta.approved_at
+    accepted = approval_evidence(doc.meta, root=root)
+    ledger = root / ".cascade" / "feature_approvals.json"
+    original = ledger.read_bytes()
+
+    for heading in ("Data structures", "API contracts", "Logic flow",
+                    "Task breakdown", "Risks & upward questions", "Decision log"):
+        doc = read_doc("feat_001", root=root)
+        doc.body = doc.body.replace(f"## {heading}", f"## {heading}\n\nUpstream handoff.")
+        write_doc(doc, root=root)
+        assert approval_evidence(doc.meta, root=root) == accepted
+        assert doc.meta.approved_at == timestamp
+        assert ledger.read_bytes() == original
+
+    doc.body = doc.body.replace("## Scope", "## Scope\n\nNew acceptance requirement.")
+    write_doc(doc, root=root)
+    assert approval_evidence(doc.meta, root=root)[0] == "stale"
+
+
+def test_legacy_migration_uses_exact_approved_git_revision(tmp_path: Path) -> None:
+    import json
+    from cascade.feature.readiness_evidence import migrate_legacy_approvals, owning_revision
+
+    root = make_repo(tmp_path)
+    _board(root)
+    doc = read_doc("feat_001", root=root)
+    doc.meta.approved_at = datetime.now(timezone.utc)
+    write_doc(doc, root=root)
+    approved = owning_revision(doc.meta, root=root)
+    timestamp = doc.meta.approved_at.isoformat()
+    ledger = root / ".cascade" / "feature_approvals.json"
+    ledger.parent.mkdir(exist_ok=True)
+    ledger.write_text(json.dumps({"version": 1, "features": {
+        "feat_001": {"approved_at": timestamp, "revision": approved}
+    }}))
+    doc = read_doc("feat_001", root=root)
+    doc.body = doc.body.replace("## API contracts", "## API contracts\n\nHandoff details.")
+    write_doc(doc, root=root)
+    assert approval_evidence(doc.meta, root=root)[0] == "stale"
+    migrate_legacy_approvals(merged_board(root), root=root)
+    assert approval_evidence(doc.meta, root=root)[0] == "current"
+    migrated = json.loads(ledger.read_text())["features"]["feat_001"]
+    assert migrated["revision"] == approved
+    assert migrated["approved_at"] == timestamp
+    assert migrated["approval_mode"] == "scope"
+    doc.body = doc.body.replace("## Scope", "## Scope\n\nUnapproved expansion.")
+    write_doc(doc, root=root)
+    assert approval_evidence(doc.meta, root=root)[0] == "stale"

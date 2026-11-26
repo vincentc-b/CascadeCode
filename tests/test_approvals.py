@@ -203,7 +203,7 @@ def test_approve_feature_enables_dispatch_when_automation_off(tmp_path: Path) ->
 
     approve_feature("feat_001", root=root)
     doc = read_doc("feat_001", root=root)
-    doc.body += "\nChanged plan after approval.\n"
+    doc.body = doc.body.replace("## Scope", "## Scope\n\nChanged plan after approval.")
     write_doc(doc, root=root)
     assert dispatch_feature("feat_001", "human", root=root).reason == "not_approved"
     assert approve_feature("feat_001", root=root)["newly_approved"] is True
@@ -360,7 +360,7 @@ def test_reapprove_changed_open_feature_refreshes_dispatch_evidence(
     approve_epic_plan_when_ready("epic_001", root=root)
     doc = read_doc("feat_001", root=root)
     old_timestamp = doc.meta.approved_at
-    doc.body += "\nUpdated producer contract.\n"
+    doc.body = doc.body.replace("## Scope", "## Scope\n\nChanged acceptance scope.")
     write_doc(doc, root=root)
     assert approval_evidence(doc.meta, root=root)[0] == "stale"
     assert "feat_001" not in compute_boss_view(root=root).dispatchable_features

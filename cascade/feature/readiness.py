@@ -348,17 +348,33 @@ def _dispatch_base_unavailable(
     if any(dep_id not in board.by_id for dep_id in meta.depends_on):
         return "dispatch_base_evidence_required"
     predecessors = direct_feature_predecessors(meta, board)
-    if not predecessors:
+    from cascade.war_room.room_settings import effective_stacked_pr_enabled
+
+    stacked = effective_stacked_pr_enabled(feature_id, meta.parent or "", root=root)
+    if not predecessors or not stacked:
         expected = f"epic/{meta.parent}" if meta.parent else None
         if selection is None or (
             selection.base_branch == expected and selection.predecessor_id is None
         ):
             return None
         return "stale_dispatch_selection"
-    if len(predecessors) > 1:
-        return "dispatch_base_evidence_required"
     from cascade.review import review_enabled, review_record_for_feature
     from cascade.workspace.integration_worktree import locate_trunk
+
+    if len(predecessors) > 1:
+        records = [review_record_for_feature(item, root=root) for item in predecessors]
+        if all(
+            (record is not None and record.get("closed"))
+            or (record is None and not review_enabled(locate_trunk(root)))
+            for record in records
+        ):
+            expected = f"epic/{meta.parent}" if meta.parent else None
+            if selection is None or (
+                selection.base_branch == expected and selection.predecessor_id is None
+            ):
+                return None
+            return "stale_dispatch_selection"
+        return "dispatch_base_evidence_required"
 
     record = review_record_for_feature(predecessors[0], root=root)
     if record is not None and record.get("closed"):

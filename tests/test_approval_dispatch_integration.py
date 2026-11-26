@@ -387,3 +387,44 @@ def test_child_added_after_epic_approval_stays_unapproved(
     assert feature_approved("feat_001", root=root)
     assert not feature_approved("feat_002", root=root)
     assert dispatch_feature("feat_002", "human", root=root).reason == "not_approved"
+
+
+def test_approved_waiting_feature_flows_after_handoff_and_dependency_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.feature.readiness_evidence import approval_evidence
+
+    root = make_repo(tmp_path, git=False)
+    _enable_automation(root)
+    _quiet_dispatch(monkeypatch)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Producer", tier="feature", parent="epic_001")
+    add_doc(root, id="feat_002", title="Consumer", tier="feature", parent="epic_001",
+            depends_on=["feat_001"])
+    approve_epic_plan_when_ready("epic_001", root=root)
+
+    doc = read_doc("feat_002", root=root)
+    accepted_at = doc.meta.approved_at
+    doc.body = doc.body.replace("## API contracts", "## API contracts\n\nFrozen producer contract.")
+    doc.body = doc.body.replace("## Risks & upward questions", "## Risks & upward questions\n\nAwait producer delivery.")
+    write_doc(doc, root=root)
+    assert approval_evidence(doc.meta, root=root)[0] == "current"
+    assert not reconcile_approval_dispatch(root)["features"]
+
+    # A new corrective Feature is a real new child, never auto-approved.
+    add_doc(root, id="feat_003", title="Correction", tier="feature", parent="epic_001",
+            depends_on=["feat_001"])
+    doc = read_doc("feat_002", root=root)
+    doc.meta.depends_on.append("feat_003")
+    write_doc(doc, root=root)
+    move_doc("feat_001", "completed", root=root)
+    assert not reconcile_approval_dispatch(root)["features"]
+    assert read_doc("feat_003", root=root).meta.approved_at is None
+
+    approve_feature("feat_003", root=root)
+    assert read_doc("feat_003", root=root).meta.status == "active"
+    move_doc("feat_003", "completed", root=root)
+    assert reconcile_approval_dispatch(root)["features"] == ["feat_002"]
+    assert read_doc("feat_002", root=root).meta.approved_at == accepted_at
+    assert len(_ready_to_plan_events("feat_002", root=root)) == 1
+    assert not reconcile_approval_dispatch(root)["features"]
