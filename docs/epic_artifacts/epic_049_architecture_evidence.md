@@ -2637,3 +2637,56 @@ Validation: canonical reads, child/amendment inspection, exact committed diff,
 pinned parent-link resolution, sign-off inspection and `git diff --check`.
 No product/browser tests or render were rerun for this record-only handoff.
 Return control to child execution and supervised delivery.
+
+## Manager Task 3 candidate and missing Task 2 publication payload
+
+In reply to `feat_049_003:feat_049_003:architect:task2_publication_exact_proposal_20261126`
+and `feat_049_003:feat_049_003:task3_awaiting_merge_6cf5b772_20261126`.
+Canonical reads retain Epic `9663684255700d5178bdd369c97cb8d5a6f4ed6a`
+and Feature plan `3dd4f1d84e48a7855d03090c706e78cb02ee607e`.
+Child metadata lists Feature 3 active and Feature 5 backlog; no architecture
+amendment is pending. At inspection, Feature branch HEAD was `96f36fa0` and
+candidate `6cf5b7724038c58d3956bfd8c4fa759d350d31f2` was not its ancestor.
+No merge or integrated acceptance is established by this review.
+
+Reviewed the candidate diff and
+`docs/task_artifacts/task_049_003_003_operational_recovery_closeout.md`.
+The publisher recognizes `owner_acknowledged` and nested routing timestamps;
+`resume_action` registers the exact executor token before notifying the committed
+start and retains it through the executor call. Preflight refusal still notifies
+its committed outcome without entering the executor. The operational fixture
+follows source writes, fast-path publication, bounded replay, HTTP and Chromium
+while the final reply is held. The Feature reports supervised 93 passing tests;
+the committed closeout records its separate scoped runs and measured read sizes.
+These remain attributed child results, not tests rerun on an integrated Epic head.
+
+The Epic artifact search found only attributed operation/render IDs and the
+Feature plan pin for Task 2 publication
+`architecture-publication-403919e4bcce0e3e3283a864cefb0200c3ad30c1ca80002919a2b589547b620f`.
+No exact Feature proposal JSON or expected generation is retained here.
+`epic_049_architecture_review.json` pins a different Epic proposal at `03280933`
+and cannot substitute for it. Prior reported pending/replay evidence does not
+establish a currently inspected operation state. No reconstruction or replay was
+performed. Sent `manager:f3_task3_candidate_and_missing_payload_20261126` to
+Feature 3 with this limitation and the requirement to persist Task 4's fresh
+reviewed integrated payload, both expected revision/generation fields and result.
+
+Design review: inspected the changed Task execution prose and Mermaid sequence
+against `resume_action`, and the producer requirements, implementation mapping
+and replay flow in `cascade/recovery_progress/DESIGN.md`. Task 3's closeout does
+not list that producer design among reviewed paths; routed its acknowledgement
+parsing review to Task 4. The candidate changes no actors, runtime/data boundaries
+or component ownership. Existing Code symbols remain; Task's supplementary flow
+now reflects token-before-notification ordering. Final static relationship,
+source-contract, render and native Code navigation verification remains Task 4's
+obligation. This Epic work-record update changes none of those architecture levels
+and requires no model/design edit itself.
+
+Validation: canonical reads, child/amendment inspection, candidate source/design
+and closeout review, negative ancestry check, saved-payload inspection, historical
+sign-off inspection and `git diff --check` for candidate and owned worktree.
+No product/browser test or render was rerun. Scope and historical sign-offs remain
+unchanged; no new scope decision or canonical spec edit is needed. Acceptance and
+renewed sign-off remain withheld pending merged-head proof, Feature 5 contention
+repair, canonical record corrections and design/publication reconciliation.
+Return control for supervised child delivery.
