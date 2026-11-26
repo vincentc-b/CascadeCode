@@ -2820,3 +2820,54 @@ decision is necessary. Historical sign-offs remain unchanged; renewed sign-off
 and acceptance remain withheld pending integrated verification, contention repair,
 record corrections and design/publication reconciliation. Return control for
 supervised child delivery and architecture review.
+
+## Manager Feature 3 exact publication request handoff
+
+In reply to `feat_049_003:feat_049_003:architecture_publication:99be54b1:3bf35619`.
+Canonical Epic remains `9663684255700d5178bdd369c97cb8d5a6f4ed6a`;
+canonical Feature 3 and its branch remain
+`99be54b1df62ebe34c45939efb7ce3d9f8612b96`, outside Epic ancestry.
+Feature 3 is active; Feature 5 remains backlog with no Tasks. No open
+architecture amendments were returned.
+
+Inspected the Feature's saved `.cascade/feat_049_003_architecture_review_99be54b1.json`
+read-only and preserved its exact bytes in
+[the Epic replay artifact](feat_049_003_architecture_review_99be54b1.json).
+SHA-256: `6425d14508268121cfd65c07ea801cb57c99f3ef6a7ee01d779cad7829941c0f`.
+The payload retains `expected_generation: null`, full expected plan revision
+`99be54b1df62ebe34c45939efb7ce3d9f8612b96`, Feature architect ownership and
+all proposal fields unchanged. Its plan, design, contract and three DSL content
+digests all match their pinned Git blobs. All six references in the older saved
+Epic publication request also still match. Neither request was replayed here.
+
+The Feature reports publication
+`architecture-publication-3bf3561962d0da6f67faa72de20ff0acd354420e95106002effcd7e350911127`
+pending on render
+`c4-render-46c097541b52d3b528cd766d334be295dbe21ccd415ce37b651bb01f5fca12d9`,
+with reviewed tuple
+`3aee1ac019a753c476cc2734afb633c9a0e5dc7c1bc0acf8f3ec9c2c4492b17c`.
+These are attributed handoff results, not a newly inspected terminal state or
+approval. Sent `manager:f3_publication_3bf35619_exact_payload_preserved` to
+Feature 3 for its architect to replay the identical request on its next turn
+and retain the terminal result and review identity. No newer pins or older
+pending operation may substitute for this request.
+
+Scoped design review checked the pinned War Room requirement/decision citations
+and `loadCurrentRecoveryProgress` / `pollChatSidecar` implementation links,
+and Recovery Progress ownership and replay/fence requirements. The existing
+Task 4 inventory and full-model navigation evidence remain attributed child
+validation. The tested `3d0691e2` to `99be54b1` diff still changes only the
+Feature plan and Task closeout. This payload-preservation change adds no actor,
+runtime/data boundary, component, Code declaration or behavior; no design/model
+edit is warranted. It does not reconcile the producer ownership mapping or
+establish the outstanding contention bound.
+
+Validation: canonical reads, child/amendment state, ancestry, exact payload and
+twelve pinned content digests, scoped design citations, source/model equivalence
+and `git diff --check`. No product/browser tests or renderer were rerun. Existing
+Epic requirements cover this handoff; no spec amendment or new scope decision
+is needed. Historical sign-offs are unchanged. Renewed sign-off and acceptance
+remain withheld pending integration, Feature 5 contention verification, canonical
+record corrections, design/publication reconciliation and the separate broader
+documentation-refresh proof. Return control to supervised child delivery and
+architecture review.
