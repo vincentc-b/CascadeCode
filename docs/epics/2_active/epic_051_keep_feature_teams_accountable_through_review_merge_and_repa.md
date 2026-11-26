@@ -214,6 +214,11 @@ No product-scope question blocks Feature planning. The following implementation 
   Chose Keep the current board status schema and completed-source review staging; make delivery ownership explicit through the shared review/obligation phase consumed by queue, resume, closeout, dependency and UI paths..
   Rationale: The publication path stages completed source documents before forge merge. Changing board enums would widen scope; a shared nonterminal delivery contract preserves compatibility while preventing staged completion from retiring or disabling the accountable owner.
   Honors: Success criteria 1, 3 and 5; original Feature/branch/review identity; existing review and owner contracts..
+
+- `dec_002` · 2026-11-26 · Epic Manager · **Macro-architecture / Admission, observation and recovery contract**
+  Chose Extend existing repair actions, claims, finite budgets and queue delivery with durable scoped admission before wakeup; route CI/conflict/feedback observations and parent/human requests through that same adapter..
+  Rationale: Generic queued coordination cannot authorize a completed Feature to mint repair work. One generation-bound route provides actionable ownership, replay and one-writer guarantees without a duplicate scheduler or ledger; unknown checks and approval waits remain explicit.
+  Honors: Success criteria 2–4; current approval/scope boundaries, no paid unchanged idle turns, no downstream rerun storm, independent verification..
 ## Amendment log
 
 _(none)_
