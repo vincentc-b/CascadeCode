@@ -14,7 +14,7 @@ owners:
 skills: []
 parent_rev: null
 created: '2026-11-25'
-updated: '2026-11-25'
+updated: '2026-11-26'
 provider: codex
 flex_mode: false
 models:
@@ -102,7 +102,7 @@ _(empty — Feature Team mints tasks after dispatch)_
 
 ## Risks & upward questions
 
-None.
+Post-merge Feature 2 review at 7f7df0e8 reproduced stale routing regression through the private publisher acknowledgement path. Corrective feature feat_049_004 is a required dependency before dispatch/integrated acceptance. Consume its verified final source and fixtures; completed Feature 2 lifecycle does not establish acceptance of this race. No UI workaround or independently inferred acknowledgement ordering is authorized.
 
 ## Decision log
 
