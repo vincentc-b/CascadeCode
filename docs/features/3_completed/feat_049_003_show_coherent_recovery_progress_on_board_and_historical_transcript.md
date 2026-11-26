@@ -2,7 +2,7 @@
 id: feat_049_003
 title: Show coherent recovery progress on board and Historical transcript
 tier: feature
-status: active
+status: completed
 parent: epic_049
 children:
 - task_049_003_001
