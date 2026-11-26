@@ -836,6 +836,66 @@ def transcript_source_acknowledgement(
             connection.close()
 
 
+@contextmanager
+def fenced_transcript_source_acknowledgement(
+    graph_id: str, *, source_key: str, root: Path
+) -> Iterator[dict[str, object]]:
+    """Yield current routing while retaining the graph fence.
+
+    This is the bounded publisher-side lookup.  Unlike the public lookup above,
+    it never repairs, imports, or publishes transcript data while its caller's
+    transaction is open.  Any unfinished transcript work remains retryable.
+    """
+
+    if not source_key:
+        raise ValueError("source key is required")
+    with graph_transcript_fence(graph_id, root=root):
+        connection = _connect_index(graph_id, root=root)
+        try:
+            pending = any(
+                connection.execute(
+                    f"SELECT 1 FROM {table} WHERE singleton = 1"
+                ).fetchone()
+                is not None
+                for table in (
+                    "pending_intent",
+                    "move_intent",
+                    "rewrite_intent",
+                    "legacy_import_buffer",
+                )
+            )
+            if pending:
+                raise TranscriptPendingError("transcript routing is pending")
+            event = connection.execute(
+                """SELECT append_sequence, message_id FROM events
+                   WHERE source_key = ?""",
+                (source_key,),
+            ).fetchone()
+            state = connection.execute(
+                """SELECT incarnation, room_path, indexed_end FROM state
+                   WHERE singleton = 1"""
+            ).fetchone()
+            if event is None or state is None or not state["room_path"]:
+                raise TranscriptPendingError("source event is not durably indexed")
+            room_path = Path(str(state["room_path"]))
+            try:
+                size = room_path.stat().st_size
+            except OSError as exc:
+                raise TranscriptPendingError(
+                    "transcript room is not currently available"
+                ) from exc
+            if size != int(state["indexed_end"]):
+                raise TranscriptPendingError("transcript index is incomplete")
+            yield {
+                "graph_id": graph_id,
+                "message_id": str(event["message_id"]),
+                "incarnation": str(state["incarnation"]),
+                "append_sequence": int(event["append_sequence"]),
+            }
+        finally:
+            connection.close()
+
+
 def append_message(graph_id: str, body: str, *, root: Path) -> dict:
     """Append one human message; return the stored message dict."""
 

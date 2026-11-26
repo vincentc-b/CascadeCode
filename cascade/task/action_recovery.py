@@ -2067,8 +2067,8 @@ def resume_action(
         else:
             committed = preflight_result
             committed_receipt = dict(committed["transition_receipts"][-1])
-    _notify_transition(repo, committed_receipt, committed)
     if preflight_result is not None:
+        _notify_transition(repo, committed_receipt, committed)
         return preflight_result
     try:
         from cascade.recovery_progress.live import live_observation
@@ -2076,6 +2076,10 @@ def resume_action(
         with live_observation(
             "executor", **_executor_live_identity(committed, committed_receipt, context)
         ):
+            # Publish the committed start only after its exact executor identity
+            # is observable.  The fast path can then distinguish real execution
+            # from a durable start left behind by a dead or restarted worker.
+            _notify_transition(repo, committed_receipt, committed)
             outcome, classification, metadata = _result_parts(execute(context))
         if outcome == "succeeded":
             classification, state = None, "completed"

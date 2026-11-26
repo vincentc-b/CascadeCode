@@ -259,7 +259,9 @@ Current recovery progress crosses the Task, Watchdog and Dashboard boundaries:
 Task retains authoritative transition receipts, Watchdog joins exact live and
 postcheck evidence into immutable work-addressed pages, and Dashboard owns the
 safe versioned presentation contract. The producer and restart/failure flow is
-documented in [Current recovery progress publication](watchdog/DESIGN.md#current-recovery-progress-publication).
+owned by the [Recovery progress design](recovery_progress/DESIGN.md); the
+[Watchdog summary](watchdog/DESIGN.md#current-recovery-progress-publication)
+describes its supervisor integration without duplicating that ownership.
 
 ## Team execution
 

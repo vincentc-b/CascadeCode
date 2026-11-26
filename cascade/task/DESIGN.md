@@ -157,8 +157,9 @@ Each material write appends a schema-v1 receipt with the action generation,
 affected work, attempt/claim identity and a monotonic action-local sequence in
 the same atomic replacement. `resume_action` commits `execution_started` only
 after preflight succeeds and before it releases the lifecycle critical section
-for the executor. `resume_action` then brackets only the actual executor call
-with an ephemeral live token projected by `_executor_live_identity`. The token
+for the executor. `resume_action` registers an ephemeral live token projected by
+`_executor_live_identity` before handing that committed start to the progress
+publisher, then retains the token through the actual executor call. The token
 matches the worker runtime/process generation and the receipt's exact graph,
 action generation, attempt and claim. It expires within 30 seconds unless a
 matching registered worker refreshes it, ends earlier with claim expiry, and is
@@ -178,9 +179,9 @@ flowchart LR
     Ack --> Claim[Locked eligible attempt and claim write]
     Claim --> Preflight{Preflight}
     Preflight -->|allowed| Start[Commit execution-start receipt]
-    Start --> Notify[After-lock best-effort notification]
-    Notify --> Token[Register exact executor live token]
-    Token --> Execute[Executor outside claim critical section]
+    Start --> Token[Register exact executor live token]
+    Token --> Notify[After-lock best-effort notification]
+    Notify --> Execute[Executor outside claim critical section]
     Execute --> EndToken[Remove token on executor exit]
     Preflight -->|refused| Finalize[Persist failed outcome]
     Execute --> Checkpoint[Persist attempt checkpoints]

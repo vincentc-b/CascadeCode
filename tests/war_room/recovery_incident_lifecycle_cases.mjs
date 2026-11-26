@@ -72,11 +72,8 @@ const row = new Element("div");
 const actions = new Element("div");
 api.appendRecoveryIncident(row, actions, view("blocked").features["2_active"][0].recovery_incident);
 assert.equal(row.children.length, 1, "one warning surface is rendered on the affected row");
-assert.match(row.children[0].children.map((child) => child.textContent).join("\n"), /Reason: Merge failed/);
-assert.match(row.children[0].children.map((child) => child.textContent).join("\n"), /Owner: epic_team: epic_001/);
-assert.match(row.children[0].children.map((child) => child.textContent).join("\n"), /Affected: branch feat\/feat_001 · paths cascade\/merge.py/);
-assert.match(row.children[0].children.map((child) => child.textContent).join("\n"), /Last attempt: #3 at 2026-11-03T12:04:00/);
-assert.equal(actions.children[0].textContent, "Open recovery review");
+assert.match(row.children[0].children[1].children.map((child) => child.textContent).join("\n"), /Reason: Merge failed/);
+assert.equal(actions.children.length, 0, "an external recovery URL is not rendered as a link");
 
 api.reconcileRecoveryIncidentToasts(view("failed"));
 api.reconcileRecoveryIncidentToasts(view("failed"));

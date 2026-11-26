@@ -348,6 +348,7 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
         with monkeypatch.context() as bounded:
             bounded.setattr(architecture_routes, "MAX_METADATA_BYTES", page_budget)
             collected = []
+            collected_targets = {}
             cursor = 0
             while cursor is not None:
                 status, raw, _ = _get(
@@ -356,12 +357,24 @@ def test_ready_snapshot_exposes_validated_semantics_and_annotated_svg(
                 assert status == 200
                 chunk = json.loads(raw)
                 assert len(json.dumps(chunk, separators=(",", ":")).encode()) <= page_budget
-                assert chunk["targets"] == payload["targets"]
+                assert {
+                    target["semantic_id"] for target in chunk["targets"]
+                } >= {
+                    target_id
+                    for view in chunk["views"]
+                    for target_id in view["target_ids"]
+                }
+                collected_targets.update(
+                    (target["semantic_id"], target) for target in chunk["targets"]
+                )
                 collected.extend(chunk["views"])
                 next_cursor = chunk["pagination"]["next_cursor"]
                 assert next_cursor is None or next_cursor > cursor
                 cursor = next_cursor
             assert collected == payload["views"]
+            assert collected_targets == {
+                target["semantic_id"]: target for target in payload["targets"]
+            }
             # Documentation resolves a selected view beyond the first bounded
             # page as well. Its independent final response cap still applies.
             status, raw, _ = _get(

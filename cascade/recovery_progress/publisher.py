@@ -18,9 +18,10 @@ import threading
 import time
 import uuid
 from collections.abc import Iterable, Mapping
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from cascade.board.context import (
     get_project_context,
@@ -273,7 +274,7 @@ def _has_timestamped_acknowledgement(
     receipt: Mapping[str, Any], authoritative: Mapping[str, Any]
 ) -> bool:
     if (
-        receipt.get("transition_kind") == "acknowledged"
+        receipt.get("transition_kind") in {"acknowledged", "owner_acknowledged"}
         and _parse_time(receipt.get("occurred_at")) is not None
     ):
         return True
@@ -288,6 +289,12 @@ def _has_timestamped_acknowledgement(
     if isinstance(execution_claim, Mapping):
         candidates.extend(
             execution_claim.get(key)
+            for key in ("acknowledged_at", "claimed_at", "observed_at", "at")
+        )
+    routing_marker = acknowledgement.get("routing_marker")
+    if isinstance(routing_marker, Mapping):
+        candidates.extend(
+            routing_marker.get(key)
             for key in ("acknowledged_at", "claimed_at", "observed_at", "at")
         )
     return any(_parse_time(value) is not None for value in candidates)
@@ -701,9 +708,22 @@ def publish_committed_transition(
         try:
             connection.execute("BEGIN IMMEDIATE")
             if ack.get("status") == "committed":
-                _record_transcript_milestone(connection, ack, root=repo, now=_now())
-            _upsert(connection, receipt, snapshot, now=_now())
-            connection.commit()
+                from cascade.war_room.chat_store import TranscriptPendingError
+
+                try:
+                    with _record_transcript_milestone(
+                        connection, ack, root=repo, now=_now()
+                    ):
+                        _upsert(connection, receipt, snapshot, now=_now())
+                        connection.commit()
+                except TranscriptPendingError:
+                    connection.rollback()
+                    connection.execute("BEGIN IMMEDIATE")
+                    _upsert(connection, receipt, snapshot, now=_now())
+                    connection.commit()
+            else:
+                _upsert(connection, receipt, snapshot, now=_now())
+                connection.commit()
             _publish_dirty(
                 connection,
                 repo,
@@ -717,13 +737,14 @@ def publish_committed_transition(
             connection.close()
 
 
+@contextmanager
 def _record_transcript_milestone(
     connection: sqlite3.Connection,
     ack: Mapping[str, Any],
     *,
     root: Path,
     now: datetime,
-) -> None:
+) -> Iterator[Mapping[str, object]]:
     required = {
         "receipt_id": str,
         "entry_id": str,
@@ -742,38 +763,51 @@ def _record_transcript_milestone(
         str(ack["incarnation"]),
         int(ack["append_sequence"]),
     )
-    existing = connection.execute(
-        """SELECT entry_id, graph_id, message_id, incarnation, append_sequence
-           FROM transcript_milestones WHERE receipt_id = ?""",
-        (receipt_id,),
-    ).fetchone()
-    if existing is not None:
-        identity = tuple(
-            existing[key] for key in ("entry_id", "graph_id", "message_id")
-        )
-        if identity != values[:3]:
-            raise ValueError("receipt maps to a different transcript acknowledgement")
-        if tuple(existing[key] for key in ("incarnation", "append_sequence")) != values[3:]:
-            # An earlier append may have released the graph fence before a
-            # newer rewrite or move reached this publisher transaction.
-            from cascade.war_room.chat_store import transcript_source_acknowledgement
+    from cascade.war_room.chat_store import (
+        fenced_transcript_source_acknowledgement,
+    )
 
-            current = transcript_source_acknowledgement(
-                values[1], source_key=f"recovery:{receipt_id}", root=root
-            )
-            if current["message_id"] != values[2]:
-                raise ValueError("receipt maps to a different transcript acknowledgement")
-            connection.execute(
-                """UPDATE transcript_milestones
-                   SET incarnation = ?, append_sequence = ?, recorded_at = ?
-                   WHERE receipt_id = ?""",
-                (current["incarnation"], current["append_sequence"], _iso(now), receipt_id),
-            )
-    else:
-        connection.execute(
-            "INSERT INTO transcript_milestones VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (receipt_id, *values, _iso(now)),
+    with fenced_transcript_source_acknowledgement(
+        values[1], source_key=f"recovery:{receipt_id}", root=root
+    ) as current:
+        if current["message_id"] != values[2]:
+            raise ValueError("receipt maps to a different transcript acknowledgement")
+        current_values = (
+            values[0],
+            values[1],
+            values[2],
+            str(current["incarnation"]),
+            int(current["append_sequence"]),
         )
+        existing = connection.execute(
+            """SELECT entry_id, graph_id, message_id, incarnation, append_sequence
+               FROM transcript_milestones WHERE receipt_id = ?""",
+            (receipt_id,),
+        ).fetchone()
+        if existing is not None:
+            identity = tuple(
+                existing[key] for key in ("entry_id", "graph_id", "message_id")
+            )
+            if identity != current_values[:3]:
+                raise ValueError(
+                    "receipt maps to a different transcript acknowledgement"
+                )
+            if (
+                tuple(existing[key] for key in ("incarnation", "append_sequence"))
+                != current_values[3:]
+            ):
+                connection.execute(
+                    """UPDATE transcript_milestones
+                       SET incarnation = ?, append_sequence = ?, recorded_at = ?
+                       WHERE receipt_id = ?""",
+                    (*current_values[3:], _iso(now), receipt_id),
+                )
+        else:
+            connection.execute(
+                "INSERT INTO transcript_milestones VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (receipt_id, *current_values, _iso(now)),
+            )
+        yield current
 
 
 def _refresh_entry_milestones(
@@ -818,27 +852,14 @@ def record_transcript_milestone(root: Path, ack: Mapping[str, Any]) -> None:
     """Durably join a committed transcript message to its progress entry."""
 
     repo = canonical_audit_root(root)
-    receipt_id = ack.get("receipt_id")
-    graph_id = ack.get("graph_id")
-    message_id = ack.get("message_id")
-    if not all(isinstance(value, str) for value in (receipt_id, graph_id, message_id)):
-        raise ValueError("transcript milestone acknowledgement is incomplete")
-    from cascade.war_room.chat_store import transcript_source_acknowledgement
-
-    current = transcript_source_acknowledgement(
-        graph_id, source_key=f"recovery:{receipt_id}", root=root
-    )
-    if current["message_id"] != message_id:
-        raise ValueError("receipt maps to a different transcript acknowledgement")
-    current_ack = {**ack, **current}
     started = time.monotonic()
     with _writer_lock:
         connection = _connect(repo)
         try:
             connection.execute("BEGIN IMMEDIATE")
-            _record_transcript_milestone(connection, current_ack, root=repo, now=_now())
-            _refresh_entry_milestones(connection, str(current_ack["entry_id"]))
-            connection.commit()
+            with _record_transcript_milestone(connection, ack, root=repo, now=_now()):
+                _refresh_entry_milestones(connection, str(ack["entry_id"]))
+                connection.commit()
             _publish_dirty(
                 connection,
                 repo,
@@ -962,6 +983,7 @@ def drain_recovery_progress(
             start_cursor = cursor
             new_rows: list[tuple[Mapping[str, Any], Mapping[str, Any], bool]] = []
             replay_rows: list[tuple[Mapping[str, Any], Mapping[str, Any], bool]] = []
+            live_refreshes: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
             with task_lifecycle_read_lock(root=repo):
                 for offset in range(len(_SOURCE_SPECS)):
                     spec_index = (start_cursor + offset) % len(_SOURCE_SPECS)
@@ -1005,9 +1027,7 @@ def drain_recovery_progress(
                                         "executing",
                                         "investigating",
                                     }:
-                                        _upsert(
-                                            connection, receipt, snapshot, now=_now()
-                                        )
+                                        live_refreshes.append((receipt, snapshot))
                                 if mapped is not None:
                                     continue
                             detached = (
@@ -1015,7 +1035,9 @@ def drain_recovery_progress(
                                 json.loads(json.dumps(dict(snapshot))),
                                 known is not None,
                             )
-                            (replay_rows if known is not None else new_rows).append(detached)
+                            (replay_rows if known is not None else new_rows).append(
+                                detached
+                            )
                         if time.monotonic() >= deadline:
                             source_complete = False
                             break
@@ -1026,17 +1048,17 @@ def drain_recovery_progress(
             replay_turn_row = connection.execute(
                 "SELECT value FROM meta WHERE key = 'milestone_replay_turn'"
             ).fetchone()
-            replay_first = replay_turn_row is not None and replay_turn_row["value"] == "1"
+            replay_first = (
+                replay_turn_row is not None and replay_turn_row["value"] == "1"
+            )
             ordered_rows = (
                 replay_rows + new_rows if replay_first else new_rows + replay_rows
             )
             queued = ordered_rows[:max_receipts]
             unprocessed = len(ordered_rows) - len(queued)
+            next_replay_turn: str | None = None
             if new_rows and replay_rows:
-                connection.execute(
-                    "INSERT OR REPLACE INTO meta VALUES ('milestone_replay_turn', ?)",
-                    ("0" if replay_first else "1",),
-                )
+                next_replay_turn = "0" if replay_first else "1"
             if len(queued) >= max_receipts or unprocessed:
                 source_complete = False
             from cascade.war_room.recovery_milestones import (
@@ -1044,6 +1066,10 @@ def drain_recovery_progress(
             )
 
             milestone_pending = 0
+            authoritative_pending = 0
+            appended: list[
+                tuple[Mapping[str, Any], Mapping[str, Any], bool, Mapping[str, Any]]
+            ] = []
             for receipt, snapshot, was_known in queued:
                 if time.monotonic() >= deadline:
                     source_complete = False
@@ -1059,20 +1085,47 @@ def drain_recovery_progress(
                         else "legacy_unknown"
                     ),
                 )
+                appended.append((receipt, snapshot, was_known, ack))
+
+            from cascade.war_room.chat_store import TranscriptPendingError
+
+            for receipt, snapshot, was_known, ack in appended:
                 known = connection.execute(
                     "SELECT 1 FROM receipts WHERE receipt_id = ?",
                     (receipt["receipt_id"],),
                 ).fetchone()
+                connection.execute("BEGIN IMMEDIATE")
                 if ack.get("status") == "committed":
-                    _record_transcript_milestone(connection, ack, root=repo, now=_now())
+                    try:
+                        with _record_transcript_milestone(
+                            connection, ack, root=repo, now=_now()
+                        ):
+                            _upsert(connection, receipt, snapshot, now=_now())
+                            connection.commit()
+                    except TranscriptPendingError:
+                        connection.rollback()
+                        connection.execute("BEGIN IMMEDIATE")
+                        _upsert(connection, receipt, snapshot, now=_now())
+                        connection.commit()
+                        milestone_pending += 1
+                        authoritative_pending += 1
                 else:
+                    if not was_known:
+                        _upsert(connection, receipt, snapshot, now=_now())
+                    connection.commit()
                     milestone_pending += 1
-                if not was_known or ack.get("status") == "committed":
-                    _upsert(connection, receipt, snapshot, now=_now())
                 if known is None:
                     imported += 1
             if milestone_pending or unprocessed:
                 cursor = start_cursor
+            connection.execute("BEGIN IMMEDIATE")
+            for receipt, snapshot in live_refreshes:
+                _upsert(connection, receipt, snapshot, now=_now())
+            if next_replay_turn is not None:
+                connection.execute(
+                    "INSERT OR REPLACE INTO meta VALUES ('milestone_replay_turn', ?)",
+                    (next_replay_turn,),
+                )
             connection.execute(
                 "INSERT OR REPLACE INTO meta VALUES ('source_cursor', ?)",
                 (str(cursor),),
@@ -1098,7 +1151,9 @@ def drain_recovery_progress(
     return {
         "imported_receipts": imported,
         "published_owners": published,
-        "complete": source_complete and lag["backlog_count"] == 0,
+        "complete": source_complete
+        and lag["backlog_count"] == 0
+        and authoritative_pending == 0,
         "lag": lag,
         "source_load_seconds": source_load_seconds,
         "duration_seconds": time.monotonic() - started,
