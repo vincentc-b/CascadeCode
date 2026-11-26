@@ -508,6 +508,41 @@ def append_transcript_message(
     return message
 
 
+def transcript_source_acknowledgement(
+    graph_id: str, *, source_key: str, root: Path
+) -> dict[str, object]:
+    """Return the durable index acknowledgement for a committed source event."""
+
+    if not source_key:
+        raise ValueError("source key is required")
+    with graph_transcript_fence(graph_id, root=root):
+        repo = _chat_repo(graph_id, root=root)
+        path = _sidecar_path(repo, graph_id)
+        connection = _connect_index(graph_id, root=root)
+        try:
+            _repair_pending(connection, path)
+            if not _import_legacy(connection, path):
+                raise TranscriptPendingError("legacy transcript import is incomplete; retry")
+            event = connection.execute(
+                """SELECT append_sequence, message_id FROM events
+                   WHERE source_key = ?""",
+                (source_key,),
+            ).fetchone()
+            state = connection.execute(
+                "SELECT incarnation FROM state WHERE singleton = 1"
+            ).fetchone()
+            if event is None or state is None:
+                raise TranscriptPendingError("source event is not durably indexed")
+            return {
+                "graph_id": graph_id,
+                "message_id": str(event["message_id"]),
+                "incarnation": str(state["incarnation"]),
+                "append_sequence": int(event["append_sequence"]),
+            }
+        finally:
+            connection.close()
+
+
 def append_message(graph_id: str, body: str, *, root: Path) -> dict:
     """Append one human message; return the stored message dict."""
 

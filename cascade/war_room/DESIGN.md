@@ -45,6 +45,13 @@ before its unique message/source key and byte range committed. Recovery complete
 only an empty, complete, or matching partial intended tail; conflicting bytes or
 an uncertain room owner stay pending without truncation.
 
+`REQ-WARROOM-TRANSCRIPT-003`: Each retained committed recovery receipt can add
+one concise `System · Recovery` line to its owning Epic or Feature room. The
+line preserves receipt and entry identity, action generation, attempt and
+transition sequence, nullable occurrence, safe target/source reference and
+direct, reconciled or legacy-unknown provenance. Neither model output nor an
+observation timestamp can mint or deduplicate a recovery line.
+
 `DEC-WARROOM-TRANSCRIPT-001`: Keep authored history in the owning room's
 `docs/_war_room/chat/<graph-id>.jsonl`. The room follows registered document
 ownership, including a backlog Feature's parent and a completed Epic's surviving
@@ -67,6 +74,12 @@ append timestamps; their source occurrence remains unknown. Dispatch and
 terminal checkout retirement copy committed history before publishing the new
 registered owner under the same fence and advance the incarnation.
 
+`DEC-WARROOM-TRANSCRIPT-003`: Use `recovery:<receipt-id>` as the unique transcript
+source key. Route Task receipts through their current owning Feature, reject
+ambiguous or unsafe evidence as typed pending, and return the committed message,
+incarnation and append sequence only after the graph fence releases. Replaying a
+receipt therefore returns the existing message without a second JSONL line.
+
 The authoritative [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
 connect `cascade-context` → `cascade-containers` →
@@ -83,6 +96,7 @@ the transcript library within the same Python runtime.
 | [graph_transcript_fence / _connect_index](chat_store.py) | Lock a graph at a stable tracking-root path across processes and open its writer-only full-synchronous intent/offset index. The SQLite file is not a GET surface. |
 | [append_transcript_message / remove_message](chat_store.py) | Reconcile only an exact pending tail, durably stage intent, append and fsync JSONL, then commit uniqueness/offset before acknowledgement. Rollback and legacy-label rewrites use the same fence, fsync the replacement and parent directory, retain other source keys, and change incarnation. |
 | [move_transcript_room](chat_store.py) | Copy only matching committed history, publish the lifecycle owner switch inside the graph fence, rebuild offsets and change incarnation. Conflicting destination bytes remain untouched and pending. |
+| [append_committed_recovery_receipt](recovery_milestones.py) | Validate safe receipt fields, resolve the owning graph across registered roots, append one deterministic recovery line, and return its durable index acknowledgement. Unknown routing, unsafe target/reference or incomplete evidence remains pending. |
 | [append_planning_turn_to_chat](planning_transcript.py) | Sanitize and append new role messages supplied by [graph invocation](../workspace/kickoff.py), carrying checkpoint ID, persisted ordinal and durable message ID. Provider failure details become a bounded system message without exposing raw output. |
 | [sync_planning_transcript_to_chat](planning_transcript.py) | Explicit writer work loads the owning graph checkpoint and replays the same stable role-reply source keys. It does not invoke a role or run from GET. |
 
@@ -119,9 +133,9 @@ sequenceDiagram
 
 Action attempts and acknowledgements persist independently in the
 [Task-owned ledger](../task/DESIGN.md#action-evidence-and-transcript-boundary).
-Chat stores optional source-occurrence and append times separately but has no
-live attempt milestone consumer yet. A queued summary, checkpoint or historical
-message therefore cannot establish live execution or verified resolution.
+Chat stores source occurrence and append times separately. Its recovery lines
+are deterministic projections of committed receipts; they do not authorize a
+retry or establish execution/verified resolution beyond the cited receipt.
 Verification: [bounded progress scenarios](../../tests/war_room/test_recovery_progress_api.py),
 [projection scenarios](../../tests/war_room/test_recovery_incident_projection.py),
 [transcript scenarios](../../tests/war_room/test_planning_transcript.py) and
@@ -129,6 +143,9 @@ Verification: [bounded progress scenarios](../../tests/war_room/test_recovery_pr
 [durability/recovery scenarios](../../tests/war_room/test_durable_chat_store.py)
 exercise these boundaries, including two real writer processes, exact-tail crash
 states, bounded legacy import, room movement and GET without graph construction.
+[Recovery milestone integration](../../tests/recovery_progress/test_transcript_milestones.py)
+checks duplicate receipt replay, distinct sequences, nullable occurrence,
+after-commit notification and restart reconciliation with ordered references.
 
 ## Bounded health-audit projection reads
 

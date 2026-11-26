@@ -152,6 +152,11 @@ Terminal Epic and Feature retirement performs the inverse operation: after
 delivery proof and cleanliness checks, the fenced room move invokes checkout
 removal and registry retirement as its owner switch, then publishes the
 surviving parent/trunk room with another incarnation.
+Committed recovery receipts use the same document ownership resolution: Task
+identity is lifted to its owning Feature while Feature and Epic identity retain
+their rooms. Multiple resolved owners, missing plans and unsafe work IDs remain
+pending. Split product/tracking roots follow the registered document worktree,
+while the graph fence remains anchored at the canonical tracking runtime root.
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)

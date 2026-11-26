@@ -21,7 +21,13 @@ that work ID's `current.json`. Owning-graph and affected-work aliases published
 in one batch share the entry identity, entry revision and manifest revision.
 
 [`publish_committed_transition`](../recovery_progress/publisher.py) is the
-best-effort after-lock path. [`drain_recovery_progress`](../recovery_progress/publisher.py)
+best-effort after-lock path. It first asks the War Room's
+[`append_committed_recovery_receipt`](../war_room/recovery_milestones.py) for a
+durable transcript acknowledgement, then stores that receipt-to-message mapping
+with [`record_transcript_milestone`](../recovery_progress/publisher.py). `_upsert`
+joins only committed mappings for the entry's retained receipt order, so failed
+or pending chat appends leave `milestone_refs` empty without changing repair
+admission. [`drain_recovery_progress`](../recovery_progress/publisher.py)
 replays missed committed receipts on startup and at the beginning of
 `watchdog_tick`, before `process_lock` and slow lifecycle, Git or provider work.
 A pass admits at most 100 receipts and 100 dirty owners or one second; the fast
@@ -35,15 +41,19 @@ until the resumable import reaches a complete pass.
 sequenceDiagram
     participant S as Action or incident source
     participant P as Progress publisher
+    participant T as Owning transcript fence
     participant I as Disposable writer index
     participant F as Immutable work pages
     S->>S: Commit transition receipt under lifecycle lock
     S-->>P: Notify after outer lock
-    P->>I: Join exact receipt, snapshot and live token
+    P->>T: Append/dedupe receipt line after source-lock release
+    T-->>P: Durable message acknowledgement after fence release
+    P->>I: Map receipt to message; join snapshot and live token
     P->>F: Publish affected aliases and atomic pointers
     alt Notification missed or process restarted
         P->>S: Bounded fair source replay
-        P->>I: Import unseen receipt identities
+        P->>T: Replay the same receipt source key
+        P->>I: Import receipt and committed message mapping
         P->>F: Publish dirty aliases with lag/completeness
     else Live evidence expired or inaccessible
         P->>F: Retain last blocker priority as unavailable
@@ -51,7 +61,8 @@ sequenceDiagram
 ```
 
 The `cascade-watchdog-code` view links the tick, bounded drain and immutable
-publisher. [Producer integration tests](../../tests/recovery_progress/test_publisher.py)
+publisher, including the durable mapping writer; `cascade-dashboard-code` owns
+receipt serialization and graph append. [Producer integration tests](../../tests/recovery_progress/test_publisher.py)
 exercise state evidence, exact live matching, immutable alias revisions, missed
 notifications, fair continuation, ordering, sanitization and measured source
 cost. Task owns source receipt durability; War Room owns the safe entry contract

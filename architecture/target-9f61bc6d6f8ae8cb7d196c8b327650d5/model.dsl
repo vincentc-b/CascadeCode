@@ -1295,6 +1295,15 @@ code_watchdog_progress_publish = element "publish_committed_transition" "Functio
     }
 }
 
+code_watchdog_milestone_record = element "record_transcript_milestone" "Function" "Durably maps a committed receipt to its transcript message, refreshes ordered entry references, and republishes dirty aliases." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.milestone-record"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/recovery_progress/publisher.py"
+        "cascade.sourceSymbol" "record_transcript_milestone"
+    }
+}
+
 watchdog_tick_to_dispatch = code_watchdog_tick -> code_watchdog_dispatch "Advances eligible Tasks through automation" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-tick-to-dispatch"
@@ -3243,6 +3252,15 @@ code_dashboard_chat_move = element "move_transcript_room" "Function" "Copies com
     }
 }
 
+code_dashboard_recovery_milestone = element "append_committed_recovery_receipt" "Function" "Routes one safe committed receipt to its owning graph and returns its durable transcript acknowledgement after fence release." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.recovery-milestone"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/recovery_milestones.py"
+        "cascade.sourceSymbol" "append_committed_recovery_receipt"
+    }
+}
+
 code_dashboard_transcript = element "append_planning_turn_to_chat" "Function" "Mirrors sanitized authored messages with checkpoint lineage, ordinal and durable message identity after graph invocation returns." {
     properties {
         "cascade.semanticId" "element.code.dashboard.transcript"
@@ -3411,6 +3429,42 @@ dashboard_chat_get_to_dashboard_chat_read = code_dashboard_chat_get -> code_dash
 dashboard_transcript_to_dashboard_chat_append = code_dashboard_transcript -> code_dashboard_chat_append "Appends each presentable message" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-transcript-to-dashboard-chat-append"
+    }
+}
+
+dashboard_recovery_milestone_to_chat_append = code_dashboard_recovery_milestone -> code_dashboard_chat_append "Appends the receipt-keyed recovery line through the durable graph fence" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-recovery-milestone-to-chat-append"
+    }
+}
+
+dashboard_recovery_milestone_to_workspace_owner = code_dashboard_recovery_milestone -> code_workspace_doc_owner "Resolves Task receipts to their owning Feature room across registered roots" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-recovery-milestone-to-workspace-owner"
+    }
+}
+
+task_transition_notify_to_progress_publish = code_task_transition_notify -> code_watchdog_progress_publish "Appends and projects the committed receipt after source-lock release" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-transition-notify-to-progress-publish"
+    }
+}
+
+watchdog_transition_notify_to_progress_publish = code_watchdog_transition_notify -> code_watchdog_progress_publish "Appends and projects the committed incident receipt after source-lock release" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-transition-notify-to-progress-publish"
+    }
+}
+
+watchdog_progress_publish_to_recovery_milestone = code_watchdog_progress_publish -> code_dashboard_recovery_milestone "Commits the transcript event before publishing its reference" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-progress-publish-to-recovery-milestone"
+    }
+}
+
+watchdog_progress_publish_to_milestone_record = code_watchdog_progress_publish -> code_watchdog_milestone_record "Persists the durable acknowledgement before exposing ordered milestone references" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-progress-publish-to-milestone-record"
     }
 }
 
