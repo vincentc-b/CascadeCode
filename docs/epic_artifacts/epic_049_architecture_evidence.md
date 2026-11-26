@@ -2772,3 +2772,51 @@ and requires no design/model edit. Acceptance and renewed sign-off remain
 withheld pending integrated verification, contention repair, canonical record
 corrections and design/publication reconciliation. Return control for supervised
 child delivery.
+## Manager Feature 3 merged Task 4 and full-model navigation handoff
+
+In reply to `feat_049_003:f3_task4_merged_full_model_navigation_99be54b1_20261126`.
+Read canonical Epic `9663684255700d5178bdd369c97cb8d5a6f4ed6a` and
+Feature `99be54b1df62ebe34c45939efb7ce3d9f8612b96`. Verified Task 4
+`d05eca4f`, merged revision `3d0691e2` and that Feature plan are in Feature
+ancestry but outside Epic ancestry. Task 3's delivery review survives in the
+canonical Feature plan. Feature 3 remains active; Feature 5 remains backlog
+with no tasks. The Feature reports all four Tasks completed; this does not
+establish integrated Epic acceptance.
+
+Reviewed the corrected Task 4 closeout at `89debbed` and its all-level impact
+inventory. It now accurately limits the original Chromium test to the reduced
+four-view Agent fixture. The separate Feature run reports five successful paths
+through the unmodified 24-view model at `3d0691e2`, covering Dashboard, Task,
+Watchdog, Workspace and Teams, with deep-link restoration, pinned source text
+and Level up. The diff from that tested revision to `99be54b1` changes only the
+Feature plan and Task 4 closeout: source, model, contract and designs are identical.
+This supplies attributed child evidence for the previously missing integrated-model
+navigation, distinct from fixture-based failure cases and the reported 18-test
+supervised source/render/cache validation. No browser or renderer was rerun here.
+
+Sent `manager:f3_full_model_navigation_99be54b1_publication_handoff` to
+Feature 3 for its architect: review and publish a fresh exact proposal pinned to
+`99be54b1`, preserve full proposal JSON and both expected generation/revision
+fields before submission, and retain the terminal result and review identity.
+Earlier failed or reported-pending operations are not approval. No substitute
+payload was reconstructed or replayed.
+
+Design review for this handoff inspected the Recovery Progress design, persisted
+ownership mapping, Task 4 inventory and the post-Task-3 source/design diff.
+That diff contains no source or architecture edits. Accordingly no actor/system,
+runtime/persistence, component, native Code or supplementary behavior view needs
+another edit for this evidence correction. This is not a new full-tree design
+certification. The mapping still assigns `cascade/recovery_progress` to `cascade`;
+Epic integration retains ownership reconciliation. The producer's configured
+budget verification does not prove the missing contention bound: Feature 5
+remains required. Completed Task 1/2 canonical corrections and Feature 4's broader
+documentation-refresh assertion also remain unresolved.
+
+Validation: canonical reads, child-state inspection, ancestry checks, exact
+work-record diff and source/model equivalence, historical sign-off inspection,
+and `git diff --check`. No product tests were rerun for this evidence-only change.
+Existing Epic requirements cover the handoff, so no spec amendment or new scope
+decision is necessary. Historical sign-offs remain unchanged; renewed sign-off
+and acceptance remain withheld pending integrated verification, contention repair,
+record corrections and design/publication reconciliation. Return control for
+supervised child delivery and architecture review.
