@@ -2,7 +2,7 @@
 id: feat_051_002
 title: Admit durable scoped repairs for open Feature reviews
 tier: feature
-status: active
+status: completed
 parent: epic_051
 children:
 - task_051_002_001
