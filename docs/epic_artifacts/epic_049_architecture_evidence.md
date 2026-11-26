@@ -2438,3 +2438,51 @@ Feature branch ancestry/log checks and `git diff --check`. No product/browser
 tests were rerun for this handoff. Acceptance and renewed sign-off remain withheld
 pending integrated consumer proof, Feature 5 contention repair, canonical record
 corrections and design/publication reconciliation.
+
+## Manager Feature 3 Task 2 delivery review
+
+In reply to `feat_049_003:feat_049_003:epic:task2_delivery_review_3dd4f1d8_20261126`.
+Read canonical Epic `9663684255700d5178bdd369c97cb8d5a6f4ed6a` and Feature
+`3dd4f1d84e48a7855d03090c706e78cb02ee607e`, child metadata and the empty
+architecture amendment list. Verified that `1727c75779dcb5ef95e609f252568029904245f0`
+is an ancestor of the reviewed Feature revision. Feature 3 remains active and
+Feature 5 remains backlog; the latter's approval timestamp is not delivery evidence.
+
+Reviewed the pinned polling follow-up, refresh-race harness and War Room design
+diff. `pollChatSidecar` starts an independent current-progress read, sharing an
+in-flight request for the same graph. Background reads retain the displayed
+projection until replacement; graph/epoch guards reject late results. Transcript
+polling merges durable IDs and reloads latest on typed cursor restart. This
+addresses the previously identified missing open-room refresh path. It does not
+establish the held-final-reply notification/replay journey or contention bounds.
+The Feature reports one passing Historical Chromium journey, the passing Node
+refresh-race harness and 14 passing C4 source checks; these were not rerun by the
+Epic Manager during this evidence-only review.
+
+Design-impact inventory: `cascade/war_room/DESIGN.md` owns
+`REQ-WARROOM-TRANSCRIPT-006` and the browser incarnation/restart decision.
+The `cascade-dashboard-code` model, view and source contract consistently add
+`pollChatSidecar` and map the progress entry to `loadCurrentRecoveryProgress`,
+both real Function declarations in `static/war_room.js`. Landscape/context and
+container boundaries remain unchanged because these edits add browser GET
+behavior within the existing Dashboard, with no new actor, service or store.
+Component responsibility remains presentation; producer persistence/replay is
+unchanged. The owning design describes normal polling and stale-response/restart
+behavior without delivery attribution. No additional design/model change belongs
+in this Epic evidence-only diff. Task 4 still owns final cross-design reconciliation,
+rendered navigation, pinned source opening and fresh revision-pinned publication;
+the earlier failed publication remains no approval.
+
+Sent `manager:f3_task2_delivery_3dd4f1d8_20261126` to Feature 3, retaining Task 3's
+operational proof and Task 4's architecture closeout responsibilities. Requested
+the exact Task 2 record-correction proposal, resolving Parent Feature link and
+supported-tool refusal if lifecycle prevents correction. The newly reported stale
+link/placeholder closeout is an unresolved canonical record gap, separate from
+the already preserved Task 1 correction. Existing Epic scope and gates cover this
+handoff; no spec amendment, new decision or renewed sign-off is warranted.
+
+Verification: canonical reads, pinned source/design/model diff review, ancestry,
+historical sign-off inspection and `git diff --check`. Acceptance remains withheld
+pending integrated consumer proof, Feature 5 contention repair, canonical record
+corrections and design/publication reconciliation. Return control to child
+execution and supervised delivery.
