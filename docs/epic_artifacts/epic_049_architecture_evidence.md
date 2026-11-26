@@ -2904,3 +2904,46 @@ Acceptance and renewed sign-off remain withheld pending integrated verification,
 Feature 5 contention repair, canonical record corrections, design ownership and
 publication reconciliation, and broader documentation-refresh proof. Return
 control for the queued architecture turn and corrective child planning.
+
+## Architect replay handoff and contention Task coverage review
+
+Reviewed the latest exact-replay routing handoff against canonical Epic
+`9663684255700d5178bdd369c97cb8d5a6f4ed6a` and the saved requests. All twelve
+pinned Git-blob digests match; the Feature request payload SHA-256 remains
+`6425d14508268121cfd65c07ea801cb57c99f3ef6a7ee01d779cad7829941c0f`.
+Feature 3 is canonically completed. Its lifecycle revision `822f5e7e` differs
+from publication pin `99be54b1` only in its relocated Feature record and
+closeout, and remains outside Epic ancestry. Its exact publication replay is
+already routed to the authenticated Feature architect; this Epic turn did not
+replay a child-owned request or establish terminal publication status.
+
+Feature 5 is active, with canonical plan
+`6e26275eec155d05667bd8847e1533538edf46d8` now listing
+`task_049_005_001` and `task_049_005_002`. Reviewed its shared monotonic deadline,
+existing-index-only lookup, graph fence through mapping commit, immutable
+identity checks and contention-to-pending/replay contract against the existing
+Epic gates. Its inventory retains context/container boundary review, component
+ownership, native Code/source-contract/render/navigation checks and normal and
+failure/restart behavior. No scope amendment is needed.
+
+Both Task `read_doc` calls returned `content_access_denied`. Task-level criteria
+were therefore not inspected, and no alternate content path was used. Routed
+`architect:f5_task_criteria_review_6e26275e` to Feature 5 to verify the binding
+criteria in both Tasks and retain a task-to-criterion mapping in permitted
+Feature evidence. This is a specific verification limitation, not proof that
+the Tasks omit those criteria.
+
+Design impact: no design/source/model changes occur in this handoff or the
+inspected Feature 3 lifecycle diff. Actors, runtime/storage boundaries,
+components, Code declarations and execution behavior are unchanged. Existing
+reviews of `cascade/war_room/DESIGN.md`, `cascade/task/DESIGN.md` and
+`cascade/recovery_progress/DESIGN.md` remain applicable; final integrated
+reconciliation and the Recovery Progress persisted ownership mapping remain
+open. No new design review, render, browser test or product test is claimed.
+
+Verification: canonical Epic/Feature and child metadata reads, empty amendment
+listing, twelve pinned digest checks, lifecycle diff/ancestry inspection and
+`git diff --check`. Historical sign-offs are unchanged. Acceptance and renewed
+sign-off remain withheld pending integration, contention proof, canonical record
+corrections, design/publication reconciliation and broader documentation-refresh
+proof. Return control to the queued Feature architecture turn and child delivery.
