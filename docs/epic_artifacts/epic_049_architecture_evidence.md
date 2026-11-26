@@ -1844,3 +1844,39 @@ producer design ownership, Task 1/5 record corrections and publication recovery
 remain open. Both saved role sign-offs still name `03280933`; renewed sign-off
 and acceptance remain withheld. Return control to corrective planning and
 supervised delivery.
+
+## Manager corrective planning activation and sequencing reconciliation
+
+On the Feature 4 planning-start event, read canonical Epic `17530d06`,
+Feature 4 `317781a1`, Feature 3 `f3153a9f` and child metadata. Feature 4 is
+active; Feature 3 remains backlog and its canonical dependencies now include
+Features 1, 2 and 4. This closes the metadata discrepancy recorded in earlier
+handoffs. Updated the Epic through `write_doc` to `fc9b57f2`, including the
+Feature 3 breakdown and current sequencing paragraph; canonical readback
+confirmed both. This implements existing decisions `dec_008` and `dec_009`,
+without a new scope choice or sign-off. No architecture amendment is pending.
+
+Sent Feature 4 the planning constraints using request suffix
+`planning_constraints_fc9b57f2_20261126`. Its existing acceptance already owns
+the candidate/evidence delivery, concrete lock/freshness protocol, real private
+and public writer interleavings, first insertion, move/rewrite/restart,
+pending/conflict behavior and malformed/valid UTF-8 continuation. Preserve
+bounded work and deliver final integrated API fixtures to Feature 3. Binding
+Task criteria must be persisted before dispatch; no duplicate Feature edit is
+needed while its team owns planning.
+
+Design review: re-read the candidate Watchdog and War Room design changes and
+the corrective diagram-impact inventory. Those additions describe current
+behavior without delivery attribution; the race guarantee remains subject to
+integrated verification. This turn changes sequencing records only: no actor,
+container, component, Code symbol or behavior diagram changes are warranted.
+The preceding candidate inventory remains assigned to Feature 4, especially
+the private mapping-to-fenced-source relationship, recovery-progress ownership
+and actual Code/source navigation with warm artifact reuse. No model render or
+runtime test was repeated for this planning-only update.
+
+Validation: canonical spec/child readback, empty amendment list, candidate
+design diff inspection and `git diff --check`. Integrated repair acceptance,
+final fixtures, design ownership, completed Task 1/5 record corrections and
+architecture publication recovery remain open. Renewed Epic sign-off remains
+withheld. Return control to Feature 4 planning and supported child delivery.
