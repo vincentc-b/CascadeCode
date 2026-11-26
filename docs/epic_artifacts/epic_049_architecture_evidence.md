@@ -1475,3 +1475,49 @@ publication request remain unchanged. Terminal publication recovery, canonical
 Task-record corrections and producer design ownership remain unresolved. Final
 Feature acceptance is not claimed. Return control to child execution and
 supervisor integration.
+
+## Manager Task 4 pre-delivery gate review
+
+Reviewed canonical Feature revision `52a59707a0b27a8ef83e86bc06df2e36c66221e0`
+and read-only Task branch `515e3b5aacb6d40b50b0f2be527e66fac1a4bf5b` in response
+to `feat_049_002:feat_049_002:task4_predelivery_gap_epic_049_20261126`.
+The Feature branch remains at `52a59707`; Task closeout is not integrated
+acceptance. Source confirms `_record_transcript_milestone` still compares
+incarnation and append sequence alongside immutable entry/graph/message identity
+and raises on any difference. The Task diff does not change that publisher.
+Architecture source still has no `resume_transcript_room_move` declaration.
+These are existing acceptance gaps, not new scope or an Epic amendment.
+
+Cascade enqueued `epic_049:epic_049:manager_task4_predelivery_gates_20261126`
+to Feature 2. Task 4 retains retry-after-rewrite/move, no duplicate line,
+genuine identity conflict rejection and no delayed-old-ack downgrade acceptance;
+the native resume node, retirement relationship and source-contract/navigation
+checks also remain required. The handoff requests final integrated revision and
+route/header/error/detail fixtures for Feature 3 after supervised delivery.
+Feature-owned evidence should capture the pre-delivery finding; its canonical
+spec already contains the binding requirements, so no duplicate spec edit or
+decision is needed here.
+
+Design closeout: reviewed Task-branch War Room, Watchdog and Workspace design
+sections against publisher source, the scoped diff and architecture declarations.
+War Room links move/resume and describes the persistent move journal; Workspace
+describes terminal retirement recovery. Watchdog still names the public mapping
+entry point for the private fast path; the existing Task 4 correction remains
+open. No current-design/model edit is warranted in this Epic evidence-only diff.
+
+| Level / view | Impact and remaining verification |
+|---|---|
+| Context / `cascade-context` | No new actor or external dependency in the acknowledgement repair. |
+| Containers / `cascade-containers` | Existing publisher index and transcript stores retain their runtime/data boundaries. |
+| Components / `cascade-war-room-components`, `cascade-supervisor-components` | Publisher, transcript and retirement ownership remains; Feature review must reconcile final recovery relationships. |
+| Code / `cascade-watchdog-code`, `cascade-dashboard-code`, `cascade-workspace-code` | Task 4 owns publisher retry semantics, the distinct resume node and retirement edge, synchronized source contract and declaration kinds, and actual Explore/Level up/deep-link/pinned-source checks. |
+| Behavior / Watchdog, War Room and Workspace designs | Reconcile stable identity versus changing incarnation/sequence and delayed acknowledgement handling; verify normal retry and crash/resume against the integrated repair. |
+
+Validation: canonical Epic/Feature reads, empty architecture amendment list,
+read-only source/design/diff trace, and both saved sign-offs matching Epic
+`03280933`. `git diff --check` passed. No executable tests, render or browser
+checks were rerun for this work-record-only change; source review does not claim
+the outstanding acceptance passed. Epic scope and sign-offs are unchanged.
+Final receipt/API/Code acceptance, canonical Task-record corrections, producer
+design ownership and terminal Epic publication recovery remain open. Return
+control to child execution and supervisor integration.
