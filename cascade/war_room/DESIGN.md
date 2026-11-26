@@ -66,7 +66,8 @@ incarnation requires restart. The compatible chat route returns only the latest
 window with explicit completeness, incarnation and older-continuation headers.
 An oversized body remains available as UTF-8-aligned immutable chunks of at
 most 64 KiB after a labeled bounded preview; a cursor inside a UTF-8 character
-is invalid, and no row is silently deleted.
+is refused with typed `400 invalid_request`. Every successful incomplete detail
+read advances its byte offset positively, and no row is silently deleted.
 
 `DEC-WARROOM-TRANSCRIPT-001`: Keep authored history in the owning room's
 `docs/_war_room/chat/<graph-id>.jsonl`. The room follows registered document
@@ -358,11 +359,14 @@ refresh persistence and storage failure.
 The War Room presents revision-pinned architecture resources and review state.
 Snapshot view limits are maxima. [snapshot_projection](architecture_routes.py)
 reduces a view page when its shared target/navigation metadata and requested
-views exceed the 256 KiB response cap, preserving all targets and a strictly
-advancing continuation cursor. The browser follows that continuation. If the
-metadata and one view cannot fit, the route returns HTTP 413; it never raises the
-cap or returns a nonadvancing empty page. [HTTP coverage](../../tests/war_room/test_architecture_http.py)
-exercises lossless continuation and the minimum-page refusal.
+views exceed the 256 KiB response cap. Each page carries the targets represented
+by its views plus any unrepresented semantic inventory on the first page; the
+browser merges targets by semantic ID while following the strictly advancing
+view continuation. This keeps large native Code inventories navigable without
+repeating every target on every page. If one view and its targets cannot fit,
+the route returns HTTP 413; it never raises the cap or returns a nonadvancing
+empty page. [HTTP coverage](../../tests/war_room/test_architecture_http.py)
+exercises lossless view and target continuation and the minimum-page refusal.
 Publication, artifact ownership, destination, generation, ancestry and byte-digest
 validation belong to the [workspace design](../workspace/DESIGN.md), specifically
 [REQ-WORKSPACE-001](../workspace/DESIGN.md),

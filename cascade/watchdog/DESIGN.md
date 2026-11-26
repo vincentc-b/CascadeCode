@@ -4,84 +4,18 @@ Purpose: observe canonical state, admit dependency-ready work, and coordinate bo
 
 ## Current recovery progress publication
 
-`REQ-WATCHDOG-PROGRESS-001`: The supervisor projects committed action and
-incident receipts into bounded current recovery evidence without changing repair
-authority. Exact action generation, attempt and claim identity joins receipts to
-live invocation or executor observations. An attempt result remains verification
-pending until a fresh same-generation authoritative postcheck; missing, expired,
-dead, inaccessible, legacy or conflicting live evidence is unavailable rather
-than execution proof.
-
-`DEC-WATCHDOG-PROGRESS-001`: Use a disposable writer-only SQLite index for
-receipt deduplication, dirty work aliases and fair replay cursors. Authoritative
-actions and incidents remain in their existing ledgers. The producer writes
-immutable bounded pages and manifests below
-`.cascade/recovery_progress/v1/work/<sha256(work-id)>/`, then atomically replaces
-that work ID's `current.json`. Owning-graph and affected-work aliases published
-in one batch share the entry identity, entry revision and manifest revision.
-
-[`publish_committed_transition`](../recovery_progress/publisher.py) is the
-best-effort after-lock path. It first asks the War Room's
-[`append_committed_recovery_receipt`](../war_room/recovery_milestones.py) for a
-durable transcript acknowledgement, then calls the private
-[`_record_transcript_milestone`](../recovery_progress/publisher.py) inside its
-writer transaction before `_upsert`. The bounded drain uses the same private
-mapping helper. The public
-[`record_transcript_milestone`](../recovery_progress/publisher.py) is a separate
-entry point for already committed acknowledgements. Every mapping path takes the
-publisher lock and SQLite write transaction before acquiring the graph fence,
-then retains that fence from the bounded source-key lookup through mapping,
-entry-reference update and commit. Receipt, entry, graph and message identity
-remain immutable, while a delayed pre-rewrite or pre-move acknowledgement cannot
-replace newer routing metadata. Pending move, rewrite, append or import evidence
-leaves the mapping absent or unchanged and the drain cursor retryable. Transcript
-repair, import and page publication happen before the publisher transaction.
-`_upsert`
-joins only committed mappings for the entry's retained receipt order, so failed
-or pending chat appends leave `milestone_refs` empty without changing repair
-admission. [`drain_recovery_progress`](../recovery_progress/publisher.py)
-replays missed committed receipts on startup and at the beginning of
-`watchdog_tick`, before `process_lock` and slow lifecycle, Git or provider work.
-A pass admits at most 100 receipts and 100 dirty owners or one second; the fast
-path has a 250 ms deadline. A partial or failed publication retains explicit
-dirty lag for a later pass. Each source ledger is loaded at most once per pass,
-and measured load duration is returned with the drain result rather than
-represented as a constant latency guarantee. Legacy coverage stays incomplete
-until the resumable import reaches a complete pass.
-
-```mermaid
-sequenceDiagram
-    participant S as Action or incident source
-    participant P as Progress publisher
-    participant T as Owning transcript fence
-    participant I as Disposable writer index
-    participant F as Immutable work pages
-    S->>S: Commit transition receipt under lifecycle lock
-    S-->>P: Notify after outer lock
-    P->>T: Append/dedupe receipt line after source-lock release
-    T-->>P: Durable message acknowledgement after fence release
-    P->>I: Begin mapping transaction
-    P->>T: Fence graph; read current source-key routing
-    P->>I: Map receipt, join snapshot, commit entry references
-    T-->>P: Release fence after publisher commit
-    P->>F: Publish affected aliases and atomic pointers
-    alt Notification missed or process restarted
-        P->>S: Bounded fair source replay
-        P->>T: Replay the same receipt source key
-        P->>I: Import receipt and committed message mapping
-        P->>F: Publish dirty aliases with lag/completeness
-    else Live evidence expired or inaccessible
-        P->>F: Retain last blocker priority as unavailable
-    end
-```
+The significant producer, its SQLite projection state, fenced transcript mapping
+protocol, pending behavior and restart replay are owned by the
+[Recovery progress design](../recovery_progress/DESIGN.md). Watchdog calls
+[`drain_recovery_progress`](../recovery_progress/publisher.py) at the beginning
+of `watchdog_tick`, before `process_lock` and slow lifecycle, Git or provider
+work. It supplies authoritative receipts and postcheck observations but does not
+own the projection's requirements or decisions. War Room owns transcript
+durability and the bounded read surface.
 
 The `cascade-watchdog-code` view links the tick, bounded drain and immutable
 publisher, including the durable mapping writer; `cascade-dashboard-code` owns
-receipt serialization and graph append. [Producer integration tests](../../tests/recovery_progress/test_publisher.py)
-exercise state evidence, exact live matching, immutable alias revisions, missed
-notifications, fair continuation, ordering, sanitization and measured source
-cost. Task owns source receipt durability; War Room owns the safe entry contract
-and bounded read surface.
+receipt serialization, graph append and authoritative source-key lookup.
 
 ## Dispatch ownership transition
 
