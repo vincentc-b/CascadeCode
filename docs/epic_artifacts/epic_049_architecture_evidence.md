@@ -1608,3 +1608,59 @@ warranted here. `git diff --check` passed. No dependency was installed. Producer
 design ownership, completed Task 1/5 board corrections, final API/navigation
 evidence and supported Epic publication recovery remain open. Return control to
 Architect/lifecycle review and corrective child planning.
+
+## Architect corrective acknowledgement review
+
+Reviewed corrective Feature `115d3f34`, consumer Feature `1925b1e6`, Epic
+`fd966c56`, and completed Feature source `7f7df0e8`. The corrective acceptance
+covers every mapping writer and the full freshness-check/write interval, not
+only a public-wrapper refresh. Normal identical replay preserves immutable
+receipt/entry/graph/message identity. In the failure interleaving, a delayed
+private acknowledgement can overwrite a newer incarnation/sequence because
+`_record_transcript_milestone` updates those fields without an ordering proof.
+The public wrapper reads current routing before taking the publisher writer
+lock, leaving a separate check-to-write interval. The existing regression in
+`tests/recovery_progress/test_transcript_milestones.py` calls only that public
+wrapper sequentially; it does not establish private-path race safety. The
+reported reproduction and 27-test result were not rerun during this review.
+
+Reviewed Watchdog, War Room and Workspace designs against those source paths.
+Watchdog's progress section and `DEC-WARROOM-TRANSCRIPT-003` currently overstate
+delayed-acknowledgement protection; corrective Feature acceptance owns their
+reconciliation with the actual synchronization protocol. Native private mapping
+and `resume_transcript_room_move` nodes now exist. Their presence closes the
+missing-node finding, not behavioral or browser acceptance. At this revision,
+`architecture/design-mappings.json` includes both recovery-progress directories;
+the remaining ownership gap is the significant publisher directory's absent
+child design and its mapping to `cascade`, whose design does not name that
+coverage. The corrective spec already assigns this reconciliation.
+
+The corrective Feature's level-by-level inventory is adequate for planning:
+context and containers retain their actors/runtime/data boundaries; supervisor
+and War Room components retain ownership but must reconcile synchronization;
+Watchdog/Dashboard Code and affected Workspace Code must match final source,
+relationships and declaration kinds. Owning behavior diagrams must explain
+normal mapping, delayed writers, unavailable evidence, restart and lock ordering.
+Feature Tasks must retain actual Code navigation, Level up, deep links, pinned
+source, warm reuse and render-bound verification. No new model edit or render is
+justified by this Epic work-record/sequence clarification.
+
+Updated the canonical Epic through `write_doc` to `684f686c`: replaced the bare
+corrective feature ID and contradictory three-feature-only wording with its
+existing scope and sequencing hold. This reconciles `dec_008`; it introduces no
+new architectural choice. Readback confirms the complete corrective entry and
+explicit metadata discrepancy. Feature 3 still has only Features 1 and 2 in
+`depends_on`; its body cannot enforce dispatch order. Authorized lifecycle
+reconciliation remains required before it advances. Both saved role sign-offs
+and the saved failed publication tuple name `03280933`, not the current plan.
+No renewed sign-off or replacement publication is claimed while sequencing
+remains unresolved; the historical publication request is preserved unchanged.
+
+Sent Feature 2 the source/design findings and corrective ownership through
+`epic_049:epic_049:architect_private_ack_corrective_review_20261126`.
+Validation: canonical spec readbacks, empty architecture amendment list, pinned
+source/test/design/model inspection and `git diff --check`. No executable tests,
+renderer or browser journey were run for this documentation-only review.
+Integrated correction acceptance, completed Task-record corrections, child design
+ownership, final API/navigation evidence and supported publication recovery
+remain open. Return control to lifecycle reconciliation and corrective planning.
