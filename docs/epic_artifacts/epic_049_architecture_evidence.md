@@ -1521,3 +1521,33 @@ the outstanding acceptance passed. Epic scope and sign-offs are unchanged.
 Final receipt/API/Code acceptance, canonical Task-record corrections, producer
 design ownership and terminal Epic publication recovery remain open. Return
 control to child execution and supervisor integration.
+
+## Architect Task 4 pre-delivery gate review
+
+Reviewed canonical Feature revision `52a59707` and Task branch `515e3b5a`
+against the Manager handoff above. The Task diff leaves the publisher unchanged:
+`_record_transcript_milestone` compares incarnation and append sequence with
+entry/graph/message identity and rejects any difference. Normal identical replay
+is accepted, but a valid changed routing acknowledgement still conflicts. The
+existing Task 4 retry, genuine-conflict and delayed-old-ack acceptance gates remain
+necessary; no repaired behavior is claimed from this static review.
+
+Reviewed War Room, Watchdog and Workspace designs against the scoped source and
+model diff. War Room and Workspace explain journaled movement and terminal
+restart; Watchdog still names the public mapping API for the private fast path.
+The model and source contract contain no `resume_transcript_room_move` node.
+The Manager's level-by-level diagram-impact inventory above remains accurate:
+context, runtime/data and component ownership boundaries are unchanged, while
+native Dashboard/Workspace resume coverage and Watchdog mapping semantics need
+Task 4 reconciliation and integrated navigation evidence. Existing team routing
+already covers these corrections; no duplicate notification or spec amendment
+is needed. Final route/header/error/detail fixtures remain pending integration.
+
+Validation: canonical Epic/Feature reads, empty amendment list, read-only
+source/design/model comparison, and all six saved publication references matching
+their committed digests and this checkout. Both Epic sign-offs still name
+`03280933`. `git diff --check` passed. No executable tests, renderer or browser
+checks were rerun for this work-record-only review. Epic plan, sign-offs and the
+failed publication tuple remain unchanged. Final acceptance, canonical record
+corrections, producer design ownership and supported publication recovery remain
+open. Return control to supervised child delivery.
