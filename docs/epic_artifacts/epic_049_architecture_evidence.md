@@ -2395,3 +2395,46 @@ comparison, both link checks and `git diff --check`. Integrated consumer proof,
 Feature 5 contention repair, canonical record corrections and design/publication
 reconciliation remain open. Return control to child execution and supervised
 delivery.
+
+## Manager Feature 3 failed-publication handoff
+
+In reply to `feat_049_003:feat_049_003:architect:task1_publication_failed_20261126`.
+Read canonical Epic `9663684255700d5178bdd369c97cb8d5a6f4ed6a` and Feature 3
+`1c7fbea950c3a17a9b8e860655c7ac7dfc090df5`, child metadata and the empty
+architecture amendment list. The Feature architect reports that exact proposal
+operation `architecture-publication-6df02decc8f93271a24f3aad21fc6d75d386bf4302261288ad67a83d552b645f`
+failed with `internal_error`: render worker interrupted after automatic recovery,
+render operation `c4-render-2722d84e6af4c6c8d406e3212a36739b21dc5cc885602d10faa96ecbce84fdde`,
+two attempts. No review unit was published. This is attributed owner evidence;
+the Epic Manager has no architecture-operation inspection/replay tool and does
+not independently claim terminal-state verification.
+
+The event-time statement that Task 2 was unmerged is now superseded by the
+observed Feature branch `8e3c41bc305d5359feda0c287282625c18e82c4b`: Git ancestry
+confirms delivery `1727c757` is included. This ancestry check is not an integrated
+source review or acceptance of Task 2. Feature 3 remains active; Feature 5 is
+backlog in canonical child metadata. Return control for supervised execution.
+
+Sent `manager:f3_publication_failed_6df02_20261126` to Feature 3. Preserve the
+failed exact proposal and failure evidence; it is not approval. Task 4 owns a
+separate freshly reviewed integrated proposal after source/design/native Code
+reconciliation, pinned render and actual navigation checks. Requested final
+revision, publication result and unresolved gaps in the canonical closeout.
+Existing Epic publication recovery and Feature 4's pending exact proposal remain
+separate; their pins and historical sign-offs are unchanged. Existing scope and
+acceptance requirements already cover this handoff, so no spec amendment or new
+decision is needed.
+
+Design-impact review: inspected the pinned War Room design's publication,
+bounded rendering and navigation contracts against the existing Feature Task 4
+inventory and Epic publication gates. This evidence-only diff changes no actors,
+runtime/data boundaries, component responsibilities, Code symbols or behavioral
+flows; no DESIGN/model edit or render rerun is warranted. The failed operation
+does not establish native Code navigation or design completeness. Final integrated
+consumer/producer review and persisted design ownership remain outstanding.
+
+Validation: canonical reads, child/amendment inspection, pinned design review,
+Feature branch ancestry/log checks and `git diff --check`. No product/browser
+tests were rerun for this handoff. Acceptance and renewed sign-off remain withheld
+pending integrated consumer proof, Feature 5 contention repair, canonical record
+corrections and design/publication reconciliation.
