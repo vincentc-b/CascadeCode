@@ -1814,3 +1814,33 @@ publication recovery remain separate open items.
 Validation: canonical Epic/Feature reads and corrective spec readback, child
 metadata, candidate/evidence diff and ancestry inspection, and `git diff --check`.
 Return control to corrective planning and supervised delivery.
+
+## Architect final Feature 2 evidence review
+
+Reviewed evidence-only commit `e986ceb19d69de834ef9074ce8b35d66dd81bd4b`,
+candidate `ecd390f4`, canonical Epic `17530d06` and corrective Feature
+`4828dfcb`. The corrective spec already preserves this handoff and its limits;
+no duplicate scope edit or notification is needed. Neither candidate nor evidence
+commit is in Epic ancestry at `e1843b60`.
+
+The reported 29 tests and 234-element/280-relationship/24-view validation are
+Feature-owned evidence, not checks rerun here. The evidence-only diff requires
+no design or model change. Rechecked the candidate's Watchdog and War Room design
+changes against the publisher and detail-reader diff: current behavior prose
+contains no delivery attribution. The preceding architect diagram-impact
+inventory remains applicable at every level. In particular, the final handoff's
+unchanged-symbol rationale does not discharge review of the private mapping
+helper's new fenced-source call relationship. Corrective acceptance retains
+that source-contract review, actual navigation and the complete writer-race,
+first-insertion, pending/conflict and move/restart checks. No new defect is
+claimed from this review.
+
+Validation: canonical spec reads, child metadata, candidate/evidence diff and
+ancestry checks, all six historical publication digests verified against exact
+commits, and `git diff --check`. No tests, render or browser run was repeated.
+Feature 4 remains backlog; Feature 3 still lists only Features 1 and 2 as
+prerequisites. Sequencing reconciliation, integrated repair acceptance,
+producer design ownership, Task 1/5 record corrections and publication recovery
+remain open. Both saved role sign-offs still name `03280933`; renewed sign-off
+and acceptance remain withheld. Return control to corrective planning and
+supervised delivery.
