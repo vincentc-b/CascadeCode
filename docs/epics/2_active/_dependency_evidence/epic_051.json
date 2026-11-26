@@ -983,6 +983,27 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_405184843227a97e854414074673136a2ba15a567d36102abdc64f0cd9929f35",
+      "dependency_id": "dep_playwright",
+      "manifest_revision": 3,
+      "entry_revision": "sha256:56e83790bc1092e08995e8a64bc51ade9f33843be2fbd651943c8a101be6858d",
+      "recipe_revision": "sha256:9db86137978c185b20e568875ff86e9b99939422d4e69d532a1ea60865b1b333",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, pathlib, hashlib; d=m.distribution('\"'\"'playwright'\"'\"'); assert d.version=='\"'\"'1.64.0'\"'\"'; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()=='\"'\"'aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"'); print('\"'\"'playwright'\"'\"', d.version)'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-26T20:02:02.330331+00:00",
+      "selected_version": "1.64.0",
+      "integrity_reference": "sha256:aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8",
+      "lock_references": [
+        "/home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info/RECORD",
+        "/home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info/RECORD"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
