@@ -187,7 +187,18 @@ def _repair_publication_board(root: Path, monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(review, "push_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "cascade.feature.repair.current_feature_repair_record",
-        lambda *_a, **_k: {"generation": 1, "action_id": "feature_repair:feat_001:one"},
+        lambda *_a, **_k: {
+            "generation": 1,
+            "action_id": "feature_repair:feat_001:one",
+            "repair_route": "open_review",
+            "review_generation": 0,
+            "review_url": "https://example.test/pulls/1",
+            "review_forge": "github",
+            "source_ref": "feat/feat_001",
+            "target_ref": "epic/epic_001",
+            "source_head": "source-head",
+            "target_head": "target-head",
+        },
     )
 
 
@@ -208,6 +219,7 @@ def test_open_historical_review_is_refreshed_for_repair_generation(
             "source_branch": "feat/feat_001",
             "target_branch": "epic/epic_001",
             "source_revision": "source-head",
+            "target_revision": "target-head",
         },
     )
     monkeypatch.setattr(review, "find_merge_request", lambda *_a, **_k: None)
@@ -226,6 +238,26 @@ def test_open_historical_review_is_refreshed_for_repair_generation(
     assert current["previous_review_url"] == mr.url
     assert review.feature_review_generation("feat_001", 0, root=root)["url"] == mr.url
 
+    monkeypatch.setattr(
+        review,
+        "merge_request_snapshot",
+        lambda *_a, **_k: {
+            "state": "open",
+            "url": mr.url,
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_revision": current["source_head"],
+            "target_revision": current["target_head"],
+        },
+    )
+    monkeypatch.setattr(
+        review,
+        "push_branch",
+        lambda *_a, **_k: pytest.fail("checkpoint replay must not push again"),
+    )
+    replay = review.ensure_feature_review("feat_001", root=root)
+    assert replay is not None and replay.url == mr.url
+
 
 def test_changed_review_source_head_is_refused_before_repair_publication(
     tmp_path: Path,
@@ -242,6 +274,21 @@ def test_changed_review_source_head_is_refused_before_repair_publication(
         action_id="feature_repair:feat_001:one",
     )
     monkeypatch.setattr(
+        "cascade.feature.repair.current_feature_repair_record",
+        lambda *_a, **_k: {
+            "generation": 1,
+            "action_id": "feature_repair:feat_001:one",
+            "repair_route": "open_review",
+            "review_generation": 0,
+            "review_url": current["url"],
+            "review_forge": "github",
+            "source_ref": "feat/feat_001",
+            "target_ref": "epic/epic_001",
+            "source_head": "source-head",
+            "target_head": "target-head",
+        },
+    )
+    monkeypatch.setattr(
         review,
         "merge_request_snapshot",
         lambda *_a, **_k: {
@@ -250,6 +297,7 @@ def test_changed_review_source_head_is_refused_before_repair_publication(
             "source_branch": "feat/feat_001",
             "target_branch": "epic/epic_001",
             "source_revision": "unexpected-moving-head",
+            "target_revision": "target-head",
         },
     )
 
@@ -257,13 +305,74 @@ def test_changed_review_source_head_is_refused_before_repair_publication(
         review.ensure_feature_review("feat_001", root=root)
 
 
-def test_merged_historical_review_creates_linked_follow_up_and_fences_old_callback(
+def test_changed_review_target_head_is_refused_before_repair_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _repair_publication_board(root, monkeypatch)
+    current = _projection("https://example.test/pulls/1")
+    review._store_review_generation(root, "feat_001", current, generation=0, action_id=None)
+    monkeypatch.setattr(
+        review,
+        "merge_request_snapshot",
+        lambda *_a, **_k: {
+            "state": "open",
+            "url": current["url"],
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_revision": "source-head",
+            "target_revision": "moved-target-head",
+        },
+    )
+    monkeypatch.setattr(
+        review,
+        "push_branch",
+        lambda *_a, **_k: pytest.fail("stale target refusal must precede push"),
+    )
+
+    with pytest.raises(review.GitError, match="target head changed"):
+        review.ensure_feature_review("feat_001", root=root)
+
+
+def test_changed_original_review_identity_refuses_before_push(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = make_repo(tmp_path)
     _repair_publication_board(root, monkeypatch)
     old = _projection("https://example.test/pulls/1")
-    old_record = review._store_review_generation(
+    review._store_review_generation(root, "feat_001", old, generation=0, action_id=None)
+    monkeypatch.setattr(
+        "cascade.feature.repair.current_feature_repair_record",
+        lambda *_a, **_k: {
+            "generation": 1,
+            "action_id": "feature_repair:feat_001:one",
+            "repair_route": "open_review",
+            "review_generation": 0,
+            "review_url": "https://example.test/pulls/99",
+            "review_forge": "github",
+            "source_ref": "feat/feat_001",
+            "target_ref": "epic/epic_001",
+            "source_head": "source-head",
+            "target_head": "target-head",
+        },
+    )
+    monkeypatch.setattr(
+        review,
+        "push_branch",
+        lambda *_a, **_k: pytest.fail("identity refusal must precede push"),
+    )
+
+    with pytest.raises(review.GitError, match="identity changed"):
+        review.ensure_feature_review("feat_001", root=root)
+
+
+def test_merged_original_review_refuses_scoped_repair_without_creating_follow_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _repair_publication_board(root, monkeypatch)
+    old = _projection("https://example.test/pulls/1")
+    review._store_review_generation(
         root, "feat_001", old, generation=0, action_id=None
     )
     old_mr = review._record_to_mr(old)
@@ -276,31 +385,23 @@ def test_merged_historical_review_creates_linked_follow_up_and_fences_old_callba
             "source_branch": "feat/feat_001",
             "target_branch": "epic/epic_001",
             "source_revision": "source-head",
+            "target_revision": "target-head",
             "merge_sha": "merge-zero",
         },
     )
-    follow_up = MergeRequest(
-        url="https://example.test/pulls/2",
-        number="2",
-        forge="github",
-        source_branch="feat/feat_001",
-        target_branch="epic/epic_001",
-        draft=False,
-    )
     monkeypatch.setattr(review, "find_merge_request", lambda *_a, **_k: None)
-    monkeypatch.setattr(review, "create_merge_request", lambda *_a, **_k: follow_up)
-
-    published = review.ensure_feature_review("feat_001", root=root)
-
-    assert published == follow_up
-    current = review.review_record_for_feature("feat_001", root=root)
-    assert current["route"] == "follow_up"
-    assert current["previous_review_url"] == old_mr.url
-    assert current["url"] == follow_up.url
-    assert (
-        review.feature_review_generation("feat_001", 0, root=root)["url"] == old_mr.url
+    monkeypatch.setattr(
+        review,
+        "create_merge_request",
+        lambda *_a, **_k: pytest.fail("terminal review must not create a follow-up"),
     )
-    assert not review.review_callback_is_current("feat_001", old_record, root=root)
+
+    with pytest.raises(review.GitError, match="no longer open"):
+        review.ensure_feature_review("feat_001", root=root)
+
+    current = review.review_record_for_feature("feat_001", root=root)
+    assert current["current_generation"] == 0
+    assert current["url"] == old_mr.url
 
 
 def test_follow_up_save_failure_recovers_same_remote_review(
@@ -308,6 +409,13 @@ def test_follow_up_save_failure_recovers_same_remote_review(
 ) -> None:
     root = make_repo(tmp_path)
     _repair_publication_board(root, monkeypatch)
+    monkeypatch.setattr(
+        "cascade.feature.repair.current_feature_repair_record",
+        lambda *_a, **_k: {
+            "generation": 1,
+            "action_id": "feature_repair:feat_001:legacy",
+        },
+    )
     old = _projection("https://example.test/pulls/1")
     review._store_review_generation(root, "feat_001", old, generation=0, action_id=None)
 

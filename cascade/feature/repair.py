@@ -184,6 +184,76 @@ def inspect_feature_repair(
     return _result(action, replayed=True)
 
 
+def inspect_open_review_repair(
+    feature_id: str,
+    request_id: str,
+    *,
+    root: Path,
+    reason: str | None = None,
+    evidence: Mapping[str, Any] | None = None,
+    requesting_parent_id: str | None = None,
+    authenticated_human: AuthenticatedHuman | None = None,
+    approval_reference: str | None = None,
+    scope_reference: str | None = None,
+    review_url: str | None = None,
+    review_forge: str | None = None,
+    source_ref: str | None = None,
+    target_ref: str | None = None,
+    observed_source_head: str | None = None,
+    observed_target_head: str | None = None,
+    observed_review_generation: int | None = None,
+    claim_id: str | None = None,
+    incident_budget_id: str | None = None,
+) -> dict[str, Any]:
+    """Inspect an open-review replay and enforce its canonical fingerprint."""
+
+    try:
+        request = _open_review_request(
+            reason=reason,
+            evidence=evidence,
+            requesting_parent_id=requesting_parent_id,
+            authenticated_human=authenticated_human,
+            approval_reference=approval_reference,
+            scope_reference=scope_reference,
+            review_url=review_url,
+            review_forge=review_forge,
+            source_ref=source_ref,
+            target_ref=target_ref,
+            observed_source_head=observed_source_head,
+            observed_target_head=observed_target_head,
+            observed_review_generation=observed_review_generation,
+            claim_id=claim_id,
+            incident_budget_id=incident_budget_id,
+        )
+    except FeatureRepairError as exc:
+        code = str(exc).replace(" ", "_")
+        return _typed_refusal(
+            _stable_action_id(feature_id, request_id),
+            _FeatureRepairRefusal(code, "complete_repair_request"),
+        )
+    if request is None:  # pragma: no cover - the wrapper requires open-review fields
+        raise FeatureRepairError("open review repair request content is required")
+
+    repo = lifecycle_root(Path(root).resolve())
+    action_id = _stable_action_id(feature_id, request_id)
+    with task_lifecycle_read_lock(root=repo):
+        action = _actions(_read_payload(repo)).get(action_id)
+    if action is None:
+        return inspect_feature_repair(feature_id, request_id, root=repo)
+    if action.get("request_digest") != _request_digest(request):
+        return _typed_refusal(
+            action_id,
+            _FeatureRepairRefusal(
+                "request_content_changed",
+                "submit_a_new_request_id",
+                terminal=True,
+            ),
+            action=action,
+            replayed=True,
+        )
+    return _result(action, replayed=True)
+
+
 def feature_repair(
     feature_id: str,
     request_id: str,

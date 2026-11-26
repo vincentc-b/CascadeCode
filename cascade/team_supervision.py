@@ -217,7 +217,7 @@ def request_feature_review_repair(
 
     from cascade.feature.repair import (
         admit_open_review_repair,
-        inspect_feature_repair,
+        inspect_open_review_repair,
     )
     from cascade.workspace.integration_worktree import locate_trunk, merged_board
     from cascade.workspace.kickoff import (
@@ -247,7 +247,15 @@ def request_feature_review_repair(
 
     owner_live = graph_turn_owner_is_live(feature_id)
     if owner_live:
-        inspected = inspect_feature_repair(feature_id, request_id, root=trunk)
+        inspected = inspect_open_review_repair(
+            feature_id,
+            request_id,
+            root=trunk,
+            requesting_parent_id=requesting_parent_id,
+            authenticated_human=authenticated_human,
+            **request,
+        )
+        refused = bool(inspected.get("refused"))
         return {
             **inspected,
             "feature_id": feature_id,
@@ -261,11 +269,13 @@ def request_feature_review_repair(
             "owner_live": True,
             "executing": bool(inspected.get("executing")),
             "executed": bool(inspected.get("executed")),
-            "waiting": True,
-            "refused": bool(inspected.get("refused")),
+            "waiting": bool(inspected.get("waiting")) if refused else True,
+            "refused": refused,
             "verification_pending": bool(inspected.get("verification_pending")),
             "verified": bool(inspected.get("verified")),
-            "next_prerequisite": "join_live_feature_owner",
+            "next_prerequisite": inspected.get("next_prerequisite")
+            if refused
+            else "join_live_feature_owner",
         }
 
     admitted = admit_open_review_repair(

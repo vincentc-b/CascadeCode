@@ -307,6 +307,7 @@ def test_live_feature_owner_defers_wakeup_without_claiming_execution(
     )
 
     assert result["admitted"] is False
+    assert result["acknowledged"] is False
     assert result["owner_live"] is True
     assert result["waiting"] is True
     assert result["wakeup_acknowledged"] is False
@@ -317,3 +318,46 @@ def test_live_feature_owner_defers_wakeup_without_claiming_execution(
     events, _ = read_events("feat_001", 0, root=root)
     assert events == []
     assert not (root / ".cascade/executions.json").exists()
+
+
+def test_live_feature_owner_refuses_changed_content_for_admitted_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    request = _completed_open_review(root)
+    request_id = str(request.pop("request_id"))
+    human = AuthenticatedHuman("human:operator")
+    owner_live = False
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.graph_turn_owner_is_live",
+        lambda *_a: owner_live,
+    )
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff.kickoff_graph_queue_event", lambda *_a, **_k: True
+    )
+    admitted = request_feature_review_repair(
+        "feat_001",
+        request_id,
+        root=root,
+        authenticated_human=human,
+        **request,
+    )
+    before = (root / ".cascade/executions.json").read_bytes()
+
+    owner_live = True
+    refused = request_feature_review_repair(
+        "feat_001",
+        request_id,
+        root=root,
+        authenticated_human=human,
+        **{**request, "reason": "Changed repair scope"},
+    )
+
+    assert admitted["admitted"] is True
+    assert refused["action_id"] == admitted["action_id"]
+    assert refused["admitted"] is False
+    assert refused["refused"] is True
+    assert refused["waiting"] is False
+    assert refused["blocker"] == "request_content_changed"
+    assert refused["next_prerequisite"] == "submit_a_new_request_id"
+    assert (root / ".cascade/executions.json").read_bytes() == before

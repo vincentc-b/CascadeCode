@@ -2091,7 +2091,7 @@ code_boss_retire = element "_retire_feature_worktree" "Function" "Calls the Work
     }
 }
 
-code_boss_review = element "ensure_feature_review" "Function" "Publish through review safeguards." {
+code_boss_review = element "ensure_feature_review" "Function" "Refresh an admitted scoped repair on the same open review; terminal or changed review identity fails before push or creation." {
     properties {
         "cascade.semanticId" "element.code.boss.review"
         "cascade.parent" "element.component.boss"
@@ -2100,12 +2100,21 @@ code_boss_review = element "ensure_feature_review" "Function" "Publish through r
     }
 }
 
-code_boss_review_route = element "_require_repair_review_route" "Function" "Require fresh forge URL and source/target facts before a repair review is reused or followed up." {
+code_boss_review_route = element "_require_repair_review_route" "Function" "Require fresh forge URL and source/target facts before a repair review is reused." {
     properties {
         "cascade.semanticId" "element.code.boss.review-route"
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/review.py"
         "cascade.sourceSymbol" "_require_repair_review_route"
+    }
+}
+
+code_boss_open_review_identity = element "_require_open_review_repair_identity" "Function" "Bind publication to the admitted original review observation or its checkpointed repair action." {
+    properties {
+        "cascade.semanticId" "element.code.boss.open-review-repair-identity"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "_require_open_review_repair_identity"
     }
 }
 
@@ -2316,7 +2325,7 @@ code_watchdog_incident_projection = element "_incident_projection" "Function" "S
     }
 }
 
-code_feature_mint = element "mint_task" "Function" "Admit scoped child specification under lifecycle lock." {
+code_feature_mint = element "mint_task" "Function" "Under the lifecycle lock, join one admitted repair reservation and idempotently repair Task, parent and dispatch event persistence." {
     properties {
         "cascade.semanticId" "element.code.feature.mint"
         "cascade.parent" "element.component.feature-team"
@@ -2361,7 +2370,7 @@ code_feature_open_review_repair = element "admit_open_review_repair" "Function" 
     }
 }
 
-code_feature_reserve = element "reserve_repair_child" "Function" "Persist the idempotent Task identity and rendered-spec digest before child and parent writes." {
+code_feature_reserve = element "reserve_repair_child" "Function" "Persist one Task identity, mint-request digest and rendered-spec digest before child and parent writes; changed replay refuses." {
     properties {
         "cascade.semanticId" "element.code.feature.reserve-repair-child"
         "cascade.parent" "element.component.feature-team"
@@ -2604,6 +2613,12 @@ code_boss_review_to_route = code_boss_review -> code_boss_review_route "Checks f
     }
 }
 
+code_boss_review_to_open_identity = code_boss_review -> code_boss_open_review_identity "Joins the admitted original review" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-review-to-open-review-identity"
+    }
+}
+
 code_boss_queue_to_task_revalidation = code_boss_queue -> code_task_revalidation "Queues replacement final validation when either head moves" {
     properties {
         "cascade.semanticId" "relationship.code-boss-queue-to-task-revalidation"
@@ -2712,7 +2727,7 @@ code_feature_registry_to_mint = code_feature_registry -> code_feature_mint "Uses
     }
 }
 
-code_feature_mint_to_reserve = code_feature_mint -> code_feature_reserve "Reserves before persistence" {
+code_feature_mint_to_reserve = code_feature_mint -> code_feature_reserve "Reserves exact child and content before persistence" {
     properties {
         "cascade.semanticId" "relationship.code-feature-mint-to-reserve-repair-child"
     }

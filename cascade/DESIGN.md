@@ -413,12 +413,14 @@ compatibility projection. Only a callback matching the current generation,
 URL and source/target route can satisfy closeout; historical acceptance remains
 inspectable but cannot approve later repair code.
 `REQ-REVIEW-REPAIR-002`: Repair publication observes the recorded review at the
-forge before selecting a route. A confirmed open review can be refreshed at the
-same URL; a confirmed merged review requires a linked follow-up from the retained
-Feature branch to its owning Epic branch. Unknown or conflicting state fails
-closed. Reconciliation binds callbacks to their immutable generation and exact
-accepted source/target heads, while independent target integration remains a
-separate closeout obligation.
+forge before selecting a route. A scoped open-review repair can refresh only its
+admitted original URL, forge and source/target route; its observed generation and
+heads must match before the first push, and replay joins the checkpointed action.
+Merged, closed, missing or changed original reviews fail closed without creating
+a follow-up. Legacy accepted-review follow-up remains a distinct route and cannot
+be selected by this scoped action. Reconciliation binds callbacks to their
+immutable generation and exact accepted source/target heads, while independent
+target integration remains a separate closeout obligation.
 `REQ-REVIEW-DELIVERY-001`: [feature_delivery_view](review.py) and its bulk form
 derive a Feature's delivery phase from the canonical board row, current immutable
 review generation, admitted repair action, completion event, and local

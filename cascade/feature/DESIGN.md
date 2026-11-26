@@ -149,6 +149,11 @@ document is written. Restart reuses that reservation, verifies an existing Task
 against the digest, and idempotently repairs the parent child list and
 `TasksMinted` event. A completed Feature cannot mint without first passing the
 generation-bound repair admission and becoming the exact authorized active copy.
+The lifecycle lock covers reservation, Task/parent repair and event replay, so
+concurrent callers join the reserved identity rather than allocating another
+child or advertising another dispatch. The normal Task team remains responsible
+for provider admission and final validation; replay does not create a parallel
+repair executor or reset either finite operation identity.
 [recover_task](recovery.py) delegates ordinary Task failures to
 [supervisor_recover_task_delivery](../task/supervisor_recovery.py). For a
 completed-parent delivery mismatch it instead verifies the queued action's exact
@@ -182,3 +187,10 @@ sequenceDiagram
     Team->>Action: checkpoint child persistence
     Note over Action,Parent: A crash at either write resumes from the reservation
 ```
+
+Publication reuses the admitted review's exact URL, forge and source/target
+route. Before the first refresh, the immutable observed review generation and
+heads must still match the action; after the refresh checkpoint, replay joins
+the same publication action and current repair generation. A merged, closed,
+missing or replaced original review is outside this scoped route and fails
+before push or review creation.

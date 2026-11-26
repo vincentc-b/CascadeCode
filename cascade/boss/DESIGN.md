@@ -57,6 +57,7 @@ own forge state. These functions collaborate within the local supervisor.
 | [feature_review_generation](../review.py) | Read immutable per-generation review facts; top-level fields remain the current compatibility projection. |
 | [feature_review_pending](../review.py) | Read an unclosed registry row or the completed-document preparation window; missing acceptance is not a completed delivery receipt. |
 | [_require_repair_review_route](../review.py) | Compare a repair review's URL and source/target route with fresh forge facts before reuse or acceptance. |
+| [_require_open_review_repair_identity](../review.py) | Join scoped repair publication to the admitted original review identity, observation or checkpointed action. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
 | [prove_terminal_retirement](../workspace/integration_worktree.py) | Recheck terminal shared Feature delivery, then verify and canonically persist every terminal descendant before best-effort checkout retirement. |
@@ -77,15 +78,15 @@ flowchart TD
     Proof -->|refused| Preserve
 ```
 
-An open historical review is reused for a repair generation only when a fresh
-forge snapshot confirms the same URL and intended target. Its current generation
-then records the newly published source and target heads. A merged historical
-generation retains its accepted URL and heads; publication creates or recovers a
-distinct follow-up review from the retained Feature branch to the owning Epic
-branch and links it to the prior generation. Closed, missing, unknown, or
-conflicting forge facts stop publication. Registry writes are atomic, so a
-restart after remote creation discovers the same open review instead of creating
-a duplicate.
+An admitted scoped open-review repair reuses the original review only when its
+durable URL, forge, source/target route, observed generation and heads still
+agree with the registry and a fresh forge snapshot. Its current generation then
+records the newly published source and target heads under the same URL and
+publication action. Merged, closed, missing, unknown or conflicting forge facts
+stop this route before push or review creation. Other already-admitted legacy
+delivery routes may retain their linked follow-up behavior; they cannot be
+selected by an open-review repair action. Registry writes are atomic, so restart
+joins the checkpointed repair generation without creating a duplicate review.
 
 Actions in `executions.json` retain authoritative delivery and repair evidence;
 the pending merge list is a scheduling index. Feature records in `reviews.json`
