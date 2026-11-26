@@ -2,7 +2,7 @@
 id: feat_049_002
 title: Persist recovery milestones and bounded transcript history
 tier: feature
-status: active
+status: completed
 parent: epic_049
 children:
 - task_049_002_001
