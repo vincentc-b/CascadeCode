@@ -60,6 +60,12 @@ def watchdog_tick(root: Path | None = None) -> None:
     """Scan `2_active` once. Unauthorized docs are moved back to backlog and toasted."""
 
     repo = resolve_root(root)
+    # Progress replay is deliberately first and outside ``process_lock``.  It
+    # consumes only committed evidence and must not wait behind slow dispatch,
+    # Git, provider, or lifecycle work later in this tick.
+    from cascade.recovery_progress.publisher import drain_recovery_progress
+
+    drain_recovery_progress(repo)
     from cascade.task.action_recovery import reconcile_abandoned_review_publications
     reconcile_abandoned_review_publications(root=repo)
     from cascade.automation import maybe_sync_briefs
@@ -210,6 +216,9 @@ def run_watchdog(
     from cascade.workspace.kickoff import install_kickoff
 
     install_kickoff(repo)
+    from cascade.recovery_progress.publisher import install_recovery_progress_publisher
+
+    install_recovery_progress_publisher(repo)
     _resume_reclaimable_task_runs(repo)
     from cascade.automation import reconcile_approval_dispatch
     from cascade.workspace.kickoff import deferred_kickoffs

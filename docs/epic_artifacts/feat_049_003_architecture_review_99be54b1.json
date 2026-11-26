@@ -1,0 +1,146 @@
+{
+  "expected_plan_revision": "99be54b1df62ebe34c45939efb7ce3d9f8612b96",
+  "expected_generation": null,
+  "proposal": {
+    "accepted_baseline": {
+      "accepted_review_unit_id": null,
+      "kind": "empty_baseline",
+      "model": null
+    },
+    "affected_work_ids": [
+      "feat_049_003"
+    ],
+    "architecture_impact": "diagram_change",
+    "authorized_owner": "feature_architect",
+    "baseline_generation": null,
+    "baseline_pointer_id": null,
+    "code_directory": "cascade/war_room",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "decision_citations": [
+      "DEC-WARROOM-PROGRESS-001",
+      "DEC-WARROOM-TRANSCRIPT-004",
+      "DEC-WARROOM-TRANSCRIPT-005",
+      "DEC-RECOVERY-PROGRESS-001",
+      "DEC-RECOVERY-PROGRESS-002"
+    ],
+    "design": {
+      "content_digest": "afdcd5a466d0014fe35dc08a7dc1bb5593559453ce89e45162aa79f94f7a5fc9",
+      "reference": {
+        "code_directory": "cascade/war_room",
+        "design_owner_directory": "cascade/war_room",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "owning_work": "feat_049_003",
+        "repository_path": "cascade/war_room/DESIGN.md",
+        "revision": "99be54b1df62ebe34c45939efb7ce3d9f8612b96",
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+      }
+    },
+    "design_owner_directory": "cascade/war_room",
+    "documentation_destination_path": ".",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "impact_reason": "The merged Dashboard and Historical consumers add versioned progress/transcript presentation, bounded paging and durable milestone anchors inside the existing War Room. The current native Dashboard Code view and source contract include loadCurrentRecoveryProgress and pollChatSidecar. Task receipt publication now registers the exact executor token before committed-start notification, and the Task design records that behavior within existing Task/Watchdog components. The integrated diff adds no actor, runtime, store, external dependency or deployment boundary; context, containers and the other scoped Code views remain accurate. Full-model source validation, pinned 24-view render, warm cache reuse and five Chromium context-to-Code/deep-link/pinned-source/Level-up paths were reviewed. Feature 5 contention bounds and the recovery_progress design-ownership mapping remain separate open gates.",
+    "integration_lineage": "epic:epic_049",
+    "owner_work_id": "feat_049_003",
+    "plan": {
+      "content_digest": "e42f10270df1ca0d338302587f185aec8c732999fb5d04c8431e23c3a44deb4c",
+      "path": "docs/features/2_active/feat_049_003_show_coherent_recovery_progress_on_board_and_historical_transcript.md",
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "target",
+      "revision": "99be54b1df62ebe34c45939efb7ce3d9f8612b96"
+    },
+    "proposed_ancestor_context": null,
+    "proposed_model": {
+      "contract": {
+        "content_digest": "8dc6e0a11b2544ab576357e971e6ea9c609a9b476e217a421449500957813efb",
+        "reference": {
+          "code_directory": "cascade/war_room",
+          "design_owner_directory": "cascade/war_room",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "epic_049",
+          "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+          "revision": "99be54b1df62ebe34c45939efb7ce3d9f8612b96",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "render_identity": "46c097541b52d3b528cd766d334be295dbe21ccd415ce37b651bb01f5fca12d9",
+      "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "renderer_settings": {
+        "cpus": "2",
+        "memory": "1536m",
+        "pids_limit": 256,
+        "timeout_seconds": 180,
+        "tmpfs_size": "512m"
+      },
+      "semantic_artifact_digest": "2dd2a5df290e2dace928a58d61edfa1aeb8b0ec1fe9b3b70f648f6c14a79fcc2",
+      "source_closure_digest": "b2798bc0d5c051c1c6bf42d9bf606829344c082f7f5191720beb6209724a8539",
+      "sources": [
+        {
+          "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a",
+          "reference": {
+            "code_directory": "cascade/war_room",
+            "design_owner_directory": "cascade/war_room",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "owning_work": "epic_049",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+            "revision": "99be54b1df62ebe34c45939efb7ce3d9f8612b96",
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+          }
+        },
+        {
+          "content_digest": "cd992b12cdaa5d06552e1f8d1e7385b6a654935012855eed95a3f4c32e7e31de",
+          "reference": {
+            "code_directory": "cascade/war_room",
+            "design_owner_directory": "cascade/war_room",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "owning_work": "epic_049",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+            "revision": "99be54b1df62ebe34c45939efb7ce3d9f8612b96",
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+          }
+        },
+        {
+          "content_digest": "3d027b9bfecc88bc4c691c52c6f412633ff9c8fdf67e1d0135d4740ec14d2a90",
+          "reference": {
+            "code_directory": "cascade/war_room",
+            "design_owner_directory": "cascade/war_room",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "owning_work": "epic_049",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+            "revision": "99be54b1df62ebe34c45939efb7ce3d9f8612b96",
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+          }
+        }
+      ]
+    },
+    "requirement_citations": [
+      "REQ-WARROOM-PROGRESS-001",
+      "REQ-WARROOM-TRANSCRIPT-005",
+      "REQ-WARROOM-TRANSCRIPT-006",
+      "REQ-RECOVERY-PROGRESS-001",
+      "REQ-RECOVERY-PROGRESS-002"
+    ],
+    "rollout_version": 1,
+    "status": "draft",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "view_citations": [
+      "cascade-landscape",
+      "cascade-context",
+      "cascade-containers",
+      "cascade-war-room-components",
+      "cascade-supervisor-components",
+      "cascade-team-components",
+      "cascade-dashboard-code",
+      "cascade-war-room-http-code",
+      "cascade-task-code",
+      "cascade-watchdog-code",
+      "cascade-workspace-code",
+      "cascade-teams-code"
+    ]
+  }
+}

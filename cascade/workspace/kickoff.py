@@ -156,7 +156,18 @@ def _run_kickoff(reason: KickoffReason, repo: Path) -> None:
                 return
             token = _model_turn_authorized.set(True)
             try:
-                turn_handed_off = _kickoff_turn(reason, repo)
+                from cascade.recovery_progress.live import live_observation
+
+                observation_identity = {
+                    "graph_id": reason.work_id,
+                    "action_id": reason.action_id,
+                    "action_generation": reason.action_generation,
+                    "attempt_number": reason.attempt_number,
+                    "claim_id": reason.claim_id,
+                    "claim_expires_at": reason.claim_expires_at,
+                }
+                with live_observation("invocation", **observation_identity):
+                    turn_handed_off = _kickoff_turn(reason, repo)
                 if (
                     turn_handed_off
                     and reason.continuation_receipt_id is not None
@@ -1414,11 +1425,18 @@ def _invoke_role_turn(
         snapshot = graph.get_state(config)
         before = len((snapshot.values or {}).get("messages") or [])
         graph.invoke({}, config)
-        after = graph.get_state(config).values or {}
+        after_snapshot = graph.get_state(config)
+        after = after_snapshot.values or {}
         new_messages = (after.get("messages") or [])[before:]
         from cascade.war_room.planning_transcript import append_planning_turn_to_chat
 
-        append_planning_turn_to_chat(work_id, new_messages, root=root)
+        append_planning_turn_to_chat(
+            work_id,
+            new_messages,
+            root=root,
+            checkpoint_config=after_snapshot.config,
+            message_offset=before,
+        )
         if model_id is not None:
             clear_turn_model_override(graph, config)
         return
@@ -1432,11 +1450,18 @@ def _invoke_role_turn(
         snapshot = graph.get_state(config)
         before = len((snapshot.values or {}).get("messages") or [])
         graph.invoke({}, config)
-        after = graph.get_state(config).values or {}
+        after_snapshot = graph.get_state(config)
+        after = after_snapshot.values or {}
         new_messages = (after.get("messages") or [])[before:]
         from cascade.war_room.planning_transcript import append_planning_turn_to_chat
 
-        append_planning_turn_to_chat(work_id, new_messages, root=root)
+        append_planning_turn_to_chat(
+            work_id,
+            new_messages,
+            root=root,
+            checkpoint_config=after_snapshot.config,
+            message_offset=before,
+        )
         if model_id is not None:
             clear_turn_model_override(graph, config)
         return

@@ -123,6 +123,95 @@ def test_sync_transcript_idempotent(tmp_path: Path) -> None:
     assert len(read_messages("epic_001", root=root)) == 1
 
 
+def test_direct_append_and_later_checkpoint_backfill_share_durable_message_id(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    from cascade.epic.checkpoint import thread_config
+    from cascade.epic.graph import ensure_epic_graph
+
+    graph = ensure_epic_graph("epic_001", root=root)
+    config = thread_config("epic_001")
+    reply = {"role": "epic_manager", "content": "Final summary.", "id": "reply-1"}
+    graph.update_state(
+        config,
+        {"epic_id": "epic_001", "messages": [reply], "last_queue_offset": 0},
+    )
+    committed = graph.get_state(config)
+    append_planning_turn_to_chat(
+        "epic_001",
+        [reply],
+        root=root,
+        checkpoint_config=committed.config,
+        message_offset=0,
+    )
+
+    # A later checkpoint changes the lineage head, as model-override cleanup does.
+    graph.update_state(config, {"last_queue_offset": 1})
+    sync_planning_transcript_to_chat("epic_001", root=root)
+
+    rows = read_messages("epic_001", root=root)
+    assert len(rows) == 1
+    assert rows[0]["body"] == "Final summary."
+    assert rows[0]["checkpoint_message_id"] == "reply-1"
+    assert rows[0]["source_key"] == "role_reply:epic_001:message:reply-1"
+
+
+def test_distinct_same_text_replies_keep_separate_checkpoint_identity(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    append_planning_turn_to_chat(
+        "epic_001",
+        [
+            {"role": "epic_manager", "content": "Same.", "id": "reply-1"},
+            {"role": "epic_manager", "content": "Same.", "id": "reply-2"},
+        ],
+        root=root,
+        checkpoint_config={"configurable": {"checkpoint_id": "checkpoint-1"}},
+    )
+
+    rows = read_messages("epic_001", root=root)
+    assert [row["body"] for row in rows] == ["Same.", "Same."]
+    assert [row["checkpoint_message_id"] for row in rows] == ["reply-1", "reply-2"]
+
+
+def test_legacy_author_body_match_is_labeled_unknown_without_claiming_identity(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    from cascade.epic.checkpoint import thread_config
+    from cascade.epic.graph import ensure_epic_graph
+    from cascade.war_room.chat_store import append_transcript_message
+
+    append_transcript_message(
+        "epic_001", author="epic_manager", body="Older reply.", root=root
+    )
+    graph = ensure_epic_graph("epic_001", root=root)
+    graph.update_state(
+        thread_config("epic_001"),
+        {
+            "epic_id": "epic_001",
+            "messages": [
+                {"role": "epic_manager", "content": "Older reply.", "id": "reply-1"}
+            ],
+            "last_queue_offset": 0,
+        },
+    )
+
+    sync_planning_transcript_to_chat("epic_001", root=root)
+    sync_planning_transcript_to_chat("epic_001", root=root)
+
+    rows = read_messages("epic_001", root=root)
+    assert len(rows) == 1
+    assert rows[0]["provenance"] == "legacy_unknown"
+    assert rows[0]["occurred_at"] is None
+    assert rows[0]["source_key"] is None
+
+
 def test_sync_backfills_failed_turn_without_raw_output(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")

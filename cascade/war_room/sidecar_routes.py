@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from datetime import datetime, timezone
 
@@ -23,7 +23,6 @@ from cascade.war_room.chat_store import (
     TaskTierChatError,
     append_message,
     graph_id_is_valid,
-    read_messages,
     remove_message,
 )
 from cascade.war_room.serialize import (
@@ -32,6 +31,14 @@ from cascade.war_room.serialize import (
     message_to_dict,
 )
 from cascade.war_room.toasts import events_to_toasts
+from cascade.war_room.transcript_pages import (
+    DEFAULT_LIMIT,
+    TranscriptCursorRestart,
+    TranscriptHistoryPending,
+    TranscriptInvalidRequest,
+    read_transcript_detail,
+    read_transcript_page,
+)
 from cascade.watchdog import append_event, read_events
 from cascade.watchdog.types import Event
 
@@ -66,6 +73,127 @@ def _parse_graph_id_from_chat_path(path: str) -> str | None:
     return graph_id
 
 
+def _parse_transcript_path(path: str) -> tuple[str, str, str | None] | None:
+    parts = path.strip("/").split("/")
+    if len(parts) == 4 and parts[:3] == ["api", "transcript", "v1"]:
+        return ("page", unquote(parts[3]), None)
+    if (
+        len(parts) == 7
+        and parts[:3] == ["api", "transcript", "v1"]
+        and parts[4] == "items"
+        and parts[6] == "detail"
+    ):
+        return ("detail", unquote(parts[3]), unquote(parts[5]))
+    return None
+
+
+def _transcript_error(
+    handler: WarRoomRequestHandler,
+    status: HTTPStatus,
+    graph_id: str,
+    code: str,
+    message: str,
+    *,
+    retryable: bool,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "graph_id": graph_id,
+        "error": {"code": code, "message": message, "retryable": retryable},
+    }
+    if extra:
+        payload.update(extra)
+    handler._json_response_with_headers(status, payload)
+
+
+def _handle_transcript_failure(
+    handler: WarRoomRequestHandler,
+    graph_id: str,
+    exc: Exception,
+    *,
+    unavailable_code: str = "history_pending",
+) -> None:
+    if isinstance(exc, TranscriptInvalidRequest):
+        _transcript_error(
+            handler, HTTPStatus.BAD_REQUEST, graph_id, "invalid_request", str(exc), retryable=False
+        )
+    elif isinstance(exc, TranscriptCursorRestart):
+        _transcript_error(
+            handler,
+            HTTPStatus.CONFLICT,
+            graph_id,
+            "cursor_restart",
+            str(exc),
+            retryable=True,
+            extra={
+                "restart": True,
+                "current_incarnation": exc.incarnation,
+                "restart_url": exc.restart_url,
+            },
+        )
+    else:
+        _transcript_error(
+            handler,
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            graph_id,
+            unavailable_code,
+            str(exc),
+            retryable=True,
+            extra={"completeness": "pending"},
+        )
+
+
+def handle_get_transcript(
+    handler: WarRoomRequestHandler, kind: str, graph_id: str, message_id: str | None
+) -> None:
+    if not graph_id_is_valid(graph_id) or (message_id is not None and not message_id):
+        _transcript_error(
+            handler,
+            HTTPStatus.BAD_REQUEST,
+            graph_id,
+            "invalid_request",
+            "invalid transcript path",
+            retryable=False,
+        )
+        return
+    parsed = urlparse(handler.path)
+    params = parse_qs(parsed.query, keep_blank_values=True)
+    try:
+        if kind == "detail":
+            if set(params) != {"cursor"} or len(params["cursor"]) != 1 or not params["cursor"][0]:
+                raise TranscriptInvalidRequest("detail cursor is required")
+            result = read_transcript_detail(
+                graph_id,
+                message_id or "",
+                root=handler.server.root,
+                cursor=params["cursor"][0],
+            )
+        else:
+            if set(params) - {"direction", "cursor", "limit"}:
+                raise TranscriptInvalidRequest("unsupported transcript query parameter")
+            direction_values = params.get("direction", ["older"])
+            cursor_values = params.get("cursor", [])
+            limit_values = params.get("limit", [str(DEFAULT_LIMIT)])
+            if len(direction_values) != 1 or len(cursor_values) > 1 or len(limit_values) != 1:
+                raise TranscriptInvalidRequest("transcript query parameters must be singular")
+            try:
+                limit = int(limit_values[0])
+            except ValueError as exc:
+                raise TranscriptInvalidRequest("limit must be an integer") from exc
+            result = read_transcript_page(
+                graph_id,
+                root=handler.server.root,
+                direction=direction_values[0],
+                cursor=cursor_values[0] if cursor_values else None,
+                limit=limit,
+            )
+    except (TranscriptInvalidRequest, TranscriptCursorRestart, TranscriptHistoryPending) as exc:
+        _handle_transcript_failure(handler, graph_id, exc)
+        return
+    handler._json_response_with_headers(HTTPStatus.OK, result.payload)
+
+
 def handle_get_toasts(handler: WarRoomRequestHandler) -> None:
     parsed = urlparse(handler.path)
     params = parse_qs(parsed.query, keep_blank_values=True)
@@ -82,10 +210,38 @@ def handle_get_toasts(handler: WarRoomRequestHandler) -> None:
 
 def handle_get_chat(handler: WarRoomRequestHandler, graph_id: str) -> None:
     if not graph_id_is_valid(graph_id):
-        handler._json_error(HTTPStatus.BAD_REQUEST, "invalid graph_id")
+        _transcript_error(
+            handler,
+            HTTPStatus.BAD_REQUEST,
+            graph_id,
+            "invalid_request",
+            "invalid graph_id",
+            retryable=False,
+        )
         return
-    messages = read_messages(graph_id, root=handler.server.root)
-    handler._json_response(HTTPStatus.OK, messages)
+    try:
+        result = read_transcript_page(
+            graph_id, root=handler.server.root, direction="older", limit=DEFAULT_LIMIT
+        )
+    except (TranscriptInvalidRequest, TranscriptCursorRestart, TranscriptHistoryPending) as exc:
+        _handle_transcript_failure(
+            handler, graph_id, exc, unavailable_code="transcript_unavailable"
+        )
+        return
+    payload = result.payload
+    headers = {
+        "X-Transcript-Completeness": str(payload["completeness"]),
+        "X-Transcript-Incarnation": str(payload["incarnation"]),
+        "X-Transcript-Has-More": "true" if payload["has_more"] else "false",
+    }
+    older_cursor = payload.get("older_cursor")
+    if isinstance(older_cursor, str):
+        href = (
+            f"/api/transcript/v1/{quote(graph_id, safe='')}?direction=older&"
+            f"cursor={quote(older_cursor, safe='')}"
+        )
+        headers["Link"] = f'<{href}>; rel="next"'
+    handler._json_response_with_headers(HTTPStatus.OK, payload["items"], headers=headers)
 
 
 def handle_post_chat(handler: WarRoomRequestHandler, graph_id: str, body: dict[str, Any]) -> None:

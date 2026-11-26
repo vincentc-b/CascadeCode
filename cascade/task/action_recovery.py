@@ -8,6 +8,7 @@ replacement boundary as task execution health.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import stat
 import tempfile
@@ -29,6 +30,7 @@ from cascade.watchdog.incidents import (
     append_generation_history,
     authoritative_generation,
     incident_record,
+    transition_receipt_v1,
 )
 
 FailureClassification = Literal[
@@ -240,6 +242,81 @@ def _copy(action: dict[str, Any]) -> dict[str, Any]:
     return json.loads(json.dumps(action))
 
 
+def _action_work_ids(action: Mapping[str, Any]) -> tuple[str | None, tuple[str, ...]]:
+    recovery = action.get("recovery") if isinstance(action.get("recovery"), Mapping) else {}
+    metadata = action.get("metadata") if isinstance(action.get("metadata"), Mapping) else {}
+    evidence = recovery.get("evidence") if isinstance(recovery.get("evidence"), Mapping) else {}
+    owner = recovery.get("owning_team") if isinstance(recovery.get("owning_team"), Mapping) else {}
+    candidates = (
+        evidence.get("affected_work_id"), metadata.get("affected_work_id"),
+        metadata.get("task_id"), metadata.get("feature_id"), metadata.get("epic_id"),
+        owner.get("work_id"), str(action.get("action_id") or "").split(":", 1)[0],
+    )
+    affected = tuple(dict.fromkeys(
+        item for item in candidates if isinstance(item, str) and _work_tier(item) is not None
+    ))
+    graph_id = owner.get("work_id") if isinstance(owner.get("work_id"), str) else None
+    return graph_id, affected
+
+
+def _append_action_transition(
+    action: dict[str, Any],
+    transition_kind: str,
+    *,
+    occurred_at: str | None,
+    attempt_number: int | None = None,
+    claim_id: str | None = None,
+    safe_payload: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Append one immutable receipt while the authoritative action is locked."""
+
+    receipts = [dict(item) for item in action.get("transition_receipts", []) if isinstance(item, Mapping)]
+    sequence = len(receipts) + 1
+    incident = action.get("incident") if isinstance(action.get("incident"), Mapping) else {}
+    generation = incident.get("authoritative_generation")
+    if not isinstance(generation, str):
+        seed = f"{action.get('action_id')}:{action.get('action_kind')}"
+        generation = "sha256:" + hashlib.sha256(seed.encode()).hexdigest()
+    graph_id, affected = _action_work_ids(action)
+    action_id = str(action.get("action_id"))
+    receipt = transition_receipt_v1(
+        source_kind="task_action",
+        source_key=action_id,
+        action=str(action.get("action_kind") or "action_recovery"),
+        action_id=action_id,
+        original_incident_id=(
+            str(incident["original_incident_id"])
+            if incident.get("original_incident_id") is not None else None
+        ),
+        generation=generation,
+        graph_id=graph_id,
+        affected_work_ids=affected,
+        attempt_number=attempt_number,
+        claim_id=claim_id,
+        sequence=sequence,
+        transition_kind=transition_kind,
+        occurred_at=occurred_at,
+        source_reference=f"executions.json#actions/{action_id}/transition_receipts/{sequence}",
+        safe_payload=safe_payload,
+    )
+    receipts.append(receipt)
+    action["transition_receipts"] = receipts
+    return receipt
+
+
+def _notify_transition(repo: Path, receipt: Mapping[str, Any], snapshot: Mapping[str, Any]) -> None:
+    """Invoke the optional publisher only after the caller releases its lock."""
+
+    from cascade.recovery_progress.notifications import notify_committed_transition
+
+    try:
+        notify_committed_transition(repo, receipt, snapshot)
+    except Exception:
+        # Tests or downstream integrations may replace the wrapper itself.  A
+        # notification is never repair authority and cannot change the commit.
+        pass
+
+
 def _validate_lifecycle_state(value: str | None) -> str | None:
     if value is None:
         return None
@@ -386,11 +463,19 @@ def create_or_load_action(
             "attempts": [],
         }
         _refresh_incident(action, now=now)
+        receipt = _append_action_transition(
+            action,
+            "created",
+            occurred_at=created,
+            safe_payload={"recovery_state": recovery_state},
+        )
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
         _write_payload(repo, payload)
-        return _copy(action)
+        committed = _copy(action)
+    _notify_transition(repo, receipt, committed)
+    return committed
 
 
 def update_recovery_record(
@@ -466,11 +551,25 @@ def update_recovery_record(
         stamped = _iso(now)
         action.update(recovery=recovery, updated_at=stamped)
         _refresh_incident(action, now=now)
+        receipt = _append_action_transition(
+            action,
+            "routing_updated",
+            occurred_at=stamped,
+            safe_payload={
+                "lifecycle_state": recovery.get("lifecycle_state"),
+                "routing_status": (
+                    recovery.get("routing_marker", {}).get("status")
+                    if isinstance(recovery.get("routing_marker"), Mapping) else None
+                ),
+            },
+        )
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 3)
         payload["actions"] = actions
         _write_payload(repo, payload)
-        return _copy(action)
+        committed = _copy(action)
+    _notify_transition(repo, receipt, committed)
+    return committed
 
 
 def replace_action_metadata(
@@ -946,11 +1045,19 @@ def record_action_checkpoint(
             checkpoints=checkpoints, checkpoint=checkpoints[-1], updated_at=stamped
         )
         _refresh_incident(action, now=now)
+        receipt = _append_action_transition(
+            action,
+            "checkpoint_recorded",
+            occurred_at=stamped,
+            safe_payload={"checkpoint_id": checkpoint_id},
+        )
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
         _write_payload(repo, payload)
-        return _copy(action)
+        committed = _copy(action)
+    _notify_transition(repo, receipt, committed)
+    return committed
 
 
 def reconcile_action(
@@ -1442,11 +1549,20 @@ def start_attempt(
         action["updated_at"] = started
         action["attempts"] = attempts
         _refresh_incident(action, now=now)
+        receipt = _append_action_transition(
+            action,
+            "attempt_started",
+            occurred_at=started,
+            attempt_number=attempt_number,
+            safe_payload={"recovery_state": recovery_state},
+        )
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
         _write_payload(repo, payload)
-        return _copy(action)
+        committed = _copy(action)
+    _notify_transition(repo, receipt, committed)
+    return committed
 
 
 def finalize_attempt(
@@ -1459,6 +1575,8 @@ def finalize_attempt(
     recovery_state: RecoveryState,
     completion_metadata: Mapping[str, Any] | None = None,
     now: datetime | None = None,
+    _transition_kind: str = "attempt_finalized",
+    _notify: bool = True,
 ) -> dict[str, Any]:
     """Atomically finalize the current attempt and record the resulting state.
 
@@ -1502,13 +1620,28 @@ def finalize_attempt(
         action["recovery_state"] = recovery_state
         action["updated_at"] = finished
         action["attempts"] = attempts
-        action.pop("execution_claim", None)
+        claim = action.pop("execution_claim", None)
         _refresh_incident(action, now=now)
+        receipt = _append_action_transition(
+            action,
+            _transition_kind,
+            occurred_at=finished,
+            attempt_number=attempt_number,
+            claim_id=(str(claim.get("claim_id")) if isinstance(claim, Mapping) and claim.get("claim_id") else None),
+            safe_payload={
+                "outcome": outcome,
+                "classification": classification,
+                "recovery_state": recovery_state,
+            },
+        )
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
         _write_payload(repo, payload)
-        return _copy(action)
+        committed = _copy(action)
+    if _notify:
+        _notify_transition(repo, receipt, committed)
+    return committed
 
 
 def repair_action(
@@ -1695,9 +1828,17 @@ def _claim_resume_attempt(
             return None
         attempt_number = int(action.get("attempt_count") or 0) + 1
         if attempt_number > int(action.get("attempt_bound") or 0):
+            blocked_at = _iso(now)
             action["failure_classification"] = "terminal_blocker"
             action["recovery_state"] = "blocked"
-            action["updated_at"] = _iso(now)
+            action["updated_at"] = blocked_at
+            _refresh_incident(action, now=now)
+            _append_action_transition(
+                action,
+                "attempt_bound_exhausted",
+                occurred_at=blocked_at,
+                safe_payload={"recovery_state": "blocked"},
+            )
             actions[action_id] = action
             payload["version"] = max(int(payload.get("version") or 1), 2)
             payload["actions"] = actions
@@ -1730,6 +1871,14 @@ def _claim_resume_attempt(
                                 if action.get("action_kind") == "review_rebase" else {})},
         )
         _refresh_incident(action, now=now)
+        _append_action_transition(
+            action,
+            "attempt_claimed",
+            occurred_at=claimed_at,
+            attempt_number=attempt_number,
+            claim_id=claim_id,
+            safe_payload={"recovery_state": "running"},
+        )
         actions[action_id] = action
         payload["version"] = max(int(payload.get("version") or 1), 2)
         payload["actions"] = actions
@@ -1739,6 +1888,47 @@ def _claim_resume_attempt(
             attempt_number=attempt_number,
             idempotency_key=str(action.get("idempotency_key") or action_id),
         )
+
+
+def _record_execution_start(
+    action_id: str,
+    context: ActionContext,
+    *,
+    root: Path,
+    now: datetime | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Commit proof that preflight passed immediately before executor entry."""
+
+    with task_lifecycle_lock(root=root):
+        payload = _read_payload(root)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        claim = action.get("execution_claim")
+        attempts = list(action.get("attempts") or [])
+        if (
+            action.get("recovery_state") != "running"
+            or not isinstance(claim, Mapping)
+            or not attempts
+            or attempts[-1].get("attempt_number") != context.attempt_number
+            or attempts[-1].get("outcome") is not None
+        ):
+            raise ActionRecoveryError("resume claim changed before executor entry")
+        started = _iso(now)
+        receipt = _append_action_transition(
+            action,
+            "execution_started",
+            occurred_at=started,
+            attempt_number=context.attempt_number,
+            claim_id=str(claim.get("claim_id")),
+            safe_payload={"recovery_state": "running"},
+        )
+        action["updated_at"] = started
+        actions[action_id] = action
+        payload["actions"] = actions
+        _write_payload(root, payload)
+        return _copy(action), _copy(receipt)
 
 
 def _result_parts(
@@ -1771,6 +1961,37 @@ def _result_parts(
     )
 
 
+def _executor_live_identity(
+    action: Mapping[str, Any],
+    receipt: Mapping[str, Any],
+    context: ActionContext,
+) -> dict[str, Any]:
+    """Project the exact admitted attempt identity for observational liveness."""
+
+    generation = receipt.get("generation")
+    claim = action.get("execution_claim")
+    graph_id, _affected = _action_work_ids(action)
+    if not isinstance(generation, str) or not isinstance(claim, Mapping):
+        raise ActionRecoveryError("executor claim omitted exact live identity")
+    claim_id = claim.get("claim_id")
+    if not isinstance(claim_id, str) or not claim_id:
+        raise ActionRecoveryError("executor claim omitted exact claim identity")
+    incident = action.get("incident")
+    return {
+        "graph_id": graph_id or context.action_id.split(":", 1)[0],
+        "action_id": context.action_id,
+        "action_generation": generation,
+        "attempt_number": context.attempt_number,
+        "claim_id": claim_id,
+        "claim_expires_at": (
+            incident.get("claim_expires_at")
+            if isinstance(incident, Mapping)
+            and isinstance(incident.get("claim_expires_at"), str)
+            else None
+        ),
+    }
+
+
 def resume_action(
     action_id: str,
     *,
@@ -1794,6 +2015,9 @@ def resume_action(
     # against a replacement action.  Lifecycle executors themselves acquire
     # the same lock around their mutation.
     repo = resolve_root(root)
+    committed: dict[str, Any]
+    committed_receipt: dict[str, Any]
+    preflight_result: dict[str, Any] | None = None
     with task_lifecycle_lock(root=repo):
         claimed = _claim_resume_attempt(
             action_id, root=repo, reclaim_running=reclaim_running, now=now
@@ -1808,7 +2032,7 @@ def resume_action(
             if preflight is not None:
                 preflight(context)
         except ActionFailure as exc:
-            return finalize_attempt(
+            preflight_result = finalize_attempt(
                 action_id,
                 context.attempt_number,
                 root=repo,
@@ -1817,9 +2041,11 @@ def resume_action(
                 recovery_state=_FAILURE_STATES[exc.classification],
                 completion_metadata=exc.metadata,
                 now=now,
+                _transition_kind="preflight_refused",
+                _notify=False,
             )
         except BaseException as exc:
-            return finalize_attempt(
+            preflight_result = finalize_attempt(
                 action_id,
                 context.attempt_number,
                 root=repo,
@@ -1831,9 +2057,30 @@ def resume_action(
                     "message": str(exc),
                 },
                 now=now,
+                _transition_kind="preflight_refused",
+                _notify=False,
             )
+        if preflight_result is None:
+            committed, committed_receipt = _record_execution_start(
+                action_id, context, root=repo, now=now
+            )
+        else:
+            committed = preflight_result
+            committed_receipt = dict(committed["transition_receipts"][-1])
+    if preflight_result is not None:
+        _notify_transition(repo, committed_receipt, committed)
+        return preflight_result
     try:
-        outcome, classification, metadata = _result_parts(execute(context))
+        from cascade.recovery_progress.live import live_observation
+
+        with live_observation(
+            "executor", **_executor_live_identity(committed, committed_receipt, context)
+        ):
+            # Publish the committed start only after its exact executor identity
+            # is observable.  The fast path can then distinguish real execution
+            # from a durable start left behind by a dead or restarted worker.
+            _notify_transition(repo, committed_receipt, committed)
+            outcome, classification, metadata = _result_parts(execute(context))
         if outcome == "succeeded":
             classification, state = None, "completed"
         else:
@@ -1884,6 +2131,7 @@ def reconcile_completed_task_delivery(task_id: str, *, root: Path) -> None:
 def acknowledge_team_recovery(work_id: str, *, root: Path) -> None:
     """Record that the concrete owner has entered its supervised turn."""
     repo = resolve_root(root)
+    notifications: list[tuple[dict[str, Any], dict[str, Any]]] = []
     with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
@@ -1902,10 +2150,21 @@ def acknowledge_team_recovery(work_id: str, *, root: Path) -> None:
                     "owner_work_id": work_id,
                     "acknowledged_at": stamped,
                 }
+                action["updated_at"] = stamped
+                _refresh_incident(action)
+                receipt = _append_action_transition(
+                    action,
+                    "owner_acknowledged",
+                    occurred_at=stamped,
+                    safe_payload={"owner_work_id": work_id},
+                )
+                notifications.append((_copy(receipt), _copy(action)))
                 changed = True
         if changed:
             payload["actions"] = actions
             _write_payload(repo, payload)
+    for receipt, snapshot in notifications:
+        _notify_transition(repo, receipt, snapshot)
 
 
 def admit_review_publication_generation(

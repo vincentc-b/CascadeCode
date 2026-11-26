@@ -115,6 +115,65 @@ environment; the evidence does not claim container or credential isolation.
 Verification references: [startup recovery](../../tests/workspace/test_worker_startup_recovery.py)
 and [runtime identity integration](../../tests/workspace/test_runtime_identity.py).
 
+## Graph invocation and transcript handoff
+
+`REQ-WORKSPACE-TURN-EVIDENCE-001`: Process-local graph ownership and persisted
+graph state have different lifetimes. Neither a saved next node nor pending
+queue work proves that an action executor is running.
+
+`DEC-WORKSPACE-TURN-EVIDENCE-001`: [kickoff.py](kickoff.py) serializes graph
+turns with process-local locks and queues. `graph_turn_owner_is_live` observes
+unfinished queue work or a held graph lock; it is conservative owner protection,
+not attempt-specific liveness. After lifecycle admission and graph-lock
+acquisition, `_run_kickoff` brackets the actual graph call with
+[begin/end live observations](../recovery_progress/live.py). An action-bound
+invocation token names the worker runtime generation, PID, boot and process-start
+identity, graph, action generation, attempt and claim. A queued job has no such
+token. Matching registered tokens may be refreshed for at most 30 seconds at a
+time and never beyond claim expiry; exit, observed process death, changed process
+identity, or worker restart removes live support. Inaccessible process identity
+is unknown rather than live. `_invoke_role_turn` reads the message count,
+invokes the graph, then forwards the new message slice, persisted checkpoint
+configuration and starting message ordinal to
+[append_planning_turn_to_chat](../war_room/planning_transcript.py).
+Checkpoint state survives restart while the local lock and queue evidence do not.
+Epic and Feature role messages carry a durable ID before checkpoint commit. An
+interruption after that commit but before chat append leaves the same role-reply
+source identity for explicit writer
+[transcript sync](../war_room/DESIGN.md#recovery-summaries-and-planning-transcripts);
+the sync performs no provider turn.
+Creating an Epic or Feature integration worktree resolves the current room before
+registry publication, then calls
+[move_transcript_room](../war_room/chat_store.py) to copy committed history and
+publish the new registry owner within the transcript's tracking-root graph fence.
+The room incarnation changes, so readers cannot continue an earlier ownership
+generation as if it were the same immutable history.
+Terminal Epic and Feature retirement performs the inverse operation: after
+delivery proof and cleanliness checks, the fenced room move invokes checkout
+removal and registry retirement as its owner switch, then publishes the
+surviving parent/trunk room with another incarnation. The transcript store
+journals the copy and fixed target incarnation before that callback. If the
+process dies after checkout removal, a repeated retirement observes the missing
+registry owner, verifies routing and the copied destination against the retained
+journal, and calls
+[resume_transcript_room_move](../war_room/chat_store.py) to finish the index
+transition without recreating the checkout.
+Committed recovery receipts use the same document ownership resolution: Task
+identity is lifted to its owning Feature while Feature and Epic identity retain
+their rooms. Multiple resolved owners, missing plans and unsafe work IDs remain
+pending. Split product/tracking roots follow the registered document worktree,
+while the graph fence remains anchored at the canonical tracking runtime root.
+
+The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+place the invocation and live-observation functions in `cascade-workspace-code`, below
+`cascade-supervisor-components`. The handoff sequence is owned by the linked
+War Room design; the broader graph lifecycle is owned by
+[the package design](../DESIGN.md#team-execution).
+Verification: [live observation tests](../../tests/workspace/test_live_observations.py),
+[kickoff tests](../../tests/workspace/test_kickoff.py), and
+[transcript tests](../../tests/war_room/test_planning_transcript.py).
+
 ## Repository initialization and guidance
 
 `REQ-WORKSPACE-INIT-001`: Initialization in a Git repository creates board columns,
@@ -223,6 +282,10 @@ Navigate from `cascade-context` through `cascade-containers` and
 [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
 The model and [source contract](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json)
 are authoritative; renders are revision-bound derived artifacts.
+Pinned implementation-design discovery uses the target-owned
+[design mapping](../../architecture/design-mappings.json); distinct child
+subsystems, including [Recovery progress](../recovery_progress/DESIGN.md), retain
+their own design artifact and owner rather than inheriting the package document.
 
 | Entry point | Inputs, output and state |
 |---|---|

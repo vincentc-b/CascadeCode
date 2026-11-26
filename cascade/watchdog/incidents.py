@@ -136,6 +136,14 @@ def incident_record(
         claim_expires_at = (stamped + timedelta(seconds=claim_seconds)).isoformat()
     elif outcome != "success":
         retry_at = (stamped + timedelta(seconds=reassessment_seconds)).isoformat()
+    normalized_stages = _transition_stage_receipts(
+        stage_receipts,
+        work_id=work_id,
+        failure_class=failure_class,
+        generation=generation,
+        original_incident_id=original_incident_id,
+        attempts=attempts,
+    )
     return {
         "schema_version": 1,
         "work_id": work_id,
@@ -151,7 +159,10 @@ def incident_record(
         "acknowledgement": _json_copy(acknowledgement or {}),
         "result": _json_copy(result or {}),
         "attempts": [_json_copy(item) for item in attempts],
-        "stage_receipts": [_json_copy(item) for item in stage_receipts],
+        "stage_receipts": normalized_stages,
+        # Stage receipts are already immutable and safe, so they are the
+        # Watchdog's canonical transition receipts rather than a duplicate log.
+        "transition_receipts": normalized_stages,
         "retry_policy": {
             "reassessment_seconds": reassessment_seconds,
             "claim_seconds": claim_seconds,
@@ -211,17 +222,122 @@ def append_stage_receipts(
     existing: Sequence[Mapping[str, Any]],
     *receipts: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """Append stage evidence idempotently without rewriting earlier receipts."""
+    """Append stage evidence without rewriting earlier receipts.
+
+    A call represents a material persisted transition.  Equal text and equal
+    timestamps therefore remain distinct; incident_record assigns their stable
+    per-source sequence and final v1 identity.
+    """
 
     result = [_json_copy(item) for item in existing]
-    known = {item.get("receipt_id") for item in result}
     for receipt in receipts:
         receipt_id = receipt.get("receipt_id")
         if not isinstance(receipt_id, str) or not receipt_id:
             raise ValueError("stage receipt identity is required")
-        if receipt_id not in known:
-            result.append(_json_copy(receipt))
-            known.add(receipt_id)
+        result.append(_json_copy(receipt))
+    return result
+
+
+def transition_receipt_v1(
+    *,
+    source_kind: str,
+    source_key: str,
+    action: str,
+    action_id: str,
+    generation: str,
+    sequence: int,
+    transition_kind: str,
+    occurred_at: str | None,
+    source_reference: str,
+    original_incident_id: str | None = None,
+    graph_id: str | None = None,
+    affected_work_ids: Sequence[str] = (),
+    attempt_number: int | None = None,
+    claim_id: str | None = None,
+    safe_payload: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the shared immutable source-transition contract."""
+
+    required = (source_kind, source_key, action, action_id, generation,
+                transition_kind, source_reference)
+    if not all(isinstance(value, str) and value.strip() for value in required):
+        raise ValueError("transition receipt identity fields are required")
+    if sequence < 1:
+        raise ValueError("transition receipt sequence must be positive")
+    work_ids = tuple(dict.fromkeys(str(item) for item in affected_work_ids if item))
+    identity = {
+        "source_kind": source_kind,
+        "source_key": source_key,
+        "action": action,
+        "action_id": action_id,
+        "original_incident_id": original_incident_id,
+        "generation": generation,
+        "graph_id": graph_id,
+        "affected_work_ids": list(work_ids),
+        "attempt_number": attempt_number,
+        "claim_id": claim_id,
+        "transition_sequence": sequence,
+        "transition_kind": transition_kind,
+        "source_reference": source_reference,
+    }
+    encoded = json.dumps(identity, sort_keys=True, separators=(",", ":"))
+    return {
+        "schema_version": 1,
+        "receipt_id": "sha256:" + hashlib.sha256(encoded.encode()).hexdigest(),
+        **identity,
+        "occurred_at": occurred_at,
+        "safe_payload": _json_copy(safe_payload or {}),
+    }
+
+
+def _transition_stage_receipts(
+    receipts: Sequence[Mapping[str, Any]],
+    *,
+    work_id: str,
+    failure_class: str,
+    generation: str,
+    original_incident_id: str | None,
+    attempts: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Enrich retained stage evidence with the shared v1 source identity."""
+
+    source_key = f"{work_id}:{failure_class}:{generation}"
+    latest = dict(attempts[-1]) if attempts else {}
+    claim_id = latest.get("claim_token")
+    attempt_number = latest.get("attempt")
+    result: list[dict[str, Any]] = []
+    for sequence, raw in enumerate(receipts, start=1):
+        receipt = _json_copy(raw)
+        if receipt.get("schema_version") == 1 and receipt.get("transition_sequence") == sequence:
+            result.append(receipt)
+            continue
+        stage = str(receipt.get("stage") or "waiting")
+        result.append(
+            {
+                **receipt,
+                **transition_receipt_v1(
+                    source_kind="watchdog_incident",
+                    source_key=source_key,
+                    action=str(receipt.get("capability") or "watchdog_recovery"),
+                    action_id=source_key,
+                    original_incident_id=original_incident_id,
+                    generation=generation,
+                    graph_id=work_id,
+                    affected_work_ids=(work_id,),
+                    attempt_number=(int(attempt_number) if attempt_number is not None else None),
+                    claim_id=(str(claim_id) if claim_id is not None else None),
+                    sequence=sequence,
+                    transition_kind=stage,
+                    occurred_at=(str(receipt["recorded_at"]) if receipt.get("recorded_at") else None),
+                    source_reference=f"incident:{source_key}:stage:{sequence}",
+                    safe_payload={
+                        key: receipt.get(key)
+                        for key in ("stage", "actor", "capability", "result", "verification_reference")
+                        if receipt.get(key) is not None
+                    },
+                ),
+            }
+        )
     return result
 
 
@@ -365,4 +481,5 @@ __all__ = [
     "incident_budget_identity",
     "project_incident",
     "recovery_stage_receipt",
+    "transition_receipt_v1",
 ]

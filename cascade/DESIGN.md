@@ -2,7 +2,8 @@
 
 Purpose: expose the Python package and CLI composition root for repository-local delivery. Interfaces are `cascade.cli` and the domain packages below. Owns `REQ-CASCADE-001` (one local composition root) and `DEC-CASCADE-001` (domain packages remain independently testable).
 
-
+Known gaps: authoritative recovery source ledgers remain monolithic, so source
+write and replay cost is measured rather than claimed to be byte-bounded.
 
 ## Parent interfaces
 
@@ -242,7 +243,7 @@ behavior and verification behind each Code view.
 | War Room | HTTP and operator identity | `cascade-war-room-http-code` | [War Room](war_room/DESIGN.md) |
 | War Room | Architecture browser | `cascade-architecture-browser-code` | [Source inspection](war_room/DESIGN.md#integrated-c4-exploration-and-source-inspection) |
 | War Room | Diagram comparison | `cascade-diagram-review-code` | [Plan preview](war_room/DESIGN.md#committed-planning-comparisons-and-project-previews) |
-| War Room | Dashboard and audit reads | `cascade-dashboard-code` | [Audit HTTP](war_room/DESIGN.md#health-audit-http-consumer) |
+| War Room | Dashboard and audit reads | `cascade-dashboard-code` | [Audit HTTP](war_room/DESIGN.md#health-audit-http-consumer), [recovery and transcripts](war_room/DESIGN.md#recovery-summaries-and-planning-transcripts) |
 | Service | Board | `cascade-board-code` | [Board](board/DESIGN.md) |
 | Service | Agent runtime | `cascade-agent-code` | [Agent](agent/DESIGN.md) |
 | Service | Tier teams | `cascade-teams-code` | [Team execution](#team-execution) |
@@ -253,6 +254,14 @@ behavior and verification behind each Code view.
 | Service | Boss | `cascade-boss-code` | [Boss](boss/DESIGN.md) |
 | Service | Workspace | `cascade-workspace-code`, `cascade-comparison-render-code` | [Workspace](workspace/DESIGN.md#c4-code-model-and-rendering-contract) |
 | Service | Comments and amendments | `cascade-collaboration-code` | [Comments](comments/DESIGN.md), [Amendments](amendments/DESIGN.md) |
+
+Current recovery progress crosses the Task, Watchdog and Dashboard boundaries:
+Task retains authoritative transition receipts, Watchdog joins exact live and
+postcheck evidence into immutable work-addressed pages, and Dashboard owns the
+safe versioned presentation contract. The producer and restart/failure flow is
+owned by the [Recovery progress design](recovery_progress/DESIGN.md); the
+[Watchdog summary](watchdog/DESIGN.md#current-recovery-progress-publication)
+describes its supervisor integration without duplicating that ownership.
 
 ## Team execution
 
@@ -316,6 +325,18 @@ blindly repeating a Git publication or lifecycle transition is unsafe.
 [Team supervision](team_supervision.py), [branch action recovery](team_branch_recovery.py),
 and [review recovery](team_review_recovery.py) own the shared recovery boundaries.
 Per-tier designs link the graph, state, checkpoint, registry and wiring modules.
+The [Workspace invocation boundary](workspace/DESIGN.md#graph-invocation-and-transcript-handoff)
+owns process-local turn evidence; the [Task action ledger](task/DESIGN.md#action-evidence-and-transcript-boundary)
+owns durable claims and attempts plus the exact executor-entry projection.
+Invocation and executor tokens are short-lived observations bound to the current
+worker process generation; queue ownership, PID existence, a legacy owner, or an
+inaccessible process cannot establish execution and the observations never grant
+repair authority. The [War Room transcript](war_room/DESIGN.md#recovery-summaries-and-planning-transcripts)
+records presentable replies after invocation return and receipt-keyed recovery
+milestones. Its historical HTTP surface reads only writer-published immutable
+pages and bounded oversized-message chunks; authoritative JSONL and the writer
+index are not GET surfaces. These separate facts do not establish independently
+verified recovery completion.
 
 ## Team libraries, wiring, and isolation
 

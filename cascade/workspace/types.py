@@ -35,6 +35,11 @@ class KickoffReason:
     model_id: str | None = None
     continuation_receipt_id: str | None = None
     continuation_handoff_id: str | None = None
+    action_id: str | None = None
+    action_generation: str | None = None
+    attempt_number: int | None = None
+    claim_id: str | None = None
+    claim_expires_at: str | None = None
 
 
 @dataclass(frozen=True)
