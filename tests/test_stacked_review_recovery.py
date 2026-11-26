@@ -344,3 +344,20 @@ def test_stacked_merge_carried_by_accepted_parent_squash_is_finalized(tmp_path, 
     assert updated["integration_target_branch"] == "epic/epic_001"
     assert updated["stack_integration_sha"] == epic_merge
     assert targets == ["epic/epic_001"]
+
+
+def test_merged_direct_review_pending_closeout_not_shown_as_open_review(tmp_path, monkeypatch):
+    root = make_repo(tmp_path, git=False)
+    _stacked_board(root)
+    review._update_record(root, "feat_002", {"target_branch": "epic/epic_001"})
+    monkeypatch.setattr(review, "merge_request_snapshot", lambda *a: {
+        "state": "merged", "comments": [], "merge_sha": "a" * 40,
+        "source_revision": "b" * 40, "target_branch": "epic/epic_001",
+    })
+    monkeypatch.setattr(review, "_finalize_merged_review_record", lambda *a, **kw: False)
+    review.poll_feature_reviews(root)
+    row = review.feature_review_view("feat_002", root=root)
+    assert row["state"] == "awaiting_closeout"
+    assert review.feature_review_pending("feat_002", root=root)
+    assert not review.list_open_reviews(root=root)
+    assert not review.review_record_for_feature("feat_002", root=root)["closed"]

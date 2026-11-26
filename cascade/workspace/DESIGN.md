@@ -325,3 +325,15 @@ cover semantic union, reviewed renames, endpoint rewiring, native rendering,
 verified SVG delivery and scheduler/cache reuse. The authored
 `cascade-comparison-render-code` view links the graph builder, source closure and
 scheduler to their actual source functions.
+
+### Durable architecture publication reconciliation
+
+Authenticated planning publication persists the pinned intent and exact affected
+work hold before starting bounded rendering. The existing watchdog maintenance
+pass replays up to four pending or unreleased terminal publication operations per
+pass in fair order, even if their originating role has exited or the service
+restarted. Per-operation OS locks serialize agent discovery and supervisor
+replay without holding the lifecycle lock across rendering. Terminal success,
+failure and supersession are persisted before the matching hold is released;
+a restart repairs an interrupted release, without clearing a successor's hold
+or authorizing an unreviewed architecture tuple. Board polling remains read-only.

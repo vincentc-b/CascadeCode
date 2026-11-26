@@ -394,6 +394,7 @@ def list_open_reviews(*, root: Path) -> list[OpenReview]:
             or record.get("closed")
             or record.get("kind") == "epic_close"
             or _stacked_acceptance(record) is not None
+            or _forge_acceptance(record) is not None
         ):
             continue
         url = str(record.get("url") or "").strip()
@@ -716,7 +717,7 @@ def _store_review_generation(
         )
         generations[str(generation)] = generation_row
         updated.update(generation_row)
-        for field in ("stacked_acceptance", "integration_target_branch", "stack_integration_sha"):
+        for field in ("forge_acceptance", "stacked_acceptance", "integration_target_branch", "stack_integration_sha"):
             if field not in generation_row:
                 updated.pop(field, None)
         updated["generations"] = generations
@@ -753,6 +754,38 @@ def feature_review_pending(feature_id: str, *, root: Path) -> bool:
     return doc.meta.status == "completed" and doc.meta.path.parent.name == "3_completed"
 
 
+def _forge_acceptance(record: dict[str, object]) -> dict[str, object] | None:
+    receipt = record.get("forge_acceptance")
+    if (
+        isinstance(receipt, dict)
+        and receipt.get("url") == record.get("url")
+        and receipt.get("target_branch") == record.get("target_branch")
+        and receipt.get("generation") == int(record.get("current_generation") or 0)
+        and receipt.get("merge_sha")
+    ):
+        return receipt
+    return None
+
+
+def _record_forge_acceptance(
+    feature_id: str, record: dict[str, object], snapshot: dict[str, object], *, root: Path,
+) -> None:
+    merge_sha = snapshot.get("merge_sha")
+    source = snapshot.get("source_revision")
+    if (not isinstance(merge_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", merge_sha)
+            or not isinstance(source, str) or not re.fullmatch(r"[0-9a-f]{40}", source)):
+        return
+    if not review_callback_is_current(feature_id, record, root=root, snapshot=snapshot):
+        return
+    receipt = {
+        "url": record.get("url"), "target_branch": record.get("target_branch"),
+        "generation": int(record.get("current_generation") or 0),
+        "merge_sha": merge_sha, "source_revision": source,
+    }
+    if _forge_acceptance(record) != receipt:
+        _update_record(root, feature_id, {"forge_acceptance": receipt})
+
+
 def _stacked_acceptance(record: dict[str, object]) -> dict[str, object] | None:
     receipt = record.get("stacked_acceptance")
     if (
@@ -773,7 +806,8 @@ def _feature_review_projection(
     receipt = _stacked_acceptance(record)
     result = {
         "state": "merged" if record.get("closed") else
-        "awaiting_integration" if receipt else "awaiting_review",
+        "awaiting_integration" if receipt else
+        "awaiting_closeout" if _forge_acceptance(record) else "awaiting_review",
         "url": str(record.get("url") or ""),
         "number": record.get("number"),
         "draft": bool(record.get("draft", False)),
@@ -783,6 +817,8 @@ def _feature_review_projection(
         result["integration_feature_id"] = predecessor
         upstream = state.get(predecessor, {})
         result["integration_review_url"] = str(upstream.get("url") or "")
+    if result["state"] == "awaiting_closeout" and isinstance(record.get("closeout_blocker"), dict):
+        result["closeout_blocker"] = record["closeout_blocker"]
     return result
 
 
@@ -1301,6 +1337,7 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
         ):
             continue
         record = _merged_review_record(feature_id, record, snapshot, trunk=trunk)
+        _record_forge_acceptance(feature_id, record, snapshot, root=trunk)
         if str(record.get("target_branch") or "").startswith("feat/"):
             feature = merged_board(trunk).by_id.get(feature_id)
             parent_id = feature.parent if feature else None
@@ -1487,12 +1524,24 @@ def _finalize_merged_review_record(
         # The accepted source tree may still have an active feature document.
         # Publish its terminal lifecycle commit before acknowledging closure.
         push_branch(epic_root, mr.target_branch)
-        return try_complete_feature(
+        complete = try_complete_feature(
             feature_id,
             root=trunk,
             review_merged=True,
             review_generation=int(record.get("current_generation") or 0),
         )
+        if not complete:
+            from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+            from cascade.workspace.architecture_review import ArchitectureProposalError
+            blocker = {"code": "closeout_pending", "message": "Merged; lifecycle closeout is pending"}
+            try:
+                require_lifecycle_review_gate(feature_id, "closeout", root=trunk)
+            except ArchitectureProposalError as exc:
+                blocker = {"code": exc.code, "message": str(exc)}
+            _update_record(trunk, feature_id, {"closeout_blocker": blocker})
+        else:
+            _update_record(trunk, feature_id, {"closeout_blocker": None})
+        return complete
     except (BoardError, OSError) as exc:
         _LOG.warning("could not finalize merged review for %s: %s", feature_id, exc)
         return False
@@ -1592,6 +1641,7 @@ def poll_feature_reviews(root: Path) -> None:
             ):
                 continue
             record = _merged_review_record(feature_id, record, snapshot, trunk=trunk)
+            _record_forge_acceptance(feature_id, record, snapshot, root=trunk)
             if _reconcile_stacked_acceptance(feature_id, record, snapshot, trunk=trunk):
                 continue
             mr = _record_to_mr(record)
@@ -1742,6 +1792,7 @@ def persist_stacked_reconciliation_review(
             "seen_comments": [],
             "toast_notified": False,
             "stacked_reconciliation": reconciliation,
+            "forge_acceptance": None,
             "stacked_acceptance": None,
             "integration_target_branch": None,
             "stack_integration_sha": None,

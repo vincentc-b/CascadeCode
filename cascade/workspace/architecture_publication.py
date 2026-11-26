@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
+import logging
 import json
 import os
 import subprocess
@@ -14,6 +16,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from cascade.board.context import get_project_context
+from cascade.board.errors import BoardError, NotFound
 from cascade.task.lifecycle_lock import task_lifecycle_lock
 from cascade.workspace.architecture_authoring import (
     ArchitectureAuthoringIntent,
@@ -44,6 +47,8 @@ _LEDGER_VERSION = 1
 _LEDGER = Path(".cascade") / "architecture-publications.json"
 _schedulers: dict[Path, C4RenderScheduler] = {}
 _schedulers_lock = threading.Lock()
+_LOG = logging.getLogger(__name__)
+_RECONCILE_LIMIT = 4
 
 
 def publish_architecture_review(
@@ -127,28 +132,58 @@ def publish_architecture_review(
                 })
                 _write_ledger(project, ledger)
                 pending = True
-    if pending:
-        store.set_acceptance_hold(unit.affected_work_ids, operation_id)
+        if pending:
+            store.set_acceptance_hold(unit.affected_work_ids, operation_id)
 
     # Replays and restart discovery always reconcile from durable intent.
     return discover_architecture_publication(operation_id, root=root)
 
 
 def discover_architecture_publication(
-    operation_id: str, *, root: Path
+    operation_id: str, *, root: Path,
 ) -> dict[str, object]:
-    """Reconcile one durable publication without unbounded caller-thread work."""
-
+    """Reconcile one durable publication; concurrent discovery never duplicates it."""
     project = get_project_context() or ProjectContext.colocated(Path(root))
+    # A per-operation fence lets the renderer acquire the lifecycle lock while
+    # validation is in progress. A crashed caller releases the OS lock.
+    lock_root = project.target.root / ".cascade" / "architecture-publication-locks"
+    lock_root.mkdir(parents=True, exist_ok=True)
+    key = hashlib.sha256(operation_id.encode()).hexdigest()
+    with (lock_root / key).open("a+b") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            with task_lifecycle_lock(root=project.target.root):
+                row = _read_ledger(project)["operations"].get(operation_id)
+            if row is None:
+                raise KeyError(operation_id)
+            return _public_result(row)
+        try:
+            return _discover_publication(operation_id, root=root, project=project)
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _discover_publication(
+    operation_id: str, *, root: Path, project: ProjectContext,
+) -> dict[str, object]:
     with task_lifecycle_lock(root=project.target.root):
         row = _read_ledger(project)["operations"].get(operation_id)
     if row is None:
         raise KeyError(operation_id)
-    if row["status"] not in {"pending"}:
+    if row["status"] != "pending":
+        _release_publication_hold(project, ArchitectureReviewStore(project), row)
         return _public_result(row)
 
     unit = ArchitectureReviewUnit.from_dict(row["proposal"])
     store = ArchitectureReviewStore(project)
+    # An interrupted admission can leave the intent durable before its hold.
+    # Restore missing holds, but never replace a newer or different operation.
+    with task_lifecycle_lock(root=project.target.root):
+        missing = tuple(work_id for work_id in unit.affected_work_ids
+                        if store.acceptance_hold(work_id) is None)
+        if missing:
+            store.set_acceptance_hold(missing, operation_id)
     try:
         _require_current_plan(
             project,
@@ -270,8 +305,12 @@ def discover_architecture_publication(
         )
     except ArchitectureProposalError as exc:
         return _terminal(project, store, row, "superseded" if exc.code in {
-            "stale_baseline", "artifact_changed", "destination_changed"
+            "stale_baseline", "artifact_changed", "destination_changed", "stale_revision"
         } else "failed", exc.code, str(exc).partition(": ")[2] or str(exc))
+    except NotFound as exc:
+        return _terminal(
+            project, store, row, "superseded", "stale_revision", str(exc)
+        )
     except C4RenderAdmissionError as exc:
         return _update(
             project, row, "pending", reason_code=exc.code, message=str(exc)
@@ -464,16 +503,62 @@ def _publish_validated(
     )
 
 
+def _release_publication_hold(project, store, row) -> None:
+    """Idempotently clear only this terminal publication's own hold."""
+    if row.get("status") == "pending":
+        return
+    with task_lifecycle_lock(root=project.target.root):
+        current = _read_ledger(project)["operations"].get(row["operation_id"])
+        if current is None or current.get("status") == "pending":
+            return
+        ids = ArchitectureReviewUnit.from_dict(current["proposal"]).affected_work_ids
+        store.clear_matching_acceptance_hold(ids, str(row["operation_id"]))
+
+
 def _terminal(project, store, row, status, code, message, **updates):
-    result = _update(
-        project, row, status, reason_code=code, message=message, **updates
-    )
-    for work_id in ArchitectureReviewUnit.from_dict(
-        row["proposal"]
-    ).affected_work_ids:
-        if store.acceptance_hold(work_id) == row["operation_id"]:
-            store.set_acceptance_hold((work_id,), None)
+    with task_lifecycle_lock(root=project.target.root):
+        result = _update(
+            project, row, status, reason_code=code, message=message, **updates
+        )
+        _release_publication_hold(project, store, {**row, "status": status})
     return result
+
+
+def reconcile_architecture_publications(root: Path, *, limit: int = _RECONCILE_LIMIT) -> list[dict[str, object]]:
+    """Advance a fair, bounded batch even after the initiating role has exited.
+
+    Terminal ledger rows may retain their hold if a process died between the
+    ledger commit and the hold release. Replay those rows too. No forge or
+    model action is authorized here; use the existing pinned publication path.
+    """
+    if limit < 1:
+        return []
+    project = get_project_context() or ProjectContext.colocated(Path(root))
+    if not (project.target.root / _LEDGER).is_file():
+        return []
+    store = ArchitectureReviewStore(project)
+    with task_lifecycle_lock(root=project.target.root):
+        ledger = _read_ledger(project)
+        holds = set(store.acceptance_holds().values())
+        candidates = sorted(
+            (
+                row for row in ledger["operations"].values()
+                if row.get("status") == "pending" or row["operation_id"] in holds
+            ),
+            key=lambda row: (row.get("last_reconciled_at", 0), row["operation_id"]),
+        )[:limit]
+        if candidates:
+            now = time.time()
+            for row in candidates:
+                row["last_reconciled_at"] = now
+            _write_ledger(project, ledger)
+    results = []
+    for row in candidates:
+        try:
+            results.append(discover_architecture_publication(str(row["operation_id"]), root=root))
+        except (BoardError, OSError, KeyError, ValueError, WorkspaceError):
+            _LOG.exception("architecture publication reconciliation failed for %s", row["operation_id"])
+    return results
 
 
 def _update(project, row, status, **updates):

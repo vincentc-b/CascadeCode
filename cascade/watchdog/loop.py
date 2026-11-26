@@ -63,7 +63,11 @@ def watchdog_tick(root: Path | None = None) -> None:
     from cascade.task.action_recovery import reconcile_abandoned_review_publications
     reconcile_abandoned_review_publications(root=repo)
     from cascade.automation import maybe_sync_briefs
+    from cascade.workspace.architecture_publication import reconcile_architecture_publications
 
+    # Finish render/publication intents before lifecycle gates evaluate them,
+    # including publications whose initiating planning turn has already ended.
+    reconcile_architecture_publications(repo)
     maybe_sync_briefs(repo)
     # Authorization is the first lifecycle gate after importing remote board
     # state.  Later consumers can dispatch descendants or apply other durable

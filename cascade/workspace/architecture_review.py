@@ -949,6 +949,24 @@ class ArchitectureReviewStore:
                 holds[work_id] = operation_id
         self._write(state)
 
+    def acceptance_holds(self) -> dict[str, str]:
+        """Read the current acceptance hold identities without mutation."""
+        return dict(self._read()["gate_rollout"]["acceptance_holds"])
+
+    def clear_matching_acceptance_hold(
+        self, work_ids: Sequence[str], operation_id: str,
+    ) -> None:
+        """Release a terminal operation, never a successor's hold."""
+        state = self._read()
+        holds = state["gate_rollout"]["acceptance_holds"]
+        changed = False
+        for work_id in work_ids:
+            if holds.get(work_id) == operation_id:
+                del holds[work_id]
+                changed = True
+        if changed:
+            self._write(state)
+
     def acceptance_hold(self, work_id: str) -> str | None:
         _nonblank(work_id, "acceptance hold work ID")
         value = self._read()["gate_rollout"]["acceptance_holds"].get(work_id)
@@ -1834,7 +1852,9 @@ def validate_review_gate(
     if hold is not None:
         raise ArchitectureProposalError(
             "acceptance_pending",
-            f"promotion {hold} has not accepted both code and documentation",
+            f"architecture publication {hold} is awaiting reconciliation"
+            if hold.startswith("architecture-publication-")
+            else f"promotion {hold} has not accepted both code and documentation",
         )
     if semantic_blockers:
         details = "; ".join(

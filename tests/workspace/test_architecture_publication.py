@@ -463,3 +463,68 @@ def _owner_worktree(root: Path, kind: str, work_id: str) -> Path:
         [IntegrationWorktree(kind, work_id, branch, worktree, base)],
     )
     return worktree
+
+
+def _interrupt_publication(tmp_path, monkeypatch):
+    from cascade.workspace import architecture_publication as publication
+
+    root, project, revision, proposal = _publication_repo(tmp_path)
+    set_project_context(project)
+    with monkeypatch.context() as patch:
+        patch.setattr(publication, "_discover_publication", lambda operation_id, **kw: {
+            "operation_id": operation_id, "status": "pending",
+        })
+        result = publication.publish_architecture_review(
+            proposal=proposal.to_dict(), expected_plan_revision=revision,
+            expected_generation=None, actor="feature_architect",
+            work_id="feat_046_001", root=root,
+        )
+    operation_id = result["operation_id"]
+    assert ArchitectureReviewStore(project).acceptance_hold("feat_046_001") == operation_id
+    return root, project, operation_id
+
+
+def test_supervisor_reconciles_publication_without_further_agent_call(tmp_path, monkeypatch):
+    from cascade.workspace import architecture_publication as publication
+
+    root, project, operation_id = _interrupt_publication(tmp_path, monkeypatch)
+    # The actual pinned proposal is valid and is published by maintenance.
+    results = publication.reconcile_architecture_publications(root)
+    assert results[0]["operation_id"] == operation_id
+    assert results[0]["status"] == "no_diagram_change"
+    assert ArchitectureReviewStore(project).acceptance_hold("feat_046_001") is None
+    assert publication.reconcile_architecture_publications(root) == []
+
+
+def test_terminal_failed_publication_and_crash_replay_release_only_owned_hold(tmp_path, monkeypatch):
+    from cascade.workspace import architecture_publication as publication
+
+    root, project, operation_id = _interrupt_publication(tmp_path, monkeypatch)
+    ledger = publication._read_ledger(project)
+    row = ledger["operations"][operation_id]
+    # Reproduce a render/publication failure followed by process death before
+    # release. The next maintenance pass must preserve failure evidence.
+    row.update(status="failed", reason_code="render_failed", message="render failed")
+    publication._write_ledger(project, ledger)
+    results = publication.reconcile_architecture_publications(root)
+    assert results[0]["status"] == "failed"
+    assert results[0]["reason_code"] == "render_failed"
+    store = ArchitectureReviewStore(project)
+    assert store.acceptance_hold("feat_046_001") is None
+    store.set_acceptance_hold(("feat_046_001",), "newer-promotion")
+    publication.discover_architecture_publication(operation_id, root=root)
+    assert store.acceptance_hold("feat_046_001") == "newer-promotion"
+
+
+def test_pending_publication_with_stale_plan_releases_its_hold(tmp_path, monkeypatch):
+    from cascade.workspace import architecture_publication as publication
+
+    root, project, operation_id = _interrupt_publication(tmp_path, monkeypatch)
+    doc = read_doc("feat_046_001", root=root)
+    doc.body += "\nA newer plan.\n"
+    write_doc(doc, root=root)
+    results = publication.reconcile_architecture_publications(root)
+    assert results[0]["operation_id"] == operation_id
+    assert results[0]["status"] == "superseded"
+    assert results[0]["reason_code"] == "stale_revision"
+    assert ArchitectureReviewStore(project).acceptance_hold("feat_046_001") is None
