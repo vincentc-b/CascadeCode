@@ -2,7 +2,7 @@
 id: epic_049
 title: Expose recovery progress and durable team transcript milestones
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_049_001
