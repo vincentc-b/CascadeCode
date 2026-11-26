@@ -6,6 +6,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import subprocess
+from typing import Any
 
 from cascade.board.errors import GitError
 from cascade.epic.registry import register_epic_tool
@@ -160,7 +161,13 @@ def restore_feature_dispatch(
     }
 
 
-def recover_feature(feature_id: str, *, epic_id: str, root: Path) -> dict[str, object]:
+def recover_feature(
+    feature_id: str,
+    *,
+    epic_id: str,
+    root: Path,
+    repair_request: dict[str, Any] | None = None,
+) -> dict[str, object]:
     """Ask one active direct Feature to reconcile its owned durable actions."""
 
     trunk = locate_trunk(root)
@@ -173,7 +180,13 @@ def recover_feature(feature_id: str, *, epic_id: str, root: Path) -> dict[str, o
         raise PermissionError("recovery is scoped to a direct Feature")
     from cascade.team_supervision import supervise_child
 
-    result = supervise_child(feature_id, "recover", root=trunk, epic_id=epic_id)
+    result = supervise_child(
+        feature_id,
+        "recover",
+        root=trunk,
+        epic_id=epic_id,
+        repair_request=repair_request,
+    )
     return {
         **result,
         "epic_id": epic_id,

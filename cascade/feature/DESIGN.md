@@ -84,13 +84,21 @@ observed source and target heads, immutable review generation, and any existing
 claim and incident-budget identities. The lifecycle transaction re-reads the
 mutation owner, Feature and parent status, approval, dependencies, governing
 comments, review registry, heads, claim and finite budget. The review request's
-own governing comment may remain open while unrelated blocking comments wait.
+own governing comment may remain open only when its root identity agrees across
+the stable request ID, scope reference and request evidence; caller-supplied
+comment lists cannot exempt unrelated blocking comments, which remain waiting.
 Changed content under the same request ID is a terminal typed refusal; stale or
 missing prerequisites return a typed next prerequisite without emitting queue
 authority. A current repair writer is joined or deferred to instead of creating
 a competing generation. Completed/open review records without an explicit
 current generation use generation zero as their observed identity and follow
 the same admission path.
+[The shared request adapter](../team_supervision.py) supplies either the exact
+direct Epic parent or an `AuthenticatedHuman`, then schedules the already-durable
+event through Workspace. It does not infer work from acknowledgement: the
+action projection independently reports admission, queue acknowledgement,
+execution and authoritative verification. Replay after an adapter crash reuses
+this action ID, generation and event.
 
 ```mermaid
 sequenceDiagram

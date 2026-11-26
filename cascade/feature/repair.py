@@ -1072,14 +1072,29 @@ def _prepare_open_review_action(
     }
 
 
-def _governing_comment_ids(evidence: object) -> set[str]:
-    if not isinstance(evidence, Mapping):
-        return set()
-    values: list[object] = []
-    for key in ("comment_id", "comment_ids", "governing_comment_ids"):
-        value = evidence.get(key)
-        values.extend(value if isinstance(value, list) else [value])
-    return {str(value) for value in values if isinstance(value, str) and value}
+def _review_request_comment_id(action: Mapping[str, Any]) -> str | None:
+    """Return the one comment durably identified as this review fix request."""
+
+    request_id = action.get("request_id")
+    scope_reference = action.get("scope_reference")
+    evidence = action.get("request_evidence")
+    if (
+        not isinstance(request_id, str)
+        or not request_id.startswith("review-fix:")
+        or not isinstance(scope_reference, str)
+        or not scope_reference.startswith("review-comment:")
+        or not isinstance(evidence, Mapping)
+    ):
+        return None
+    request_comment_id = request_id.removeprefix("review-fix:")
+    scope_comment_id = scope_reference.removeprefix("review-comment:")
+    evidence_comment_id = evidence.get("comment_id")
+    if (
+        request_comment_id
+        and request_comment_id == scope_comment_id == evidence_comment_id
+    ):
+        return request_comment_id
+    return None
 
 
 def _open_review_admission_gates(
@@ -1150,8 +1165,10 @@ def _open_review_admission_gates(
                 "feature_dependency_incomplete", f"complete_dependency:{dep}"
             )
     gate = blocking_threads_for(doc.meta.id, root=root, board=board)
-    allowed = _governing_comment_ids(action.get("request_evidence"))
-    unexpected = [thread.id for thread in gate.threads if thread.id not in allowed]
+    request_comment_id = _review_request_comment_id(action)
+    unexpected = [
+        thread for thread in gate.threads if thread.id != request_comment_id
+    ]
     if unexpected:
         raise _FeatureRepairRefusal(
             "governing_comments_changed", "resolve_or_refresh_governing_comments"

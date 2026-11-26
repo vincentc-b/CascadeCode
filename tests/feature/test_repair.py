@@ -12,6 +12,7 @@ import pytest
 import cascade.feature.repair as repair
 import cascade.review as review
 from cascade.board.store import read_doc, write_doc
+from cascade.comments.store import comment, resolve_comment
 from cascade.feature.repair import (
     FeatureRepairError,
     admit_feature_repair,
@@ -290,6 +291,60 @@ def test_open_review_stale_observation_waits_without_queue_authority(
     events, _ = read_events("feat_001", 0, root=root)
     assert events == []
     assert read_doc("feat_001", root=root).meta.status == "completed"
+
+
+def test_open_review_exempts_only_its_exact_comment_thread(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _completed_feature(root)
+    own_comment = comment(
+        "feat_001",
+        "Scope",
+        "Fix this review finding",
+        blocking=True,
+        author="human",
+        root=root,
+    )
+    unrelated_comment = comment(
+        "feat_001",
+        "Scope",
+        "Resolve this separate concern too",
+        blocking=True,
+        author="human",
+        root=root,
+    )
+
+    waiting = _open_review_request(
+        root,
+        request_id=f"review-fix:{own_comment}",
+        evidence={
+            "comment_id": own_comment,
+            "comment_ids": [own_comment, unrelated_comment],
+            "finding": "edge case",
+        },
+        scope_reference=f"review-comment:{own_comment}",
+    )
+
+    assert waiting["waiting"] is True
+    assert waiting["admitted"] is False
+    assert waiting["blocker"] == "governing_comments_changed"
+    assert waiting["next_prerequisite"] == "resolve_or_refresh_governing_comments"
+    assert read_doc("feat_001", root=root).meta.status == "completed"
+
+    resolve_comment("feat_001", unrelated_comment, author="human", root=root)
+    admitted = _open_review_request(
+        root,
+        request_id=f"review-fix:{own_comment}",
+        evidence={
+            "comment_id": own_comment,
+            "comment_ids": [own_comment, unrelated_comment],
+            "finding": "edge case",
+        },
+        scope_reference=f"review-comment:{own_comment}",
+    )
+
+    assert admitted["admitted"] is True
+    events, _ = read_events("feat_001", 0, root=root)
+    assert sum(event.type == "FeatureRepairAuthorized" for event in events) == 1
 
 
 def test_open_review_crash_after_authority_append_replays_exact_action(

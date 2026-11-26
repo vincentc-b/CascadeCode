@@ -2388,6 +2388,15 @@ code_epic_supervise = element "supervise_child" "Function" "Inspect incidents an
     }
 }
 
+code_epic_review_repair_request = element "request_feature_review_repair" "Function" "Authorize one direct-parent or authenticated-human request, admit its exact Feature repair action, and acknowledge wakeup separately from execution." {
+    properties {
+        "cascade.semanticId" "element.code.epic.review-repair-request"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/team_supervision.py"
+        "cascade.sourceSymbol" "request_feature_review_repair"
+    }
+}
+
 code_epic_mismatch_route = element "_recover_feature_lifecycle_mismatch" "Function" "Verify direct Task ownership and route the exact mismatch generation to Feature recovery." {
     properties {
         "cascade.semanticId" "element.code.epic.parent-lifecycle-mismatch-route"
@@ -2748,6 +2757,18 @@ code_epic_registry_to_recover = code_epic_registry -> code_epic_recover "Uses" {
 code_epic_recover_to_supervise = code_epic_recover -> code_epic_supervise "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-epic-recover-to-supervise"
+    }
+}
+
+code_epic_supervise_to_review_repair_request = code_epic_supervise -> code_epic_review_repair_request "Routes exact open-review requests without requiring a Task mismatch" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-supervise-to-review-repair-request"
+    }
+}
+
+code_epic_review_repair_request_to_feature_admission = code_epic_review_repair_request -> code_feature_open_review_repair "Uses the shared content-addressed admission contract" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-feature-admission"
     }
 }
 
@@ -3600,6 +3621,27 @@ code_workspace_owner_live = element "graph_turn_owner_is_live" "Function" "Obser
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/kickoff.py"
         "cascade.sourceSymbol" "graph_turn_owner_is_live"
+    }
+}
+
+code_workspace_queue_kickoff = element "kickoff_graph_queue_event" "Function" "Schedule delivery only when the durable queue is ahead of its checkpoint cursor." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.queue-kickoff"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "kickoff_graph_queue_event"
+    }
+}
+
+code_epic_review_repair_request_to_owner_live = code_epic_review_repair_request -> code_workspace_owner_live "Defers to a live Feature graph owner" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-owner-live"
+    }
+}
+
+code_epic_review_repair_request_to_queue_kickoff = code_epic_review_repair_request -> code_workspace_queue_kickoff "Schedules the already-durable event after admission" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-queue-kickoff"
     }
 }
 

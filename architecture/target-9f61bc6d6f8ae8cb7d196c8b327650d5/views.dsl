@@ -31,7 +31,7 @@ custom "cascade-epic-code" {
         "cascade.codeComponent" "element.component.epic-team"
     }
     include code_epic_graph code_epic_state code_epic_checkpoint code_epic_wiring code_epic_registry code_epic_guard code_epic_runtime code_epic_provider
-    include code_epic_recover code_epic_supervise code_epic_mismatch_route code_epic_prepare_checkout
+    include code_epic_recover code_epic_supervise code_epic_review_repair_request code_epic_mismatch_route code_epic_prepare_checkout
     autoLayout lr
 }
 
@@ -203,7 +203,7 @@ custom "cascade-workspace-code" {
     }
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
     include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_create code_workspace_resume_epic code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
-    include code_workspace_invoke code_workspace_owner_live code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
+    include code_workspace_invoke code_workspace_owner_live code_workspace_queue_kickoff code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
     include code_workspace_delivery code_workspace_resume code_workspace_schedule code_workspace_delivery_locked code_workspace_retained_feature
     autoLayout lr
 }
