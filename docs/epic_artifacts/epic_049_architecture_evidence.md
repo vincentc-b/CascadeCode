@@ -3213,3 +3213,44 @@ sign-off remain withheld for Feature 5 integration, measured contention and
 eventual dirty-projection publication, completed-record corrections, broader
 documentation-refresh proof, and final exact architecture publication. The
 reported terminal Feature 3 publication failure remains non-approval.
+
+## Manager reconciliation of completion and fresh publication handoff
+
+At Epic baseline `fe132019`, Cascade's child projection confirms Features 1–4
+completed and Feature 5 active. Feature 4 `a3d4a42b` is an Epic ancestor;
+Feature 3 publication pin `150f2380` and Feature 5 implementation `1334c4a1`
+are not. Feature 3's delivered source equivalence remains distinct from exact
+plan ancestry. Its War Room design and architecture source tree are unchanged
+between `99be54b1`, `150f2380` and the current Epic. The `150f2380` commit changes
+only its work record. The canonical Feature 3 spec read was denied with
+`content_access_denied`; no alternate spec access was attempted.
+
+The child reports fresh pending operation
+`architecture-publication-a515cd706ae6957b53c4bbfc92fb80ed46246958f5ea5e8f44538b876376a8a0`,
+render `c4-render-582abe458faf6ad47059d05e01156ef7a5dd0b0104c5ada4146e2b3395735504`,
+and tuple `066bf7045eda8229ca11ad34130a9aa293f7c65e093dbf3b249615dfda8d9231`,
+pinned to `150f2380537d95af6bec4efd60624147c1af3a12`. The reported request file
+is `.cascade/feat_049_003_architecture_review_150f2380.json`, SHA-256
+`d846178cdb78ffb0db638de8e9c6396edff8153ddcef50c80c025373e762c37f`.
+Epic has not received or independently verified this new payload or operation.
+Cascade enqueued a handoff to Feature 3 for its architect's identical-request
+replay, terminal response preservation and tracked exact-payload transfer.
+The reported earlier `model_invalid` attempt at this revision retained an old
+source closure digest; it must not be substituted for the corrected request.
+The older failed request remains intact and supplies no approval.
+
+The canonical Epic update `aac0599e` records this distinction and the current
+acceptance gates. The child was also notified that `7f24245c` already corrected
+the Recovery Progress owner mapping; final reconciliation with Feature 5 is
+still necessary. No new scope decision, lifecycle transition or sign-off was
+made. All twelve pinned blob digests in the two existing saved requests match.
+
+Design impact: this turn changes only work evidence. The reviewed War Room
+design and model comparison shows no new context, container, component, Code
+or behavioral change requiring an architecture edit. The prior producer-owner
+review above remains applicable. No product tests, browser navigation or
+render were rerun for this evidence-only handoff. Feature 5 still owns measured
+contention and eventual dirty-projection publication on the integrated source;
+completed-record corrections, broader documentation-refresh proof and final
+design/publication reconciliation remain open. Return control to supervised
+child delivery and the publication owner.
