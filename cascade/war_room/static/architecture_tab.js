@@ -630,14 +630,25 @@
 
     async function remainingViews(payload, generation) {
       var views = payload.views.slice();
+      var targets = Array.isArray(payload.targets) ? payload.targets.slice() : [];
+      var targetIds = new Set(targets.map(function (target) {
+        return target.semantic_id;
+      }));
       var cursor = payload.pagination && payload.pagination.next_cursor;
       while (cursor != null) {
         var page = await json(snapshotUrl(payload.snapshot_id, null, cursor));
         if (generation !== state.generation) return null;
         views = views.concat(page.views || []);
+        (page.targets || []).forEach(function (target) {
+          if (!targetIds.has(target.semantic_id)) {
+            targetIds.add(target.semantic_id);
+            targets.push(target);
+          }
+        });
         cursor = page.pagination && page.pagination.next_cursor;
       }
       payload.views = views;
+      payload.targets = targets;
       if (payload.pagination) payload.pagination.next_cursor = null;
       return payload;
     }

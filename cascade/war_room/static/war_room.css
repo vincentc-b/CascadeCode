@@ -880,6 +880,23 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+.transcript-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+.transcript-state,
+.transcript-message-metadata {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.transcript-state.error {
+  color: #f28b82;
+}
+
 .dependency-current-summary {
   margin: 0.5rem 0;
   padding: 0.65rem 0.75rem;
@@ -887,6 +904,43 @@ button:disabled {
   border-radius: 6px;
   background: #12151c;
   font-size: 0.82rem;
+}
+
+.recovery-current-summary,
+.recovery-progress-summary {
+  margin: 0.5rem 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #12151c;
+  font-size: 0.78rem;
+}
+
+.recovery-current-summary:empty {
+  display: none;
+}
+
+.recovery-progress-summary h3,
+.recovery-current-summary h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.recovery-progress-entry + .recovery-progress-entry {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+}
+
+.recovery-progress-identity,
+.recovery-progress-freshness,
+.recovery-progress-continuation {
+  color: var(--muted);
+}
+
+.recovery-progress-milestones a,
+.recovery-progress-action {
+  margin-right: 0.45rem;
 }
 
 .dependency-current-summary h3,
@@ -913,6 +967,21 @@ button:disabled {
 
 .chat-message {
   margin-bottom: 0.5rem;
+  border-radius: 4px;
+  padding: 0.2rem 0.35rem;
+}
+
+.chat-message:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.chat-message-recovery {
+  border-left: 3px solid #fbbf24;
+  background: rgba(251, 191, 36, 0.06);
+}
+
+.transcript-detail {
+  margin-top: 0.35rem;
 }
 
 .chat-message .author {

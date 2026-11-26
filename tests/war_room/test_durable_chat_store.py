@@ -16,6 +16,7 @@ from cascade.war_room import chat_store
 from cascade.war_room.chat_store import (
     TranscriptPendingError,
     append_transcript_message,
+    fenced_transcript_source_acknowledgement,
     move_transcript_room,
     read_messages,
     remove_message,
@@ -68,6 +69,30 @@ def _seed_intent(root: Path, line: bytes, *, written: int) -> None:
             ),
         )
         connection.commit()
+    finally:
+        connection.close()
+
+
+def test_fenced_source_lookup_leaves_pending_intent_for_writer_repair(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    intended = _line("message-1", "durable", "receipt-1")
+    _seed_intent(root, intended, written=len(intended))
+
+    with pytest.raises(TranscriptPendingError, match="routing is pending"):
+        with fenced_transcript_source_acknowledgement(
+            "epic_001", source_key="receipt-1", root=root
+        ):
+            pytest.fail("pending routing must not be yielded")
+
+    connection = chat_store._connect_index("epic_001", root=root)
+    try:
+        assert (
+            connection.execute("SELECT count(*) FROM pending_intent").fetchone()[0] == 1
+        )
+        assert connection.execute("SELECT count(*) FROM events").fetchone()[0] == 0
     finally:
         connection.close()
 

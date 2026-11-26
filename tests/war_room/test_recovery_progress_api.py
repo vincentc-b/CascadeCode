@@ -129,6 +129,9 @@ def test_board_summary_uses_the_same_primary_and_additive_identity(
     assert metadata["entry_id"] == progress["primary"]["entry_id"]
     assert metadata["count"] == 2
     assert metadata["next_cursor"]
+    assert metadata["primary"]["entry_id"] == progress["primary"]["entry_id"]
+    assert metadata["primary"]["receipt_ref_count"] == 1
+    assert metadata["primary"]["milestone_ref_count"] == 0
 
 
 def test_reader_has_no_read_side_effects(tmp_path: Path) -> None:
