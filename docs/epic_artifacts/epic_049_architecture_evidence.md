@@ -1392,3 +1392,49 @@ not close the retry gap. Epic plan, sign-offs and saved publication request are
 unchanged. Repair acceptance, canonical Task corrections, producer design
 coverage, final fixtures and terminal Epic publication recovery remain open.
 Return control to child execution and supervisor integration.
+
+## Manager integrated storage repair handoff
+
+Reviewed canonical Feature 2 revision `52a59707a0b27a8ef83e86bc06df2e36c66221e0`
+after the Task 5 integration report at `a32d84ab`. Source trace confirms that
+`chat_store._repair_pending` syncs a fully visible intended line before committing
+its index entry. Rewrite intent persists exact replacement bytes and a target
+incarnation before replacement; restart accepts matching original or replacement
+bytes and leaves conflicts pending. Room movement journals a fingerprinted copy
+and target incarnation, and terminal retirement invokes
+`resume_transcript_room_move` when the registered checkout is already absent.
+The Feature reports 70 focused tests, a real pinned renderer check and source
+validation. These checks were not rerun in this Manager evidence-only turn.
+
+The repaired implementation is integrated; final cross-slice acceptance remains
+with Task 4. Cascade enqueued
+`epic_049:epic_049:manager_task5_integrated_gate_20261126` to Feature 2, preserving
+receipt retry after rewrite/move, immutable identity conflict rejection and no
+stale-acknowledgement downgrade; bounded v1/legacy/detail route fixtures; and the
+missing native Code node/retirement relationship. Final integrated source and
+route/header/error/detail fixtures must reach Feature 3 through the parent.
+The canonical Feature already owns these requirements, so no duplicate spec
+edit, new decision or Epic amendment is needed.
+
+Design closeout: reviewed the Feature's `cascade/war_room/DESIGN.md` and
+`cascade/workspace/DESIGN.md` recovery requirements, source links and sequences
+against `chat_store.py`, `integration_worktree.py` and native model declarations.
+The design links the resume entry point, but the model contains move/rewrite and
+retirement nodes without a distinct `resume_transcript_room_move` node. Task 4
+owns that material coverage gap and final source-contract reconciliation.
+
+| Level / view | Impact and remaining verification owner |
+|---|---|
+| Context / `cascade-context` | No changed actor or external dependency in the storage repair. |
+| Containers / `cascade-containers` | Existing runtime, JSONL and writer-index boundaries remain; no new service. |
+| Components / `cascade-war-room-components`, `cascade-supervisor-components` | Transcript store and lifecycle ownership remain; final Feature review checks their recovery relationship. |
+| Code / `cascade-dashboard-code`, `cascade-workspace-code` | Task 4 adds the real resume entry point and retirement relationship, synchronizes source metadata/contract, and verifies Explore, Level up, deep-link restoration and pinned-source opening. |
+| Behavior / War Room and Workspace designs | The journaled rewrite/move and terminal retirement sequences agree with the traced source. Task 4 retains normal, crash/restart, conflict and receipt replay acceptance against the integrated store. |
+
+No current-design or model edit is warranted on this Epic branch for this
+work-record-only change. Canonical Epic/Feature reads and an empty amendment list
+confirm unchanged scope; both saved role sign-offs still name Epic `03280933`.
+`git diff --check` passed. Task 1/5 canonical-record corrections, producer design
+ownership, final API/receipt acceptance and terminal Epic publication recovery
+remain open. No new sign-off or publication is claimed. Return control to child
+execution and supervisor integration.
