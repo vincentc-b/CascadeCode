@@ -24,6 +24,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-26T21:25:37.189836+00:00'
 ---
 # Expose accountable review state and prove the complete repair journey
 
