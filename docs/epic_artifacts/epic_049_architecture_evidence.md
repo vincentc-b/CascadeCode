@@ -3160,3 +3160,56 @@ non-approval; its later canonical closeout is not inferred from local source
 equivalence. Canonical record corrections, the broader documentation-refresh
 proof, design ownership and fresh exact publication remain open. No new scope
 decision or renewed sign-off is warranted. Return control to child delivery.
+
+## Architect reconciliation of integrated producer ownership
+
+Reviewed integrated baseline `d34359e0` and corrected the explicitly assigned
+Recovery Progress ownership row in `architecture/design-mappings.json`. The
+code directory now resolves to `cascade/recovery_progress/DESIGN.md` and its
+owner-scoped artifact identity. This is an explicit current mapping migration;
+the target repository key, other mappings, accepted snapshots and both saved
+publication requests are unchanged. The child's four requirement IDs and two
+decision IDs retain their single owner. Parent `cascade/DESIGN.md` and
+`cascade/watchdog/DESIGN.md` already link to that owner and need no duplicate
+requirements or prose changes.
+
+Reviewed the child design, parent and Watchdog summaries, War Room lookup
+interface, and `publisher.py::_record_transcript_milestone` /
+`drain_recovery_progress` against `chat_store.py` fencing. Normal routing reads
+the current source key under the graph fence and holds it through publisher
+commit; pending indexing or identity conflict cannot supply a new mapping.
+Retained receipts and dirty aliases drive later replay. Blocking graph locks
+and schema-initializing transcript SQLite access remain in this Epic baseline.
+Qualified `REQ-RECOVERY-PROGRESS-004` verification instead of claiming elapsed
+contention bounds from cooperative deadline checks. No implementation history
+or delivery attribution was added to the design.
+
+Diagram-impact reconciliation for this documentation/mapping diff:
+
+- Landscape/context and containers: unchanged people, external systems, runtime
+  and persistence boundaries; owner lookup metadata does not change topology.
+- Supervisor components and `cascade-watchdog-code`: publisher symbols retain
+  Watchdog component ownership; design ownership now resolves to the existing
+  producer child. `cascade-dashboard-code` retains transcript-fence ownership.
+  No source symbol, native element kind, relationship or view membership changed.
+- Task, Workspace and Teams Code views: source entry points and caller contracts
+  are unchanged by this diff. Feature 5 must still reconcile final implementation
+  and budget descriptions against its delivered source.
+- Supplementary flow: the child's mapping/replay sequence matches inspected
+  source ordering. Its verification table now states the remaining contention
+  limit; there is no new execution transition to diagram.
+
+Validation: `tests/workspace/test_architecture_destination.py` and
+`tests/workspace/test_c4_source.py` passed **30 tests in 3.11 seconds**.
+The repository ownership loader resolves all 33 rows to existing designs and
+resolves the producer row to its child. Local file links from the producer,
+parent and Watchdog designs resolve. All twelve pinned publication blob digests
+match; `git diff --check` passed. No renderer or browser navigation was rerun
+for this mapping/table-only change; earlier full-model navigation evidence is
+not claimed as verification of the pending contention implementation.
+
+The current persisted owner-mapping gap is corrected. Acceptance and renewed
+sign-off remain withheld for Feature 5 integration, measured contention and
+eventual dirty-projection publication, completed-record corrections, broader
+documentation-refresh proof, and final exact architecture publication. The
+reported terminal Feature 3 publication failure remains non-approval.

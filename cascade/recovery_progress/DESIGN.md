@@ -139,7 +139,7 @@ and dirty aliases resume publication without changing lifecycle admission.
 | `REQ-RECOVERY-PROGRESS-001` | [publisher scenarios](../../tests/recovery_progress/test_publisher.py) | Verified for exact evidence joins, bounded publication, aliases and replay. |
 | `REQ-RECOVERY-PROGRESS-002` | [milestone integration](../../tests/recovery_progress/test_transcript_milestones.py) and [transcript store](../../tests/war_room/test_durable_chat_store.py) | Verified for first insertion, delayed fast-path/drain/public writers, conflicts, pending state, room movement and current fenced routing. |
 | `REQ-RECOVERY-PROGRESS-003` | [milestone restart/replay scenarios](../../tests/recovery_progress/test_transcript_milestones.py) | Verified for committed receipt replay and pending evidence without fabricated routing. |
-| `REQ-RECOVERY-PROGRESS-004` | [publisher scenarios](../../tests/recovery_progress/test_publisher.py) | Verified against configured receipt, owner, pass and fast-path bounds. |
+| `REQ-RECOVERY-PROGRESS-004` | [publisher scenarios](../../tests/recovery_progress/test_publisher.py) | Receipt/owner caps and cooperative deadline checks are covered. Graph-fence acquisition can block, and transcript index setup uses a 30-second SQLite timeout; elapsed-time bounds under contention are not established. |
 
 ## Child Designs and Directory Coverage
 
