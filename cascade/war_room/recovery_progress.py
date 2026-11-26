@@ -510,12 +510,25 @@ def board_recovery_projection(
     """Return the compatible primary summary and additive version metadata."""
 
     primary = progress.get("primary")
+    board_primary = dict(primary) if isinstance(primary, Mapping) else None
+    if board_primary is not None:
+        receipt_refs = board_primary.get("receipt_refs", [])
+        milestone_refs = board_primary.get("milestone_refs", [])
+        board_primary["receipt_ref_count"] = len(receipt_refs)
+        board_primary["milestone_ref_count"] = len(milestone_refs)
+        board_primary["receipt_refs"] = list(receipt_refs[:3])
+        board_primary["milestone_refs"] = list(milestone_refs[:3])
     metadata = {
         "schema_version": SCHEMA_VERSION,
+        "work_id": progress.get("work_id"),
         "revision": progress.get("revision"),
+        "observed_at": progress.get("observed_at"),
+        "expires_at": progress.get("expires_at"),
+        "lag": progress.get("lag"),
         "entry_id": primary.get("entry_id") if isinstance(primary, Mapping) else None,
         "action_id": primary.get("action_id") if isinstance(primary, Mapping) else None,
         "freshness": primary.get("freshness") if isinstance(primary, Mapping) else None,
+        "primary": board_primary,
         "count": progress.get("entry_count", 0),
         "next_cursor": progress.get("next_cursor"),
         "completeness": progress.get("completeness"),

@@ -2,6 +2,7 @@
   "elements": [
     {"dsl_identifier": "code_dashboard_recovery", "semantic_id": "element.code.dashboard.recovery", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_progress_contract", "semantic_id": "element.code.dashboard.progress-contract", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_dashboard_progress_ui", "semantic_id": "element.code.dashboard.progress-ui", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_incidents", "semantic_id": "element.code.dashboard.incidents", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_chat_get", "semantic_id": "element.code.dashboard.chat.get", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_chat_read", "semantic_id": "element.code.dashboard.chat.read", "fragment": "model.dsl"},
@@ -243,6 +244,8 @@
   "relationships": [
     {"dsl_identifier": "dashboard_incidents_to_dashboard_recovery", "semantic_id": "relationship.code-dashboard-incidents-to-dashboard-recovery", "source": "code_dashboard_incidents", "destination": "code_dashboard_recovery", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_router_to_progress_reader", "semantic_id": "relationship.code-dashboard-router-to-progress-reader", "source": "code_dashboard_router", "destination": "code_dashboard_incidents", "fragment": "model.dsl"},
+    {"dsl_identifier": "dashboard_progress_ui_to_router", "semantic_id": "relationship.code-dashboard-progress-ui-to-router", "source": "code_dashboard_progress_ui", "destination": "code_dashboard_router", "fragment": "model.dsl"},
+    {"dsl_identifier": "dashboard_render_to_progress_ui", "semantic_id": "relationship.code-dashboard-render-to-progress-ui", "source": "code_dashboard_render", "destination": "code_dashboard_progress_ui", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_router_to_dashboard_chat_get", "semantic_id": "relationship.code-dashboard-router-to-dashboard-chat-get", "source": "code_dashboard_router", "destination": "code_dashboard_chat_get", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_router_to_dashboard_transcript_get", "semantic_id": "relationship.code-dashboard-router-to-dashboard-transcript-get", "source": "code_dashboard_router", "destination": "code_dashboard_transcript_get", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_chat_get_to_dashboard_chat_page", "semantic_id": "relationship.code-dashboard-chat-get-to-dashboard-chat-page", "source": "code_dashboard_chat_get", "destination": "code_dashboard_chat_page", "fragment": "model.dsl"},

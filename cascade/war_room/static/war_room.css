@@ -889,6 +889,43 @@ button:disabled {
   font-size: 0.82rem;
 }
 
+.recovery-current-summary,
+.recovery-progress-summary {
+  margin: 0.5rem 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #12151c;
+  font-size: 0.78rem;
+}
+
+.recovery-current-summary:empty {
+  display: none;
+}
+
+.recovery-progress-summary h3,
+.recovery-current-summary h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.recovery-progress-entry + .recovery-progress-entry {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+}
+
+.recovery-progress-identity,
+.recovery-progress-freshness,
+.recovery-progress-continuation {
+  color: var(--muted);
+}
+
+.recovery-progress-milestones a,
+.recovery-progress-action {
+  margin-right: 0.45rem;
+}
+
 .dependency-current-summary h3,
 .transcript-history-heading {
   margin: 0 0 0.35rem;

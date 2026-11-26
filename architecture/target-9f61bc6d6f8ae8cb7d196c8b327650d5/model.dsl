@@ -1667,6 +1667,15 @@ code_dashboard_progress_contract = element "_derive_entry" "Function" "Defines t
     }
 }
 
+code_dashboard_progress_ui = element "renderCurrentRecoveryProgress" "Function" "Renders the same revision-bound safe recovery entries beside Historical while refusing stale graph or revision responses." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.progress-ui"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/war_room.js"
+        "cascade.sourceSymbol" "renderCurrentRecoveryProgress"
+    }
+}
+
 dashboard_router_to_render = code_dashboard_router -> code_dashboard_render "Serves the dashboard page" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-router-to-render"
@@ -3468,6 +3477,18 @@ dashboard_incidents_to_dashboard_recovery = code_dashboard_incidents -> code_das
 dashboard_router_to_progress_reader = code_dashboard_router -> code_dashboard_incidents "Dispatches bounded recovery progress reads" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-router-to-progress-reader"
+    }
+}
+
+dashboard_progress_ui_to_router = code_dashboard_progress_ui -> code_dashboard_router "Requests bounded revision-bound recovery pages" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-progress-ui-to-router"
+    }
+}
+
+dashboard_render_to_progress_ui = code_dashboard_render -> code_dashboard_progress_ui "Serves the persistent current-progress presentation" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-render-to-progress-ui"
     }
 }
 

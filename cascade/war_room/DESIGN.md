@@ -32,8 +32,19 @@ caps at 100 entries; its opaque cursor binds exact work ID, immutable revision
 and row offset. A superseded revision returns a typed restart conflict. The
 compatible `recovery_incident` board field is derived from the same selected
 entry and carries additive version, revision, entry, freshness, count and
-continuation metadata under `recovery_progress`. Across board rows, reads share
+continuation metadata under `recovery_progress`, including a compact safe primary
+with bounded receipt and milestone references. Across board rows, reads share
 the 100-entry, 1 MiB source budget and each response remains below 256 KiB.
+
+The dashboard renders that shared primary persistently on its board row and reads
+the same immutable pages beside Historical for ordered concurrent incidents. The
+room binds asynchronous results to work ID and projection revision, restarts a
+superseded continuation, and never splices a late graph or revision into the
+current panel. State, stage, owner, occurrence, freshness and delivery lag remain
+distinct; queued work is not presented as execution and publication is not
+presented as verified completion. Recovery text is assigned through DOM text
+nodes, while actions accept only local root-relative URLs and committed milestone
+references resolve to stable transcript fragments.
 
 `REQ-WARROOM-TRANSCRIPT-001`: Historical chat preserves the owning Epic or
 Feature's human and presentable role messages. Reading chat does not invoke a
@@ -134,6 +145,7 @@ the transcript library within the same Python runtime.
 |---|---|
 | [read_recovery_progress / read_recovery_progress_many](recovery_progress.py) | Open only a work-hashed direct no-follow pointer, its immutable manifest and requested pages. Validate exact work/repository identity, freshness, revision and row shape while enforcing aggregate source, row and response budgets. Missing, stale, corrupt and wrong-root evidence is typed pending. |
 | [board_recovery_projection](recovery_progress.py) | Preserve the coarse `recovery_incident` surface while selecting its action and revision from the same safe entry returned to room consumers. Presentation never grants retry authority. |
+| [renderCurrentRecoveryProgress](static/war_room.js) | Present revision-bound current and concurrent entries beside Historical, restart changed continuations, reject late graph responses and allow only local action or committed milestone links. |
 | [handle_get_transcript / handle_get_chat](sidecar_routes.py) | Validate the versioned page/detail or compatible latest-window request and map invalid input, cursor restart and unavailable publication to typed 400, 409 or 503 responses. The compatible array adds `Link` and transcript completeness headers. |
 | [publish_transcript_projection](transcript_pages.py) | Project only committed append-sequence/offset rows into content-addressed pages, bounded previews and exact detail blobs, then atomically advance the direct graph pointer. Partial legacy import is published as incomplete coverage. |
 | [read_transcript_page / read_transcript_detail](transcript_pages.py) | Open only regular no-follow projection artifacts, enforce 50-default/100-maximum rows, 1 MiB aggregate source and 256 KiB response ceilings, and return incarnation/high-water cursors or UTF-8-aligned 64 KiB detail chunks. |

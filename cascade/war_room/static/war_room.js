@@ -39,6 +39,7 @@
     chatGraphId: document.getElementById("chat-graph-id"),
     chatMessages: document.getElementById("chat-messages"),
     dependencyCurrentSummary: document.getElementById("dependency-current-summary"),
+    recoveryCurrentSummary: document.getElementById("recovery-current-summary"),
     chatCompose: document.getElementById("chat-compose"),
     chatBody: document.getElementById("chat-body"),
     chatSend: document.getElementById("chat-send"),
@@ -1767,8 +1768,14 @@
       row.appendChild(details);
     }
 
-    if (item.recovery_incident && typeof appendRecoveryIncident === "function") {
-      appendRecoveryIncident(row, actions, item.recovery_incident);
+    if ((item.recovery_progress || item.recovery_incident) &&
+        typeof appendRecoveryProgressSummary === "function") {
+      appendRecoveryProgressSummary(
+        row,
+        actions,
+        item.recovery_progress || {},
+        item.recovery_incident
+      );
     }
 
     const providerRecovery = item.provider_recovery;
@@ -2029,64 +2036,176 @@
   function appendRecoveryIncident(row, actions, incident) {
     if (!incident || typeof incident !== "object") return;
 
-    const state = typeof incident.state === "string" ? incident.state : "failed";
-    const stateLabel = {
-      failed: "Recovery failed",
-      investigating: "Recovery investigating",
-      blocked: "Recovery blocked",
-      resolved: "Recovery resolved",
-    }[state] || "Recovery needs attention";
+    appendRecoveryProgressSummary(
+      row,
+      actions,
+      incident.recovery_progress || {},
+      incident
+    );
+  }
+
+  const RECOVERY_STATE_LABELS = {
+    requested_queued: "Queued · not executing",
+    acknowledged: "Acknowledged",
+    investigating: "Investigating",
+    executing: "Executing",
+    waiting_blocked: "Waiting / blocked",
+    retryable_failed: "Retryable failure",
+    exhausted: "Attempts exhausted",
+    verification_pending: "Verification pending",
+    verified_complete: "Authoritatively verified",
+    stale_unavailable: "Stale / unavailable",
+  };
+
+  function appendRecoveryProgressSummary(row, actions, progress, incident) {
+    progress = progress && typeof progress === "object" ? progress : {};
+    const primary = progress.primary && typeof progress.primary === "object"
+      ? progress.primary : (incident ? {
+        state: incident.state,
+        owner: incident.owner && incident.owner.work_id,
+        safe_reason: incident.reason,
+        occurred_at: incident.last_attempt && incident.last_attempt.at,
+        attempt_number: incident.last_attempt && incident.last_attempt.number,
+        next_step: incident.next_step,
+        target: incident.target && incident.target.href,
+      } : null);
+    if (!primary && !incident && !progress.error) return;
+
+    const state = incident && typeof incident.state === "string"
+      ? incident.state : "investigating";
+    const stateLabel = primary
+      ? (RECOVERY_STATE_LABELS[primary.state] || "Recovery needs attention")
+      : "Recovery evidence pending";
     const warning = document.createElement("section");
-    warning.className = "recovery-incident recovery-incident-" + state;
-    warning.setAttribute("aria-label", stateLabel);
+    warning.className = "recovery-incident recovery-progress-summary recovery-incident-" + state;
+    warning.setAttribute("aria-label", "Current recovery: " + stateLabel);
     row.classList.add("board-row-recovery", "board-row-recovery-" + state);
 
-    const status = document.createElement("div");
+    const status = document.createElement("h3");
     status.className = "recovery-incident-status";
-    status.textContent = stateLabel;
+    status.textContent = "Current recovery · " + stateLabel;
     warning.appendChild(status);
-
-    appendRecoveryIncidentLine(warning, "Reason", incident.reason);
-    const owner = incident.owner;
-    if (owner && typeof owner === "object") {
-      const ownerName = [owner.kind, owner.work_id].filter(function (value) {
-        return typeof value === "string" && value;
-      }).join(": ");
-      appendRecoveryIncidentLine(warning, "Owner", ownerName);
+    appendRecoveryProgressEnvelope(warning, progress);
+    if (primary) {
+      appendRecoveryProgressEntry(warning, primary, true);
+    } else {
+      const error = progress.error && progress.error.message;
+      appendRecoveryIncidentLine(warning, "Evidence", error || "Current evidence is unavailable.");
     }
-
-    const affected = incident.affected;
-    if (affected && typeof affected === "object") {
-      const locations = [];
-      if (typeof affected.branch === "string" && affected.branch) {
-        locations.push("branch " + affected.branch);
-      }
-      if (Array.isArray(affected.paths) && affected.paths.length) {
-        locations.push("paths " + affected.paths.join(", "));
-      }
-      appendRecoveryIncidentLine(warning, "Affected", locations.join(" · "));
-    }
-
-    const attempt = incident.last_attempt;
-    if (attempt && typeof attempt === "object") {
-      const label = "#" + String(attempt.number || 0) +
-        (attempt.at ? " at " + attempt.at : "");
-      appendRecoveryIncidentLine(warning, "Last attempt", label);
-    }
-    appendRecoveryIncidentLine(warning, "Next step", incident.next_step);
     row.appendChild(warning);
 
-    const target = incident.target;
-    if (target && typeof target.href === "string" && target.href) {
-      actions.appendChild(actionLink(
+    const target = incident && incident.target;
+    if (actions && target && safeLocalRecoveryHref(target.href)) {
+      actions.appendChild(recoveryActionLink(
         target.kind === "review" ? "Open recovery review" : "Open recovery action",
         target.href
       ));
     }
   }
 
+  function appendRecoveryProgressEnvelope(container, progress) {
+    const lag = progress.lag && typeof progress.lag === "object" ? progress.lag : {};
+    const facts = [];
+    if (progress.completeness) facts.push("coverage " + progress.completeness);
+    if (progress.work_id) facts.push("work " + progress.work_id);
+    if (progress.revision) facts.push("projection " + progress.revision);
+    if (progress.observed_at) facts.push("observed " + progress.observed_at);
+    if (progress.expires_at) facts.push("expires " + progress.expires_at);
+    if (typeof lag.backlog_count === "number") facts.push("delivery lag " + lag.backlog_count);
+    if (lag.oldest_pending_at) facts.push("oldest pending " + lag.oldest_pending_at);
+    if (!facts.length) return;
+    const line = document.createElement("div");
+    line.className = "recovery-progress-freshness";
+    line.textContent = facts.join(" · ");
+    container.appendChild(line);
+  }
+
+  function appendRecoveryProgressEntry(container, entry, primary) {
+    if (!entry || typeof entry !== "object") return;
+    const block = document.createElement("div");
+    block.className = "recovery-progress-entry" + (primary ? " recovery-progress-primary" : "");
+    const state = RECOVERY_STATE_LABELS[entry.state] || String(entry.state || "Unknown state");
+    appendRecoveryIncidentLine(block, primary ? "State" : "Concurrent", state);
+    appendRecoveryIncidentLine(block, "Stage", entry.stage);
+    appendRecoveryIncidentLine(block, "Owner", entry.owner || "unassigned");
+    appendRecoveryIncidentLine(block, "Reason", entry.safe_reason);
+    appendRecoveryIncidentLine(block, "Occurred", entry.occurred_at || "time unavailable");
+    appendRecoveryIncidentLine(block, "Freshness", entry.freshness || "unavailable");
+    appendRecoveryIncidentLine(block, "Attempt", entry.attempt_number == null
+      ? "not recorded" : "#" + String(entry.attempt_number));
+    appendRecoveryIncidentLine(block, "Prerequisite", entry.prerequisite);
+    appendRecoveryIncidentLine(block, "Next safe step", entry.next_step);
+
+    const identity = document.createElement("div");
+    identity.className = "recovery-progress-identity";
+    identity.textContent = [
+      "action " + String(entry.action_id || "unavailable"),
+      "generation " + String(entry.generation || "unavailable"),
+      "graph " + String(entry.graph_id || "unavailable"),
+      "entry " + String(entry.entry_id || "unavailable"),
+    ].join(" · ");
+    block.appendChild(identity);
+
+    const safeTarget = safeLocalRecoveryHref(entry.verification_ref) ||
+      safeLocalRecoveryHref(entry.target);
+    if (safeTarget) {
+      block.appendChild(recoveryActionLink("Open safe recovery reference", safeTarget));
+    }
+    if (Array.isArray(entry.milestone_refs) && entry.milestone_refs.length) {
+      const milestones = document.createElement("div");
+      milestones.className = "recovery-progress-milestones";
+      entry.milestone_refs.forEach(function (messageId, index) {
+        if (typeof messageId !== "string" || !messageId) return;
+        milestones.appendChild(recoveryActionLink(
+          "Committed milestone " + String(index + 1),
+          "#recovery-milestone-" + encodeURIComponent(messageId)
+        ));
+      });
+      block.appendChild(milestones);
+      if (entry.milestone_ref_count > entry.milestone_refs.length) {
+        appendRecoveryIncidentLine(
+          block,
+          "Committed milestones",
+          String(entry.milestone_ref_count - entry.milestone_refs.length) + " more in the room summary"
+        );
+      }
+    } else if ((Array.isArray(entry.receipt_refs) && entry.receipt_refs.length) ||
+        entry.receipt_ref_count > 0) {
+      appendRecoveryIncidentLine(block, "Milestone delivery", "pending");
+    }
+    container.appendChild(block);
+  }
+
+  function safeLocalRecoveryHref(value) {
+    if (typeof value !== "string" || !value) return null;
+    if (value[0] === "#") return value;
+    if (value[0] !== "/" || value.indexOf("//") === 0 || /[\u0000-\u001f]/.test(value)) {
+      return null;
+    }
+    return value;
+  }
+
+  function recoveryActionLink(label, href) {
+    const safeHref = safeLocalRecoveryHref(href);
+    if (!safeHref) {
+      const unavailable = document.createElement("span");
+      unavailable.textContent = label + " unavailable";
+      return unavailable;
+    }
+    const link = document.createElement("a");
+    link.className = "recovery-progress-action";
+    link.href = safeHref;
+    link.textContent = label;
+    if (safeHref[0] !== "#") {
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    }
+    link.addEventListener("click", function (ev) { ev.stopPropagation(); });
+    return link;
+  }
+
   function appendRecoveryIncidentLine(container, label, value) {
-    if (typeof value !== "string" || !value) return;
+    if ((typeof value !== "string" && typeof value !== "number") || value === "") return;
     const line = document.createElement("div");
     line.className = "recovery-incident-detail";
     line.textContent = label + ": " + value;
@@ -2427,6 +2546,9 @@
     messages.forEach(function (msg) {
       const div = document.createElement("div");
       div.className = "chat-message";
+      if (typeof msg.id === "string" && msg.id) {
+        div.id = "recovery-milestone-" + encodeURIComponent(msg.id);
+      }
       if (msg.author && msg.author !== "human") {
         div.classList.add("chat-message-agent");
       }
@@ -2454,6 +2576,106 @@
       el.dependencyCurrentSummary,
       item && item.dependency_status
     );
+  }
+
+  let recoveryProgressEpoch = 0;
+  let currentRecoveryProgress = null;
+
+  function recoveryProgressPath(graphId, cursor) {
+    let path = "/api/recovery/progress?work_id=" + encodeURIComponent(graphId) + "&limit=100";
+    if (cursor) path += "&cursor=" + encodeURIComponent(cursor);
+    return path;
+  }
+
+  function renderCurrentRecoveryProgress(progress) {
+    if (!el.recoveryCurrentSummary) return;
+    el.recoveryCurrentSummary.innerHTML = "";
+    const heading = document.createElement("h3");
+    heading.textContent = "Current recovery progress";
+    el.recoveryCurrentSummary.appendChild(heading);
+    appendRecoveryProgressEnvelope(el.recoveryCurrentSummary, progress);
+    if (progress.error) {
+      appendRecoveryIncidentLine(
+        el.recoveryCurrentSummary,
+        "Evidence pending",
+        progress.error.message || progress.error.code || "Current evidence is unavailable."
+      );
+      return;
+    }
+    (progress.items || []).forEach(function (entry, index) {
+      appendRecoveryProgressEntry(el.recoveryCurrentSummary, entry, index === 0);
+    });
+    if (!progress.items || !progress.items.length) {
+      appendRecoveryIncidentLine(el.recoveryCurrentSummary, "State", "No published recovery entries.");
+    }
+    const identity = document.createElement("div");
+    identity.className = "recovery-progress-identity";
+    identity.textContent = "work " + String(progress.work_id || "unavailable") +
+      " · projection " + String(progress.revision || "pending");
+    el.recoveryCurrentSummary.appendChild(identity);
+    if (progress.next_cursor) {
+      const continuation = document.createElement("button");
+      continuation.type = "button";
+      continuation.className = "recovery-progress-continuation";
+      continuation.textContent = "Load more current incidents";
+      continuation.addEventListener("click", function () {
+        continuation.disabled = true;
+        loadCurrentRecoveryProgress(progress.work_id, progress.next_cursor, progress.revision)
+          .catch(function () { /* the panel reports typed failures */ });
+      });
+      el.recoveryCurrentSummary.appendChild(continuation);
+    }
+  }
+
+  async function loadCurrentRecoveryProgress(graphId, cursor, expectedRevision) {
+    if (!el.recoveryCurrentSummary || !graphId) return null;
+    const isContinuation = !!cursor;
+    const epoch = isContinuation ? recoveryProgressEpoch : ++recoveryProgressEpoch;
+    if (!isContinuation) {
+      currentRecoveryProgress = null;
+      el.recoveryCurrentSummary.textContent = "Loading current recovery progress…";
+    }
+    try {
+      const progress = await apiGet(recoveryProgressPath(graphId, cursor));
+      if (epoch !== recoveryProgressEpoch || graphId !== focusGraphId ||
+          progress.work_id !== graphId) return null;
+      if (isContinuation && (!currentRecoveryProgress ||
+          currentRecoveryProgress.revision !== expectedRevision ||
+          progress.revision !== expectedRevision)) {
+        return loadCurrentRecoveryProgress(graphId);
+      }
+      if (isContinuation) {
+        const known = {};
+        currentRecoveryProgress.items.forEach(function (entry) { known[entry.entry_id] = true; });
+        (progress.items || []).forEach(function (entry) {
+          if (!known[entry.entry_id]) currentRecoveryProgress.items.push(entry);
+        });
+        currentRecoveryProgress.next_cursor = progress.next_cursor;
+        currentRecoveryProgress.observed_at = progress.observed_at;
+        currentRecoveryProgress.expires_at = progress.expires_at;
+        currentRecoveryProgress.lag = progress.lag;
+      } else {
+        currentRecoveryProgress = progress;
+      }
+      renderCurrentRecoveryProgress(currentRecoveryProgress);
+      return currentRecoveryProgress;
+    } catch (err) {
+      if (epoch !== recoveryProgressEpoch || graphId !== focusGraphId) return null;
+      const code = err && err.body && err.body.error && err.body.error.code;
+      if (isContinuation && err.status === 409 && code === "revision_changed") {
+        return loadCurrentRecoveryProgress(graphId);
+      }
+      renderCurrentRecoveryProgress({
+        work_id: graphId,
+        error: {
+          code: code || "evidence_unavailable",
+          message: err && err.body && err.body.error && err.body.error.message ||
+            err.message || "Current recovery progress is unavailable.",
+        },
+        items: [],
+      });
+      return null;
+    }
   }
 
   let inflightChatFetch = null;
@@ -2595,6 +2817,9 @@
         : "Epic War Room";
     el.btnDetach.hidden = !attachedGraphId;
     renderCurrentDependencySummary(lastBoardView);
+    loadCurrentRecoveryProgress(focusGraphId).catch(function () {
+      /* The persistent current-progress panel reports typed failures. */
+    });
     loadRoomSettings(focusGraphId).catch(function (err) {
       setRoomSettingsStatus(err.message || "Failed to load room settings", true);
     });
