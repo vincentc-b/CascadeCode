@@ -2723,3 +2723,52 @@ rerun, and child test results remain attributed evidence.
 Renewed sign-off and acceptance remain withheld pending integrated verification,
 Feature 5 contention repair, canonical record corrections and design/publication
 reconciliation. Return control to child execution.
+
+## Manager Task 4 candidate and navigation-evidence review
+
+Reviewed Task 4 candidate `0ef4796b` against Feature head `0f87523f`.
+At inspection, the candidate is an ancestor of neither the Feature branch nor
+Epic head `4d9980d7`. Its commit adds only
+`docs/task_artifacts/task_049_003_004_recovery_ui_architecture_closeout.md`.
+The branch comparison also lacks the Feature plan's Task 3 delivery review
+because the candidate predates that plan update; preserving it is a merge
+requirement, not evidence that Task 4 deleted the review.
+
+The closeout provides an all-level impact inventory, state ownership and
+normal/pending/replay flows. Its 16 source, renderer and Chromium checks remain
+attributed child results. Inspected the Recovery Progress design, candidate
+closeout, persisted mappings and cited browser/renderer test source. This was a
+scoped evidence review, not a fresh full-tree design certification.
+
+The cited Chromium test
+`test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot`
+calls `_install_model` and `_limit_model_views`, which replace model and views
+with `JOURNEY_MODEL` / `JOURNEY_VIEWS`. Its four views cover context, containers,
+supervisor components and Agent Code with a fixture `run_role`. This verifies
+browser mechanics but does not itself prove navigation, deep-link restoration,
+Level up or pinned source opening for integrated Dashboard, Task, Watchdog and
+Workspace Code views. Full-model source/render evidence is separate and cannot
+close that UI coverage gap. Sent
+`manager:task4_candidate_navigation_scope_0ef4796b` to Feature 3 to qualify the
+closeout and supply actual integrated-model navigation evidence, or exact reusable
+evidence with model/source equivalence, before publication and acceptance. This
+enforces the existing Task 4 contract without adding scope.
+
+The candidate's `architecture/design-mappings.json` still maps
+`cascade/recovery_progress` to `cascade` despite its child design owning
+`REQ-RECOVERY-PROGRESS-001..004` and `DEC-RECOVERY-PROGRESS-001..002`.
+The existing Epic ownership-reconciliation gate remains open. The message also
+reinforces preserving Task 3's review at merge and saving the fresh publication
+proposal JSON, expected generation/revision and result. No missing Task 2 payload
+was reconstructed; failed or reported-pending publication is not approval.
+
+Validation: canonical Epic/child reads, no open architecture amendments, ancestry
+checks, candidate diff/closeout and relevant test-source inspection, and
+`git diff --check` for candidate comparison and owned tree. No product test,
+Chromium journey or renderer was rerun. Feature 5 remains canonically backlog
+with no tasks. Epic scope and historical sign-offs are unchanged; no new decision
+or spec edit is needed. This work-record review changes no architecture level
+and requires no design/model edit. Acceptance and renewed sign-off remain
+withheld pending integrated verification, contention repair, canonical record
+corrections and design/publication reconciliation. Return control for supervised
+child delivery.
