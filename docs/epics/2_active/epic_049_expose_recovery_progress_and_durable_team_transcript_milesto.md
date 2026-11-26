@@ -270,6 +270,11 @@ Architecture verification results and pinned publication references are recorded
   Chose Keep the 256 KiB architecture metadata cap and return smaller view pages with lossless continuation; make document-context lookup follow the same continuation..
   Rationale: The expanded current-code model rendered successfully but the supported browser received HTTP 413 for a 271,703-byte default page. A one-view page fits, and the existing browser already follows cursors. Adaptive page sizing fixes this concrete publication/navigation blocker without changing target identity, render bounds, accepted snapshots or process startup policy.
   Honors: Design-skill actual navigation and warm-reuse verification; bounded metadata, nonempty advancing pages, pinned source identity and typed refusal if the minimum page cannot fit..
+
+- `dec_008` · 2026-11-26 · Epic Manager · **Corrective sequencing**
+  Chose Mint feat_049_004 after completed feat_049_002 to repair stale private acknowledgements; make feat_049_003 depend on the correction and withhold integrated Feature/Epic acceptance pending verified repair..
+  Rationale: In reply to feat_049_002:feat_049_002:postmerge_stale_private_ack_20261126. Source review confirms the private mapping can replace newer incarnation/sequence with a delayed saved acknowledgement. Completed lifecycle is not proof of acceptance, and an owned backlog correction is available without reopening completed records.
+  Honors: Existing success criteria 4–6, durable identity/replay contract, bounded writer work, genuine conflict rejection, and design/native Code verification. No product scope expansion or completed-record edit..
 ## Amendment log
 
 _(none)_
