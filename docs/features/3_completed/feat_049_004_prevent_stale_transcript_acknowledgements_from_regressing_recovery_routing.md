@@ -2,7 +2,7 @@
 id: feat_049_004
 title: Prevent stale transcript acknowledgements from regressing recovery routing
 tier: feature
-status: active
+status: completed
 parent: epic_049
 children:
 - task_049_004_001
