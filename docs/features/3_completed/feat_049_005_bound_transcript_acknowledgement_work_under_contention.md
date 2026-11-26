@@ -2,7 +2,7 @@
 id: feat_049_005
 title: Bound transcript acknowledgement work under contention
 tier: feature
-status: active
+status: completed
 parent: epic_049
 children:
 - task_049_005_001
