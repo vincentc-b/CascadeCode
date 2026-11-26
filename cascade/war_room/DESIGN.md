@@ -43,7 +43,13 @@ graph or backfill a checkpoint. Task teams do not accept persistent-room chat.
 processes. A successful append means its exact JSONL line reached durable storage
 before its unique message/source key and byte range committed. Recovery completes
 only an empty, complete, or matching partial intended tail; conflicting bytes or
-an uncertain room owner stay pending without truncation.
+an uncertain room owner stay pending without truncation. A completely visible
+pending line is fsynced with its parent directory before its index row commits.
+
+`REQ-WARROOM-TRANSCRIPT-004`: Room movement remains recoverable across process
+death after copy, source removal, owner publication, or incarnation reset. A
+pending move blocks other transcript writers, accepts only its fingerprinted
+destination, and never rewrites conflicting source or destination bytes.
 
 `REQ-WARROOM-TRANSCRIPT-003`: Each retained committed recovery receipt can add
 one concise `System · Recovery` line to its owning Epic or Feature room. The
@@ -67,12 +73,20 @@ author/body-only match is retained with null occurrence time and
 `DEC-WARROOM-TRANSCRIPT-002`: JSONL remains authoritative. A writer-only SQLite
 index under the canonical tracking runtime root records message/source
 uniqueness, append sequence, offsets, room incarnation and one durable exact-line
-intent. The adjacent graph-hashed advisory lock fences append, explicit sync,
-rollback rewrite and room movement across processes. Legacy rows are indexed in
-resumable passes of at most 100 rows and 1 MiB without rewriting their IDs or
-append timestamps; their source occurrence remains unknown. Dispatch and
-terminal checkout retirement copy committed history before publishing the new
-registered owner under the same fence and advance the incarnation.
+intent. A rewrite intent records the original fingerprint, exact replacement and
+target incarnation before replacing JSONL. Restart either repeats replacement
+from matching original bytes or finishes index reset from matching replacement
+bytes; other bytes remain pending. The adjacent graph-hashed advisory lock
+fences append, explicit sync, rollback rewrite and room movement across
+processes. Legacy rows are indexed in resumable passes of at most 100 rows and
+1 MiB without rewriting their IDs or append timestamps; their source occurrence
+remains unknown. Dispatch and terminal checkout retirement persist a move intent
+with source fingerprint and target incarnation before copying committed history.
+They durably remove the source, publish the new registered owner, and atomically
+reset offsets and clear the intent under the same fence. Retry reuses that
+incarnation. When terminal owner publication removes the checkout, routing
+evidence at the destination can finish the retained move intent without
+reopening the removed owner.
 
 `DEC-WARROOM-TRANSCRIPT-003`: Use `recovery:<receipt-id>` as the unique transcript
 source key. Route Task receipts through their current owning Feature, reject
@@ -94,8 +108,8 @@ the transcript library within the same Python runtime.
 | [handle_get_chat](sidecar_routes.py) | Validates the graph ID and returns the existing JSONL rows through `read_messages`; no sync occurs on GET. |
 | [read_messages / _chat_read_path](chat_store.py) | Resolve the registered room without building the merged board, read the whole file and ignore malformed JSON lines. Missing history returns an empty list. This interface has no pagination or source-byte bound. |
 | [graph_transcript_fence / _connect_index](chat_store.py) | Lock a graph at a stable tracking-root path across processes and open its writer-only full-synchronous intent/offset index. The SQLite file is not a GET surface. |
-| [append_transcript_message / remove_message](chat_store.py) | Reconcile only an exact pending tail, durably stage intent, append and fsync JSONL, then commit uniqueness/offset before acknowledgement. Rollback and legacy-label rewrites use the same fence, fsync the replacement and parent directory, retain other source keys, and change incarnation. |
-| [move_transcript_room](chat_store.py) | Copy only matching committed history, publish the lifecycle owner switch inside the graph fence, rebuild offsets and change incarnation. Conflicting destination bytes remain untouched and pending. |
+| [append_transcript_message / remove_message](chat_store.py) | Reconcile only an exact pending tail, durably stage intent, append and fsync JSONL, then commit uniqueness/offset before acknowledgement. Rollback and legacy-label rewrites journal the original fingerprint, replacement and target incarnation before replacement, then reset and re-import the index. Restart accepts only matching original or replacement bytes, retains message/source identity and leaves conflicts pending. |
+| [move_transcript_room / resume_transcript_room_move](chat_store.py) | Journal the source fingerprint, destination and target incarnation before durable copy; remove the matching source and publish the lifecycle owner inside the graph fence; then rebuild offsets and clear the journal. Retry or terminal lifecycle recovery accepts only the journaled destination. Conflicting bytes remain untouched and pending. |
 | [append_committed_recovery_receipt](recovery_milestones.py) | Validate safe receipt fields, resolve the owning graph across registered roots, append one deterministic recovery line, and return its durable index acknowledgement. Unknown routing, unsafe target/reference or incomplete evidence remains pending. |
 | [append_planning_turn_to_chat](planning_transcript.py) | Sanitize and append new role messages supplied by [graph invocation](../workspace/kickoff.py), carrying checkpoint ID, persisted ordinal and durable message ID. Provider failure details become a bounded system message without exposing raw output. |
 | [sync_planning_transcript_to_chat](planning_transcript.py) | Explicit writer work loads the owning graph checkpoint and replays the same stable role-reply source keys. It does not invoke a role or run from GET. |
@@ -131,6 +145,28 @@ sequenceDiagram
     end
 ```
 
+```mermaid
+sequenceDiagram
+    participant L as Workspace lifecycle
+    participant F as Graph fence and move intent
+    participant S as Source room
+    participant D as Destination room
+    participant R as Owner registry
+    L->>F: Persist source fingerprint and target incarnation
+    F->>D: Copy and fsync history and parent
+    F->>S: Remove matching source and fsync parent
+    F->>R: Publish idempotent owner switch
+    F->>F: Reset offsets; install incarnation; clear intent
+    alt Restart at any boundary
+        L->>F: Resume retained intent
+        F->>D: Verify exact fingerprint
+        F->>R: Retry switch or verify destination routing
+        F->>F: Finish index transition once
+    else Conflicting source or destination
+        F-->>L: Pending; preserve both sides
+    end
+```
+
 Action attempts and acknowledgements persist independently in the
 [Task-owned ledger](../task/DESIGN.md#action-evidence-and-transcript-boundary).
 Chat stores source occurrence and append times separately. Its recovery lines
@@ -142,7 +178,9 @@ Verification: [bounded progress scenarios](../../tests/war_room/test_recovery_pr
 [read routing](../../tests/war_room/test_chat_poll_routing.py), and
 [durability/recovery scenarios](../../tests/war_room/test_durable_chat_store.py)
 exercise these boundaries, including two real writer processes, exact-tail crash
-states, bounded legacy import, room movement and GET without graph construction.
+states, bounded legacy import, every durable room-move boundary, split roots,
+terminal checkout removal, replacement-before-index rewrite recovery and GET
+without graph construction.
 [Recovery milestone integration](../../tests/recovery_progress/test_transcript_milestones.py)
 checks duplicate receipt replay, distinct sequences, nullable occurrence,
 after-commit notification and restart reconciliation with ordered references.

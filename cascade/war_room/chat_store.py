@@ -100,6 +100,25 @@ def _connect_index(graph_id: str, *, root: Path) -> sqlite3.Connection:
             message_id TEXT NOT NULL,
             source_key TEXT
         );
+        CREATE TABLE IF NOT EXISTS move_intent (
+            singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+            source_path TEXT NOT NULL,
+            destination_path TEXT NOT NULL,
+            source_present INTEGER NOT NULL,
+            byte_length INTEGER NOT NULL,
+            digest TEXT NOT NULL,
+            target_incarnation TEXT NOT NULL,
+            phase TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS rewrite_intent (
+            singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+            room_path TEXT NOT NULL,
+            original_length INTEGER NOT NULL,
+            original_digest TEXT NOT NULL,
+            replacement BLOB NOT NULL,
+            replacement_digest TEXT NOT NULL,
+            target_incarnation TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS legacy_import_buffer (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             start_offset INTEGER NOT NULL,
@@ -136,6 +155,14 @@ def _append_and_fsync(path: Path, payload: bytes) -> None:
         os.fsync(handle.fileno())
     if created:
         _fsync_parent(path)
+
+
+def _fsync_file_and_parent(path: Path) -> None:
+    """Make already-visible file bytes and their directory entry durable."""
+
+    with path.open("rb") as handle:
+        os.fsync(handle.fileno())
+    _fsync_parent(path)
 
 
 def _copy_and_fsync(source: Path, destination: Path) -> None:
@@ -185,6 +212,151 @@ def _same_file_bytes(left: Path, right: Path) -> bool:
                 return True
 
 
+def _file_fingerprint(path: Path) -> tuple[int, str]:
+    digest = hashlib.sha256()
+    length = 0
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            length += len(chunk)
+            digest.update(chunk)
+    return length, digest.hexdigest()
+
+
+def _move_fault(_stage: str) -> None:
+    """Fault-injection seam for crash/restart protocol tests."""
+
+
+def _rewrite_fault(_stage: str) -> None:
+    """Fault-injection seam for crash/restart protocol tests."""
+
+
+def _replace_and_fsync(path: Path, payload: bytes) -> None:
+    if not payload:
+        path.unlink(missing_ok=True)
+        _fsync_parent(path)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        _fsync_parent(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _finish_rewrite(
+    connection: sqlite3.Connection, intent: sqlite3.Row, path: Path
+) -> None:
+    expected_path = str(path.resolve())
+    if intent["room_path"] != expected_path:
+        raise TranscriptPendingError("pending transcript rewrite has an uncertain owner")
+    replacement = bytes(intent["replacement"])
+    replacement_digest = hashlib.sha256(replacement).hexdigest()
+    if replacement_digest != intent["replacement_digest"]:
+        raise TranscriptPendingError("pending transcript rewrite digest is invalid")
+    original_fingerprint = (
+        int(intent["original_length"]),
+        intent["original_digest"],
+    )
+    current_fingerprint = _file_fingerprint(path) if path.is_file() else None
+    original_matches = current_fingerprint == original_fingerprint
+    replacement_matches = (
+        current_fingerprint == (len(replacement), replacement_digest)
+        if replacement
+        else not path.exists()
+    )
+    if original_matches:
+        _replace_and_fsync(path, replacement)
+    elif replacement_matches:
+        if path.is_file():
+            _fsync_file_and_parent(path)
+        else:
+            _fsync_parent(path)
+    else:
+        raise TranscriptPendingError(
+            "transcript bytes do not match the pending rewrite"
+        )
+    _rewrite_fault("after_replace")
+    connection.execute("DELETE FROM events")
+    connection.execute("DELETE FROM pending_intent")
+    connection.execute("DELETE FROM legacy_import_buffer")
+    connection.execute(
+        """UPDATE state SET incarnation = ?, indexed_end = 0, room_path = ?
+           WHERE singleton = 1""",
+        (intent["target_incarnation"], expected_path),
+    )
+    connection.execute("DELETE FROM rewrite_intent WHERE singleton = 1")
+    connection.commit()
+    _import_legacy(connection, path)
+
+
+def _repair_rewrite(connection: sqlite3.Connection, path: Path) -> None:
+    intent = connection.execute(
+        "SELECT * FROM rewrite_intent WHERE singleton = 1"
+    ).fetchone()
+    if intent is not None:
+        _finish_rewrite(connection, intent, path)
+
+
+def _move_destination_matches(intent: sqlite3.Row, destination: Path) -> bool:
+    if not bool(intent["source_present"]):
+        return not destination.exists()
+    if not destination.is_file():
+        return False
+    return _file_fingerprint(destination) == (
+        int(intent["byte_length"]),
+        intent["digest"],
+    )
+
+
+def _finish_room_move(
+    connection: sqlite3.Connection, intent: sqlite3.Row, destination: Path
+) -> None:
+    connection.execute("DELETE FROM events")
+    connection.execute("DELETE FROM pending_intent")
+    connection.execute("DELETE FROM legacy_import_buffer")
+    connection.execute(
+        """UPDATE state SET incarnation = ?, indexed_end = 0, room_path = ?
+           WHERE singleton = 1""",
+        (intent["target_incarnation"], str(destination.resolve())),
+    )
+    connection.execute("DELETE FROM move_intent WHERE singleton = 1")
+    connection.commit()
+    _import_legacy(connection, destination)
+
+
+def resume_transcript_room_move(graph_id: str, *, root: Path) -> bool:
+    """Finish a move whose owner switch is already externally visible.
+
+    Lifecycle retry paths use this after a process dies immediately after an
+    idempotent registry/checkout switch, when the old owner may no longer exist.
+    """
+
+    with graph_transcript_fence(graph_id, root=root):
+        connection = _connect_index(graph_id, root=root)
+        try:
+            intent = connection.execute(
+                "SELECT * FROM move_intent WHERE singleton = 1"
+            ).fetchone()
+            if intent is None:
+                return False
+            destination = Path(intent["destination_path"])
+            if not _move_destination_matches(intent, destination):
+                raise TranscriptPendingError(
+                    "room movement destination no longer matches its durable copy"
+                )
+            if _chat_read_path(graph_id, root=root).resolve() != destination.resolve():
+                raise TranscriptPendingError("room movement owner switch is not complete")
+            _finish_room_move(connection, intent, destination)
+            return True
+        finally:
+            connection.close()
+
+
 def move_transcript_room(
     graph_id: str,
     *,
@@ -205,40 +377,106 @@ def move_transcript_room(
     with graph_transcript_fence(graph_id, root=root):
         connection = _connect_index(graph_id, root=root)
         try:
-            _repair_pending(connection, source)
-            if source.is_file():
-                if destination.is_file():
-                    if not _same_file_bytes(source, destination):
-                        raise TranscriptPendingError(
-                            "destination room contains unrelated transcript bytes"
-                        )
-                else:
-                    _copy_and_fsync(source, destination)
-            elif destination.is_file():
+            intent = connection.execute(
+                "SELECT * FROM move_intent WHERE singleton = 1"
+            ).fetchone()
+            if intent is not None:
+                if (
+                    intent["source_path"] != str(source.resolve())
+                    or intent["destination_path"] != str(destination.resolve())
+                ):
+                    raise TranscriptPendingError(
+                        "another transcript room movement is still pending"
+                    )
+            else:
+                _repair_rewrite(connection, source)
                 state = connection.execute(
                     "SELECT room_path FROM state WHERE singleton = 1"
                 ).fetchone()
-                if state["room_path"] not in (None, str(destination.resolve())):
-                    raise TranscriptPendingError("room movement has an uncertain source")
-            state = connection.execute(
-                "SELECT room_path FROM state WHERE singleton = 1"
-            ).fetchone()
-            changing_room = state["room_path"] != str(destination.resolve())
-            source_removed = False
-            if source != destination and source.is_file():
+                if state["room_path"] == str(destination.resolve()):
+                    if source != destination and source.is_file():
+                        if not destination.is_file() or not _same_file_bytes(
+                            source, destination
+                        ):
+                            raise TranscriptPendingError(
+                                "source bytes conflict with the current transcript room"
+                            )
+                        source.unlink()
+                        _fsync_parent(source)
+                    if switch_owner is not None:
+                        switch_owner()
+                    return
+
+                _repair_pending(connection, source)
+                source_present = source.is_file()
+                if source_present:
+                    byte_length, digest = _file_fingerprint(source)
+                else:
+                    byte_length, digest = 0, hashlib.sha256(b"").hexdigest()
+                connection.execute(
+                    """INSERT INTO move_intent
+                       (singleton, source_path, destination_path, source_present,
+                        byte_length, digest, target_incarnation, phase)
+                       VALUES (1, ?, ?, ?, ?, ?, ?, 'prepared')""",
+                    (
+                        str(source.resolve()),
+                        str(destination.resolve()),
+                        int(source_present),
+                        byte_length,
+                        digest,
+                        uuid.uuid4().hex,
+                    ),
+                )
+                connection.commit()
+                intent = connection.execute(
+                    "SELECT * FROM move_intent WHERE singleton = 1"
+                ).fetchone()
+
+            if not _move_destination_matches(intent, destination):
+                if destination.exists():
+                    raise TranscriptPendingError(
+                        "destination room contains unrelated transcript bytes"
+                    )
+                if bool(intent["source_present"]):
+                    if not source.is_file() or _file_fingerprint(source) != (
+                        int(intent["byte_length"]),
+                        intent["digest"],
+                    ):
+                        raise TranscriptPendingError(
+                            "room movement source no longer matches its durable intent"
+                        )
+                    _copy_and_fsync(source, destination)
+            _move_fault("after_copy")
+
+            if source != destination and source.exists():
+                if not source.is_file() or _file_fingerprint(source) != (
+                    int(intent["byte_length"]),
+                    intent["digest"],
+                ):
+                    raise TranscriptPendingError(
+                        "room movement source contains unrelated bytes"
+                    )
                 source.unlink()
                 _fsync_parent(source)
-                source_removed = True
-            try:
-                if switch_owner is not None:
-                    switch_owner()
-            except BaseException:
-                if source_removed and source.parent.is_dir() and destination.is_file():
-                    _copy_and_fsync(destination, source)
-                raise
-            if changing_room:
-                _reset_room_index(connection, destination, change_incarnation=True)
-                _import_legacy(connection, destination)
+            connection.execute(
+                "UPDATE move_intent SET phase = 'source_removed' WHERE singleton = 1"
+            )
+            connection.commit()
+            _move_fault("after_source_remove")
+
+            connection.execute(
+                "UPDATE move_intent SET phase = 'switching_owner' WHERE singleton = 1"
+            )
+            connection.commit()
+            if switch_owner is not None:
+                switch_owner()
+            _move_fault("after_owner_switch")
+            connection.execute(
+                "UPDATE move_intent SET phase = 'owner_switched' WHERE singleton = 1"
+            )
+            connection.commit()
+            _finish_room_move(connection, intent, destination)
+            _move_fault("after_index_reset")
         finally:
             connection.close()
 
@@ -261,6 +499,13 @@ def _commit_intent(connection: sqlite3.Connection, intent: sqlite3.Row) -> None:
     )
     connection.execute("DELETE FROM pending_intent WHERE singleton = 1")
     connection.commit()
+
+
+def _ensure_no_move_intent(connection: sqlite3.Connection) -> None:
+    if connection.execute(
+        "SELECT 1 FROM move_intent WHERE singleton = 1"
+    ).fetchone() is not None:
+        raise TranscriptPendingError("transcript room movement is pending")
 
 
 def _read_indexed_message(path: Path, event: sqlite3.Row) -> dict:
@@ -300,6 +545,8 @@ def _repair_pending(connection: sqlite3.Connection, path: Path) -> None:
         raise TranscriptPendingError("the pending transcript intent digest is invalid")
     if size < expected + len(line):
         _append_and_fsync(path, line[len(present) :])
+    else:
+        _fsync_file_and_parent(path)
     _commit_intent(connection, intent)
 
 
@@ -469,6 +716,8 @@ def append_transcript_message(
         path = _sidecar_path(repo, graph_id)
         connection = _connect_index(graph_id, root=root)
         try:
+            _ensure_no_move_intent(connection)
+            _repair_rewrite(connection, path)
             _repair_pending(connection, path)
             state = connection.execute(
                 "SELECT room_path FROM state WHERE singleton = 1"
@@ -520,6 +769,8 @@ def transcript_source_acknowledgement(
         path = _sidecar_path(repo, graph_id)
         connection = _connect_index(graph_id, root=root)
         try:
+            _ensure_no_move_intent(connection)
+            _repair_rewrite(connection, path)
             _repair_pending(connection, path)
             if not _import_legacy(connection, path):
                 raise TranscriptPendingError("legacy transcript import is incomplete; retry")
@@ -560,68 +811,66 @@ def _rewrite_messages(
     root: Path,
     transform: Callable[[dict], dict | None],
 ) -> None:
-    """Rewrite rows and rebuild their durable index under the graph fence."""
+    """Durably rewrite rows and rebuild their index under the graph fence."""
 
     with graph_transcript_fence(graph_id, root=root):
         repo = _chat_repo(graph_id, root=root)
         path = _sidecar_path(repo, graph_id)
         connection = _connect_index(graph_id, root=root)
         try:
+            _ensure_no_move_intent(connection)
+            _repair_rewrite(connection, path)
             _repair_pending(connection, path)
             if not _import_legacy(connection, path):
                 raise TranscriptPendingError("legacy transcript import is incomplete; retry")
-        finally:
-            connection.close()
-        if not path.is_file():
-            return
-        kept: list[str] = []
-        changed = False
-        for line in path.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                row = json.loads(stripped)
-            except json.JSONDecodeError:
-                kept.append(stripped)
-                continue
-            if not isinstance(row, dict):
-                kept.append(stripped)
-                continue
-            replacement = transform(row)
-            if replacement is None:
-                changed = True
-                continue
-            encoded = json.dumps(
-                replacement, ensure_ascii=False, separators=(",", ":")
-            )
-            kept.append(encoded)
-            changed = changed or encoded != stripped
-        if not changed:
-            return
-        if kept:
-            temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-            with temporary.open("w", encoding="utf-8") as handle:
-                handle.write("\n".join(kept) + "\n")
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, path)
-            _fsync_parent(path)
-        else:
-            path.unlink(missing_ok=True)
-            _fsync_parent(path)
-        connection = _connect_index(graph_id, root=root)
-        try:
-            connection.execute("DELETE FROM events")
-            connection.execute("DELETE FROM pending_intent")
-            connection.execute("DELETE FROM legacy_import_buffer")
+            if not path.is_file():
+                return
+            original = path.read_bytes()
+            kept: list[str] = []
+            changed = False
+            for line in original.decode("utf-8").splitlines():
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    row = json.loads(stripped)
+                except json.JSONDecodeError:
+                    kept.append(stripped)
+                    continue
+                if not isinstance(row, dict):
+                    kept.append(stripped)
+                    continue
+                replacement = transform(row)
+                if replacement is None:
+                    changed = True
+                    continue
+                encoded = json.dumps(
+                    replacement, ensure_ascii=False, separators=(",", ":")
+                )
+                kept.append(encoded)
+                changed = changed or encoded != stripped
+            if not changed:
+                return
+            replacement = ("\n".join(kept) + ("\n" if kept else "")).encode()
             connection.execute(
-                """UPDATE state SET incarnation = ?, indexed_end = 0, room_path = ?
-                   WHERE singleton = 1""",
-                (uuid.uuid4().hex, str(path.resolve())),
+                """INSERT INTO rewrite_intent
+                   (singleton, room_path, original_length, original_digest,
+                    replacement, replacement_digest, target_incarnation)
+                   VALUES (1, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(path.resolve()),
+                    len(original),
+                    hashlib.sha256(original).hexdigest(),
+                    replacement,
+                    hashlib.sha256(replacement).hexdigest(),
+                    uuid.uuid4().hex,
+                ),
             )
             connection.commit()
-            _import_legacy(connection, path)
+            intent = connection.execute(
+                "SELECT * FROM rewrite_intent WHERE singleton = 1"
+            ).fetchone()
+            _finish_rewrite(connection, intent, path)
         finally:
             connection.close()
 

@@ -383,6 +383,16 @@ def retire_integration_worktree(
     trunk = locate_trunk(trunk).resolve()
     entry = get_integration_worktree(trunk, kind, work_id)
     if entry is None:
+        if kind in {"epic", "feature"}:
+            from cascade.war_room.chat_store import (
+                TranscriptPendingError,
+                resume_transcript_room_move,
+            )
+
+            try:
+                resume_transcript_room_move(work_id, root=trunk)
+            except TranscriptPendingError:
+                return False
         return True
     expected = integration_worktree_path(kind, work_id, trunk=trunk)
     if entry.path.resolve() != expected or entry.branch != integration_branch(

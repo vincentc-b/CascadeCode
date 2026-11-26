@@ -3225,7 +3225,7 @@ code_dashboard_chat_fence = element "graph_transcript_fence" "Function" "Seriali
     }
 }
 
-code_dashboard_chat_index = element "_connect_index" "Function" "Opens the writer-only SQLite intent, uniqueness, offset and incarnation index with full synchronous commits." {
+code_dashboard_chat_index = element "_connect_index" "Function" "Opens the writer-only SQLite append, rewrite and move intent index with uniqueness, offsets, incarnation and full synchronous commits." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.index"
         "cascade.parent" "element.component.dashboard"
@@ -3234,7 +3234,7 @@ code_dashboard_chat_index = element "_connect_index" "Function" "Opens the write
     }
 }
 
-code_dashboard_chat_rewrite = element "_rewrite_messages" "Function" "Fences rollback and legacy-label rewrites, fsyncs replacement JSONL and rebuilds source-key offsets under a new incarnation." {
+code_dashboard_chat_rewrite = element "_rewrite_messages" "Function" "Journals exact replacement bytes and a retry-stable incarnation, fsyncs JSONL, then rebuilds message and source-key offsets." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.rewrite"
         "cascade.parent" "element.component.dashboard"
@@ -3243,7 +3243,7 @@ code_dashboard_chat_rewrite = element "_rewrite_messages" "Function" "Fences rol
     }
 }
 
-code_dashboard_chat_move = element "move_transcript_room" "Function" "Copies committed JSONL history and switches routing with a new incarnation under the graph fence." {
+code_dashboard_chat_move = element "move_transcript_room" "Function" "Journals and verifies a durable room copy, then switches routing and installs one retry-stable incarnation under the graph fence." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.move"
         "cascade.parent" "element.component.dashboard"
@@ -3486,7 +3486,7 @@ dashboard_chat_rewrite_to_fence = code_dashboard_chat_rewrite -> code_dashboard_
     }
 }
 
-dashboard_chat_rewrite_to_index = code_dashboard_chat_rewrite -> code_dashboard_chat_index "Advances incarnation and rebuilds durable source-key offsets" {
+dashboard_chat_rewrite_to_index = code_dashboard_chat_rewrite -> code_dashboard_chat_index "Persists rewrite intent, advances incarnation and rebuilds durable source-key offsets" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-chat-rewrite-to-index"
     }

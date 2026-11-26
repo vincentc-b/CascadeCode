@@ -46,7 +46,27 @@ from cascade.workspace.integration_worktree import IntegrationWorktree
 from cascade.workspace.types import ProjectContext
 from cascade.workspace.errors import MutationOwnerError
 from cascade.workspace.up import resume_legally_active_graphs
-from tests.support import add_doc, make_repo, approve_board_feature, commit_board
+from tests.support import (
+    add_doc,
+    approve_board_feature,
+    commit_board,
+    declare_no_dependencies,
+    make_repo,
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_provider_admission(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep worktree lifecycle tests independent of provider discovery."""
+
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch._provider_preflight_refusal",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "cascade.approvals._require_approval_selections",
+        lambda *_args, **_kwargs: (),
+    )
 
 
 def _branch_exists(root: Path, branch: str) -> bool:
@@ -1208,6 +1228,7 @@ def test_planning_tools_write_into_integration_checkouts(tmp_path: Path) -> None
     subprocess.run(["git", "add", "-A"], cwd=root, check=True)
     subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
     _chain(root)
+    declare_no_dependencies("epic_001", root=root)
     pin_parent("feat_001", "epic_001", root=doc_filesystem_root("feat_001", trunk=root))
 
     assert mint_task("Next", feature_id="feat_001", root=root) == "task_001_000_002"
