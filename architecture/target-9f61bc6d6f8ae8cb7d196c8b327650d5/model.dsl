@@ -1667,12 +1667,21 @@ code_dashboard_progress_contract = element "_derive_entry" "Function" "Defines t
     }
 }
 
-code_dashboard_progress_ui = element "renderCurrentRecoveryProgress" "Function" "Renders the same revision-bound safe recovery entries beside Historical while refusing stale graph or revision responses." {
+code_dashboard_progress_ui = element "loadCurrentRecoveryProgress" "Function" "Reads and renders revision-bound safe recovery entries beside Historical while refusing stale graph or revision responses." {
     properties {
         "cascade.semanticId" "element.code.dashboard.progress-ui"
         "cascade.parent" "element.component.dashboard"
         "cascade.sourcePath" "cascade/war_room/static/war_room.js"
-        "cascade.sourceSymbol" "renderCurrentRecoveryProgress"
+        "cascade.sourceSymbol" "loadCurrentRecoveryProgress"
+    }
+}
+
+code_dashboard_transcript_ui = element "pollChatSidecar" "Function" "Polls incarnation-bound Historical pages and current progress together while merging incremental messages by durable identity without mixing history." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.transcript-ui"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/war_room.js"
+        "cascade.sourceSymbol" "pollChatSidecar"
     }
 }
 
@@ -3489,6 +3498,18 @@ dashboard_progress_ui_to_router = code_dashboard_progress_ui -> code_dashboard_r
 dashboard_render_to_progress_ui = code_dashboard_render -> code_dashboard_progress_ui "Serves the persistent current-progress presentation" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-render-to-progress-ui"
+    }
+}
+
+dashboard_render_to_transcript_ui = code_dashboard_render -> code_dashboard_transcript_ui "Serves the durable Historical transcript presentation" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-render-to-transcript-ui"
+    }
+}
+
+dashboard_transcript_ui_to_router = code_dashboard_transcript_ui -> code_dashboard_router "Requests bounded versioned page and detail reads" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-transcript-ui-to-router"
     }
 }
 

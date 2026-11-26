@@ -78,13 +78,13 @@ def transcript_server(tmp_path: Path):
         thread.join(timeout=5)
 
 
-def _legacy_rows(root: Path, count: int) -> None:
-    path = root / "docs/_war_room/chat/epic_001.jsonl"
+def _legacy_rows(root: Path, count: int, graph_id: str = "epic_001") -> None:
+    path = root / f"docs/_war_room/chat/{graph_id}.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = [
         {
             "id": f"legacy-{number:03d}",
-            "graph_id": "epic_001",
+            "graph_id": graph_id,
             "author": "system",
             "body": f"message {number:03d}",
             "ts": "unknown",
@@ -96,10 +96,10 @@ def _legacy_rows(root: Path, count: int) -> None:
     path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
 
 
-def _finish_legacy_import(root: Path) -> None:
+def _finish_legacy_import(root: Path, graph_id: str = "epic_001") -> None:
     with pytest.raises(TranscriptPendingError):
-        append_transcript_message("epic_001", author="system", body="trigger", root=root)
-    append_transcript_message("epic_001", author="system", body="trigger", root=root)
+        append_transcript_message(graph_id, author="system", body="trigger", root=root)
+    append_transcript_message(graph_id, author="system", body="trigger", root=root)
 
 
 def test_paginated_latest_older_after_and_legacy_headers(transcript_server) -> None:
@@ -516,6 +516,114 @@ def test_real_chromium_loads_older_and_incrementally_polls(transcript_server) ->
                 initial["after_cursor"],
             )
             assert [item["id"] for item in after["items"]] == [appended["id"]]
+        finally:
+            browser.close()
+
+
+def test_historical_ui_pages_milestones_and_bounded_detail(transcript_server) -> None:
+    playwright = pytest.importorskip("playwright.sync_api")
+    base, root = transcript_server
+    graph_id = "epic_044"
+    _legacy_rows(root, 130, graph_id)
+    _finish_legacy_import(root, graph_id)
+    append_transcript_message(
+        graph_id,
+        author="epic_manager",
+        body="The older authored conclusion remains dated history.",
+        root=root,
+        message_id="manager-history",
+        occurred_at="2026-11-25T03:58:01+00:00",
+        metadata={"kind": "role_reply"},
+    )
+    append_transcript_message(
+        graph_id,
+        author="system",
+        body="Recovery investigation started.",
+        root=root,
+        message_id="recovery-history",
+        source_key="recovery:receipt-browser",
+        occurred_at=None,
+        provenance="reconciled",
+        metadata={
+            "kind": "recovery_milestone",
+            "source_reference": "javascript:alert(1)",
+        },
+    )
+    complete_body = "detail-prefix-" + ("🙂漢字" * 30000) + "-detail-suffix"
+    append_transcript_message(
+        graph_id,
+        author="feature_architect",
+        body=complete_body,
+        root=root,
+        message_id="large-ui-message",
+        occurred_at="2026-11-25T04:02:25+00:00",
+        metadata={"kind": "role_reply"},
+    )
+
+    with playwright.sync_playwright() as runtime:
+        try:
+            browser = runtime.chromium.launch(headless=True)
+        except playwright.Error as exc:
+            pytest.skip(f"Chromium unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            transcript_requests: list[str] = []
+            page.on(
+                "request",
+                lambda request: transcript_requests.append(request.url)
+                if "/api/transcript/v1/" in request.url
+                else None,
+            )
+            page.goto(base + "/")
+            messages = page.locator("#chat-messages .chat-message")
+            messages.first.wait_for()
+            assert messages.count() == 50
+            assert page.locator('[data-message-id="recovery-history"] .author').inner_text() == (
+                "System · Recovery"
+            )
+            recovery = page.locator('[data-message-id="recovery-history"]')
+            assert "Occurrence time unavailable" in recovery.inner_text()
+            assert recovery.get_attribute("tabindex") == "0"
+            assert recovery.get_attribute("id") == "recovery-milestone-recovery-history"
+            assert recovery.locator("a").count() == 0
+            assert page.locator('[data-message-id="manager-history"] .author').inner_text() == (
+                "Epic manager"
+            )
+
+            scroll = page.locator("#chat-messages")
+            anchor_id = messages.first.get_attribute("data-message-id")
+            assert anchor_id
+            page.evaluate("el => { el.scrollTop = 40; }", scroll.element_handle())
+            before = page.locator(f'[data-message-id="{anchor_id}"]').bounding_box()
+            page.get_by_role("button", name="Load older history").click()
+            page.wait_for_function(
+                "() => document.querySelectorAll('#chat-messages .chat-message').length === 100"
+            )
+            after = page.locator(f'[data-message-id="{anchor_id}"]').bounding_box()
+            assert before is not None and after is not None
+            assert abs(before["y"] - after["y"]) < 10
+
+            detail = page.locator('[data-message-id="large-ui-message"]')
+            detail.get_by_role("button", name="Open complete message").click()
+            page.wait_for_function(
+                "expected => document.querySelector('[data-message-id=\"large-ui-message\"] .chat-body').textContent === expected",
+                arg=complete_body,
+            )
+            assert detail.locator(".chat-body").inner_text() == complete_body
+
+            appended = append_transcript_message(
+                graph_id,
+                author="human",
+                body="incremental browser message",
+                root=root,
+                message_id="incremental-ui-message",
+            )
+            page.locator(
+                f'[data-message-id="{appended["id"]}"]'
+            ).wait_for(timeout=7000)
+            assert any("direction=older" in url for url in transcript_requests)
+            assert any("direction=after" in url for url in transcript_requests)
+            assert not any("/api/chat/" in url for url in transcript_requests)
         finally:
             browser.close()
 

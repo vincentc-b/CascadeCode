@@ -40,11 +40,16 @@ The dashboard renders that shared primary persistently on its board row and read
 the same immutable pages beside Historical for ordered concurrent incidents. The
 room binds asynchronous results to work ID and projection revision, restarts a
 superseded continuation, and never splices a late graph or revision into the
-current panel. State, stage, owner, occurrence, freshness and delivery lag remain
-distinct; queued work is not presented as execution and publication is not
-presented as verified completion. Recovery text is assigned through DOM text
-nodes, while actions accept only local root-relative URLs and committed milestone
-references resolve to stable transcript fragments.
+current panel. Historical polling starts a single-flight current-progress read
+alongside each incremental transcript read, so committed notifications and their
+milestones can appear independently while an authored reply remains pending. A
+background read retains the displayed projection until its typed result arrives
+and does not reset transcript scroll, paging cursors or high-water. State, stage,
+owner, occurrence, freshness and delivery lag remain distinct; queued work is not
+presented as execution and publication is not presented as verified completion.
+Recovery text is assigned through DOM text nodes, while actions accept only local
+root-relative URLs and committed milestone references resolve to stable transcript
+fragments.
 
 `REQ-WARROOM-TRANSCRIPT-001`: Historical chat preserves the owning Epic or
 Feature's human and presentable role messages. Reading chat does not invoke a
@@ -79,6 +84,17 @@ An oversized body remains available as UTF-8-aligned immutable chunks of at
 most 64 KiB after a labeled bounded preview; a cursor inside a UTF-8 character
 is refused with typed `400 invalid_request`. Every successful incomplete detail
 read advances its byte offset positively, and no row is silently deleted.
+
+`REQ-WARROOM-TRANSCRIPT-006`: The Historical browser consumes versioned latest,
+older and after pages while keeping transcript incarnation independent from the
+current recovery projection revision. It merges rows only when graph and
+incarnation match, preserves the older-page high-water and scroll position, and
+restarts instead of mixing a stale page or detail response. Durable message IDs
+provide keyboard-focusable anchors. Recovery milestones are labeled
+`System · Recovery` separately from human and authored role replies; nullable
+occurrence, append time and provenance remain visible. Incomplete import and
+pending publication are explicit. Oversized previews open through bounded detail
+continuations, and only allowlisted local references become links.
 
 `DEC-WARROOM-TRANSCRIPT-001`: Keep authored history in the owning room's
 `docs/_war_room/chat/<graph-id>.jsonl`. The room follows registered document
@@ -134,6 +150,14 @@ Rollback and legacy-label rewrites invalidate the pointer before replacement and
 republish under the new incarnation, so interrupted mutation is unavailable
 rather than stale healthy history.
 
+`DEC-WARROOM-TRANSCRIPT-005`: Browser paging state is scoped to the selected
+graph and published room incarnation. Latest reads replace that state; older and
+after reads deduplicate by durable message ID and retain their supplied cursors.
+A typed cursor restart discards the affected browser state and reloads latest.
+Late responses from an earlier graph, incarnation or detail request are ignored.
+The compatible chat array remains an API surface but is not the Historical
+browser's paging authority.
+
 The authoritative [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
 connect `cascade-context` → `cascade-containers` →
@@ -145,10 +169,11 @@ the transcript library within the same Python runtime.
 |---|---|
 | [read_recovery_progress / read_recovery_progress_many](recovery_progress.py) | Open only a work-hashed direct no-follow pointer, its immutable manifest and requested pages. Validate exact work/repository identity, freshness, revision and row shape while enforcing aggregate source, row and response budgets. Missing, stale, corrupt and wrong-root evidence is typed pending. |
 | [board_recovery_projection](recovery_progress.py) | Preserve the coarse `recovery_incident` surface while selecting its action and revision from the same safe entry returned to room consumers. Presentation never grants retry authority. |
-| [renderCurrentRecoveryProgress](static/war_room.js) | Present revision-bound current and concurrent entries beside Historical, restart changed continuations, reject late graph responses and allow only local action or committed milestone links. |
+| [loadCurrentRecoveryProgress](static/war_room.js) | Read and present revision-bound current and concurrent entries beside Historical, restart changed continuations, reject late graph responses and allow only local action or committed milestone links. Background reads retain the prior projection until the typed replacement arrives. |
 | [handle_get_transcript / handle_get_chat](sidecar_routes.py) | Validate the versioned page/detail or compatible latest-window request and map invalid input, cursor restart and unavailable publication to typed 400, 409 or 503 responses. The compatible array adds `Link` and transcript completeness headers. |
 | [publish_transcript_projection](transcript_pages.py) | Project only committed append-sequence/offset rows into content-addressed pages, bounded previews and exact detail blobs, then atomically advance the direct graph pointer. Partial legacy import is published as incomplete coverage. |
 | [read_transcript_page / read_transcript_detail](transcript_pages.py) | Open only regular no-follow projection artifacts, enforce 50-default/100-maximum rows, 1 MiB aggregate source and 256 KiB response ceilings, and return incarnation/high-water cursors or UTF-8-aligned 64 KiB detail chunks. |
+| [pollChatSidecar](static/war_room.js) | Refresh graph/incarnation-scoped Historical state, merge after pages by durable ID, and single-flight the independent current-progress read without changing transcript scroll or page high-water. Latest, older and bounded detail helpers restart typed stale cursors without mixing history. |
 | [graph_transcript_fence / _connect_index](chat_store.py) | Lock a graph at a stable tracking-root path across processes and open its writer-only full-synchronous intent/offset index. The SQLite file is not a GET surface. |
 | [fenced_transcript_source_acknowledgement](chat_store.py) | Hold the graph fence while yielding complete current source-key routing from the writer index. Pending intents, incomplete indexing or an unavailable room fail pending without repair, import or page publication. |
 | [append_transcript_message / remove_message](chat_store.py) | Reconcile only an exact pending tail, durably stage intent, append and fsync JSONL, then commit uniqueness/offset before acknowledgement. Rollback and legacy-label rewrites journal the original fingerprint, replacement and target incarnation before replacement, then reset and re-import the index. Restart accepts only matching original or replacement bytes, retains message/source identity and leaves conflicts pending. |
@@ -232,7 +257,12 @@ after-commit notification and restart reconciliation with ordered references.
 [Bounded transcript API scenarios](../../tests/war_room/test_transcript_pages_api.py)
 check latest, older and incremental pages, legacy continuation headers, typed
 restart/unavailable responses, projection-only GET, response ceilings and exact
-multi-chunk UTF-8 detail reconstruction.
+multi-chunk UTF-8 detail reconstruction. The Chromium Historical journey in the
+same file checks distinct milestone/authored rendering, keyboard anchors, older
+scroll retention, incremental appends and preview-to-detail continuation. The
+[browser refresh race harness](../../tests/war_room/war_room_refresh_races.mjs)
+checks that Historical polling refreshes progress and transcript projections
+together without duplicate reads.
 
 ## Bounded health-audit projection reads
 

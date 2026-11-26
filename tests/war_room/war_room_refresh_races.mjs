@@ -43,6 +43,8 @@ async function testStaleChatReplyCannotReplaceCurrentRoom() {
       return request.promise;
     },
     renderChatMessages(messages) { rendered.push(messages[0].body); },
+    updateTranscriptControls() {},
+    setTranscriptStatus() {},
     clearChatPollDiagnostic() {},
     reportChatLoadFailure(error) { errors.push(error.message); },
   };
@@ -50,24 +52,33 @@ async function testStaleChatReplyCannotReplaceCurrentRoom() {
     let focusGraphId = "epic_001";
     let lastChatSnapshot = "";
     let lastChatSnapshotGraphId = null;
-    ${section("  let inflightChatFetch = null;", "  let chatPollInFlight = false;")}
-    ({ loadChat, setFocus(id) { focusGraphId = id; } });
+    let transcriptEpoch = 0;
+    let transcriptState = null;
+    const el = { transcriptLoadOlder: null };
+    ${section("  function transcriptPagePath", "  function renderCurrentDependencySummary")}
+    ({ loadTranscriptLatest, setFocus(id) { focusGraphId = id; } });
   `;
   const chat = vm.runInNewContext(script, context);
 
-  const oldLoad = chat.loadChat();
+  const oldLoad = chat.loadTranscriptLatest("epic_001");
   chat.setFocus("epic_002");
-  const currentLoad = chat.loadChat();
-  requests.get("/api/chat/epic_002").resolve([{ body: "current room" }]);
+  const currentLoad = chat.loadTranscriptLatest("epic_002");
+  requests.get("/api/transcript/v1/epic_002?limit=50").resolve({
+    graph_id: "epic_002", incarnation: "current", items: [{id: "2", body: "current room"}],
+    high_water_mark: 1, completeness: "complete", older_cursor: null, after_cursor: "after-2"
+  });
   await currentLoad;
-  requests.get("/api/chat/epic_001").resolve([{ body: "old room" }]);
+  requests.get("/api/transcript/v1/epic_001?limit=50").resolve({
+    graph_id: "epic_001", incarnation: "old", items: [{id: "1", body: "old room"}],
+    high_water_mark: 1, completeness: "complete", older_cursor: null, after_cursor: "after-1"
+  });
   await oldLoad;
   assert.deepEqual(rendered, ["current room"]);
 
   chat.setFocus("epic_001");
-  const staleFailure = chat.loadChat();
+  const staleFailure = chat.loadTranscriptLatest("epic_001");
   chat.setFocus("epic_002");
-  requests.get("/api/chat/epic_001").reject(new Error("old room failed"));
+  requests.get("/api/transcript/v1/epic_001?limit=50").reject(new Error("old room failed"));
   await staleFailure;
   assert.deepEqual(errors, []);
 }
@@ -108,6 +119,59 @@ async function testActionRefreshFetchesAfterPendingPoll() {
 
 await testStaleChatReplyCannotReplaceCurrentRoom();
 await testActionRefreshFetchesAfterPendingPoll();
+
+async function testHistoricalPollRefreshesProgressWithoutDuplicateReads() {
+  const transcriptRequest = deferred();
+  const progressRequest = deferred();
+  const progressGraphs = [];
+  const rendered = [];
+  const context = {
+    el: { recoveryCurrentSummary: {} },
+    loadCurrentRecoveryProgress(graphId, _cursor, _revision, options) {
+      progressGraphs.push({ graphId, options });
+      return progressRequest.promise;
+    },
+    transcriptPagePath(graphId, direction, cursor) {
+      return `/transcript/${graphId}/${direction}/${cursor}`;
+    },
+    apiGet(path) {
+      assert.equal(path, "/transcript/epic_001/after/after-1");
+      return transcriptRequest.promise;
+    },
+    acceptTranscriptPage(page, graphId, incarnation) {
+      return page.graph_id === graphId && page.incarnation === incarnation;
+    },
+    renderChatMessages(messages) { rendered.push(messages.map((item) => item.id)); },
+    updateTranscriptControls() {},
+    clearChatPollDiagnostic() {},
+    reportChatLoadFailure(error) { throw error; },
+  };
+  const poller = vm.runInNewContext(`
+    let focusGraphId = "epic_001";
+    let transcriptEpoch = 1;
+    let transcriptState = {
+      graphId: "epic_001", incarnation: "incarnation-1", afterCursor: "after-1",
+      highWaterMark: 1, completeness: "complete", messages: [{id: "old"}]
+    };
+    ${section("  let chatPollInFlight = false;", "  async function waitForChatReplies")}
+    ({ pollChatSidecar });
+  `, context);
+
+  const first = poller.pollChatSidecar();
+  const duplicate = poller.pollChatSidecar();
+  assert.equal(progressGraphs.length, 1, "one bounded progress GET is shared per poll window");
+  assert.equal(progressGraphs[0].graphId, "epic_001");
+  assert.equal(progressGraphs[0].options.background, true);
+  transcriptRequest.resolve({
+    graph_id: "epic_001", incarnation: "incarnation-1", items: [{id: "milestone-2"}],
+    after_cursor: "after-2", high_water_mark: 2, completeness: "complete"
+  });
+  progressRequest.resolve({ work_id: "epic_001", revision: "progress-2" });
+  await Promise.all([first, duplicate]);
+  assert.equal(JSON.stringify(rendered), JSON.stringify([["old", "milestone-2"]]));
+}
+
+await testHistoricalPollRefreshesProgressWithoutDuplicateReads();
 
 async function testBoardAndCancellationLookupRunInParallel() {
   const boardRequest = deferred();

@@ -357,7 +357,18 @@
               aria-live="polite"
             ></section>
             <h3 class="transcript-history-heading">Historical transcript</h3>
-            <div id="chat-messages" class="chat-messages" role="log"></div>
+            <div class="transcript-controls">
+              <button type="button" id="transcript-load-older" class="btn-secondary" hidden>
+                Load older history
+              </button>
+              <span id="transcript-state" class="transcript-state" role="status" aria-live="polite"></span>
+            </div>
+            <div
+              id="chat-messages"
+              class="chat-messages"
+              role="log"
+              aria-label="Historical transcript"
+            ></div>
             <form id="chat-compose" class="chat-compose">
               <textarea
                 id="chat-body"

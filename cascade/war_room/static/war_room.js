@@ -38,6 +38,8 @@
     bossSummary: document.getElementById("boss-view-summary"),
     chatGraphId: document.getElementById("chat-graph-id"),
     chatMessages: document.getElementById("chat-messages"),
+    transcriptLoadOlder: document.getElementById("transcript-load-older"),
+    transcriptState: document.getElementById("transcript-state"),
     dependencyCurrentSummary: document.getElementById("dependency-current-summary"),
     recoveryCurrentSummary: document.getElementById("recovery-current-summary"),
     chatCompose: document.getElementById("chat-compose"),
@@ -2519,6 +2521,8 @@
 
   let lastChatSnapshot = "";
   let lastChatSnapshotGraphId = null;
+  let transcriptEpoch = 0;
+  let transcriptState = null;
 
   function chatSnapshot(messages) {
     if (!Array.isArray(messages)) return "";
@@ -2529,43 +2533,241 @@
           "\t" +
           String(msg.author || "") +
           "\t" +
-          String(msg.body || "").length
+          String(msg.body || "") +
+          "\t" +
+          String(msg.occurred_at || "") +
+          "\t" +
+          String(msg.provenance || "")
         );
       })
       .join("\n");
   }
 
-  function renderChatMessages(messages) {
+  function transcriptAuthorLabel(msg) {
+    if (msg.kind === "recovery_milestone") return "System · Recovery";
+    if (msg.author === "human") return "Human";
+    const labels = {
+      epic_manager: "Epic manager",
+      epic_architect: "Epic architect",
+      feature_lead: "Feature lead",
+      feature_architect: "Feature architect",
+      boss: "Boss",
+    };
+    return labels[msg.author] || String(msg.author || "Unknown author").replaceAll("_", " ");
+  }
+
+  function appendTranscriptMetadata(container, msg) {
+    const metadata = document.createElement("div");
+    metadata.className = "transcript-message-metadata";
+    const occurred = msg.occurred_at || "Occurrence time unavailable";
+    const appended = msg.appended_at || msg.ts || "append time unavailable";
+    metadata.textContent = occurred + " · appended " + appended +
+      (msg.provenance ? " · " + String(msg.provenance).replaceAll("_", " ") : "");
+    container.appendChild(metadata);
+    const safeReference = safeLocalRecoveryHref(msg.source_reference) ||
+      safeLocalRecoveryHref(msg.target);
+    if (safeReference) {
+      container.appendChild(recoveryActionLink("Open local source", safeReference));
+    }
+  }
+
+  async function loadTranscriptDetail(msg, body, button, graphId, incarnation, epoch) {
+    let cursor = msg.detail_cursor;
+    let completeBody = "";
+    button.disabled = true;
+    button.textContent = "Loading complete message…";
+    try {
+      while (cursor) {
+        const path = "/api/transcript/v1/" + encodeURIComponent(graphId) +
+          "/items/" + encodeURIComponent(msg.id) + "/detail?cursor=" +
+          encodeURIComponent(cursor);
+        const detail = await apiGet(path);
+        if (epoch !== transcriptEpoch || graphId !== focusGraphId ||
+            detail.graph_id !== graphId || detail.message_id !== msg.id ||
+            detail.incarnation !== incarnation) return;
+        completeBody += String(detail.chunk || "");
+        cursor = detail.next_cursor;
+        if (!detail.complete && !cursor) throw new Error("Incomplete detail has no continuation.");
+      }
+      if (epoch !== transcriptEpoch || graphId !== focusGraphId) return;
+      body.textContent = completeBody;
+      button.remove();
+    } catch (err) {
+      if (epoch !== transcriptEpoch || graphId !== focusGraphId) return;
+      const code = err && err.body && err.body.error && err.body.error.code;
+      if (err.status === 409 && code === "cursor_restart") {
+        setTranscriptStatus("History changed while detail was loading; restarted current history.", true);
+        await loadChat({ userInitiated: false });
+        return;
+      }
+      button.disabled = false;
+      button.textContent = "Retry complete message";
+      setTranscriptStatus(
+        code === "invalid_request" ? "Detail cursor does not belong to this message or graph."
+          : "Complete message is pending; the bounded preview remains available.",
+        true
+      );
+    }
+  }
+
+  function renderChatMessages(messages, options) {
     if (!el.chatMessages) return;
     if (!Array.isArray(messages)) return;
     const snap = chatSnapshot(messages);
     if (snap === lastChatSnapshot && focusGraphId === lastChatSnapshotGraphId) return;
+    const previousHeight = el.chatMessages.scrollHeight;
+    const previousTop = el.chatMessages.scrollTop;
+    const wasAtBottom = previousTop + el.chatMessages.clientHeight >= previousHeight - 8;
     lastChatSnapshot = snap;
     lastChatSnapshotGraphId = focusGraphId;
+    const detailGraphId = transcriptState && transcriptState.graphId;
+    const detailIncarnation = transcriptState && transcriptState.incarnation;
     el.chatMessages.innerHTML = "";
     messages.forEach(function (msg) {
       const div = document.createElement("div");
       div.className = "chat-message";
-      if (typeof msg.id === "string" && msg.id) {
+      div.tabIndex = 0;
+      if (typeof msg.id === "string" && msg.id && msg.kind === "recovery_milestone") {
         div.id = "recovery-milestone-" + encodeURIComponent(msg.id);
       }
-      if (msg.author && msg.author !== "human") {
+      if (typeof msg.id === "string") div.dataset.messageId = msg.id;
+      if (msg.kind === "recovery_milestone") {
+        div.classList.add("chat-message-recovery");
+      } else if (msg.author && msg.author !== "human") {
         div.classList.add("chat-message-agent");
       }
       const author = document.createElement("div");
       author.className = "author";
-      author.textContent = msg.author || "unknown";
+      author.textContent = transcriptAuthorLabel(msg);
       const body = document.createElement("div");
       body.className = "chat-body";
-      body.textContent = msg.body;
+      body.textContent = String(msg.body || "");
       div.appendChild(author);
       div.appendChild(body);
+      appendTranscriptMetadata(div, msg);
+      if (msg.detail_truncated && msg.detail_cursor) {
+        const detail = document.createElement("button");
+        detail.type = "button";
+        detail.className = "transcript-detail";
+        detail.textContent = "Open complete message";
+        detail.addEventListener("click", function () {
+          loadTranscriptDetail(
+            msg, body, detail, detailGraphId,
+            detailIncarnation, transcriptEpoch
+          );
+        });
+        div.appendChild(detail);
+      }
       if (DependencyStatusUi && DependencyStatusUi.appendHistoricalObservation) {
         DependencyStatusUi.appendHistoricalObservation(document, div, msg);
       }
       el.chatMessages.appendChild(div);
     });
-    el.chatMessages.scrollTop = el.chatMessages.scrollHeight;
+    if (options && options.prepended) {
+      el.chatMessages.scrollTop = previousTop + (el.chatMessages.scrollHeight - previousHeight);
+    } else if (!options || options.latest || wasAtBottom) {
+      el.chatMessages.scrollTop = el.chatMessages.scrollHeight;
+    } else {
+      el.chatMessages.scrollTop = previousTop;
+    }
+  }
+
+  function setTranscriptStatus(message, isError) {
+    if (!el.transcriptState) return;
+    el.transcriptState.textContent = message || "";
+    el.transcriptState.classList.toggle("error", !!isError);
+  }
+
+  function updateTranscriptControls() {
+    if (el.transcriptLoadOlder) {
+      el.transcriptLoadOlder.hidden = !(transcriptState && transcriptState.olderCursor);
+      el.transcriptLoadOlder.disabled = false;
+    }
+    if (!transcriptState) return;
+    const coverage = transcriptState.completeness === "complete"
+      ? "History is complete for the published projection."
+      : "History import is incomplete; only published messages are shown.";
+    setTranscriptStatus(coverage + " Incarnation " + transcriptState.incarnation + ".", false);
+  }
+
+  function transcriptPagePath(graphId, direction, cursor) {
+    let path = "/api/transcript/v1/" + encodeURIComponent(graphId) + "?limit=50";
+    if (cursor) path += "&direction=" + direction + "&cursor=" + encodeURIComponent(cursor);
+    return path;
+  }
+
+  function acceptTranscriptPage(page, graphId, incarnation) {
+    return page && page.graph_id === graphId &&
+      (!incarnation || page.incarnation === incarnation) && graphId === focusGraphId;
+  }
+
+  async function loadTranscriptLatest(graphId, options) {
+    const epoch = ++transcriptEpoch;
+    transcriptState = null;
+    lastChatSnapshot = "";
+    lastChatSnapshotGraphId = graphId;
+    if (el.chatMessages) el.chatMessages.innerHTML = "";
+    if (el.transcriptLoadOlder) el.transcriptLoadOlder.hidden = true;
+    setTranscriptStatus("Loading published history…", false);
+    try {
+      const page = await apiGet(transcriptPagePath(graphId));
+      if (epoch !== transcriptEpoch || !acceptTranscriptPage(page, graphId)) return [];
+      transcriptState = {
+        graphId: graphId,
+        incarnation: page.incarnation,
+        highWaterMark: page.high_water_mark,
+        completeness: page.completeness,
+        messages: Array.isArray(page.items) ? page.items.slice() : [],
+        olderCursor: page.older_cursor,
+        afterCursor: page.after_cursor,
+      };
+      renderChatMessages(transcriptState.messages, { latest: true });
+      updateTranscriptControls();
+      if (!options || options.userInitiated !== false) clearChatPollDiagnostic();
+      return transcriptState.messages;
+    } catch (err) {
+      if (epoch !== transcriptEpoch || graphId !== focusGraphId) return [];
+      const code = err && err.body && err.body.error && err.body.error.code;
+      setTranscriptStatus(
+        code === "history_pending" ? "Historical transcript is pending publication."
+          : "Historical transcript is unavailable.",
+        true
+      );
+      reportChatLoadFailure(err, options || { userInitiated: true });
+      return [];
+    }
+  }
+
+  async function loadOlderTranscript() {
+    const state = transcriptState;
+    if (!state || !state.olderCursor) return;
+    const epoch = transcriptEpoch;
+    if (el.transcriptLoadOlder) el.transcriptLoadOlder.disabled = true;
+    try {
+      const page = await apiGet(transcriptPagePath(state.graphId, "older", state.olderCursor));
+      if (epoch !== transcriptEpoch || state !== transcriptState ||
+          !acceptTranscriptPage(page, state.graphId, state.incarnation)) return;
+      const known = new Set(state.messages.map(function (msg) { return msg.id; }));
+      const older = (page.items || []).filter(function (msg) { return !known.has(msg.id); });
+      state.messages = older.concat(state.messages);
+      state.olderCursor = page.older_cursor;
+      state.completeness = page.completeness;
+      renderChatMessages(state.messages, { prepended: true });
+      updateTranscriptControls();
+    } catch (err) {
+      if (epoch !== transcriptEpoch || state !== transcriptState) return;
+      const code = err && err.body && err.body.error && err.body.error.code;
+      if (err.status === 409 && code === "cursor_restart") {
+        await loadTranscriptLatest(state.graphId, { userInitiated: false });
+      } else {
+        setTranscriptStatus(
+          code === "invalid_request" ? "Older-history cursor was refused."
+            : "Older history is pending; current messages were retained.",
+          true
+        );
+        if (el.transcriptLoadOlder) el.transcriptLoadOlder.disabled = false;
+      }
+    }
   }
 
   function renderCurrentDependencySummary(view) {
@@ -2627,11 +2829,11 @@
     }
   }
 
-  async function loadCurrentRecoveryProgress(graphId, cursor, expectedRevision) {
+  async function loadCurrentRecoveryProgress(graphId, cursor, expectedRevision, options) {
     if (!el.recoveryCurrentSummary || !graphId) return null;
     const isContinuation = !!cursor;
     const epoch = isContinuation ? recoveryProgressEpoch : ++recoveryProgressEpoch;
-    if (!isContinuation) {
+    if (!isContinuation && !(options && options.background)) {
       currentRecoveryProgress = null;
       el.recoveryCurrentSummary.textContent = "Loading current recovery progress…";
     }
@@ -2678,59 +2880,78 @@
     }
   }
 
-  let inflightChatFetch = null;
-  let inflightChatFetchId = null;
-
-  async function fetchChatMessages(graphId) {
-    if (inflightChatFetch && inflightChatFetchId === graphId) {
-      return inflightChatFetch;
-    }
-    inflightChatFetchId = graphId;
-    inflightChatFetch = apiGet("/api/chat/" + encodeURIComponent(graphId)).finally(function () {
-      if (inflightChatFetchId === graphId) {
-        inflightChatFetch = null;
-        inflightChatFetchId = null;
-      }
-    });
-    return inflightChatFetch;
-  }
-
   async function loadChat(options) {
     const graphId = focusGraphId;
-    if (graphId !== lastChatSnapshotGraphId) {
-      lastChatSnapshot = "";
-    }
-    const userInitiated = !options || options.userInitiated !== false;
-    try {
-      const messages = await fetchChatMessages(graphId);
-      if (graphId !== focusGraphId) return [];
-      renderChatMessages(messages);
-      if (userInitiated) clearChatPollDiagnostic();
-      return messages;
-    } catch (err) {
-      if (graphId === focusGraphId) {
-        reportChatLoadFailure(err, { userInitiated: userInitiated });
-      }
-      return [];
-    }
+    return loadTranscriptLatest(graphId, options);
   }
 
   let chatPollInFlight = false;
+  let recoveryProgressPollInFlight = null;
+  let recoveryProgressPollGraphId = null;
+
+  function pollCurrentRecoveryProgress(graphId) {
+    if (!el.recoveryCurrentSummary || !graphId) return Promise.resolve(null);
+    if (recoveryProgressPollInFlight && recoveryProgressPollGraphId === graphId) {
+      return recoveryProgressPollInFlight;
+    }
+    recoveryProgressPollGraphId = graphId;
+    const pending = loadCurrentRecoveryProgress(
+      graphId, null, null, { background: true }
+    );
+    const request = Promise.resolve(pending).finally(function () {
+      if (recoveryProgressPollInFlight === request) {
+        recoveryProgressPollInFlight = null;
+        recoveryProgressPollGraphId = null;
+      }
+    });
+    recoveryProgressPollInFlight = request;
+    return request;
+  }
 
   /** Background refresh; never updates chat status on failure. */
   async function pollChatSidecar() {
-    if (!focusGraphId || chatPollInFlight) return;
-    chatPollInFlight = true;
+    if (!focusGraphId) return;
     const graphId = focusGraphId;
+    const progressPoll = pollCurrentRecoveryProgress(graphId);
+    if (chatPollInFlight) {
+      await progressPoll;
+      return;
+    }
+    chatPollInFlight = true;
+    const state = transcriptState;
     try {
-      const messages = await fetchChatMessages(graphId);
-      if (graphId !== focusGraphId) return;
-      renderChatMessages(messages);
+      if (!state || state.graphId !== graphId || !state.afterCursor) {
+        await loadTranscriptLatest(graphId, { userInitiated: false });
+        return;
+      }
+      const epoch = transcriptEpoch;
+      const page = await apiGet(transcriptPagePath(graphId, "after", state.afterCursor));
+      if (epoch !== transcriptEpoch || state !== transcriptState ||
+          !acceptTranscriptPage(page, graphId, state.incarnation)) return;
+      const known = new Set(state.messages.map(function (msg) { return msg.id; }));
+      (page.items || []).forEach(function (msg) {
+        if (!known.has(msg.id)) {
+          state.messages.push(msg);
+          known.add(msg.id);
+        }
+      });
+      state.afterCursor = page.after_cursor;
+      state.highWaterMark = page.high_water_mark;
+      state.completeness = page.completeness;
+      renderChatMessages(state.messages);
+      updateTranscriptControls();
       clearChatPollDiagnostic();
     } catch (err) {
-      reportChatLoadFailure(err, { userInitiated: false });
+      const code = err && err.body && err.body.error && err.body.error.code;
+      if (state === transcriptState && graphId === focusGraphId &&
+          err.status === 409 && code === "cursor_restart") {
+        await loadTranscriptLatest(graphId, { userInitiated: false });
+      } else if (state === transcriptState && graphId === focusGraphId) {
+        reportChatLoadFailure(err, { userInitiated: false });
+      }
     } finally {
       chatPollInFlight = false;
+      await progressPoll;
     }
   }
 
@@ -2744,9 +2965,9 @@
       });
       if (graphId !== focusGraphId) return;
       try {
-        const messages = await fetchChatMessages(graphId);
-        if (graphId !== focusGraphId) return;
-        renderChatMessages(messages);
+        await pollChatSidecar();
+        const messages = transcriptState && transcriptState.graphId === graphId
+          ? transcriptState.messages : [];
         if (countAgentChatMessages(messages) > baselineAgentCount) {
           setStatus("");
           return;
@@ -2756,6 +2977,12 @@
       }
     }
     setStatus("No team reply yet — check Providers and CURSOR_API_KEY.", true);
+  }
+
+  if (el.transcriptLoadOlder) {
+    el.transcriptLoadOlder.addEventListener("click", function () {
+      loadOlderTranscript();
+    });
   }
 
   async function attach(graphId, kind) {

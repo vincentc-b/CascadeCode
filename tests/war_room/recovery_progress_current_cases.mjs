@@ -62,7 +62,7 @@ const script = `
   let focusGraphId = "epic_001";
   function apiGet(path) { return globalThis.apiGetStub(path); }
   ${section("  function appendRecoveryIncident(", "  function actionButton(")}
-  ${section("  let recoveryProgressEpoch = 0;", "  let inflightChatFetch = null;")}
+    ${section("  let recoveryProgressEpoch = 0;", "  async function loadChat")}
   ({
     renderCurrentRecoveryProgress,
     loadCurrentRecoveryProgress,
