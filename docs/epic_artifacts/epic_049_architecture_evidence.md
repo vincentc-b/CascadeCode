@@ -2331,3 +2331,39 @@ pins are unchanged. Acceptance and renewed sign-off remain withheld pending
 integrated consumer proof, Feature 5 contention repair, canonical record
 corrections, design-owner reconciliation and publication recovery. Return
 control to child execution and supervised delivery.
+
+## Manager Feature 3 Task 1 record-correction handoff review
+
+In reply to `feat_049_003:feat_049_003:task1_record_correction_03fe5929_20261126`.
+Read canonical Epic `9663684255700d5178bdd369c97cb8d5a6f4ed6a`, Feature
+`1c7fbea950c3a17a9b8e860655c7ac7dfc090df5`, child metadata and the empty
+architecture amendment list. Inspected the sole artifact added by
+`03fe592909c8cab52ddca2d3c18de208bed80b3d` through Git. It preserves the
+proposed Task body and the reported `cannot be revised while completed`
+refusal; this is not a canonical Task correction or integrated acceptance.
+
+The replacement preserves the Feature contract and assigns remaining room
+refresh/committed anchors to Task 2 and held-final-reply proof to Task 3.
+Its Parent Feature target `../../features/2_active/feat_049_003.md` does not
+exist at that revision. Canonical child metadata and the pinned Git tree instead
+identify `../../features/2_active/feat_049_003_show_coherent_recovery_progress_on_board_and_historical_transcript.md`.
+Sent `manager:f3_task1_record_correction_03fe5929_20261126` to the Feature owner
+to correct the proposed replacement while retaining the exact attempted body
+and refusal separately. No repeated completed-lifecycle mutation was requested.
+The existing Epic scope and acceptance gates require no spec edit or new decision.
+
+Design review: the handoff changes only a work-record artifact. Reviewed its
+claims against the pinned War Room progress contract and the prior delivery
+review above. Context actors, container persistence/runtime boundaries,
+component responsibilities, native Code symbols and behavioral flows are
+unchanged by this diff; no design/model edit or render rerun is warranted.
+The existing stable-anchor and room-refresh follow-ups remain with Feature 3;
+final integrated design-owner reconciliation and publication recovery remain open.
+
+Verification: canonical reads, pinned artifact/diff and parent-link checks,
+sign-off inspection and `git diff --check`. No product/browser tests were rerun
+for this evidence-only change. Feature 3 remains active and Feature 5 backlog;
+acceptance and renewed sign-off remain withheld pending integrated consumer
+proof, contention repair, canonical record corrections and design/publication
+reconciliation. Historical sign-offs and saved publication references are
+unchanged. Return control to child execution and supervised delivery.
